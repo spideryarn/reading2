@@ -1,5 +1,5 @@
 /**
- * The two routes behind Referee's Claims — `/api/referee/claims/…` in
+ * The two routes behind Referee's Claims — `/api/referee/promises/…` in
  * src/routes.ts.
  *
  * No server and no network: `handleApi` is a plain function over a request and a
@@ -11,8 +11,8 @@
  * start spending money.
  *
  * What this file is actually for is the sentence *the routes are wired to the
- * store and the guard runs before the stream opens*. `claimsProblem` and
- * `validateClaims` are tested as functions elsewhere; a guard nobody calls
+ * store and the guard runs before the stream opens*. `promisesProblem` and
+ * `validatePromises` are tested as functions elsewhere; a guard nobody calls
  * passes its own tests perfectly.
  *
  * ## It ran on the filesystem store until 2026-09-04, and this is the file the
@@ -27,7 +27,7 @@
  * Converting it is that postmortem's own remedy
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § B). It now seeds through `scratchArticleInPg`, and reads back through
- * `refereeClaimsStore`.
+ * `refereePromisesStore`.
  *
  * tests/referee-routes-postgres.test.ts was written *because* this file could
  * not say anything about Postgres. Its header's argument for existing
@@ -38,7 +38,7 @@
  * ### One case was dropped rather than translated, and the reason is a finding
  *
  * *"refuses a paper with no text, before a header is written"* — the 400 out of
- * `claimsProblem` — **cannot be reached under Postgres**, because
+ * `promisesProblem` — **cannot be reached under Postgres**, because
  * `reasonsNotToPublish` (src/store/pg-revisions.ts) refuses to publish a
  * revision with no blocks: *"it has no blocks"*. So there is no way for
  * `loadArticle` to hand the route an article whose `blocks` are empty, and the
@@ -49,7 +49,7 @@
  * What is lost is narrower than it looks: the *ordering* claim those cases
  * carried — nothing is written and no header goes out before the request is
  * refused — is still asserted by the 404 case below, which is the other refusal
- * above `sse(res)`. What is genuinely uncovered is `claimsProblem` itself, and
+ * above `sse(res)`. What is genuinely uncovered is `promisesProblem` itself, and
  * it is uncovered because under the store that deploys it is unreachable.
  */
 
@@ -60,7 +60,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { hashBlocks } from "../src/source-hash.js";
-import { CLAIMS_ORPHAN_GRACE_MS } from "../src/store/pg-referee-claims.js";
+import { PROMISES_ORPHAN_GRACE_MS } from "../src/store/pg-referee-promises.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -68,30 +68,30 @@ import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-artic
 loadEnvLocal();
 
 /** The paper every case below asks about. */
-const SLUG = "test-referee-claims-routes";
+const SLUG = "test-referee-promises-routes";
 /**
  * A second paper, seeded and never asked.
  *
  * The filesystem version got *"a paper nobody has asked"* for free by writing a
  * fresh directory before every case. There is no `remove` on
- * `RefereeClaimsStore` — one run per article, and deleting it is not an
+ * `RefereePromisesStore` — one run per article, and deleting it is not an
  * operation the app has — so the un-asked state is a second article rather than
  * a reset, and it cannot be spoiled by the order the cases run in.
  */
-const FRESH = "test-referee-claims-routes-fresh";
+const FRESH = "test-referee-promises-routes-fresh";
 /** A slug that is not an article at all. */
-const ABSENT = "test-referee-claims-routes-no-such-article";
+const ABSENT = "test-referee-promises-routes-no-such-article";
 /** A fingerprint for runs whose fingerprint is not what the case is about. */
 const HASH = "feedfacefeedface";
 
 await pgReady({
-  suite: "tests/referee-claims-routes.test.ts",
-  tables: ["spideryarn.referee_claims", "spideryarn.revision_blocks"],
+  suite: "tests/referee-promises-routes.test.ts",
+  tables: ["spideryarn.referee_promises", "spideryarn.revision_blocks"],
   max: 2,
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { loadArticle, refereeClaimsStore } = await import("../src/store/index.js");
+const { loadArticle, refereePromisesStore } = await import("../src/store/index.js");
 
 
 interface Reply {
@@ -133,15 +133,15 @@ async function call(method: string, url: string, body?: unknown): Promise<Reply>
   return { status, body: text ? JSON.parse(text) : {}, streamed };
 }
 
-const URL = `/api/referee/claims/${SLUG}`;
+const URL = `/api/referee/promises/${SLUG}`;
 
 /**
  * A run begun long enough ago that the sweep considers it abandoned.
  *
  * **The store's own clock parameter, not an `UPDATE` after the fact.**
- * `RefereeClaimsStore.begin` takes `now` precisely so a caller can say when a
- * run started, and `referee_claims.created_at` is what the Postgres sweep
- * measures against `CLAIMS_ORPHAN_GRACE_MS`. Doctoring the column afterwards
+ * `RefereePromisesStore.begin` takes `now` precisely so a caller can say when a
+ * run started, and `referee_promises.created_at` is what the Postgres sweep
+ * measures against `PROMISES_ORPHAN_GRACE_MS`. Doctoring the column afterwards
  * would be the same fixture with SQL in it, and
  * tests/store-parity-referee.test.ts § `staleStart` records what that cost when
  * it was tried: `created_at` **is** the wire form's `createdAt`, so the doctored
@@ -153,7 +153,7 @@ const URL = `/api/referee/claims/${SLUG}`;
  * where this file starts covering it.
  */
 const abandoned = () => () =>
-  new Date(Date.now() - CLAIMS_ORPHAN_GRACE_MS - 60_000).toISOString();
+  new Date(Date.now() - PROMISES_ORPHAN_GRACE_MS - 60_000).toISOString();
 
 describe("Referee's claims routes", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
@@ -179,9 +179,9 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
     it("answers null for a paper nobody has asked, rather than 404", async () => {
       /* A paper with no claims run is the ordinary state, not a missing
          resource. The panel has a sentence for it and needs the 200 to render
-         it. Under Postgres this is a `referee_claims` table with no row for
+         it. Under Postgres this is a `referee_promises` table with no row for
          this article, where on files it was a directory with no JSON file. */
-      const reply = await call("GET", `/api/referee/claims/${FRESH}`);
+      const reply = await call("GET", `/api/referee/promises/${FRESH}`);
       expect(reply.status).toBe(200);
       expect(reply.body.run).toBeNull();
     });
@@ -195,7 +195,7 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          The fingerprint is a **string** here, where the criteria suite's GET
          gets nothing at all: `sourceHashFor` answers `undefined` only for a
          revision with no blocks, and this article has nineteen. */
-      await asTestOwner(() => refereeClaimsStore.begin(SLUG, HASH));
+      await asTestOwner(() => refereePromisesStore.begin(SLUG, HASH));
       const reply = await call("GET", URL);
       expect(reply.status).toBe(200);
       expect(typeof reply.body.sourceHash).toBe("string");
@@ -210,7 +210,7 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          deletion gives *1 failed | 6 passed (7)*, this case, `expected 'error'
          to be 'pending'`. On Vercel the GET arrives on a different process from
          the one streaming the answer, so without that guard every poll errors a
-         run that is still arriving. `CLAIMS_ORPHAN_GRACE_MS`.
+         run that is still arriving. `PROMISES_ORPHAN_GRACE_MS`.
 
          **Blind to.** Where the boundary actually falls. This line and the case
          below stand either side of one threshold and neither moves a clock, so
@@ -224,13 +224,13 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
     it("fingerprints the blocks a run is sent exactly as the GET fingerprints the paper", async () => {
       /* The positive control for sweep 5's fingerprint fix
          (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
-         `runRefereeClaims` stamps a run with `hashBlocks` of the blocks
+         `runRefereePromises` stamps a run with `hashBlocks` of the blocks
          `loadArticle` gave it, and the panel compares that against the store's
          `sourceHash`. If the two ever disagreed for one revision, every fresh
          run would wear *older version* — which reads as a fact about the paper
          rather than as a bug. */
       const loaded = await asTestOwner(() => loadArticle(SLUG));
-      const current = await asTestOwner(() => refereeClaimsStore.sourceHash(SLUG));
+      const current = await asTestOwner(() => refereePromisesStore.sourceHash(SLUG));
       expect(current).toMatch(/^[0-9a-f]{16}$/);
       expect(hashBlocks(loaded.blocks)).toBe(current);
     });
@@ -241,9 +241,9 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          process is not running it and it is older than the grace window, so the
          GET repairs it.
 
-         **Mutation.** `sweep` in src/store/pg-referee-claims.ts writing
+         **Mutation.** `sweep` in src/store/pg-referee-promises.ts writing
          `status: "pending"` where it writes `status: "error"`, so an abandoned
-         run is found, stamped with `CLAIMS_SWEPT` and left exactly as
+         run is found, stamped with `PROMISES_SWEPT` and left exactly as
          spinning as it was. Re-run 2026-09-04: *1 failed | 6 passed (7)*, this
          case, `expected 'pending' to be 'error'`.
 
@@ -253,10 +253,10 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          the sentence, or with the wrong one, passes both assertions. `begin`
          and `finish`, which is where a real run's status comes from, are not
          reached by it either. */
-      await asTestOwner(() => refereeClaimsStore.begin(SLUG, HASH, abandoned()));
+      await asTestOwner(() => refereePromisesStore.begin(SLUG, HASH, abandoned()));
       const reply = await call("GET", URL);
       expect((reply.body.run as { status: string }).status).toBe("error");
-      expect((await asTestOwner(() => refereeClaimsStore.load(SLUG)))?.status).toBe("error");
+      expect((await asTestOwner(() => refereePromisesStore.load(SLUG)))?.status).toBe("error");
     });
   });
 
@@ -268,7 +268,7 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          `sse(res)`, so there is still somewhere to put a 404. It is the only
          refusal this route has left that a published article can reach; see
          the header on the one that went with the filesystem store. */
-      const reply = await call("POST", `/api/referee/claims/${ABSENT}`);
+      const reply = await call("POST", `/api/referee/promises/${ABSENT}`);
       expect(reply.status).toBe(404);
       expect(reply.streamed).toBe(false);
     });

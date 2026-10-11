@@ -10,8 +10,8 @@
  * file was written after a one-sided store shipped and the assertions that
  * would have caught it are literals rather than comparisons. Two of them have
  * no second home anywhere: the `clampConfidence` trap (a valence of −80 beside
- * a confidence of 55, below) and the only guard on `CLAIMS_ORPHAN_GRACE_MS`
- * outside `tests/store-pg-referee-claims.test.ts`.
+ * a confidence of 55, below) and the only guard on `PROMISES_ORPHAN_GRACE_MS`
+ * outside `tests/store-pg-referee-promises.test.ts`.
  *
  * The reason it was written, which is why the file still opens with it:
  *
@@ -58,9 +58,9 @@
  *    `ownedSlug`, because a slug is globally unique and the row it would
  *    otherwise find belongs to a stranger.
  * 2. **A young abandoned claims run** is left alone for
- *    `CLAIMS_ORPHAN_GRACE_MS`, because on Vercel the process that is streaming
+ *    `PROMISES_ORPHAN_GRACE_MS`, because on Vercel the process that is streaming
  *    the answer is a different process from the one being asked.
- *    `RefereeClaimsStore.sweep` in src/store/contracts.ts holds that decision,
+ *    `RefereePromisesStore.sweep` in src/store/contracts.ts holds that decision,
  *    and `staleStart` below is how a run old enough to sweep is produced
  *    without reaching behind the store's back.
  *
@@ -79,17 +79,17 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
-import type { ClaimsRun } from "../src/referee-claims.js";
-import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
+import type { PromisesRun } from "../src/referee-promises.js";
+import { PROMISES_SWEPT } from "../src/store/pg-referee-promises.js";
 import type { DivergingResult, SingleResult } from "../src/referee-criteria.js";
 import type { Comment } from "../src/types.js";
 import { CRITERION_SWEPT } from "../src/referee-criteria-store.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
-import type { CommentStore, RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
+import type { CommentStore, RefereePromisesStore, RefereeCriteriaStore } from "../src/store/contracts.js";
 import {
-  CLAIMS_ORPHAN_GRACE_MS,
-  pgRefereeClaimsStore,
-} from "../src/store/pg-referee-claims.js";
+  PROMISES_ORPHAN_GRACE_MS,
+  pgRefereePromisesStore,
+} from "../src/store/pg-referee-promises.js";
 import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -107,7 +107,7 @@ const HASH = "feedfacefeedface";
 
 await pgReady({
   suite: "tests/store-parity-referee.test.ts",
-  tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims"],
+  tables: ["spideryarn.referee_criteria", "spideryarn.referee_promises"],
   max: 2,
 });
 
@@ -175,7 +175,7 @@ const clock = () => clockFrom(Date.parse("2026-09-01T00:00:00.000Z"));
  *
  * This is how the Postgres sweep's grace window gets exercised without either
  * store being reached behind its own back. The first version of this file moved
- * `referee_claims.created_at` with an `UPDATE` after the fact, and that was
+ * `referee_promises.created_at` with an `UPDATE` after the fact, and that was
  * wrong twice over: it is SQL inside a parity comparison, and `created_at` **is**
  * the wire form's `createdAt`, so the doctored run and the filesystem's run
  * differed in the one field the doctoring touched. The suite said so on its first
@@ -188,7 +188,7 @@ const clock = () => clockFrom(Date.parse("2026-09-01T00:00:00.000Z"));
  * genuinely differ, has its own test below and does not use this.
  */
 function staleStart(): number {
-  return Date.now() - CLAIMS_ORPHAN_GRACE_MS - 60_000;
+  return Date.now() - PROMISES_ORPHAN_GRACE_MS - 60_000;
 }
 
 /**
@@ -289,7 +289,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        a third private copy of the query when this line was written, which is
        exactly how a fingerprint drifts; the assertion is still worth keeping,
        because "they share a function today" is not what this is checking. */
-    expect(await pgRefereeClaimsStore.sourceHash(SLUG)).toBe(fromCriteria);
+    expect(await pgRefereePromisesStore.sourceHash(SLUG)).toBe(fromCriteria);
   });
 
   /* ------------------------------------------------------------- criteria -- */
@@ -711,7 +711,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
    * below is a run both of them consider abandoned rather than a run one of them
    * was told to consider abandoned.
    */
-  async function claimsScript(store: RefereeClaimsStore, startedAt: number): Promise<unknown[]> {
+  async function claimsScript(store: RefereePromisesStore, startedAt: number): Promise<unknown[]> {
     const now = clockFrom(startedAt);
     const snapshots: unknown[] = [];
     const take = async (label: string, returned?: unknown) => {
@@ -723,7 +723,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     const first = await store.begin(SLUG, HASH, now);
     await take("begin a run", first.run);
 
-    /* `claimsOmitted: 0` and `start: 0` are both written as zeros on purpose:
+    /* `promisesOmitted: 0` and `start: 0` are both written as zeros on purpose:
        a `?? null` or a falsy check turns a truthful "none were cut off" into
        "we did not record it", and the two render as different sentences. */
     await take(
@@ -731,8 +731,8 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
       await store.finish(SLUG, {
         status: "done",
         model: "m1",
-        claimsOmitted: 0,
-        claims: [
+        promisesOmitted: 0,
+        promises: [
           {
             id: `${FIRST_BLOCK.id}:0`,
             claim: "The method halves annotation time.",
@@ -759,7 +759,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     /* Starting a run **replaces** the last answer before the new one exists —
        deliberately, because a panel showing yesterday's claims under today's
        spinner is the one state a referee cannot interpret. So `claims`, `model`
-       and `claimsOmitted` all have to go, and a store that merged instead of
+       and `promisesOmitted` all have to go, and a store that merged instead of
        overwriting shows both. */
     await take("begin a second run", (await store.begin(SLUG, HASH, now)).run);
 
@@ -787,28 +787,28 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
   it("walks a claims run through begin, finish, replace, sweep and fail", async () => {
     /* **Was a step-by-step comparison against the filesystem store.** Every one
-       of these steps has its own case in tests/store-pg-referee-claims.test.ts,
+       of these steps has its own case in tests/store-pg-referee-promises.test.ts,
        asserted against literals — `replaces the run rather than adding one`,
        `clears a failed run's error when the next one starts`, `leaves a run
        this process is running alone`, `sweeps an abandoned run once it is past
        the window`, `leaves an absent field absent rather than null`. What is
        kept here is the walk itself in one order, with the two zeros the script's
-       own comment names: `claimsOmitted: 0` and `start: 0` must survive as
+       own comment names: `promisesOmitted: 0` and `start: 0` must survive as
        zeros, because a `?? null` or a falsy check turns a truthful "none were
        cut off" into "we did not record it", and the two render as different
        sentences. */
-    const steps = (await claimsScript(pgRefereeClaimsStore, staleStart())) as {
+    const steps = (await claimsScript(pgRefereePromisesStore, staleStart())) as {
       label: string;
-      run: ClaimsRun | null;
+      run: PromisesRun | null;
     }[];
 
     expect(steps[0]?.run, "a run was already there").toBeNull();
     expect(steps[2]?.run?.status, "the finished run is not done").toBe("done");
-    expect(steps[2]?.run?.claimsOmitted, "a truthful zero became an absence").toBe(0);
-    expect(steps[2]?.run?.claims?.[0]?.start, "a truthful zero became an absence").toBe(0);
+    expect(steps[2]?.run?.promisesOmitted, "a truthful zero became an absence").toBe(0);
+    expect(steps[2]?.run?.promises?.[0]?.start, "a truthful zero became an absence").toBe(0);
     // Starting a run replaces the last answer before the new one exists.
     expect(steps[4]?.run?.status, "the second begin did not replace the answer").toBe("pending");
-    expect(steps[4]?.run?.claims ?? [], "yesterday's claims survived today's spinner").toEqual(
+    expect(steps[4]?.run?.promises ?? [], "yesterday's claims survived today's spinner").toEqual(
       [],
     );
     // Running here: left alone whatever its age. Abandoned: swept.
@@ -823,11 +823,11 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
   it("writes the shared sentence over a swept run", async () => {
     /* The one string a referee actually reads out of a sweep. It moved into
-       src/store/pg-referee-claims.ts on 2026-09-05 when the filesystem claims
+       src/store/pg-referee-promises.ts on 2026-09-05 when the filesystem claims
        store that used to hold it was deleted; the import here is what says the
        sweep still writes the shared constant rather than a copy. */
-    await pgRefereeClaimsStore.begin(SLUG, HASH, clockFrom(staleStart()));
-    expect((await pgRefereeClaimsStore.sweep(SLUG, false))?.error).toBe(CLAIMS_SWEPT);
+    await pgRefereePromisesStore.begin(SLUG, HASH, clockFrom(staleStart()));
+    expect((await pgRefereePromisesStore.sweep(SLUG, false))?.error).toBe(PROMISES_SWEPT);
   });
 
   it("writes the shared sentence over a swept criterion", async () => {
@@ -842,29 +842,29 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
   /* ------------------------------------------ the two behaviours of its own -- */
 
   it("leaves a young abandoned claims run alone, which is what the window is for", async () => {
-    /* **The only guard on `CLAIMS_ORPHAN_GRACE_MS` outside
-       tests/store-pg-referee-claims.test.ts.** It was `differs about a young
+    /* **The only guard on `PROMISES_ORPHAN_GRACE_MS` outside
+       tests/store-pg-referee-promises.test.ts.** It was `differs about a young
        abandoned claims run, on purpose` while there were two stores — the
        filesystem one swept the moment anybody looked — and without it the past
        clock the claims script runs on is indistinguishable from an exclusion:
        the day the grace window is dropped, the walk above still passes. */
-    await pgRefereeClaimsStore.begin(SLUG, HASH);
-    const spared = await pgRefereeClaimsStore.sweep(SLUG, false);
+    await pgRefereePromisesStore.begin(SLUG, HASH);
+    const spared = await pgRefereePromisesStore.sweep(SLUG, false);
     expect(
       spared?.status,
-      `Postgres leaves a run younger than ${CLAIMS_ORPHAN_GRACE_MS}ms alone, because the ` +
+      `Postgres leaves a run younger than ${PROMISES_ORPHAN_GRACE_MS}ms alone, because the ` +
         "process streaming the answer is a different process from the one being asked",
     ).toBe("pending");
   });
 
   it("404s a slug that is not an article, rather than answering about it", async () => {
-    /* It reaches the reader: `GET /api/referee/claims/:slug` goes straight to
+    /* It reaches the reader: `GET /api/referee/promises/:slug` goes straight to
        the store. The slug is globally unique, so a lookup without `ownedSlug`
        finds a real article belonging to a stranger — and 404 rather than 403,
        because a 403 confirms it exists. The filesystem store answered `[]` and
        `null` here, which is the shape this refusal replaced. */
     await expect(pgRefereeCriteriaStore.load(ABSENT)).rejects.toThrow(/not found|no article/i);
-    await expect(pgRefereeClaimsStore.load(ABSENT)).rejects.toThrow(/not found|no article/i);
+    await expect(pgRefereePromisesStore.load(ABSENT)).rejects.toThrow(/not found|no article/i);
   });
 
   it("says an article with no run has no run", async () => {
@@ -872,7 +872,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        for it and needs the answer to be `null` rather than a throw. Read
        against `SLUG`, which IS an article — so this and the case above are the
        two halves of one distinction rather than the same emptiness twice. */
-    const run: ClaimsRun | null = await pgRefereeClaimsStore.load(SLUG);
+    const run: PromisesRun | null = await pgRefereePromisesStore.load(SLUG);
     expect(run).toBeNull();
     expect(await pgRefereeCriteriaStore.load(SLUG)).toEqual([]);
   });

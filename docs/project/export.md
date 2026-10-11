@@ -36,7 +36,7 @@ file-by-file list, and the thing to edit when the layout changes.
     augmentations/    tree, glossary, glossary-lookups, glossary-hidden, ideas, quotes, timeline,
                       quiz, sketch, illustrated, arc, tweets, labels, bibliography, citation-finds,
                       citation-investigations, faq, relations, skim, crossrefs, simple-summary,
-                      reading-time, comments, chat, searches, referee-claims, referee-criteria,
+                      reading-time, comments, chat, searches, referee-promises, referee-criteria,
                       tags (your own, since 261003d), quiz-attempts (your answers and the
                       mark each was given, since 261005b — every one, including answers to
                       questions that have since been rewritten; each row carries its

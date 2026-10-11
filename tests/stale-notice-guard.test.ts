@@ -9,7 +9,7 @@
  * not count. It fails when either of these appears outside a `<StaleNotice>`
  * or `<DismissibleNotice>` element:
  *
- *  - a stale banner's box class — `gloss-stale`, `quotes-stale`, `clm-stale`,
+ *  - a stale banner's box class — `gloss-stale`, `quotes-stale`, `prm-stale`,
  *    `srch-stale`, `sk-stale`, `ill-stale` — in a string, which is how a second
  *    hand-built banner would start;
  *  - the words *"older version of the article"* in a string or in JSX text,

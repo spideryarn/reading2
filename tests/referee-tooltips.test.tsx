@@ -45,7 +45,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Claim } from "../src/referee-claims.js";
+import type { PaperPromise } from "../src/referee-promises.js";
 import type { MirrorInput, MirrorRemark, MirrorResult } from "../src/referee-mirror-types.js";
 import type { RefereeView } from "../src/web/referee-views.js";
 import type { Block, BlockId } from "../src/types.js";
@@ -79,11 +79,11 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
 const { MirrorView } = await import("../src/web/MirrorPanel.js");
 const { RefereeViews } = await import("../src/web/modes/referee/RefereeMode.js");
-const { ClaimsView } = await import("../src/web/ClaimsPanel.js");
+const { PromisesView } = await import("../src/web/PromisesPanel.js");
 const { CandidatesPanel } = await import("../src/web/CandidatesPanel.js");
 const { PlaceOnCriterion } = await import("../src/web/PlaceOnCriterion.js");
 type MirrorApi = import("../src/web/useMirror.js").MirrorApi;
-type ClaimsApi = import("../src/web/useClaims.js").ClaimsApi;
+type PromisesApi = import("../src/web/usePromises.js").PromisesApi;
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. docs/project/block-ids.md. */
 const BLOCK = "spya-k3m9qt" as BlockId;
@@ -504,8 +504,27 @@ describe("the criteria form explains its controls before they are pressed", () =
    * halfway through writing their own criterion. And *Run this criterion* is a
    * model call over the whole paper, which is the other thing a label of four
    * words cannot carry.
+   *
+   * The presets are drawn only once the referee has a criterion of their own
+   * (plan 261011g; tests/referee-criteria-starters.test.tsx), so this band
+   * has one.
    */
   it("puts a card on every preset and on the run button", { timeout: 20000 }, async () => {
+    answer = () =>
+      Promise.resolve(
+        json({
+          criteria: [
+            {
+              id: "spya-crt2aa",
+              criterion: "Is the exposure measured the same way in both arms?",
+              config: { kind: "single" },
+              createdAt: "2026-10-11T09:00:00.000Z",
+              status: "done",
+              results: [],
+            },
+          ],
+        }),
+      );
     paint();
     await flush();
     const presets = [...host.querySelectorAll(".crit-preset")];
@@ -722,12 +741,12 @@ describe("Mirror's rows say what they mean by evidence, and where they go", () =
 /**
  * **Claims was never imported into this file**, which a cross-family review
  * found on 2026-09-02: deleting either of its cards left the whole suite green.
- * `ClaimsView` is a pure function of its props — tests/referee-claims-panel.test.tsx
+ * `PromisesView` is a pure function of its props — tests/referee-promises-panel.test.tsx
  * — so it needs no router and no hook.
  */
 describe("Claims says what its two controls do", () => {
   const CLAIM_BLOCK = "spya-anc234" as BlockId;
-  const claim: Claim = {
+  const claim: PaperPromise = {
     id: `${CLAIM_BLOCK}:8`,
     blockId: CLAIM_BLOCK,
     quote: "the method halves annotation time",
@@ -739,12 +758,12 @@ describe("Claims says what its two controls do", () => {
     discarded: 0,
   };
 
-  function paint(claims: Claim[], run: ClaimsApi["run"]): void {
+  function paint(claims: PaperPromise[], run: PromisesApi["run"]): void {
     act(() => {
       root.render(
-        createElement(ClaimsView, {
+        createElement(PromisesView, {
           api: { run, stale: false, loaded: true, loadFailed: false, pull: () => {}, error: null },
-          claims,
+          promises: claims,
           slots: new Map(claims.map((c, i) => [c.id, i])),
           showing: [],
           onToggle: () => {},
@@ -754,10 +773,10 @@ describe("Claims says what its two controls do", () => {
     });
   }
 
-  const DONE: ClaimsApi["run"] = {
+  const DONE: PromisesApi["run"] = {
     status: "done",
     createdAt: "2026-09-01T00:00:00.000Z",
-    claims: [claim],
+    promises: [claim],
   };
 
   /**
@@ -769,13 +788,13 @@ describe("Claims says what its two controls do", () => {
    */
   it("puts a card on the tick that says more than the tick does", { timeout: 20000 }, async () => {
     paint([claim], DONE);
-    const tick = host.querySelector(".clm-tick");
+    const tick = host.querySelector(".prm-tick");
     expect(tick, "the mark checkbox is not drawn").not.toBeNull();
     const card = await cardFor(tick as Element);
     expect(card.head).toBe(flat((tick as Element).textContent));
     expectEarnsItsHover(card, "Claims' tick");
     /* The refusal is the point of the card: the model asserts linkage, the
-       referee decides adequacy. src/web/ClaimsPanel.tsx § the three rules. */
+       referee decides adequacy. src/web/PromisesPanel.tsx § the three rules. */
     expect(card.body.toLowerCase(), "the card no longer says whose call it is").toContain("your call");
   });
 
@@ -785,7 +804,7 @@ describe("Claims says what its two controls do", () => {
    */
   it("puts a card on the button that spends money", { timeout: 20000 }, async () => {
     paint([], null);
-    const pull = host.querySelector(".clm-run");
+    const pull = host.querySelector(".prm-run");
     expect(pull, "the pull button is not drawn").not.toBeNull();
     const card = await cardFor(pull as Element);
     expectEarnsItsHover(card, "Claims' pull");

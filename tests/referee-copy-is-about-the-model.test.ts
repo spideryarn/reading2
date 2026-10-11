@@ -41,9 +41,9 @@ import {
 
 import { ANSWER_UNUSABLE } from "../src/messages.js";
 import {
-  CLAIM_WITHHELD,
-  CLAIMS_AT_CAP,
-  claimsOmittedNote,
+  PROMISE_WITHHELD,
+  PROMISES_AT_CAP,
+  promisesOmittedNote,
   DOCUMENT_ORDER_NOTE,
   NO_PASSAGE_FOUND,
   OTHER_TEXT_AT_CAP,
@@ -52,7 +52,7 @@ import {
   PASSAGES_CAPPED,
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
-} from "../src/referee-claims.js";
+} from "../src/referee-promises.js";
 import { ALL_DROPPED, COI_NOT_CHECKED, NO_NAMES_YET } from "../src/referee-candidates.js";
 import { REFEREE_VIEWS } from "../src/web/referee-views.js";
 
@@ -129,7 +129,7 @@ const WEB = join(ROOT, "src", "web");
  *
  * **Resolved against the importing file's own directory**, not against
  * `src/web`: a controller under `src/web/modes/referee/` reaches its panels as
- * `../../ClaimsPanel.js`, and a resolver that took the basename and looked in
+ * `../../PromisesPanel.js`, and a resolver that took the basename and looked in
  * `src/web` would agree for the wrong reason today and be wrong outright the
  * first time two directories hold the same file name.
  */
@@ -421,7 +421,7 @@ const ABOUT_THE_PAPER = [
  *
  * **One sentence since 2026-10-04**, `ANSWER_UNUSABLE` in src/messages.ts,
  * thrown by both runners. There were two, one in each runner's file, sharing
- * the one code; Claims' was `CLAIMS_UNUSABLE`. The describe after this one
+ * the one code; Claims' was `PROMISES_UNUSABLE`. The describe after this one
  * holds the same constant to Claims' rules.
  */
 describe("what Referee says when the answer it got was unusable", () => {
@@ -475,7 +475,7 @@ describe("what Referee says when the answer it got was unusable", () => {
  *   because those two call for different actions.
  * - `ANSWER_UNUSABLE` (src/messages.ts) is the same distinction at the level of
  *   the whole run. It is the sentence Criteria throws too; Claims had its own,
- *   `CLAIMS_UNUSABLE`, until 2026-10-04.
+ *   `PROMISES_UNUSABLE`, until 2026-10-04.
  * - `DOCUMENT_ORDER_NOTE` is the other half of the review's finding: the list is
  *   in the paper's order and is not a ranking, and a reader who assumes
  *   best-first reads the top and stops.
@@ -493,7 +493,7 @@ describe("what Claims says about an empty answer", () => {
   it("keeps 'found nothing' and 'found things I could not use' apart", () => {
     /* The whole reason there are three sentences and not two. Both of these
        would be false about the other's state, and the panel picks between them
-       on `Claim.discarded`. */
+       on `PaperPromise.discarded`. */
     expect(NO_PASSAGE_FOUND).toMatch(/did not find/i);
     expect(PASSAGES_UNUSABLE).not.toMatch(/did not find/i);
     expect(ANSWER_UNUSABLE.message).not.toMatch(/did not find/i);
@@ -626,7 +626,7 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
       OTHER_TEXT_NOTE,
       OTHER_TEXT_AT_CAP,
       REASONING_WITHHELD,
-      CLAIM_WITHHELD,
+      PROMISE_WITHHELD,
     ]) {
       for (const phrase of ABOUT_THE_PAPER) {
         expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
@@ -670,10 +670,10 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
        label, so a referee who is not told what happened will read the paper's
        sentence as the model having had nothing to say. The subject has to be the
        model's line, and it has to say what stands in its place. */
-    expect(CLAIM_WITHHELD.toLowerCase()).toMatch(/^the model's one-line/);
-    expect(CLAIM_WITHHELD.toLowerCase()).toContain("the paper's own words");
+    expect(PROMISE_WITHHELD.toLowerCase()).toMatch(/^the model's one-line/);
+    expect(PROMISE_WITHHELD.toLowerCase()).toContain("the paper's own words");
     // Never the verdict itself wearing our clothes.
-    expect(CLAIM_WITHHELD.toLowerCase()).not.toMatch(/does not carry|is unsupported|was wrong/);
+    expect(PROMISE_WITHHELD.toLowerCase()).not.toMatch(/does not carry|is unsupported|was wrong/);
   });
 });
 
@@ -692,7 +692,7 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
  */
 describe("what Claims says when one of its own caps cut something", () => {
   it("never blames the paper or the model for a cap that is ours", () => {
-    for (const sentence of [PASSAGES_CAPPED, CLAIMS_AT_CAP, claimsOmittedNote(3), OTHER_TEXT_AT_CAP]) {
+    for (const sentence of [PASSAGES_CAPPED, PROMISES_AT_CAP, promisesOmittedNote(3), OTHER_TEXT_AT_CAP]) {
       for (const phrase of ABOUT_THE_PAPER) {
         expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
       }
@@ -705,8 +705,8 @@ describe("what Claims says when one of its own caps cut something", () => {
        missing learns nothing they can act on; one who is told it is the end of
        the paper can go and look at the end of the paper. */
     expect(PASSAGES_CAPPED.toLowerCase()).toContain("latest in the paper");
-    expect(CLAIMS_AT_CAP.toLowerCase()).toContain("end of the paper");
-    expect(claimsOmittedNote(3).toLowerCase()).toContain("end of the paper");
+    expect(PROMISES_AT_CAP.toLowerCase()).toContain("end of the paper");
+    expect(promisesOmittedNote(3).toLowerCase()).toContain("end of the paper");
     expect(OTHER_TEXT_AT_CAP.toLowerCase()).toContain("latest in the paper");
   });
 
@@ -715,6 +715,6 @@ describe("what Claims says when one of its own caps cut something", () => {
        glance from a ranking. Under the list there is nothing to rank, so the
        count of cut claims is allowed and is worth more than a hedge. */
     expect(PASSAGES_CAPPED).not.toMatch(/\d/);
-    expect(claimsOmittedNote(3)).toMatch(/3 further claims/);
+    expect(promisesOmittedNote(3)).toMatch(/3 further claims/);
   });
 });

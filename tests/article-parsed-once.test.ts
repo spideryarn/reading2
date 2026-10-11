@@ -6,8 +6,8 @@
  * `renderedText` (annotate.ts) is `document.createElement("div")`, an
  * `innerHTML =` and a `textContent` read: **a full HTML parse per block**.
  * `page(blocks)` calls it for every block, and six exported resolvers call
- * `page`. Two of them do it inside a loop — one `resolveClaim` per shown claim
- * in ClaimsPanel, one `resolveCriterion` per ticked criterion in CriteriaPanel
+ * `page`. Two of them do it inside a loop — one `resolvePaperPromise` per shown claim
+ * in PromisesPanel, one `resolveCriterion` per ticked criterion in CriteriaPanel
  * — so referee mode was O(claims x blocks) parses, and a search paid a whole
  * pass per keypress.
  *

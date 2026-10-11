@@ -252,7 +252,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
       ],
     ],
     [
-      "claims",
+      "promises",
       [
         "The model was asked for one thing only: where the paper takes each claim up. Whether the passage carries the claim is yours to judge — press a row and read the paragraph.",
       ],
@@ -320,7 +320,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
     const userAgent = vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
       "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36",
     );
-    paint(PDF, "claims");
+    paint(PDF, "promises");
     const button = rules()!;
     const matches = button.matches.bind(button);
     const focusVisible = vi.spyOn(button, "matches").mockImplementation(
@@ -351,7 +351,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
   });
 
   it("opens on mouse hover and stays shut after a click", async () => {
-    paint(PDF, "claims");
+    paint(PDF, "promises");
     const button = rules()!;
     await act(async () => {
       pointer(button, "pointerover", "mouse");
@@ -366,7 +366,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
   });
 
   it("does not reopen from a pending hover after two quick presses", async () => {
-    paint(PDF, "claims");
+    paint(PDF, "promises");
     const button = rules()!;
     await act(async () => {
       pointer(button, "pointerover", "mouse");
@@ -420,7 +420,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
   });
 
   it.each(["outside tap", "Escape"])("shuts on %s", async (dismissal) => {
-    paint(PDF, "claims");
+    paint(PDF, "promises");
     const button = rules()!;
     await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("true");
@@ -449,7 +449,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
   });
 
   it("shuts an open card when the sub-mode changes, so one panel's rules are never read over another", async () => {
-    paint(PDF, "claims");
+    paint(PDF, "promises");
     await act(async () => rules()?.click());
     expect(card()).toContain("The model was asked for one thing only");
     paint(PDF, "mirror");
@@ -459,7 +459,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
   });
 
   it("is a real button, so a keyboard reaches it, and carries no title attribute", () => {
-    paint(PDF, "claims");
+    paint(PDF, "promises");
     const button = rules();
     expect(button?.tagName).toBe("BUTTON");
     expect(button?.getAttribute("type")).toBe("button");
@@ -470,7 +470,7 @@ describe("each panel's how-to-read sentences are one press away", () => {
 describe("the band says what to do in the sub-mode it is showing", () => {
   it.each<[RefereeView, string]>([
     ["criteria", "Write what you have been asked to judge this paper against."],
-    ["claims", "What the paper claims up front"],
+    ["promises", "What the paper promises up front"],
     ["mirror", "The model reads your own comments back to you"],
     ["candidates", "For an editor: who could review this paper"],
     ["hidden", "Text in this document's source that a reader would not see"],

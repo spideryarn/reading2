@@ -22,7 +22,7 @@ const comments = by<any>(snap.comments, (c) => c.article_id);
 const threads = by<any>(snap.chat_threads, (c) => c.article_id);
 const reading = by<any>(snap.reading_time, (c) => c.article_id);
 const idsIn = (rows: any[]) => by<any>(rows.filter((r) => r.ids?.length), (r) => r.article_id);
-const derived = { search: idsIn(snap.search_runs), criteria: idsIn(snap.referee_criteria), claims: idsIn(snap.referee_claims), chatMsgs: idsIn(snap.chat_messages) };
+const derived = { search: idsIn(snap.search_runs), criteria: idsIn(snap.referee_criteria), claims: idsIn(snap.referee_promises), chatMsgs: idsIn(snap.chat_messages) };
 const linkSums = by<any>(snap.link_summaries, (c) => c.article_id);
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();

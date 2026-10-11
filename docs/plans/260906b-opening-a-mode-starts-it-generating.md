@@ -150,7 +150,7 @@ there. Recall arms nothing — it is the reader's own words.
 Both are streams rather than jobs, so the work is mapping what they have onto the four-state
 `ArtefactStatus` `useAutoRun` reads, and giving each a re-read for the failed-GET path.
 
-- **Claims.** [`useClaims`](../../src/web/useClaims.ts) fetches inside a `useEffect` keyed on slug
+- **Claims.** [`useClaims`](../../src/web/usePromises.ts) fetches inside a `useEffect` keyed on slug
   and exposes no way to ask again. The fetch moves into a `useCallback` the effect calls, and
   `reload` joins the interface. Status: `!loaded` → `loading`, `loadFailed` → `error`, `run !== null`
   → `ready`, else `none`. `ensure` is `pull`, which already refuses a second run while one is in

@@ -15,7 +15,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 import { Info, TriangleAlert } from "lucide-react";
 import type { Block, BlockId, Comment } from "../../../types.js";
-import { LINKAGE_NOT_ADEQUACY } from "../../../referee-claims.js";
+import { LINKAGE_NOT_ADEQUACY } from "../../../referee-promises.js";
 import {
   REFEREE_CANDIDATES_REACHES_SEARCH,
   REFEREE_DECLARE_IT,
@@ -37,7 +37,7 @@ import { type SourceScanMark, SourceScanNotice, sourceScanMark } from "../../Sou
 import { type SourceScanState, useSourceScan } from "../../useSourceScan.js";
 import { type HiddenCheckApi, useHiddenCheck } from "../../useHiddenCheck.js";
 import { CriteriaBand, WHAT_THE_RANK_IS, WHAT_THE_TICK_DOES } from "../../CriteriaPanel.js";
-import { ClaimsBand } from "../../ClaimsPanel.js";
+import { PromisesBand } from "../../PromisesPanel.js";
 import { MIRROR_IS_NOT_GIVEN_THE_PAPER, MirrorBand } from "../../MirrorPanel.js";
 import { CandidatesBand } from "../../CandidatesPanel.js";
 import { ModeSurface } from "../../ModeSurface.js";
@@ -48,7 +48,7 @@ import { ModeSurface } from "../../ModeSurface.js";
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md. The band itself is
  * stage 1 — the confidentiality notice, the original four buttons, and a line
  * per panel saying what that panel will do — and it still calls no model. Those
- * four model-facing panels are Criteria, Claims, Mirror and Candidates; Hidden
+ * four model-facing panels are Criteria, Promises, Mirror and Candidates; Hidden
  * text is the fifth panel, and its scan calls no model — only its *Ask Opus
  * about these* button does, when pressed (plan 261007l).
  *
@@ -152,7 +152,7 @@ export function RefereeBand({
    * The marked passage the referee last pressed — **Criteria's, and read
    * nowhere else**, like `comments` above.
    *
-   * Claims paints marks too and does not have one yet; it is the same wiring
+   * Promises paints marks too and does not have one yet; it is the same wiring
    * when somebody wants it. Mirror and Candidates paint nothing at all.
    */
   openKey: string | null;
@@ -307,7 +307,7 @@ export function RefereeFrame({
  * than in a hover card a phone never shows.
  * docs/plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md,
  * which also says what was not moved: the notes that sit beside results
- * (Claims' order, Mirror's evidence, Criteria's key).
+ * (Promises' order, Mirror's evidence, Criteria's key).
  *
  * Criteria's two are both here from the start, where the panel printed each
  * only once it had a criterion or a result: a card whose contents changed
@@ -319,7 +319,7 @@ export function RefereeFrame({
  */
 const REFEREE_HOW_TO_READ: Record<RefereeView, readonly string[]> = {
   criteria: [WHAT_THE_TICK_DOES, WHAT_THE_RANK_IS],
-  claims: [LINKAGE_NOT_ADEQUACY],
+  promises: [LINKAGE_NOT_ADEQUACY],
   mirror: [MIRROR_IS_NOT_GIVEN_THE_PAPER],
   candidates: [],
   /* The panel says what it is for at its own foot, in every state
@@ -478,7 +478,7 @@ export function RefereeViews({
               tabIndex={0}
               className={`ref-view-btn summ-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
-                /* **The gesture seam for Claims.** Pressing its chip with
+                /* **The gesture seam for Promises.** Pressing its chip with
                    nothing there starts it — Greg's rule about opening a mode,
                    one level down. The other four chips arm nothing; Candidates
                    waits for Build the reviewer brief and Hidden text's scan has
@@ -489,7 +489,7 @@ export function RefereeViews({
                    Here, in the `onClick`, and deliberately **not** in `onView`'s
                    `setView` one level up: `?referee=` is query state, so Back and
                    Forward move it too, and retracing your steps through the five
-                   chips must not buy a claims run or a web search. */
+                   chips must not buy a promises run or a web search. */
                 armActivationForRefereeView(slug, v);
                 onView(v);
               }}
@@ -525,8 +525,8 @@ export function RefereeViews({
  *
  * - **Criteria** never scores the paper, and the run is a model call over the
  *   whole of it, so pressing Run is not free.
- * - **Claims** asserts linkage and never adequacy — `LINKAGE_NOT_ADEQUACY` in
- *   src/referee-claims.ts says the same thing behind the panel's *How to read
+ * - **Promises** asserts linkage and never adequacy — `LINKAGE_NOT_ADEQUACY` in
+ *   src/referee-promises.ts says the same thing behind the panel's *How to read
  *   this* button (`HowToRead` above).
  * - **Mirror** is never given the paper (src/referee-mirror.ts § the three
  *   constraints) and keeps nothing (`useMirror.ts`: *one button, one run,
@@ -547,9 +547,9 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
     what: "Write what you have been asked to judge this paper against. Each criterion becomes a re-runnable pass that marks the passages bearing on it.",
     how: "Each run is a model call over the whole paper. It never scores the paper: which way a passage cuts is marked, and what that adds up to is yours.",
   },
-  claims: {
-    what: "What the paper claims up front, and where it takes each claim up — in the paper's own order, never a ranking.",
-    how: "It asserts only that a passage takes a claim up, never whether the passage carries it. That judgement is the review.",
+  promises: {
+    what: "What the paper promises up front, and where it takes each promise up — in the paper's own order, never a ranking.",
+    how: "It asserts only that a passage takes a promise up, never whether the passage carries it. That judgement is the review.",
   },
   mirror: {
     what: "The model reads your own comments back to you and points at ones an author could not act on.",
@@ -629,12 +629,12 @@ function RefereeSubMode({
           onOpenKey={onOpenKey}
         />
       );
-    case "claims":
+    case "promises":
       /* **Stage 4.** What the paper claims about itself and where it takes each
          claim up, in the paper's own order and never ranked by how much was
-         found. src/web/ClaimsPanel.tsx is the whole of it, including the three
+         found. src/web/PromisesPanel.tsx is the whole of it, including the three
          rules and where each one is enforced rather than asked for. */
-      return <ClaimsBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
+      return <PromisesBand slug={slug} blocks={blocks} onJump={onJump} onFound={onFound} />;
     case "mirror":
       /* **Stage 5b**, and the second sub-mode to become reachable. It takes no
          `blocks` and pushes nothing up: a Mirror remark is about a sentence the

@@ -41,7 +41,7 @@ import {
   quizAttempts,
   staleNoticeDismissals,
   commandSuggestionDismissals,
-  refereeClaims,
+  refereePromises,
   refereeHiddenChecks,
   refereeCriteria,
   sourcesClaimChecks,
@@ -178,9 +178,9 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "referee-criteria.json" },
     bundle: { exported: true, into: "augmentations/referee-criteria.json" },
   },
-  referee_claims: {
-    rollback: { exported: true, into: "referee-claims.json" },
-    bundle: { exported: true, into: "augmentations/referee-claims.json" },
+  referee_promises: {
+    rollback: { exported: true, into: "referee-promises.json" },
+    bundle: { exported: true, into: "augmentations/referee-promises.json" },
   },
   /* Debate's checks of the claims the reader picked — reader state: their
      presses, the claims they typed in their own words, and what each search
@@ -713,14 +713,14 @@ export interface ArticleRows {
   readonly searchRuns: readonly (typeof searchRuns.$inferSelect)[];
   readonly refereeCriteria: readonly (typeof refereeCriteria.$inferSelect)[];
   /**
-   * At most one row — `referee_claims.article_id` is its primary key. An array
+   * At most one row — `referee_promises.article_id` is its primary key. An array
    * because every other member here is one, and because the caller reading
    * `[0]` says what the shape is at the point it matters.
    */
-  readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
+  readonly refereePromises: readonly (typeof refereePromises.$inferSelect)[];
   /** Every claim check, oldest first. Plan 261008i § 3. */
   readonly sourcesClaimChecks: readonly (typeof sourcesClaimChecks.$inferSelect)[];
-  /** At most one row, keyed by `article_id` like `refereeClaims`. Plan 261009a. */
+  /** At most one row, keyed by `article_id` like `refereePromises`. Plan 261009a. */
   readonly refereeHiddenChecks: readonly (typeof refereeHiddenChecks.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
@@ -924,8 +924,8 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .orderBy(asc(refereeCriteria.createdAt), asc(refereeCriteria.id));
   const claims = await tx
     .select()
-    .from(refereeClaims)
-    .where(eq(refereeClaims.articleId, article.id))
+    .from(refereePromises)
+    .where(eq(refereePromises.articleId, article.id))
     .limit(1);
   const checks = await tx
     .select()
@@ -993,7 +993,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     chatMessages: messages,
     searchRuns: runs,
     refereeCriteria: criteria,
-    refereeClaims: claims,
+    refereePromises: claims,
     sourcesClaimChecks: checks,
     refereeHiddenChecks: hiddenChecks,
     glossaryLookups: lookups,

@@ -1,11 +1,11 @@
 /**
- * **Claims — what the paper says about itself up front, and where it takes each
+ * **Promises — what the paper says about itself up front, and where it takes each
  * one up.**
  *
  * Stage 4 of docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2. The band
  * half (the hook, the local selection, resolving passages into marks) and the
  * panel half (what is on screen) are both here, split the way every other mode
- * splits them: `ClaimsBand` owns the state and pushes the resolved passages up
+ * splits them: `PromisesBand` owns the state and pushes the resolved passages up
  * to `Reader`, which owns the prose; everything below it is a pure function of
  * its props.
  *
@@ -13,12 +13,12 @@
  *
  * The plan's first draft ranked claims by how few passages supported them. A
  * cross-family review removed that and was right to, and named the failure it
- * was protecting against: *a tired referee opens Claims first, reads the top
+ * was protecting against: *a tired referee opens Promises first, reads the top
  * "thin" rows, and treats everything unlisted as clean. That is the mode most
  * likely to replace reading, dressed as the one least likely to.*
  *
  * **1. Document order, never thinness order.** Enforced twice, in code, and
- * neither place can see a passage count. `validateClaims` (src/referee-claims.ts)
+ * neither place can see a passage count. `validatePromises` (src/referee-promises.ts)
  * sorts the authoritative answer by block position; `inDocumentOrder` below sorts
  * what the panel is *holding*, which is what makes the order right during the
  * stream as well as after it — a streamed claim cannot be placed, because the
@@ -29,7 +29,7 @@
  * imported rather than typed here, so that
  * tests/referee-copy-is-about-the-model.test.ts checks the sentence itself. And
  * there are **three** empty states rather than two, because there are three
- * things that can have happened — see `ClaimRow`, which is where the third one
+ * things that can have happened — see `PromiseRow`, which is where the third one
  * is drawn and why.
  *
  * **3. Linkage, never adequacy.** Said in words (`LINKAGE_NOT_ADEQUACY`) — at
@@ -43,7 +43,7 @@
  * prose reach this screen — a claim's headline and a passage's line — and both
  * go through `ADEQUACY_FRAMES`, which the eval's held-out set catches four
  * verdicts in twelve with. A blanked headline falls back to the paper's own
- * sentence (`CLAIM_WITHHELD`); a blanked line to `REASONING_WITHHELD`; and the
+ * sentence (`PROMISE_WITHHELD`); a blanked line to `REASONING_WITHHELD`; and the
  * count of both is printed under the list, because a fail-safe nobody can see is
  * a fail-safe nobody can check.
  *
@@ -102,19 +102,19 @@
  * from its anchor (`blockId:start`) rather than minted — deliberately, so that a
  * streamed claim and the authoritative one that replaces it are the same claim.
  * Minting a real id to make the parameter work would have cost the thing the
- * derived id buys. `?claims=` is worth having on the day a claims run becomes a
+ * derived id buys. `?promises=` is worth having on the day a promises run becomes a
  * pipeline artefact with ids that outlive a run.
  */
 
 import { useCallback, useMemo, useState } from "react";
 
-import type { Claim, OtherText } from "../referee-claims.js";
+import type { PaperPromise, OtherText } from "../referee-promises.js";
 import {
-  CLAIM_WITHHELD,
-  CLAIMS_AT_CAP,
-  claimsOmittedNote,
+  PROMISE_WITHHELD,
+  PROMISES_AT_CAP,
+  promisesOmittedNote,
   DOCUMENT_ORDER_NOTE,
-  MAX_CLAIMS,
+  MAX_PROMISES,
   MAX_OTHER_TEXT,
   NO_PASSAGE_FOUND,
   OTHER_TEXT_AT_CAP,
@@ -125,16 +125,16 @@ import {
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
   withheldNote,
-} from "../referee-claims.js";
+} from "../referee-promises.js";
 import type { Block, BlockId } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
 import { Excerpt } from "./Excerpt.js"; // the quote drawn from the block's markup (plan 261009k)
 import { assignSlots } from "./hit-colours.js";
 import { usePassageLifecycle } from "./passage-lifecycle.js";
-import { type Found, resolveClaim } from "./search-hits.js";
+import { type Found, resolvePaperPromise } from "./search-hits.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { Button } from "@/components/ui/button";
-import { type ClaimsApi, useClaims } from "./useClaims.js";
+import { type PromisesApi, usePromises } from "./usePromises.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { StaleNotice } from "./StaleNotice.js";
 import { useStaleNotice } from "./useStaleNotices.js";
@@ -167,14 +167,14 @@ function positions(blocks: Block[]): Map<BlockId, number> {
  * `passages`, which is what makes "no ranking by support count" a property of
  * this code rather than a promise in a prompt.
  *
- * **Exported for its test**, and only for that. Rendering `ClaimsView` cannot
+ * **Exported for its test**, and only for that. Rendering `PromisesView` cannot
  * cover it — that component is handed an already-sorted list — so a mutation
  * that made this sort by `passages.length` left every panel test green. Found by
  * running exactly that mutation, which is why the export is here rather than the
  * test being taken on trust.
  */
-export function inDocumentOrder(claims: Claim[], at: Map<BlockId, number>): Claim[] {
-  return [...claims].sort((a, b) => {
+export function inDocumentOrder(promises: PaperPromise[], at: Map<BlockId, number>): PaperPromise[] {
+  return [...promises].sort((a, b) => {
     const ai = at.get(a.blockId) ?? Number.MAX_SAFE_INTEGER;
     const bi = at.get(b.blockId) ?? Number.MAX_SAFE_INTEGER;
     return ai !== bi ? ai - bi : a.start - b.start;
@@ -196,7 +196,7 @@ export function inDocumentOrder(claims: Claim[], at: Map<BlockId, number>): Clai
  *   says why each of those is the way it is, and why the clear is a *layout*
  *   cleanup — this band and `CriteriaBand` share one slot.
  */
-export function ClaimsBand({
+export function PromisesBand({
   slug,
   blocks,
   onJump,
@@ -209,31 +209,31 @@ export function ClaimsBand({
   onFound(next: Found[]): void;
 }) {
   /* The press that starts a run with nothing there is inside the hook, beside
-     the read it is answered against — useClaims.ts § the automatic run. */
-  const api = useClaims(slug);
+     the read it is answered against — usePromises.ts § the automatic run. */
+  const api = usePromises(slug);
   /** Which claims are painting the prose. Empty is the default — marks are off. */
   const [showing, setShowing] = useState<string[]>([]);
 
   const at = useMemo(() => positions(blocks), [blocks]);
-  const claims = useMemo(
-    () => (api.run === null ? [] : inDocumentOrder(api.run.claims, at)),
+  const promises = useMemo(
+    () => (api.run === null ? [] : inDocumentOrder(api.run.promises, at)),
     [api.run, at],
   );
 
   /* **Computed here rather than on the server**, and that is the whole reason it
      could be built without touching a route, a table or a stored shape: it is a
-     pure function of the blocks this reader already has and the claims that came
+     pure function of the blocks this reader already has and the promises that came
      back.
 
      **Only once the run is done.** Mid-stream every claim that has not arrived
      yet reads as a claim the answer did not account for, which is a true
      statement about an incomplete answer and a misleading one on a screen. The
-     panel is honest about a partial list of claims — they are the paper's, in
+     panel is honest about a partial list of promises — they are the paper's, in
      order — and cannot be about a partial list of omissions. */
   const settled = api.run?.status === "done";
   const otherText = useMemo(
-    () => (settled ? otherTextInQuotes(blocks, claims) : []),
-    [settled, blocks, claims],
+    () => (settled ? otherTextInQuotes(blocks, promises) : []),
+    [settled, blocks, promises],
   );
 
   /* `createdAt` is the run's, so it is the same for every claim and the tie-break
@@ -242,17 +242,17 @@ export function ClaimsBand({
   const slots = useMemo(
     () =>
       assignSlots(
-        claims.map((c) => ({ id: c.id, createdAt: api.run?.createdAt ?? "" })),
+        promises.map((c) => ({ id: c.id, createdAt: api.run?.createdAt ?? "" })),
       ),
-    [claims, api.run],
+    [promises, api.run],
   );
 
   const found = useMemo(() => {
     const out: Found[] = [];
-    for (const claim of claims) {
+    for (const claim of promises) {
       if (!showing.includes(claim.id)) continue;
       out.push(
-        ...resolveClaim(blocks, {
+        ...resolvePaperPromise(blocks, {
           id: claim.id,
           slot: slots.get(claim.id) ?? 0,
           passages: claim.passages,
@@ -260,7 +260,7 @@ export function ClaimsBand({
       );
     }
     return out;
-  }, [claims, showing, slots, blocks]);
+  }, [promises, showing, slots, blocks]);
 
   /* **Publish before paint, and clear on the way out** — two of the three rules
      every passage producer follows, in src/web/passage-lifecycle.ts rather than
@@ -282,9 +282,9 @@ export function ClaimsBand({
   }, []);
 
   return (
-    <ClaimsView
+    <PromisesView
       api={api}
-      claims={claims}
+      promises={promises}
       otherText={otherText}
       slots={slots}
       showing={showing}
@@ -302,13 +302,13 @@ export function ClaimsBand({
  * band-owns-the-state, panel-is-pure split every other mode in this app makes.
  *
  * **Exported, unlike `CriteriaView` next door**, and for the reason `MirrorView`
- * is: tests/referee-claims-panel.test.tsx renders it with no router, no fetch
+ * is: tests/referee-promises-panel.test.tsx renders it with no router, no fetch
  * and no hook, which is the only way to put all three of the empty states on a
  * screen at once and check which sentence each one prints.
  */
-export function ClaimsView({
+export function PromisesView({
   api,
-  claims,
+  promises,
   otherText = [],
   slots,
   showing,
@@ -316,8 +316,8 @@ export function ClaimsView({
   onJump,
   slug = null,
 }: {
-  api: ClaimsApi;
-  claims: Claim[];
+  api: PromisesApi;
+  promises: PaperPromise[];
   /**
    * The rest of the text inside the passages the claims quote —
    * `otherTextInQuotes`.
@@ -343,14 +343,14 @@ export function ClaimsView({
   /* The stale line's × (plan 261010a): this run, by its clock. */
   const staleNotice = useStaleNotice({
     slug,
-    mode: "claims",
+    mode: "promises",
     identities: api.stale ? (run?.createdAt ?? null) : null,
   });
   /* Counted from the rows themselves rather than carried alongside them, so a
      stored run from before the fail-safe existed reads as zero — which is the
      truth about it. Both surfaces count: a passage's line and a claim's own
      headline are the same fail-safe, so they are one number on the panel. */
-  const withheld = claims.reduce(
+  const withheld = promises.reduce(
     (n, c) => n + c.passages.filter((p) => p.withheld).length + (c.claimWithheld ? 1 : 0),
     0,
   );
@@ -360,18 +360,18 @@ export function ClaimsView({
    * nothing.**
    *
    * Two sentences because there are two states of knowledge, and the difference
-   * is a route this work was not allowed to touch: `validateClaims` counts the
-   * truncation, but the store is written with `claims` and `model` only, so
-   * `run.claimsOmitted` is absent on every run written so far. With the count we
+   * is a route this work was not allowed to touch: `validatePromises` counts the
+   * truncation, but the store is written with `promises` and `model` only, so
+   * `run.promisesOmitted` is absent on every run written so far. With the count we
    * say it; without it, a full list is still proof the cap was reached, and that
    * much is said. Silence would be the fourth ranking signal GPT Sol's second
    * review named: visibility itself.
    */
-  const cut = run?.claimsOmitted ?? 0;
+  const cut = run?.promisesOmitted ?? 0;
   const capNote =
-    cut > 0 ? claimsOmittedNote(cut) : claims.length >= MAX_CLAIMS ? CLAIMS_AT_CAP : null;
+    cut > 0 ? promisesOmittedNote(cut) : promises.length >= MAX_PROMISES ? PROMISES_AT_CAP : null;
   return (
-    <div className="clm">
+    <div className="prm">
       {/* `LINKAGE_NOT_ADEQUACY` opened the panel here until 2026-10-03; it is
           behind the band's *How to read this* button now (RefereeMode.tsx
           § HowToRead). */}
@@ -387,8 +387,8 @@ export function ClaimsView({
         className="tip-soon"
         content={
           <ControlTip
-            head={run === null ? "Pull the paper's claims" : "Pull them again"}
-            what="Asks the model for the claims the paper makes about its own work up front, and for the passages where the paper takes each one up."
+            head={run === null ? "Pull the paper's promises" : "Pull them again"}
+            what="Asks the model for the promises the paper makes about its own work up front, and for the passages where the paper takes each one up."
             how="One model call over the whole paper, so it takes a few seconds and costs something. The list comes back in the paper's own order, never best or worst first, and pulling again replaces the whole list rather than adding to it."
           />
         }
@@ -397,56 +397,56 @@ export function ClaimsView({
           type="button"
           variant="outline"
           size="sm"
-          className="clm-run"
+          className="prm-run"
           onClick={api.pull}
           disabled={pending || !api.loaded}
         >
-          {run === null ? "Pull the paper's claims" : "Pull them again"}
+          {run === null ? "Pull the paper's promises" : "Pull them again"}
         </Button>
       </Tooltip>
 
-      {api.error && <p className="clm-error">{api.error}</p>}
-      {!api.loaded && <BandWaiting className="gloss-quiet">Loading the claims…</BandWaiting>}
+      {api.error && <p className="prm-error">{api.error}</p>}
+      {!api.loaded && <BandWaiting className="gloss-quiet">Loading the promises…</BandWaiting>}
 
       {/* The empty state described the sub-mode here until 2026-10-03; the
           band's lead line above the panel says it now (RefereeMode.tsx). */}
 
-      {pending && claims.length === 0 && <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>}
+      {pending && promises.length === 0 && <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>}
 
       {run?.status === "error" && (
-        <p className="clm-error">
+        <p className="prm-error">
           {run.error}{" "}
-          <button type="button" className="clm-retry" onClick={api.pull}>
+          <button type="button" className="prm-retry" onClick={api.pull}>
             Try again
           </button>
         </p>
       )}
 
-      {run?.status === "done" && claims.length === 0 && (
+      {run?.status === "done" && promises.length === 0 && (
         /* The whole-run version of rule 2. Not "this paper makes no claims",
            which is the shorter, more natural sentence and a finding we have no
-           standing to make. An answer where the model *did* name claims and none
+           standing to make. An answer where the model *did* name promises and none
            of them could be found in the paper is a failed run
            (`ANSWER_UNUSABLE`, src/messages.ts) and lands in the error
            branch above with a Try again, so this branch does not cover it.
            tests/referee-copy-is-about-the-model.test.ts. */
         <p className="gloss-quiet">
-          The model did not find any claims stated up front — which is a fact about the run, not
+          The model did not find any promises stated up front — which is a fact about the run, not
           about the paper.
         </p>
       )}
 
-      {claims.length > 0 && (
+      {promises.length > 0 && (
         <>
-          <StaleNotice notice={staleNotice} className="clm-stale">
+          <StaleNotice notice={staleNotice} className="prm-stale">
             Answered about an earlier version of this paper.
           </StaleNotice>
           {/* Said out loud, above the list, because a reader who assumes a list
               is sorted best-first reads the top of it and stops. */}
-          <p className="clm-order">{DOCUMENT_ORDER_NOTE}</p>
-          <ol className="clm-list">
-            {claims.map((claim) => (
-              <ClaimRow
+          <p className="prm-order">{DOCUMENT_ORDER_NOTE}</p>
+          <ol className="prm-list">
+            {promises.map((claim) => (
+              <PromiseRow
                 key={claim.id}
                 claim={claim}
                 slot={slots.get(claim.id)}
@@ -461,12 +461,12 @@ export function ClaimsView({
               Every other note on this panel is about how to read what follows;
               this one is a fact about the list that has just been read, and it
               is meaningless before it. */}
-          {withheld > 0 && <p className="clm-what">{withheldNote(withheld)}</p>}
+          {withheld > 0 && <p className="prm-what">{withheldNote(withheld)}</p>}
 
           {/* And the cap, in the same place and for the same reason: a cap
               nobody is told about ranks the paper's later claims below its
               earlier ones by making them invisible. */}
-          {capNote && <p className="clm-what">{capNote}</p>}
+          {capNote && <p className="prm-what">{capNote}</p>}
 
           {otherText.length > 0 && <OtherTextInQuotes rows={otherText} onJump={onJump} />}
         </>
@@ -497,7 +497,7 @@ export function ClaimsView({
  * lands as an accusation before its own caveat has been read, and it called the
  * rows sentences when the splitter deliberately makes clauses. GPT Sol's second
  * review found all three mismatches; `otherTextInQuotes` in
- * src/referee-claims.ts is where the third one — *anchored in* meaning only
+ * src/referee-promises.ts is where the third one — *anchored in* meaning only
  * *begins in* — is now said plainly.
  *
  * **No count and no ordinal**, for the same reason nothing else here has one:
@@ -513,10 +513,10 @@ function OtherTextInQuotes({
   onJump(blockId: BlockId): void;
 }) {
   return (
-    <section className="clm-row">
+    <section className="prm-row">
       {/* **The heading a referee is likeliest to read as an accusation.** The
           note under it already denies it — `OTHER_TEXT_NOTE`, whose docstring in
-          src/referee-claims.ts is where the denial is argued — and the card says
+          src/referee-promises.ts is where the denial is argued — and the card says
           the refusal a second time, in one line, for the reader who reads a
           heading and skips the paragraph beneath it. Not a second copy of the
           note: the note says what the list *is*, and the card says what it is
@@ -532,21 +532,21 @@ function OtherTextInQuotes({
           />
         }
       >
-        <p className="clm-claim">{OTHER_TEXT_HEADING}</p>
+        <p className="prm-promise">{OTHER_TEXT_HEADING}</p>
       </Tooltip>
-      <p className="clm-what">{OTHER_TEXT_NOTE}</p>
-      <ul className="clm-passages">
+      <p className="prm-what">{OTHER_TEXT_NOTE}</p>
+      <ul className="prm-passages">
         {rows.map((row) => (
-          <li className={"clm-passage"} key={`${row.blockId}:${row.start}`}>
-            <BlockRef id={row.blockId} onJump={onJump} preview={false} className="clm-jump">
-              <span className="clm-quote"><Excerpt blockId={row.blockId} words={row.text} /></span>
+          <li className={"prm-passage"} key={`${row.blockId}:${row.start}`}>
+            <BlockRef id={row.blockId} onJump={onJump} preview={false} className="prm-jump">
+              <span className="prm-quote"><Excerpt blockId={row.blockId} words={row.text} /></span>
             </BlockRef>
           </li>
         ))}
       </ul>
       {/* The cap on this list, said rather than trimmed in silence — and
           numberless, like everything else in this section. */}
-      {rows.length >= MAX_OTHER_TEXT && <p className="clm-none">{OTHER_TEXT_AT_CAP}</p>}
+      {rows.length >= MAX_OTHER_TEXT && <p className="prm-none">{OTHER_TEXT_AT_CAP}</p>}
     </section>
   );
 }
@@ -570,18 +570,18 @@ function OtherTextInQuotes({
  * - **None, and the model named some that could not be found** —
  *   `PASSAGES_UNUSABLE`. This is the state that used to be missing one sub-mode
  *   over, where a criterion whose every result was thrown away printed the
- *   *second* sentence and it was false (GPT Sol's finding 4). `Claim.discarded`
+ *   *second* sentence and it was false (GPT Sol's finding 4). `PaperPromise.discarded`
  *   is what tells them apart, and it is on the row precisely so this branch can
  *   exist.
  */
-function ClaimRow({
+function PromiseRow({
   claim,
   slot,
   showing,
   onToggle,
   onJump,
 }: {
-  claim: Claim;
+  claim: PaperPromise;
   slot: number | undefined;
   showing: boolean;
   onToggle(): void;
@@ -592,25 +592,25 @@ function ClaimRow({
       ? undefined
       : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties);
   return (
-    <li className="clm-row">
-      {/* **Never both, and never neither.** `validateClaims` blanks the headline
+    <li className="prm-row">
+      {/* **Never both, and never neither.** `validatePromises` blanks the headline
           as it sets the flag, and what stands in its place is the paper's own
           sentence in the button below — already on the row, already checked
           against its block, and not the model's judgement. That is the fallback
           GPT Sol's second review asked for, and it is why the row can afford to
           lose the line. */}
       {claim.claimWithheld ? (
-        <p className="clm-none">{CLAIM_WITHHELD}</p>
+        <p className="prm-none">{PROMISE_WITHHELD}</p>
       ) : (
-        <p className="clm-claim">{claim.claim}</p>
+        <p className="prm-promise">{claim.claim}</p>
       )}
 
       {/* A block link, not a button (plan 260928b): it only goes there, so it
           gets an address, ⌘-click and the card. `preview={false}` because the
           paper's words are already the link's text — the card says only which
           section they are in. */}
-      <BlockRef id={claim.blockId} onJump={onJump} preview={false} className="clm-jump">
-        <span className="clm-quote"><Excerpt blockId={claim.blockId} words={claim.quote} /></span>
+      <BlockRef id={claim.blockId} onJump={onJump} preview={false} className="prm-jump">
+        <span className="prm-quote"><Excerpt blockId={claim.blockId} words={claim.quote} /></span>
       </BlockRef>
 
       {claim.passages.length > 0 && (
@@ -636,7 +636,7 @@ function ClaimRow({
             />
           }
         >
-          <label className="clm-tick">
+          <label className="prm-tick">
             <input
               type="checkbox"
               checked={showing}
@@ -652,33 +652,33 @@ function ClaimRow({
       )}
 
       {claim.passages.length === 0 && (
-        <p className="clm-none">
+        <p className="prm-none">
           {claim.discarded > 0 ? PASSAGES_UNUSABLE : NO_PASSAGE_FOUND}
         </p>
       )}
 
-      <ul className="clm-passages">
+      <ul className="prm-passages">
         {claim.passages.map((p, i) => (
           <li
             /* The index is part of the key on purpose, and it is the same
-               three-part shape `resolveClaim` mints for the marks: one claim can
+               three-part shape `resolvePaperPromise` mints for the marks: one claim can
                be taken up twice in the same block. The list is replaced wholesale
                by each stream frame rather than reordered, so an index key cannot
                carry state across a move. */
             // biome-ignore lint/suspicious/noArrayIndexKey: the ordinal is part of the identity here — see above
             key={`${p.blockId}:${i}`}
-            className="clm-passage"
+            className="prm-passage"
           >
-            <BlockRef id={p.blockId} onJump={onJump} preview={false} className="clm-jump">
-              <span className="clm-quote"><Excerpt blockId={p.blockId} words={p.quote} /></span>
+            <BlockRef id={p.blockId} onJump={onJump} preview={false} className="prm-jump">
+              <span className="prm-quote"><Excerpt blockId={p.blockId} words={p.quote} /></span>
             </BlockRef>
-            {p.reasoning && <p className="clm-why">{p.reasoning}</p>}
-            {/* Never both: `validateClaims` blanks the line as it sets the flag.
-                The sentence is a value in src/referee-claims.ts so the copy test
+            {p.reasoning && <p className="prm-why">{p.reasoning}</p>}
+            {/* Never both: `validatePromises` blanks the line as it sets the flag.
+                The sentence is a value in src/referee-promises.ts so the copy test
                 can check what it may say — it is about the model's line, and it
                 says the passage survived, because a referee who watches a line
                 vanish will otherwise wonder what went with it. */}
-            {p.withheld && <p className="clm-why clm-why-withheld">{REASONING_WITHHELD}</p>}
+            {p.withheld && <p className="prm-why prm-why-withheld">{REASONING_WITHHELD}</p>}
           </li>
         ))}
       </ul>
@@ -686,9 +686,9 @@ function ClaimRow({
       {/* **The cap on this row, said out loud and without a digit.** A count of
           passages is one glance from a ranking, and *how many were cut* is that
           count by another route — so the sentence says the row is incomplete and
-          which way the cut went, and `Claim.passagesOmitted` keeps the number
+          which way the cut went, and `PaperPromise.passagesOmitted` keeps the number
           for a log. GPT Sol's second review, finding 5. */}
-      {(claim.passagesOmitted ?? 0) > 0 && <p className="clm-none">{PASSAGES_CAPPED}</p>}
+      {(claim.passagesOmitted ?? 0) > 0 && <p className="prm-none">{PASSAGES_CAPPED}</p>}
     </li>
   );
 }

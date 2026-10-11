@@ -11,7 +11,7 @@
  * which is the list and says why each is on it; they are not counted here. Most
  * are a mode with a generated artefact. Some are a part of one: the Sketch and
  * Illustrated pictures inside Diagram, the Quiz half of Learn, Summary's
- * plain-words levels, and Referee's Claims and Candidates (whose chip stopped
+ * plain-words levels, and Referee's Promises and Candidates (whose chip stopped
  * arming it on 2026-10-03, so nothing reaches that one today). A target can have
  * more than one control: Diagram's bar button and its Sketch chip both arm the
  * Sketch. The Tweets page was a target a press armed until 2026-09-15 and now

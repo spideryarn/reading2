@@ -1114,6 +1114,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacyTweets(at);
   at = liftLegacyDebateBy(at);
   at = liftLegacySources(at);
+  at = liftLegacyRefereeClaims(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1508,16 +1509,44 @@ function liftLegacySources(at: Address): Address {
 }
 
 /**
+ * **Referee's Promises sub-mode, called Claims until 2026-10-11**:
+ * `?referee=claims` → `?referee=promises`, the first `referee` pair only (as
+ * `get("referee")` reads it), every other pair kept exactly as written. Sources
+ * owns the word *Claims* now, so the old value names nothing in Referee and
+ * `refereeParam` would otherwise open Criteria.
+ *
+ * Behind every arrival, as `liftLegacySources` is: `settleAddress` on boot,
+ * `liftedLegacyHref` on a navigation and on Back, and `liftedLegacySearch` for
+ * a remembered last view, which stores `referee` verbatim. tests/referee-promises-old-addresses.test.ts;
+ * docs/plans/261011g-referee-claims-become-promises-and-starter-criteria-wait-for-the-referee-own.md.
+ */
+function liftLegacyRefereeClaims(at: Address): Address {
+  const pairs = queryPairs(at.search);
+  const first = pairs.findIndex((pair) => hasKey(pair, "referee"));
+  const pair = pairs[first];
+  if (pair === undefined || !pair.includes("=")) return at;
+  let value = pair.slice(pair.indexOf("=") + 1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return at;
+  }
+  if (value !== "claims") return at;
+  const kept = pairs.map((p, i) => (i === first ? "referee=promises" : p));
+  return { pathname: at.pathname, search: `?${kept.join("&")}`, hash: at.hash };
+}
+
+/**
  * **Every old spelling `settleAddress` lifts that can also arrive after
  * boot** — `liftedTweetsHref`'s job, for the thread's old addresses, Debate's
- * old order, and the old mode words of Citations, Debate and Peer review
- * together. `navigate()`
+ * old order, the old mode words of Citations, Debate and Peer review
+ * together, and Referee's old `?referee=claims`. `navigate()`
  * and Back/Forward (`useRoute`) ask this, so a tab open across a deploy lands
  * where a fresh load would. `null` when the address carries none of them.
  */
 export function liftedLegacyHref(href: string): string | null {
   const at = splitHref(href);
-  const lifted = liftLegacySources(liftLegacyDebateBy(liftLegacyTweets(at)));
+  const lifted = liftLegacyRefereeClaims(liftLegacySources(liftLegacyDebateBy(liftLegacyTweets(at))));
   return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
 }
 
@@ -1525,11 +1554,11 @@ export function liftedLegacyHref(href: string): string | null {
  * **The same lifts for a bare query string** — a remembered last view, which
  * last-view.ts § `restoredHref` puts on the address after `settleAddress` has
  * run (GPT Sol's F1 on plan 261009l). Debate's old order first, then the
- * Sources words, as `settleAddress` orders them. The thread's old word is
+ * Sources words, then Referee's, as `settleAddress` orders them. The thread's old word is
  * last-view's own business (`opensTheThread` drops it).
  */
 export function liftedLegacySearch(search: string): string {
-  return liftLegacySources(liftLegacyDebateBy({ pathname: "", search, hash: "" })).search;
+  return liftLegacyRefereeClaims(liftLegacySources(liftLegacyDebateBy({ pathname: "", search, hash: "" }))).search;
 }
 
 /**

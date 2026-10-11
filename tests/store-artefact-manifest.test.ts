@@ -262,7 +262,7 @@ const HOMES: Record<string, string> = {
      yet": a claims run is an article-derived reusable artefact whose right home
      is a pipeline artefact, and a bespoke table for something already scheduled
      to be replaced is two migrations to reach one place. That is still true and
-     `referee_claims` still calls itself an interim — what changed is that the
+     `referee_promises` still calls itself an interim — what changed is that the
      alternative was a sub-mode returning 501 for every operation in the only
      configuration that deploys.
 
@@ -272,7 +272,7 @@ const HOMES: Record<string, string> = {
      the export invented nothing. The export is covered instead by the sentinel
      fixture in tests/store-export-covers-tables.test.ts, which inserts a row and
      requires it back out of this file. See `COVERED_BY_ANOTHER_TEST`. */
-  "referee-claims.json": "referee_claims (one row per article, claims stay JSONB)",
+  "referee-promises.json": "referee_promises (one row per article, claims stay JSONB)",
   "referee-hidden-check.json": "referee_hidden_checks (one finished Opus check per article)",
   "glossary-lookups.json": "glossary_lookups",
   "citation-finds.json": "citation_finds",
@@ -511,11 +511,11 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
   /* tests/store-export-covers-tables.test.ts:724 inserts a sentinel claims row
      and requires it back out of this exact filename, so an export that stopped
      writing it fails there. */
-  "referee-claims.json": {
+  "referee-promises.json": {
     why: "no committed article carries a claims run; a sentinel row is inserted and required back out of this filename",
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
-      contains: "referee_claims",
+      contains: "referee_promises",
     },
   },
   "referee-hidden-check.json": {

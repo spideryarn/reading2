@@ -816,24 +816,27 @@ export async function exportArticle(
     if (criteria.length) await put("referee_criteria", "referee-criteria.json", { criteria });
   }
 
-  /* referee-claims.json — the paper's own claims and where it takes each one
-     up. The shape on disk is `{ run }` rather than a bare run, because that is
+  /* referee-promises.json — the paper's own promises (its claims about itself)
+     and where it takes each one up. It was `referee-claims.json`, with a
+     `claims` field, until Referee's Claims became Promises on 2026-10-11 (plan
+     261011g); nothing reads an export back, so only a reader of old exports
+     sees two names. The shape on disk is `{ run }` rather than a bare run, because that is
      what the filesystem claims store wrote and what a restore would have to
-     read back. That store (`src/referee-claims-store.ts`, with its
+     read back. That store (`src/referee-promises-store.ts`, with its
      `loadClaimsRun` reading `parsed.run`) was deleted on 2026-09-05 and this
      wrapper outlived it: the bytes are a rollback format now, and changing the
      envelope would silently invalidate every export already written.
 
      **One row and no id**, unlike every other table here: a referee asks the
      paper what it claims exactly once, so there is nothing to order and nothing
-     to loop over. `referee_claims` is an interim table
-     (drizzle/0051_referee_claims.sql); when Claims becomes the pipeline artefact
+     to loop over. `referee_promises` is an interim table
+     (drizzle/0051_referee_claims.sql); when Promises becomes the pipeline artefact
      the plan wants, this block moves up to the `article_revisions` group above
      and the coverage entry moves with it.
 
-     `claims` is JSONB and is written back verbatim. There is no `configFromRow`
+     `promises` is JSONB and is written back verbatim. There is no `configFromRow`
      equivalent to fail on, because there is no discriminated union in the row —
-     the shape is validated by `validateClaims` on the way in. */
+     the shape is validated by `validatePromises` on the way in. */
   /* Hidden text's Opus check, one row and no id, as above. Plan 261009a. */
   const hiddenCheckRow = rows.refereeHiddenChecks[0];
   if (hiddenCheckRow) {
@@ -848,24 +851,24 @@ export async function exportArticle(
       },
     });
   }
-  const claimsRow = rows.refereeClaims[0];
-  if (claimsRow) {
-    await put("referee_claims", "referee-claims.json", {
+  const promisesRow = rows.refereePromises[0];
+  if (promisesRow) {
+    await put("referee_promises", "referee-promises.json", {
       run: compact({
-        status: claimsRow.status,
-        createdAt: claimsRow.createdAt.toISOString(),
-        /* Not `compact`ed away: `claims` is `not null default []`, and an empty
+        status: promisesRow.status,
+        createdAt: promisesRow.createdAt.toISOString(),
+        /* Not `compact`ed away: `promises` is `not null default []`, and an empty
            array is a real answer — a run that failed, or one still pending —
            which is a different fact from a run that was never made. `compact`
            drops only null and undefined, so `[]` stays. */
-        claims: claimsRow.claims,
-        model: claimsRow.model,
+        promises: promisesRow.promises,
+        model: promisesRow.model,
         /* `compact` drops it when null, which is right: null means *not
-           recorded*, and `"claimsOmitted": null` on disk would read as a
+           recorded*, and `"promisesOmitted": null` on disk would read as a
            recorded zero. */
-        claimsOmitted: claimsRow.claimsOmitted,
-        error: claimsRow.error,
-        sourceHash: claimsRow.sourceHash,
+        promisesOmitted: promisesRow.promisesOmitted,
+        error: promisesRow.error,
+        sourceHash: promisesRow.sourceHash,
       }),
     });
   }

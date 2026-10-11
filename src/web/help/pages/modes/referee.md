@@ -1,5 +1,5 @@
 ---
-keywords: peer review reviewer reviewing paper manuscript criteria claims assess evaluate journal conference critique
+keywords: peer review reviewer reviewing paper manuscript criteria promises assess evaluate journal conference critique
 related: for-reviewers, comments
 ---
 
@@ -7,7 +7,7 @@ related: for-reviewers, comments
 
 Peer review asks you to be thorough and fair, and an AI that wrote your review for you would be
 neither. Referee helps you do it yourself: you set the criteria you are judging against, it lines up
-the paper’s claims beside the passages it thinks are meant to back them, and it reads your own
+the paper’s promises beside the passages it thinks are meant to deliver them, and it reads your own
 comments back so you can make them clearer. It never gives a verdict; that stays yours.
 
 ![A Strength of evidence criterion on a paper: four passages, each with a line on why, three marked counts for in green and one counts against in red](../images/mode-referee.png "A For / against criterion: each passage the AI found, which way it cuts, and why. The list numbers 1–4 are its ordering, not a score.")
@@ -22,9 +22,11 @@ does allow AI help it usually asks you to say so.
 
 Five parts, chosen by the chips at the top:
 
-- **Criteria**: write what you are judging against, or start from a preset such as **Controls** or
-  **Strength of evidence**, then press **Run this criterion**.
-- **Claims**: what the paper promises, each beside the passages meant to deliver it.
+- **Criteria**: write what you are judging against, then press **Run this criterion**. Once you
+  have written one of your own, starters appear: checks that are easy to skip, such as
+  **Conclusions** or **Numbers**, and what referee forms ask, such as **Controls**. A starter only
+  fills the box; nothing runs until you press.
+- **Promises**: what the paper promises, each beside the passages meant to deliver it.
 - **Mirror**: reads your own comments back and flags any an author would find hard to act on, or
   that you should check against the passage. It sees only your comments and the passages you marked.
   It is not saved, so leaving Mirror loses it.
@@ -56,11 +58,11 @@ Colour means two different things:
 
 - A **For / against** criterion colours each passage by which way it cuts: red towards “against”,
   green towards “for”, with a sign too — − against, + for, · neither, ± both.
-- Every other mark’s colour says only which criterion or claim made it. It carries no judgement.
+- Every other mark’s colour says only which criterion or promise made it. It carries no judgement.
 
 The number beside a criterion’s passage is the AI’s ordering of its own answers, not a score, and
 nothing adds them up. “The model did not find a passage” tells you about the search, not the paper.
-Fewer passages under a claim does not make it a weaker claim.
+Fewer passages under a promise does not make it a weaker one.
 
 When you comment on a passage in Referee you can place it on a For / against criterion yourself, and
 the panel shows your placement beside the AI’s and says when you disagree.

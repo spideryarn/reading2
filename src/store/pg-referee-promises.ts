@@ -1,14 +1,14 @@
 /**
- * A paper's claims run. The only half — src/referee-claims-store.ts, the
+ * A paper's promises run. The only half — src/referee-promises-store.ts, the
  * filesystem one, went on 2026-09-05 with the rest of the filesystem store
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
  * the stage-G section), and what it held that outlives it is here: the
- * corollary below, `CLAIMS_SWEPT`, and the logging rule.
+ * corollary below, `PROMISES_SWEPT`, and the logging rule.
  *
  * **src/store/pg-referee-criteria.ts is this file's model**, and that file in
  * turn points at src/store/pg-searches.ts for the reasoning behind the article
  * lock, the `DB_NOW` clock and the conditional spreads. None of it is repeated
- * here. What is written out below is only what a claims run has that a
+ * here. What is written out below is only what a promises run has that a
  * criterion does not.
  *
  * ## One run per article, so the table has no id and this file has no retry rule
@@ -51,10 +51,10 @@
  *
  * ## Why this store exists, having been argued against
  *
- * Claims shipped on 2026-08-31 files-only, and under `SPIDERYARN_STORE=postgres`
+ * Promises (then Claims) shipped on 2026-08-31 files-only, and under `SPIDERYARN_STORE=postgres`
  * — which is what deploys — every method refused with a 501. That was recorded
  * rather than pending, on two grounds. The first still stands and is why the
- * table calls itself an interim: a claims run is an article-derived reusable
+ * table calls itself an interim: a promises run is an article-derived reusable
  * artefact whose right home is a **pipeline artefact**
  * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2). The second was
  * the blocking one and has expired: src/store/export.ts was being rewritten in
@@ -79,12 +79,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq, lt, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { refereeClaims } from "../db/schema.js";
+import { refereePromises } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type { Claim, ClaimsRun } from "../referee-claims.js";
-import { CLAIMS_TIMEOUT_MS } from "../referee-claims-run.js";
-import type { ClaimsFinish, RefereeClaimsStore } from "./contracts.js";
+import type { PaperPromise, PromisesRun } from "../referee-promises.js";
+import { PROMISES_TIMEOUT_MS } from "../referee-promises-run.js";
+import type { PromisesFinish, RefereePromisesStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { articleIdForOwned, sourceHashFor } from "./pg.js";
 
@@ -96,7 +96,7 @@ type Db = ReturnType<typeof getDb>;
 /**
  * **How long another process's `pending` run is left alone.**
  *
- * `RefereeClaimsStore.sweep` takes one boolean — *is this process running it* —
+ * `RefereePromisesStore.sweep` takes one boolean — *is this process running it* —
  * where `SweepOptions` takes a set of ids **and** a grace window, and
  * contracts.ts is explicit about why both are needed: `keep` alone is a
  * cross-process bug. Process B sees process A's live row in nobody's set and
@@ -114,12 +114,12 @@ type Db = ReturnType<typeof getDb>;
  * have in src/routes.ts, where an assertion holds it; here the arithmetic makes
  * it unfalsifiable instead.
  */
-export const CLAIMS_ORPHAN_GRACE_MS = CLAIMS_TIMEOUT_MS + 30_000;
+export const PROMISES_ORPHAN_GRACE_MS = PROMISES_TIMEOUT_MS + 30_000;
 
 /**
  * What a sweep writes over an abandoned `pending` run.
  *
- * It lived in `src/referee-claims-store.ts` until 2026-09-05, when that module
+ * It lived in `src/referee-promises-store.ts` until 2026-09-05, when that module
  * — the filesystem claims store — was deleted with the rest of the filesystem
  * store
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
@@ -133,7 +133,7 @@ export const CLAIMS_ORPHAN_GRACE_MS = CLAIMS_TIMEOUT_MS + 30_000;
  * is matched on the constant rather than pinned by a test, so moving it must
  * not be an excuse to reword it.
  */
-export const CLAIMS_SWEPT = "The server stopped before the claims run finished.";
+export const PROMISES_SWEPT = "The server stopped before the promises run finished.";
 
 /**
  * The stored row as the client sees it, or `null` when this paper has never been
@@ -144,35 +144,35 @@ export const CLAIMS_SWEPT = "The server stopped before the claims run finished."
  * simply had no key, and a `"model": null` on the wire is a different shape from
  * the filesystem's — which is the single commonest near-miss in this store.
  */
-function toRun(row: typeof refereeClaims.$inferSelect): ClaimsRun {
+function toRun(row: typeof refereePromises.$inferSelect): PromisesRun {
   return {
-    status: row.status as ClaimsRun["status"],
+    status: row.status as PromisesRun["status"],
     createdAt: row.createdAt.toISOString(),
-    claims: row.claims as Claim[],
+    promises: row.promises as PaperPromise[],
     ...(row.model === null ? {} : { model: row.model }),
     /* Absent, not zero. Null means *not recorded*: an older run, a pending one,
        or a failed one. The route records it on success. A zero here would tell
        the panel that nothing was cut off, which is a different sentence from
        the one it prints when it does not know. */
-    ...(row.claimsOmitted === null ? {} : { claimsOmitted: row.claimsOmitted }),
+    ...(row.promisesOmitted === null ? {} : { promisesOmitted: row.promisesOmitted }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }),
   };
 }
 
 /** The one run for this article, or `null`. */
-async function runFor(articleId: string, db: Db | Tx = getDb()): Promise<ClaimsRun | null> {
+async function runFor(articleId: string, db: Db | Tx = getDb()): Promise<PromisesRun | null> {
   const rows = await db
     .select()
-    .from(refereeClaims)
-    .where(eq(refereeClaims.articleId, articleId))
+    .from(refereePromises)
+    .where(eq(refereePromises.articleId, articleId))
     .limit(1);
   const row = rows[0];
   return row ? toRun(row) : null;
 }
 
-const rawPgRefereeClaimsStore: RefereeClaimsStore = {
-  async load(slug: string): Promise<ClaimsRun | null> {
+const rawPgRefereePromisesStore: RefereePromisesStore = {
+  async load(slug: string): Promise<PromisesRun | null> {
     return runFor(await articleIdForOwned(slug));
   },
 
@@ -184,7 +184,7 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
     slug: string,
     sourceHash: string,
     now: () => string = () => new Date().toISOString(),
-  ): Promise<{ run: ClaimsRun; attempt: string }> {
+  ): Promise<{ run: PromisesRun; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = now();
@@ -205,24 +205,24 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
        reader does not own, so the two can only agree; writing it keeps the row
        self-describing instead of inheriting an owner from a previous write. */
     const [written] = await db
-      .insert(refereeClaims)
+      .insert(refereePromises)
       .values({
         articleId,
         ownerId: currentOwnerId(),
         status: "pending",
-        claims: [],
+        promises: [],
         createdAt: new Date(at),
         sourceHash,
         attemptId: attempt,
       })
       .onConflictDoUpdate({
-        target: refereeClaims.articleId,
+        target: refereePromises.articleId,
         set: {
           ownerId: currentOwnerId(),
           status: "pending",
-          claims: [],
+          promises: [],
           model: null,
-          claimsOmitted: null,
+          promisesOmitted: null,
           error: null,
           /* Re-stamped, and that is not cosmetic: `created_at` is the sweep's
              clock (see the column), so a second run keeping the first run's
@@ -239,12 +239,12 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
       })
       .returning();
 
-    logger.info({ slug }, "claims run started");
+    logger.info({ slug }, "promises run started");
     // `written!`: an insert with `returning()` yields the row it wrote.
     return { run: toRun(written!), attempt };
   },
 
-  async finish(slug: string, patch: ClaimsFinish, attempt: string): Promise<ClaimsRun | null> {
+  async finish(slug: string, patch: PromisesFinish, attempt: string): Promise<PromisesRun | null> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
@@ -258,29 +258,29 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
        a run or claim it was answered against a different version of the paper
        than the one `begin` was told.
 
-       **Every other field of `ClaimsRun` is written here, and a new one has to
-       be added to this list.** `claimsOmitted` arrived on 2026-09-01 while this
+       **Every other field of `PromisesRun` is written here, and a new one has to
+       be added to this list.** `promisesOmitted` arrived on 2026-09-01 while this
        file was being written, and a store that maps the run field by field —
        which is what a table is — drops a field it has not been told about,
        silently, while `finish` reports success. That is the shape
        docs/reusable/silent-success.md is about, and it is the standing cost of
-       columns over a blob. tests/store-pg-referee-claims.test.ts holds the round
+       columns over a blob. tests/store-pg-referee-promises.test.ts holds the round
        trip that goes red when it happens, and `EVERY_RUN_FIELD` in that file
        makes the *next* one a typecheck failure rather than a silent drop. */
-    /* `ClaimsFinish` is a two-armed union; this is its fields with the arms
+    /* `PromisesFinish` is a two-armed union; this is its fields with the arms
        folded together, so each is written when it is there. An `error` arm's
        `claims` can only be `[]` (the type), and the row it lands on is `pending`
-       and so already empty (`referee_claims_empty_unless_done`): whatever is
+       and so already empty (`referee_promises_empty_unless_done`): whatever is
        written here is written as given, and a caller that cast its way past
        the type is refused by the database rather than tidied up. */
-    const fields: Partial<Pick<ClaimsRun, "claims" | "model" | "claimsOmitted" | "error">> = patch;
+    const fields: Partial<Pick<PromisesRun, "promises" | "model" | "promisesOmitted" | "error">> = patch;
     const rows = await db
-      .update(refereeClaims)
+      .update(refereePromises)
       .set({
         status: patch.status,
-        ...(fields.claims === undefined ? {} : { claims: fields.claims }),
+        ...(fields.promises === undefined ? {} : { promises: fields.promises }),
         ...(fields.model === undefined ? {} : { model: fields.model }),
-        ...(fields.claimsOmitted === undefined ? {} : { claimsOmitted: fields.claimsOmitted }),
+        ...(fields.promisesOmitted === undefined ? {} : { promisesOmitted: fields.promisesOmitted }),
         ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way.
         attemptId: null,
@@ -291,21 +291,21 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
       })
       .where(
         and(
-          eq(refereeClaims.articleId, articleId),
-          eq(refereeClaims.status, "pending"),
-          eq(refereeClaims.attemptId, attempt),
+          eq(refereePromises.articleId, articleId),
+          eq(refereePromises.status, "pending"),
+          eq(refereePromises.attemptId, attempt),
         ),
       )
       .returning();
 
-    if (patch.status === "error") logger.warn({ slug }, "claims run failed");
+    if (patch.status === "error") logger.warn({ slug }, "promises run failed");
     /* Zero rows is `null`, never a resurrection: the row went away underneath
        the call, or it is no longer this attempt's to write. Inserting one here
        would store an answer for a paper nobody asked about any more. */
     return rows[0] ? toRun(rows[0]) : null;
   },
 
-  async sweep(slug: string, live: boolean): Promise<ClaimsRun | null> {
+  async sweep(slug: string, live: boolean): Promise<PromisesRun | null> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
@@ -314,26 +314,26 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
          sweepPending sets out. `live` is what THIS process is doing; the age
          check is for every other process, and without it a GET arriving on a
          second lambda would error a run the first lambda is halfway through
-         streaming. See `CLAIMS_ORPHAN_GRACE_MS`. */
-      const cutoff = new Date(Date.now() - CLAIMS_ORPHAN_GRACE_MS);
+         streaming. See `PROMISES_ORPHAN_GRACE_MS`. */
+      const cutoff = new Date(Date.now() - PROMISES_ORPHAN_GRACE_MS);
       const swept = await db
-        .update(refereeClaims)
+        .update(refereePromises)
         // `finished_at` is when the sweep ended the run — the only ending it had.
         .set({
           status: "error",
-          error: CLAIMS_SWEPT,
+          error: PROMISES_SWEPT,
           attemptId: null,
           finishedAt: sql`clock_timestamp()`,
         })
         .where(
           and(
-            eq(refereeClaims.articleId, articleId),
-            eq(refereeClaims.status, "pending"),
-            lt(refereeClaims.createdAt, cutoff),
+            eq(refereePromises.articleId, articleId),
+            eq(refereePromises.status, "pending"),
+            lt(refereePromises.createdAt, cutoff),
           ),
         )
-        .returning({ articleId: refereeClaims.articleId });
-      if (swept.length) logger.warn({ slug }, "swept an abandoned claims run");
+        .returning({ articleId: refereePromises.articleId });
+      if (swept.length) logger.warn({ slug }, "swept an abandoned promises run");
     }
 
     /* The run as it now stands, so a GET is one call — the filesystem store
@@ -343,4 +343,4 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
-export const pgRefereeClaimsStore: RefereeClaimsStore = guardDbStore("referee-claims", rawPgRefereeClaimsStore);
+export const pgRefereePromisesStore: RefereePromisesStore = guardDbStore("referee-promises", rawPgRefereePromisesStore);

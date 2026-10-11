@@ -35,7 +35,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ANSWER_OVERFLOWED, ANSWER_OVERFLOWED_FIXED_ASK } from "../src/messages.js";
 import { findPassagesStream, parseHits } from "../src/search.js";
 import { runCriterionStream } from "../src/referee-criteria-run.js";
-import { runClaimsStream } from "../src/referee-claims-run.js";
+import { runPromisesStream } from "../src/referee-promises-run.js";
 import { mirrorStream } from "../src/referee-mirror.js";
 import { hiddenCheckStream } from "../src/referee-hidden-check.js";
 import { grouped } from "../src/scan-groups.js";
@@ -198,7 +198,7 @@ describe("the overflow message each public caller gets", () => {
         passages: [],
       }),
     );
-    const thrown = await thrownBy(runClaimsStream({ power: "standard", meta, blocks: BLOCKS }));
+    const thrown = await thrownBy(runPromisesStream({ power: "standard", meta, blocks: BLOCKS }));
     expect(thrown?.message).toBe(ANSWER_OVERFLOWED_FIXED_ASK.message);
     expect(thrown?.message).not.toMatch(/narrow/);
     expect(thrown?.message).toMatch(/\[ai-overflowed-no-ask\]$/);

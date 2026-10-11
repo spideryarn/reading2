@@ -4,7 +4,7 @@
  * answer was thrown away on reload; Greg asked for it kept (report
  * spya-gqq38u, and docs/project/database.md § AI output we paid for is kept).
  *
- * src/store/pg-referee-claims.ts with most of it taken out. Only a validated
+ * src/store/pg-referee-promises.ts with most of it taken out. Only a validated
  * answer is written, as one upsert, so there is no `pending` row, no attempt
  * token and no sweep: a failed or abandoned run leaves the last good answer
  * where it was, and two tabs racing leave the answer from the newer press even

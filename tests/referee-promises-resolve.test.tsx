@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * `resolveClaim` in src/web/search-hits.ts — a claim's passages turned into the
+ * `resolvePaperPromise` in src/web/search-hits.ts — a claim's passages turned into the
  * marks the prose draws.
  *
  * jsdom rather than node, for the reason tests/referee-criteria-resolve.test.ts
@@ -18,8 +18,8 @@
  * removed from this sub-mode. The panel row jumps to it; the prose does not wear
  * it, and nothing on screen would look broken if it did.
  *
- * *No confidence reaches `Found`.* There is no number on a `ClaimPassage` and
- * there is not going to be one (src/referee-claims.ts § `ClaimPassage`): the row
+ * *No confidence reaches `Found`.* There is no number on a `PromisePassage` and
+ * there is not going to be one (src/referee-promises.ts § `PromisePassage`): the row
  * asserts that a passage takes a claim up, never how well. `confidence: null` is
  * what a literal word-match already carries, so `keepAbove` reads it as certain
  * rather than as zero. A `0` slipping in here would hide every claim mark behind
@@ -27,9 +27,9 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { ClaimPassage } from "../src/referee-claims.js";
+import type { PromisePassage } from "../src/referee-promises.js";
 import type { Block } from "../src/types.js";
-import { blockHues, hitMarks, resolveClaim } from "../src/web/search-hits.js";
+import { blockHues, hitMarks, resolvePaperPromise } from "../src/web/search-hits.js";
 
 const block = (id: string, html: string): Block => {
   const text = html.replace(/<[^>]+>/g, "");
@@ -47,16 +47,16 @@ const BLOCKS: Block[] = [
   block(RESULTS, "<p>Median time fell by half, and held across both cohorts.</p>"),
 ];
 
-const passage = (blockId: string, quote: string, start = 0): ClaimPassage => ({
+const passage = (blockId: string, quote: string, start = 0): PromisePassage => ({
   blockId,
   quote,
   start,
   reasoning: "how it takes the claim up",
 });
 
-describe("resolveClaim", () => {
+describe("resolvePaperPromise", () => {
   it("finds the passage's quote in the rendered prose", () => {
-    const [found] = resolveClaim(BLOCKS, {
+    const [found] = resolvePaperPromise(BLOCKS, {
       id: `${ABSTRACT}:8`,
       slot: 2,
       passages: [passage(RESULTS, "fell by half")],
@@ -72,7 +72,7 @@ describe("resolveClaim", () => {
        that did nothing when pressed is worse than a row pointing at the
        paragraph the model meant. `resolveOne` owns this; asserted here because
        it is the state a stale claims run is actually in. */
-    const [found] = resolveClaim(BLOCKS, {
+    const [found] = resolvePaperPromise(BLOCKS, {
       id: `${ABSTRACT}:8`,
       slot: 0,
       passages: [passage(RESULTS, "a sentence this paper never carried")],
@@ -84,7 +84,7 @@ describe("resolveClaim", () => {
   it("does not mark the claim's own sentence, only where the paper takes it up", () => {
     /* The abstract is where the paper *states* the claim. Marking it in the same
        hue as the passages would say the abstract is evidence for itself. */
-    const found = resolveClaim(BLOCKS, {
+    const found = resolvePaperPromise(BLOCKS, {
       id: `${ABSTRACT}:8`,
       slot: 0,
       passages: [passage(RESULTS, "fell by half")],
@@ -97,7 +97,7 @@ describe("resolveClaim", () => {
     /* `null`, never `0`. `keepAbove` reads null as certain and zero as beneath
        every threshold, so a zero here would hide every claim mark behind the
        `?conf=` bar and look exactly like a model that found nothing. */
-    const [found] = resolveClaim(BLOCKS, {
+    const [found] = resolvePaperPromise(BLOCKS, {
       id: `${ABSTRACT}:8`,
       slot: 0,
       passages: [passage(RESULTS, "fell by half")],
@@ -108,7 +108,7 @@ describe("resolveClaim", () => {
 
   it("drops a passage naming a block the article no longer has", () => {
     expect(
-      resolveClaim(BLOCKS, {
+      resolvePaperPromise(BLOCKS, {
         id: `${ABSTRACT}:8`,
         slot: 0,
         passages: [passage("spya-zwt234", "anything")],
@@ -122,8 +122,8 @@ describe("resolveClaim", () => {
        The same three-part shape a hit, an occurrence and a criterion result all
        use. */
     const twice = [passage(RESULTS, "fell by half"), passage(RESULTS, "both cohorts")];
-    const a = resolveClaim(BLOCKS, { id: `${ABSTRACT}:8`, slot: 0, passages: twice });
-    const b = resolveClaim(BLOCKS, { id: `${ABSTRACT}:9`, slot: 1, passages: twice });
+    const a = resolvePaperPromise(BLOCKS, { id: `${ABSTRACT}:8`, slot: 0, passages: twice });
+    const b = resolvePaperPromise(BLOCKS, { id: `${ABSTRACT}:9`, slot: 1, passages: twice });
     expect(new Set([...a, ...b].map((f) => f.key)).size).toBe(4);
   });
 
@@ -131,7 +131,7 @@ describe("resolveClaim", () => {
     /* `blockHues` drops `null` slots, so a claim without one would paint the
        rail and leave the bar blank — which looks like a rendering bug and is
        not one. */
-    const found = resolveClaim(BLOCKS, {
+    const found = resolvePaperPromise(BLOCKS, {
       id: `${ABSTRACT}:8`,
       slot: 3,
       passages: [passage(RESULTS, "fell by half")],

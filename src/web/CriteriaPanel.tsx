@@ -137,6 +137,14 @@ import {
 } from "./valence.js";
 import { BandWaiting } from "./BandWaiting.js";
 
+/** One starter: what pressing it puts in the form. Nothing runs from a press. */
+interface CriterionStarter {
+  label: string;
+  criterion: string;
+  kind: RefereeCriterionKind;
+  poles?: { against: string; favour: string };
+}
+
 /**
  * **Starter packs, taken from real referee forms** — Nature's, PLOS ONE's
  * technical-soundness gate, eLife's split of *significance of findings* from
@@ -153,12 +161,7 @@ import { BandWaiting } from "./BandWaiting.js";
  * "bad" — *"the controls are adequate"* and *"the controls are pre-registered"*
  * are different questions and only one of them is any given referee's.
  */
-const CRITERION_PRESETS: {
-  label: string;
-  criterion: string;
-  kind: RefereeCriterionKind;
-  poles?: { against: string; favour: string };
-}[] = [
+const FORM_STARTERS: CriterionStarter[] = [
   {
     label: "Technical soundness",
     criterion: "Are the methods and the analysis technically sound, and is the reporting complete?",
@@ -194,6 +197,76 @@ const CRITERION_PRESETS: {
   },
 ];
 
+/**
+ * **The second group: checks that are easy to skip.** Reviewers miss more than
+ * they catch: given papers with nine planted major errors, they found about
+ * 2.6 on average (Schroter et al., *J R Soc Med* 2008, 607 reviewers;
+ * docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md).
+ * **That is the only thing the study is cited for.** These five are not a
+ * transcription of its error table, which nobody here has read (plan 261011g
+ * § Part 2): they are the broad kinds of error the research summary names —
+ * conclusions that outrun the results, an abstract that says more than the
+ * results, numbers that disagree with their own tables, an unjustified sample,
+ * unstated limitations — written as questions. There was an "Allocation"
+ * starter in the plan; it went because the same research says biased
+ * randomisation was among the errors reviewers caught *best* (GPT Sol's plan
+ * review, F4). "Controls" stays in the form group above.
+ */
+const SECOND_LOOK_STARTERS: CriterionStarter[] = [
+  {
+    label: "Conclusions",
+    criterion: "Do the conclusions follow from the results the paper reports, or do they go further?",
+    kind: "diverging",
+    poles: { against: "goes further than the results", favour: "follows from the results" },
+  },
+  {
+    label: "Abstract and results",
+    criterion: "Does the abstract say the same thing as the results section?",
+    kind: "diverging",
+    poles: { against: "the abstract says more or something different", favour: "the abstract matches the results" },
+  },
+  {
+    label: "Numbers",
+    criterion: "Do the numbers in the text agree with the tables and figures they refer to?",
+    kind: "single",
+  },
+  {
+    label: "Sample size",
+    criterion: "Is the number of participants or samples justified, and is how it was decided reported?",
+    kind: "single",
+  },
+  {
+    label: "Limitations",
+    criterion: "Does the paper state its limitations, and are they the ones that matter most?",
+    kind: "single",
+  },
+];
+
+/**
+ * **Both groups, shown only once the referee has a criterion of their own.**
+ * Greg, 2026-10-10 (q-fkq30v 4A), carrying the research's condition: a list of
+ * starters is the tool suggesting what to judge, which is the anchoring the
+ * mode exists to avoid, so the first criterion has to be the referee's. While
+ * no starter is on screen, whatever they save first is necessarily their own
+ * words. Until 2026-10-11 the form group showed from the first visit.
+ */
+export const STARTER_GROUPS: { heading: string; note: string; starters: CriterionStarter[] }[] = [
+  {
+    heading: "Worth a second look",
+    note: "Reviewers miss more than they catch: in one study, given papers with nine planted major errors, they found fewer than three on average. These are checks that are easy to skip.",
+    starters: SECOND_LOOK_STARTERS,
+  },
+  {
+    heading: "From referee forms",
+    note: "What journals and conferences ask their referees to judge.",
+    starters: FORM_STARTERS,
+  },
+];
+
+/** The line in the starters' place until the referee has written one of their own. */
+export const STARTERS_WAIT =
+  "Starters appear here once you have written a criterion of your own, so that your first question is yours.";
+
 /* ------------------------------------------------------------------ band -- */
 
 /**
@@ -215,7 +288,7 @@ const CRITERION_PRESETS: {
  *   clear both on the way out in a separate cleanup that depends on nothing but
  *   the parent's setters. src/web/passage-lifecycle.ts says why each of those is
  *   the way it is, and why the clear is a *layout* cleanup — this band and
- *   `ClaimsBand` share one slot.
+ *   `PromisesBand` share one slot.
  */
 export function CriteriaBand({
   slug,
@@ -292,7 +365,7 @@ export function CriteriaBand({
      docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2,
      and tests/passage-mode-cleanup.test.tsx is the executable form of it.
 
-     **This band and `ClaimsBand` are the pair the phase of the clear matters
+     **This band and `PromisesBand` are the pair the phase of the clear matters
      for.** They are siblings inside `RefereeSubMode` writing the *same* slot, so
      changing `?referee=` hands one slot from one producer to the other inside a
      single commit — which is why the helper's clear is a layout cleanup rather
@@ -379,6 +452,16 @@ function CriteriaView({
      asked for would be an explanation of a thing that is not happening.
      `config.kind` and not `results[0].kind`, because a criterion that is on and
      still streaming is already painting. */
+  /* **A latch, not a count** (GPT Sol's plan review, F3): the starters are
+     unlocked by the referee having written a criterion, and deleting it later
+     cannot un-anchor them, so they stay rather than flicker. Set by a saved
+     row once the list has loaded, or by the referee's own press of Run. Per
+     mount, so a fresh visit to an article with no criteria starts locked
+     again. No chat or MCP path creates a criterion today; one that ever does
+     must not set this. */
+  const [authored, setAuthored] = useState(false);
+  if (!authored && api.criteria.length > 0) setAuthored(true);
+
   const anyDiverging = api.criteria.some(
     (row) => active.includes(row.id) && row.config.kind === "diverging",
   );
@@ -387,7 +470,11 @@ function CriteriaView({
       <NewCriterion
         scale={scale}
         loaded={api.loaded}
-        onAsk={(criterion, config) => onShow(api.ask(criterion, config))}
+        hasOwn={authored}
+        onAsk={(criterion, config) => {
+          setAuthored(true);
+          onShow(api.ask(criterion, config));
+        }}
       />
 
       {/* Two slots, because they are two facts: the load's failure stays until
@@ -601,6 +688,7 @@ const MIXED_SIGN = "±";
 function NewCriterion({
   scale,
   loaded,
+  hasOwn,
   onAsk,
 }: {
   /**
@@ -626,6 +714,13 @@ function NewCriterion({
    * docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md.
    */
   loaded: boolean;
+  /**
+   * **Has the referee written a criterion of their own?** Pending, done or
+   * failed alike: each is something they wrote and pressed Run on. The
+   * starters wait for it (`STARTER_GROUPS`), and `CriteriaView` keeps it set
+   * once it is.
+   */
+  hasOwn: boolean;
   onAsk(criterion: string, config: RefereeCriterionConfig): void;
 }) {
   const [text, setText] = useState("");
@@ -745,44 +840,61 @@ function NewCriterion({
         </div>
       )}
 
-      <div className="crit-presets">
-        {/* **The card says what the press overwrites**, because the press is
-            destructive and nothing on screen says so: it replaces the box, the
-            kind and both poles at once, so a referee halfway through writing
-            their own criterion loses it to what looks like a suggestion chip.
-            The card also prints the criterion itself, which is the thing they
-            are actually choosing and which the label only gestures at. */}
-        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {CRITERION_PRESETS.map((p) => (
-            <Tooltip
-              key={p.label}
-              placement="bottom"
-              keepSide
-              className="tip-soon"
-              content={
-                <ControlTip
-                  head={p.label}
-                  what={`Fills the box with: “${p.criterion}”`}
-                  how={`Replaces whatever is in the form — the text, the kind and both ends — with this ${KIND_LABEL[p.kind].toLowerCase()} criterion. Nothing runs until you press Run this criterion, and the words stay yours to edit.`}
-                />
-              }
-            >
-              <button
-                type="button"
-                className="crit-preset"
-                onClick={() => {
-                  setText(p.criterion);
-                  setKind(p.kind);
-                  setAgainst(p.poles?.against ?? "");
-                  setFavour(p.poles?.favour ?? "");
-                }}
-              >
-                {p.label}
-              </button>
-            </Tooltip>
+      {/* Held back until there is a criterion of the referee's own —
+          `STARTER_GROUPS` says why. Nothing at all while the saved list is
+          still out, because "none yet" is not known until it lands. */}
+      {hasOwn ? (
+        <div className="crit-starters">
+          {STARTER_GROUPS.map((g) => (
+            <div key={g.heading} className="crit-starter-group">
+              <p className="crit-starter-heading">
+                {g.heading}
+                <span className="crit-starter-note"> — {g.note}</span>
+              </p>
+              <div className="crit-presets">
+                {/* **The card says what the press overwrites**, because the press is
+                    destructive and nothing on screen says so: it replaces the box, the
+                    kind and both poles at once, so a referee halfway through writing
+                    their own criterion loses it to what looks like a suggestion chip.
+                    The card also prints the criterion itself, which is the thing they
+                    are actually choosing and which the label only gestures at. */}
+                <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+                  {g.starters.map((p) => (
+                    <Tooltip
+                      key={p.label}
+                      placement="bottom"
+                      keepSide
+                      className="tip-soon"
+                      content={
+                        <ControlTip
+                          head={p.label}
+                          what={`Fills the box with: “${p.criterion}”`}
+                          how={`Replaces whatever is in the form — the text, the kind and both ends — with this ${KIND_LABEL[p.kind].toLowerCase()} criterion. Nothing runs until you press Run this criterion, and the words stay yours to edit.`}
+                        />
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="crit-preset"
+                        onClick={() => {
+                          setText(p.criterion);
+                          setKind(p.kind);
+                          setAgainst(p.poles?.against ?? "");
+                          setFavour(p.poles?.favour ?? "");
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    </Tooltip>
+                  ))}
+                </TooltipGroup>
+              </div>
+            </div>
           ))}
-        </TooltipGroup>
-      </div>
+        </div>
+      ) : (
+        loaded && <p className="crit-starters-wait">{STARTERS_WAIT}</p>
+      )}
 
       <Tooltip
         placement="top"

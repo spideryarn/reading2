@@ -3,7 +3,7 @@
  *
  * Five components resolve passages and hand them up to `Reader`, which owns the
  * prose: `useIdeasMode`, `useTimelineMode`, `useSearchMode`, `CriteriaBand` and
- * `ClaimsBand`. (There were six until 2026-09-08 — see the table below for
+ * `PromisesBand`. (There were six until 2026-09-08 — see the table below for
  * where Quotes went.) Until 2026-09-06 each held its own copy of
  * the same three effects, and the copies said so — *"a fix to one of these
  * belongs in all three"*, written when there were two and left standing when
@@ -40,7 +40,7 @@
  * Phase turned out to matter. React destroys a deleted subtree's **passive**
  * effects in the passive phase of the commit that deleted it, which is *after*
  * the layout phase in which an incoming sibling published. Referee's two
- * sub-modes are siblings writing one slot (`CriteriaBand` and `ClaimsBand`
+ * sub-modes are siblings writing one slot (`CriteriaBand` and `PromisesBand`
  * inside `RefereeSubMode`), so a passive clear ran *after* the incoming
  * producer's publication and overwrote it. A layout cleanup runs in the mutation
  * phase instead — before the incoming sibling's layout effect — so the outgoing
@@ -58,7 +58,7 @@
  * | `kind` | Producers | Inbound key | Rule 2 |
  * |---|---|---|---|
  * | `keyed` | Ideas, Timeline, Search, Criteria | yes, from `Reader` | yes |
- * | `unkeyed` | Claims | no | no |
+ * | `unkeyed` | Promises | no | no |
  *
  * **There was a third, `derived`, and Quotes was its only caller.** It let one
  * producer publish `found` and `openKey` in the *same* layout effect, so no
@@ -115,7 +115,7 @@ export type PassageLifecycle =
       onOpenKey(key: string | null): void;
     }
   | {
-      /** Claims — no key at all; the unmount clears `found` and nothing else. */
+      /** Promises — no key at all; the unmount clears `found` and nothing else. */
       kind: "unkeyed";
       found: Found[];
       onFound(next: Found[]): void;

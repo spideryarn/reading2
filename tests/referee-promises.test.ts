@@ -1,6 +1,6 @@
 /**
- * What a claims run is allowed to become — `validateClaims` in
- * src/referee-claims.ts.
+ * What a claims run is allowed to become — `validatePromises` in
+ * src/referee-promises.ts.
  *
  * Pure, deterministic, no network and no model. This is the file that holds the
  * three rules the cross-family review made the condition of Claims surviving at
@@ -17,23 +17,23 @@
  *   prints different sentences and only one of them would be true.
  *
  * The third rule — linkage, never adequacy — is not checkable here and is
- * labelled as such in src/referee-claims-run.ts: `reasoning` is free text and
+ * labelled as such in src/referee-promises-run.ts: `reasoning` is free text and
  * nothing in a validator reads English.
  */
 import { describe, expect, it } from "vitest";
 
 import {
-  type Claim,
-  discardedClaims,
+  type PaperPromise,
+  discardedPromises,
   DOCUMENT_ORDER_NOTE,
   LINKAGE_NOT_ADEQUACY,
-  MAX_CLAIMS,
+  MAX_PROMISES,
   MAX_PASSAGES,
   NO_PASSAGE_FOUND,
   PASSAGES_UNUSABLE,
-  UnreadableClaims,
-  validateClaims,
-} from "../src/referee-claims.js";
+  UnreadablePromises,
+  validatePromises,
+} from "../src/referee-promises.js";
 import type { Block } from "../src/types.js";
 
 /**
@@ -88,13 +88,13 @@ describe("rule 1 — document order, never thinness order", () => {
        second line is what makes the test discriminating: the winning claim has
        *more* passages, so no ranking by support count in either direction could
        produce this order. */
-    const { claims } = validateClaims({ claims: [THIN, THICK] }, BLOCKS);
+    const { promises: claims } = validatePromises({ claims: [THIN, THICK] }, BLOCKS);
     expect(claims.map((c) => c.claim)).toEqual([THICK.claim, THIN.claim]);
     expect(claims[0]?.passages.length).toBeGreaterThan(claims[1]?.passages.length ?? 0);
   });
 
   it("puts a claim's passages in the paper's order too, not the model's", () => {
-    const { claims } = validateClaims({ claims: [THICK] }, BLOCKS);
+    const { promises: claims } = validatePromises({ claims: [THICK] }, BLOCKS);
     // Fed eee555 first and ccc333 second; the paper has ccc333 first.
     expect(claims[0]?.passages.map((p) => p.blockId)).toEqual(["spya-cmr456", "spya-ekn678"]);
   });
@@ -103,7 +103,7 @@ describe("rule 1 — document order, never thinness order", () => {
     const long = [
       { id: "spya-fpz789", text: "First we claim speed. Second we claim accuracy." },
     ] as Block[];
-    const { claims } = validateClaims(
+    const { promises: claims } = validatePromises(
       {
         claims: [
           { blockId: "spya-fpz789", quote: "Second we claim accuracy", claim: "accuracy" },
@@ -137,7 +137,7 @@ describe("rule 2 — a null result is about the model, never about the paper", (
     /* Dropping it would be worse than the sentence it is here to carry: the
        claim would simply not appear, and a referee reading the list would take
        the paper to have claimed only what is in front of them. */
-    const { claims } = validateClaims(
+    const { promises: claims } = validatePromises(
       { claims: [{ ...THIN, passages: [] }] },
       BLOCKS,
     );
@@ -149,7 +149,7 @@ describe("rule 2 — a null result is about the model, never about the paper", (
 
 describe("the third state — named passages that could not be found", () => {
   it("counts them on the claim, so the panel can tell it from having found none", () => {
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       {
         claims: [
           {
@@ -172,7 +172,7 @@ describe("the third state — named passages that could not be found", () => {
   });
 
   it("does not count a repeated passage as discarded, because the passage is on the row", () => {
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       {
         claims: [
           {
@@ -194,7 +194,7 @@ describe("the third state — named passages that could not be found", () => {
 
 describe("every row is an index into the piece", () => {
   it("replaces the model's typing with the article's own characters", () => {
-    const { claims } = validateClaims(
+    const { promises: claims } = validatePromises(
       {
         claims: [
           { ...THICK, quote: "The Method Halves Annotation Time", passages: [] },
@@ -212,7 +212,7 @@ describe("every row is an index into the piece", () => {
        "which characters do I wash" and "did the model copy this", and this
        validator is asking the second question.
        src/quote-match.ts § `passes`. */
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       { claims: [{ ...THICK, quote: "halves anno tation time", passages: [] }] },
       BLOCKS,
     );
@@ -221,7 +221,7 @@ describe("every row is an index into the piece", () => {
   });
 
   it("drops a claim naming a block this article does not have", () => {
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       { claims: [{ ...THICK, blockId: "spya-zwt234" }] },
       BLOCKS,
     );
@@ -230,7 +230,7 @@ describe("every row is an index into the piece", () => {
   });
 
   it("drops a claim with no line saying what the claim is", () => {
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       { claims: [{ blockId: "spya-anc234", quote: "halves annotation time" }] },
       BLOCKS,
     );
@@ -243,14 +243,14 @@ describe("every row is an index into the piece", () => {
        streams and once over the whole reply — and a minted id would differ
        between the two, so the claim the referee had switched on would go dark
        the moment the authoritative answer landed. */
-    const once = validateClaims({ claims: [THICK] }, BLOCKS).claims[0];
-    const again = validateClaims({ claims: [THICK] }, BLOCKS).claims[0];
+    const once = validatePromises({ claims: [THICK] }, BLOCKS).promises[0];
+    const again = validatePromises({ claims: [THICK] }, BLOCKS).promises[0];
     expect(once?.id).toBe(again?.id);
     expect(once?.id).toContain("spya-anc234");
   });
 
   it("drops a second claim anchored to the same words", () => {
-    const { claims, dropped } = validateClaims({ claims: [THICK, THICK] }, BLOCKS);
+    const { promises: claims, dropped } = validatePromises({ claims: [THICK, THICK] }, BLOCKS);
     expect(claims).toHaveLength(1);
     expect(dropped.duplicates).toBe(1);
   });
@@ -262,20 +262,20 @@ describe("what it refuses outright", () => {
        meaningful answer *this paper makes no claims up front*, which is a
        sentence about the paper that nothing has earned.
        docs/reusable/silent-success.md. */
-    expect(() => validateClaims({ notClaims: [] }, BLOCKS)).toThrow(UnreadableClaims);
-    expect(() => validateClaims(null, BLOCKS)).toThrow(UnreadableClaims);
+    expect(() => validatePromises({ notClaims: [] }, BLOCKS)).toThrow(UnreadablePromises);
+    expect(() => validatePromises(null, BLOCKS)).toThrow(UnreadablePromises);
   });
 
   it("answers an empty list when the model returned one, and counts nothing", () => {
-    const { claims, dropped } = validateClaims({ claims: [] }, BLOCKS);
+    const { promises: claims, dropped } = validatePromises({ claims: [] }, BLOCKS);
     expect(claims).toEqual([]);
-    expect(discardedClaims(dropped)).toBe(0);
+    expect(discardedPromises(dropped)).toBe(0);
   });
 
   it("tells 'found nothing' apart from 'found things I could not use'", () => {
-    const bad = validateClaims({ claims: [{ blockId: "spya-zwt234", quote: "x", claim: "x" }] }, BLOCKS);
-    expect(bad.claims).toEqual([]);
-    expect(discardedClaims(bad.dropped)).toBe(1);
+    const bad = validatePromises({ claims: [{ blockId: "spya-zwt234", quote: "x", claim: "x" }] }, BLOCKS);
+    expect(bad.promises).toEqual([]);
+    expect(discardedPromises(bad.dropped)).toBe(1);
   });
 });
 
@@ -288,12 +288,12 @@ describe("the caps", () => {
     }));
 
   it("counts what it truncated rather than trimming in silence", () => {
-    const text = many(MAX_CLAIMS + 3)
+    const text = many(MAX_PROMISES + 3)
       .map((c) => c.quote)
       .join(". ");
     const blocks = [{ id: "spya-fpz789", text }] as Block[];
-    const { claims, dropped } = validateClaims({ claims: many(MAX_CLAIMS + 3) }, blocks);
-    expect(claims).toHaveLength(MAX_CLAIMS);
+    const { promises: claims, dropped } = validatePromises({ claims: many(MAX_PROMISES + 3) }, blocks);
+    expect(claims).toHaveLength(MAX_PROMISES);
     expect(dropped.truncated).toBe(3);
   });
 
@@ -303,7 +303,7 @@ describe("the caps", () => {
       { id: "spya-bqd345", text: "We also show that it generalises to three unseen domains." },
       { id: "spya-fpz789", text },
     ] as Block[];
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       {
         claims: [
           {
@@ -318,7 +318,7 @@ describe("the caps", () => {
       },
       blocks,
     );
-    expect((claims[0] as Claim).passages).toHaveLength(MAX_PASSAGES);
+    expect((claims[0] as PaperPromise).passages).toHaveLength(MAX_PASSAGES);
     expect(dropped.passageTruncated).toBe(2);
   });
 });

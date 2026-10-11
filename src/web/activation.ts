@@ -342,7 +342,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   referee: {
     kind: "none",
     reason:
-      "opens a panel without starting a model call; only the Claims chip can arm a run",
+      "opens a panel without starting a model call; only the Promises chip can arm a run",
   },
   learn: {
     kind: "none",
@@ -418,7 +418,7 @@ export function modeGenerates(mode: Mode): boolean {
 export function modeStep(mode: Mode): StepName | null {
   const row = MODE_TARGET[mode];
   if (row.kind !== "fixed") return null;
-  return row.target === "claims" || row.target === "candidates" ? null : row.target;
+  return row.target === "promises" || row.target === "candidates" ? null : row.target;
 }
 
 /**
@@ -454,7 +454,7 @@ export function modeStep(mode: Mode): StepName | null {
  */
 const REFEREE_TARGET: Record<RefereeView, AutoRunTarget | null> = {
   criteria: null,
-  claims: "claims",
+  promises: "promises",
   mirror: null,
   candidates: null,
   hidden: null,
@@ -690,13 +690,13 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 }
 
 /**
- * The same, for a press on one of Referee's sub-mode chips. All but Claims
+ * The same, for a press on one of Referee's sub-mode chips. All but Promises
  * arm nothing — `REFEREE_TARGET` says which and why.
  *
  * Called from the chip's own `onClick` in `RefereeViews`, and from nowhere
  * else. **Not from the `?referee=` setter beside it**, which is what
  * Back and Forward move: retracing your steps through the chips must not buy a
- * claims run. Same rule, same reason, as `armActivationForMode`.
+ * promises run. Same rule, same reason, as `armActivationForMode`.
  */
 export function armActivationForRefereeView(slug: string, view: RefereeView): void {
   const target = REFEREE_TARGET[view];

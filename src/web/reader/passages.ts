@@ -50,7 +50,7 @@ import type { Found } from "../search-hits.js";
  * One producer's pair: the passages it has published, and which of them the
  * reader last pressed.
  *
- * `openKey` is `null` for a band that has nothing rung — and for Claims, which
+ * `openKey` is `null` for a band that has nothing rung — and for Promises, which
  * has no key at all, that is the only value it can take. The two fields travel
  * together everywhere, which is the point of the type.
  */
@@ -62,7 +62,7 @@ export interface PassageSlot {
 /**
  * The five slots `Reader` holds, named by the mode that writes each one.
  *
- * `referee` is written by two bands — Criteria and Claims — which is the one
+ * `referee` is written by two bands — Criteria and Promises — which is the one
  * slot shared by a pair of producers, and why the passage lifecycle clears in a
  * layout cleanup (docs/postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md).
  * `search` is the slot whose band names its half `openHit`/`onOpenHit`; the

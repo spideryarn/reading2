@@ -298,11 +298,11 @@ describe("referee mode's sub-modes", () => {
   });
 
   it("is a radiogroup with exactly one checked", () => {
-    paintViews("claims");
+    paintViews("promises");
     expect(host.querySelector('.ref-views[role="radiogroup"]')).not.toBeNull();
     const checked = chips().filter((el) => el.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);
-    expect(checked[0]?.textContent).toBe("Claims");
+    expect(checked[0]?.textContent).toBe("Promises");
   });
 
   it("still selects on a click", () => {
@@ -310,7 +310,7 @@ describe("referee mode's sub-modes", () => {
     const second = chips()[1];
     expect(second).toBeDefined();
     act(() => (second as HTMLElement).click());
-    expect(changes).toEqual(["claims"]);
+    expect(changes).toEqual(["promises"]);
   });
 });
 

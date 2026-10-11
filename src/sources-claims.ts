@@ -22,10 +22,10 @@
  *   OpenRouter's chat/completions wire because it needs the web plugin; this
  *   needs nothing of the kind, so it is on the Messages wire with `faq` and
  *   `relations`, sending Ideas' article block byte for byte.
- * - **Not Referee's list** (`src/referee-claims.ts`), which answers a different
+ * - **Not Referee's list** (`src/referee-promises.ts`), which answers a different
  *   question for a peer reviewer. **Its anchoring rule is reused**: every quote
  *   is re-found in the block it names with `findQuote(…, "spaced")` and
- *   replaced by the article's own characters — src/referee-claims.ts says why
+ *   replaced by the article's own characters — src/referee-promises.ts says why
  *   `"spaced"` and not the default.
  * - **Document order, never a ranking**, and at most `MAX_LISTED_CLAIMS`.
  * - **Public**: a visitor to a shared article sees the list read-only, as every

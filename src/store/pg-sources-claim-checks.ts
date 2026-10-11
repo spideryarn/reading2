@@ -4,7 +4,7 @@
  * a view over it until the contract migration).
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 is the design;
  * src/db/schema.ts § `sourcesClaimChecks` says why the table is shaped as it
- * is. src/store/pg-referee-claims.ts is this file's model for the attempt, the
+ * is. src/store/pg-referee-promises.ts is this file's model for the attempt, the
  * sweep and the logging rule, and none of its reasoning is repeated here.
  *
  * ## The reservation is the insert
@@ -43,7 +43,7 @@ const logger = log("store");
 /**
  * **How long another process's `pending` check is left alone** — the call's
  * own deadline and a margin, derived rather than written down beside it.
- * `CLAIMS_ORPHAN_GRACE_MS` in pg-referee-claims.ts is the sibling.
+ * `PROMISES_ORPHAN_GRACE_MS` in pg-referee-promises.ts is the sibling.
  *
  * **Both clocks start at the reservation**: this one at `created_at`, and the
  * call's deadline just after `begin` returns (src/routes.ts §
@@ -161,7 +161,7 @@ const rawStore: SourcesClaimChecksStore = {
 
   async finish(slug, id, patch: ClaimCheckFinish, attempt) {
     const articleId = await articleIdForOwned(slug);
-    /* **Fenced three ways**, as pg-referee-claims.ts § finish: this article,
+    /* **Fenced three ways**, as pg-referee-promises.ts § finish: this article,
        still `pending`, and still this attempt's. A check the sweep has ended
        matches nothing and gets `null` — never a resurrection. */
     const rows = await getDb()

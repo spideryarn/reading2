@@ -796,7 +796,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quiz: true,
   /* Summary's Simple chip — armed one level down, never by the mode button. */
   simple: true,
-  claims: true,
+  promises: true,
   candidates: true,
 };
 const TARGETS = Object.keys(EVERY_TARGET) as AutoRunTarget[];

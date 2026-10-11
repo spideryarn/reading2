@@ -33,7 +33,7 @@ let stderr = "";
 
 beforeAll(() => {
   const body = `await (async () => {
-    const { runClaims } = await import(${src("referee-claims-run.ts")});
+    const { runPromises } = await import(${src("referee-promises-run.ts")});
     const frame = (payload) => "data: " + JSON.stringify(payload) + "\\n\\n";
     globalThis.fetch = async () => ({
       ok: true,
@@ -58,7 +58,7 @@ beforeAll(() => {
       }),
     });
     try {
-      await runClaims({
+      await runPromises({
         meta: { title: "A long essay" },
         blocks: [{ id: "spya-anc234", text: "We show that the method halves annotation time." }],
       });
@@ -128,7 +128,7 @@ describe("a claims run that spent its whole allowance thinking", () => {
     );
     expect(warn, stdout).toBeDefined();
     expect(warn?.level).toBe("warn");
-    expect(warn?.job).toBe("referee-claims");
+    expect(warn?.job).toBe("referee-promises");
     expect(warn?.reasoningTokens).toBe(THOUGHT);
     expect(warn?.effort).toBe("medium");
     expect(warn?.ceiling).toBeGreaterThan(THOUGHT);

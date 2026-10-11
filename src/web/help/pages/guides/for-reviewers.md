@@ -1,7 +1,7 @@
 ---
 title: Reviewing a paper
 summary: For a peer reviewer, or anybody reading critically, a route through the modes that point you at passages, with the judgement left to you.
-keywords: reviewer referee peer review critical critique assess evaluate manuscript preprint journal claims evidence guide
+keywords: reviewer referee peer review critical critique assess evaluate manuscript preprint journal claims promises evidence guide
 related: mode-referee, mode-sources, comments, faq-is-the-ai-reading-for-me, for-experts
 ---
 
@@ -19,11 +19,11 @@ appear only once you turn those on.
 preprints, open-review submissions, and drafts the author has agreed to share.
 [Referee](/help/mode-referee) says why.
 
-## See what the paper claims
+## See what the paper promises
 
-- **Open [Referee](/help/mode-referee)** and choose **Claims**: what the paper promises, each
-  beside the passages meant to deliver it. Fewer passages under a claim does not make it a weaker
-  claim.
+- **Open [Referee](/help/mode-referee)** and choose **Promises**: what the paper promises, each
+  beside the passages meant to deliver it. Fewer passages under a promise does not make it a weaker
+  one.
 - **Open [Ideas](/help/mode-ideas)** for what the piece assumes and never states. That split is the
   AI’s reading, so treat it as a careful reader’s interpretation.
 - **Try [FAQ](/help/mode-faq)** to find the objections the piece anticipates. Each question points

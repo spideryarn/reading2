@@ -92,7 +92,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Claim, ClaimsRun } from "../src/referee-claims.js";
+import type { PaperPromise, PromisesRun } from "../src/referee-promises.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { Block, BlockId, Ideas, Timeline } from "../src/types.js";
 import type { Found } from "../src/web/search-hits.js";
@@ -124,7 +124,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
-const { ClaimsBand } = await import("../src/web/ClaimsPanel.js");
+const { PromisesBand } = await import("../src/web/PromisesPanel.js");
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, and `?idea=`, `?event=`
@@ -242,7 +242,7 @@ const CRITERION: SavedCriterion = {
  * Marks are off until the referee asks for them — `showing` is local state that
  * starts empty — so the arm below ticks the box before it has anything to lose.
  */
-const CLAIM: Claim = {
+const CLAIM: PaperPromise = {
   id: `${ONE}:0`,
   blockId: ONE,
   quote: "Thirty-one participants",
@@ -254,10 +254,10 @@ const CLAIM: Claim = {
   discarded: 0,
 };
 
-const CLAIMS_RUN: ClaimsRun = {
+const PROMISES_RUN: PromisesRun = {
   status: "done",
   createdAt: "2026-09-01T09:00:00.000Z",
-  claims: [CLAIM],
+  promises: [CLAIM],
   sourceHash: "h",
 };
 
@@ -295,8 +295,8 @@ const serve = (url: string): Promise<Response> => {
   if (path === `/api/referee/criteria/${SLUG}`) {
     return Promise.resolve(json({ criteria: [CRITERION], sourceHash: "h" }));
   }
-  if (path === `/api/referee/claims/${SLUG}`) {
-    return Promise.resolve(json({ run: CLAIMS_RUN, sourceHash: "h" }));
+  if (path === `/api/referee/promises/${SLUG}`) {
+    return Promise.resolve(json({ run: PROMISES_RUN, sourceHash: "h" }));
   }
   /* Search's saved runs, and an empty list is the honest answer here: this arm
      is about the literal matcher, which needs no saved search and no model. */
@@ -352,7 +352,7 @@ function Harness({ band }: { band: BandName | null }) {
        than an omission: nothing rings a claim's passage, so leaving the sub-mode
        has to take `found` and must not touch a key it does not own. */
     band === "claims"
-      ? createElement(ClaimsBand, {
+      ? createElement(PromisesBand, {
           key: "b",
           slug: SLUG,
           blocks: BLOCKS,
@@ -548,7 +548,7 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     /* Marks are off until the referee asks for them, so the precondition here is
        a tick rather than a URL — `showing` is local state and starts empty. */
     expect(state().found, "nothing is marked until the referee ticks a claim").toBe(0);
-    const ticks = [...host.querySelectorAll<HTMLInputElement>(".clm-tick input")];
+    const ticks = [...host.querySelectorAll<HTMLInputElement>(".prm-tick input")];
     expect(ticks, "one claim to tick").toHaveLength(1);
     act(() => ticks[0]!.click());
     await flush();
@@ -593,7 +593,7 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
 
   it("Referee's two sub-modes hand one slot over, in both directions", async () => {
     /* **The one place in the app where two producers share a slot.**
-       `CriteriaBand` and `ClaimsBand` are siblings inside `RefereeSubMode`
+       `CriteriaBand` and `PromisesBand` are siblings inside `RefereeSubMode`
        writing `Reader`'s single `refereeFound`, so changing `?referee=` is one
        commit that deletes one producer and mounts the other.
 
@@ -623,7 +623,7 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     expect(state().openKey, "criteria's ring must not outlive criteria").toBe("none");
     expect(state().found, "and neither may its marks").toBe(0);
 
-    const ticks = [...host.querySelectorAll<HTMLInputElement>(".clm-tick input")];
+    const ticks = [...host.querySelectorAll<HTMLInputElement>(".prm-tick input")];
     act(() => ticks[0]!.click());
     await flush();
     expect(state().found, "claims now owns the slot").toBe(1);

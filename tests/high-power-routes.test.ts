@@ -524,7 +524,7 @@ describe("every request-path route family sends Opus for a high-powered article 
   });
 
   it("referee — the claims", async () => {
-    await call("POST", `/api/referee/claims/${SLUG}`);
+    await call("POST", `/api/referee/promises/${SLUG}`);
     expect(sent).toEqual([HIGH_POWER_MODEL_OPENROUTER]);
   });
 

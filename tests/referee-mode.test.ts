@@ -102,7 +102,7 @@ describe("which sub-mode a link asks for", () => {
        referee's own three and never the landing view: somebody who opened
        Referee mode is almost always the referee. It was last until
        2026-10-07, when the source scan became the fifth (plan 261007h). */
-    expect(REFEREE_VIEWS.slice(0, 4)).toEqual(["criteria", "claims", "mirror", "candidates"]);
+    expect(REFEREE_VIEWS.slice(0, 4)).toEqual(["criteria", "promises", "mirror", "candidates"]);
     expect(DEFAULT_REFEREE_VIEW).not.toBe("candidates");
   });
 

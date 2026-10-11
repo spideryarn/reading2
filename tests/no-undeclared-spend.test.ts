@@ -204,7 +204,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
 
      **It was twelve until 2026-10-04.** The seven streaming runners
      (`converse.ts`, `explain.ts`, `quiz-mark.ts`, `search.ts` and referee
-     mode's `referee-criteria-run.ts`, `referee-claims-run.ts` and
+     mode's `referee-criteria-run.ts`, `referee-promises-run.ts` and
      `referee-mirror.ts`) each read the key, used it for nothing and threw the
      sentence the gateway throws anyway. Those checks were deleted (plan
      261004c § R3), the files no longer name the variable in code, and their

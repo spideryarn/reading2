@@ -1,4 +1,4 @@
-/* referee.css — Referee mode's band and its five sub-modes: Criteria, Claims,
+/* referee.css — Referee mode's band and its five sub-modes: Criteria, Promises,
    Mirror, Candidates and Hidden text, plus PlaceOnCriterion's colours where
    they are the panel's rather than the dialog's.
 
@@ -28,7 +28,7 @@
    is a small result: head 41 + notice 214 + scan 386 + chips 46 = 687 in a
    636px band. `.ref-views` started at y=700 in a 720px window, so the sub-mode
    chips were themselves below the fold, and `.ref-panel` was `height: 0` with
-   321px of content in it. Criteria, Claims, Mirror and Candidates were all
+   321px of content in it. Criteria, Promises, Mirror and Candidates were all
    unreachable, on every window shorter than about 1400px, and the referee had
    nothing to scroll because there was nothing scrollable.
 
@@ -407,6 +407,14 @@
 .crit-kinds { align-self: flex-start; }
 .crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
 
+/* The starters: two labelled groups, shown only once the referee has a
+   criterion of their own (CriteriaPanel.tsx § `STARTER_GROUPS`); the wait line
+   stands in their place until then. */
+.crit-starters { display: flex; flex-direction: column; gap: 0.35rem; }
+.crit-starter-heading { margin: 0 0 0.15rem; font-size: 0.81rem; color: var(--ink); }
+.crit-starter-note,
+.crit-starters-wait { font-size: 0.81rem; color: var(--ink-faint); }
+.crit-starters-wait { margin: 0; }
 .crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
 .crit-preset {
   font: inherit;
@@ -620,7 +628,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 .crit-why { margin: 0.1rem 0 0 1.45rem; font-size: var(--type-body); color: var(--ink-faint); }
 .crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.83rem; }
 
-/* --- Claims, the second sub-mode. src/web/ClaimsPanel.tsx.
+/* --- Promises, the second sub-mode (Claims until 2026-10-11). src/web/PromisesPanel.tsx.
 
    What the paper says about itself, and where it takes each claim up.
    docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
@@ -635,19 +643,19 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
    The empty state is the same weight as a full one — it is an answer about the
    run, not a fault. */
 
-.clm { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
+.prm { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
 
 /* The panel's quiet notes about its own list: what was withheld, what the cap
    cut, the other text in quotes. (Linkage-never-adequacy wore this class above
    the button until 2026-10-03; it is behind `.ref-rules` now.) */
-.clm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.prm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
-/* *Pull the paper's claims*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+/* *Pull the paper's promises*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
    the class is a hook, and only where it sits is here. */
-.clm-run { align-self: flex-start; }
+.prm-run { align-self: flex-start; }
 
-.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
-.clm-retry {
+.prm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
+.prm-retry {
   border: 0;
   padding: 0;
   background: none;
@@ -660,18 +668,18 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 
 /* Both of these are quiet lines rather than warnings: one says the paper has
    moved since the run, the other says what the order means. Neither is a fault. */
-.clm-stale, .clm-order { margin: 0; font-size: 0.81rem; color: var(--ink-faint); }
+.prm-stale, .prm-order { margin: 0; font-size: 0.81rem; color: var(--ink-faint); }
 /* The stale line is StaleNotice.tsx's markup since plan 261010a — ⚠, the
    words, and the × at the end of the line — and stays a quiet line. */
-.clm-stale p { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
-.clm-stale svg { flex: none; }
+.prm-stale p { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
+.prm-stale svg { flex: none; }
 
-.clm-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
-.clm-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
+.prm-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
+.prm-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
 
 /* The claim in one line, and the paper's own sentence under it — the label and
    the evidence that the paper said it, in that order. */
-.clm-claim { margin: 0 0 0.15rem; font-size: var(--type-item); font-weight: 600; color: var(--ink); }
+.prm-promise { margin: 0 0 0.15rem; font-size: var(--type-item); font-weight: 600; color: var(--ink); }
 
 /* A block link (BlockRef.tsx, plan 260928b), so it is also `.block-ref`, whose
    id-chip type prose.css sets: Courier at 0.58rem, faint, half opacity, and an
@@ -680,7 +688,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
    to the quote inside, as it did when this was a button. Colour, opacity and
    underline only on the `<a>`: a block this version of the article no longer
    has is a span, and keeps `.block-ref-missing`'s dimmed strike-through. */
-.clm-jump.block-ref {
+.prm-jump.block-ref {
   display: block;
   width: 100%;
   padding: 0;
@@ -688,23 +696,23 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
   letter-spacing: inherit;
   text-align: left;
 }
-a.clm-jump.block-ref,
-a.clm-jump.block-ref:hover { color: inherit; opacity: 1; text-decoration: none; }
-a.clm-jump:hover .clm-quote { text-decoration: underline; }
-a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.clm-quote { font-size: var(--type-quote); color: var(--ink); }
+a.prm-jump.block-ref,
+a.prm-jump.block-ref:hover { color: inherit; opacity: 1; text-decoration: none; }
+a.prm-jump:hover .prm-quote { text-decoration: underline; }
+a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.prm-quote { font-size: var(--type-quote); color: var(--ink); }
 
-.clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
-.clm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+.prm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
+.prm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 
 /* **Not an error colour and not an error shape.** A claim the model found no
    passage for is an ordinary answer about the run, and dressing it as a warning
    is how it comes to be read as a finding about the paper. */
-.clm-none { margin: 0.2rem 0 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.prm-none { margin: 0.2rem 0 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
-.clm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
-.clm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
-.clm-why { margin: 0.1rem 0 0; font-size: var(--type-body); color: var(--ink-faint); }
+.prm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.prm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
+.prm-why { margin: 0.1rem 0 0; font-size: var(--type-body); color: var(--ink-faint); }
 
 /* --- Mirror, the third sub-mode. src/web/MirrorPanel.tsx.
 

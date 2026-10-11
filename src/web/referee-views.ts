@@ -3,8 +3,9 @@
  * nothing.**
  *
  * Three of them help somebody who has been asked to peer-review a piece —
- * `criteria` is their own criteria run over it, `claims` is what the piece
- * promises against where it delivers, and `mirror` is the model reading *their*
+ * `criteria` is their own criteria run over it, `promises` is what the piece
+ * promises against where it delivers (called `claims` until 2026-10-11, when
+ * Sources took that word; src/web/params.ts lifts the old value), and `mirror` is the model reading *their*
  * review rather than the paper. The fourth, `candidates`, is for the person on
  * the other side of the desk: an **editor** deciding who should review it.
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md.
@@ -41,7 +42,7 @@ export const REFEREE_VIEWS = [
   "criteria",
   /* What the piece promises up front, against the passages that are meant to
      deliver it — structure rather than judgement. */
-  "claims",
+  "promises",
   /* The inversion: the model reads the referee's own comments, and says things
      about *those*, never about whether the paper is any good. */
   "mirror",
@@ -70,7 +71,7 @@ export type RefereeView = (typeof REFEREE_VIEWS)[number];
  * Which sub-mode a reader lands in.
  *
  * `criteria`, because it is the only one a referee can use before they have
- * done anything: Claims needs the piece read for it, Mirror needs comments to
+ * done anything: Promises needs the piece read for it, Mirror needs comments to
  * read, and Candidates is not a referee's question at all.
  */
 export const DEFAULT_REFEREE_VIEW: RefereeView = "criteria";

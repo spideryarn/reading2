@@ -548,8 +548,8 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
        the rollback does, would lose them. */
     at("referee-criteria.json", { criteria: rows.refereeCriteria.map((row) => rowJson(row)) });
   }
-  const claims = rows.refereeClaims[0];
-  if (claims) at("referee-claims.json", { run: rowJson(claims) });
+  const claims = rows.refereePromises[0];
+  if (claims) at("referee-promises.json", { run: rowJson(claims) });
   if (rows.sourcesClaimChecks.length) {
     at("sources-claim-checks.json", { checks: rows.sourcesClaimChecks.map((row) => rowJson(row)) });
   }
@@ -675,7 +675,7 @@ one thing that will make the rest of these files make sense.
       chat.json            Your conversations about the article: threads, and every message
                            nested inside the thread it belongs to.
       searches.json        Meaning-searches you ran, and what they matched.
-      referee-claims.json  Referee mode: what the paper claims.
+      referee-promises.json  Referee mode: what the paper claims.
       sources-claim-checks.json Sources › Claims: the claims you picked or typed, and what each search found.
       referee-hidden-check.json Referee mode: Opus's opinion of each row of hidden text.
       referee-criteria.json Referee mode: the criteria you set, and how the article scored.
@@ -879,7 +879,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/comments.json": "Your comments, bookmarks and notes, each anchored to a block.",
   "augmentations/chat.json": "Your conversations: threads, with every message nested inside its thread.",
   "augmentations/searches.json": "Meaning-searches you ran, and what they matched.",
-  "augmentations/referee-claims.json": "Referee mode: what the paper claims.",
+  "augmentations/referee-promises.json": "Referee mode: what the paper claims.",
   "augmentations/sources-claim-checks.json":
     "Sources › Claims: the claims you picked or typed, and what each search found.",
   "augmentations/referee-hidden-check.json": "Referee mode: Opus's opinion of each row of hidden text.",

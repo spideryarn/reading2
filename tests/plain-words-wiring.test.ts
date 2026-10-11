@@ -23,7 +23,7 @@ import { buildSummaryMessages, LINK_SUMMARY_PROMPT_VERSION } from "../src/link-s
 import { liveInstructions } from "../src/live.js";
 import { plainWords, type PlainKind } from "../src/plain-words.js";
 import { buildMarkMessages } from "../src/quiz-mark.js";
-import { buildClaimsMessages } from "../src/referee-claims-run.js";
+import { buildPromisesMessages } from "../src/referee-promises-run.js";
 import { buildCriterionMessages } from "../src/referee-criteria-run.js";
 import { buildMirrorMessages } from "../src/referee-mirror.js";
 import { prepareHiddenCheck } from "../src/referee-hidden-check.js";
@@ -118,8 +118,8 @@ const prompts: { name: string; text: () => string; kinds: PlainKind[]; oldSenten
     kinds: ["explain"],
   },
   {
-    name: "referee claims",
-    text: () => textOf(buildClaimsMessages(meta, blocks)[0]?.content),
+    name: "referee promises",
+    text: () => textOf(buildPromisesMessages(meta, blocks)[0]?.content),
     kinds: ["explain", "landmark"],
   },
 ];

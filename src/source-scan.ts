@@ -21,7 +21,7 @@
  * filesystem half read `raw.json` and the file beside it, the Postgres half
  * follows `raw_source_sha256` into the `sources` bucket, and neither fell back
  * to the other. So a Postgres deployment got a real scan rather than a 501 —
- * which is the trap Claims chose to live with and this one did not have to,
+ * which is the trap Referee's Claims (Promises since 2026-10-11) chose to live with and this one did not have to,
  * because there is nothing here to store.
  *
  * ## How the bytes become text
@@ -68,7 +68,7 @@
  *   A result that cannot outlive the code that produced it cannot go stale, and
  *   an in-process cache cannot: changing a detection rule ships a new process.
  * - **A table costs a migration and the export-coverage guard**, and the
- *   filesystem-only shape Claims took would give a Postgres deployment nothing
+ *   filesystem-only shape Referee's Claims took would give a Postgres deployment nothing
  *   at all.
  *
  * If a cold scan ever turns out to be too slow in production, the next step is

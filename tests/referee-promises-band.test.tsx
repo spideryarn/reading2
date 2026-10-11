@@ -3,14 +3,14 @@
  * **The Claims band, wired to a fetch — is the referee told the paper has
  * moved?**
  *
- * tests/referee-claims-panel.test.tsx renders `ClaimsView` with no hook and no
+ * tests/referee-promises-panel.test.tsx renders `PromisesView` with no hook and no
  * fetch, which is right for what it is about: the three empty states and the
  * document order are pure functions of the props. Staleness is not. It is
- * decided in `useClaims` out of two things that arrive separately — the run,
+ * decided in `usePromises` out of two things that arrive separately — the run,
  * and the paper's fingerprint as the GET reported it — so a test that hands
  * `stale` in as a prop is a test of the sentence, not of the judgement.
  *
- * So this file mounts the real `ClaimsBand` over a stubbed `apiFetch`, the way
+ * So this file mounts the real `PromisesBand` over a stubbed `apiFetch`, the way
  * tests/referee-criteria-panel.test.tsx mounts `CriteriaBand`, and asserts the
  * sentence a referee actually reads. The bug it was written for: the server
  * answers `sourceHash: undefined` for a paper whose blocks it could not read,
@@ -25,7 +25,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Claim, ClaimsRun } from "../src/referee-claims.js";
+import type { PaperPromise, PromisesRun } from "../src/referee-promises.js";
 import type { Block, BlockId } from "../src/types.js";
 
 /** One reply, decided by the test that is running. */
@@ -52,7 +52,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { ClaimsBand } = await import("../src/web/ClaimsPanel.js");
+const { PromisesBand } = await import("../src/web/PromisesPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, so a plausible-looking
    `spya-aaa111` is not one of ours. docs/project/block-ids.md § the alphabet. */
@@ -81,7 +81,7 @@ const BLOCKS: Block[] = [
   },
 ];
 
-const CLAIM: Claim = {
+const CLAIM: PaperPromise = {
   id: `${CLAIMED}:8`,
   blockId: CLAIMED,
   quote: "halves annotation time",
@@ -93,11 +93,11 @@ const CLAIM: Claim = {
   discarded: 0,
 };
 
-function run(over: Partial<ClaimsRun> = {}): ClaimsRun {
+function run(over: Partial<PromisesRun> = {}): PromisesRun {
   return {
     status: "done",
     createdAt: "2026-09-01T09:00:00.000Z",
-    claims: [CLAIM],
+    promises: [CLAIM],
     ...over,
   };
 }
@@ -110,7 +110,7 @@ let root: Root;
 function mount(): void {
   act(() => {
     root.render(
-      createElement(ClaimsBand, {
+      createElement(PromisesBand, {
         slug: SLUG,
         blocks: BLOCKS,
         onJump: () => {},
@@ -150,7 +150,7 @@ afterEach(async () => {
 });
 
 describe("a claims run answered about an older paper says so above the list", () => {
-  /** The sentence the referee reads. Not imported — `ClaimsPanel` inlines it. */
+  /** The sentence the referee reads. Not imported — `PromisesPanel` inlines it. */
   const WARNING = "Answered about an earlier version of this paper.";
 
   /**
@@ -171,7 +171,7 @@ describe("a claims run answered about an older paper says so above the list", ()
 
   it("warns when the server checked and could not fingerprint the paper", async () => {
     /* `sourceHash: undefined` is what the GET answers for a paper whose blocks
-       it could not read (src/routes.ts § referee claims), and it is a real
+       it could not read (src/routes.ts § referee promises), and it is a real
        answer: unknown counts as stale from either side. It is also the one that
        vanishes on the wire, so a client reading the key rather than the value
        never sees it and quietly tells the referee nothing has moved. */

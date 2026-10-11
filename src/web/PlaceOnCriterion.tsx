@@ -210,7 +210,7 @@ interface Props {
  *
  * **The criteria are fetched here rather than threaded in**, and that is a
  * decision. `CriteriaBand` only mounts on the `criteria` sub-mode, so a list
-   * lifted out of it would be empty on Mirror, Claims, Candidates and Hidden
+   * lifted out of it would be empty on Mirror, Promises, Candidates and Hidden
    * text — four of the five places a referee selects prose. Mounting the existing hook here
  * costs one GET, and only when a referee actually selects a passage.
  */

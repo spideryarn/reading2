@@ -1049,7 +1049,7 @@ function slugOf(input: string): string {
  * offline.
  *
  * And a fourth omission, which is a **decision** rather than a policy:
- * `/api/referee/criteria/:slug` and `/api/referee/claims/:slug` are stored
+ * `/api/referee/criteria/:slug` and `/api/referee/promises/:slug` are stored
  * reads a referee would want offline, and they are left out because their paths
  * are nested one segment deeper than every other artefact's. `slugOf` reads
  * path segment 3, so it would file them under the slug `"criteria"`, and

@@ -11,7 +11,7 @@
  *
  * That blind spot had a real occupant for four days. `ai-unusable` was raised by
  * two sentences that lived in the Referee runners' own files
- * (src/referee-claims-run.ts and src/referee-criteria-run.ts; they are one
+ * (src/referee-promises-run.ts and src/referee-criteria-run.ts; they are one
  * sentence in src/messages.ts since 2026-10-04, `ANSWER_UNUSABLE`), and was
  * registered nowhere. Both files asked in
  * prose to be registered — twice each — and

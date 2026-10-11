@@ -164,8 +164,8 @@ export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
     description: "Your own reviewing criteria, run over the piece",
     experimental: false,
   },
-  claims: {
-    label: "Claims",
+  promises: {
+    label: "Promises",
     description: "What the piece promises, against the passages meant to deliver it",
     experimental: false,
   },

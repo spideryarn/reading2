@@ -356,7 +356,7 @@ goes first, because it is instant and nearly free. The models, the measurement a
 
 **Sub-modes have rows of their own since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
 Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Learn › Quiz*,
-*Diagram › Illustrated*, *Referee › Claims*, *Summary › Thread* and the rest sit after the mode rows
+*Diagram › Illustrated*, *Referee › Promises*, *Summary › Thread* and the rest sit after the mode rows
 and before the pages, and Enter opens the mode with that chip already pressed: armed as the chip
 arms (Quiz writes questions, Illustrated paints), never as the mode does, and with the same
 `generates` marker rule. Only a mode the Dock offers has its sub-modes listed, and Diagram offers the

@@ -503,8 +503,8 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
-  /* **Claims — what the paper says about itself, and where it takes it up**
-     (src/referee-claims-run.ts). Criteria's policy, and the caching half of it
+  /* **Promises — what the paper says about itself, and where it takes it up**
+     (src/referee-promises-run.ts). Criteria's policy, and the caching half of it
      is stronger here rather than weaker.
 
      `order` is pinned because this call sends the whole (identity-stripped)
@@ -518,7 +518,7 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
      `require_parameters` is the half that is not a preference: a fallback that
      silently dropped `cache_control` gives a full-price answer indistinguishable
      from a cheap one, and this is the largest single prompt in the mode. */
-  "referee-claims": {
+  "referee-promises": {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
@@ -1069,7 +1069,7 @@ export type ReasoningDecision =
  * more on a longer input. A ceiling sized for the answer alone is therefore a
  * ceiling the thinking can spend first. The pipeline learned that on 2026-08-25
  * (docs/postmortems/260826a-toc-max-tokens.md) and wrote it into
- * src/token-budget.ts — which nothing on this wire imports, so Referee Claims,
+ * src/token-budget.ts — which nothing on this wire imports, so Referee Promises,
  * built a week later with a 12,000 ceiling sized for its JSON, failed on every
  * long paper it was given
  * (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
@@ -1136,8 +1136,8 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      8,000–13,000 thinking tokens, 113–160s, and on one run all 12,000 of the
      old ceiling with nothing written. At `medium`: none on that essay, 1,207 on
      a short synthetic paper, answers in about 50s. `low` lost a passage to a
-     paraphrased quote. src/referee-claims-run.ts sizes its budget with this. */
-  "referee-claims": { effort: "medium" },
+     paraphrased quote. src/referee-promises-run.ts sizes its budget with this. */
+  "referee-promises": { effort: "medium" },
   "referee-candidates": {
     providerDefault:
       "Not measured. A chat personality (src/converse.ts) that weighs web search results, " +
