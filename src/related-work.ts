@@ -23,11 +23,14 @@
  * referee may have uploaded a confidential manuscript, so opening the chip
  * never sends anything, and the privacy page says what the press sends.
  *
- * **The query is the recipe `related-work/1`** (F7): the imported title, then
- * the article's own abstract when it has one, else its first paragraphs (body
- * text, not headings, not notes), at most `MAX_QUERY_BODY` characters cut at a
- * word. The year filter, `publication_year:<Y+1`, only when the piece's year is
- * known: a paper cannot have left out work published after it. The query and
+ * **The query is the recipe `related-work/2`** (F7): the imported title, then
+ * the article's own abstract when it has one, else the paragraphs of the
+ * abstract section its Structure tree finds (`relatedWorkOpening`), else its
+ * first paragraphs (body text, not headings, not notes), at most
+ * `MAX_QUERY_BODY` characters cut at a word, with every email address taken
+ * out. The year filter, `publication_year:<Y+1`, only when the piece's year is
+ * known: a paper cannot have left out work published after it; and always a
+ * type filter (`RELATED_WORK_TYPES`), so no erratum or front matter. The query and
  * the filter are hashed into the stored row's `fingerprint`, so a later `GET`
  * can say the article no longer asks the question that was searched.
  *
@@ -104,12 +107,17 @@ import { log, type Log } from "./log.js";
 import { registryTitleAgrees } from "./paper-evidence.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import type { FetchAllowanceStore, RatePolicy, RelatedWorkStore } from "./store/contracts.js";
-import type { CitedWork, RelatedWork, RelatedWorkResult } from "./types.js";
+import { inAbstract } from "./skim.js";
+import type { BlockKind, CitedWork, RelatedWork, RelatedWorkResult, Tree } from "./types.js";
 
 /* ------------------------------------------------------------ the policy -- */
 
-/** The recipe's name, in the fingerprint. Change it when the query or the filter would be built differently. */
-export const RELATED_WORK_RECIPE = "related-work/1";
+/**
+ * The recipe's name, in the fingerprint. Change it when the query or the filter
+ * would be built differently. `/2` (2026-10-11): the abstract's paragraphs
+ * before the opening, email addresses taken out, and the type filter.
+ */
+export const RELATED_WORK_RECIPE = "related-work/2";
 
 /** One page. Measured 2026-10-11: ten credits, 113 KB with abstracts, 1.7 s. */
 export const RELATED_WORK_RESULTS = 25;
@@ -228,15 +236,72 @@ function cutAtWord(text: string, max: number): string {
 }
 
 /**
- * **The words sent to OpenAlex** (`related-work/1`): the title, then the
+ * **An email address is personal data, and OpenAlex is an outside party**, so
+ * no word with an `@` between two other characters is ever sent — a paper's
+ * author list carries its authors' addresses, and the opening can be it when
+ * the tree finds no abstract. Brackets and punctuation round it go too.
+ */
+function withoutEmails(text: string): string {
+  return text.replace(/[<(\[]?[^\s<>()[\]@]+@[^\s<>()[\]@]+[>)\]]?[.,;:]?/g, " ");
+}
+
+/** A block as the opening reads it: its place, its kind, its text, and the three marks that rule it out. */
+export interface OpeningBlock {
+  id: string;
+  kind: BlockKind;
+  text: string;
+  role: string | null;
+  treatment: string | null;
+  note: string | null;
+}
+
+/** Body prose: a text block that is not a note, a supplement or a classified block (a footnote, a reference). */
+function isOpeningProse(block: OpeningBlock): boolean {
+  return block.kind === "text" && block.role === null && block.treatment === null && block.note === null && block.text.trim() !== "";
+}
+
+/** The first texts of `blocks`, in order, until there is enough for `MAX_QUERY_BODY`. */
+function enough(blocks: readonly OpeningBlock[]): string[] {
+  const out: string[] = [];
+  let length = 0;
+  for (const block of blocks) {
+    if (length > MAX_QUERY_BODY) break;
+    const text = block.text.trim();
+    out.push(text);
+    length += text.length + 1;
+  }
+  return out;
+}
+
+/**
+ * **What follows the title in the query**: the abstract's paragraphs when the
+ * Structure tree has an abstract section (`inAbstract`, src/skim.ts, the same
+ * test Skim uses to leave the abstract out), else the first body paragraphs.
+ * Without this, a paper whose front matter is a permissions notice and an
+ * author list was searched by those (the Transformer, 2026-10-11). Positions
+ * are resolved by block index (docs/project/block-ids.md), so `blocks` is the
+ * whole article in order.
+ */
+export function relatedWorkOpening(blocks: readonly OpeningBlock[], tree: Tree | null): string[] {
+  const prose = blocks.filter(isOpeningProse);
+  if (tree !== null) {
+    const index = new Map(blocks.map((block, at) => [block.id, at] as const));
+    const abstract = prose.filter((block) => inAbstract(block.id, index, tree));
+    if (abstract.length > 0) return enough(abstract);
+  }
+  return enough(prose);
+}
+
+/**
+ * **The words sent to OpenAlex** (`related-work/2`): the title, then the
  * abstract if there is one, else the opening paragraphs, together at most
  * `MAX_QUERY_BODY` characters after the title. Null when there is neither a
  * title nor any prose.
  */
 export function relatedWorkQueryOf(article: RelatedWorkArticle, opening: readonly string[]): string | null {
-  const title = cutAtWord(article.title ?? "", MAX_QUERY_TITLE);
-  const abstract = (article.abstract ?? "").trim();
-  const body = cutAtWord(abstract !== "" ? abstract : opening.join(" "), MAX_QUERY_BODY);
+  const title = cutAtWord(withoutEmails(article.title ?? ""), MAX_QUERY_TITLE);
+  const abstract = withoutEmails(article.abstract ?? "").trim();
+  const body = cutAtWord(abstract !== "" ? abstract : withoutEmails(opening.join(" ")), MAX_QUERY_BODY);
   const query = [title, body].filter((part) => part !== "").join(" ");
   return query === "" ? null : query;
 }
@@ -262,17 +327,28 @@ export function relatedWorkInputOf(
   return { query, yearLimit, fingerprint: relatedWorkFingerprint(query, yearLimit) };
 }
 
+/**
+ * **The kinds of work a piece could have cited**, as OpenAlex types them —
+ * one filter value, `|` meaning or. A positive list rather than a list of
+ * exclusions, so a type OpenAlex adds later is left out until somebody decides:
+ * errata, paratext (*Proceedings of the First Workshop on…*), editorials,
+ * letters, peer reviews and retractions never reach the list. A conference
+ * paper is an `article` to OpenAlex.
+ */
+export const RELATED_WORK_TYPES = "article|preprint|review|book-chapter|book|dissertation|report";
+
 const SEARCH_FIELDS =
   "id,doi,display_name,publication_year,authorships,primary_location,cited_by_count,abstract_inverted_index";
 
 /**
  * OpenAlex's semantic search for these words, published before the year after
- * `yearLimit` when there is one. A search parameter and a separately built
+ * `yearLimit` when there is one, and of the types in `RELATED_WORK_TYPES`. A search parameter and a separately built
  * `filter`, so nothing in the query can add a filter.
  */
 export function openAlexRelatedUrl(query: string, yearLimit: number | null): string {
   const params = new URLSearchParams({ "search.semantic": query });
-  if (yearLimit !== null) params.set("filter", `publication_year:<${yearLimit + 1}`);
+  const filters = [...(yearLimit !== null ? [`publication_year:<${yearLimit + 1}`] : []), `type:${RELATED_WORK_TYPES}`];
+  params.set("filter", filters.join(","));
   params.set("per_page", String(RELATED_WORK_RESULTS));
   params.set("select", SEARCH_FIELDS);
   params.set("mailto", CONTACT_EMAIL);

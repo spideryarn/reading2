@@ -23,6 +23,8 @@ import {
   MAX_QUERY_BODY,
   RELATED_WORK_RATE_POLICY,
   RELATED_WORK_RECIPE,
+  RELATED_WORK_TYPES,
+  type OpeningBlock,
   type RelatedWorkArticle,
   type RelatedWorkLoaded,
   type RelatedWorkSearch,
@@ -37,12 +39,13 @@ import {
   relatedWorkFingerprint,
   relatedWorkInputOf,
   relatedWorkOf,
+  relatedWorkOpening,
   relatedWorkQueryOf,
   searchRelatedWork,
 } from "../src/related-work.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import type { AllowanceTaken, RateBucket, RatePolicy } from "../src/store/contracts.js";
-import type { BlockId, CitedWork, RelatedWork } from "../src/types.js";
+import type { BlockId, CitedWork, RelatedWork, Tree } from "../src/types.js";
 
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(new URL(`./fixtures/openalex/${name}`, import.meta.url), "utf8")) as unknown;
@@ -373,11 +376,112 @@ describe("the query recipe", () => {
     const url = new URL(openAlexRelatedUrl("x&filter=type:book AND y", 2017));
     expect(url.origin + url.pathname).toBe("https://api.openalex.org/works");
     expect(url.searchParams.get("search.semantic")).toBe("x&filter=type:book AND y");
-    expect(url.searchParams.getAll("filter")).toEqual(["publication_year:<2018"]);
+    expect(url.searchParams.getAll("filter")).toEqual([`publication_year:<2018,type:${RELATED_WORK_TYPES}`]);
     expect(url.searchParams.get("per_page")).toBe("25");
     expect(url.searchParams.get("mailto")).toBe(CONTACT_EMAIL);
     expect(url.searchParams.get("select")).toContain("abstract_inverted_index");
-    expect(new URL(openAlexRelatedUrl("q", null)).searchParams.has("filter")).toBe(false);
+    /* No year: the type filter alone. */
+    expect(new URL(openAlexRelatedUrl("q", null)).searchParams.getAll("filter")).toEqual([`type:${RELATED_WORK_TYPES}`]);
+  });
+
+  it("asks only for kinds of work a piece could cite: no errata, paratext, editorials or retractions", () => {
+    const kinds = RELATED_WORK_TYPES.split("|");
+    expect(kinds).toEqual(expect.arrayContaining(["article", "preprint", "book-chapter", "review"]));
+    for (const never of ["erratum", "paratext", "editorial", "retraction", "peer-review", "letter"]) {
+      expect(kinds).not.toContain(never);
+    }
+  });
+
+  it("is a new recipe, so a search kept under the first one reads as asked with other words", () => {
+    expect(RELATED_WORK_RECIPE).toBe("related-work/2");
+  });
+
+  it("never sends an email address, from the title or the opening", () => {
+    const query = relatedWorkQueryOf({ title: "A paper by avaswani@google.com" }, [
+      "Ashish Vaswani Google Brain avaswani@google.com Noam Shazeer <noam@google.com>, (llion@google.com).",
+    ]);
+    expect(query).not.toBeNull();
+    expect(query).not.toContain("@");
+    expect(query).toContain("Ashish Vaswani Google Brain");
+  });
+});
+
+describe("relatedWorkOpening: the abstract first", () => {
+  /* The Transformer's own shape (local import, 2026-10-11): the arXiv
+     permissions notice and the author list come before the abstract, under
+     the same front-matter section. */
+  const at = (n: number) => `spya-b${n}aaaa` as BlockId;
+  const block = (n: number, text: string, kind: OpeningBlock["kind"] = "text"): OpeningBlock => ({
+    id: at(n),
+    kind,
+    text,
+    role: null,
+    treatment: null,
+    note: null,
+  });
+  const BLOCKS: OpeningBlock[] = [
+    block(0, "Attention Is All You Need", "heading"),
+    block(1, "Provided proper attribution is provided, Google hereby grants permission to reproduce the tables."),
+    block(2, "Ashish Vaswani Google Brain avaswani@google.com Noam Shazeer Google Brain noam@google.com"),
+    block(3, "Abstract", "heading"),
+    block(4, "The dominant sequence transduction models are based on complex recurrent networks."),
+    block(5, "We propose a new simple network architecture, the Transformer."),
+    block(6, "1 Introduction", "heading"),
+    block(7, "Recurrent neural networks have been firmly established."),
+  ];
+  const node = (id: string, parent: string | null, depth: number, title: string, lo: number, hi: number, children: string[] = []) => ({
+    id,
+    parent,
+    depth,
+    title,
+    children,
+    range: [at(lo), at(hi)] as [BlockId, BlockId],
+  });
+  /* One leaf per block under each section, as a real tree has: a leaf is the
+     paragraph, never a section (src/section-path.ts § sectionNodesOf). */
+  const leaves = (parent: string, depth: number, lo: number, hi: number) =>
+    Object.fromEntries(
+      Array.from({ length: hi - lo + 1 }, (_, i) => [`l${lo + i}`, node(`l${lo + i}`, parent, depth, "", lo + i, lo + i)]),
+    );
+  const ids = (lo: number, hi: number) => Array.from({ length: hi - lo + 1 }, (_, i) => `l${lo + i}`);
+  const TREE = {
+    version: "test",
+    generator: "test",
+    slug: "attention",
+    rootId: "n0",
+    nodes: {
+      n0: node("n0", null, 0, "Attention Is All You Need", 0, 7, ["n1", "n4"]),
+      n1: node("n1", "n0", 1, "Front Matter and Abstract", 0, 5, ["n2", "n3"]),
+      n2: node("n2", "n1", 2, "Permissions and Authors", 0, 2, ids(0, 2)),
+      n3: node("n3", "n1", 2, "Abstract", 3, 5, ids(3, 5)),
+      n4: node("n4", "n0", 1, "1 Introduction", 6, 7, ids(6, 7)),
+      ...leaves("n2", 3, 0, 2),
+      ...leaves("n3", 3, 3, 5),
+      ...leaves("n4", 2, 6, 7),
+    },
+  } as unknown as Tree;
+
+  it("takes the abstract's paragraphs when the Structure tree has an abstract", () => {
+    expect(relatedWorkOpening(BLOCKS, TREE)).toEqual([BLOCKS[4]?.text, BLOCKS[5]?.text]);
+    const query = relatedWorkQueryOf({ title: "Attention Is All You Need" }, relatedWorkOpening(BLOCKS, TREE)) ?? "";
+    expect(query).toContain("The dominant sequence transduction models");
+    expect(query).not.toContain("permission");
+    expect(query).not.toContain("Vaswani");
+  });
+
+  it("falls back to the first body paragraphs with no tree, or no abstract in it", () => {
+    const first = [BLOCKS[1]?.text, BLOCKS[2]?.text, BLOCKS[4]?.text, BLOCKS[5]?.text, BLOCKS[7]?.text];
+    expect(relatedWorkOpening(BLOCKS, null)).toEqual(first);
+    const noAbstract = {
+      ...TREE,
+      nodes: { ...TREE.nodes, n3: { ...TREE.nodes.n3, title: "Overview" } },
+    } as unknown as Tree;
+    expect(relatedWorkOpening(BLOCKS, noAbstract)).toEqual(first);
+  });
+
+  it("leaves out notes, supplements and classified blocks wherever they are", () => {
+    const withNote: OpeningBlock[] = BLOCKS.map((b, i) => (i === 4 ? { ...b, role: "footnote" } : b));
+    expect(relatedWorkOpening(withNote, TREE)).toEqual([BLOCKS[5]?.text]);
   });
 });
 

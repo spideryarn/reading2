@@ -23,18 +23,18 @@
  * Nothing: src/related-work.ts logs the search.
  */
 
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { decodeAuthors } from "../authors.js";
 import { isStale as bibliographyIsStale } from "../bibliography.js";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, relatedWorkSearches, revisionBlocks } from "../db/schema.js";
 import {
-  MAX_QUERY_BODY,
   type RelatedWorkLoaded,
   type RelatedWorkSearch,
   type StoredRelatedWork,
   relatedWorkOf,
+  relatedWorkOpening,
 } from "../related-work.js";
 import { citedMetaFingerprintOf } from "../source-hash.js";
 import type { Bibliography, RelatedWork, Tree } from "../types.js";
@@ -49,37 +49,29 @@ import { blockHashQuery, notFound, requireSlug } from "./pg.js";
  */
 const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
 
-/** How many leading blocks are read for the opening: far more than `MAX_QUERY_BODY` ever needs. */
-const OPENING_BLOCKS = 40;
-
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 
-/** The first body paragraphs' text, until there is enough for the query. Not headings, notes, quotes or supplements. */
-async function openingOf(tx: Tx, revisionId: string): Promise<string[]> {
-  const rows = await tx
-    .select({ text: revisionBlocks.text })
+/**
+ * **What follows the title in the query** — `relatedWorkOpening`: the
+ * abstract's paragraphs when the tree has an abstract, else the first body
+ * paragraphs. Every block is read, in order, because the tree's ranges are
+ * resolved by position (docs/project/block-ids.md); the HTML and the search
+ * vector are not.
+ */
+async function openingOf(tx: Tx, revisionId: string, tree: Tree | null): Promise<string[]> {
+  const blocks = await tx
+    .select({
+      id: revisionBlocks.blockId,
+      kind: revisionBlocks.kind,
+      text: revisionBlocks.text,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+      note: revisionBlocks.note,
+    })
     .from(revisionBlocks)
-    .where(
-      and(
-        eq(revisionBlocks.revisionId, revisionId),
-        eq(revisionBlocks.kind, "text"),
-        isNull(revisionBlocks.role),
-        isNull(revisionBlocks.treatment),
-        isNull(revisionBlocks.note),
-      ),
-    )
-    .orderBy(asc(revisionBlocks.ordinal))
-    .limit(OPENING_BLOCKS);
-  const opening: string[] = [];
-  let length = 0;
-  for (const { text } of rows) {
-    const flat = text.trim();
-    if (flat === "") continue;
-    opening.push(flat);
-    length += flat.length + 1;
-    if (length > MAX_QUERY_BODY) break;
-  }
-  return opening;
+    .where(eq(revisionBlocks.revisionId, revisionId))
+    .orderBy(asc(revisionBlocks.ordinal));
+  return relatedWorkOpening(blocks, tree);
 }
 
 /** The first top-level heading, for a revision with no stored title — `firstHeadingTitle` in pg.ts. */
@@ -138,7 +130,8 @@ async function loadRelatedWork(slug: string): Promise<RelatedWorkLoaded> {
     const bibliography = found.bibliography as Bibliography | null;
     const listed = bibliography !== null && Array.isArray(bibliography.citations) ? bibliography : null;
     /* One after another: a transaction is one connection. */
-    const opening = await openingOf(tx, found.revisionId);
+    const tree = found.tree as Tree | null;
+    const opening = await openingOf(tx, found.revisionId, tree);
     const title = found.title ?? (await firstHeading(tx, found.revisionId));
     /* Only for staleness, and only when there is a list to judge. */
     const blocks = listed !== null ? await blockHashQuery(tx, found.revisionId) : [];
@@ -148,7 +141,6 @@ async function loadRelatedWork(slug: string): Promise<RelatedWorkLoaded> {
       .where(eq(relatedWorkSearches.articleId, found.articleId))
       .limit(1);
     const authors = decodeAuthors(found.authors);
-    const tree = found.tree as Tree | null;
     return {
       articleId: found.articleId,
       article: {

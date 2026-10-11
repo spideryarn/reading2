@@ -26,6 +26,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
+import { RELATED_WORK_TYPES } from "../src/related-work.js";
 import { articleRevisions, articles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
@@ -214,7 +215,7 @@ describe("GET and POST /api/related-work/:slug", () => {
     expect(asked).toHaveLength(1);
     const url = new URL(asked[0] ?? "");
     expect(url.searchParams.get("search.semantic")?.startsWith("Attention Is All You Need ")).toBe(true);
-    expect(url.searchParams.get("filter")).toBe("publication_year:<2018");
+    expect(url.searchParams.get("filter")).toBe(`publication_year:<2018,type:${RELATED_WORK_TYPES}`);
 
     /* The next open is the kept answer, and asks nothing. */
     asked = [];
@@ -229,7 +230,7 @@ describe("GET and POST /api/related-work/:slug", () => {
         from spideryarn.related_work_searches r join spideryarn.articles a on a.id = r.article_id
        where a.slug = ${MINE}`).then((r) => (r as unknown as { rows: { n: number; fingerprint: string; year_limit: number }[] }).rows);
     expect(row).toMatchObject({ n: 8, year_limit: 2017 });
-    expect(row?.fingerprint).toMatch(/^related-work\/1:[0-9a-f]{64}$/);
+    expect(row?.fingerprint).toMatch(/^related-work\/2:[0-9a-f]{64}$/);
   });
 
   it("says no-bibliography and asks nothing, on both verbs", async () => {
