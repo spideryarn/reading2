@@ -211,6 +211,7 @@ import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 import { voiceClass } from "./voice.js";
 import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /**
  * **The article the bar was opened over**, or `undefined` where there is none.
@@ -2326,6 +2327,7 @@ export function CommandBar({
     box: inputRef,
     context: article === undefined ? { kind: "profile" } : { kind: "article", slug: article.slug },
     transcribe,
+    report: dictationReporter("command-bar"),
     /* Per article, because a command is about the page it was said on: one
        name for the whole site offered a phrase said on one article back on the
        next, transcribed against the first and run on the second (plan 261009g). */

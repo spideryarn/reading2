@@ -135,6 +135,7 @@ import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 import { withVoice } from "./voice.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /**
  * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
@@ -706,6 +707,7 @@ export function QuizPanel({
     box,
     context: { kind: "article", slug: owner.slug },
     transcribe,
+    report: dictationReporter("quiz"),
     /* One box per question: an answer offered back under a different question
        would be the wrong answer. */
     keep: keepDictation(`quiz:${owner.slug}:${question?.id ?? ""}`),

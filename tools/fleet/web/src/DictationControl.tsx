@@ -85,6 +85,9 @@ export function useFleetDictation({
     box,
     context,
     transcribe: sendForTranscription,
+    /* No Sentry on the box: a failure here is on the screen of the person
+       who hit it, and that is the whole audience. */
+    report: () => {},
   });
   return {
     dictation: field.dictation,

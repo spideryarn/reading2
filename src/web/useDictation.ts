@@ -102,9 +102,18 @@
  *    result is dropped unless it is still the newest thing anybody asked for.
  */
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
-import type { DictationKeeper, KeptTape, Transcriber, TranscriptionResult } from "./transcriber.js";
+import {
+  type DictationFailure,
+  type DictationKeeper,
+  type DictationReporter,
+  type KeptTape,
+  type MicErrorName,
+  type Transcriber,
+  type TranscriptionResult,
+  micErrorName,
+} from "./transcriber.js";
 import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js";
-import { verdictFor } from "./dictation-errors.js";
+import { MIC_NONE, MIC_REFUSED, verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
   chosenInputListed,
@@ -654,6 +663,14 @@ export interface DictationOptions<C> {
    */
   transcribe: Transcriber<C>;
   /**
+   * **Who hears about a failure besides the reader** — Sentry, in the product.
+   * Called once per sentence shown, from one effect on `error`, so a failure
+   * branch added later is reported without anybody remembering to. Held in a
+   * ref, like `transcribe`. [transcriber.ts](./transcriber.ts) says why it is
+   * required.
+   */
+  report: DictationReporter<C>;
+  /**
    * **Where a copy is kept until the words are in the box**, so that a tab that
    * closes, reloads or crashes does not take the dictation with it. Optional:
    * without one, a recording lives only as long as the page, as it always did.
@@ -671,7 +688,8 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const [supported] = useState(() => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [interim, setInterim] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  /* Never called directly: `setError`, below, is the one door, and it reports. */
+  const [error, showError] = useState<string | null>(null);
   const [track, setTrack] = useState<MediaStreamTrack | null>(null);
   const [ctx, setCtx] = useState<AudioContext | null>(null);
   const [hearing, setHearing] = useState(false);
@@ -788,6 +806,34 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
      render. Read at the moment of upload, like every other callback here. */
   const transcribe = useRef(options.transcribe);
   transcribe.current = options.transcribe;
+  const report = useRef(options.report);
+  report.current = options.report;
+  /**
+   * What the reader's sentence alone cannot say, for the report: why the
+   * microphone would not open, whether the chosen one did, and whether live
+   * words were running. Set beside the `setError` it explains and reset on
+   * every press, so a later failure never carries an earlier press's reason.
+   */
+  const failureCause = useRef<Omit<DictationFailure, "message">>(NO_CAUSE);
+  /* **One door, every failure.** `setError` is the only way a sentence reaches
+     the reader, so reporting inside it covers each of the ~25 branches that
+     call it, and a branch added next month without anybody remembering to —
+     until 2026-10-11 none of them was reported, which is why Greg's "some kind
+     of error" on the microphone could not be found anywhere
+     (SPIDERYARN-READING2-H0, plan 261011i). **Synchronous, not an effect on
+     `error`**, which was the first version: an effect sees rendered state, so
+     a sentence identical to the one already showing, or one set just before
+     an unmount, was never reported. GPT Sol's plan review, F1. A call is an
+     occurrence; every one of them is reported. */
+  const setError = useCallback((message: string | null) => {
+    showError(message);
+    if (message === null) return;
+    try {
+      report.current({ message, ...failureCause.current }, whereRef.current);
+    } catch {
+      /* A reporter that throws must not take the dictation's message with it. */
+    }
+  }, []);
   const keeper = useRef(options.keep);
   keeper.current = options.keep;
   const keepBox = options.keep?.box ?? null;
@@ -1572,6 +1618,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
 
     session.current = s;
     newest.current = s;
+    failureCause.current = NO_CAUSE;
     setError(null);
     setPhase("opening");
     setDeviceUnavailable(false);
@@ -1625,7 +1672,12 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         return;
       }
       if (outcome.kind !== "started") {
-        setError("The microphone could not be started. Press it again, or type instead. [mic-no-start]");
+        failureCause.current = {
+          micError: outcome.micError,
+          live: false,
+          chosenMic: preferred === null ? "none" : "not-honoured",
+        };
+        setError(couldNotStart(outcome.micError));
         finish(s);
         return;
       }
@@ -1635,6 +1687,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          session's page-wide microphone claim. */
       s.track = outcome.track;
       s.live = outcome.live;
+      failureCause.current = {
+        micError: null,
+        live: outcome.live,
+        chosenMic: preferred === null ? "none" : outcome.honoured ? "honoured" : "not-honoured",
+      };
       setLiveText(outcome.live);
       const opened = labelled(outcome.track);
       /* **Was it the microphone they chose?** Asked of the name as well as the
@@ -2135,8 +2192,48 @@ type CaptureOutcome =
        */
       honoured: boolean;
     }
-  /** It did not start, and the reader needs telling. */
-  | { kind: "failed" };
+  /**
+   * It did not start, and the reader needs telling. `micError` is why, in the
+   * browser's word, from the **last** request refused — the one whose refusal
+   * ended the attempt — or null when no request was refused (the press was
+   * abandoned, or a stream came back with no track). It used to be thrown
+   * away, so a refused permission and a microphone held by another app were
+   * both "could not be started. Press it again" (plan 261011i).
+   */
+  | { kind: "failed"; micError: MicErrorName | null };
+
+/** No reason known yet: the state at every press. */
+const NO_CAUSE: Omit<DictationFailure, "message"> = Object.freeze({
+  micError: null,
+  live: false,
+  chosenMic: "none",
+});
+
+/**
+ * **What to tell the reader when the microphone would not open**, by why.
+ *
+ * Until 2026-10-11 every refusal was `[mic-no-start]`'s "Press it again" —
+ * which cannot work when the page was refused the microphone, and is the wrong
+ * place to look when there is no microphone at all. A refusal gets its own
+ * sentence, deliberately not the recogniser's `[mic-blocked]` "Allow it for
+ * this site": `NotAllowedError` is also a device-wide or browser-wide denial,
+ * a permissions policy, or one of WebKit's own failures with permission
+ * granted, and `SecurityError` is media disabled on the document (GPT Sol's
+ * plan review, F2). No microphone at all gets the recogniser's `[mic-none]`.
+ * Everything else — another app holding the device, no `getUserMedia` — keeps
+ * the general one. Plan 261011i.
+ */
+export function couldNotStart(micError: MicErrorName | null): string {
+  switch (micError) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return MIC_REFUSED;
+    case "NotFoundError":
+      return MIC_NONE;
+    default:
+      return "The microphone could not be started. Press it again, or type instead. [mic-no-start]";
+  }
+}
 
 /**
  * Something that is definitely not a `MediaStreamTrack`, for the probe below.
@@ -2322,10 +2419,14 @@ async function beginCapture(
   /* The probe can wait for an old recogniser to release. A stopped session has
      already released its page-wide claim by then, so it must not go on to open
      a device outside that claim. */
-  if (!stillWanted()) return { kind: "failed" };
-  if (!navigator.mediaDevices?.getUserMedia) return { kind: "failed" };
+  if (!stillWanted()) return { kind: "failed", micError: null };
+  if (!navigator.mediaDevices?.getUserMedia) return { kind: "failed", micError: "unsupported" };
 
   let track: MediaStreamTrack | null = null;
+  /* **The refusal that ended the attempt**, in the browser's word: the last
+     request's, since each fallback below runs only after a missing device and
+     its own refusal is then the one the reader is left with. */
+  let refused: MicErrorName | null = null;
   /* **Whether the reader got the microphone they asked for.** Set only where
      the `exact` request itself succeeded, so a fallback and a refusal both
      report false rather than being told apart by inspecting a track we may not
@@ -2341,7 +2442,7 @@ async function beginCapture(
      after a refused request. */
   let ask = preferred;
   if (preferred !== null && (await chosenInputListed(preferred)) === "missing") ask = null;
-  if (!stillWanted()) return { kind: "failed" };
+  if (!stillWanted()) return { kind: "failed", micError: null };
   /* The system default by name where the browser lists one
      (mic-devices.ts § audioConstraint). Only a *missing device* earns another
      attempt (§ deviceMissing): a missing choice takes the system-default route,
@@ -2353,13 +2454,14 @@ async function beginCapture(
   /* `enumerateDevices` is another await before capture. As above, stopping in
      this gap releases the claim; opening afterwards would overlap whoever took
      the microphone next. */
-  if (!stillWanted()) return { kind: "failed" };
+  if (!stillWanted()) return { kind: "failed", micError: null };
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(ask, defaultListed));
     track = stream.getAudioTracks()[0] ?? null;
     if (track) honoured = ask === preferred;
   } catch (err) {
+    refused = micErrorName(err);
     /* The remembered microphone is gone — unplugged, or its id rotated when
        site data was cleared. `exact` rejects rather than substituting, which is
        what we want, and this is the one place that then asks for the system
@@ -2375,14 +2477,15 @@ async function beginCapture(
          (`ask`, above); it remains for ids the browser hid, and for a device
          that went between listing and opening. */
       const fallbackDefaultListed = ask !== null && (await defaultInputListed());
-      if (!stillWanted()) return { kind: "failed" };
+      if (!stillWanted()) return { kind: "failed", micError: null };
       try {
         const stream = await navigator.mediaDevices.getUserMedia(
           audioConstraint(null, fallbackDefaultListed),
         );
         track = stream.getAudioTracks()[0] ?? null;
       } catch (fallbackError) {
-        if (!stillWanted()) return { kind: "failed" };
+        refused = micErrorName(fallbackError);
+        if (!stillWanted()) return { kind: "failed", micError: null };
         /* Chromium's named default can disappear between enumeration and open,
            just like a chosen device. Only that missing-device failure earns the
            final unconstrained attempt. */
@@ -2390,7 +2493,8 @@ async function beginCapture(
           try {
             const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(null));
             track = stream.getAudioTracks()[0] ?? null;
-          } catch {
+          } catch (finalError) {
+            refused = micErrorName(finalError);
             track = null;
           }
         } else {
@@ -2402,11 +2506,11 @@ async function beginCapture(
     }
   }
 
-  if (!track) return { kind: "failed" };
+  if (!track) return { kind: "failed", micError: refused ?? "no-track" };
   if (!stillWanted()) {
     // The reader stopped while we were opening. Do not leave the device on.
     track.stop();
-    return { kind: "failed" };
+    return { kind: "failed", micError: null };
   }
 
   if (!live || !r) {
