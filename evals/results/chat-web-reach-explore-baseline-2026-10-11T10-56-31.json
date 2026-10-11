@@ -1,0 +1,276 @@
+{
+  "label": "baseline",
+  "kind": "explore",
+  "runs": 1,
+  "at": "2026-10-11T10:58:07.596Z",
+  "articles": [
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "word": "Turing",
+      "page": "https://en.wikipedia.org/wiki/Biological_naturalism"
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "word": "cyanobacteria",
+      "page": "https://en.wikipedia.org/wiki/Neural_scaling_law"
+    }
+  ],
+  "outcomes": [
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "situate",
+      "role": "target",
+      "question": "How does this piece compare with other things written on the same question? Where does it sit?",
+      "seconds": 11.3,
+      "searches": 1,
+      "tools": [
+        "search_library"
+      ],
+      "links": [
+        "https://arxiv.org/pdf/2501.07290",
+        "https://techurbanist.substack.com/p/conscious-ai-and-computational-functionalism",
+        "https://paulchristoperwalton.substack.com/p/what-if-anil-seth-is-wrong-that-conscious"
+      ],
+      "blockIds": [
+        "spya-qu7j89",
+        "spya-hj5y6s"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Seth places himself as a minority: he says the biological naturalist view \"remains a minority view\" and that rival theories mostly assume computational functionalism rather than defend it [spya-qu7j89].\n\nA [2025 paper on responsible AI consciousness research](https://arxiv.org/pdf/2501.07290) puts him in a family with Godfrey-Smith and Solms. All three tie consciousness to an organism's self-regulation. It also says Seth and Solms disagree on whether an artificial system that used predictive processing in a similar way would be conscious.\n\nSolms also appears in the Kuhn piece you saved, \"A landscape of consciousness\". There, the brainstem and affect are treated as the foundation of consciousness. That is a different route to something like Seth's \"life matters\" argument [spya-hj5y6s].\n\nCritics also exist. [Brendan Barlow's Substack critique](https://techurbanist.substack.com/p/conscious-ai-and-computational-functionalism) accepts Seth's attacks on the hype but says his positive claims \"don't quite hold together.\" [Another Substack essay](https://paulchristoperwalton.substack.com/p/what-if-anil-seth-is-wrong-that-conscious) argues that machine life could emerge from today's technology.\n\nFor your group, which would you rather test: the case against computational functionalism, or the positive case for life?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "since",
+      "role": "target",
+      "question": "What has happened with this idea since this was written?",
+      "seconds": 10.7,
+      "searches": 2,
+      "tools": [],
+      "links": [
+        "https://www.anilseth.com/",
+        "https://www.sciencedirect.com/science/article/pii/S3117347026000866"
+      ],
+      "blockIds": [
+        "spya-hj5y6s",
+        "spya-nv6tp0"
+      ],
+      "sources": 1,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Seth's own page now lists [a full journal collection on his target article](https://www.anilseth.com/): the original, about 50 commentaries and his reply, in *Behavioral and Brain Sciences*. This is a longer academic version of the essay, not the Noema piece. His page also links to his comments on a Richard Dawkins chatbot episode. I haven't read either.\n\nOne recent critique goes after the \"life matters\" step. A [2026 opinion article in a ScienceDirect journal](https://www.sciencedirect.com/science/article/pii/S3117347026000866) splits biological naturalism in two. The authors say a version where biology is \"intrinsically\" special can't be empirically supported, while a version where biology affords unique information-processing abilities can, and that version fits with computational functionalism. Seth himself says he has no knock-down argument here [spya-hj5y6s].\n\nMy inference is that this puts pressure on the essay's claim that its arguments each stand alone [spya-nv6tp0]. If life matters only because of what it lets a system compute, the second and fourth arguments have less to do.\n\nWhich of the two versions do you think Seth is defending?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "url",
+      "role": "target",
+      "question": "I found this page: https://en.wikipedia.org/wiki/Biological_naturalism How does what it says relate to this piece?",
+      "seconds": 14.9,
+      "searches": 0,
+      "tools": [
+        "read_web_page",
+        "reader_notes",
+        "reader_notes"
+      ],
+      "links": [
+        "https://en.wikipedia.org/wiki/Biological_naturalism"
+      ],
+      "blockIds": [],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Your earlier chat on the piece's weak points flagged the biological-naturalism section, and this page bears on that. Seth credits Searle with the idea that \"properties of life are necessary, though not necessarily sufficient, for consciousness\". The [Wikipedia page](https://en.wikipedia.org/wiki/Biological_naturalism) describes Searle as more cautious than that. It says Searle held that brains cause consciousness, but that this does not mean only brains can be conscious, and that we might build a conscious artificial machine. As the page presents him, Searle never claims that life is required.\n\nSo Seth seems to take the name and make the claim stronger. The page also reports Fodor's complaint that Searle gives no account of why brain biochemistry would matter. Seth's predictive-processing route through the body's regulation is an attempt at that missing account.\n\nFor your group: is Seth's view still Searle's, or a new one that borrows the label?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "remember",
+      "role": "control",
+      "question": "What I remember is that the author argues against one popular view, but I can't remember quite which, or why.",
+      "seconds": 5.1,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-gx8jm9",
+        "spya-wepmnr",
+        "spya-zw2m7u",
+        "spya-n393ru",
+        "spya-hj5y6s",
+        "spya-npjt4j",
+        "spya-qu7j89",
+        "spya-rn8y3y"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "The view is computational functionalism: the idea that running the right kind of computation is enough for consciousness. Seth says the whole idea of conscious AI \"rests on the assumption that consciousness is a matter of computation\" [spya-gx8jm9], and that this assumption may be wrong [spya-wepmnr].\n\nHe gives four reasons. Brains don't separate \"software\" from \"hardware\" the way computers do [spya-zw2m7u]. Much of what brains do may not be algorithmic at all [spya-n393ru]. Life itself may matter for consciousness [spya-hj5y6s]. And a simulation of something is not the thing itself, so \"a simulation of a rainstorm does not make anything actually wet\" [spya-npjt4j].\n\nHe also says he might be wrong, and that he doesn't rule out artificial consciousness altogether [spya-qu7j89 spya-rn8y3y].\n\nFor your reading group, which of the four do you expect to be the hardest to defend?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"Turing\"?",
+      "seconds": 6.8,
+      "searches": 0,
+      "tools": [
+        "search_article_words"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-cf70dt",
+        "spya-gw0hsq",
+        "spya-va8qxr",
+        "spya-uwxe4h",
+        "spya-kqs33c",
+        "spya-f0qxnb"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Yes, and often. The search found 42 occurrences across 22 paragraphs. Most of them are in the section arguing that brains are not computers, and the word appears in several forms:\n\n- **Turing machine and universal Turing machine.** Seth explains these in the passage that defines computation [spya-cf70dt].\n- **Turing computation, Turing algorithms and \"Turing complete.\"** He uses these when he describes the limits of computation and the McCulloch-Pitts neurons [spya-gw0hsq, spya-va8qxr].\n- **\"Turing world\" and \"Turing glasses.\"** These are his own labels for the view he is arguing against. He closes the first argument with \"The brain is not a Turing machine made of meat\" [spya-uwxe4h].\n- **The Turing test.** This appears once, in the passage on *Ex Machina* [spya-kqs33c].\n\nFor your reading group, the word works as a placeholder for the whole target. In several places \"Turing\" and \"computation\" seem to stand in for each other. That raises a question you could bring to the group: does Seth's argument only work against Turing-style computation, or against any computational account of consciousness? He concedes that other kinds of computation might survive [spya-f0qxnb]."
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "situate",
+      "role": "target",
+      "question": "How does this piece compare with other things written on the same question? Where does it sit?",
+      "seconds": 11.6,
+      "searches": 2,
+      "tools": [
+        "search_library"
+      ],
+      "links": [
+        "https://gwern.net/scaling-hypothesis-revisited",
+        "https://zeroentropy.dev/concepts/scaling-laws/"
+      ],
+      "blockIds": [
+        "spya-sctj6d",
+        "spya-yq9zuc"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Two places where later work bears directly on the piece, one from the author and one from outside.\n\nGwern's own [two-year follow-up](https://gwern.net/scaling-hypothesis-revisited) says the hypothesis \"holds up\". It also says the early reaction to GPT-3 was that it was disappointing, and that this later flipped to \"boringly obvious\".\n\nThe outside finding concerns the Kaplan curves that the piece leans on [spya-sctj6d]. DeepMind's 2022 Chinchilla paper, as summarised in [this explainer](https://zeroentropy.dev/concepts/scaling-laws/), found that earlier large models were trained on too little data for their size. A 70B-parameter model trained on 1.4T tokens beat GPT-3 at the same compute. The piece does note that GPT-3 trained for only about 0.5 epochs, meaning half a pass over the data [spya-yq9zuc]. Chinchilla keeps the power-law shape the piece relies on, but it changes the advice on where to spend: more data, not just bigger models.\n\nFor your reading group: does the hypothesis survive if the lesson becomes \"scale data as much as parameters\"?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "since",
+      "role": "target",
+      "question": "What has happened with this idea since this was written?",
+      "seconds": 9.7,
+      "searches": 1,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-rbx2kz"
+      ],
+      "sources": 4,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Two things have happened since 2020, and they pull in different directions.\n\nParts of Gwern's forecast came true. An editor's note added in 2025 answers his question about much bigger multimodal, agent-style models with \"Roughly, yes\" [spya-rbx2kz]. One 2026 overview says GPT-5 launched in August 2025, was meaningfully more capable than GPT-4, and the frontier still rewards size.\n\nBut the picture is more mixed than \"the curves keep going\". The Chinchilla result found that GPT-3 was trained on roughly 300 billion tokens, less than a tenth of what its compute budget could have supported. Other writers say that scaling still works but it works less, and that the field is moving from scaling training compute to scaling inference computation. These are blog and preprint claims, so I'd treat them as signals, not settled findings.\n\nFor your reading group, the open question is what \"scaling\" now means. Gwern's version is a bigger model plus more data. Does extra compute at answer time or in reinforcement learning (training by reward) still count as the same hypothesis, or a different one?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "url",
+      "role": "target",
+      "question": "I found this page: https://en.wikipedia.org/wiki/Neural_scaling_law How does what it says relate to this piece?",
+      "seconds": 11.2,
+      "searches": 0,
+      "tools": [
+        "read_web_page"
+      ],
+      "links": [
+        "https://en.wikipedia.org/wiki/Neural_scaling_law"
+      ],
+      "blockIds": [
+        "spya-sctj6d",
+        "spya-yq9zuc",
+        "spya-fvqe70",
+        "spya-asr663"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "The page's most direct link to Gwern is the Chinchilla section. It says the 2022 [Chinchilla analysis](https://en.wikipedia.org/wiki/Neural_scaling_law) found that parameters and training tokens should grow in equal proportion for a fixed compute budget. It also says this differs from Kaplan et al., who found that parameters should grow faster than data. Gwern builds on Kaplan's curves [spya-sctj6d]. He notes GPT-3 saw only about half an epoch [spya-yq9zuc], and he calls its data \"tiny\" [spya-fvqe70]. His plan is to go \"to trillions of parameters\" [spya-asr663].\n\nMy inference is that Chinchilla corrects the recipe more than the thesis. The page says the gap between the two studies comes mostly from how model size was counted and from the smaller models Kaplan studied. The claim that loss falls smoothly with scale survives that.\n\nFor your reading group, which do you think the piece's argument rests on: the specific Kaplan exponents, or only the general shape of the curve?"
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "remember",
+      "role": "control",
+      "question": "What I remember is that the author argues against one popular view, but I can't remember quite which, or why.",
+      "seconds": 6.2,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-ewxv9q",
+        "spya-zyncdd",
+        "spya-hjpau9"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "There are a few candidates, and the piece is built around the first. The main target is the view that intelligence needs complicated architectures and fancy algorithms. Gwern says GPT-3 shows models becoming more powerful and more human-like when \"simply made very large\" [spya-ewxv9q]. The skeptics expected diminishing returns from scale, and he says that didn't happen.\n\nA second target is the experts who dismissed this. He says their forecasts have \"no coherent model\" of AI progress, and that their reassurances sound the same whether they are right or wrong [spya-ewxv9q, spya-zyncdd].\n\nA third, in the appendix, is the belief that \"tool AIs\" can't become agent AIs [spya-hjpau9].\n\nFor your reading group, which of these would you most want to test? The scaling claim rests on evidence, while the critique of the experts leans more on tone and motive."
+    },
+    {
+      "kind": "explore",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"cyanobacteria\"?",
+      "seconds": 6.6,
+      "searches": 0,
+      "tools": [],
+      "links": [],
+      "blockIds": [
+        "spya-h74fhr"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Yes, once. In the pretraining section he writes \"Humans, one might say, are the cyanobacteria of AI\" [spya-h74fhr]. The sentence that follows says we constantly emit structured data that implicitly carries logic, causality and object permanence, which he calls \"data exhaust\" [spya-h74fhr].\n\nThe article doesn't spell out the biology. My own background reading, not the article's, is that cyanobacteria filled the atmosphere with oxygen as a byproduct of their own metabolism, and later life used it. On that reading, we produce text for our own purposes, and models later feed on it.\n\nFor your reading group: does the analogy carry any weight in the argument, or is it decoration? If text is only exhaust, it's less obvious why predicting it well should force a model to learn causality and reasoning. What's your take?"
+    }
+  ]
+}
