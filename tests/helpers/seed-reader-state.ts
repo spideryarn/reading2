@@ -340,6 +340,7 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
         /* Without this a restore drops the "?" metadata from every help question
            and says nothing — the same failure the line above it records. */
         help: message.help ?? false,
+        modality: message.modality ?? null,
         /* And without this a restore closes every hint the reader had opened. */
         hintOpenedAt: message.hintOpenedAt ? new Date(message.hintOpenedAt) : null,
         createdAt: new Date(message.createdAt),

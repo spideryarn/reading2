@@ -29,6 +29,7 @@ import {
   runProposal,
 } from "./command-proposal.js";
 import { voiceClass } from "./voice.js";
+import { ChatSearchCard, useChatSearchPlace } from "./ChatSearchCard.js";
 
 /**
  * **The executor chat's chips press through**, from the reading view to the
@@ -106,12 +107,42 @@ export function CommandChip({
   /* A ref as well as the state: two presses in one frame both see the state
      from before the first — CommandBar.tsx § `inFlight`. */
   const inFlight = useRef(false);
+  const searchPlace = useChatSearchPlace();
   const chip = chipFor(raw, commands, blocks);
   // Cited.tsx only mounts this for a token that is a chip; if it stopped being
   // one (the article's blocks changed under it), it is its own characters.
   if (chip === null) return <>{raw}</>;
 
   const { label, description, generates } = proposalWords(chip.proposal, chip.shown, chip.target);
+
+  /* **A search runs where it is, in a chat surface** (plan 261011aa, Greg's
+     spya-ma72mx): the same button, still pressed by the reader and checked
+     again at the press, but what it found is drawn here rather than the band
+     switching to Search. */
+  const proposal = chip.proposal;
+  if (searchPlace !== null && (proposal.id === "quick-search" || proposal.id === "find")) {
+    return (
+      <ChatSearchCard
+        kind={proposal.id === "quick-search" ? "quick" : "find"}
+        words={proposal.words}
+        place={searchPlace}
+        button={
+          <>
+            <span className="cmd-chip-name">{voiced(label)}</span>
+            {generates && <span className="cmd-chip-generates">{GENERATES_MARKER}</span>}
+          </>
+        }
+        name={<span className="cmd-chip-name">{voiced(label)}</span>}
+        description={
+          proposal.id === "quick-search"
+            ? "A fast first pass for the passages about this, listed here."
+            : "Every place these words appear, listed here."
+        }
+        enabled={chip.enabled}
+        recheck={() => chipFor(raw, commands, blocks)?.enabled === true}
+      />
+    );
+  }
 
   const settle = (outcome: ActionOutcome, done: string | null) => {
     switch (outcome.kind) {

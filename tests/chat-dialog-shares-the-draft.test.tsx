@@ -53,6 +53,7 @@ const FIRST_ANSWER: ChatThread = {
 let threads: ChatThread[] = [STORED];
 const removed: string[] = [];
 const discarded: string[] = [];
+const sends: unknown[][] = [];
 
 vi.mock("../src/web/useProfile.js", () => ({
   useProfile: () => ({ profile: null, loaded: true, save: () => {}, error: null }),
@@ -63,7 +64,10 @@ vi.mock("../src/web/useChat.js", () => ({
     loaded: true,
     loadFailed: false,
     recovering: new Set<string>(),
-    send: () => STORED.id,
+    send: (...args: unknown[]) => {
+      sends.push(args);
+      return STORED.id;
+    },
     speak: () => "",
     cancelAndDiscard: (id: string) => {
       discarded.push(id);
@@ -124,6 +128,10 @@ function type(text: string): void {
   });
 }
 
+function submit(): void {
+  act(() => box().form?.requestSubmit());
+}
+
 function press(label: string): void {
   const button = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === label);
   if (!button) throw new Error(`the dialog drew no "${label}" button`);
@@ -135,6 +143,7 @@ beforeEach(() => {
   threads = [STORED];
   removed.length = 0;
   discarded.length = 0;
+  sends.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -156,6 +165,14 @@ describe("the dialog's conversation arm", () => {
     mount({ kind: "thread", threadId: STORED.id });
     type("typed in the dialog");
     expect(chatDraftsFor(SLUG).thread(STORED.id)).toBe("typed in the dialog");
+  });
+
+  it("passes a typed follow-up's modality to the stored turn", () => {
+    mount({ kind: "thread", threadId: STORED.id });
+    type("typed in the dialog");
+    submit();
+    expect(sends).toHaveLength(1);
+    expect(sends[0]?.[3]).toEqual({ modality: "typed" });
   });
 
   it("forgets the words when the conversation is deleted from here", () => {
@@ -182,5 +199,13 @@ describe("the dialog's passage arm", () => {
     type("about this passage");
     expect(chatDraftsFor(SLUG).list()).toBe("");
     expect(chatDraftsFor(SLUG).thread(BLOCK)).toBeUndefined();
+  });
+
+  it("passes a typed new question's modality to the stored turn", () => {
+    mount({ kind: "draft", anchor: { blockId: BLOCK }, opening: "a science of bumps" });
+    type("What does this mean?");
+    submit();
+    expect(sends).toHaveLength(1);
+    expect(sends[0]?.[3]).toMatchObject({ modality: "typed" });
   });
 });

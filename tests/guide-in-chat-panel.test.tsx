@@ -288,7 +288,8 @@ describe("the guide's greeting", () => {
     });
     await settle();
     expect(sent).toEqual(["For my journal club"]);
-    expect(sentHow).toEqual([{ typed: true }]);
+    /* And how it was made, for the question's row (plan 261011z). */
+    expect(sentHow).toEqual([{ typed: true, modality: "typed" }]);
   });
 
   it("points at the profile only when a reason is stored and About you is empty", async () => {

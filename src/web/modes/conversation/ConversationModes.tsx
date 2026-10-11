@@ -1334,6 +1334,9 @@ export function ConversationBand({
       /* Only the guide consumes this provenance. Keeping it off Chat and Learn
          also lets the route refuse a misplaced claim instead of ignoring it. */
       ...(sendKind === "guide" && how?.typed ? { typed: true as const } : {}),
+      /* How the composer saw the words arrive, for every kind: stored on the
+         question's row (report spya-z30x5n). */
+      ...(how?.modality ? { modality: how.modality } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box
@@ -1431,7 +1434,7 @@ export function ConversationBand({
          `startNew` raises it — this *is* a new conversation being started, and
          the reader who typed to start it should still have a caret when it
          opens, in the composer that has just replaced the one they typed into. */
-      onSendNew={(question) => {
+      onSendNew={(question, how) => {
         if (resettingNow.current) return;
         heldOnList.current = null;
         /* `null` for the thread, so this mints a new one — and therefore this
@@ -1440,6 +1443,9 @@ export function ConversationBand({
           onThreadId: (corrected) => void setThread(corrected),
           kind,
           ...(onScreen ? { visible: onScreen() } : {}),
+          /* The list owns a real Composer too; keep the provenance it saw
+             instead of losing the second callback argument at this adapter. */
+          ...(how?.modality ? { modality: how.modality } : {}),
         });
         void setThread(id);
         /* **Not on a soft keyboard.** The send lets go of the keys there so

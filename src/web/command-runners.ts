@@ -409,7 +409,9 @@ export function readingExecutor({
  * row of the bar's, not a proposal. A chat *Find “X”* chip goes on opening the
  * exact-words search; a quick search reaches chat as its own proposal,
  * `quick-search`, whose runner is in `reading.runners` above (since
- * 2026-10-07, plan 261007j), and so is a `mode`.
+ * 2026-10-07, plan 261007j), and so is a `mode`. Inside a chat surface both
+ * search chips run in place instead (ChatSearchCard.tsx, plan 261011aa); the
+ * runners here are what they press anywhere else, and what gates them.
  *
  * Chat is the owner's, so this is only ever built for one.
  */
@@ -424,7 +426,7 @@ export function chatExecutor({
   blocks: Block[];
   jump(blockId: BlockId): void;
   tags: TagsControl;
-  /** Open Search on these words — CommandBar.tsx § `findHref`. */
+  /** Open Search on these words — search-hrefs.ts § `findHref`. */
   find(words: string): void;
 }): CommandExecutor {
   return {
