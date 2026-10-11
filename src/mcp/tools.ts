@@ -30,6 +30,7 @@ import {
   type AdminAuthorLookup,
   AUTHOR_GIFT_NOTES_MAX,
   type AuthorGiftEnsured,
+  authorGiftPath,
 } from "../admin-author-gifts.js";
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { freeArticles } from "../admin-vouchers.js";
@@ -211,6 +212,8 @@ function trimAuthorLookup(l: AdminAuthorLookup) {
 function trimAuthorGift(api: Api, g: AdminAuthorGift) {
   return {
     id: g.id,
+    /* The page with this gift's card open (plan 261011n § D1). */
+    url: `${api.site}${authorGiftPath(g.id)}`,
     status: g.status,
     starter: { slug: g.starter.slug, title: g.starter.title, link: articleLink(api, g.starter.slug) },
     email: g.email,
@@ -813,8 +816,8 @@ export const TOOLS: readonly Tool[] = [
       "Admin only. Every author gift, newest first: a draft gift voucher for the author of one of the admin's own " +
       "articles. Each has its id, status (draft, sending, sent or discarded), the article (slug, title, link), the " +
       "address and name and which lookup supplied each (null when typed by hand), the note to them, how many free " +
-      "articles, the admin's notes in full, and every web-search lookup with what it found, its sources and its " +
-      "cost in nano-dollars. Never a private link. Nothing can be sent from here: a gift is sent only by pressing " +
+      "articles, the admin's notes in full, every web-search lookup with what it found, its sources and its " +
+      "cost in nano-dollars, and `url`, the gift's card on /admin/vouchers to open in a browser. Never a private link. Nothing can be sent from here: a gift is sent only by pressing " +
       "Send on /admin/vouchers.",
     input: z.strictObject({}),
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -841,7 +844,8 @@ export const TOOLS: readonly Tool[] = [
       "link: this tool never makes one, and if Send needs one it asks the admin to confirm they may share the " +
       "article and makes it then. One gift per article: if the article already has one, nothing is changed and the " +
       "answer says so, and update_author_gift edits it. look_up_author: true also runs a paid web search for the " +
-      "author's name and address, which fills only what you left empty. For a gift with no article, there is no " +
+      "author's name and address, which fills only what you left empty. The answer's `review` is the address of " +
+      "this draft on /admin/vouchers: give it to the admin, or open it in a browser for them. For a gift with no article, there is no " +
       "draft: the admin makes it on /admin/vouchers.",
     input: z.strictObject({
       slug: slugInput,
@@ -867,7 +871,9 @@ export const TOOLS: readonly Tool[] = [
         lookup: look_up_author,
         draft,
       });
-      const review = `${api.site}/admin/vouchers`;
+      /* This gift's card, not just the page (plan 261011n § D1): a harness can
+         open it in a browser for the admin. */
+      const review = `${api.site}${authorGiftPath(answer.id)}`;
       if (!answer.created) {
         return {
           id: answer.id,
@@ -885,7 +891,8 @@ export const TOOLS: readonly Tool[] = [
         created: true,
         lookup: answer.lookupId !== null,
         said:
-          "Saved as a draft; nothing was sent. The admin reviews it and presses Send on /admin/vouchers." +
+          "Saved as a draft; nothing was sent. The admin reviews it and presses Send on /admin/vouchers; `review` " +
+          "opens this draft there." +
           (answer.lookupId !== null ? " A web search for the author is running and will fill what is empty." : ""),
         review,
       };
@@ -969,7 +976,8 @@ export const INSTRUCTIONS = [
     "to them (recipientNote, put in their email), and notes for the admin (notes, never emailed): where you found " +
     "the address, why this piece, and a suggested email in full. If you cannot find an address, " +
     "look_up_author: true runs Spideryarn's own paid web search for one.",
-  "4. Tell the admin the draft is waiting on /admin/vouchers under Author gifts. They review it there and press " +
+  "4. Give the admin the draft's address (draft_author_gift's `review`), or open it in a browser for them. They " +
+    "review it there, on /admin/vouchers under Author gifts, and press " +
     "Send themselves; if the article has no private link yet, Send makes one once they confirm they may share it.",
   "",
   "draft_author_gift and update_author_gift never send anything. Any tool that sends an email or publishes asks " +

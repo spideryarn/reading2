@@ -416,6 +416,8 @@ describe("each tool calls the route it claims", () => {
     expect(result.json()).toMatchObject({ id: VOUCHER, created: true, status: "draft", lookup: false });
     expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
     expect(result.text).toMatch(/\/admin\/vouchers/);
+    /* Plan 261011n § D1: the address of this draft, for a harness to open. */
+    expect(result.json()).toMatchObject({ review: expect.stringMatching(new RegExp(`/admin/vouchers\\?gift=${VOUCHER}$`)) });
   });
 
   it("draft_author_gift with look_up_author asks the route for a lookup", async () => {
@@ -436,6 +438,7 @@ describe("each tool calls the route it claims", () => {
     expect(result.isError, result.text).toBe(false);
     expect(result.json()).toMatchObject({ id: VOUCHER, created: false, status: "sent" });
     expect(result.text).toMatch(/update_author_gift/);
+    expect(result.json()).toMatchObject({ review: expect.stringMatching(new RegExp(`\\?gift=${VOUCHER}$`)) });
   });
 
   it("list_gift_vouchers leaves out the notes and the claimant's usage (Sol F17)", async () => {

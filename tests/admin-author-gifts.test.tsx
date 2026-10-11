@@ -183,6 +183,29 @@ const sets = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
 const writes = () => calls.filter((c) => c.method !== "GET");
 
 describe("Author gifts", () => {
+  it("opens on the gift `?gift=<id>` names, highlighted (plan 261011n § D1)", async () => {
+    giftsAnswer = () => [gift({ id: DRAFT }), gift({ id: SENT })];
+    history.replaceState(null, "", `/admin/vouchers?gift=${SENT}`);
+    try {
+      await mount();
+      expect(card(SENT)?.className).toMatch(/ring-2/);
+      expect(card(DRAFT)?.className).not.toMatch(/ring-2/);
+    } finally {
+      history.replaceState(null, "", "/");
+    }
+  });
+
+  it("ignores a `?gift=` that is not a gift id", async () => {
+    giftsAnswer = () => [gift({ id: DRAFT })];
+    history.replaceState(null, "", "/admin/vouchers?gift=%3Cscript%3E");
+    try {
+      await mount();
+      expect(card(DRAFT)?.className).not.toMatch(/ring-2/);
+    } finally {
+      history.replaceState(null, "", "/");
+    }
+  });
+
   it("sits above the voucher table, and is not a table itself", async () => {
     giftsAnswer = () => [gift()];
     await mount();

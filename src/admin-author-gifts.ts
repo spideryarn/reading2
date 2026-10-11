@@ -145,3 +145,16 @@ export interface AuthorGiftSent {
   readonly voucherId: string;
   readonly email: "queued" | "replayed";
 }
+
+/**
+ * **The address of one gift on `/admin/vouchers`** — the page opens with that
+ * card highlighted and scrolled to (plan 261011n § D1). What MCP's
+ * `draft_author_gift` answers, so a harness can open the draft for the admin.
+ * The id is an opaque UUID behind the admin gate, so the address grants
+ * nothing.
+ */
+export const AUTHOR_GIFT_PARAM = "gift";
+
+export function authorGiftPath(id: string): string {
+  return `/admin/vouchers?${AUTHOR_GIFT_PARAM}=${encodeURIComponent(id)}`;
+}
