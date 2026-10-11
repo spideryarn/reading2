@@ -104,7 +104,7 @@ describe("which sub-mode a link asks for", () => {
        2026-10-07, when the source scan became the fifth (plan 261007h). The
        reviewer's own Notes joined the referee's steps, after Mirror, on
        2026-10-11 (plan 261011f). */
-    expect(REFEREE_VIEWS.slice(0, 5)).toEqual(["criteria", "claims", "mirror", "notes", "candidates"]);
+    expect(REFEREE_VIEWS.slice(0, 5)).toEqual(["criteria", "promises", "mirror", "notes", "candidates"]);
     expect(DEFAULT_REFEREE_VIEW).not.toBe("candidates");
   });
 

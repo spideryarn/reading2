@@ -40,7 +40,7 @@ import {
   librarySearch,
   listArticles,
   readerStore,
-  refereeClaimsStore,
+  refereePromisesStore,
   refereeHiddenCheckStore,
   refereeCriteriaStore,
   sourcesClaimChecksStore,
@@ -136,15 +136,15 @@ import {
   type RefereeResult,
 } from "./referee-criteria.js";
 import type { SavedCriterion } from "./saved-criteria.js";
-/* Referee mode's Claims sub-mode. `referee-claims.js` is pure — it reaches
+/* Referee mode's Promises sub-mode (Claims until 2026-10-11). `referee-promises.js` is pure — it reaches
    `quote-match` and `types` and nothing else — so the shapes and the copy come
-   in for free; `referee-claims-run.js` is the paying call, imported for the same
+   in for free; `referee-promises-run.js` is the paying call, imported for the same
    reason `findPassagesStream` and `runCriterionStream` above are. */
-import { runClaimsStream } from "./referee-claims-run.js";
-/* What a claims run is stamped with: the fingerprint of the blocks it was sent. */
+import { runPromisesStream } from "./referee-promises-run.js";
+/* What a promises run is stamped with: the fingerprint of the blocks it was sent. */
 import { hashBlocks } from "./source-hash.js";
 import { CRITERION_NOT_ON_ARTICLE } from "./referee-criteria-store.js";
-import type { Claim } from "./referee-claims.js";
+import type { PaperPromise } from "./referee-promises.js";
 /* Referee mode's rule 5, and the one thing under it that costs nothing: the
    deterministic scan of the stored raw source. No model, no gateway, no spend
    attribution — src/source-scan.ts is the caller and src/injection-scan.ts is
@@ -300,7 +300,7 @@ import {
 import { ownedArticleIdentity } from "./store/pg.js";
 import type {
   ClaimCheckFinish,
-  ClaimsFinish,
+  PromisesFinish,
   CriterionFinish,
   NewFeedback,
   NewFeedbackAddendum,
@@ -1307,7 +1307,7 @@ function skimDismissalGeneratedAt(body: unknown): string {
  * Chat needed `Live` and `settleThread` for the same problem. This is the small
  * version: nothing here can stop or supersede anything, it only stops the sweep
  * from lying. The count itself is src/live-keys.ts, shared with `searching`,
- * `refereeing` and `pullingClaims` below.
+ * `refereeing` and `pullingPromises` below.
  */
 const answering = liveKeys();
 
@@ -1464,7 +1464,7 @@ function sse(res: ServerResponse): {
    *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
-   *                           `runRefereeCriterion`, `runRefereeClaims`, `runHiddenCheck`
+   *                           `runRefereeCriterion`, `runRefereePromises`, `runHiddenCheck`
    *                           (since 2026-10-09, plan 261009a), and
    *                           `search` for a meaning run
    *
@@ -5359,7 +5359,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   /* Read before the row is written, and the same `article` goes to the model:
      the run is stamped with the hash of the blocks it is answered over, not of
      whatever is current when `begin` runs (plan 261005i § D, as
-     `runRefereeClaims`). A failed read is an HTTP error with no row. */
+     `runRefereePromises`). A failed read is an HTTP error with no row. */
   const article = await loadArticle(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
@@ -5507,7 +5507,7 @@ function liveCriteria(slug: string): Set<string> {
  * arriving through the one kind that has a different deadline.
  *
  * **Derived from that deadline since 2026-09-28**, the way
- * `CLAIMS_ORPHAN_GRACE_MS` in src/store/pg-referee-claims.ts already was. It was
+ * `PROMISES_ORPHAN_GRACE_MS` in src/store/pg-referee-promises.ts already was. It was
  * a flat 150s; the deadlines became functions of the token ceilings
  * (docs/plans/260928c-referee-claims-fail-on-long-pieces.md), and the
  * assertion below is what caught the flat number falling behind — at module
@@ -5723,12 +5723,12 @@ async function runRefereeCriterion(
   }
 }
 
-/* ------------------------------------------------ referee claims (stage 4) --
+/* ------------------------------------------------ referee promises (stage 4) --
    What the paper claims about itself, and where it takes each claim up.
    docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
 
    **Criteria's two routes rather than its four**, and the difference is the data
-   model rather than a corner cut: there is one claims run per article, so there
+   model rather than a corner cut: there is one promises run per article, so there
    is no row to name, nothing to recolour and nothing to delete one of. A second
    run replaces the first, which is what POST already means.
 
@@ -5749,7 +5749,7 @@ async function runRefereeCriterion(
  * could then bury the newer run while this process was still answering it;
  * with one holder, so did an older run whose `begin` answered late.
  */
-const pullingClaims = liveKeys();
+const pullingPromises = liveKeys();
 
 /**
  * The run a request should ask for, and a 400 saying why not.
@@ -5773,11 +5773,11 @@ const pullingClaims = liveKeys();
  * that stream simply stopped, and the panel said the claims "stopped arriving",
  * which blames the connection for something the reader did.
  */
-export const CLAIMS_SUPERSEDED =
-  "A newer claims run for this article started after this one, so this answer was not kept. " +
+export const PROMISES_SUPERSEDED =
+  "A newer promises run for this article started after this one, so this answer was not kept. " +
   "Reload the page to see the newer run.";
 
-function claimsProblem(blocks: Block[]): string | null {
+function promisesProblem(blocks: Block[]): string | null {
   return blocks.length === 0
     ? "This article has no text to read yet. Let ingestion finish and try again."
     : null;
@@ -5794,47 +5794,47 @@ function claimsProblem(blocks: Block[]): string | null {
  *
  * The three differences:
  *
- * - **The middle frame is `claim`**, and it carries a whole `Claim` with its
+ * - **The middle frame is `claim`**, and it carries a whole `PaperPromise` with its
  *   passages already anchored and re-quoted against the article.
  * - **A streamed claim is not in document order and the final one is.**
- *   `validateClaims` sorts by position, and a preview cannot — the claims after
+ *   `validatePromises` sorts by position, and a preview cannot — the claims after
  *   it have not arrived. So the panel sorts what it is holding on every frame
- *   (src/web/ClaimsPanel.tsx), which is what makes rule 1 true on screen at
+ *   (src/web/PromisesPanel.tsx), which is what makes rule 1 true on screen at
  *   every instant rather than only at the end.
  * - **There is no id, and there is an attempt.** One run per article, so
  *   identity is the slug — but two tabs can each begin one, and the row belongs
  *   to the later. `finish` presents the token `begin` returned, and an older
  *   run's answer is refused rather than written over the newer one
- *   (src/store/pg-referee-claims.ts § One run per article, and still an attempt).
+ *   (src/store/pg-referee-promises.ts § One run per article, and still an attempt).
  *
  * The `dropped` counts come back on the outcome and are **not** sent to the
  * client, exactly as Criteria's are not — with the same exception, for the same
  * reason. An answer in which every claim was thrown away is raised as a failure
- * by `runClaimsStream` (the same `ANSWER_UNUSABLE`) and stored as one, because otherwise
+ * by `runPromisesStream` (the same `ANSWER_UNUSABLE`) and stored as one, because otherwise
  * the panel would print "the model did not find" about an answer that found
  * things and could not place them. The per-claim half of that lives on the row
- * as `Claim.discarded` and *is* sent, because the sentence under an empty claim
+ * as `PaperPromise.discarded` and *is* sent, because the sentence under an empty claim
  * depends on it.
  */
-async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void> {
+async function runRefereePromises(slug: string, res: ServerResponse): Promise<void> {
   /* Read before anything is written, so a slug that is not an article is a clean
      404 and an empty one is a clean 400 — both before a header exists. */
   const article = await loadArticle(slug);
-  const problem = claimsProblem(article.blocks);
+  const problem = promisesProblem(article.blocks);
   if (problem) throw httpError(400, problem);
 
   /* The fingerprint of the blocks about to be sent, taken from those blocks. A
      store that read the revision itself could stamp a newer one than the model
      was shown, if the article was re-extracted since the line above. */
-  const { run: row, attempt } = await refereeClaimsStore.begin(slug, hashBlocks(article.blocks));
-  const release = pullingClaims.hold(slug);
+  const { run: row, attempt } = await refereePromisesStore.begin(slug, hashBlocks(article.blocks));
+  const release = pullingPromises.hold(slug);
   try {
     const { frame } = sse(res);
     frame("begin", row);
 
-    let patch: ClaimsFinish;
+    let patch: PromisesFinish;
     try {
-      let claims: Claim[] = [];
+      let promises: PaperPromise[] = [];
       let model = "";
       /* The one `dropped` count that **is** stored, and the exception is narrow on
          purpose. The others describe answers we threw away, which is our business
@@ -5842,29 +5842,29 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
          will never see, cut from the end of the document because the cap is
          positional — so without it the list looks complete and position has
          quietly become the ranking this sub-mode is built to have none of.
-         GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
-      let claimsOmitted = 0;
-      for await (const event of runClaimsStream({
+         GPT Sol's finding 5, 2026-09-01; tests/referee-promises-omitted.test.ts. */
+      let promisesOmitted = 0;
+      for await (const event of runPromisesStream({
         meta: article.meta,
         blocks: article.blocks,
         power: powerOf(article),
       })) {
-        if (event.type === "claim") {
-          frame("claim", { claim: event.claim });
+        if (event.type === "promise") {
+          frame("promise", { promise: event.promise });
           continue;
         }
-        claims = event.outcome.claims;
+        promises = event.outcome.promises;
         model = event.outcome.model;
-        claimsOmitted = event.outcome.dropped.truncated;
+        promisesOmitted = event.outcome.dropped.truncated;
       }
-      patch = { status: "done", claims, model, claimsOmitted };
+      patch = { status: "done", promises, model, promisesOmitted };
     } catch (err) {
-      captureFailure(err, { route: "referee-claims", slug });
-      patch = { status: "error", error: sayToReader(err, { route: "referee-claims", slug }), claims: [] };
+      captureFailure(err, { route: "referee-promises", slug });
+      patch = { status: "error", error: sayToReader(err, { route: "referee-promises", slug }), promises: [] };
     }
 
     try {
-      const stored = await refereeClaimsStore.finish(slug, patch, attempt);
+      const stored = await refereePromisesStore.finish(slug, patch, attempt);
       /* `null` means the run is not this call's to finish any more, and what the
          reader is told depends on what is there instead. Nothing: the article's
          data went away, and silence is right. A finished row about the same
@@ -5877,19 +5877,19 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
          an overwrite. */
       if (stored) frame("done", stored);
       else {
-        const current = await refereeClaimsStore.load(slug);
+        const current = await refereePromisesStore.load(slug);
         if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
           frame("done", current);
         } else if (current) {
-          frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+          frame("done", { ...current, status: "error", promises: [], error: PROMISES_SUPERSEDED });
         }
       }
     } catch (storeErr) {
       log("store").error(
         { ...errorFields(storeErr), slug },
-        `could not record a claims run for ${slug}`,
+        `could not record a promises run for ${slug}`,
       );
-      captureFailure(storeErr, { route: "referee-claims", phase: "record-result", slug });
+      captureFailure(storeErr, { route: "referee-promises", phase: "record-result", slug });
     } finally {
       res.end();
     }
@@ -6092,7 +6092,7 @@ async function finishCheck(
 
 /**
  * **Check the claims a reader picked** — `POST /api/debate-claims/:slug/checks`,
- * a JSON body in, SSE out. `runRefereeClaims`' shape: the refusals before a
+ * a JSON body in, SSE out. `runRefereePromises`' shape: the refusals before a
  * header, the `pending` row before the call, an attempt-fenced finish, and the
  * stream ends only after the answer is stored.
  *
@@ -9620,15 +9620,15 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 /* Referee mode's criteria: the collection, and one row. `criteria` sits inside
    the path rather than as `/api/referee/:slug` because the mode has four
    sub-modes and three of them will want routes of their own —
-   `/api/referee/claims/:slug` and `/api/referee/mirror/:slug` both arrived under
+   `/api/referee/promises/:slug` and `/api/referee/mirror/:slug` both arrived under
    it without a rename — and a namespace decided now is cheaper than a rename
-   later. Claims is **one pattern, not two**: there is one claims run per
+   later. Promises is **one pattern, not two**: there is one promises run per
    article, so there is no row to name; GET reads it, POST replaces it. */
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
-const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
+const REFEREE_PROMISES_PATTERN = /^\/api\/referee\/promises\/([\w.%-]+)$/;
 /* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
-   one. One pattern for both rows, as Claims above. */
+   one. One pattern for both rows, as Promises above. */
 const SOURCES_CLAIM_CHECKS_PATTERN = /^\/api\/sources-claims\/([\w.%-]+)\/checks$/;
 /* The checks' path until 2026-10-09, for one deploy — removed by the contract,
    plan 261009w (the old GET and POST below). */
@@ -12936,7 +12936,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "GET",
-    pattern: REFEREE_CLAIMS_PATTERN,
+    pattern: REFEREE_PROMISES_PATTERN,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
@@ -12949,8 +12949,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          running is one an earlier process died in the middle of, and leaving it
          would be a spinner nothing can ever clear. */
       send(res, 200, {
-        run: await refereeClaimsStore.sweep(slug, pullingClaims.has(slug)),
-        sourceHash: await refereeClaimsStore.sourceHash(slug),
+        run: await refereePromisesStore.sweep(slug, pullingPromises.has(slug)),
+        sourceHash: await refereePromisesStore.sourceHash(slug),
       });
     },
   },
@@ -12958,13 +12958,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "POST",
-    pattern: REFEREE_CLAIMS_PATTERN,
+    pattern: REFEREE_PROMISES_PATTERN,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* The sixth endpoint in this file that does not answer with JSON. It still
          reaches `send` for its failures: `loadArticle` throws its 404 and
-         `claimsProblem` its 400 before a header is written, which is why both
-         are the first two lines of `runRefereeClaims`.
+         `promisesProblem` its 400 before a header is written, which is why both
+         are the first two lines of `runRefereePromises`.
 
          **No body is read at all** — see that function's docstring. A POST with
          a body is not refused, it is ignored, which is the same call
@@ -12973,7 +12973,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          `article: "first-capture"`, because the call inside it pays: the rows
          have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
-      await runRefereeClaims(slugPart(captures, 1), res);
+      await runRefereePromises(slugPart(captures, 1), res);
     },
   },
 

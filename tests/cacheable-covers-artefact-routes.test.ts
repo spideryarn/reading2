@@ -331,7 +331,7 @@ describe("and the deliberate omissions stay out", () => {
    * src/web/lib/api.ts says the same thing; if that reason is fixed there,
    * this assertion is the thing that has to be deleted deliberately.
    */
-  it.each(["/api/referee/criteria/gibbon", "/api/referee/claims/gibbon"])(
+  it.each(["/api/referee/criteria/gibbon", "/api/referee/promises/gibbon"])(
     "does not keep %s — nested path, decided rather than forgotten",
     async (url) => {
       vi.stubGlobal("fetch", () => Promise.resolve(jsonOk()));

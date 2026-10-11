@@ -61,7 +61,7 @@ import {
   UPLOAD_TOO_BIG,
   UPLOAD_TOO_MANY_PAGES,
 } from "./messages.js";
-import { MAX_UPLOAD_BYTES } from "./uploads.js";
+import { type ConvertedFormat, MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /* ------------------------------------------------------------- the axes -- */
 
@@ -168,8 +168,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * document* a revision was made from; an image is not the document, so
  * `raw_sources.kind`'s `check (kind in ('pdf','html'))` stays exactly as it is
  * and the `assets` manifest is the record instead.
+ *
+ * **Nor does the file a text, Markdown or Word upload arrived as**, since
+ * 2026-10-11. Stage 1 turns those into a web page and the page is the document
+ * (`raw_sources` row and all); the arrived file is kept beside it, under the
+ * hash `article_revisions.raw_sha256` already records and the extension
+ * `raw_filename` already carries — so it is findable with no new column, and
+ * kept because a reader's file is theirs (vision.md, principle 6).
+ * docs/plans/261011j-upload-text-markdown-and-word-files.md.
  */
-export type StoredKind = DocumentKind | AssetExt;
+export type StoredKind = DocumentKind | AssetExt | ConvertedFormat;
 
 const EXTENSION: Record<StoredKind, string> = {
   html: "html",
@@ -177,6 +185,9 @@ const EXTENSION: Record<StoredKind, string> = {
   png: "png",
   jpeg: "jpeg",
   gif: "gif",
+  text: "txt",
+  markdown: "md",
+  docx: "docx",
 };
 
 /**

@@ -46,7 +46,7 @@ import { CONTACT_EMAIL } from "./site-text.js";
 import type { FetchFailureCode } from "./types.js";
 import { canonicalKey } from "./source.js";
 import { readStreamCapped } from "./read-capped.js";
-import { MAX_UPLOAD_BYTES, uploadContentType } from "./uploads.js";
+import { MAX_UPLOAD_BYTES, convertedFormatFromName, uploadContentType, type UploadFormat } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
@@ -1860,6 +1860,42 @@ export function uploadedDocumentKind(filename: string, bytes: Uint8Array): Docum
   if (kind !== "html") return kind;
   if (evidence.leadingHtml) return "html";
   return evidence.otherVocabulary || evidence.binary ? null : "html";
+}
+
+/**
+ * **What an uploaded file is, in the five formats a reader may upload** — or
+ * `null` for one we will not read. Since 2026-10-11
+ * (docs/plans/261011j-upload-text-markdown-and-word-files.md).
+ *
+ * For a name claiming PDF or HTML this is `uploadedDocumentKind`, unchanged.
+ * For a name claiming text, Markdown or Word, the same evidence decides first
+ * and the claim only after it:
+ *
+ *  - **Whatever the fetched path would read in the bytes wins**, whatever the
+ *    file is called — the invariant `tests/fetch.test.ts` pins for every
+ *    extension. So `page.docx` beginning `<!doctype html>` is read as the page
+ *    it is, and a PDF header in the first kilobyte is a PDF. The first cut
+ *    took a PDF header only at byte zero for these names, so that notes
+ *    *quoting* one would stay notes; GPT Sol's code review showed that was a
+ *    second rule contradicting the first, for a case too rare to keep one for.
+ *  - **Word must be a zip** (`PK\x03\x04`); whether it is a *Word* zip is for
+ *    mammoth to say, in src/upload-convert.ts.
+ *  - **Text and Markdown must not be binary** (the WHATWG binary-data test,
+ *    BOM-aware, so a UTF-16 file from Notepad passes) and not another markup
+ *    vocabulary's document.
+ */
+export function uploadedFormat(filename: string, bytes: Uint8Array): UploadFormat | null {
+  const claimed = convertedFormatFromName(filename);
+  if (claimed === null) return uploadedDocumentKind(filename, bytes);
+  /* What the fetched path would read in these bytes, first and whatever the
+     name — `kindFrom`'s own order, so a PDF header and leading HTML evidence
+     mean here exactly what they mean there. */
+  const { kind, evidence } = classify(null, bytes);
+  if (kind !== null) return kind;
+  if (claimed === "docx") {
+    return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04 ? "docx" : null;
+  }
+  return evidence.binary || evidence.otherVocabulary ? null : claimed;
 }
 
 /**

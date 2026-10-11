@@ -353,12 +353,12 @@ describe("the `generates` marker on a sub-mode row", () => {
     return row?.querySelector(".cmdbar-generates")?.textContent === GENERATES_MARKER;
   };
 
-  it("is on Quiz and Illustrated and Claims, and off Recall, Criteria and Mirror", () => {
+  it("is on Quiz and Illustrated and Promises, and off Recall, Criteria and Mirror", () => {
     reading();
     openBar();
     expect(marked("Learn › Quiz")).toBe(true);
     expect(marked("Diagram › Illustrated")).toBe(true);
-    expect(marked("Referee › Claims")).toBe(true);
+    expect(marked("Referee › Promises")).toBe(true);
     /* Thread arms nothing and still says it: its band writes on arrival. */
     expect(marked("Summary › Thread")).toBe(true);
     expect(subModeTarget(THREAD)).toBeNull();
@@ -484,7 +484,7 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     expect(hidden).toBeDefined();
     act(() => hidden?.click());
     expect(onMode).toHaveBeenCalledWith("referee", { mode: "referee", view: "hidden" });
-    expect(pendingActivation("a-piece", "claims")).toBeNull();
+    expect(pendingActivation("a-piece", "promises")).toBeNull();
     expect(pendingActivation("a-piece", "candidates")).toBeNull();
   });
 
@@ -558,7 +558,7 @@ describe("Enter on Referee › Hidden text, on the reading view", () => {
       return params.get("mode") === "referee" && params.get("referee") === "hidden";
     });
     expect(push).toHaveBeenCalledTimes(1);
-    expect(pendingActivation("a-piece", "claims")).toBeNull();
+    expect(pendingActivation("a-piece", "promises")).toBeNull();
     expect(pendingActivation("a-piece", "candidates")).toBeNull();
   });
 });
@@ -602,7 +602,7 @@ describe("Sources' four sub-modes", () => {
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Links");
   });
 
-  it("finds Claims by the compound a reader would say, the old Debate one too, beside Referee's", () => {
+  it("finds Claims by the compound a reader would say, the old Debate one too, and Referee's Promises by its own word", () => {
     reading();
     openBar();
     type("sources claims");
@@ -610,7 +610,10 @@ describe("Sources' four sub-modes", () => {
     type("debate claims");
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Claims");
     type("claims");
-    expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Sources › Claims", "Referee › Claims"]));
+    expect(rows().map(fullName)).toContain("Sources › Claims");
+    expect(rows().map(fullName), "Sources owns *claims* now; Referee's is Promises (plan 261011g)").not.toContain("Referee › Promises");
+    type("promises");
+    expect(rows().map(fullName)).toContain("Referee › Promises");
   });
 
   /* **The retired mode words select the view each old link opens**
@@ -804,7 +807,7 @@ describe("the registry's two answers agree", () => {
     expect(bandTarget("referee", { ...DEFAULTS, referee: "candidates" })).toBeNull();
     expect(subModeGenerates(candidates)).toBe(false);
     /* And Claims still does, so the row above is not passing on an empty table. */
-    expect(subModeTarget({ mode: "referee", view: "claims" })).toBe("claims");
+    expect(subModeTarget({ mode: "referee", view: "promises" })).toBe("promises");
   });
 
   it("Hidden text arms nothing and is not marked as generating", () => {

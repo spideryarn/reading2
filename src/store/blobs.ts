@@ -36,6 +36,7 @@
 import { createHash } from "node:crypto";
 
 import { canonicalKey, type StoredKind } from "../source.js";
+import { formatContentType } from "../uploads.js";
 import { fsBlobs } from "./blobs-fs.js";
 import { StorageFailed, supabaseBlobs } from "./blobs-supabase.js";
 
@@ -124,6 +125,11 @@ export const CONTENT_TYPE: Record<StoredKind, string> = {
   png: "image/png",
   jpeg: "image/jpeg",
   gif: "image/gif",
+  /* The file a converted upload arrived as, kept beside the page made from it
+     (src/source.ts § `StoredKind`). The same types its staging PUT carried. */
+  text: formatContentType("text"),
+  markdown: formatContentType("markdown"),
+  docx: formatContentType("docx"),
 };
 
 /**

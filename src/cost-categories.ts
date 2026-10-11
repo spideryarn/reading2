@@ -253,7 +253,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "referee-mirror": "interactive request work",
   "referee-hidden-check": "interactive request work",
   "referee-criteria": "interactive request work",
-  "referee-claims": "interactive request work",
+  "referee-promises": "interactive request work",
   "referee-candidates": "interactive request work",
   /* Talking into a text box. Request scope, and on OpenRouter despite the model
      being called `openai/gpt-transcribe` — a model named after a vendor is not a

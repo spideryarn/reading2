@@ -827,7 +827,7 @@ Two shared shells have since been built on those pieces:
   The glossary and Citations read their answers through it.
 
 The hand-rolled loops in [`src/search.ts`](../../src/search.ts) and the referee runners
-(`src/referee-claims-run.ts`, `src/referee-criteria-run.ts`, `src/referee-mirror.ts`, and
+(`src/referee-promises-run.ts`, `src/referee-criteria-run.ts`, `src/referee-mirror.ts`, and
 `src/referee-hidden-check.ts`, which copies Mirror's), and the
 client hooks that loop over `readEvents` themselves, are older copies of the same shape. Some of
 them carry structured items rather than text deltas, which is a real difference —

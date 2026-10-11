@@ -1,5 +1,5 @@
 /**
- * The client half of a paper's claims run — Stage 4 of
+ * The client half of a paper's promises run — Stage 4 of
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2.
  *
  * **`useCriteria.ts` with the list taken out**, and it is deliberately that
@@ -12,7 +12,7 @@
  *   identity. Criteria mints one because `?crits=` has to name a real row from
  *   the first frame.
  * - **No tombstone, because there is nothing to delete.** A criterion can be
- *   deleted while its answer is in the air; a claims run can only be *replaced*,
+ *   deleted while its answer is in the air; a promises run can only be *replaced*,
  *   and a second POST while the first is still streaming is handled by
  *   `running` refusing to start one.
  * - **The terminal contract survives, and it matters more here than there.**
@@ -23,12 +23,12 @@
  * - **The final list replaces the streamed one**, never merges with it. That is
  *   not tidiness: the authoritative pass is where the document sort happens over
  *   the whole answer, and a merge would leave the panel holding claims in the
- *   order the model happened to emit them. See `ClaimsBand` for the other half
+ *   order the model happened to emit them. See `PromisesBand` for the other half
  *   of that, which is what keeps the order right *during* the stream.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Claim, ClaimsRun } from "../referee-claims.js";
+import type { PaperPromise, PromisesRun } from "../referee-promises.js";
 import { isStale } from "../search-stale.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
@@ -37,9 +37,9 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
-export interface ClaimsApi {
+export interface PromisesApi {
   /** The stored run, or `null` when this paper has never been asked. */
-  run: ClaimsRun | null;
+  run: PromisesRun | null;
   /** The paper has moved since this run was answered — or we cannot tell. */
   stale: boolean;
   /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
@@ -52,10 +52,10 @@ export interface ClaimsApi {
   error: string | null;
 }
 
-const url = (slug: string) => `/api/referee/claims/${encodeURIComponent(slug)}`;
+const url = (slug: string) => `/api/referee/promises/${encodeURIComponent(slug)}`;
 
-export function useClaims(slug: string): ClaimsApi {
-  const [run, setRun] = useState<ClaimsRun | null>(null);
+export function usePromises(slug: string): PromisesApi {
+  const [run, setRun] = useState<PromisesRun | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export function useClaims(slug: string): ClaimsApi {
    * **Which article this hook is about now**, so a stream started for the last
    * one cannot write into it.
    *
-   * A claims run takes a minute or two and the reader is free to open another
+   * A promises run takes a minute or two and the reader is free to open another
    * paper in the meantime. Without this the in-flight stream keeps calling
    * `setRun`, and the new article's panel fills with the old paper's claims —
    * each of them anchored to block ids this article does not have, so the rows
@@ -116,7 +116,7 @@ export function useClaims(slug: string): ClaimsApi {
   const load = useCallback(
     async (current: () => boolean) => {
       await apiFetch(url(slug))
-        .then((r) => readJson<{ run?: ClaimsRun | null; sourceHash?: string; error?: string }>(r))
+        .then((r) => readJson<{ run?: PromisesRun | null; sourceHash?: string; error?: string }>(r))
         .then((body) => {
           if (!current()) return;
           if (body.error) {
@@ -185,11 +185,11 @@ export function useClaims(slug: string): ClaimsApi {
     setError(null);
     /* A spinner with nothing under it, immediately — and note what this throws
        away: the previous answer. That is the same call `begin` makes on the
-       server (src/store/pg-referee-claims.ts § One run per article), and it is
+       server (src/store/pg-referee-promises.ts § One run per article), and it is
        deliberate.
        Yesterday's claims under today's spinner is the one state a referee cannot
        interpret. */
-    setRun({ status: "pending", createdAt: new Date().toISOString(), claims: [] });
+    setRun({ status: "pending", createdAt: new Date().toISOString(), promises: [] });
 
     let settled = false;
     void (async () => {
@@ -205,7 +205,7 @@ export function useClaims(slug: string): ClaimsApi {
           // another paper between two frames of the same run.
           if (!stillMine()) return;
           if (event.name === "begin") {
-            const begun = event.data as ClaimsRun;
+            const begun = event.data as PromisesRun;
             /* Fresher news about the paper than the GET has: the server
                fingerprints the blocks as it opens the run, so this hash *is* the
                article's current one. */
@@ -213,10 +213,10 @@ export function useClaims(slug: string): ClaimsApi {
             setRun(begun);
             continue;
           }
-          if (event.name === "claim") {
-            const { claim } = event.data as { claim: Claim };
+          if (event.name === "promise") {
+            const { promise } = event.data as { promise: PaperPromise };
             setRun((prev) =>
-              prev === null ? prev : { ...prev, claims: [...prev.claims, claim] },
+              prev === null ? prev : { ...prev, promises: [...prev.promises, promise] },
             );
             continue;
           }
@@ -225,12 +225,12 @@ export function useClaims(slug: string): ClaimsApi {
             /* The final pass is authoritative and legitimately differs from what
                streamed — it is where the whole answer is sorted into document
                order — so it **replaces** rather than merging. */
-            setRun(event.data as ClaimsRun);
+            setRun(event.data as PromisesRun);
             return;
           }
         }
 
-        if (!settled) throw new ReaderFacingError("The claims stopped arriving. Try again.");
+        if (!settled) throw new ReaderFacingError("The promises stopped arriving. Try again.");
       } catch (e) {
         if (!stillMine()) return;
         const message = describeFetchFailure(e as Error);
@@ -241,7 +241,7 @@ export function useClaims(slug: string): ClaimsApi {
         setRun((prev) => ({
           status: "error",
           createdAt: prev?.createdAt ?? new Date().toISOString(),
-          claims: [],
+          promises: [],
           error: message,
           ...(prev?.sourceHash === undefined ? {} : { sourceHash: prev.sourceHash }),
         }));
@@ -255,14 +255,14 @@ export function useClaims(slug: string): ClaimsApi {
   }, [slug]);
 
   /**
-   * **The referee pressed Claims and this paper has never been asked — ask it.**
+   * **The referee pressed Promises and this paper has never been asked — ask it.**
    *
    * Greg's rule about opening a mode (src/web/useAutoRun.ts), one level down:
    * the press is minted by the chip in `RefereeViews` (App.tsx), and arriving
    * here any other way — a pasted `?referee=claims`, a Back step, the mode button
    * on a URL that already said `claims` — spends nothing.
    *
-   * **The first target with no job behind it.** A claims run is one SSE stream
+   * **The first target with no job behind it.** A promises run is one SSE stream
    * rather than a pipeline step (src/web/auto-run-targets.ts), so `pull` takes
    * the place of `ensure`. The hook does not care: it asks *is there anything
    * there* and *did the reader press it*, and this file decides what running
@@ -293,7 +293,7 @@ export function useClaims(slug: string): ClaimsApi {
         : "none";
   useAutoRun(
     slug,
-    "claims",
+    "promises",
     status,
     async () => pull(),
     async () => {

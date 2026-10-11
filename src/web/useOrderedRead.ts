@@ -102,11 +102,11 @@ export interface OrderedRead {
    * is dropped, and the trailing read with them: a read now would race whatever
    * replaces it.
    *
-   * **One caller today: `useClaims`**, which returns this as its effect's
+   * **One caller today: `usePromises`**, which returns this as its effect's
    * cleanup — on a change of slug and on unmount — so a reply about the previous
-   * paper cannot land on the next one (./useClaims.ts). Until 2026-09-05 the caller was `useGlossary`'s `clear()`,
+   * paper cannot land on the next one (./usePromises.ts). Until 2026-09-05 the caller was `useGlossary`'s `clear()`,
    * which went with the glossary panel's *Start again*; for a while after that
-   * nothing called it, and this comment went on saying so after `useClaims`
+   * nothing called it, and this comment went on saying so after `usePromises`
    * arrived. The other readers have no delete and re-key on the slug instead.
    */
   discard(): void;

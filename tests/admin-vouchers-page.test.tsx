@@ -651,6 +651,111 @@ describe("/admin/vouchers", () => {
       expect(cells[heads.indexOf("Private note")]?.textContent).toContain("met at the conference");
     });
     const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
+    const nameBox = () => host.querySelector("#voucher-new-recipient-name") as HTMLInputElement;
+    const emailBox = () => host.querySelector("#voucher-new-email") as HTMLInputElement;
+
+    /* Plan 261011k, Greg 2026-10-11 (spya-cfbp0q). */
+    it("keeps just the address from a pasted `Name <address>`, and fills the name only if it is empty", async () => {
+      await mount();
+      await fill("Firstname Lastname <firstname@example.com>");
+      expect(emailBox().value).toBe("firstname@example.com");
+      expect(nameBox().value).toBe("Firstname Lastname");
+
+      /* A name already typed stays. */
+      await fill('"Someone Else" <else@example.com>');
+      expect(emailBox().value).toBe("else@example.com");
+      expect(nameBox().value).toBe("Firstname Lastname");
+
+      /* Not that shape: kept as typed. */
+      await fill("Half typed <ada@exa");
+      expect(emailBox().value).toBe("Half typed <ada@exa");
+    });
+
+    it("fills the waiting voucher editor's own empty name and saves both changes", async () => {
+      listAnswer = [{ ...VOUCHERS[0], recipientName: null }];
+      await mount();
+      const waiting = rowFor("waiting@example.test");
+      await act(async () => buttonIn(waiting, "Edit")?.click());
+      const email = waiting?.querySelector<HTMLInputElement>('input[type="email"]');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(email, "Ada King <ada@example.com>");
+        email?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(email?.value).toBe("ada@example.com");
+      expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]')?.value).toBe("Ada King");
+      await act(async () => buttonIn(waiting, "Save")?.click());
+      await settle();
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+        email: "ada@example.com",
+        recipientName: "Ada King",
+      });
+    });
+
+    /* Plan 261011k, Greg 2026-10-11 (spya-dkddku): several to one address add up. */
+    it("says when the address already has gifts: waiting by address, claimed by the claimant's address now, never revoked", async () => {
+      listAnswer = [
+        ...VOUCHERS,
+        /* Claimed by whoever has waiting@ now, though it was sent elsewhere. */
+        {
+          ...VOUCHERS[1],
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+          email: "sent-before@example.test",
+          claimantEmail: "waiting@example.test",
+          articles: 7,
+        },
+        { ...VOUCHERS[2], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5", email: "waiting@example.test" },
+        {
+          ...VOUCHERS[1],
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6",
+          email: "claimant-unreadable@example.test",
+          claimantEmail: null,
+        },
+      ];
+      await mount();
+      const line = () => host.querySelector("#voucher-new-already")?.textContent ?? null;
+      await fill("nobody@example.test");
+      expect(line()).toBeNull();
+      await fill(" Waiting@Example.test ");
+      expect(line()).toBe("This address already has 2 gifts (27 articles). This one adds to them.");
+      expect(emailBox().getAttribute("aria-describedby")).toBe("voucher-new-already");
+      await fill("revoked@example.test");
+      expect(line()).toBeNull();
+      /* Its claimant has moved to another address, so a gift here would not reach them. */
+      await fill("claimed@example.test");
+      expect(line()).toBeNull();
+      await fill("claimed-now@example.test");
+      expect(line()).toBe("This address already has a gift of 10 articles. This one adds to it.");
+      /* A claimed voucher belongs to an account; without its current address, the list cannot say a new gift adds to it. */
+      await fill("claimant-unreadable@example.test");
+      expect(line()).toBeNull();
+    });
+
+    it("does not assert from an old list while Refresh is pending or after it fails", async () => {
+      await mount();
+      await fill("waiting@example.test");
+      const line = () => host.querySelector("#voucher-new-already")?.textContent ?? null;
+      expect(line()).toContain("already has a gift");
+
+      const ordinaryFetch = globalThis.fetch;
+      let failRefresh: () => void = () => {};
+      globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+        if ((init?.method ?? "GET") === "GET" && url === "/api/admin/vouchers") {
+          return new Promise<Response>((_resolve, reject) => {
+            failRefresh = () => reject(new TypeError("Failed to fetch"));
+          });
+        }
+        return ordinaryFetch(input, init);
+      }) as typeof fetch;
+
+      const refresh = host.querySelector('button[aria-label="Refresh the vouchers"]') as HTMLButtonElement;
+      await act(async () => refresh.click());
+      expect(line()).toBeNull();
+      await act(async () => failRefresh());
+      await settle();
+      expect(line()).toBeNull();
+    });
 
     /* Sol's F13 on 261007j: the inputs stay editable while a create is in
        flight, so the answer to the first must not wipe a second draft typed

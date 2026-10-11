@@ -124,8 +124,8 @@ let getJob: typeof import("../src/jobs.js").getJob;
 let environmentOwnerId: typeof import("../src/owner.js").environmentOwnerId;
 let isStepName: typeof import("../src/pipeline.js").isStepName;
 let stagingKey: typeof import("../src/source.js").stagingKey;
-let uploadedDocumentKind: typeof import("../src/fetch.js").uploadedDocumentKind;
-let CONTENT_TYPE: typeof import("../src/store/blobs.js").CONTENT_TYPE;
+let uploadedFormat: typeof import("../src/fetch.js").uploadedFormat;
+let formatContentType: typeof import("../src/uploads.js").formatContentType;
 let postgresBlobStore: typeof import("../src/store/blobs.js").postgresBlobStore;
 let claimUpload: typeof import("../src/upload-records.js").claimUpload;
 let mintUpload: typeof import("../src/upload-records.js").mintUpload;
@@ -143,10 +143,10 @@ async function loadRuntime(): Promise<void> {
   ({ environmentOwnerId } = await import("../src/owner.js"));
   ({ isStepName } = await import("../src/pipeline.js"));
   ({ stagingKey } = await import("../src/source.js"));
-  ({ uploadedDocumentKind } = await import("../src/fetch.js"));
-  ({ CONTENT_TYPE, postgresBlobStore } = await import("../src/store/blobs.js"));
+  ({ uploadedFormat } = await import("../src/fetch.js"));
+  ({ postgresBlobStore } = await import("../src/store/blobs.js"));
   ({ claimUpload, mintUpload, noteSlug, readUpload } = await import("../src/upload-records.js"));
-  ({ MAX_UPLOAD_BYTES } = await import("../src/uploads.js"));
+  ({ MAX_UPLOAD_BYTES, formatContentType } = await import("../src/uploads.js"));
 }
 
 type Job = Awaited<ReturnType<typeof enqueue>>;
@@ -466,17 +466,17 @@ async function ingestFile(file: string): Promise<never> {
     );
   }
   const filename = path.basename(file);
-  /* **`uploadedDocumentKind` is the same function `acquireUpload` uses**, so
-     the two cannot disagree about what a file is — and since 2026-09-07 that
-     matters twice over, because the answer is no longer a boolean. It decides
-     the `Content-Type` the bytes go into the bucket under a few lines down, and
-     a CLI that guessed `application/pdf` for a web page would be refused by the
+  /* **`uploadedFormat` is the same function `acquireUpload` uses**, so the two
+     cannot disagree about what a file is — and since 2026-09-07 that matters
+     twice over, because the answer is no longer a boolean. It decides the
+     `Content-Type` the bytes go into the bucket under a few lines down, and a
+     CLI that guessed `application/pdf` for a web page would be refused by the
      bucket's own allowlist with a status nobody could read. */
-  const kind = uploadedDocumentKind(filename, bytes);
+  const kind = uploadedFormat(filename, bytes);
   if (kind === null) {
     die(
-      `${file} is neither a PDF nor a web page, so nothing here can read it.\n` +
-        "  This takes a `.pdf` or an `.html`; an address is `npm run ingest -- <url>`.",
+      `${file} is not a file we can read.\n` +
+        "  This takes a `.pdf`, `.html`, `.docx`, `.md` or `.txt`; an address is `npm run ingest -- <url>`.",
     );
   }
   const sha256 = createHash("sha256").update(bytes).digest("hex");
@@ -494,7 +494,7 @@ async function ingestFile(file: string): Promise<never> {
     stagingKey,
   );
   const id = minted.record.id;
-  await store.putIfAbsent(stagingKey(id), bytes, CONTENT_TYPE[kind]);
+  await store.putIfAbsent(stagingKey(id), bytes, formatContentType(kind));
 
   const claim = await claimUpload(id, { owner, arrived: true });
   if (!claim.ok) die(`Could not claim the upload we had just minted: ${claim.why}.`);

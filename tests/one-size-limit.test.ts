@@ -1,7 +1,7 @@
 /**
  * **One size limit for a file chosen and a document fetched by address.**
  *
- * The dialog says "PDF or web page, up to 50 MB" (`uploadLimits()` in
+ * The dialog says "PDF, web page, Word, Markdown or text file, up to 50 MB" (`uploadLimits()` in
  * src/uploads.ts). Until 2026-10-04 that was true of an upload and false of an
  * address, which stopped at a second number typed into src/fetch.ts: 32 MiB.
  * Greg, 2026-10-04: "make them consistent (and perhaps reuse the same

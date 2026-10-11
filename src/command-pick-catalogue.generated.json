@@ -264,7 +264,7 @@
  {
   "id": "mode:referee",
   "label": "Referee",
-  "description": "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
+  "description": "Refereeing it? What to weigh before you decide: your criteria, its promises, and a second look at your notes",
   "aliases": [
    "review",
    "reviewer",
@@ -700,14 +700,14 @@
   ]
  },
  {
-  "id": "submode:referee:claims",
-  "label": "Claims",
+  "id": "submode:referee:promises",
+  "label": "Promises",
   "description": "What the piece promises, against the passages meant to deliver it",
   "aliases": [
    "Referee",
-   "Claims Referee",
-   "Referee Claims",
-   "Claims mode"
+   "Promises Referee",
+   "Referee Promises",
+   "Promises mode"
   ],
   "kind": "submode",
   "generates": true,

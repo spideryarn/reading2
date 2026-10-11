@@ -697,8 +697,8 @@ const NOT_A_ROW: Record<string, string> = {
     "Reception's Cited by is a section inside Debate's band, not a mode's artefact read: it has no error string at all. Every failed request is its `unavailable` outcome, with its own fixed sentence and its own Try again, checked in tests/use-citers.test.tsx and tests/reception-and-claims-panel.test.tsx.",
   "useArc.ts":
     "its `error` is never drawn — Reader reads `capability.arc.arc` and nothing else of it — so there is nothing to put a button beside. Its sentence is checked below.",
-  "useClaims.ts":
-    "Referee's claims run is a stored stream run, not a mode panel's artefact read; it already goes through `describeFetchFailure` and words its own load failure.",
+  "usePromises.ts":
+    "Referee's promises run is a stored stream run, not a mode panel's artefact read; it already goes through `describeFetchFailure` and words its own load failure.",
   "useRelations.ts":
     "Marginalia's relation words: a failed read stores no message and draws nothing, the notes simply have no connective.",
   "useCrossrefs.ts":

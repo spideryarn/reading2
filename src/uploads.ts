@@ -4,7 +4,9 @@
  * **Two kinds since 2026-09-07** — a PDF and a web page — and one function says
  * which (`uploadKind`). Before that this module was named entirely around PDFs,
  * and several sentences below still lead with one because a PDF is where every
- * one of the hard-won details came from.
+ * one of the hard-won details came from. **Five formats since 2026-10-11**:
+ * plain text, Markdown and Word as well, each turned into a web page at stage 1
+ * (src/upload-convert.ts, docs/plans/261011j-upload-text-markdown-and-word-files.md).
  *
  * A module of its own for the same reason src/ingest.ts is one: **the answer
  * has to be the same in the browser and on the server**, and they are different
@@ -87,7 +89,10 @@ export const MAX_PAGES = 250;
  * `pdfTooManyPages` for the pages.
  */
 export function uploadLimits(): string {
-  return `PDF or web page, up to ${formatBytes(MAX_UPLOAD_BYTES)}. PDFs up to ${MAX_PAGES} pages.`;
+  return (
+    `PDF, web page, Word, Markdown or text file, up to ${formatBytes(MAX_UPLOAD_BYTES)}. ` +
+    `PDFs up to ${MAX_PAGES} pages.`
+  );
 }
 
 /** What the reader chose, in the small part of `File` that matters here. */
@@ -142,8 +147,8 @@ export function uploadProblem(file: ChosenFile): string | null {
        branch it always was — renaming it would strand every report that already
        quotes it in exchange for a tidier spelling. */
     return (
-      "That doesn't look like a PDF or a web page. Uploads are PDF and HTML files — or a web " +
-      "address can go in the box above instead. [pick-pdf]"
+      "That doesn't look like a file we can read. Uploads are PDF, HTML, Word, Markdown and text " +
+      "files — or a web address can go in the box above instead. [pick-pdf]"
     );
   }
   if (file.size === 0) {
@@ -154,6 +159,61 @@ export function uploadProblem(file: ChosenFile): string | null {
   }
   return null;
 }
+
+/**
+ * **What a reader can upload**, as a claim about one file.
+ *
+ * `pdf` and `html` are stored as what they are. `text`, `markdown` and `docx`
+ * are turned into a web page at stage 1 and stored as `html` from then on
+ * (src/upload-convert.ts) — so this is wider than `DocumentKind` in
+ * src/fetch.ts, deliberately, and the two meet in `uploadedFormat` there.
+ */
+export type UploadFormat = "pdf" | "html" | ConvertedFormat;
+
+/** The three formats that are turned into a web page before they are stored. */
+export type ConvertedFormat = "text" | "markdown" | "docx";
+
+/**
+ * The extensions of the three converted formats, and what each one claims.
+ * **By extension only**, because `POST /api/uploads` decides on the name alone
+ * (`uploadProblem` with `type: ""`, src/routes.ts), and a picker that took a
+ * file the server then refused is the disagreement this module exists to
+ * prevent.
+ */
+const CONVERTED_EXTENSIONS: Readonly<Record<string, ConvertedFormat>> = {
+  txt: "text",
+  text: "text",
+  rst: "text",
+  org: "text",
+  md: "markdown",
+  markdown: "markdown",
+  mdown: "markdown",
+  mkd: "markdown",
+  docx: "docx",
+};
+
+/**
+ * The file picker's `accept`, built from the same list `uploadKind` reads, so
+ * the picker cannot offer a file the check refuses or hide one it takes.
+ */
+export const UPLOAD_ACCEPT = [
+  "application/pdf",
+  ".pdf",
+  "text/html",
+  ".html",
+  ".htm",
+  ...Object.keys(CONVERTED_EXTENSIONS).map((extension) => `.${extension}`),
+].join(",");
+
+/** What the extension alone claims, for the three converted formats. */
+export function convertedFormatFromName(name: string): ConvertedFormat | null {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return null;
+  return CONVERTED_EXTENSIONS[name.slice(dot + 1).toLowerCase()] ?? null;
+}
+
+/** The registered type of a Word `.docx`. Also in the `sources` bucket's allowlist. */
+export const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 /**
  * **What this file claims to be**, before anybody has looked at a single byte —
@@ -175,12 +235,21 @@ export function uploadProblem(file: ChosenFile): string | null {
  * to disagree. A `.html` whose bytes begin `%PDF-` is a PDF, and
  * `acquireUpload` is where that is settled.
  *
+ * **Three more since 2026-10-11, and for those the name alone decides.** An
+ * OS's guess at the type of a Markdown or an Org-mode file is anything from the empty
+ * string to `text/x-markdown` to Lotus Organizer, so the strict "a definite
+ * type beats the name" rule below would refuse good files on the strength of a
+ * mime database. The server checks the bytes — no binary data, a zip for Word —
+ * before converting anything (`uploadedFormat`, src/fetch.ts).
+ *
  * This module deliberately does not import `DocumentKind` for the return type.
  * It has no dependencies at all — that is the whole reason it exists, so the
  * browser can hold it — and src/fetch.ts brings the network stack with it.
  * `tests/uploads.test.ts` pins that the two spellings stay the same two words.
  */
-export function uploadKind(file: ChosenFile): "pdf" | "html" | null {
+export function uploadKind(file: ChosenFile): UploadFormat | null {
+  const converted = convertedFormatFromName(file.name);
+  if (converted !== null) return converted;
   if (file.type === "application/pdf") return "pdf";
   if (file.type === "text/html") return "html";
   const name = file.name.toLowerCase();
@@ -225,9 +294,31 @@ export function uploadKind(file: ChosenFile): "pdf" | "html" | null {
  *
  * Falls back to `application/pdf` for a file `uploadKind` refused, because
  * `uploadProblem` has already stopped that file and there is no PUT to label.
+ *
+ * **Every value it returns must be in the `sources` bucket's
+ * `allowed_mime_types`** (supabase/config.toml) — on the live bucket, not only
+ * in the file; `scripts/check-buckets.ts --prod` says which.
  */
 export function uploadContentType(file: ChosenFile): string {
-  return uploadKind(file) === "html" ? "text/html" : "application/pdf";
+  return formatContentType(uploadKind(file));
+}
+
+/** The staging `Content-Type` for a format — `uploadContentType`'s rule, for a caller that already knows it. */
+export function formatContentType(format: UploadFormat | null): string {
+  switch (format) {
+    case "html":
+      return "text/html";
+    /* Markdown is text, and one type for both keeps the bucket's allowlist an
+       entry shorter; the filename is what says which it is. */
+    case "text":
+    case "markdown":
+      return "text/plain";
+    case "docx":
+      return DOCX_CONTENT_TYPE;
+    case "pdf":
+    case null:
+      return "application/pdf";
+  }
 }
 
 /**

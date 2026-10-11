@@ -64,7 +64,7 @@
  * exactly three places — src/routes.ts (per request), src/jobs.ts (per pipeline
  * step) and src/cli-ledger.ts (`withLedger`, which is what this file uses).
  * None of `converse`, `explain`, `findPassages`, `markAnswer`, `runCriterion`,
- * `runClaims`, `mirror`, `lookUpTerm`, `transcribe` or `articleVectors` opens
+ * `runPromises`, `mirror`, `lookUpTerm`, `transcribe` or `articleVectors` opens
  * one, and none of them sets its own attribution either — every one of them
  * relies on its caller for `articleSlug`, exactly as the routes do. So this file
  * wraps each call in `withSpendAttribution({ articleSlug, ownerId })` for the
@@ -77,7 +77,7 @@
  * glossary and a sink for the write, and Learn and Candidates are `converse`
  * with a `kind`, because that is all the routes give them either.
  *
- * The idiom itself is not new — `evals/referee-claims.ts` and
+ * The idiom itself is not new — `evals/referee-promises.ts` and
  * `evals/referee-mirror.ts` already call these functions directly under
  * `withLedger("eval", main)`.
  *
@@ -106,7 +106,7 @@ import { explain } from "../../src/explain.js";
 import { isMain } from "../../src/is-main.js";
 import { environmentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../../src/owner.js";
 import { markAnswer } from "../../src/quiz-mark.js";
-import { runClaims } from "../../src/referee-claims-run.js";
+import { runPromises } from "../../src/referee-promises-run.js";
 import { runCriterion } from "../../src/referee-criteria-run.js";
 import { mirror } from "../../src/referee-mirror.js";
 import { CANDIDATES_OPENING } from "../../src/referee-candidates.js";
@@ -471,14 +471,14 @@ const TASKS: readonly InteractionTask[] = [
       }),
   },
   {
-    name: "referee-claims",
+    name: "referee-promises",
     note:
       "**A per-ARTICLE artefact, not a per-interaction one** — it is generated once and stored, " +
       "like a mode. It is measured here rather than in run.ts only because it is not a pipeline " +
       "step and so cannot be a draw there. Add it to the article's cost, never to a reader's.",
     rounds: { kind: "one" },
     async run({ article }) {
-      const outcome = await runClaims({ power: "standard", meta: article.meta, blocks: article.blocks });
+      const outcome = await runPromises({ power: "standard", meta: article.meta, blocks: article.blocks });
       return `${JSON.stringify(outcome).length} bytes of outcome`;
     },
   },
@@ -656,7 +656,7 @@ const STANDING_NOTES = [
     "lands in `npm run cost`'s Product bucket (scripts/ai-cost.ts defines Product as " +
     "scopeKind !== \"eval\") and every row resolves to the eval owner's article rather than to " +
     "a null article_id under the environment owner.",
-  "`referee-claims` and `embeddings` are ARTICLE costs measured here only because they are not " +
+  "`referee-promises` and `embeddings` are ARTICLE costs measured here only because they are not " +
     "pipeline steps and so cannot be draws in run.ts. `referee-mirror` is NOT one of them — it " +
     "stores nothing and is re-paid on every press and every reload, which makes it a repeated " +
     "reader cost. It was classified the other way until 2026-09-03.",

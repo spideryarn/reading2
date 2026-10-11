@@ -31,16 +31,13 @@ describe("firstOpenWithPurpose: the table", () => {
   /* Since 2026-10-07 (plan 261007p) the ordinary default is the guide, so
      the purpose read no longer says where a first open lands, only whether
      the modal shows: where no band fits and no reason is stored. */
-  const wide = "?mode=chat&guide=1&margin=1";
-  const medium = "?mode=chat&guide=1";
+  const band = "?mode=chat&guide=1";
   it.each([
-    [wide, "stored", wide, false],
-    [medium, "stored", medium, false],
+    [band, "stored", band, false],
     ["", "stored", "", false],
-    [wide, "unknown", wide, false],
+    [band, "unknown", band, false],
     ["", "unknown", "", false],
-    [wide, "none", wide, false],
-    [medium, "none", medium, false],
+    [band, "none", band, false],
     ["", "none", "", true],
   ] as const)("ordinary %j, purpose %s → %j, modal %s", (ordinary, outcome, search, modal) => {
     expect(firstOpenWithPurpose(ordinary, outcome)).toEqual({ search, modal });
@@ -115,35 +112,35 @@ describe("a marked first open", () => {
   it("does not wait for the purpose read: the guide at once, since it is the answer either way", () => {
     Object.assign(setting, { signedIn: true });
     render(null);
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("no reason, room for a band: settings first, then the read → the guide, and no modal", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null);
     render("none");
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     expect(modals).toEqual([false]);
   });
 
   it("no reason, room for a band: the purpose read need not wait for settings", () => {
     Object.assign(setting, { signedIn: true });
     render("none");
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     expect(modals).toEqual([false]);
     Object.assign(setting, { loaded: true });
     render("none");
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("does not strand the guide when the unrelated settings read never settles", () => {
     Object.assign(setting, { signedIn: true });
     render("none");
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     expect(modals).toEqual([false]);
   });
 
-  it("no reason, room for a band but not the notes → the guide alone", () => {
+  it("no reason, a narrower window with room for a band → the guide alone", () => {
     setWidth(800);
     Object.assign(setting, { loaded: true, signedIn: true });
     render("none");
@@ -161,7 +158,7 @@ describe("a marked first open", () => {
   it("a reason stored → the guide too, and no modal", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render("stored");
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     expect(modals).toEqual([false]);
   });
 
@@ -170,7 +167,7 @@ describe("a marked first open", () => {
     render("unknown");
     Object.assign(setting, { loaded: true });
     render("unknown");
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     expect(modals).toEqual([false]);
   });
 
@@ -178,7 +175,7 @@ describe("a marked first open", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null, true);
     render("none", true);
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     expect(new Set(modals)).toEqual(new Set([false]));
     /* A reader who then moves is not moved back by a replayed decision. */
     history.replaceState(null, "", "/read/x?mode=summary");
@@ -207,14 +204,14 @@ describe("no mark", () => {
   it("the ordinary default, without waiting for anything", () => {
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null);
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("a mark for another article does not hold this one", () => {
     session.set(MARK, "y");
     Object.assign(setting, { loaded: true, signedIn: true });
     render(null);
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 });
 

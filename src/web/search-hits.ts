@@ -31,7 +31,7 @@
 import { renderedText, type Mark } from "./annotate.js";
 import { findOnlyQuote, findQuote, snippetAt } from "../quote-match.js";
 import { rendersMaths } from "./maths-provenance.js";
-import type { ClaimPassage } from "../referee-claims.js";
+import type { PromisePassage } from "../referee-promises.js";
 import type { DivergingScale, RefereeResult } from "../referee-criteria.js";
 import type {
   Block,
@@ -459,7 +459,7 @@ interface Page {
  * `renderedText` is `document.createElement("div")`, an `innerHTML =` and a
  * `textContent` read — a full HTML parse, per block. `page` does it for every
  * block, and **six** exported resolvers call `page`. Two of them call it inside
- * a loop: one `resolveClaim` per shown claim (ClaimsPanel.tsx) and one
+ * a loop: one `resolvePaperPromise` per shown claim (PromisesPanel.tsx) and one
  * `resolveCriterion` per ticked criterion (CriteriaPanel.tsx). So referee mode
  * was O(claims × blocks) parses, and ticking one criterion paid for all of them
  * again; a literal search paid a whole pass per keypress.
@@ -927,7 +927,7 @@ export function resolveTimelineEvent(
  * which way. Greg reversed that, having read a paper with it:
  *
  * > I'm not convinced that the highlighting colour in the text matches the
- * > colour in the Referee Claims. Here, "So if extrapolation" counts against on
+ * > colour in the Referee Promises. Here, "So if extrapolation" counts against on
  * > the left, and yet it is highlighted with a green line in the text on the
  * > right. … I was thinking that it should match the colour of the left-hand
  * > panel. If that's set to red/green, so should the prose be.
@@ -999,8 +999,8 @@ export function resolveCriterion(
  * the same decision:
  *
  * - **`confidence: null`**, like an idea's and a quote's and unlike a
- *   criterion's. There is no number on a `ClaimPassage` and there is not going
- *   to be one (src/referee-claims.ts § `ClaimPassage`): the row asserts that a
+ *   criterion's. There is no number on a `PromisePassage` and there is not going
+ *   to be one (src/referee-promises.ts § `PromisePassage`): the row asserts that a
  *   passage takes a claim up, never how well. `null` is what a literal
  *   word-match already carries, so the threshold, the ordering and the wash all
  *   already know what to do with it — `keepAbove` reads it as certain rather
@@ -1020,9 +1020,9 @@ export function resolveCriterion(
  * quote's: these offsets come from a model naming a block, so the first rendered
  * occurrence is not necessarily the one meant.
  */
-export function resolveClaim(
+export function resolvePaperPromise(
   blocks: Block[],
-  claim: { id: string; slot: number; passages: ClaimPassage[] },
+  claim: { id: string; slot: number; passages: PromisePassage[] },
 ): Found[] {
   const at = page(blocks);
   const out: Found[] = [];
@@ -1042,7 +1042,7 @@ export function resolveClaim(
       /* **The identity-only path, and it stays that way.** A claim's passage
          says the paper takes this claim up here; whether it carries the claim
          is the referee's call and not the model's
-         (docs/project/referee-mode.md § Claims). There is no valence to carry
+         (docs/project/referee-mode.md § 2, Promises). There is no valence to carry
          and a claim mark wears its claim's own hue. */
       valence: null,
       reasoning: p.reasoning,

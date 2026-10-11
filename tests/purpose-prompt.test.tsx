@@ -375,13 +375,13 @@ describe("PurposePrompt on a held first open", () => {
 
   it("no reason, a band fits: no modal, the mark cleared, the guide opened", async () => {
     session.set(MARK, SLUG);
-    holdWith("?mode=chat&guide=1&margin=1");
+    holdWith("?mode=chat&guide=1");
     render(true);
     await settle();
     expect(isOpen(), "the modal was shown over the guide").toBe(false);
     expect(showModals).toBe(0);
     expect(session.has(MARK)).toBe(false);
-    expect(applied).toEqual(["?mode=chat&guide=1&margin=1"]);
+    expect(applied).toEqual(["?mode=chat&guide=1"]);
   });
 
   it("no reason, no room for a band: the modal, as before", async () => {
@@ -396,12 +396,12 @@ describe("PurposePrompt on a held first open", () => {
   it("a failed read: the ordinary default, and the mark kept for the next load", async () => {
     session.set(MARK, SLUG);
     readerBody = "fail";
-    holdWith("?mode=chat&guide=1&margin=1");
+    holdWith("?mode=chat&guide=1");
     render();
     await settle();
     expect(isOpen()).toBe(false);
     expect(session.get(MARK)).toBe(SLUG);
-    expect(applied).toEqual(["?mode=chat&guide=1&margin=1"]);
+    expect(applied).toEqual(["?mode=chat&guide=1"]);
   });
 });
 

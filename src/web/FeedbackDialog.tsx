@@ -1455,7 +1455,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             <span>
               <strong>Send extra diagnostics.</strong> The last few requests this page made to us and
               how they went, the names of any errors, and facts about your browser and screen size.
-              On one of your own articles, it may also send the file the article was made from and
+              On one of your own articles, it may also send the PDF or web page Spideryarn read and
               our copy of its text, within a size limit, so we can reproduce the problem. These
               extra diagnostics <em>never</em> include your notes, comments or chats, or what you've
               told us about yourself.

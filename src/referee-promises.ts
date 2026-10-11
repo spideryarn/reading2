@@ -17,13 +17,13 @@
  * supplement, or that the paper words the thing differently. And counting
  * passages is indefensible as a proxy for adequacy — one decisive result beats
  * five repetitive mentions. The failure mode named in the plan is specific: *a
- * tired referee opens Claims first, reads the top "thin" rows, and treats
+ * tired referee opens Promises (then Claims) first, reads the top "thin" rows, and treats
  * everything unlisted as clean. That is the mode most likely to replace reading,
  * dressed as the one least likely to.*
  *
  * So:
  *
- * 1. **Document order, never thinness order.** `validateClaims` sorts by where
+ * 1. **Document order, never thinness order.** `validatePromises` sorts by where
  *    the claim sits in the article and by nothing else, and it does the sort
  *    itself rather than leaving it to a caller — see `byDocument`. There is no
  *    comparator anywhere in this feature that reads `passages.length`.
@@ -31,11 +31,11 @@
  *    and it is a value rather than a string in a panel so that a test can hold
  *    it to that. Never "none", never "unsupported", never "the paper does not
  *    address this" — tests/referee-copy-is-about-the-model.test.ts.
- * 3. **Linkage only, never adequacy.** A `ClaimPassage` asserts that a passage
+ * 3. **Linkage only, never adequacy.** A `PromisePassage` asserts that a passage
  *    addresses the claim. Whether the results *carry* the abstract's sentence is
  *    the referee's job, and it is the interesting part. There is deliberately no
  *    confidence, no strength, no score and no valence on anything in this file —
- *    see `ClaimPassage.reasoning`. Until 2026-09-01 this rule was held by nothing
+ *    see `PromisePassage.reasoning`. Until 2026-09-01 this rule was held by nothing
  *    but the prompt; it now also has a **fail-safe** that blanks a `reasoning`
  *    line reading as a verdict and counts what it blanked (`ADEQUACY_FRAMES`).
  *    A fail-safe, not a guarantee — read its docstring for what it cannot see.
@@ -57,7 +57,7 @@
  * checked against the paper**. The third used to render as the second one level
  * up in Criteria, where a `done` row with no results printed *"the model did not
  * find a passage"* about an answer that had found one and failed to score it
- * (GPT Sol's finding 4). Here that is `Claim.discarded`: a per-claim count of
+ * (GPT Sol's finding 4). Here that is `PaperPromise.discarded`: a per-claim count of
  * passages thrown away, carried onto the row so the panel can say the true
  * sentence rather than the near one. `PASSAGES_UNUSABLE` is that sentence.
  *
@@ -103,14 +103,14 @@ interface Anchored {
  * this passage addresses that claim*; the referee presses it, lands on the
  * paragraph, and decides.
  */
-export interface ClaimPassage extends Anchored {
+export interface PromisePassage extends Anchored {
   /**
    * One short line on **how** this passage bears on the claim — the methods
    * step, the table, the limitation.
    *
    * Linkage, never adequacy: "reports the accuracy the abstract quotes" is the
    * shape, and "confirms the claim" is not. The prompt asks for that, and since
-   * 2026-09-01 `validateClaims` also **blanks a line that reads as a verdict**
+   * 2026-09-01 `validatePromises` also **blanks a line that reads as a verdict**
    * rather than printing it — see `ADEQUACY_FRAMES` and `withheld` below.
    *
    * An empty string means either that the model wrote nothing here or that what
@@ -120,7 +120,7 @@ export interface ClaimPassage extends Anchored {
   /**
    * **This passage's `reasoning` was a verdict, so it was blanked.**
    *
-   * Set by `validateClaims` and never by the model. The passage itself survives:
+   * Set by `validatePromises` and never by the model. The passage itself survives:
    * the linkage — *this paragraph bears on that claim* — is the useful half and
    * is still a door into the prose, so losing the row to save the sentence would
    * cost the referee more than it saved. Failing safe means dropping the
@@ -134,7 +134,7 @@ export interface ClaimPassage extends Anchored {
 }
 
 /** One claim the paper makes about itself, and where it is taken up. */
-export interface Claim extends Anchored {
+export interface PaperPromise extends Anchored {
   /**
    * **Stable, derived, never minted** — `blockId:start`.
    *
@@ -160,8 +160,8 @@ export interface Claim extends Anchored {
    * **This claim's own line was a verdict, so it was blanked** and `claim` is
    * the empty string.
    *
-   * Set by `validateClaims` and never by the model, exactly like
-   * `ClaimPassage.withheld`. Until 2026-09-01 the fail-safe read `reasoning`
+   * Set by `validatePromises` and never by the model, exactly like
+   * `PromisePassage.withheld`. Until 2026-09-01 the fail-safe read `reasoning`
    * only, and a committed test pinned an adequacy verdict surviving untouched in
    * the headline — *"The 40% claim is not supported by the results"* — which
    * GPT Sol's second review called what it was: not an edge case but a direct
@@ -169,7 +169,7 @@ export interface Claim extends Anchored {
    *
    * **The claim survives, and so does its label.** The paper's own `quote` is
    * already on the row and is not the model's judgement, so it stands in as the
-   * label (`CLAIM_WITHHELD`). Dropping the claim instead would cost the referee
+   * label (`PROMISE_WITHHELD`). Dropping the claim instead would cost the referee
    * a claim the paper actually makes, to be rid of one sentence.
    */
   claimWithheld?: true;
@@ -180,7 +180,7 @@ export interface Claim extends Anchored {
    * words: `NO_PASSAGE_FOUND` when nothing was named, `PASSAGES_UNUSABLE` when
    * things were named and none survived. `discarded` is what tells those apart.
    */
-  passages: ClaimPassage[];
+  passages: PromisePassage[];
   /**
    * How many passages the model named for this claim that could not be kept —
    * an unknown block id, a quote not in the block it named, a row with no anchor
@@ -210,7 +210,7 @@ export interface Claim extends Anchored {
 }
 
 /**
- * One run of Claims over one article — the whole stored artefact.
+ * One run of Promises over one article — the whole stored artefact.
  *
  * **One row per article, not a list**, which is the one shape difference from
  * `SavedCriterion`: a referee writes several criteria and asks the paper what
@@ -222,30 +222,30 @@ export interface Claim extends Anchored {
  * `SavedCriterion` and a `SearchRun` and a `Comment`, so a crash mid-run leaves
  * a visible unfinished run rather than a question that evaporated.
  */
-export interface ClaimsRun {
+export interface PromisesRun {
   status: "pending" | "done" | "error";
   createdAt: string;
-  claims: Claim[];
+  promises: PaperPromise[];
   model?: string;
   error?: string;
   /**
-   * **How many claims `MAX_CLAIMS` cut off the end of this run.**
+   * **How many claims `MAX_PROMISES` cut off the end of this run.**
    *
-   * The run-level half of `Claim.passagesOmitted`, and it exists for the same
+   * The run-level half of `PaperPromise.passagesOmitted`, and it exists for the same
    * reason: a referee reading an apparently complete list in which the claims
    * the paper makes last were systematically dropped is being ranked by
    * visibility (GPT Sol's second review, finding 5).
    *
-   * **Optional, and the panel is honest either way.** `validateClaims` computes
-   * it as `DroppedClaims.truncated`, but the route that stores a run
-   * (src/routes.ts § `runRefereeClaims`) writes `claims` and `model` and nothing
+   * **Optional, and the panel is honest either way.** `validatePromises` computes
+   * it as `DroppedPromises.truncated`, but the route that stores a run
+   * (src/routes.ts § `runRefereePromises`) writes `claims` and `model` and nothing
    * else, so until it also writes this the field is absent on every stored run.
-   * The panel therefore falls back to `CLAIMS_AT_CAP`, which says the one thing
-   * a full list proves on its own; with the field it says `claimsOmittedNote`
+   * The panel therefore falls back to `PROMISES_AT_CAP`, which says the one thing
+   * a full list proves on its own; with the field it says `promisesOmittedNote`
    * instead. Wiring it up is one line in that route:
-   * `claimsOmitted: event.outcome.dropped.truncated`.
+   * `promisesOmitted: event.outcome.dropped.truncated`.
    */
-  claimsOmitted?: number;
+  promisesOmitted?: number;
   /**
    * Fingerprint of the blocks this run was answered against — `hashBlocks`,
    * src/source-hash.ts. Same field and same word as `SavedCriterion`, and absent
@@ -263,10 +263,10 @@ export interface ClaimsRun {
  *
  * An abstract and an introduction carry a handful; twenty is past anything real
  * and short of anything a panel cannot be read down. Beyond it the extras are
- * **counted, not dropped in silence** (`DroppedClaims.truncated`), because a cap
+ * **counted, not dropped in silence** (`DroppedPromises.truncated`), because a cap
  * that never says so is a cap nobody finds out about.
  */
-export const MAX_CLAIMS = 20;
+export const MAX_PROMISES = 20;
 
 /**
  * How many passages one claim keeps.
@@ -287,7 +287,7 @@ export const MAX_PASSAGES = 8;
  * finding, and a zero-passage row is not evidence for it: the extractor may have
  * dropped a table or a figure or a supplement, the paper may word the thing
  * differently, or the model may simply have missed it. GPT Sol's second finding
- * made this the condition of Claims surviving the review at all.
+ * made this the condition of Promises (then Claims) surviving the review at all.
  *
  * A value rather than a string inside the panel, so that
  * tests/referee-copy-is-about-the-model.test.ts can check the sentence itself
@@ -388,7 +388,7 @@ export function withheldNote(n: number): string {
  * is not the model's judgement — so it stands in as the label, which is the
  * fallback the review asked for. Nothing is invented and nothing is dropped.
  */
-export const CLAIM_WITHHELD =
+export const PROMISE_WITHHELD =
   "The model's one-line version of this claim was withheld — it read as a judgement on whether " +
   "the paper carries the claim, and that judgement is yours. The paper's own words stand below in " +
   "its place.";
@@ -401,7 +401,7 @@ export const CLAIM_WITHHELD =
  * many were cut* is that count again by another route. What a referee needs from
  * this sentence is that the row is incomplete and which way the cut went, and
  * both of those fit without a digit. The count itself is on
- * `Claim.passagesOmitted` for a log or an eval to read.
+ * `PaperPromise.passagesOmitted` for a log or an eval to read.
  */
 export const PASSAGES_CAPPED =
   "The model named more passages for this claim than are shown. What was cut is what comes " +
@@ -413,24 +413,24 @@ export const PASSAGES_CAPPED =
  * Outside the list, so the no-digit rule that governs a claim row does not
  * apply, and a count here cannot be read as a ranking of anything: it is a fact
  * about this app's cap. `n` is how many claims validation threw away for being
- * past `MAX_CLAIMS`.
+ * past `MAX_PROMISES`.
  */
-export function claimsOmittedNote(n: number): string {
+export function promisesOmittedNote(n: number): string {
   const what = n === 1 ? "One further claim the model returned was" : `${n} further claims the model returned were`;
-  return `${what} cut, because this run reached the panel's cap of ${MAX_CLAIMS}. The cut is from the end of the paper, so it is the claims the paper makes last that are missing.`;
+  return `${what} cut, because this run reached the panel's cap of ${MAX_PROMISES}. The cut is from the end of the paper, so it is the claims the paper makes last that are missing.`;
 }
 
 /**
  * **And what the panel says when it can see the cap was reached but not how far
  * past it the answer went.**
  *
- * A run stored before `ClaimsRun.claimsOmitted` existed — and, until the route
+ * A run stored before `PromisesRun.promisesOmitted` existed — and, until the route
  * carries that field, every run — has the claims and not the count. Saying
  * nothing would be the silent cap the review objected to; inventing a number
  * would be worse. So this sentence says the one thing that is certainly true.
  */
-export const CLAIMS_AT_CAP =
-  `This run reached the panel's cap of ${MAX_CLAIMS} claims. If the model returned more, they were ` +
+export const PROMISES_AT_CAP =
+  `This run reached the panel's cap of ${MAX_PROMISES} claims. If the model returned more, they were ` +
   "cut from the end of the paper, so the claims the paper makes last may be missing here.";
 
 /** The heading over the rest of the text inside the passages the claims quote. */
@@ -479,7 +479,7 @@ export const OTHER_TEXT_AT_CAP =
 /**
  * **Sentences that are a judgement about whether a passage carries a claim.**
  *
- * These frames were built and argued for in `evals/referee-claims.ts`, where
+ * These frames were built and argued for in `evals/referee-promises.ts`, where
  * they were checked in both directions against real committed model output: they
  * fire on all six adequacy lines of the ablated run — the same paper with the
  * prompt's refusals cut out — and stay silent on ten guarded linkage lines,
@@ -514,7 +514,7 @@ export const OTHER_TEXT_AT_CAP =
  * be read the same way. The 6/6-and-10/10 in `evals/results/referee-claims.md`
  * is **in-sample**: the frames were shaped by the very lines they are checked
  * against, so a production miss is necessarily an eval miss too. The held-out
- * set the review asked for is `HELD_OUT` in `evals/referee-claims.ts` — written
+ * set the review asked for is `HELD_OUT` in `evals/referee-promises.ts` — written
  * before any of these frames was touched, labelled by hand, and reported with
  * its misses rather than its hits.
  *
@@ -543,7 +543,7 @@ export const OTHER_TEXT_AT_CAP =
  * place in the sub-mode to put a verdict; and there *is* something to put in its
  * place — **the paper's own sentence**, which is already on the row, already
  * checked against the block it came from, and is not the model's judgement.
- * `Claim.claimWithheld` and `CLAIM_WITHHELD`.
+ * `PaperPromise.claimWithheld` and `PROMISE_WITHHELD`.
  */
 const ADEQUACY_FRAMES: readonly { readonly name: string; readonly re: RegExp }[] = [
   {
@@ -724,7 +724,7 @@ export function subtractPaperPhrases(text: string, grams: Set<string>): string {
  * unit that swallows the anchor of the claim in the clause after it, and what
  * keeps *"Our contributions are three."* off the list.
  *
- * It was tuned against the five papers in `evals/referee-claims.ts`, and the
+ * It was tuned against the five papers in `evals/referee-promises.ts`, and the
  * tuning is recorded rather than smoothed away: at five, *"In a pre-registered
  * randomised trial,"* became a unit of its own and orphaned the fluency claim
  * that follows it in the same sentence.
@@ -840,7 +840,7 @@ function units(text: string): { text: string; start: number }[] {
  * neighbour is still caught, because a swallowed claim is by definition **inside
  * the quote that swallowed it**: the Ridge answer's memory and robustness
  * clauses sit inside the abstract sentence quoted whole under the speed claim,
- * and tests/referee-claims-accounting.test.ts pins that against the real
+ * and tests/referee-promises-accounting.test.ts pins that against the real
  * committed answer.
  *
  * **What the narrowing gives up**, written down rather than discovered later: a
@@ -851,7 +851,7 @@ function units(text: string): { text: string; start: number }[] {
  * reached for and could not justify either: a fixed prefix of the article, named
  * as a prefix, rather than a judgement about where a paper's claims live.
  */
-export function otherTextInQuotes(blocks: Block[], claims: readonly Claim[]): OtherText[] {
+export function otherTextInQuotes(blocks: Block[], claims: readonly PaperPromise[]): OtherText[] {
   /** Per block: where each claim begins, and the span each claim's quote covers. */
   const anchors = new Map<BlockId, { starts: number[]; spans: [number, number][] }>();
   for (const c of claims) {
@@ -888,16 +888,16 @@ export function otherTextInQuotes(blocks: Block[], claims: readonly Claim[]): Ot
 /* ---------------------------------------------------------- what was lost -- */
 
 /** What validation threw away, so a log line and a panel can say it out loud. */
-export interface DroppedClaims {
-  /** Claims with no `blockId`, no `quote`, or no line saying what the claim is. */
+export interface DroppedPromises {
+  /** Promises with no `blockId`, no `quote`, or no line saying what the claim is. */
   malformed: number;
-  /** Claims anchored to a block this article does not have. */
+  /** Promises anchored to a block this article does not have. */
   unknownIds: number;
-  /** Claims whose quote is not in the block they named. */
+  /** Promises whose quote is not in the block they named. */
   unquoted: number;
-  /** Claims anchored to words an earlier claim already claimed. */
+  /** Promises anchored to words an earlier claim already claimed. */
   duplicates: number;
-  /** Claims past `MAX_CLAIMS`. Counted so a cap is never silent. */
+  /** Promises past `MAX_PROMISES`. Counted so a cap is never silent. */
   truncated: number;
   /** Passages with no anchor in them at all. */
   passageMalformed: number;
@@ -911,7 +911,7 @@ export interface DroppedClaims {
   passageTruncated: number;
 }
 
-function nothingDropped(): DroppedClaims {
+function nothingDropped(): DroppedPromises {
   return {
     malformed: 0,
     unknownIds: 0,
@@ -936,12 +936,12 @@ function nothingDropped(): DroppedClaims {
  * used to render as one sentence and the sentence was false for the second of
  * them. `truncated` is deliberately not here — those claims were good and *we*
  * capped them, which is a fact about this app rather than about the answer, and
- * a truncated answer has `MAX_CLAIMS` claims in it so it is never the empty case
+ * a truncated answer has `MAX_PROMISES` claims in it so it is never the empty case
  * this exists for. Nor are the `passage*` counts: a claim whose passages were
  * all thrown away is still a claim, and it says so on its own row through
- * `Claim.discarded`.
+ * `PaperPromise.discarded`.
  */
-export function discardedClaims(dropped: DroppedClaims): number {
+export function discardedPromises(dropped: DroppedPromises): number {
   return dropped.malformed + dropped.unknownIds + dropped.unquoted + dropped.duplicates;
 }
 
@@ -957,10 +957,10 @@ export function discardedClaims(dropped: DroppedClaims): number {
  * earned, and the one failure a referee could not possibly diagnose.
  * docs/reusable/silent-success.md.
  */
-export class UnreadableClaims extends Error {
+export class UnreadablePromises extends Error {
   constructor(cause: string) {
     super("The model's answer could not be read as a list of claims.", { cause });
-    this.name = "UnreadableClaims";
+    this.name = "UnreadablePromises";
   }
 }
 
@@ -1001,17 +1001,17 @@ function byDocument<T extends Anchored>(at: Map<BlockId, number>): (a: T, b: T) 
  * passages were all thrown away keeps its own count so the panel can say which
  * of the three things happened.
  */
-export function validateClaims(
+export function validatePromises(
   raw: unknown,
   blocks: Block[],
-): { claims: Claim[]; dropped: DroppedClaims; withheld: string[] } {
+): { promises: PaperPromise[]; dropped: DroppedPromises; withheld: string[] } {
   const list = (raw as { claims?: unknown } | null | undefined)?.claims;
-  if (!Array.isArray(list)) throw new UnreadableClaims("claims-not-an-array");
+  if (!Array.isArray(list)) throw new UnreadablePromises("claims-not-an-array");
 
   const dropped = nothingDropped();
   const byId = new Map(blocks.map((b) => [b.id, b]));
   const at = positions(blocks);
-  const claims: Claim[] = [];
+  const promises: PaperPromise[] = [];
   const seen = new Set<string>();
 
   /**
@@ -1020,7 +1020,7 @@ export function validateClaims(
    *
    * **Returned rather than logged**, and returned rather than left on the
    * passage: the server may not log a passage's reasoning (a paper under review
-   * is somebody else's unpublished work — src/referee-claims-run.ts § What may
+   * is somebody else's unpublished work — src/referee-promises-run.ts § What may
    * be logged), and shipping the sentence to the client under another name would
    * be printing it after all. The eval is the one caller that reads the strings.
    */
@@ -1031,7 +1031,7 @@ export function validateClaims(
    * if something fires.
    *
    * That order is an optimisation with a point: `paperPhrases` walks the whole
-   * article, this runs once per passage, and `validateClaims` is called again
+   * article, this runs once per passage, and `validatePromises` is called again
    * for **every claim as it streams**. A frame firing is rare, so the article is
    * almost never walked; and when it does fire the subtraction is what separates
    * a model passing judgement from a model quoting a paper that is about
@@ -1086,11 +1086,11 @@ export function validateClaims(
     /* **The headline goes through the same fail-safe as a passage's line.** It
        is the biggest text on the row and it used to be the one piece of model
        prose nothing scanned. What stands in its place is the paper's own
-       sentence, which is on the row already — see `Claim.claimWithheld`. */
+       sentence, which is on the row already — see `PaperPromise.claimWithheld`. */
     const line = claim.trim();
     const headlineIsAVerdict = readsAsAVerdict(line);
     if (headlineIsAVerdict) withheld.push(line);
-    claims.push({
+    promises.push({
       id,
       blockId,
       // The article's words, not the model's retyping — the guarantee this
@@ -1108,16 +1108,16 @@ export function validateClaims(
   /* Sorted **after** the whole list is built rather than inserted in order, so
      that the comparator is one function with one job and there is nowhere for a
      second ordering rule to hide. */
-  claims.sort(byDocument(at));
+  promises.sort(byDocument(at));
 
-  if (claims.length > MAX_CLAIMS) {
+  if (promises.length > MAX_PROMISES) {
     /* Truncated from the **end of the document**, which is the only defensible
        place to cut when the order is positional: any other choice would be a
        judgement about which claims matter, made by a cap. */
-    dropped.truncated = claims.length - MAX_CLAIMS;
-    claims.length = MAX_CLAIMS;
+    dropped.truncated = promises.length - MAX_PROMISES;
+    promises.length = MAX_PROMISES;
   }
-  return { claims, dropped, withheld };
+  return { promises, dropped, withheld };
 }
 
 /**
@@ -1126,19 +1126,19 @@ export function validateClaims(
  * `discarded` comes back separately from the shared `dropped` tally because the
  * two answer different questions: the tally is a log line about the whole run,
  * and this number decides which sentence appears under *this* row. Both are
- * kept — see `Claim.discarded`.
+ * kept — see `PaperPromise.discarded`.
  */
 function readPassages(
   raw: unknown,
   byId: Map<BlockId, Block>,
   at: Map<BlockId, number>,
-  dropped: DroppedClaims,
+  dropped: DroppedPromises,
   readsAsAVerdict: (line: string) => boolean,
   withheld: string[],
-): { passages: ClaimPassage[]; discarded: number; omitted: number } {
+): { passages: PromisePassage[]; discarded: number; omitted: number } {
   if (!Array.isArray(raw)) return { passages: [], discarded: 0, omitted: 0 };
 
-  const passages: ClaimPassage[] = [];
+  const passages: PromisePassage[] = [];
   const seen = new Set<string>();
   let discarded = 0;
 
@@ -1190,7 +1190,7 @@ function readPassages(
   passages.sort(byDocument(at));
   /* Counted on the claim as well as in the run's tally, so the cap can say so on
      the row that lost something rather than only in a log line nobody reads —
-     `Claim.passagesOmitted`, and GPT Sol's second review, finding 5. */
+     `PaperPromise.passagesOmitted`, and GPT Sol's second review, finding 5. */
   let omitted = 0;
   if (passages.length > MAX_PASSAGES) {
     omitted = passages.length - MAX_PASSAGES;

@@ -52,6 +52,7 @@ import { ChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } fr
 import {
   cameFromAnUpload,
   decodeHtml,
+  type DocumentKind,
   FetchFailure,
   type FetchedDocument,
   fetchDocument,
@@ -59,9 +60,11 @@ import {
   RawDocumentUnavailable,
   readRawBytes,
   storedDocumentBytes,
-  uploadedDocumentKind,
+  uploadedFormat,
   writeRaw,
 } from "./fetch.js";
+import { convertUpload } from "./upload-convert.js";
+import type { ConvertedFormat } from "./uploads.js";
 import {
   GLOSSARY_OUTPUT_SCHEMA,
   generateGlossary,
@@ -1543,6 +1546,21 @@ async function refuseAnOverlongPdf(
 }
 
 /**
+ * A text, Markdown or Word upload as the page it becomes, in the shape
+ * `decodeHtml` returns — or the upload refused, when the bytes are not the
+ * format the name claimed. src/upload-convert.ts.
+ */
+async function convertedText(
+  format: ConvertedFormat,
+  bytes: Uint8Array,
+  filename: string,
+  refuse: () => Promise<never>,
+): Promise<{ text: string; encoding: string | null }> {
+  const converted = (await convertUpload(format, bytes, filename)) ?? (await refuse());
+  return { text: converted.html, encoding: converted.encoding };
+}
+
+/**
  * **Stage 1 for a file the reader gave us** — the verification the plan calls
  * `verify-source`, living inside the acquisition step rather than beside it.
  *
@@ -1647,10 +1665,17 @@ async function acquireUpload(
      next forty lines, so every use of it needs a cast or a second check — and a
      cast here would be a claim that a refusal happened, which is the one thing
      nothing downstream could verify. This way the compiler knows. */
-  const kind = uploadedDocumentKind(upload.filename, got) ?? (await refuse("not-a-pdf"));
+  const format = uploadedFormat(upload.filename, got) ?? (await refuse("not-a-pdf"));
 
   const sha256 = createHash("sha256").update(got).digest("hex");
   if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
+
+  /* **What is stored, as against what arrived.** Text, Markdown and Word are
+     turned into a web page below and are a web page from then on — no third
+     `DocumentKind`, and nothing after this step can tell them from an uploaded
+     `.html` except by the filename on the manifest
+     (docs/plans/261011j-upload-text-markdown-and-word-files.md). */
+  const kind: DocumentKind = format === "pdf" ? "pdf" : "html";
 
   /* **After the hash, before the promotion**, and the position is the whole of
      it: three lines further down the record is `verified` and nothing can move
@@ -1679,8 +1704,26 @@ async function acquireUpload(
      filename carries none. Passing `text/html` there would be handing the
      sniffer a charset claim nobody made. So the encoding comes from the BOM,
      then the document's own `<meta charset>`, then windows-1252 — which is what
-     a browser does with a file off a disk too. */
-  const decoded = kind === "html" ? decodeHtml(got, null) : null;
+     a browser does with a file off a disk too.
+
+     **For a converted format the "decoded string" is the converter's page**,
+     and a `.docx` mammoth cannot read is refused here with the same sentence as
+     any other file whose inside is not what its name says. */
+  const decoded =
+    format === "pdf"
+      ? null
+      : format === "html"
+        ? decodeHtml(got, null)
+        : await convertedText(format, got, upload.filename, () => refuse("not-a-pdf"));
+
+  /* **And the file itself, kept**, because it is the reader's (vision.md,
+     principle 6) and the page above is only what we made of it. Under the
+     arrived bytes' own hash — the `sha256` this manifest records and
+     `article_revisions.raw_sha256` stores — with the extension of the format,
+     so `raw_filename` and `raw_sha256` are enough to find it again. After the
+     conversion, so a file we refuse is not kept; before the page is stored, so
+     a page is never stored without its original. */
+  if (format !== "pdf" && format !== "html") await storeRawSource(got, format);
   const storedBytes = storedDocumentBytes(
     decoded === null ? { kind: "pdf", bytes: got } : { kind: "html", text: decoded.text },
   );

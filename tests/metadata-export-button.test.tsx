@@ -248,7 +248,8 @@ describe("the Export button", () => {
     expect(exportButton()).toBeTruthy();
     /* And it says what the reader gets, which is the half of this card that is
        not a button. */
-    expect(host.textContent).toContain("A zip of everything we hold for this article");
+    expect(host.textContent).toContain("A zip of the article as Spideryarn reads it");
+    expect(host.textContent).toContain("It does not include the original file or web page");
   });
 
   /**

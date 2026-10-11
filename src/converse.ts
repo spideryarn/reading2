@@ -159,7 +159,7 @@ export const jobFor = (kind: ThreadKind): ConverseJob =>
  * before there was more than one job here. `referee-mirror` shipped with a
  * `defaultModel()` that still read `modelFor("search")`, so its new environment
  * variable was an override that silently did nothing
- * (src/referee-claims-run.ts says so beside its own); passing the kind is what
+ * (src/referee-promises-run.ts says so beside its own); passing the kind is what
  * stops `SPIDERYARN_REFEREE_CANDIDATES_MODEL` being the same non-event.
  */
 export const defaultModel = (power: ModelPower, kind: ThreadKind = "chat"): string =>

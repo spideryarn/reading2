@@ -1,0 +1,7 @@
+Code review of commit 156451a6c (`git show 156451a6c`), plan docs/plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md, your plan review docs/plans/261011k-vouchers-plan-review-sol.md.
+
+Scope: src/email-address.ts (splitNameAndAddress, addressBoxChange), src/web/AdminVouchersPage.tsx (giftsAlreadyAt, alreadyLine, CreateForm and VoucherRow onChange), src/web/AdminAuthorGifts.tsx (draft editor onChange), and the tests: tests/email-address.test.ts, tests/admin-vouchers-page.test.tsx, tests/admin-author-gifts.test.tsx, tests/billing-vouchers.test.ts ("adds several vouchers to one address").
+
+Look for: correctness bugs (the parser, React controlled-input behaviour, the edit row's name state in VoucherRow being the right one, the author gift editor's save diff once the email is replaced), the already-hint being wrong in any listed state (revoked, claimed with null claimantEmail, list still loading, refresh), tests that could never go red, and doc claims in docs/project/billing.md / admin.md that the code does not back.
+
+You may fix what you find inside this scope (edit files; do not commit, do not touch git). Run the relevant suites with `npx vitest run <files>` and `npm run typecheck`. Then write: a numbered list of findings, each with severity, file:line, and whether you fixed it; then any wider issue for me to decide; then a one-line VERDICT: approve / approve with changes / rework.

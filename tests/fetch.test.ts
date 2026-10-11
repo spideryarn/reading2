@@ -28,6 +28,7 @@ import {
   retryDelayMs,
   sniffKind,
   uploadedDocumentKind,
+  uploadedFormat,
   type FetchLike,
   type FetchOptions,
 } from "../src/fetch.js";
@@ -1332,6 +1333,12 @@ describe("the two predicates over one set of bytes", () => {
       if (expected === null) continue;
       expect(uploadedDocumentKind("case.html", b), `${label}: uploaded as .html`).toBe(expected);
       expect(uploadedDocumentKind("case.pdf", b), `${label}: uploaded as .pdf`).toBe(expected);
+      /* The three converted formats since 2026-10-11 (plan 261011j): their
+         claim decides only where the bytes said nothing. GPT Sol's code review
+         found `page.docx` refused and `\n%PDF-…` named `.txt` read as text. */
+      for (const name of ["case.txt", "case.md", "case.rst", "case.docx"]) {
+        expect(uploadedFormat(name, b), `${label}: uploaded as ${name}`).toBe(expected);
+      }
     }
   });
 });

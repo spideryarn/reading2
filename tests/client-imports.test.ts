@@ -313,6 +313,11 @@ const SHARED = new Set([
      261010c). Types and three constants, no imports: the same wire-contract
      argument as `admin-vouchers.js`. */
   "admin-author-gifts.js",
+  /* How an email address is stored and compared, and the `Name <address>`
+     split the admin address boxes apply on paste (plan 261011k). Pure, and
+     imports nothing — its header says so, which is why the server's voucher
+     tables and the browser's boxes can share one rule. */
+  "email-address.js",
   /* The `/admin/costs` wire shape and the pure filter, group and pivot over
      it, shared with the analysis script so a figure has one definition. Imports
      `step-order.js` and nothing else; `category` is a string the server fills
@@ -476,7 +481,7 @@ const SHARED = new Set([
 
      The client needs it for the same reason it needs `referee-criteria.js`, and
      one reason of its own. The shared reason: the marks in the prose are
-     resolved from the same `Claim` the server checked with `findQuote`, so a
+     resolved from the same `PaperPromise` the server checked with `findQuote`, so a
      second declaration in `src/web/` is how the panel and the paragraph come to
      disagree about what a claim found. The reason of its own is the **copy** —
      `NO_PASSAGE_FOUND`, `PASSAGES_UNUSABLE`, `LINKAGE_NOT_ADEQUACY` and
@@ -484,9 +489,9 @@ const SHARED = new Set([
      precisely so that tests/referee-copy-is-about-the-model.test.ts can check
      the sentences themselves; a browser copy would be a second set of words for
      that test to be right about and wrong in front of.
-     See src/referee-claims.ts and
+     See src/referee-promises.ts and
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2. */
-  "referee-claims.js",
+  "referee-promises.js",
   /* What a Mirror run is made of — the five remark kinds, the input counts and
      the coverage status. On the list because it imports **nothing at all**: it
      is a `.ts` of type declarations only, on the model of `public-types.js`

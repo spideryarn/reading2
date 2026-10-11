@@ -311,9 +311,9 @@ describe("POST /api/uploads", () => {
     expect(minted).toHaveLength(0);
   });
 
-  it("refuses a file that is not a PDF by name or type", async () => {
+  it("refuses a file that is not one we can read by name or type", async () => {
     const { status } = await call("POST", "/api/uploads", {
-      filename: "notes.txt",
+      filename: "song.mp3",
       bytes: 100,
       sha256: "a".repeat(64),
     });

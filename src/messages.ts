@@ -894,7 +894,7 @@ export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
  *
  * Thrown by both Referee runners: `runCriterionStream`
  * (src/referee-criteria-run.ts) when every result row was discarded, and
- * `runClaimsStream` (src/referee-claims-run.ts) when every claim was.
+ * `runPromisesStream` (src/referee-promises-run.ts) when every claim was.
  *
  * There are three outcomes a run can have, not two: the model found passages,
  * the model found nothing, and *the model returned something nothing could be
@@ -904,7 +904,7 @@ export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
  * the sentence for the second outcome and false for the third ⟨GPT Sol's
  * finding 4, docs/plans/260831an-referee-mode-stage3b5c-review-sol.md⟩. *Found
  * nothing* and *found things I could not use* call for different actions, so
- * they must not print the same sentence. For Claims the wrong one would read
+ * they must not print the same sentence. For Promises the wrong one would read
  * as *the paper makes no claims*, a finding that sub-mode exists not to make.
  *
  * So this is a **failed run** rather than an empty one: the row goes to
@@ -918,7 +918,7 @@ export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
  * anchor at all. "Nothing it returned could be used" covers all four. Until
  * 2026-10-04 there were two sentences sharing this one code, one in each
  * runner's file: Criteria's said the model "pointed at passages", which a row
- * with no anchor never did, and Claims' (`CLAIMS_UNUSABLE`) said nothing "could
+ * with no anchor never did, and Promises' (then Claims, `CLAIMS_UNUSABLE`) said nothing "could
  * be found in the paper", which is not why a shapeless row is dropped. Plan
  * 261004c § R6.
  *
@@ -968,10 +968,10 @@ export const NOT_CONFIGURED: ReaderFacingFailure = {
  * a control that does not exist.** `parseHits` in src/search.ts raises this, and
  * `parseHits` is search's parser *and* Referee mode's: a criterion run, a claims
  * pull and a Mirror run all end here. Only Search has an ask to narrow — the
- * reader typed it. Claims pulls the paper's own claims and has no scoping
+ * reader typed it. Promises pulls the paper's own claims and has no scoping
  * control of any kind, Mirror reads the referee's comments and has none either,
  * and a criterion's words are a saved row rather than a box on this screen.
- * Found in a browser pass on Claims, 2026-09-02
+ * Found in a browser pass on Promises (then Claims), 2026-09-02
  * (docs/plans/260902f-make-referee-mode-understandable.md § four things the pass
  * turned up).
  *
@@ -1009,7 +1009,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
 
 /**
  * The same failure, reported to a screen with **nothing to narrow**: a criterion
- * run, a claims pull, a Mirror run.
+ * run, a promises pull, a Mirror run.
  *
  * See `ANSWER_OVERFLOWED` above for why there are two of these and why this one
  * is the default that `parseHits` uses unless told otherwise. The retry is the
@@ -2544,13 +2544,19 @@ export function fetchFailed(code: FetchFailureCode, status: number | null): Read
  * what a reader quotes back to us (docs/project/copy.md), and the reason is a
  * string already written into `uploads.reason` rows that a rename would orphan
  * for nothing. Neither is a spelling anybody but us reads.
+ *
+ * **Five formats since 2026-10-11**
+ * (docs/plans/261011j-upload-text-markdown-and-word-files.md), and the same
+ * sentence for a Word file that mammoth cannot read or the zip guard refuses:
+ * the reader's move is the same — save it again from the program that opens it.
  */
 export const UPLOAD_UNREADABLE_FILE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That file isn't a PDF or a web page inside, whatever its name says. Sending it again will " +
-    "not help, because it will be the same file — but if it opens in a PDF reader or a browser, " +
-    "saving it again from there usually produces one this app can read. [up-pdf]",
+    "That file isn't one we can read inside, whatever its name says — not a PDF, web page, Word " +
+    "document, Markdown or text file. Sending it again will not help, because it will be the same " +
+    "file — but if it opens in another program, saving it again from there as a PDF or a Word " +
+    "document usually produces one this app can read. [up-pdf]",
 };
 
 /**
@@ -3159,11 +3165,11 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
      big — the input does not count against `max_tokens` at all, and a prompt
      too long for the model is refused before anything streams. The completion
      allowance was used before this caller received text. Reasoning is one way
-     that happens, and it is what happened on every long paper Referee Claims
+     that happens, and it is what happened on every long paper Referee Promises
      was given until 2026-09-28
      (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
      The sentence here used to blame the input and advise asking about a
-     shorter stretch — a control that Claims, Criteria and Mirror do not have,
+     shorter stretch — a control that Promises, Criteria and Mirror do not have,
      and a diagnosis that was false for every caller. It must not replace that
      diagnosis with "thinking", either: `saidNothing` is shared by callers that
      can receive tool-call and other non-text deltas, and it is not passed the

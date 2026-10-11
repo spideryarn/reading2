@@ -162,7 +162,7 @@ async function storeSources(dir = STORE_DIR): Promise<string[]> {
  *
  * The capital matters: without it `pgReady` and a hypothetical `fsync` are
  * implementations. And a **selector** is named for the thing rather than for a
- * store (`commentStore`, `refereeClaimsStore`), so this is also what keeps
+ * store (`commentStore`, `refereePromisesStore`), so this is also what keeps
  * `src/store/index.ts` out of the count.
  */
 function sideOf(name: string): Side | undefined {
@@ -279,7 +279,7 @@ describe("the store seams are found by reading the contract, not a list", () => 
     expect([...SEAMS.keys()].length).toBeGreaterThan(8);
     expect([...SEAMS.keys()]).toContain("CommentStore");
     expect([...SEAMS.keys()]).toContain("RefereeCriteriaStore");
-    expect([...SEAMS.keys()]).toContain("RefereeClaimsStore");
+    expect([...SEAMS.keys()]).toContain("RefereePromisesStore");
   });
 
   it("counts a store declared through Pick<…>, so a partial adapter cannot hide", () => {

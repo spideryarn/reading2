@@ -472,19 +472,19 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         status: "done",
       });
     },
-    referee_claims: async () => {
+    referee_promises: async () => {
       /* One row and no id — a referee asks the paper what it claims exactly
          once. The sentinel goes in `model` rather than in a claim, because a
          claim has to anchor to a block that exists and `Claim`'s shape is
          currently moving under another session; `model` is a plain exported
          column and the check here is "did this table's row reach that file",
          not "is a claim well formed". */
-      await db.insert(schema.refereeClaims).values({
+      await db.insert(schema.refereePromises).values({
         articleId: ARTICLE_ID,
         ownerId: owner(),
         status: "done",
-        claims: [],
-        model: sentinel("referee_claims"),
+        promises: [],
+        model: sentinel("referee_promises"),
       });
     },
     /* A finished check whose search failed, so `error` carries the sentinel;
@@ -798,7 +798,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   },
   search_runs: {},
   referee_criteria: {},
-  referee_claims: {},
+  referee_promises: {},
   sources_claim_checks: {},
   referee_hidden_checks: {},
   glossary_lookups: {},
@@ -843,7 +843,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
     listAt(parsed, "threads").flatMap((thread) => listAt(thread, "messages")),
   search_runs: (parsed) => listAt(parsed, "runs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
-  referee_claims: (parsed) => [at(parsed, "run")],
+  referee_promises: (parsed) => [at(parsed, "run")],
   sources_claim_checks: (parsed) => listAt(parsed, "checks"),
   referee_hidden_checks: (parsed) => [at(parsed, "check")],
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
@@ -890,7 +890,7 @@ await pgReady({
   suite: "tests/store-export-covers-tables.test.ts",
   tables: [
     "spideryarn.referee_criteria",
-    "spideryarn.referee_claims",
+    "spideryarn.referee_promises",
     "spideryarn.sources_claim_checks",
     "spideryarn.referee_hidden_checks",
     "spideryarn.glossary_lookups",
@@ -962,7 +962,7 @@ describe("what the record calls exported, both exports were watched writing", ()
     await db
       .delete(schema.refereeCriteria)
       .where(eq(schema.refereeCriteria.articleId, ARTICLE_ID));
-    await db.delete(schema.refereeClaims).where(eq(schema.refereeClaims.articleId, ARTICLE_ID));
+    await db.delete(schema.refereePromises).where(eq(schema.refereePromises.articleId, ARTICLE_ID));
     await db
       .delete(schema.sourcesClaimChecks)
       .where(eq(schema.sourcesClaimChecks.articleId, ARTICLE_ID));

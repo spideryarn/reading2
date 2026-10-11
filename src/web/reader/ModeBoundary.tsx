@@ -32,7 +32,7 @@
  * band is showing — Diagram's picture, Referee's view, Learn's part, Summary's
  * length, Structure's layout, Debate's view — goes in `resetKey`, which is
  * `FeatureBoundary`'s documented extension point for it: Back from broken
- * Claims to Criteria is a different band and gets a fresh start. For three of
+ * Promises to Criteria is a different band and gets a fresh start. For three of
  * the six a visitor's key omits it, because the parameter does not select their
  * band. Which three, and why, is `SUB_MODE_SELECTS_A_BAND_FOR` below — a
  * `Record` over every mode that has sub-modes, because the list was written by
