@@ -23,9 +23,16 @@
      sentences, not tags — wrapped, they break mid-question and read as a bag of
      fragments rather than a list of things to ask. */
   gap: 0.3rem;
+  /* **In the centre, each button as wide as its words** (Greg, spya-srg5fa:
+     *"Perhaps we could actually move those into the center as well, so they're
+     a bit less prominent underneath the last agent response"*; plan 261011m).
+     Full-width and left-aligned, they read as the answer's last paragraph and
+     drew the eye from the box below. */
+  align-items: center;
 }
 .chat-suggest-btn {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -34,7 +41,7 @@
   font-family: var(--font-ui);
   font-size: 0.91rem;
   line-height: 1.35;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition: border-color 0.12s, color 0.12s, background-color 0.12s;
 }

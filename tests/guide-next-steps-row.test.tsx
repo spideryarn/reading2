@@ -23,7 +23,6 @@ vi.mock("../src/web/router.js", async (importOriginal) => {
 
 const { ChatCommands } = await import("../src/web/CommandChip.js");
 const { GuideNextSteps, STEP_WORDS } = await import("../src/web/GuideNextSteps.js");
-const { GuideActContext } = await import("../src/web/guide-acts.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -91,33 +90,6 @@ describe("the guide's next steps", () => {
     expect(chip?.textContent).toContain("Summary › Brief");
     await act(async () => chip?.click());
     expect(runners.mode).toHaveBeenCalledWith(expect.objectContaining({ key: "submode:summary:brief" }));
-  });
-
-  it("never presses a mode itself, even drawn inside an answer's unspent act", async () => {
-    const runners = spies();
-    const executor: CommandExecutor = { runners, sources: { modes: MODES }, openModeUnarmed: runners.mode };
-    const act0 = { messageId: "spya-ans001", used: false, made: new Set<string>(["mode:structure"]) };
-    act(() => {
-      root.render(
-        createElement(
-          GuideActContext.Provider,
-          { value: act0 },
-          createElement(ChatCommands, {
-            executor,
-            children: createElement(GuideNextSteps, {
-              slug: "a-piece",
-              message: answer([offered([{ kind: "mode", mode: "mode:structure" }])]),
-              blocks: BLOCKS,
-              onAsk: () => {},
-            }),
-          }),
-        ),
-      );
-    });
-    await act(async () => {});
-    expect(host.querySelector("button.cmd-chip")).not.toBeNull();
-    expect(runners.mode).not.toHaveBeenCalled();
-    expect(act0.used).toBe(false);
   });
 
   it("draws no group at all when every step is a mode this page will not open", () => {

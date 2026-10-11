@@ -8,9 +8,8 @@
  * (docs/project/chat-llm-help-commands-vision.md § Decided, § The aspiration):
  * chat's context holds the article and fetched pages, which are untrusted, so
  * chat only ever **proposes** — a button the reader presses — and what it wrote
- * is parsed, never trusted. Everything here is that parse. (The guide's one
- * button that presses itself, since 2026-10-07, goes through this same parse:
- * guide-acts.ts.)
+ * is parsed, never trusted. Everything here is that parse. The guide is no
+ * exception (its self-pressing button was removed by plan 261011m).
  */
 import type { Known } from "./citations.js";
 import {

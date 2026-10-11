@@ -288,14 +288,13 @@ describe("Learn's chips", () => {
 });
 
 /**
- * Greg, 2026-10-04 (spya-cnqcjf): Recall, Quiz and Tutorial are mainstream;
- * Explore stays one of the experimental features. So the gate is on one chip,
- * by the bar's own rule (experimental-visibility.ts): drawn when the switch is
- * on, or when it is the view the reader is in.
- * docs/plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md.
+ * Greg, 2026-10-04 (spya-cnqcjf): Recall, Quiz and Tutorial are mainstream,
+ * and Explore stayed behind the switch. Greg, 2026-10-11 (spya-jm0nfg):
+ * Explore is out too, *"because it's useful"*. So every Learn part is drawn,
+ * switch on or off, by the bar's own rule (experimental-visibility.ts).
+ * docs/plans/261011p-learn-explore-out-of-the-experimental-switch.md.
  */
-describe("Explore is behind the switch, and the other three are not", () => {
-  const WITHOUT_EXPLORE = ["Recall", "Tutorial", "Quiz"];
+describe("every part of Learn is shown, switch on or off", () => {
   const ALL_FOUR = ["Recall", "Tutorial", "Explore", "Quiz"];
 
   function chipLabels(value: "recall" | "tutorial" | "explore" | "quiz", experimental: boolean): (string | null)[] {
@@ -319,25 +318,26 @@ describe("Explore is behind the switch, and the other three are not", () => {
   }
 
   /* The policy, written out rather than read from the table, so that one edit
-     to a flag cannot move a chip in front of every reader. */
-  it("is the one experimental flag among Learn's sub-modes", () => {
+     to a flag cannot take a chip away from every reader. */
+  it("has no experimental flag among Learn's sub-modes", () => {
     const flagged = LEARN_VIEWS.filter((v) => LEARN_SUB_MODES[v].experimental);
-    expect(flagged).toEqual(["explore"]);
+    expect(flagged).toEqual([]);
     expect(MODE_CATALOG.learn.experimental).toBe(false);
   });
 
-  it("the helper: three views with the switch off, four with it on, and Explore while it is open", () => {
-    expect(visibleLearnViews(false, "recall")).toEqual(["recall", "tutorial", "quiz"]);
-    expect(visibleLearnViews(false, "quiz")).toEqual(["recall", "tutorial", "quiz"]);
-    expect(visibleLearnViews(true, "recall")).toEqual(["recall", "tutorial", "explore", "quiz"]);
-    expect(visibleLearnViews(false, "explore")).toEqual(["recall", "tutorial", "explore", "quiz"]);
+  it("the helper: all four views in every state", () => {
+    for (const on of [false, true]) {
+      for (const current of LEARN_VIEWS) {
+        expect(visibleLearnViews(on, current)).toEqual(["recall", "tutorial", "explore", "quiz"]);
+      }
+    }
   });
 
   it("the chips", () => {
     for (const on of [false, true]) {
       for (const current of LEARN_VIEWS) {
-        expect(chipLabels(current, on)).toEqual(on || current === "explore" ? ALL_FOUR : WITHOUT_EXPLORE);
-        /* Every state has one pressed chip, including an old Explore link. */
+        expect(chipLabels(current, on)).toEqual(ALL_FOUR);
+        /* Every state has one pressed chip. */
         const pressed = [...host.querySelectorAll<HTMLElement>('.learn-submode-btn[aria-pressed="true"]')];
         expect(pressed.map((c) => c.textContent)).toEqual([LEARN_SUB_MODES[current].label]);
       }
@@ -345,17 +345,16 @@ describe("Explore is behind the switch, and the other three are not", () => {
   });
 
   it("the (i) list", () => {
-    switchIs.on = false;
-    expect(aboutLabels("recall")).toEqual(WITHOUT_EXPLORE);
-    expect(aboutLabels("explore")).toEqual(ALL_FOUR);
-    switchIs.on = true;
-    expect(aboutLabels("recall")).toEqual(ALL_FOUR);
+    for (const on of [false, true]) {
+      switchIs.on = on;
+      for (const current of LEARN_VIEWS) expect(aboutLabels(current)).toEqual(ALL_FOUR);
+    }
   });
 
   it("the command bar's rows", () => {
-    expect(barLabels(false, "recall")).toEqual(WITHOUT_EXPLORE);
-    expect(barLabels(true, "recall")).toEqual(ALL_FOUR);
-    expect(barLabels(false, "explore")).toEqual(ALL_FOUR);
+    for (const on of [false, true]) {
+      for (const current of LEARN_VIEWS) expect(barLabels(on, current)).toEqual(ALL_FOUR);
+    }
   });
 });
 
@@ -413,9 +412,7 @@ describe("Learn's (i)", () => {
       for (const kind of ["learn", "tutorial", "explore"] as const) {
         act(() => root.render(createElement(ChatPanel, props(kind))));
         const labels = [...document.querySelectorAll(".band-about-list li strong")].map((s) => s.textContent);
-        expect(labels, `${kind}, experimental=${on}`).toEqual(
-          on || kind === "explore" ? ["Recall", "Tutorial", "Explore", "Quiz"] : ["Recall", "Tutorial", "Quiz"],
-        );
+        expect(labels, `${kind}, experimental=${on}`).toEqual(["Recall", "Tutorial", "Explore", "Quiz"]);
       }
     }
     act(() => root.render(createElement(ChatPanel, props("chat"))));

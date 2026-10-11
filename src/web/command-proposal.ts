@@ -506,18 +506,6 @@ export interface CommandExecutor {
   readonly runners: ProposalRunners;
   readonly sources: ArgumentSources;
   /**
-   * **Open the mode a `mode` proposal names without arming a run** — what the
-   * guide's own act uses in place of `runners.mode`, never a press (plan
-   * 261008a, GPT Sol's F1; src/web/guide-acts.ts). A press arms the band's run
-   * and the band retires it unspent when its read finds the artefact; the
-   * guide's act does not lean on that, so an artefact that vanished between the
-   * server's read and the band's costs nothing.
-   *
-   * **Absent means the guide opens no mode by itself**: the reading view hands
-   * it over for the owner alone, as it does `runners.mode`.
-   */
-  readonly openModeUnarmed?: ProposalRunners["mode"];
-  /**
    * **What a guide thread's chips press through instead**, where it differs:
    * the same executor with the guide's mode door, which also holds the modes
    * the guide may offer from behind the experimental switch (plan 261009x;

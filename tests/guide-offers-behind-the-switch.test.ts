@@ -3,14 +3,13 @@
  * press, and nothing else changes** — plan
  * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
  *
- * Three readers of one record (src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`):
- * the written guide's list of modes, the press rule (src/acts-alone.ts), and the
- * guide's chip door (src/web/chip-door.ts, held in
- * tests/guide-offers-behind-the-switch-door.test.tsx). This file holds the first
- * two and the record itself.
+ * Two readers of one record (src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`):
+ * the written guide's list of modes, and the guide's chip door
+ * (src/web/chip-door.ts, held in tests/guide-offers-behind-the-switch-door.test.tsx).
+ * This file holds the first and the record itself. (A third, the rule that kept
+ * these modes out of the guide's act, went with the act in plan 261011m.)
  */
 import { describe, expect, it } from "vitest";
-import { modeActsAlone } from "../src/acts-alone.js";
 import { guideModeKeys, modeToken, modeWordsSection, spokenModeWords } from "../src/guide.js";
 import { MODE_CATALOG, OFFERED_BEHIND_THE_SWITCH, offeredBehindTheSwitch } from "../src/mode-catalog.js";
 import type { Mode } from "../src/modes.js";
@@ -85,15 +84,5 @@ describe("the written guide's list of modes", () => {
   it("leaves the spoken guide's list as it was", () => {
     expect(spokenModeWords()).not.toContain("offer it only when");
     expect(lineOf(spokenModeWords(), "- Referee")).toContain("Referee (experimental):");
-  });
-});
-
-describe("the press rule", () => {
-  it("never lets the guide open Referee or a Referee sub-mode by itself", () => {
-    for (const row of refereeRows) expect(modeActsAlone(row.id, row.generates), row.id).toBe(false);
-  });
-
-  it("still lets it open an ordinary mode that only moves the reader", () => {
-    expect(modeActsAlone("mode:structure", false)).toBe(true);
   });
 });

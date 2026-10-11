@@ -9,7 +9,8 @@ Your shelf is every article you have added. The search box above it does two job
 cards by what is written on them (title, author, site and the one-line summary), and it searches the
 words *inside* your articles, listing matching passages underneath. Open one and you land on that
 passage with your words lit up. Archived articles are left out of both unless **Include archived**
-is on.
+is on. Paste a web address into it by mistake and it offers to add the article instead — press
+**Add it**.
 
 - **Sorting.** The chips set the order; press the one you are on to reverse it. **Shift-click** a
   second chip to sort within the first — by Added, then by Length, say. **Published** is the date

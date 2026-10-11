@@ -280,8 +280,9 @@ export function LearnSubModeToggle({
   value: LearnView;
   /**
    * **Whether the reader's experimental-features switch is on**, which decides
-   * whether the Explore chip is drawn and nothing else (sub-modes.ts §
-   * `visibleLearnViews`). Required, for `DiagramPanel`'s reason: a new mount
+   * which chips are drawn and nothing else (sub-modes.ts § `visibleLearnViews`);
+   * no part of Learn is behind it since Explore came out on 2026-10-11, so
+   * today it changes nothing. Required, for `DiagramPanel`'s reason: a new mount
    * site cannot forget it and quietly show a chip the switch is hiding. The
    * chip for the part the reader is in is always drawn, so the row has one
    * pressed. docs/project/experimental-features.md.

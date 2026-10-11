@@ -15,7 +15,7 @@ import { withTurn } from "../src/chat.js";
 import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_NEXT_STEPS_TOOL, OFFER_TO_SAVE_TOOL, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, roundTools, webSearchTool } from "../src/converse.js";
 import { cachedText } from "../src/article-prompt.js";
-import { A_FEW_ARTICLES, experienceLine, experienceOf, madeLine, modeWordsSection } from "../src/guide.js";
+import { A_FEW_ARTICLES, experienceLine, experienceOf, modeWordsSection } from "../src/guide.js";
 import catalogue from "../src/command-pick-catalogue.generated.json" with { type: "json" };
 import type { Block, ChatMessage, Meta, ThreadKind } from "../src/types.js";
 import {
@@ -177,7 +177,11 @@ describe("our words for the modes", () => {
     expect(section).toContain("- Referee (experimental; offer it only when ");
     expect(section).toContain("- Sources: ");
     expect(section).toContain("- Glossary: ");
-    expect(section).toContain("  - Learn › Explore (experimental): ");
+    /* Learn › Explore was the sub-mode example until 2026-10-11, when it came
+       out of the switch (plan 261011p); now an ordinary row, so the guide may
+       offer its button. */
+    expect(section).toContain("  - Diagram › Force (experimental): ");
+    expect(section).toMatch(/ {2}- Learn › Explore: [^\n]* Button: \[cmd:mode:submode%3Alearn%3Aexplore\]/);
   });
 
   it("is the same bytes every time, and whatever the reader or the turn", () => {
@@ -241,43 +245,6 @@ describe("how much the reader has used Spideryarn", () => {
   it("says nothing when there is no bucket", () => {
     expect(experienceLine(null)).toBe("");
     expect(lastOf(build("guide"))).not.toContain("HOW MUCH THEY HAVE USED SPIDERYARN");
-  });
-});
-
-/* Plan 261008a (qi-ztp3w9az): which *Button* modes are already made, so open at
-   once — one per-turn line, read from the same snapshot the page acts on. */
-describe("which modes are already made", () => {
-  it("names each mode that opens free by the name the mode words give it", () => {
-    expect(madeLine(["glossary"])).toBe("ALREADY MADE FOR THIS ARTICLE: Glossary.");
-    expect(madeLine(["glossary", "simple"])).toBe(
-      "ALREADY MADE FOR THIS ARTICLE: Glossary; Summary › Brief; Summary › Fuller.",
-    );
-    /* Each name is one the mode words list, with the token beside it. */
-    const section = modeWordsSection();
-    expect(section).toContain("- Glossary: ");
-    expect(section).toContain("  - Summary › Brief: ");
-    expect(section).toContain("  - Summary › Fuller: ");
-  });
-
-  it("says nothing when nothing is made, or the read failed", () => {
-    expect(madeLine([])).toBe("");
-    expect(madeLine(null)).toBe("");
-  });
-
-  it("is told, in the cached system prompt, what the line means", () => {
-    expect(systemOf("guide")).toContain("ALREADY MADE FOR THIS ARTICLE");
-  });
-
-  it("rides in the final user message for the guide only, and never above the breakpoint", () => {
-    const messages = build("guide", { made: ["glossary"] });
-    const last = lastOf(messages);
-    expect(last).toContain("ALREADY MADE FOR THIS ARTICLE: Glossary.");
-    expect(last.indexOf("ALREADY MADE")).toBeLessThan(last.indexOf(base.question));
-    expect(build("guide", { made: null }).slice(0, 3)).toEqual(messages.slice(0, 3));
-    expect(cachedText(messages)).not.toContain("ALREADY MADE FOR THIS ARTICLE:");
-    for (const kind of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
-      expect(lastOf(build(kind, { made: ["glossary"] }))).not.toContain("ALREADY MADE");
-    }
   });
 });
 

@@ -11,7 +11,7 @@ One setting, off by default, with **three controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Some reading modes, four Diagram pictures and Learn's Explore are behind it** —
+**Some reading modes and four Diagram pictures are behind it** —
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
@@ -23,7 +23,7 @@ neither gets made properly.
 - [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
 - [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
 - [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
-- [§ The two things gated below mode level](#the-two-things-gated-below-mode-level) — Learn's Explore and Diagram's four pictures
+- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, and Learn's Explore until 2026-10-11
 - [§ See also](#see-also)
 
 ## The four rules
@@ -53,7 +53,7 @@ has exactly one checked thing. Since 2026-09-04 the same sentence covers `?diagr
 the same code saying it: [`experimental-visibility.ts`](../../src/web/experimental-visibility.ts) is
 the rule shared by `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx), `visibleKinds`
 in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), and Learn's
-[visible parts](#the-two-things-gated-below-mode-level). The switch is about clutter, not enforcement — an old bookmark keeps
+[visible parts](#gated-below-mode-level). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
 *bars* differ, which is the whole point: the default bar for one and every mode for the other, and
 one Diagram chip against five. A gate
@@ -222,12 +222,12 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**The modes in the table below**, **four of Diagram's five pictures**, and **Learn's Explore**
-([§ The two things gated below mode level](#the-two-things-gated-below-mode-level)). Diagram's picture gates,
+**The modes in the table below** and **four of Diagram's five pictures**
+([§ Gated below mode level](#gated-below-mode-level)). Diagram's picture gates,
 since Diagram itself went in on 2026-09-29, only matter to somebody who reaches the mode by URL with the switch off. Greg picked the first
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
-them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Marginalia went in on 2026-10-01 and came out on 2026-10-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
+them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, which followed on 2026-10-11, Marginalia went in on 2026-10-01 and came out on 2026-10-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
 out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, Diagram — whole, not only four pictures — went in on 2026-09-29, and Citations and Debate came out together on 2026-10-09 as Sources; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
@@ -432,6 +432,22 @@ owner, its relation words and short notes are made when the column is first show
 ([url-state.md](url-state.md)).
 [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md).
 
+**Learn's Explore came out on 2026-10-11**, six days after the rest of Learn. Greg:
+
+> The explore submode in learn should be a main mode, i.e. not an experimental feature anymore,
+> because it's useful.
+>
+> — Greg, 2026-10-11 (spya-jm0nfg)
+
+"Main mode" was read as *shown to everybody*, not as a mode of its own: it is still Learn's fourth
+chip, between Tutorial and Quiz, now with the switch off too, and in the band's (i) and the command
+bar. Learn stays owners-only, so visitors see nothing new, and nothing is generated or paid for
+until the reader sends a message. Tutorial's prompt, which had pointed a reader's own line of
+thought at Chat only because Explore was hidden, now points at Explore
+([learn-mode.md](learn-mode.md)). `visibleLearnViews` stays, returning all four, as the one place a
+new Learn part would be gated.
+[261011p](../plans/261011p-learn-explore-out-of-the-experimental-switch.md).
+
 **Remember left the table on 2026-10-05, without its Explore part.** Greg:
 
 > I want to include at least part of the remember mode in the mainstream features, i.e. not only in
@@ -442,11 +458,11 @@ owner, its relation words and short notes are made when the column is first show
 
 It had been behind the switch since the first four went in on 2026-09-03; its row said the name
 suggests saved notes and spaced repetition, neither of which exists. That is still so. Recall,
-Tutorial and Quiz are now in every reader's bar, and Explore is gated one level down:
-[§ The two things gated below mode level](#the-two-things-gated-below-mode-level). Learn is
-owners-only as before, so a visitor's bar gains a Learn button that opens the sentence saying
-so, as Skim's does. Nothing new is generated when an article is added, because a press on Learn
-generates nothing: the Quiz is still written on the first press of its chip.
+Tutorial and Quiz entered every reader's bar then, while Explore remained gated one level down
+until 2026-10-11 ([§ Gated below mode level](#gated-below-mode-level)). Learn remained owners-only,
+so a visitor's bar gained a Learn button that opens the sentence saying so, as Skim's does. Nothing
+new was generated when an article was added, because a press on Learn generates nothing: the Quiz
+is still written on the first press of its chip.
 [261005b](../plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md).
 
 **Skim (then called Trajectory) left the table on 2026-09-28, the day it arrived.** Greg:
@@ -467,21 +483,15 @@ are none or they are stale, as Glossary, Ideas and Quotes already do on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`). Its unmeasured-prompt caveat has
 not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
-## The two things gated below mode level
+## Gated below mode level
 
-Four of Diagram's pictures, and one of Learn's four parts.
-
-**Learn's Explore, since 2026-10-05.** When the mode came out from behind the switch, Greg named
-Recall, Quiz and Tutorial; Explore was two days old and stays here. With the switch off the chips
-read Recall · Tutorial · Quiz, the band's (i) lists those three, and the command bar has no
-*Learn › Explore* row. `?learn=explore` still opens it, and while the reader is in it the chip
-is drawn and pressed. That address outlives the mode
-([url-state.md](url-state.md)), so a reader who used Explore and then turned the switch off comes
-back to it when they press Learn: hidden, not unreachable. It is the flag Diagram's pictures
-use, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), read by
-`visibleLearnViews` there for the chips and the (i), and by `subModeRows`
-([`CommandBar.tsx`](../../src/web/CommandBar.tsx)) for the bar. The policy is written out a second
-time in `tests/learn-header-cards.test.tsx`, so moving the flag alone fails a test.
+Four of Diagram's pictures. Learn's Explore was gated here from 2026-10-05 until it came out on
+2026-10-11 ([§ What is behind it today](#what-is-behind-it-today) has the history); the flag it
+used, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), is
+still read for Learn by `visibleLearnViews` there and by `subModeRows`
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx)), and `tests/learn-header-cards.test.tsx` writes
+the policy out a second time, so flagging a Learn part again fails a test until the test is changed
+too.
 
 **Diagram, since 2026-09-04.** It came out from behind the switch and four of its five pictures went
 behind it instead, on a reader's report:

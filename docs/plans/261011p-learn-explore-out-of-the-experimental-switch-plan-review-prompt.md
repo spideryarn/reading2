@@ -1,0 +1,5 @@
+Review this plan, read-only, in the repo at the current directory (a Spideryarn worktree). Read CLAUDE.md, then docs/plans/261011p-learn-explore-out-of-the-experimental-switch.md, then the code and docs it names (src/web/sub-modes.ts, src/web/QuizPanel.tsx, src/web/LearnAbout.tsx, src/web/CommandBar.tsx, src/converse.ts Tutorial prompt "WHEN THEY GO EXPLORING", tests/learn-header-cards.test.tsx, tests/chat-commands.test.ts, docs/project/experimental-features.md, docs/project/learn-mode.md, src/web/help/pages/modes/learn.md, evals/learn-tutorial.ts).
+
+Questions: is the reading of "main mode" (a sub-mode always shown, not a top-level mode) right and the simplest? Is anything that gates or mentions Explore as experimental missed (grep widely: help pages, chat/guide command lists, prompts, docs, tests, url-state, last-view, mobile/touch menus)? Is the Tutorial prompt change sound and proportionately measured; any cache implication? Any visitor/owner or cost consequence missed?
+
+Give findings ranked by severity, each with file:line and a concrete fix, then a final line: VERDICT: approve / approve with changes / rework.

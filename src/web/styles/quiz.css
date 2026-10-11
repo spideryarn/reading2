@@ -29,7 +29,8 @@
    than wrap, as every part-switcher does: the bin and the Written-for-you
    badge after it are pushed to the row's right end, and give up nothing. */
 .band-head > .learn-submode { margin-right: auto; }
-/* **Four chips (the Experimental switch on) tighten their side padding, and
+/* **Four chips (every owner since 2026-10-11; only with the Experimental switch
+   on before that) tighten their side padding, and
    only in a narrow head**; anywhere else they take the bar's own (0.6rem, 0.8rem
    under a finger), as every other part-switcher does. Until 2026-10-07 they were
    tight at every width, 4px a side even at 1440 where the head has 490px, and
