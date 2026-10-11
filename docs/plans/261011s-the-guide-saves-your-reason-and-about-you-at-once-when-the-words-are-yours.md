@@ -212,3 +212,12 @@ knowing that risk; or keep About you always pressed.
 - 2026-10-11: **measured**, [261009c § 2026-10-11](../investigations/261009c-the-guide-s-offers-to-save-measured.md#2026-10-11-which-offers-save-at-once-plan-261011s):
   v4 18/18, 6 of 14 at once, one answer said "buttons" beside an offer with none; v5 (two sentences)
   18/18, 9 of 14 at once, every button mentioned was there. The hostile article drew no offer.
+- 2026-10-11: **seen in a browser**, Sonnet subagent, Playwright, the local *Attention Is All You
+  Need*, four paid turns. Typed "for my journal club next week": the reason saved itself, *from what
+  you wrote*, Metadata matched, Undo put it back. Typed "I'm a historian of science, not an ML
+  person": About you kept its text and added the sentence by itself, /profile matched, Undo restored
+  it. Three reloads after a self-save: *Saved* with Undo each time, never a second save; after an
+  Undo, the button. 390 wide: the card fits, no horizontal scroll. No console errors. A next-step
+  press drew no offer, so that case rests on the tests. Seen once: on a reload the card shows its
+  Save button for the moment before its own read answers, then *Saved*. Shots:
+  [after a reload](261011s-shot-3-reload.png), [390](261011s-shot-5-narrow.png).
