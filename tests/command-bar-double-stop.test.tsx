@@ -51,6 +51,7 @@ vi.mock("../src/web/useDictation.js", () => ({
     mic.options = options;
     return {
       supported: true,
+      level: { current: 0 },
       armed: mic.armed,
       transcribing: mic.transcribing,
       phase: mic.armed ? "listening" : mic.transcribing ? "transcribing" : "idle",
@@ -68,6 +69,7 @@ vi.mock("../src/web/useDictation.js", () => ({
 }));
 
 const { Dock } = await import("../src/web/Dock.js");
+const { DOUBLE_PRESS_MS } = await import("../src/web/useDictationField.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { HELP_TOPIC_PAGES } = await import("../src/web/help/help-pages.js");
 const { helpWords } = await import("./helpers/help-words.js");
@@ -144,14 +146,39 @@ function start(): void {
   mic.armed = true;
   draw();
 }
-/** The Stop press: the microphone goes off and the transcript is on its way. */
+/**
+ * **One press on Stop, left alone.** The field holds it for
+ * `DOUBLE_PRESS_MS` before it stops the microphone (plan 261011y), so the
+ * hold is run out on a fake clock — only for the press, because the rest of
+ * this file settles on the real one.
+ */
 function stop(): void {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    act(() => micButton().click());
+    act(() => {
+      vi.advanceTimersByTime(DOUBLE_PRESS_MS);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+  mic.armed = false;
+  mic.transcribing = true;
+  draw();
+}
+/**
+ * **Stop pressed twice, as a finger makes it**: both presses land while the
+ * button is still Stop, and the field stops the microphone at the second.
+ */
+function stopTwice(): void {
+  act(() => micButton().click());
+  expect(micButton().getAttribute("aria-label"), "nothing changes between the two presses").toBe("Stop dictating");
   act(() => micButton().click());
   mic.armed = false;
   mic.transcribing = true;
   draw();
 }
-/** A second press on the same button, as a finger makes it. A disabled button takes none. */
+/** A press on the button while the words are on their way. A disabled button takes none. */
 function pressAgain(): void {
   act(() => micButton().click());
 }
@@ -221,10 +248,15 @@ afterEach(async () => {
 describe("a double press on Stop in the command bar", () => {
   it("runs the row the phrase names, once, having said that it will", async () => {
     start();
-    stop();
-    expect(micButton().disabled, "live for the second press").toBe(false);
-    expect(micButton().getAttribute("aria-label")).toBe("Press Enter when the words arrive");
-    pressAgain();
+    act(() => micButton().click());
+    expect(mic.toggles, "the first press is held, not yet a stop").toBe(1);
+    expect(micButton().disabled, "still Stop, for the second press").toBe(false);
+    expect(micButton().getAttribute("aria-label")).toBe("Stop dictating");
+    act(() => micButton().click());
+    expect(mic.toggles, "stopped at the second press").toBe(2);
+    mic.armed = false;
+    mic.transcribing = true;
+    draw();
     expect(micButton().disabled).toBe(true);
     expect(micButton().getAttribute("aria-label")).toMatch(/then pressing Enter/);
     expect(strip()).toBe("Turning that into text, then pressing Enter…");
@@ -236,8 +268,7 @@ describe("a double press on Stop in the command bar", () => {
 
   it("runs a row that writes, exactly as Enter on that phrase does", async () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     await end("archive this article");
     expect(archiveSet).toHaveBeenCalledTimes(1);
     expect(archiveSet).toHaveBeenCalledWith(true);
@@ -245,8 +276,7 @@ describe("a double press on Stop in the command bar", () => {
 
   it("asks about a phrase that names nothing, and draws the answer without running it", async () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     await end(SENTENCE);
     expect(asked.map((a) => a.body.sentence)).toEqual([SENTENCE]);
     expect(status()).toBe("Working out what you meant…");
@@ -261,8 +291,7 @@ describe("a double press on Stop in the command bar", () => {
 
   it("goes where a sure pick that only moves the reader points, as Enter's ask does", async () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     await end(SENTENCE);
     await answer({ kind: "row", key: CHANGELOG, confidence: 0.99, others: [] });
     expect(location.pathname).toBe("/changelog");
@@ -281,9 +310,7 @@ describe("a double press on Stop in the command bar", () => {
   it("runs nothing when no transcript arrived", async () => {
     start();
     act(() => options().onText("plain"));
-    stop();
-    expect(micButton().disabled).toBe(false);
-    pressAgain();
+    stopTwice();
     expect(strip()).toBe("Turning that into text, then pressing Enter…");
     await end(null);
     expect(openedModes).toEqual([]);
@@ -295,8 +322,7 @@ describe("a double press on Stop in the command bar", () => {
 
   it("runs nothing once the bar has been shut, even if it is opened again before the words", async () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     act(() => dialog().dispatchEvent(new Event("close")));
     draw();
     openBar();
@@ -318,8 +344,7 @@ describe("a double press on Stop in the command bar", () => {
     key("ArrowDown");
     const second = dialog().querySelectorAll('[role="option"]')[1];
     expect(input().getAttribute("aria-activedescendant")).toBe(second?.id);
-    stop();
-    pressAgain();
+    stopTwice();
     // Chromium replaces its live span; Safari/Firefox inserts into the empty draft.
     await end("s");
     expect(openedModes).toEqual(freshEnter);
@@ -333,8 +358,7 @@ describe("a double press on Stop in the command bar", () => {
     expect(heading()).toBe("Did you mean");
     input().setSelectionRange(SENTENCE.length, SENTENCE.length);
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     await end("please");
     expect(openedModes).toEqual([]);
     expect(asked.map((a) => a.body.sentence)).toEqual([SENTENCE, `${SENTENCE} please`]);
@@ -348,12 +372,26 @@ describe("a double press on Stop in the command bar", () => {
     expect(openedModes).toEqual(["glossary"]);
   });
 
-  it("withdraws the second-press offer when shut during its window", async () => {
+  it("shut during the hold: the bar's own stop is the only one, and nothing runs", async () => {
     start();
-    stop();
-    expect(micButton().disabled).toBe(false);
-    act(() => dialog().dispatchEvent(new Event("close")));
-    openBar();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      act(() => micButton().click());
+      expect(mic.toggles, "held, not yet stopped").toBe(1);
+      /* Shutting the bar stops a microphone left on (CommandBar's own effect). */
+      act(() => dialog().dispatchEvent(new Event("close")));
+      expect(mic.toggles, "the shut bar stopped the microphone").toBe(2);
+      mic.armed = false;
+      mic.transcribing = true;
+      draw();
+      openBar();
+      act(() => {
+        vi.advanceTimersByTime(DOUBLE_PRESS_MS);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mic.toggles, "the hold's expiry must not press a microphone already off").toBe(2);
     expect(micButton().disabled).toBe(true);
     pressAgain();
     expect(strip()).toBe("Turning that into text…");
@@ -380,7 +418,7 @@ describe("a double press on Stop in the command bar", () => {
     expect(archiveSet).toHaveBeenCalledTimes(1);
   });
 
-  it("offers Enter if the pending action settles during the second-press window", async () => {
+  it("offers Enter if the pending action settles while the microphone is on", async () => {
     let finish = () => {};
     archiveSet.mockImplementation(() => new Promise((resolve) => {
       finish = () => resolve({ kind: "failed", message: "Could not archive." });
@@ -390,12 +428,10 @@ describe("a double press on Stop in the command bar", () => {
     await settle();
     type("");
     start();
-    stop();
-    expect(micButton().disabled).toBe(true);
     finish();
     await settle();
-    expect(micButton().disabled).toBe(false);
-    pressAgain();
+    stopTwice();
+    expect(strip()).toBe("Turning that into text, then pressing Enter…");
     await end("plain");
     expect(openedModes).toEqual(["plain"]);
   });
@@ -403,8 +439,7 @@ describe("a double press on Stop in the command bar", () => {
   it("presses Enter without asking for a signed-out reader's unmatched words", async () => {
     draw(EXPERIMENTAL_SIGNED_OUT);
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     expect(strip()).toBe("Turning that into text, then pressing Enter…");
     await end(SENTENCE);
     expect(input().value).toBe(SENTENCE);
@@ -416,8 +451,7 @@ describe("a double press on Stop in the command bar", () => {
 
   it("cannot execute a pending done action after the Dock unmounts", async () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     const ending = options();
     act(() => root.render(null));
     act(() => {

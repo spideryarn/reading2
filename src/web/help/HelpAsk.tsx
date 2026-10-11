@@ -333,7 +333,6 @@ function AskBox({ state }: { state: HelpAskState }) {
               dictation={dictate.dictation}
               toggle={dictate.toggle}
               disabled={arriving}
-              again={dictate.again}
               sendingAfter={dictate.sendingAfter}
               doubleStop={dictate.doubleStop}
             />

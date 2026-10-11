@@ -152,7 +152,6 @@ export function FeedbackSendBox({
             dictation={dictate.dictation}
             toggle={dictate.toggle}
             disabled={sending}
-            again={dictate.again}
             sendingAfter={dictate.sendingAfter}
             doubleStop={dictate.doubleStop}
           />

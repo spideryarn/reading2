@@ -5,21 +5,30 @@
  * should also click send afterwards for me."*
  * docs/plans/261005a-dictation-double-press-on-stop-also-sends.md.
  *
- * Two halves, and they are tested apart because they fail apart:
+ * **The Stop press is held, not followed by a window** (plan
+ * docs/plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md,
+ * Part 2). On a box with a done action a Stop press waits `DOUBLE_PRESS_MS`
+ * before it stops anything, and nothing on screen changes meanwhile; a second
+ * press inside that time stops at once and sends once the real words are in.
+ * Greg, spya-j5h3cb: *"as soon as I click the first of the two double-click
+ * clicks, it automatically kind of changes the UI"*.
  *
- * - **the field** decides whether a second press counts, and sends only once
- *   the real transcript is in the box, and only for what the box was about;
- * - **the button** has to let the second press arrive at all, which a
- *   `disabled` button never does.
+ * Two halves, tested apart because they fail apart:
+ *
+ * - **the field** decides whether a press is a second press, when the
+ *   microphone actually stops, and sends only once the real transcript is in
+ *   the box, and only for what the box was about;
+ * - **the button** must still be Stop, and still have the focus, when the
+ *   second press comes.
  *
  * `useDictation` is stubbed, so each ending is driven by hand through the
  * options the field gave it: `onTranscript`, then `onEnd`, in the order the
- * real hook calls them.
+ * real hook calls them. The stub's `toggle` turns the microphone off when it
+ * is on and on when it is off, as the real one does, and counts.
  */
-import { act, createElement, useRef, useState } from "react";
+import { act, createElement, Fragment, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UseDictation } from "../src/web/useDictation.js";
 import type { UseDictationField } from "../src/web/useDictationField.js";
 
 interface Options {
@@ -30,6 +39,8 @@ interface Options {
 const mic = vi.hoisted(() => ({
   armed: false,
   transcribing: false,
+  /** The phase while armed; Chromium's recogniser goes back to `opening` after a pause. */
+  armedPhase: "listening" as "listening" | "opening",
   toggles: 0,
   endsAt: null as number | null,
   finishNow: null as (() => void) | null,
@@ -39,12 +50,20 @@ vi.mock("../src/web/useDictation.js", () => ({
   useDictation: (options: unknown) => {
     mic.options = options;
     return {
+      supported: true,
       armed: mic.armed,
       transcribing: mic.transcribing,
-      phase: mic.armed ? "listening" : mic.transcribing ? "transcribing" : "idle",
+      phase: mic.armed ? mic.armedPhase : mic.transcribing ? "transcribing" : "idle",
       endsAt: mic.endsAt,
       toggle() {
         mic.toggles++;
+        if (mic.armed) {
+          mic.armed = false;
+          mic.transcribing = true;
+        } else {
+          mic.armed = true;
+          mic.transcribing = false;
+        }
         mic.finishNow?.();
       },
     };
@@ -57,12 +76,16 @@ const { helpModeReadingWords } = await import("./helpers/help-words.js");
 
 let host: HTMLDivElement;
 let root: Root;
+let mounted = true;
 let field: UseDictationField | null = null;
-/** What `onDone` saw each time it ran: the box's value and whether it was busy. */
+/** What `onDone` saw each time it ran: the box's value, and whether it was busy. */
 let sent: Array<{ value: string; busy: boolean }> = [];
 /** What the box is drawn with; a test changes these and draws again. */
 let withDone = true;
+let withButton = false;
 let doneKey: string | undefined;
+/** Frames asked for and not yet drawn: the field puts the focus back in one. */
+let frames: FrameRequestCallback[] = [];
 
 function Box() {
   const box = useRef<HTMLTextAreaElement | null>(null);
@@ -77,10 +100,29 @@ function Box() {
     },
     report: () => {},
     doneKey,
-    ...(withDone ? { onDone: () => sent.push({ value, busy: f.busy }) } : {}),
+    ...(withDone
+      ? {
+          onDone: () => {
+            sent.push({ value, busy: f.busy });
+          },
+        }
+      : {}),
   });
   field = f;
-  return createElement("textarea", { ref: box, readOnly: f.readOnly, value, onChange() {} });
+  const area = createElement("textarea", { key: "box", ref: box, readOnly: f.readOnly, value, onChange() {} });
+  if (!withButton) return area;
+  return createElement(
+    Fragment,
+    null,
+    area,
+    createElement(DictationButton, {
+      key: "mic",
+      dictation: f.dictation,
+      toggle: f.toggle,
+      sendingAfter: f.sendingAfter,
+      doubleStop: f.doubleStop,
+    }),
+  );
 }
 
 function draw() {
@@ -93,26 +135,36 @@ function f(): UseDictationField {
 function options(): Options {
   return mic.options as Options;
 }
+/** Draw the frames asked for so far, as the browser would on its next paint. */
+function paint() {
+  const due = frames;
+  frames = [];
+  act(() => {
+    for (const frame of due) frame(0);
+  });
+}
 
 /** Start a dictation: one press, and the microphone is on. */
 function start() {
   act(() => f().toggle());
-  mic.armed = true;
   draw();
+  expect(mic.armed).toBe(true);
 }
-/** The Stop press: the microphone goes off and the transcript is on its way. */
-function stop() {
+/** One press on Stop, as the field's toggle takes it. */
+function press() {
   act(() => f().toggle());
-  mic.armed = false;
-  mic.transcribing = true;
   draw();
 }
-/** The second press, as the button makes it: only if the field offers one. */
-function pressAgain(): boolean {
-  const again = f().again;
-  if (!again) return false;
-  act(() => again());
-  return true;
+/** Stop pressed twice, inside the hold. */
+function stopTwice() {
+  press();
+  press();
+}
+/** One press on Stop, left alone until the hold runs out. */
+function stop() {
+  press();
+  wait(DOUBLE_PRESS_MS);
+  draw();
 }
 function wait(ms: number) {
   act(() => {
@@ -131,16 +183,25 @@ function end(transcript: string | null) {
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  frames = [];
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    frames.push(cb);
+    return frames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => {});
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  mounted = true;
   field = null;
   sent = [];
   withDone = true;
+  withButton = false;
   doneKey = undefined;
   mic.armed = false;
   mic.transcribing = false;
+  mic.armedPhase = "listening";
   mic.toggles = 0;
   mic.endsAt = null;
   mic.finishNow = null;
@@ -148,20 +209,61 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  act(() => root.unmount());
+  if (mounted) act(() => root.unmount());
   host.remove();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("a single press on Stop, on a box with a done action", () => {
+  it("is held for DOUBLE_PRESS_MS, then stops; and sends nothing", () => {
+    start();
+    const before = mic.toggles;
+    press();
+    expect(mic.toggles, "held: the microphone is still on").toBe(before);
+    expect(f().dictation.armed).toBe(true);
+    expect(f().sendingAfter).toBe(false);
+    wait(DOUBLE_PRESS_MS - 1);
+    expect(mic.toggles, "not before the hold runs out").toBe(before);
+    wait(1);
+    expect(mic.toggles, "stopped when it does").toBe(before + 1);
+    draw();
+    expect(f().readOnly, "the words are on their way").toBe(true);
+    end("just the words");
+    expect(sent).toEqual([]);
+    wait(DOUBLE_PRESS_MS * 3);
+    expect(mic.toggles, "and nothing more is pressed afterwards").toBe(before + 1);
+  });
+
+  it("is not held on a box with no done action: Stop stops at once", () => {
+    withDone = false;
+    draw();
+    expect(f().doubleStop).toBe(false);
+    start();
+    const before = mic.toggles;
+    press();
+    expect(mic.toggles).toBe(before + 1);
+    expect(f().readOnly).toBe(true);
+    /* And a second press is not a second press: the button is disabled now, and
+       the field's own toggle starts again only through the hook. */
+    wait(DOUBLE_PRESS_MS);
+    expect(mic.toggles).toBe(before + 1);
+    end("words");
+    expect(sent).toEqual([]);
+  });
 });
 
 describe("a second press on Stop, in the field", () => {
-  it("sends once the transcript has arrived, with the new words and not busy", () => {
+  it("stops at the second press, without waiting, and sends once the transcript has arrived", () => {
     start();
-    expect(f().again, "nothing to press twice while still talking").toBeUndefined();
-    stop();
-    wait(200);
-    expect(pressAgain()).toBe(true);
+    const before = mic.toggles;
+    press();
+    expect(mic.toggles).toBe(before);
+    press();
+    expect(mic.toggles, "stopped at the second press").toBe(before + 1);
     expect(f().sendingAfter, "the reader is told the second press was taken").toBe(true);
-    expect(f().again, "taken once; the button has nothing more to do").toBeUndefined();
+    wait(DOUBLE_PRESS_MS * 2);
+    expect(mic.toggles, "the hold did not fire as well").toBe(before + 1);
     expect(sent, "not before the words arrive").toEqual([]);
 
     end("the evidence, not the history");
@@ -171,36 +273,26 @@ describe("a second press on Stop, in the field", () => {
 
   it("sends exactly once, however many more renders follow", () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     end("once");
     draw();
     draw();
     expect(sent).toHaveLength(1);
   });
 
-  it("does nothing on a single press", () => {
+  it("is not a second press once the hold has run out", () => {
     start();
     stop();
-    end("just the words");
-    expect(sent).toEqual([]);
-  });
-
-  it("stops offering the second press once it is too late to be a double press", () => {
-    start();
-    stop();
-    wait(DOUBLE_PRESS_MS - 1);
-    expect(f().again).toBeDefined();
-    wait(2);
-    expect(f().again, "the button goes back to disabled").toBeUndefined();
+    expect(f().sendingAfter).toBe(false);
     end("too late");
     expect(sent).toEqual([]);
   });
 
+  /* The real hook delivers no transcript for an empty answer either (`[mic-silent]`,
+     `[mic-empty]`): it reaches `onEnd` without `onTranscript`, as here. */
   it("does not send when nothing was transcribed", () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     end(null);
     expect(sent, "a failed or empty dictation sends nothing").toEqual([]);
     expect(f().sendingAfter).toBe(false);
@@ -208,8 +300,7 @@ describe("a second press on Stop, in the field", () => {
 
   it("does not send when a later retry delivers the words", () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     end(null);
     /* Try again, some time later: a second ending of the same dictation. */
     end("the retry's words");
@@ -218,8 +309,7 @@ describe("a second press on Stop, in the field", () => {
 
   it("does not carry a double press over into the next dictation", () => {
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     end(null);
     start();
     stop();
@@ -231,8 +321,7 @@ describe("a second press on Stop, in the field", () => {
     doneKey = "question-1";
     draw();
     start();
-    stop();
-    pressAgain();
+    stopTwice();
     /* The reader moves on while the words are on their way. */
     doneKey = "question-2";
     draw();
@@ -241,16 +330,36 @@ describe("a second press on Stop, in the field", () => {
     expect(sent, "an answer is not sent to a question it was not said to").toEqual([]);
   });
 
-  it("withdraws the second press when the target changes during the window", () => {
+  it("still stops when the target changes during the hold, and sends nothing for either", () => {
     doneKey = "question-1";
     draw();
     start();
-    stop();
+    const before = mic.toggles;
+    press();
 
     doneKey = "question-2";
     draw();
+    expect(mic.toggles, "still held").toBe(before);
+    wait(DOUBLE_PRESS_MS);
+    expect(mic.toggles, "the reader pressed Stop: a new key does not withdraw that").toBe(before + 1);
+    draw();
+    end("an answer to question one");
+    expect(sent).toEqual([]);
+  });
 
-    expect(f().again, "question two must not accept a double press on question one's Stop").toBeUndefined();
+  it("a second press after the target changed mid-hold stops at once, and sends to neither", () => {
+    doneKey = "question-1";
+    draw();
+    start();
+    const before = mic.toggles;
+    press();
+    doneKey = "question-2";
+    draw();
+    press();
+    expect(mic.toggles, "the second press stops now").toBe(before + 1);
+    expect(f().sendingAfter, "the words were said to question one").toBe(false);
+    wait(DOUBLE_PRESS_MS);
+    expect(mic.toggles, "and the hold does not fire as well").toBe(before + 1);
     end("an answer to question one");
     expect(sent).toEqual([]);
   });
@@ -259,8 +368,7 @@ describe("a second press on Stop, in the field", () => {
     doneKey = "open";
     draw();
     start();
-    stop();
-    pressAgain();
+    stopTwice();
 
     doneKey = "shut";
     draw();
@@ -275,8 +383,7 @@ describe("a second press on Stop, in the field", () => {
     doneKey = "question-1";
     draw();
     start();
-    stop();
-    pressAgain();
+    stopTwice();
 
     /* `onEnd` schedules the done action for an effect. A parent can move the
        reused box before that effect runs, in the same batch as the hook's own
@@ -294,21 +401,69 @@ describe("a second press on Stop, in the field", () => {
 
   it("a press after the dictation has ended is an ordinary press", () => {
     start();
-    stop();
+    stopTwice();
     end(null);
     const before = mic.toggles;
-    expect(f().again).toBeUndefined();
     act(() => f().toggle());
     expect(mic.toggles, "trying again straight away starts a dictation").toBe(before + 1);
+    expect(mic.armed).toBe(true);
     expect(sent).toEqual([]);
   });
+});
 
-  it("a box with no done action never offers a second press", () => {
-    withDone = false;
-    draw();
+describe("what the hold survives, and what ends it", () => {
+  it("does not press Stop at expiry once the cap has passed during the hold", () => {
     start();
-    stop();
-    expect(f().again).toBeUndefined();
+    mic.endsAt = Date.now() + 100;
+    draw();
+    const before = mic.toggles;
+    press();
+    expect(mic.toggles, "held: the cap has not passed yet").toBe(before);
+    /* The cap stops the session itself; this render, and the latest one the
+       hold reads, still says `armed`. A toggle here would reach the hook's
+       start branch. */
+    wait(DOUBLE_PRESS_MS);
+    expect(mic.toggles, "the expiry must not press the hook past the cap").toBe(before);
+  });
+
+  it("is not withdrawn when the recogniser goes back to opening during it", () => {
+    start();
+    const before = mic.toggles;
+    press();
+    /* Chromium's recogniser restarts after a pause: armed, phase `opening`. */
+    mic.armedPhase = "opening";
+    draw();
+    mic.armedPhase = "listening";
+    draw();
+    expect(mic.toggles).toBe(before);
+    wait(DOUBLE_PRESS_MS);
+    expect(mic.toggles, "the microphone must not be left on").toBe(before + 1);
+  });
+
+  it("presses nothing after the box has gone", () => {
+    start();
+    const before = mic.toggles;
+    press();
+    frames = [];
+    act(() => root.unmount());
+    mounted = false;
+    expect(() => wait(DOUBLE_PRESS_MS * 2)).not.toThrow();
+    expect(mic.toggles).toBe(before);
+    expect(frames, "nor asks for a frame to focus a box that has gone").toEqual([]);
+  });
+
+  it("is taken by the box's own Send: stops now, sends after the words, and the hold never fires", () => {
+    start();
+    const before = mic.toggles;
+    press();
+    act(() => f().finishThenDone());
+    expect(mic.toggles, "stopped by Send, at once").toBe(before + 1);
+    expect(f().sendingAfter).toBe(true);
+    draw();
+    wait(DOUBLE_PRESS_MS * 2);
+    expect(mic.toggles, "the held Stop did not toggle a second time").toBe(before + 1);
+    end("sent by the button");
+    expect(sent).toEqual([{ value: "sent by the button", busy: false }]);
   });
 });
 
@@ -317,7 +472,7 @@ describe("the box's done action while dictation is involved", () => {
     start();
     mic.finishNow = () => {
       options().onTranscript("synchronous words");
-      mic.armed = false;
+      mic.transcribing = false;
       options().onEnd();
     };
 
@@ -345,46 +500,77 @@ describe("the box's done action while dictation is involved", () => {
   });
 });
 
-describe("the button, while the words are on their way", () => {
-  const dictation = (over: Partial<UseDictation>): UseDictation =>
-    ({ armed: false, transcribing: false, phase: "idle", ...over }) as UseDictation;
-
-  function button(props: { again?: () => void; toggle: () => void; sendingAfter?: boolean }) {
-    act(() =>
-      root.render(
-        createElement(DictationButton, {
-          dictation: dictation({ transcribing: true, phase: "transcribing" }),
-          ...props,
-        }),
-      ),
-    );
+describe("the button, between the two presses", () => {
+  function button(): HTMLButtonElement {
     const el = host.querySelector("button");
     if (!el) throw new Error("no button");
     return el;
   }
+  const textarea = () => host.querySelector("textarea");
 
-  it("is disabled, as it always was, when there is no second press to make", () => {
-    const el = button({ toggle: vi.fn() });
-    expect(el.disabled).toBe(true);
-    expect(el.getAttribute("aria-label")).toBe("Turning your words into text");
+  it("stays Stop, keeps the focus, and takes a second keyboard press", () => {
+    withButton = true;
+    draw();
+    act(() => button().click());
+    draw();
+    paint();
+    expect(mic.armed).toBe(true);
+
+    /* Enter or Space on a focused button is a click on it. */
+    act(() => button().focus());
+    act(() => button().click());
+    paint();
+    expect(button().getAttribute("aria-label"), "nothing changes on the first press").toBe("Stop dictating");
+    expect(button().disabled).toBe(false);
+    expect(document.activeElement, "the focus stays on the button for the second press").toBe(button());
+
+    act(() => button().click());
+    draw();
+    paint();
+    expect(mic.armed, "stopped at the second press").toBe(false);
+    expect(document.activeElement, "and the focus goes back to the box").toBe(textarea());
+    end("said by keyboard");
+    expect(sent).toEqual([{ value: "said by keyboard", busy: false }]);
   });
 
-  it("can be pressed while a second press counts, and says what the press does", () => {
-    const toggle = vi.fn();
-    const again = vi.fn();
-    const el = button({ toggle, again });
-    expect(el.disabled, "a disabled button never hears the second click").toBe(false);
-    expect(el.hasAttribute("aria-disabled"), "it is not disabled, so it does not say so").toBe(false);
-    expect(el.getAttribute("aria-label")).toBe("Send when the words arrive");
-    act(() => el.click());
-    expect(again).toHaveBeenCalledTimes(1);
-    expect(toggle, "never a new dictation over the one in flight").not.toHaveBeenCalled();
+  it("puts the focus back in the box when a single press's hold runs out", () => {
+    withButton = true;
+    draw();
+    act(() => button().click());
+    draw();
+    paint();
+    act(() => button().focus());
+    act(() => button().click());
+    paint();
+    expect(document.activeElement).toBe(button());
+    wait(DOUBLE_PRESS_MS);
+    draw();
+    paint();
+    expect(document.activeElement).toBe(textarea());
   });
 
-  it("once the press is taken, is disabled and says that it will send", () => {
-    const el = button({ toggle() {}, sendingAfter: true });
-    expect(el.disabled).toBe(true);
-    expect(el.getAttribute("aria-label")).toMatch(/then sending/);
+  it("is disabled while the words are on their way, and says that it will send once a second press was taken", () => {
+    withButton = true;
+    draw();
+    act(() => button().click());
+    draw();
+    act(() => button().click());
+    act(() => button().click());
+    draw();
+    expect(button().disabled).toBe(true);
+    expect(button().getAttribute("aria-label")).toMatch(/then sending/);
+  });
+
+  it("is disabled while the words are on their way after a single press", () => {
+    withButton = true;
+    draw();
+    act(() => button().click());
+    draw();
+    act(() => button().click());
+    wait(DOUBLE_PRESS_MS);
+    draw();
+    expect(button().disabled).toBe(true);
+    expect(button().getAttribute("aria-label")).toBe("Turning your words into text");
   });
 });
 

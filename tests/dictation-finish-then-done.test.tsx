@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * **The box's own done action, asked for while the microphone is involved**
- * (`finishThenDone`), and a second press on Stop that arrives after a fast
- * ending, across the real `useDictation` boundary. Plan
+ * (`finishThenDone`), and a second press on Stop however fast the transcriber
+ * answers, across the real `useDictation` boundary. Plan
  * docs/plans/261010f-feedback-dialog-send-after-dictation-and-a-saved-draft.md,
  * reports spya-t9qu3v and spya-exhqqr: Send pressed while the microphone was on
  * did nothing at all. The harness is dictation-double-stop-sends-real-hook's.
@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import type { TranscriptionResult } from "../src/web/transcriber.js";
 import { useDictationField, type UseDictationField } from "../src/web/useDictationField.js";
+import { captureHeldStops, type HeldStops } from "./helpers/held-stop.js";
 
 class FakeRecorder {
   static instances: FakeRecorder[] = [];
@@ -56,6 +57,7 @@ const failed: TranscriptionResult = {
 };
 
 let clock = 0;
+let holds: HeldStops;
 let host: HTMLDivElement;
 let root: Root;
 
@@ -103,6 +105,7 @@ beforeEach(() => {
       },
     },
   });
+  holds = captureHeldStops();
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
   host = document.createElement("div");
@@ -126,8 +129,6 @@ async function settle() {
   });
 }
 
-
-const DOUBLE_PRESS_MS = 600;
 
 function harness() {
   let field: UseDictationField | null = null;
@@ -195,9 +196,9 @@ describe("finishThenDone: the done action, pressed while the microphone is invol
     clock += 3000;
     act(() => h.recorder().emit(300));
     act(() => h.get().toggle());
+    act(() => holds.expire());
     await settle();
     expect(h.get().readOnly).toBe(true);
-    clock += DOUBLE_PRESS_MS + 1;
     act(() => h.get().finishThenDone());
     await h.answer(0, ok("late words"));
     expect(h.sent).toEqual([{ value: "late words", busy: false }]);
@@ -241,6 +242,7 @@ describe("finishThenDone: the done action, pressed while the microphone is invol
     clock += 3000;
     act(() => h.recorder().emit(300));
     act(() => h.get().toggle());
+    act(() => holds.expire());
     await settle();
     const last = calls.length - 1;
     await h.answer(last, ok("words for the new microphone"));
@@ -248,35 +250,38 @@ describe("finishThenDone: the done action, pressed while the microphone is invol
   });
 });
 
-describe("a second press after a fast ending", () => {
-  it("sends when the ending already delivered words, and never starts the microphone", async () => {
+/* **There is no fast ending to land on any more.** A second press used to be
+   counted *after* Stop, and words back inside that window put the button back
+   to Dictate before the second press arrived (plan 261010f, item 2, patched
+   it; plan 261011y removed the window). Now the Stop is held and the second
+   press lands on it, so the transcriber's speed cannot come between them. */
+describe("a second press, however fast the words come back", () => {
+  it("stops at the second press and sends the quick words once, never starting the microphone", async () => {
     const h = harness();
     await h.start();
     clock += 3000;
     act(() => h.recorder().emit(300));
     act(() => h.get().toggle());
+    expect(h.get().dictation.armed, "held: still listening after the first press").toBe(true);
+    act(() => h.get().toggle());
+    expect(holds.pending(), "the second press took the hold").toBe(0);
     await settle();
-    /* The words arrive inside the double-press window. */
+    expect(h.get().dictation.armed).toBe(false);
     await h.answer(0, ok("quick words"));
     expect(h.get().dictation.phase).toBe("idle");
-    const recorders = FakeRecorder.instances.length;
-    clock += 200;
-    act(() => h.get().toggle());
-    await settle();
-    expect(FakeRecorder.instances.length, "no new recording").toBe(recorders);
-    expect(h.get().dictation.armed).toBe(false);
+    expect(FakeRecorder.instances, "no new recording").toHaveLength(1);
     expect(h.sent).toEqual([{ value: "quick words", busy: false }]);
   });
 
-  it("is an ordinary press once the window has passed", async () => {
+  it("after a single Stop has run its course, a press is an ordinary press", async () => {
     const h = harness();
     await h.start();
     clock += 3000;
     act(() => h.recorder().emit(300));
     act(() => h.get().toggle());
+    act(() => holds.expire());
     await settle();
     await h.answer(0, ok("quick words"));
-    clock += DOUBLE_PRESS_MS + 1;
     act(() => h.get().toggle());
     await settle();
     expect(h.get().dictation.phase).toBe("listening");

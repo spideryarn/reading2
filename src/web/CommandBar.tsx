@@ -2808,7 +2808,6 @@ export function CommandBar({
           <DictationButton
             dictation={dictate.dictation}
             toggle={dictate.toggle}
-            again={dictate.again}
             sendingAfter={dictate.sendingAfter}
             doubleStop={dictate.doubleStop}
             done="enter"

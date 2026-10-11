@@ -3454,14 +3454,14 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
             {/* Holds its width across Stop: in this wrapping row a wider word
                 could push Live onto a line of its own and move the microphone
                 in a bottom-pinned composer. `TalkLabel`. */}
             <TalkLabel field={dictate} className="chat-talk-label" hidden />
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a
