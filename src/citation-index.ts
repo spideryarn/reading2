@@ -80,7 +80,7 @@ import { registryTitleIsDistinctive } from "./citation-registry.js";
 import { OPENALEX_WORK_ID } from "./citer-link.js";
 import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
-import { errorFields, log, type Log } from "./log.js";
+import { log, type Log } from "./log.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import type { Citer, CitersResult, Meta } from "./types.js";
 
@@ -365,18 +365,35 @@ function articleYear(article: ArticleIdentity): number | undefined {
   return article.publishedYear ?? plausibleYear(/^\d{4}/.exec(article.publishedAt ?? "")?.[0]);
 }
 
+/** Whether two OpenAlex display names could be two spellings of one person. */
+function sameNamedPerson(one: string, two: string): boolean {
+  const folded = (value: string) => tokens(value.normalize("NFD").replace(/\p{M}+/gu, "")).join(" ");
+  const variants = (value: string) => openAlexAuthors([value]).map((author) => ({
+    family: folded(author.family),
+    given: tokens((author.given ?? "").normalize("NFD").replace(/\p{M}+/gu, ""))[0] ?? "",
+  }));
+  return variants(one).some((a) => variants(two).some((b) => {
+    if (a.family === "" || a.family !== b.family) return false;
+    /* A missing given name cannot prove these are different people. An
+       initial and its expansion are the same identity for the same reason
+       `registryAuthorIsOurs` accepts either as corroboration. */
+    return a.given === "" || b.given === "" || a.given === b.given ||
+      ((a.given.length === 1 || b.given.length === 1) && a.given[0] === b.given[0]);
+  }));
+}
+
 /**
  * **How many different people among OpenAlex's names are ours**, each tested
- * on its own. A name listed twice (OpenAlex does that) counts once.
+ * on its own. Duplicate spellings of one person (including an initial beside
+ * the full given name) count once: two strings are not two corroborating facts.
  */
 function agreeingAuthors(article: ArticleIdentity, names: readonly string[]): number {
-  const seen = new Set<string>();
+  const seen: string[] = [];
   for (const name of names) {
-    const folded = tokens(name).join(" ");
-    if (folded === "" || seen.has(folded)) continue;
-    if (registryAuthorIsOurs(article, openAlexAuthors([name]))) seen.add(folded);
+    if (tokens(name).length === 0 || seen.some((prior) => sameNamedPerson(prior, name))) continue;
+    if (registryAuthorIsOurs(article, openAlexAuthors([name]))) seen.push(name);
   }
-  return seen.size;
+  return seen.length;
 }
 
 /** What a title search found: the one work that passes, or none. */
@@ -553,7 +570,14 @@ export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}):
   const id = citersIdOf(article);
   const query = id === null ? searchableTitle(article) : null;
   if (id === null && query === null) return { kind: "no-doi" };
-  const d = await resolveDeps(deps);
+  let d: Resolved;
+  try {
+    d = await resolveDeps(deps);
+  } catch {
+    /* There may be no logger yet, and an import or dependency error's message
+       may contain a database parameter. The public outcome is still usable. */
+    return { kind: "unavailable" };
+  }
   const started = Date.now();
   const done = (key: CitersKey | "title", result: CitersResult, from: "cache" | "openalex" | "stale"): CitersResult => {
     d.log.info(
@@ -605,8 +629,11 @@ export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}):
       if (stale.kind === "found") return done(route.key, stale, "stale");
     }
     return done(route.key, { kind: asked.kind }, "openalex");
-  } catch (err) {
-    d.log.error({ id: id ?? "title", outcome: "store", ms: Date.now() - started, ...errorFields(err) }, "citation index lookup failed");
+  } catch {
+    /* Error messages from a fetch seam can contain its whole URL, and database
+       errors can include the title/authors being written. This module's log
+       contract permits neither, so record only bounded, non-content fields. */
+    d.log.error({ id: id ?? "title", outcome: "internal-error", ms: Date.now() - started }, "citation index lookup failed");
     return { kind: "unavailable" };
   }
 }

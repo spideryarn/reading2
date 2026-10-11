@@ -5798,7 +5798,8 @@ export const CITERS_NO_MATCH =
  * that a wrong match can be seen to be one (plan 261011q, GPT Sol's F6). The
  * record's title follows it as text.
  */
-export const CITERS_BY_TITLE = "We had no DOI for this piece, so we matched it by its title and authors to this OpenAlex record:";
+export const CITERS_BY_TITLE =
+  "We had no DOI for this piece, so we looked it up in OpenAlex by its title, and took this record because its title and two of its authors (or one author and the year) match:";
 export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of this piece.";
 /**
  * **Not "the DOI belongs to another work"**: what failed is our check that the
@@ -5808,9 +5809,9 @@ export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of 
 export const CITERS_UNCONFIRMED =
   "We could not confirm that the DOI on record is this piece's own, so we have not listed who cites it.";
 /** The one outcome with a Try again beside it. */
-export const CITERS_UNAVAILABLE = "We could not reach OpenAlex just now.";
+export const CITERS_UNAVAILABLE = "We could not get the Cited by list just now.";
 /** No Try again: the same request would be too large again. */
-export const CITERS_TOO_LARGE = "OpenAlex's list for this piece is too large for us to read yet.";
+export const CITERS_TOO_LARGE = "OpenAlex's answer for this piece is too large for us to read yet.";
 export const CITERS_NONE = "OpenAlex knows this piece and lists no paper citing it yet.";
 /** Under every list: the list is a list, and nothing here says what a citing paper thinks. */
 export const CITERS_UNREAD = "We have not read what any of them says about it.";

@@ -158,3 +158,25 @@ sandbox, exit 0. Verdict: RETHINK. Taken:
 | F6 | "it has no DOI of its own" and "OpenAlex has no paper" overclaim; the match is invisible | the sentences rewritten; the matched record is shown and linked |
 | F7 | the author names are not sent; the hash is not anonymous and survives deletion | the privacy text says title words only; no hash table |
 | F8 | `CITERS_ABOUT`, `useCiters`, the route comment, `asCitersResult`, the tests | all in Stage 1 and 2 |
+
+## GPT Sol's code review
+
+[261011q-code-review-sol.md](261011q-code-review-sol.md) (prompt:
+[261011q-code-review-prompt.md](261011q-code-review-prompt.md), diff:
+[261011q-code-review.diff](261011q-code-review.diff)), `gpt-5.6-sol`, high, workspace-write, exit 0.
+Verdict: LAND AFTER FIXES. Sol fixed five in place, and I read its diff:
+
+- **C1 (P2)**: `Ashish Vaswani` and `A. Vaswani` in one record counted as two agreeing authors.
+  Name variants of one person now count once; tests.
+- **C2 (P2)**: the catch-all logged `errorFields`, whose message can carry the search address (and
+  so the title) or a database parameter. Now only the key, outcome and time; a test.
+- **C3 (P3)**: the client took any `target.openalexId`; now only a `W` id, and the matched-record
+  link is built from it alone.
+- **C4 (P3)**: loading the dependencies could throw out of `citersOf`; now `unavailable`.
+- **C5 (P3)**: the matched-record line overclaimed, and the `unavailable` and `too-large` sentences
+  named the wrong failure. Reworded; I then made its matched-record line plainer: *"We had no DOI
+  for this piece, so we looked it up in OpenAlex by its title, and took this record because its
+  title and two of its authors (or one author and the year) match:"*.
+
+Sol could not run the Postgres suite in its sandbox; run here afterwards with the other touched
+suites (349 passed) and `npm run typecheck`.

@@ -1116,6 +1116,14 @@ describe("Cited by, under Reception", () => {
     expect(link?.getAttribute("rel")).toBe("noreferrer noopener");
     expect(titles()).toEqual(["Citing paper 0"]);
 
+    /* Even a malformed runtime object cannot make this link prefer a DOI: the
+       matched-record link is made from the W id only. */
+    withCiters(found(1, {
+      via: "title",
+      target: { openalexId: "W2626778328", title: "Attention Is All You Need", doi: "10.1000/wrong" },
+    } as Partial<Extract<CitersResult, { kind: "found" }>>));
+    expect(matchLine()?.querySelector("a")?.getAttribute("href")).toBe("https://openalex.org/W2626778328");
+
     /* An id that is not a `W` id is named, never linked. */
     withCiters(found(1, { via: "title", target: { openalexId: "W1\"><script>", title: "Odd" } }));
     expect(matchLine()?.textContent).toBe(`${CITERS_BY_TITLE} Odd`);

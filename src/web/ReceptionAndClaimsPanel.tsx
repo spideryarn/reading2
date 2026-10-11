@@ -1809,7 +1809,7 @@ function CitersList({ found }: { found: Extract<CitersResult, { kind: "found" }>
   const listed = found.citers.length;
   const shown = all ? found.citers : found.citers.slice(0, CITERS_SHOWN);
   /* Built from the shape-checked `W` id, never a string from the answer (src/citer-link.ts). */
-  const matched = found.via === "title" ? citerUrl(found.target) : null;
+  const matched = found.via === "title" ? citerUrl({ openalexId: found.target.openalexId }) : null;
   return (
     <>
       {found.via === "title" && (

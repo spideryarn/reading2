@@ -22,6 +22,7 @@
  * reader, the same "we could not get it just now", with the same button.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { OPENALEX_WORK_ID } from "../citer-link.js";
 import type { Citer, CitersResult } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -53,7 +54,8 @@ function isCiter(value: unknown): value is Citer {
 function isTarget(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const target = value as Record<string, unknown>;
-  return typeof target.openalexId === "string" && typeof target.title === "string";
+  return typeof target.openalexId === "string" && OPENALEX_WORK_ID.test(target.openalexId) &&
+    typeof target.title === "string";
 }
 
 /**
@@ -62,8 +64,8 @@ function isTarget(value: unknown): boolean {
  * server, a proxy's page, a test stub's `{}`) would throw while drawing and
  * take the whole Debate band with it. Checked once here, as far as the panel
  * reads: the kind, and for a list its four numbers, its date and that the list
- * is one, including each row's rendered fields. String bounds and identifier
- * shapes remain the server parser's job.
+ * is one, including each row's rendered fields. String bounds and citer-row
+ * identifier shapes remain the server parser's job.
  */
 function asCitersResult(value: unknown): CitersResult | null {
   if (typeof value !== "object" || value === null) return null;

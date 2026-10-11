@@ -118,6 +118,7 @@ it("calls a 200 that is not one of the route's answers unavailable, rather than 
     { kind: "found", target: TARGET, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
     { kind: "found", via: "isbn", target: TARGET, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
     { kind: "found", via: "title", target: { openalexId: 7 }, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
+    { kind: "found", via: "title", target: { openalexId: "not-a-w-id", title: "A work" }, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
     { kind: "something-new" },
     null,
     [],

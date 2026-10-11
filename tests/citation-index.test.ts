@@ -35,6 +35,7 @@ import {
 } from "../src/citation-index.js";
 import { citerUrl } from "../src/citer-link.js";
 import { FetchFailure, fetchBibliographicJson, type FetchLike } from "../src/fetch.js";
+import type { Log } from "../src/log.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import { citersLines } from "../src/messages.js";
 import { providerHostOf } from "./setup/provider-guard.js";
@@ -119,6 +120,22 @@ function harness(answers: Record<string, unknown | FetchFailure>) {
   const api = openAlex(answers);
   const deps = { store, limiter, fetchJson: api.fetchJson, sleep: async () => {} };
   return { store, limiter, api, deps };
+}
+
+/** A logger whose objects can be inspected without Pino's test-time silence. */
+function recordingLog(): { entries: object[]; logger: Log } {
+  const entries: object[] = [];
+  const write = (value: object | string) => {
+    if (typeof value === "object") entries.push(value);
+  };
+  const logger: Log = {
+    debug: write,
+    info: write,
+    warn: write,
+    error: write,
+    child: () => logger,
+  };
+  return { entries, logger };
 }
 
 const HAPPY = { [WORK_URL]: WORK, [CITERS_URL]: CITERS };
@@ -568,6 +585,15 @@ describe("citersOf", () => {
     };
     expect(await citersOf(LEVIN, h.deps)).toEqual({ kind: "unavailable" });
   });
+
+  it("answers unavailable, never a throw, when its dependencies cannot be loaded", async () => {
+    const deps = Object.defineProperty({}, "store", {
+      get() {
+        throw new Error("store module did not load");
+      },
+    });
+    await expect(citersOf(LEVIN, deps)).resolves.toEqual({ kind: "unavailable" });
+  });
 });
 
 /* ------------------------------------------------------------ the fetcher -- */
@@ -668,6 +694,18 @@ describe("titleMatchOf", () => {
     expect(titleMatchOf(one, searchOf(twice))).toEqual({ kind: "none" });
   });
 
+  it("does not count full-name and initial variants of one author as two people", () => {
+    const one = { title: ATTENTION, byline: "Ashish Vaswani" };
+    const twice = { ...VASWANI, authorships: authorships(["Ashish Vaswani", "A. Vaswani"]) };
+    expect(titleMatchOf(one, searchOf(twice))).toEqual({ kind: "none" });
+  });
+
+  it("still counts different authors who share a surname and first initial", () => {
+    const two = { title: ATTENTION, byline: "Ashish Vaswani, Anand Vaswani" };
+    const work = { ...VASWANI, authorships: authorships(["Ashish Vaswani", "Anand Vaswani"]) };
+    expect(titleMatchOf(two, searchOf(work))?.kind).toBe("match");
+  });
+
   it("matches nothing when two different works pass: the most cited is not evidence", () => {
     const again = { ...VASWANI, id: "https://openalex.org/W1" };
     expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, again))).toEqual({ kind: "none" });
@@ -732,6 +770,18 @@ describe("citersOf, with no DOI", () => {
       expect(await citersOf(ATTENTION_ARTICLE, h.deps)).toEqual({ kind: "unavailable" });
       expect(h.store.writes).toEqual([]);
     }
+  });
+
+  it("does not log a title, author or the title-bearing search URL when an unexpected error escapes", async () => {
+    const h = harness({});
+    const recorded = recordingLog();
+    h.api.fetchJson.mockRejectedValue(new Error(`failed ${SEARCH_URL} for ${ATTENTION_ARTICLE.byline}`));
+    expect(await citersOf(ATTENTION_ARTICLE, { ...h.deps, log: recorded.logger })).toEqual({ kind: "unavailable" });
+    const error = recorded.entries.find((entry) => "err" in entry);
+    expect(error).toBeUndefined();
+    expect(JSON.stringify(recorded.entries)).not.toContain(ATTENTION);
+    expect(JSON.stringify(recorded.entries)).not.toContain("Ashish");
+    expect(JSON.stringify(recorded.entries)).not.toContain("search.title");
   });
 
   it("serves a fresh cached list under the OpenAlex key without asking for it again", async () => {
