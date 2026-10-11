@@ -55,14 +55,25 @@
   padding: 0 0.7rem 0.7rem;
 }
 
-/* ---- Bibliography | Links | Reception | Claims ----
-   Sources' four sub-modes (SourcesMode.tsx § SourcesViews; Debate's
+/* ---- Bibliography | Not cited | Links | Reception | Claims ----
+   Sources' five sub-modes for the owner, four for a visitor (SourcesMode.tsx § SourcesViews; Debate's
    Reception | Claims until 2026-10-09), drawn with the part-switcher every mode
    shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the part-switcher),
    so the segmented controls cannot drift apart. The row is the band's head
    (`.band-head`), which already keeps the (i)'s corner clear, in both panels.
    What is here is only what differs: each chip carries a count. Its own row
    under the head, `.rcp-controls`, went with that move. */
+/* **Their side padding is this row's own 0.35rem, not the bar's 0.6**, as
+   Search's matchers keep 0.4 (search.css § `.srch-mode`): a padding
+   refinement, never the bar's look. With Not cited the owner's row is five
+   chips, each with a count, and at the bar's padding it measured 438px against
+   the ~404px the head leaves in the default 460px band at 1280, so Claims sat
+   under the scroll fade. At 0.35rem the five fit there (plan 261011ac, browser
+   check). Narrower than that (a 390px phone) the row still scrolls inside
+   itself with the fade and the chosen chip kept in view: the part-switcher
+   does not wrap, because a joined bar that wraps is two broken halves
+   (mode-band.css § the part-switcher, plan 261007h § F2). */
+.rcp-views .summ-view-btn { padding-inline: 0.35rem; gap: 0.2rem; }
 /* Spaced from its label by the part-switcher's own gap. */
 .rcp-view-count {
   color: var(--ink-faint);
