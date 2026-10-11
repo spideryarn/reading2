@@ -8011,11 +8011,11 @@ export type EarlierFeedbackShow = (typeof EARLIER_FEEDBACK_SHOWS)[number];
  * - `shipped`: its notes combine to shipped (a change went out);
  * - otherwise `aside` (shown *Set aside*): an admin pressed Ignore on
  *   `/admin/feedback`, or its notes say declined;
- * - otherwise `waiting` (shown *Needs a decision*): its notes say awaiting;
+ * - otherwise `waiting` (shown *Waiting* on the row): its notes say awaiting;
  * - otherwise `open`: no note yet, so it is new or in hand.
  *
- * The order is the rule: an ignored report no longer asks for a decision, and
- * a shipped one stays shipped whatever else is true of it. The one place the
+ * The order is the rule: an ignored report is no longer waiting, and a shipped
+ * one stays shipped whatever else is true of it. The one place the
  * rule is executed is src/store/pg-feedback.ts § `statusOf`.
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */
@@ -8161,7 +8161,8 @@ export interface AdminFeedbackDeferralReceipt {
  * `questions` is every open question, oldest first, **the same under every
  * `show`**: a question's report may be shipped, set aside or absent, so the
  * list is not narrowed by the filter (plan 261007d, decision 7). The dialog
- * draws them in *Needs a decision* and counts them beside that pill.
+ * draws them in *Needs a decision*, and that pill's number is the threads
+ * waiting, not `counts.waiting` (plan 261011ad).
  */
 export interface AdminEarlierFeedbackPage {
   reports: AdminEarlierFeedback[];

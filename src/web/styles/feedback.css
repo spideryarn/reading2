@@ -292,8 +292,8 @@ a.fb-earlier-page:focus-visible {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* "Needs a decision" is the one status that asks something of the reader: full
-   ink and the same weight Shipped has, with no colour of its own. */
+/* An unresolved "Waiting" report stays prominent: full ink and the same
+   weight Shipped has, with no colour of its own. */
 .fb-earlier-waiting {
   color: var(--ink);
   font-weight: 600;
@@ -474,8 +474,6 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-question-answer-one + .fb-question-answer-one { margin-top: 0.4rem; }
 /* Waiting reports no question has been written for (spya-u6h6q8). */
 .fb-orphans { display: flex; flex-direction: column; gap: 0.35rem; }
-/* On the Needs a decision pill, after its report count: how many questions. */
-.fb-show-questions { font-weight: 400; }
 
 .fb-head {
   display: flex;

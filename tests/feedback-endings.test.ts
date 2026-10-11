@@ -59,7 +59,7 @@ describe("the committed map", () => {
   });
 
   it("carries a comment for every report that waits on Greg or was declined (261007d)", () => {
-    /* The reason the comment exists: a row under Needs a decision or Set aside
+    /* The reason the comment exists: a Waiting or Set aside report row
        says why. A new awaiting or declined note without one goes red here. */
     const { awaiting, declined } = feedbackIdsByEnding();
     expect(awaiting.length + declined.length).toBeGreaterThan(0);

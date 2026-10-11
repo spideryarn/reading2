@@ -194,6 +194,7 @@ const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
 const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
 const { reloadVeto } = await import("../src/web/safe-to-reload.js");
 const { navigate } = await import("../src/web/router.js");
+const { EarlierFilter } = await import("../src/web/FeedbackEarlier.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -2023,7 +2024,8 @@ describe("the Earlier tab", () => {
       await settle();
 
       expect(lists).toEqual([WAITING_URL, ALL_URL]);
-      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
+      /* Needs a decision counts the threads waiting, none here; the others count reports (261011ad). */
+      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 0", "Set aside 2", "Shipped 1"]);
     });
 
     /* Plan 261008i, decision 8: the count on the shortcut is needed before
@@ -2043,12 +2045,13 @@ describe("the Earlier tab", () => {
 
     /* Decision 9: Earlier opens on Needs a decision only when a thread waits.
        Here none does, and the reader has chosen nothing, so it moves to All. */
-    it("reads the admin route, and shows five pills with report counts, on All when no thread waits", async () => {
+    it("reads the admin route, and shows five pills with their counts, on All when no thread waits", async () => {
       asAdmin = true;
       listAnswer = serve(ADMIN_REPORTS);
       await openEarlier();
       expect(lists).toEqual([WAITING_URL, ALL_URL]);
-      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
+      /* Needs a decision counts the threads waiting, none here; the others count reports (261011ad). */
+      expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 0", "Set aside 2", "Shipped 1"]);
       expect(pill("All").getAttribute("aria-pressed")).toBe("true");
     });
 
@@ -2068,7 +2071,7 @@ describe("the Earlier tab", () => {
       expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent?.startsWith("#215 · ")).toBe(true);
       expect(items.map((li) => li.querySelector("[data-status]")?.textContent)).toEqual([
         "Shipped",
-        "Needs a decision",
+        "Waiting",
         "Set aside",
         "Set aside",
         "Open",
@@ -2180,7 +2183,7 @@ describe("the Earlier tab", () => {
     });
 
     /* docs/plans/261010o-addendum-to-an-earlier-feedback-report.md: the admin
-       adds to one of their own reports that is Open or Needs a decision, and
+       adds to one of their own reports that is Open or Waiting, and
        sees what they added under its words. Everything is keyed by report. */
     describe("adding to an earlier report", () => {
       const ADDENDA_PATH = "/api/admin/feedback/addenda";
@@ -2241,7 +2244,7 @@ describe("the Earlier tab", () => {
         addendumMicUses.length = 0;
       });
 
-      it("offers Add to this report on Open and Needs a decision reports, and on no other", async () => {
+      it("offers Add to this report on Open and Waiting reports, and on no other", async () => {
         await openAll();
         expect([215, 214, 213, 212, 211].map((n) => hasButton(item(n), "Add to this report"))).toEqual([
           false,
@@ -2673,18 +2676,55 @@ describe("the Earlier tab", () => {
 
       it("says how many are open beside the pill in every view, and draws them only in Needs a decision", async () => {
         await openWaiting();
-        /* The report count on the pill is still the report count; the questions are beside it. */
-        expect(pills()).toContain("Needs a decision 1 · 2 to decide");
+        /* The pill counts waiting threads, not reports. */
+        expect(pills()).toContain("Needs a decision 2");
         /* The one waiting report is Q1's, so it is inside that thread and not listed. */
         expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(0);
 
-        /* In All: counted on the pill, after its report count, and not drawn. */
+        /* In All: still counted on the pill, and not drawn in this view. */
         click(pill("All"));
         await settle();
         expect(lists).toEqual([WAITING_URL, ALL_URL]);
-        expect(pills()).toContain("Needs a decision 1 · 2 to decide");
+        expect(pills()).toContain("Needs a decision 2");
         expect(questionsBox()?.hidden ?? true).toBe(true);
         expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(5);
+      });
+
+      /* spya-h2d3my (Greg, 2026-10-11): "the needs a decision in the top right
+         next to Write and Earlier gives a different count than the needs a
+         decision next to open, shipped, etc. And one of them says it needs my
+         decision for something that I think I deferred". The pill counted
+         reports whose notes say awaiting, which a reply or a Defer never
+         changes; the shortcut counted threads waiting. Plan 261011ad. */
+      it("draws one number on the pill and the shortcut: the threads waiting, not a replied or deferred one, nor the reports", async () => {
+        /* One report awaiting; two threads waiting, one replied to, one deferred. */
+        await openWaiting({ ...ADMIN_REPORTS, questions: [Q1, Q2, Q3, Q4] }, { ...WAITING, questions: [Q1, Q2, Q3, Q4] });
+        const shortcutText = () => shortcut()?.textContent?.replace(/\s+/g, " ").trim();
+        expect(shortcutText()).toBe("Needs a decision 2");
+        expect(pills()).toContain("Needs a decision 2");
+        expect(pills().join(" ")).not.toContain("to decide");
+        /* And the same in every view, not only under that filter. */
+        click(pill("All"));
+        await settle();
+        expect(pills()).toContain("Needs a decision 2");
+        expect(shortcutText()).toBe("Needs a decision 2");
+      });
+
+      it("draws no number on Needs a decision until the threads are known, never the report count instead", () => {
+        const box = document.createElement("div");
+        const here = createRoot(box);
+        act(() =>
+          here.render(
+            <EarlierFilter
+              choice={{ detail: "admin", show: "all", counts: ADMIN_COUNTS }}
+              onShow={() => {}}
+              questionCount={null}
+            />,
+          ),
+        );
+        const words = [...box.querySelectorAll(".fb-show-button")].map((b) => (b.textContent ?? "").replace(/\s+/g, " ").trim());
+        expect(words).toEqual(["All 5", "Open 1", "Needs a decision", "Set aside 2", "Shipped 1"]);
+        act(() => here.unmount());
       });
 
       /* spya-u6h6q8 (Greg, 2026-10-08): "There seems to be a few that are listed
@@ -2726,15 +2766,16 @@ describe("the Earlier tab", () => {
         expect(questionsBox()?.compareDocumentPosition(orphans as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       });
 
-      it("says one question in the singular, and nothing on the pill when there are none", async () => {
+      it("counts one thread as one, and none as 0 although a report still says awaiting", async () => {
         await openWaiting({ ...ADMIN_REPORTS, questions: [Q2] }, { ...WAITING, questions: [Q2] });
-        expect(pills()).toContain("Needs a decision 1 · 1 to decide");
+        expect(pills()).toContain("Needs a decision 1");
         listAnswer = serve(ADMIN_REPORTS);
         reopen();
         click(tab("Earlier"));
         await settle();
-        expect(pills()).toContain("Needs a decision 1");
-        expect(pills().join(" ")).not.toContain("to decide");
+        /* ADMIN_REPORTS has one report whose notes say awaiting; no thread waits. */
+        expect(pills()).toContain("Needs a decision 0");
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 0");
         expect(rows()).toHaveLength(0);
       });
 
@@ -2818,7 +2859,7 @@ describe("the Earlier tab", () => {
         click(button(thread(), "‹ All threads"));
         expect(panelOf("Earlier").querySelector(".fb-thread")).toBeNull();
         expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
-        expect(pills()).toContain("Needs a decision 1 · 2 to decide");
+        expect(pills()).toContain("Needs a decision 2");
       });
 
       /* spya-nmt06n (Greg, 2026-10-09): "I only want them to cycle through the
@@ -3108,6 +3149,7 @@ describe("the Earlier tab", () => {
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
         expect(inGroup("responded")).toEqual(["q-aaaaaa"]);
         expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+        expect(pills()).toContain("Needs a decision 1");
       });
 
       /* F4: a reply just sent stands until a read started after it lands. A
@@ -3324,6 +3366,7 @@ describe("the Earlier tab", () => {
         expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
         expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+        expect(pills()).toContain("Needs a decision 1");
 
         click(row("q-aaaaaa"));
         click(button(thread(), "Bring back"));
@@ -3703,12 +3746,12 @@ describe("the Earlier tab", () => {
 
         /* The server's count is the server's: one thread waiting on a decision. */
         if (panelOf("Earlier").querySelector(".fb-thread")) click(button(thread(), "‹ All threads"));
-        expect(pills()).toContain("Needs a decision 1 · 1 to decide");
+        expect(pills()).toContain("Needs a decision 1");
         expect(rows()).toContain("q-aaaaaa");
         expect(rows()).toContain("q-bbbbbb");
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
         expect(inGroup("retained")).toEqual(["q-aaaaaa"]);
-        expect(shortcut()?.getAttribute("title")).toMatch(/^1 needs a decision/);
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
         expect(
           [...panelOf("Earlier").querySelectorAll(".fb-orphans .fb-earlier-number")].map((number) => number.textContent),
         ).toEqual(["#214"]);

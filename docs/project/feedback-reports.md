@@ -572,8 +572,9 @@ there is nothing to act on. The same provenance rule holds, and the same "not de
 before the deploy that creates that table.
 
 **The plain listing** (`npx tsx scripts/feedback-questions.ts`) also names any report whose note
-says `awaiting` with no open question asking about it: Greg sees those under *Needs a decision*
-with nothing to answer, so write the question, or correct the note. And any split report with a
+says `awaiting` with no open question asking about it: Greg sees those as *Waiting, but no question
+written yet* under the *Needs a decision* thread view, with nothing to answer, so write the question,
+or correct the note. And any split report with a
 part no note covers yet: name the report in the note that covers it, or write the note.
 `--show q-xxxxxx` prints one question's file, `refs:` included, which is how a question Greg names
 in a terminal is found.
