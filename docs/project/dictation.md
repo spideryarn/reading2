@@ -20,6 +20,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) — IndexedDB recovery, `keepDictation`
 - [§ The ways it fails](#the-ways-it-fails) — ten failure modes
 - [§ The codes](#the-codes) — every `[mic-…]` code and where it is raised
+- [§ Every failure reaches Sentry](#every-failure-reaches-sentry) — one door, the code and never the sentence, the tags
 - [§ Where the pieces are](#where-the-pieces-are) — file map
 - [§ What a browser pass could check](#what-a-browser-pass-could-and-could-not-check) (history)
 - [§ What is still open](#what-is-still-open) — unmeasured things
@@ -876,7 +877,8 @@ a recorder that hit its cap. They live beside the code that raises them.
 | | |
 |---|---|
 | `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
-| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
+| `[mic-refused]` `[mic-none]` `[mic-no-start]` | the microphone would not open, chosen by the browser's reason in [`useDictation.ts`](../../src/web/useDictation.ts) § `couldNotStart`: refused (`NotAllowedError`, `SecurityError`), none at all (`NotFoundError`, the same sentence as the recogniser's), anything else. Until 2026-10-11 all three were `[mic-no-start]`'s "Press it again", which cannot work after a refusal. `[mic-refused]` is deliberately not `[mic-blocked]`: the refusal can come from the device's privacy settings, the browser's, a policy, or WebKit itself, not only the site permission ([261011i](../plans/261011i-dictation-failures-reach-sentry.md)) |
+| `[mic-unplugged]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
 | `[mic-moved]` `[mic-moved-held]` | the words came back after the reader moved the box on — the next comment, the next quiz question — so they were offered back rather than put in the wrong one; and a new press refused because it would clear them; [§ Words go only where they were said](#words-go-only-where-they-were-said) |
@@ -917,6 +919,38 @@ defined by being *outside* that file. The rule was never file-specific;
 the conversations that quoted it, which is why `[mic-offline]` stayed on the upload — the path a
 reader actually loses a dictation to — and the recogniser's became `[mic-no-connection]`.
 
+## Every failure reaches Sentry
+
+> I was on the microphone input button. … there was some kind of error so the microphone input
+> didn't work. … See if you can find that error in Sentry, in the logs or anywhere like that. If you
+> can't, let's improve the logging and Sentry error monitoring around microphone input.
+>
+> — Greg, 2026-10-11 (spya-m2pyfq)
+
+It could not be found. No recording reached `/api/transcribe` in the hours he named, so it failed in
+the browser, and until then **nothing in the browser told anyone but the reader**: every failure
+here is a sentence put on screen, and Sentry's automatic reporting sees only uncaught throws.
+
+Now **`setError` is the one door, and it reports**. Every one of the ~25 branches that shows a
+sentence goes through it, so a branch added later is covered without anyone remembering to. It is
+synchronous rather than an effect on `error`: an effect sees rendered state, and would miss the same
+sentence twice or one set just before an unmount. The hook takes a required `report` beside
+`transcribe`, for the same reason `transcribe` is a parameter (the fleet passes a no-op), and each
+product box passes `dictationReporter("<surface>")` from
+[`dictation-report.ts`](../../src/web/dictation-report.ts).
+
+**What reaches Sentry is the code, never the sentence**, as an issue per code (fingerprinted, because
+every failure is raised from one line), named `DictationFailure`, with tags from closed sets only:
+`dictation_code`, `dictation_surface` (which box), `dictation_place` (`article` or `profile`, never
+the slug), `mic_error` (the browser's reason when the microphone would not open), `mic_chosen` (a
+chosen microphone, and whether it is the one that opened), `mic_live`, `browser_engine` and
+`browser_mobile` (the scrubber drops the user agent). Not reported: `[mic-recovered]`,
+`[mic-cut-off]`, `[mic-moved]`, `[mic-moved-held]` and `[mic-full]`, which are the app doing its job.
+Search Sentry for `DictationFailure`.
+
+**Not covered: a permission prompt nobody answers.** `getUserMedia` may then never settle, the strip
+says "Opening the microphone…" for ever, and no sentence is shown, so nothing is reported.
+
 ## Where the pieces are
 
 | | |
@@ -930,7 +964,8 @@ reader actually loses a dictation to — and the recogniser's became `[mic-no-co
 | [`mic-recording.ts`](../../src/web/mic-recording.ts) | the tape, its container fallback, its caps, and where it is cut into parts |
 | [`mic-devices.ts`](../../src/web/mic-devices.ts) | which microphone, and why the constraint is `exact` |
 | [`useAudioLevel.ts`](../../src/web/useAudioLevel.ts) · [`audio-level.ts`](../../src/web/audio-level.ts) · [`MicLevel.tsx`](../../src/web/MicLevel.tsx) | the meter |
-| [`dictation-errors.ts`](../../src/web/dictation-errors.ts) | every recogniser error code to a sentence, totally |
+| [`dictation-errors.ts`](../../src/web/dictation-errors.ts) | every recogniser error code to a sentence, totally, and the capture's refusal sentence |
+| [`dictation-report.ts`](../../src/web/dictation-report.ts) | a failure, told to Sentry: the code and closed tags, never the sentence |
 | [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, the guards that replaced the schema |
 | [`src/dictation-limits.ts`](../../src/dictation-limits.ts) | the sizes and the containers, shared by both ends — and the one sentence for a recording that is too long |
 | [`src/dictation-fillers.ts`](../../src/dictation-fillers.ts) | the ums, deleted — and why it is not a line in the prompt |

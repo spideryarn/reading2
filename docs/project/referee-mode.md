@@ -11,7 +11,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Referee and Sources](#referee-and-sources-since-2026-10-09) — which mode is for what, and the line between them
 - [§ Who the guide offers it to](#who-the-guide-offers-it-to-since-2026-10-09) — a referee gets its button with the switch off
 - [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
-- [§ The five sub-modes](#the-five-sub-modes) — URL shape; then Criteria (§ 1), Promises (§ 2), Mirror (§ 3), Candidates (§ 4), Hidden text (§ 5)
+- [§ The six sub-modes](#the-six-sub-modes) — URL shape; then Criteria (§ 1), Promises (§ 2), Mirror (§ 3), Notes (§ 4), Candidates (§ 5), Hidden text (§ 6)
 - [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
 - [§ Where each of Candidates' four rules lives](#where-each-of-the-four-rules-actually-lives) — what code enforces and what is only a prompt
 - [§ Every control says what it does](#every-control-says-what-it-does) — the hover cards, and which labels changed
@@ -130,7 +130,7 @@ Greg, 2026-10-03 (`spya-vbeyse`):
 Measured that day at 1280 × 800, the criterion box started 607px down a 760px band. So, top to
 bottom, the band is now:
 
-1. **One row: the five chips and a *Notices* button**, with the band's (i) in the corner. The
+1. **One row: the six chips and a *Notices* button**, with the band's (i) in the corner. The
    chips are the part-switcher every mode shares (`mode-band.css` § the part-switcher, since
    2026-10-07): one joined bar, with Notices beside it, or on a line under it when the band is too
    narrow for both. On the 288px band an iPad gives this mode the bar scrolls sideways inside its
@@ -176,7 +176,7 @@ operator arXiv's LaTeX-to-HTML converter writes into MathML, and two `navigation
 arXiv's own page. Notices opened itself for any finding, so the first thing above Criteria was 39
 rows of CSS path. Now:
 
-- **The scan is the fifth chip, *Hidden text*** (`?referee=hidden`), last in the row. Pressing it
+- **The scan is the *Hidden text* chip** (`?referee=hidden`), last in the row. Pressing it
   runs nothing; the band has already fetched the scan. **Notices holds only the confidentiality
   sentences and never opens itself.**
 - **The chip carries a mark when something was found** (`sourceScanMark` in
@@ -383,9 +383,9 @@ Greg had not seen the name when the plan was written; the button's word is **one
 It was three until 2026-09-02 — the dock and the visitor's owners-only sentence each kept their own
 copy — and now everything that names a mode reads that record.
 
-## The five sub-modes
+## The six sub-modes
 
-`?mode=referee` with `?referee=criteria|promises|mirror|candidates|hidden`
+`?mode=referee` with `?referee=criteria|promises|mirror|notes|candidates|hidden`
 ([`src/web/referee-views.ts`](../../src/web/referee-views.ts)), following Diagram's `?diagram=`
 precedent — a `role="radiogroup"` of buttons, each its own tab stop, arrow-key *selection*
 deliberately withheld so the article's own arrow keys still reach the article
@@ -778,7 +778,54 @@ Built, as of 2026-09-01, and here is the whole of it:
   of it, because Greg vetoed a report scaffold and a suggested rewrite is that feature by another
   door.
 
-### 4. Candidates — who could review this, for an editor
+### 4. Notes — the reviewer's own notes, sorted by them, copied out in their words
+
+Since 2026-10-11. Greg chose it from the research's list (q-fkq30v, reply `spya-dbfeqh`):
+
+> 4 all? Use your judgment based on that combination of ease and value.
+
+It was idea 4 of
+[261009b](../research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md):
+*"The reviewer marks each of their own comments major or minor. Then they take them out as a
+skeleton, in their own words only: summary, major, minor."* The plan is
+[261011f](../plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md).
+
+The panel lists every comment of the reviewer's with words on it, review comments and reading notes
+alike, under *Not sorted yet*, *Major* and *Minor*, each in reading order with the passage it is on.
+A **Major** / **Minor** pair on each row sorts it; pressing the lit one again un-sorts it. **Copy
+notes** puts plain text on the clipboard for a journal's form: a bare *Summary* heading, then
+*Major*, *Minor* and anything not sorted yet, numbered, each with `On: “the quote”`. Marks with no
+words (a highlight, a bookmark, a placement with nothing written) are counted in a line and left out.
+
+**Why this is not the report scaffold Greg vetoed on 2026-08-31.** That was *"a scaffold collecting
+flagged passages into report structure"* ([260831an](../plans/260831an-referee-mode-for-peer-reviewers.md),
+appendix); the same night's notes allowed *"a plain comments-export"* later. Three rules hold the
+line, each in code rather than in a prompt — there is no prompt:
+
+1. **Only the reviewer's words go out**, with the author's quoted passage as a pointer.
+   [`src/web/referee-notes.ts`](../../src/web/referee-notes.ts) takes a `NoteSource`, a narrow
+   `Pick` of a comment, so a model's `answer`, `citations`, `searches`, `model` and `error` are not
+   in scope to be read. No Structure heading either: those are model-written, so a passage is
+   located by its own words. `tests/referee-notes.test.ts` plants a sentinel in every model field.
+2. **The reviewer sorts; nothing sorts for them.** `comments.severity` is written only by
+   `PATCH /api/comments/:slug/:id/severity` (`patchSeverity`), never by a Save and never by a model.
+3. **No sentence of ours in the text.** An empty heading is printed bare, the Summary included.
+
+**Copy waits for a sort still on the wire.** A sort is not optimistic (`useComments.sort`), so for a
+round trip the note is under its old heading; the button is disabled until every sort has landed,
+or *Major, then Copy* would copy the old grouping and say "Copied" (GPT Sol, plan review F3).
+`tests/referee-notes-panel.test.tsx`.
+
+**A sorted note still goes out on a shared link if it has no criterion** — the body, not the sort,
+because `publicCommentsQuery` names its columns. That is no new exposure (the note went out before
+it was sorted), but a sorted note is plainly review material, so whether `PUBLIC_COMMENTS_WHERE`
+should also withhold `severity is not null` is a defence change and is Greg's
+([comments.md § A shared link carries them](comments.md#a-shared-link-carries-them-since-2026-09-04)).
+
+Sorting is only in this panel, not also in the comment boxes: one place, at the moment of writing up.
+It is the next step if a reviewer asks for it.
+
+### 5. Candidates — who could review this, for an editor
 
 The odd one out: not a referee's question but an editor's, added after Greg overruled the plan's own
 cut —
@@ -966,7 +1013,7 @@ asserts there is no digit on a candidate row that is not a block id.
 co-authorship COI checks and that is the obvious next step. It is also a different project, and
 Greg's own framing was *"see how far we can get in a stage or two"*.
 
-### 5. Hidden text — the check of the document's own source
+### 6. Hidden text — the check of the document's own source
 
 Not a model and not a question: the deterministic scan for text a reader would not see and a model
 would read, which has already run by the time the band opens. It became a sub-mode on 2026-10-07
@@ -992,7 +1039,7 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the five sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Promises asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts; Hidden text's check uses no model and does not check PDFs, and Opus is asked about its rows only from inside it |
+| the six sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Promises asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Notes copies out only your words and calls no model; Candidates reaches a search engine and checks no conflicts; Hidden text's check uses no model and does not check PDFs, and Opus is asked about its rows only from inside it |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's promises*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
@@ -1407,7 +1454,7 @@ referee copy has to be written around:
 
 **The line between this and the general page.** A referee is a deep reader with a deadline and a
 form to fill in. Everything on the general page is true for them; what the referee page adds is the
-five sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
+six sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
 for you.
 
 ## See also
@@ -1421,7 +1468,10 @@ for you.
 - [260831e-helping-peer-reviewers/](../research/260831e-helping-peer-reviewers/README.md) — the
   research behind both: what journals and funders will let AI touch, the prior art and its cognitive
   offloading evidence, and the editor's side of the desk.
-- [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the five sub-modes, named once.
+- [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the six sub-modes, named once.
+- [`src/web/referee-notes.ts`](../../src/web/referee-notes.ts) and
+  [`src/web/RefereeNotesPanel.tsx`](../../src/web/RefereeNotesPanel.tsx) — Notes, which calls no
+  model: what may be copied out, and the panel.
 - [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
   [`src/referee-promises.ts`](../../src/referee-promises.ts),
   [`src/referee-candidates.ts`](../../src/referee-candidates.ts) — the four model-facing modules.

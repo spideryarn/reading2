@@ -547,6 +547,9 @@ svg.band-waiting-ghost { flex: none; }
   padding: 0.55rem 0.25rem 0.25rem;
   color: var(--ink-faint);
 }
+/* The same compass in Chat's header while the guide is open (plan 261010g). */
+.chat-head-guide { display: inline-flex; align-items: center; gap: 0.35rem; }
+.chat-head-guide-mark { flex: none; color: var(--ink-faint); }
 /* Rows are three lines now, so they need a hairline of air between them or
    two conversations read as one. */
 .chat-threads li + li { margin-top: 0.1rem; }

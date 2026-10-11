@@ -1717,10 +1717,10 @@ export function Reader({
    * **Open Bibliography on one work** — the focus and the move in one place,
    * so neither can be written without the other (GPT Sol's F7 on plan
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
-   * (Bibliography is the absent default), so a reader on Reception or Claims
-   * lands on the list the focus is for. Called by a chat's way back to a
-   * cited work, by Claims' *Cited in this paragraph* (that plan's Stage 2),
-   * and by a citation card's *Open in Sources*.
+   * (Bibliography is the absent default), so a reader on Links, Reception or
+   * Claims lands on the list the focus is for. Called by a chat's way back to a
+   * cited work, by Links' *In Bibliography*, by Claims' *Cited in this
+   * paragraph* (that plan's Stage 2), and by a citation card's *Open in Sources*.
    *
    * If Bibliography is already the visible list and no conversation is open,
    * only restore the band and focus the row. A same-value pushed write creates
@@ -3753,6 +3753,8 @@ export function Reader({
         if (!owner)
           return artefacts?.bibliography || artefacts?.reception || artefacts?.sourcesClaims ? (
             <VisitorSourcesBand
+              blocks={article.blocks}
+              sourceUrl={article.meta.url ?? null}
               bibliography={artefacts.bibliography ?? null}
               reception={artefacts.reception ?? null}
               claimList={artefacts.sourcesClaims ?? null}
@@ -3768,6 +3770,9 @@ export function Reader({
         return (
           <SourcesBand
             slug={slug}
+            blocks={article.blocks}
+            sourceUrl={article.meta.url ?? null}
+            fromPdf={article.meta.source === "pdf"}
             bibliographyRead={owner.bibliography}
             onJump={bandJump}
             blockOrder={blockOrder}
@@ -3792,7 +3797,8 @@ export function Reader({
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
-         unmounts — for either band, since they share `useSkimMode`.
+         unmounts — for either band, and for either walk inside it (the route's
+         `useSkimMode`, or `FiguresWalk` on `?depth=figures`, plan 261011b).
          docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
 
          The visitor's branch is gated on the route itself, like the timeline's:
@@ -3905,6 +3911,18 @@ export function Reader({
                judgement; `useComments` is already mounted for the page.
                docs/project/referee-mode.md § the referee's own mark. */
             comments={comments}
+            /* **The same list with its load state, and the one write — for
+               Notes alone**: the reviewer's own major/minor sort. The state, so
+               "no notes yet" is never said over a list still on its way.
+               Plan 261011f. */
+            notes={
+              owner.comments.loadFailed
+                ? { state: "failed" }
+                : owner.comments.loaded
+                  ? { state: "ready", comments, sorting: owner.comments.sorting }
+                  : { state: "loading" }
+            }
+            onSort={owner.comments.sort}
             onJump={bandJump}
             onFound={setRefereeFound}
             /* Which marked passage the referee last pressed, so the prose rings
@@ -4506,7 +4524,7 @@ export function Reader({
              `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
           key={annotateKey(annotating)}
           anchor={annotating}
-          /* **Referee mode only**, and all five of its sub-modes: the criteria
+          /* **Referee mode only**, and all six of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}

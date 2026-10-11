@@ -129,6 +129,11 @@ const SHARED = new Set([
      than two that could drift. Imports types and nothing else.
      See src/skim-passes.ts. */
   "skim-passes.js",
+  /* Which blocks are figures, tables and media, and their captions — Skim's
+     Figures walk and Structure's row marks, and a pure function of the
+     blocks the server may ask too (plan 261011b). Imports types and
+     `reserved.js`. See src/figures.ts. */
+  "figures.js",
   /* What the glossary's *Look up a term* box will accept — the bound, the
      screen, and the three sentences a refused term gets. On the list for the
      reason the header gives rather than for convenience: it imports nothing at

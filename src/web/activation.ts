@@ -198,7 +198,7 @@ export type { AutoRunTarget };
  * (two such calls until `debate/7`, 2026-10-08, when the claims search left
  * the press). **Delegated since that day**: a press landing on Reception arms
  * the search, one landing on Claims arms the claims list — one call and no
- * search. Since 2026-10-09 it is one of Sources' three sub-modes, out of
+ * search. Since 2026-10-09 it is a Sources sub-mode, out of
  * the experimental switch, and **the mode opens on Bibliography**, so a press
  * on the Sources button buys the search only when the address already
  * names Reception (§ `activationForSources`). No navigation buys it; a
@@ -456,6 +456,8 @@ const REFEREE_TARGET: Record<RefereeView, AutoRunTarget | null> = {
   criteria: null,
   promises: "promises",
   mirror: null,
+  /* Nothing to run: the reviewer's own notes, and no model. */
+  notes: null,
   candidates: null,
   hidden: null,
 };
@@ -584,8 +586,8 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Sources' sub-modes arms**: the
- * `bibliography` list for Bibliography, the `reception` search for Reception, and
- * the `sources-claims` list for Claims.
+ * `bibliography` list for Bibliography, nothing for Links, the `reception`
+ * search for Reception, and the `sources-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
@@ -604,11 +606,15 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * is showing (useReception.ts, useSourcesClaims.ts), so neither press can buy the
  * other's work.
  */
-export function activationForSources(view: SourcesView): AutoRunTarget {
+export function activationForSources(view: SourcesView): AutoRunTarget | null {
   switch (view) {
     /* Citations' fixed target until 2026-10-09: the list of works cited. */
     case "bibliography":
       return "bibliography";
+    /* The article's own hyperlinks, read off the blocks in the browser: nothing
+       to buy (plan 261011d). */
+    case "links":
+      return null;
     case "reception":
       return "reception";
     case "claims":

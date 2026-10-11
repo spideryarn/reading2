@@ -55,7 +55,9 @@ import {
   useRef,
   useState,
 } from "react";
+import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
+import { FigureMark } from "./FigureMark.js";
 import { ModeSurface } from "./ModeSurface.js";
 import {
   type StructureCard,
@@ -278,6 +280,7 @@ function RowCard({
 
 function Row({
   row,
+  figures,
   onJump,
   /**
    * **`false` on the measuring copies, and that is load-bearing.** They are the
@@ -290,6 +293,8 @@ function Row({
   tip,
 }: {
   row: StructureRow;
+  /** The article's figures, for the mark after the title (FigureMark.tsx). */
+  figures: readonly Figure[];
   onJump(id: BlockId): void;
   tip: boolean;
 }) {
@@ -331,7 +336,13 @@ function Row({
           <span className="struct-num">{row.number}</span>
           {/* The author's heading kept, or the model's title or navLabel
               (tree.ts § `nodeLabel`); voice.ts puts the face on it. */}
-          <span className={withVoice("struct-text", row.voice)}>{row.text}</span>
+          <span className={withVoice("struct-text", row.voice)}>
+            {row.text}
+            {/* Inside the title, so it trails its last word rather than taking
+                a grid row of its own; and here in the one `Row`, so the
+                measuring copies carry it too (FigureMark.tsx). */}
+            <FigureMark figures={figures} startRow={row.startRow} endRow={row.endRow} />
+          </span>
           {/* Inside the title's grid, in its column, so a gist starts where its
               title does — the list face's `.outln-gist` does the same. */}
           {row.gist ? <span className="struct-gist">{row.gist}</span> : null}
@@ -488,17 +499,19 @@ function MeasuredCounter() {
 function Column({
   column,
   label,
+  figures,
   onJump,
 }: {
   column: StructureColumn;
   label: string;
+  figures: readonly Figure[];
   onJump(id: BlockId): void;
 }) {
   return (
     <ol className="struct-col" aria-label={label}>
       <Elided n={column.earlier} where="earlier" />
       {column.rows.map((row) => (
-        <Row key={row.id} row={row} onJump={onJump} tip={true} />
+        <Row key={row.id} row={row} figures={figures} onJump={onJump} tip={true} />
       ))}
       <Elided n={column.later} where="later" />
     </ol>
@@ -507,6 +520,7 @@ function Column({
 
 export function StructurePanel({
   root,
+  figures,
   focusRow,
   allowParagraphs,
   onJump,
@@ -514,6 +528,11 @@ export function StructurePanel({
   head,
 }: {
   root: SummaryNode | null;
+  /**
+   * `figuresOf(article.blocks)`, worked out once by `StructureBand` — the
+   * marks after each row's title (FigureMark.tsx).
+   */
+  figures: readonly Figure[];
   /**
    * Which row the reader is at — `LiveContext.focusRow`, the same sampler
    * Structure's list face reads (and the gist columns' context panels read,
@@ -705,7 +724,7 @@ export function StructurePanel({
             <div className="struct-side">
               <ol className="struct-col" data-struct-measure="a">
                 {proj.columnA.rows.map((row) => (
-                  <Row key={row.id} row={row} onJump={NO_JUMP} tip={false} />
+                  <Row key={row.id} row={row} figures={figures} onJump={NO_JUMP} tip={false} />
                 ))}
                 <MeasuredCounter />
               </ol>
@@ -713,7 +732,7 @@ export function StructurePanel({
             <div className="struct-side struct-inner">
               <ol className="struct-col" data-struct-measure="b">
                 {proj.columnB.rows.map((row) => (
-                  <Row key={row.id} row={row} onJump={NO_JUMP} tip={false} />
+                  <Row key={row.id} row={row} figures={figures} onJump={NO_JUMP} tip={false} />
                 ))}
                 <MeasuredCounter />
               </ol>
@@ -729,7 +748,7 @@ export function StructurePanel({
               pressing something does not fire a dozen cards. */}
           <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
             <div className="struct-side">
-              <Column column={columnA} label="Parts" onJump={onJump} />
+              <Column column={columnA} label="Parts" figures={figures} onJump={onJump} />
             </div>
             <div className="struct-side struct-inner">
               {/* **The bracket, and the whole of the connector in v1.** It names
@@ -747,7 +766,7 @@ export function StructurePanel({
                 </p>
               ) : null}
               {columnB.rows.length > 0 || columnB.later > 0 ? (
-                <Column column={columnB} label="Sections of this part" onJump={onJump} />
+                <Column column={columnB} label="Sections of this part" figures={figures} onJump={onJump} />
               ) : (
                 /* **Two different nothings, and they must not read alike.** No
                    current part at all — the reader is above the first or past the

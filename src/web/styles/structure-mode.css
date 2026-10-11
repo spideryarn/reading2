@@ -406,6 +406,43 @@
   color: var(--ink-faint);
 }
 
+/* **The figure mark**, after a row's title in both of Structure's faces — this
+   one and the list (outline-mode.css): which figures, tables and media the
+   row's range holds (src/web/FigureMark.tsx; Greg, spya-sb0c7e). Declared once
+   here for both.
+
+   Inside the title span, so it trails the last word; `nowrap` so an icon and
+   its count never part, and the whole mark drops to the next line as one piece
+   if the title fills the row. Its own colour, face and style, so a read row's
+   faint title, a part's weight and a supplement's italic do not reach it: it is
+   chrome beside the title, one step quieter than it. The icons inherit
+   `currentColor` (icons.md § Rules). */
+.fig-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  margin-left: 0.4em;
+  vertical-align: -0.1em;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+}
+.fig-mark-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+}
+.fig-mark svg {
+  flex: none;
+}
+.fig-mark-n {
+  font-variant-numeric: tabular-nums;
+}
+
 .struct-empty {
   margin: 0;
   color: var(--ink-soft);

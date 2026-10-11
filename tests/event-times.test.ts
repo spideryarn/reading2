@@ -74,6 +74,7 @@ await pgReady({
     { table: "spideryarn.articles", column: "updated_at" },
     { table: "spideryarn.comments", column: "finished_at" },
     { table: "spideryarn.comments", column: "colour_at" },
+    { table: "spideryarn.comments", column: "severity_at" },
     { table: "spideryarn.chat_messages", column: "finished_at" },
     { table: "spideryarn.chat_messages", column: "hint_opened_at" },
     { table: "spideryarn.chat_threads", column: "renamed_at" },
@@ -353,8 +354,8 @@ describe("articles.updated_at", () => {
 
 /* -------------------------------------------------------------- comments -- */
 
-describe("comments.finished_at and comments.colour_at", () => {
-  const TIMES = ["finished_at", "colour_at", "updated_at", "created_at"];
+describe("comments.finished_at, comments.colour_at and comments.severity_at", () => {
+  const TIMES = ["finished_at", "colour_at", "severity_at", "updated_at", "created_at"];
   const read = (id: string) => cells("comments", inArticle(id), TIMES);
 
   /** A highlight the reader made, with no model call behind it. */
@@ -377,7 +378,12 @@ describe("comments.finished_at and comments.colour_at", () => {
 
   it("has no finished time on a comment nobody asked the model about", async () => {
     const id = await highlight();
-    expect(await read(id)).toMatchObject({ finished_at: null, colour_at: null, updated_at: null });
+    expect(await read(id)).toMatchObject({
+      finished_at: null,
+      colour_at: null,
+      severity_at: null,
+      updated_at: null,
+    });
   });
 
   it("is nulled when an answer begins, stamped when it lands, and nulled by the next attempt", async () => {
@@ -437,12 +443,31 @@ describe("comments.finished_at and comments.colour_at", () => {
     expect(cleared.created_at).toBe(coloured.created_at);
   });
 
+  it("times a sort and an un-sort, and neither touches updated_at", async () => {
+    const id = await highlight();
+    await mine(() => pgCommentStore.patchSeverity(SLUG, id, "major"));
+    const sorted = await read(id);
+    expectRecent(sorted.severity_at, "severity_at after a sort");
+    expect(sorted.updated_at, "a sort read as an edit of the words").toBeNull();
+    expect(sorted.finished_at).toBeNull();
+
+    await pause();
+    await mine(() => pgCommentStore.patchSeverity(SLUG, id, null));
+    const unsorted = await read(id);
+    expect(Date.parse(unsorted.severity_at ?? "")).toBeGreaterThan(
+      Date.parse(sorted.severity_at ?? ""),
+    );
+    expect(unsorted.updated_at).toBeNull();
+    expect(unsorted.created_at).toBe(sorted.created_at);
+  });
+
   it("does not time an edit of the words as a recolour", async () => {
     const id = await highlight();
     await mine(() => pgCommentStore.patchBody(SLUG, id, "My note."));
     const edited = await read(id);
     expectRecent(edited.updated_at, "updated_at after an edit");
     expect(edited.colour_at).toBeNull();
+    expect(edited.severity_at).toBeNull();
   });
 });
 

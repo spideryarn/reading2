@@ -150,6 +150,7 @@ import { chatDraftsFor } from "./chat-draft.js";
 import type { Answered } from "./chat/controller.js";
 import { type GuideAct, GuideActContext, useGuideAct } from "./guide-acts.js";
 import { rowTitle } from "./chat-list-row.js";
+import { dictationReporter } from "./dictation-report.js";
 
 interface Props {
   /**
@@ -680,8 +681,13 @@ export function ChatPanel({
             {learn ? (
               MODE_LABEL.learn
             ) : open?.kind === "guide" ? (
-              /* One per article, so its name rather than its first question. */
-              GUIDE_LABEL
+              /* One per article, so its name rather than its first question —
+                 and its `Compass`, as everywhere the guide is named (plan
+                 261010g; docs/project/icons.md). */
+              <span className="chat-head-guide">
+                <Compass size={14} aria-hidden="true" className="chat-head-guide-mark" />
+                {GUIDE_LABEL}
+              </span>
             ) : open ? (
               /* The title is the reader's first question, or their rename. */
               <span className="chat-head-title">{open.title}</span>
@@ -3241,6 +3247,7 @@ export function Composer({
     box,
     context: { kind: "article", slug },
     transcribe,
+    report: dictationReporter("chat"),
     keep: keepDictation(keepAs),
     /* A double press on Stop also sends (dictation.md § A double press). */
     onDone: () => void submit(),

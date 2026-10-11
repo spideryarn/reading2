@@ -222,7 +222,7 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
    * Read here rather than threaded in, for the reason the criteria themselves
    * are fetched here: this section is mounted from `CommentDialog` and
    * `AnnotateDialog`, which are nowhere near `RefereeBand` and are open on all
-   * five sub-modes. A prop would have to be carried through two dialogs that
+   * six sub-modes. A prop would have to be carried through two dialogs that
    * have nothing else to do with Referee mode.
    *
    * It has to be the mode's, and that is GPT Sol's finding 4 rather than

@@ -37,6 +37,7 @@ import { useCopy } from "./useCopy.js";
 import { isPristineHighlight } from "./fresh-highlight.js";
 import { readSelection, sameAnchor } from "./selection.js";
 import { keyboardInsetStyle, putKeyboardAway, useVisualViewport } from "./useVisualViewport.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /**
  * **What this reader may do with the comment they are looking at.**
@@ -213,6 +214,7 @@ export function CommentDialog({
     box: followUpBox,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe,
+    report: dictationReporter("comment"),
     /* One box per comment, as the follow-up itself is. */
     keep: keepDictation(`comment:${comment.id}`),
     /* A double press on Stop also asks (dictation.md § A double press). */

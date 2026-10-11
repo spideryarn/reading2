@@ -38,6 +38,7 @@ import { MirrorView } from "../src/web/MirrorPanel.js";
 import { RefereeFrame } from "../src/web/modes/referee/RefereeMode.js";
 import { SourceScanNotice } from "../src/web/SourceScanNotice.js";
 import type { RefereeView } from "../src/web/params.js";
+import { REFEREE_VIEWS } from "../src/web/referee-views.js";
 import type { SourceScanState } from "../src/web/useSourceScan.js";
 
 const HIDDEN: ScanFinding = {
@@ -483,10 +484,10 @@ describe("the band says what to do in the sub-mode it is showing", () => {
     expect(host.querySelector(".ref-panel")?.firstElementChild).toBe(lead);
   });
 
-  it("keeps the Notices button out of the radiogroup, which has exactly the five chips", () => {
+  it("keeps the Notices button out of the radiogroup, which has exactly one chip per sub-mode", () => {
     paint(PDF);
     const group = host.querySelector('[role="radiogroup"]');
-    expect(group?.querySelectorAll('[role="radio"]').length).toBe(5);
+    expect(group?.querySelectorAll('[role="radio"]').length).toBe(REFEREE_VIEWS.length);
     expect(group?.contains(notices())).toBe(false);
     expect(notices().getAttribute("role")).toBeNull();
   });

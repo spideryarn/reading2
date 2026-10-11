@@ -39,6 +39,7 @@ function Box() {
     transcribe: async () => {
       throw new Error("not called");
     },
+    report: () => {},
   });
   return createElement("textarea", { ref: box, readOnly: seen.readOnly });
 }

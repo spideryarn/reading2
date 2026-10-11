@@ -260,6 +260,7 @@ function drive() {
          rather than an import inside the hook since 2026-09-08 —
          src/web/transcriber.ts says why. */
       transcribe: sendForTranscription,
+      report: () => {},
     });
     return null;
   }
@@ -475,7 +476,8 @@ describe("which microphone it opens", () => {
     act(() => h.get().toggle());
     await settle();
     expect(h.get().armed).toBe(false);
-    expect(h.get().error).toMatch(/microphone could not be started/i);
+    /* A refusal of permission says so, rather than "press it again" (plan 261011i). */
+    expect(h.get().error).toMatch(/\[mic-refused\]$/);
     h.unmount();
   });
 

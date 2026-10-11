@@ -140,6 +140,7 @@ describe("double Stop over the real dictation hook", () => {
         box,
         context: { kind: "profile" },
         transcribe,
+        report: () => {},
       });
       field = current;
       return createElement("textarea", { ref: box, value, readOnly: current.readOnly, onChange() {} });

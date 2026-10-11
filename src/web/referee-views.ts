@@ -1,5 +1,5 @@
 /**
- * **Referee mode's five sub-modes, named once, in a module that imports
+ * **Referee mode's six sub-modes, named once, in a module that imports
  * nothing.**
  *
  * Three of them help somebody who has been asked to peer-review a piece —
@@ -46,6 +46,13 @@ export const REFEREE_VIEWS = [
   /* The inversion: the model reads the referee's own comments, and says things
      about *those*, never about whether the paper is any good. */
   "mirror",
+  /* **The reviewer's own notes, sorted major or minor by them, copied out in
+     their words** — the bones of the report, with nothing written for them.
+     After Mirror because it is the step after the second look: the writing-up.
+     No model is called. Greg chose it from the 261009b research ideas on
+     2026-10-10 (q-fkq30v, *"4 all?"*);
+     docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md. */
+  "notes",
   /* **The odd one out, and it is here because Greg said so.** Who could review
      this paper, and what expertise it would take — an *editor's* question, not a
      referee's, and the plan's appendix had cut it for exactly that reason

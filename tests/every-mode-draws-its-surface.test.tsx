@@ -169,6 +169,7 @@ if (!(globalThis as { CSS?: unknown }).CSS) {
 const SLUG = "a-piece";
 const PARAGRAPH =
   "The instrument was built before anybody could say what it would measure, and the theory followed it.";
+const LINK_PHRASE = "the theory followed it";
 const SECOND = "A later chapter revisits the same episode from the other side again.";
 
 /**
@@ -203,7 +204,8 @@ const BLOCKS: Article["blocks"] = [
     kind: "text",
     text: PARAGRAPH,
     words: 17,
-    html: `<p>${PARAGRAPH}</p>`,
+    html:
+      '<p>The instrument was built before anybody could say what it would measure, and <a href="https://outside.example/linked-evidence">the theory followed it</a>.</p>',
     gistable: true,
   },
   {
@@ -1253,16 +1255,18 @@ const SPENDS: Record<Mode, Spend> = {
   ideas: { kind: "posts", steps: ["ideas"] },
   quotes: { kind: "posts", steps: ["quotes"] },
   timeline: { kind: "posts", steps: ["timeline"] },
-  /* **Three presses since 2026-10-09**, one per sub-mode, as Diagram's are
+  /* **Four presses since 2026-10-11**, one per sub-mode, as Diagram's are
      one per picture: Sources opens on whichever `?sources=` names
      (plan 261009l). Bibliography, the default, is one model call over the
      article (Citations' row until then); Reception is the dearest press in the
-     app, one call out to the open web (Debate's); Claims is its own list. Each
-     press buys only its own sub-mode's work. */
+     app, one call out to the open web (Debate's); Claims is its own list.
+     Links reads markup already in the article and spends nothing. Each press
+     buys only its own sub-mode's work. */
   sources: {
     kind: "delegated",
     presses: [
       { search: "", steps: ["bibliography"], spends: [] },
+      { search: "?sources=links", steps: [], spends: [] },
       { search: "?sources=reception", steps: ["reception"], spends: [] },
       { search: "?sources=claims", steps: ["sources-claims"], spends: [] },
     ],
@@ -1570,19 +1574,20 @@ const DRAWS: Record<Mode, Draws> = {
 };
 
 /**
- * **Sources' other two sub-modes**, each drawn by its real controller —
- * `DRAWS` asks of the default view only, Bibliography, so Reception and Claims
- * get a row each here (GPT Sol's F4 on plan 261009l). One band in every view,
+ * **Sources' four sub-modes**, each drawn by its real controller — `DRAWS`
+ * asks of the default view only, Bibliography, so Links, Reception and Claims
+ * get rows here too (GPT Sol's F4 on plan 261009l). One band in every view,
  * with one (i), the panel's: the chip row is that band's header, never a
  * surface of its own.
  */
 const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
   { search: "?mode=sources", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
+  { search: "?mode=sources&sources=links", where: ".mode-band.sources.links", says: LINK_PHRASE },
   { search: "?mode=sources&sources=reception", where: ".mode-band.sources.rcp", says: RECEPTION_TITLE },
   { search: "?mode=sources&sources=claims", where: ".mode-band.sources.rcp", says: CLAIM_STATEMENT },
 ];
 
-describe("phase B — Sources' three sub-modes", () => {
+describe("phase B — Sources' four sub-modes", () => {
   for (const view of SOURCES_VIEWS_DRAW) {
     it(
       `${view.search}: one band, its own body, the chip row as its head and one (i)`,
@@ -1595,7 +1600,12 @@ describe("phase B — Sources' three sub-modes", () => {
         expect(readable(band as Element)).toContain(view.says);
         expect((band as Element).querySelectorAll(":scope > .band-about")).toHaveLength(1);
         const chips = (band as Element).querySelectorAll(":scope > .band-head .rcp-views [role='radio']");
-        expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual(["Bibliography", "Reception", "Claims"]);
+        expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual([
+          "Bibliography",
+          "Links",
+          "Reception",
+          "Claims",
+        ]);
       },
       PHASE_MS,
     );

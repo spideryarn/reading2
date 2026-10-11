@@ -324,8 +324,8 @@ const SWATCHES: { group: string; names: string[] }[] = [
     names: ["--background", "--card", "--popover", "--secondary", "--accent", "--border", "--input"],
   },
   /* `--danger` beside `--destructive`: the first is error text, the second a
-     fill (styles/tokens.css § --danger). */
-  { group: "States", names: ["--ring", "--destructive", "--danger", "--primary", "--primary-foreground"] },
+     fill (styles/tokens.css § --danger). `--positive` is its green opposite. */
+  { group: "States", names: ["--ring", "--destructive", "--danger", "--positive", "--primary", "--primary-foreground"] },
   {
     group: "The search mark (the outline carries confidence; its colour carries identity)",
     /* `--hit-wash`, not `--hit-wash-rgb`. The `-rgb` form is three numbers, and

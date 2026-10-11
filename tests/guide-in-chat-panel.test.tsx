@@ -240,6 +240,8 @@ describe("the guide's greeting", () => {
     /* The three ways in, whatever is stored (plan 261009u). */
     expect(startLabels()).toEqual([...GUIDE_STARTS]);
     expect(host.querySelector("h2")?.textContent).toBe("Guide");
+    /* With the guide's compass, as in the bar and in Chat's list (plan 261010g). */
+    expect(host.querySelector("h2 .chat-head-guide-mark")).not.toBeNull();
   });
 
   it("quotes About you back and asks if it is still right, when there is one", async () => {

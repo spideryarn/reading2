@@ -2965,6 +2965,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the rollback exporter, on its own scratch slug; no model is called. It
      reaches Storage the way its neighbours do, through `scratchArticleInPg`. */
   "tests/comment-colour.test.ts": "private-postgres",
+  /* Plan 261011f. A note's major/minor sort through the route, the store, raw
+     SQL and the rollback exporter, on its own scratch slug; no model is called. */
+  "tests/comment-severity.test.ts": "private-postgres",
   /* Plan 261001p. Seeds one article and one answered comment, and reads the
      row back after a refused Dig deeper to show it was left alone — a read
      a neighbour answering the same slug could falsify. No model is called. */

@@ -290,6 +290,9 @@ function SourcesOuter({ show }: { show: boolean }) {
   return show
     ? createElement(SourcesBand, {
         slug: SLUG,
+        blocks: BLOCKS,
+        sourceUrl: null,
+        fromPdf: false,
         bibliographyRead: read,
         onJump: noop,
         blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),

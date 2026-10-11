@@ -14,7 +14,7 @@
 import { type ReactNode, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 import { Info, TriangleAlert } from "lucide-react";
-import type { Block, BlockId, Comment } from "../../../types.js";
+import type { Block, BlockId, Comment, Severity } from "../../../types.js";
 import { LINKAGE_NOT_ADEQUACY } from "../../../referee-promises.js";
 import {
   REFEREE_CANDIDATES_REACHES_SEARCH,
@@ -40,6 +40,7 @@ import { CriteriaBand, WHAT_THE_RANK_IS, WHAT_THE_TICK_DOES } from "../../Criter
 import { PromisesBand } from "../../PromisesPanel.js";
 import { MIRROR_IS_NOT_GIVEN_THE_PAPER, MirrorBand } from "../../MirrorPanel.js";
 import { CandidatesBand } from "../../CandidatesPanel.js";
+import { RefereeNotesView, type NotesComments } from "../../RefereeNotesPanel.js";
 import { ModeSurface } from "../../ModeSurface.js";
 
 /**
@@ -118,6 +119,8 @@ export function RefereeBand({
   blocks,
   byline,
   comments,
+  notes,
+  onSort,
   onJump,
   onFound,
   openKey,
@@ -145,6 +148,14 @@ export function RefereeBand({
    * mode's business. docs/project/comments.md § the referee's own placement.
    */
   comments: readonly Comment[];
+  /**
+   * The same comments with the list's load state — **for Notes, and read
+   * nowhere else** — so an empty Notes panel is never drawn over a list that has
+   * not arrived. And `onSort`, the one write this band makes to a comment:
+   * the reviewer's own major/minor sort (`useComments.sort`). Plan 261011f.
+   */
+  notes: NotesComments;
+  onSort(id: string, severity: Severity | null): Promise<void>;
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — the seam described on `found` above. */
   onFound(next: Found[]): void;
@@ -178,6 +189,8 @@ export function RefereeBand({
         blocks={blocks}
         byline={byline}
         comments={comments}
+        notes={notes}
+        onSort={onSort}
         onJump={onJump}
         onFound={onFound}
         openKey={openKey}
@@ -321,6 +334,9 @@ const REFEREE_HOW_TO_READ: Record<RefereeView, readonly string[]> = {
   criteria: [WHAT_THE_TICK_DOES, WHAT_THE_RANK_IS],
   promises: [LINKAGE_NOT_ADEQUACY],
   mirror: [MIRROR_IS_NOT_GIVEN_THE_PAPER],
+  /* What may go out is said in the lead line and the hover card, and the
+     panel has no result to misread. */
+  notes: [],
   candidates: [],
   /* The panel says what it is for at its own foot, in every state
      (`WHAT_THIS_IS` in SourceScanNotice.tsx), so there is nothing to move. */
@@ -480,7 +496,7 @@ export function RefereeViews({
               onClick={() => {
                 /* **The gesture seam for Promises.** Pressing its chip with
                    nothing there starts it — Greg's rule about opening a mode,
-                   one level down. The other four chips arm nothing; Candidates
+                   one level down. The other five chips arm nothing; Candidates
                    waits for Build the reviewer brief and Hidden text's scan has
                    already run. The table is
                    src/web/activation.ts § REFEREE_TARGET, which is also where
@@ -488,7 +504,7 @@ export function RefereeViews({
 
                    Here, in the `onClick`, and deliberately **not** in `onView`'s
                    `setView` one level up: `?referee=` is query state, so Back and
-                   Forward move it too, and retracing your steps through the five
+                   Forward move it too, and retracing your steps through the six
                    chips must not buy a promises run or a web search. */
                 armActivationForRefereeView(slug, v);
                 onView(v);
@@ -520,7 +536,7 @@ export function RefereeViews({
  * `ControlTip`'s rule, which is the whole reason the second sentence is worth a
  * hover: `what` is what the reader could have worked out by pressing the chip
  * and looking; `how` is what they could not — where the answer comes from, what
- * it costs, or what the sub-mode does *not* promise. Each of these five `how`s
+ * it costs, or what the sub-mode does *not* promise. Each of these six `how`s
  * is a refusal:
  *
  * - **Criteria** never scores the paper, and the run is a model call over the
@@ -554,6 +570,10 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
   mirror: {
     what: "The model reads your own comments back to you and points at ones an author could not act on.",
     how: "It is never given the paper, so it can hold no opinion about it. The answer is not stored — leaving this sub-mode loses it.",
+  },
+  notes: {
+    what: "Sort your own notes into major and minor, then copy them out as the bones of your report.",
+    how: "Only your words go out, each with the passage it is on — never an AI answer, and no model is called. The Summary is left empty for you to write.",
   },
   candidates: {
     what: "For an editor: who could review this paper, and what expertise it would take.",
@@ -590,6 +610,8 @@ function RefereeSubMode({
   blocks,
   byline,
   comments,
+  notes,
+  onSort,
   onJump,
   onFound,
   openKey,
@@ -607,6 +629,9 @@ function RefereeSubMode({
   check?: HiddenCheckApi;
   /** The referee's own placements. See `RefereeBand`, which says why. */
   comments: readonly Comment[];
+  /** Notes' comments and its one write. See `RefereeBand`. */
+  notes: NotesComments;
+  onSort(id: string, severity: Severity | null): Promise<void>;
   onJump(blockId: BlockId): void;
   onFound(next: Found[]): void;
   /** Criteria's pressed passage. See `RefereeBand`, which says why. */
@@ -642,6 +667,12 @@ function RefereeSubMode({
          jump into the piece, and nothing is painted on the prose.
          src/web/MirrorPanel.tsx. */
       return <MirrorBand slug={slug} onJump={onJump} />;
+    case "notes":
+      /* **The reviewer's own notes, sorted by them and copied out in their
+         words.** No model, nothing painted on the prose, and nothing read off
+         a comment but its words, its passage and its sort —
+         src/web/referee-notes.ts says why. Plan 261011f. */
+      return <RefereeNotesView comments={notes} blocks={blocks} onSort={onSort} onJump={onJump} />;
     case "candidates":
       /* **Stage 6 and 7, and somebody else's stage.** The one sub-mode that is
          not the referee's question: it answers an *editor's* — who could review

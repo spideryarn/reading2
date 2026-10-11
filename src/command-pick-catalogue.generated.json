@@ -243,6 +243,25 @@
   ]
  },
  {
+  "id": "mode:sources",
+  "label": "Sources",
+  "description": "What this piece cites, and what others say about it",
+  "aliases": [
+   "peer review",
+   "literature",
+   "further reading"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "mode:referee",
   "label": "Referee",
   "description": "Refereeing it? What to weigh before you decide: your criteria, its promises, and a second look at your notes",
@@ -258,25 +277,6 @@
   "generates": false,
   "contexts": [
    "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "mode:sources",
-  "label": "Sources",
-  "description": "What this piece cites, and what others say about it",
-  "aliases": [
-   "peer review",
-   "literature",
-   "further reading"
-  ],
-  "kind": "mode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -578,6 +578,109 @@
   ]
  },
  {
+  "id": "submode:sources:bibliography",
+  "label": "Bibliography",
+  "description": "What this piece cites: the works in its bibliography, each with a link",
+  "aliases": [
+   "Sources",
+   "Bibliography Sources",
+   "Sources Bibliography",
+   "Bibliography mode",
+   "citations",
+   "references",
+   "works cited",
+   "refs",
+   "reference list",
+   "cited works"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:sources:links",
+  "label": "Links",
+  "description": "Where this piece links to: every web address in its text, in the order you meet it",
+  "aliases": [
+   "Sources",
+   "Links Sources",
+   "Sources Links",
+   "Links mode",
+   "hyperlinks",
+   "external links",
+   "outbound links",
+   "web links",
+   "urls"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:sources:reception",
+  "label": "Reception",
+  "description": "What others say about this piece: replies, reviews, and work that cites it",
+  "aliases": [
+   "Sources",
+   "Reception Sources",
+   "Sources Reception",
+   "Reception mode",
+   "debate",
+   "debate reception",
+   "critiques",
+   "responses",
+   "criticism",
+   "reactions",
+   "commentary",
+   "rebuttals",
+   "counterarguments",
+   "what others say",
+   "replies"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:sources:claims",
+  "label": "Claims",
+  "description": "The claims this piece rests on, quoted from it: pick some to check against the web",
+  "aliases": [
+   "Sources",
+   "Claims Sources",
+   "Sources Claims",
+   "Claims mode",
+   "debate claims"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:referee:criteria",
   "label": "Criteria",
   "description": "Your own reviewing criteria, run over the piece",
@@ -635,6 +738,25 @@
   ]
  },
  {
+  "id": "submode:referee:notes",
+  "label": "Notes",
+  "description": "Your own notes, sorted major and minor by you, copied out in your words",
+  "aliases": [
+   "Referee",
+   "Notes Referee",
+   "Referee Notes",
+   "Notes mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:referee:candidates",
   "label": "Candidates",
   "description": "Who could review this piece, and what expertise it would take",
@@ -667,84 +789,6 @@
   "generates": false,
   "contexts": [
    "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:sources:bibliography",
-  "label": "Bibliography",
-  "description": "What this piece cites: the works in its bibliography, each with a link",
-  "aliases": [
-   "Sources",
-   "Bibliography Sources",
-   "Sources Bibliography",
-   "Bibliography mode",
-   "citations",
-   "references",
-   "works cited",
-   "refs",
-   "reference list",
-   "cited works"
-  ],
-  "kind": "submode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:sources:reception",
-  "label": "Reception",
-  "description": "What others say about this piece: replies, reviews, and work that cites it",
-  "aliases": [
-   "Sources",
-   "Reception Sources",
-   "Sources Reception",
-   "Reception mode",
-   "debate",
-   "debate reception",
-   "critiques",
-   "responses",
-   "criticism",
-   "reactions",
-   "commentary",
-   "rebuttals",
-   "counterarguments",
-   "what others say",
-   "replies"
-  ],
-  "kind": "submode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:sources:claims",
-  "label": "Claims",
-  "description": "The claims this piece rests on, quoted from it: pick some to check against the web",
-  "aliases": [
-   "Sources",
-   "Claims Sources",
-   "Sources Claims",
-   "Claims mode",
-   "debate claims"
-  ],
-  "kind": "submode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -872,9 +916,12 @@
  },
  {
   "id": "action:guide",
-  "label": "Guide",
-  "description": "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
+  "label": "Guide chat",
+  "description": "Talk through how to read this piece: why you're reading it, where to start, which modes would help.",
   "aliases": [
+   "guide",
+   "chat with the guide",
+   "help me read",
    "tour",
    "where to start",
    "how to read",

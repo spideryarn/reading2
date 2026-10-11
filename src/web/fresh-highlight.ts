@@ -44,7 +44,8 @@ export function isPristineHighlight(comment: Comment): boolean {
     !comment.answer &&
     comment.status === "none" &&
     comment.criterionId === undefined &&
-    comment.valence === undefined
+    comment.valence === undefined &&
+    comment.severity === undefined
   );
 }
 

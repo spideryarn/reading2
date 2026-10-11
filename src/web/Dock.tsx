@@ -680,8 +680,9 @@ interface Props {
  *    model's reading of the piece rather than things literally in it (GPT Sol,
  *    2026-09-29). Since 2026-10-07 every one of them is under More, so the run
  *    is drawn only while one of them is open.
- *  - `critical` — reading it critically and against other work (Citations,
- *    Referee, Debate).
+ *  - `critical` — reading it critically and against other work (Sources,
+ *    Referee; Citations, Referee, Debate until the first and last merged into
+ *    Sources on 2026-10-09).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
  *    conversation, what they took from it (Search, Chat, Learn) — the
  *    same category docs/project/mode.md already names.
@@ -957,11 +958,37 @@ const MODES_UI = [
     group: "guides",
     more: true,
   },
-  /* **First of the critical run — Referee, Sources — since 2026-10-09**,
-     when Citations, which stood before it from 2026-10-04 (spya-tnqt2t, plan
-     261004j), became one of Sources' sub-modes. The run is Greg's
-     grouping, 2026-09-29: *"Move Citations further right, next to Debate and
-     Reviewer"* (SPIDERYARN-READING2-4E). Before the run existed it sat
+  /* **Sources, first of the critical run — Sources, Referee — since
+     2026-10-10.** Greg (spya-eyaf3n): *"Sources should be to the left of
+     referee in the bottom bar."* It had come out of the switch the day before
+     (spya-vcvxu5: *"let's move this out of experimental, this combined
+     mode"*) as Citations and Debate in one button, in Debate's place after
+     Referee. Its chips are Bibliography, Links, Reception and Claims.
+     Bibliography's list is the piece's own references, Debate's is the web's,
+     and Referee beside it is somebody weighing the piece: the run reads it
+     critically. Sources first also puts the run's line before Sources, the
+     member every reader is offered, while Referee remains behind the switch.
+
+     It inherited Debate's place because most of what it adds is **not in the
+     article at all**. Moving it one place left changes that inherited order,
+     not the account of what the mode adds.
+
+     Its icon is Bibliography's `BookText` (mode-icons.ts), because the button
+     opens on Bibliography; Debate's `Globe` stays on Reception's search button.
+     docs/plans/261011a-sources-left-of-referee-in-the-bottom-bar.md;
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md;
+     Bibliography's row: docs/plans/260911g-citations-mode.md; Debate's:
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
+  {
+    mode: "sources",
+    group: "critical",
+  },
+  /* **Referee, last of the critical run and before the input run, since
+     2026-10-10**, when Sources moved to its left (spya-eyaf3n). It was the
+     run's first from 2026-10-09, when Citations, which stood before it from
+     2026-10-04 (spya-tnqt2t, plan 261004j), became one of Sources' sub-modes.
+     The run is Greg's grouping, 2026-09-29: *"Move Citations further right,
+     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Before the run existed it sat
      straight after Search, because it is Search's kind of thing — a pass
      over the piece looking for passages — pointed at somebody who has been
      asked to peer-review it rather than at somebody reading it for themselves.
@@ -980,24 +1007,6 @@ const MODES_UI = [
      — which is what the mode is actually for. docs/project/icons.md. */
   {
     mode: "referee",
-    group: "critical",
-  },
-  /* **Sources, last of the critical run and before the input run, where
-     Debate stood**, since 2026-10-09: Citations and Debate in one button, with
-     Bibliography, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
-     move this out of experimental, this combined mode"*. Bibliography's list is
-     the piece's own references, Debate's is the web's, and Referee beside it
-     is somebody weighing the piece: the run reads it critically.
-
-     Debate's place, at the far end of the outward run, because most of what
-     the mode adds is **not in the article at all**. Its icon is Bibliography's
-     `BookText` (mode-icons.ts), because the button opens on Bibliography;
-     Debate's `Globe` stays on Reception's search button.
-     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md;
-     Bibliography's row: docs/plans/260911g-citations-mode.md; Debate's:
-     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
-  {
-    mode: "sources",
     group: "critical",
   },
   /* **First of the input run — Search, Chat, Learn — since 2026-09-29.**

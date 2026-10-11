@@ -438,6 +438,8 @@ function view(over: Partial<SkimView> = {}): SkimView {
     ],
     position: 2,
     card: null,
+    figures: 0,
+    onFigures: () => void calls.push("figures"),
     onDepth: (d) => void calls.push(`depth ${d}`),
     onRow: (id) => void calls.push(`row ${id}`),
     onStep: (dir) => void calls.push(`step ${dir}`),
@@ -1475,10 +1477,10 @@ describe("the door in the prose", () => {
   it("offers the next stop mid-pass, and the band back only when asked to", async () => {
     let next = 0;
     let back = 0;
-    await act(async () => root.render(door({ door: { kind: "next", cue: null }, onNext: () => void next++ })));
+    await act(async () => root.render(door({ door: { kind: "next", noun: "stop", cue: null }, onNext: () => void next++ })));
     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
     await act(async () =>
-      root.render(door({ door: { kind: "next", cue: null }, onNext: () => void next++, onRoute: () => void back++ })),
+      root.render(door({ door: { kind: "next", noun: "stop", cue: null }, onNext: () => void next++, onRoute: () => void back++ })),
     );
     const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["All stops", "Next stop ›"]);
@@ -1492,7 +1494,7 @@ describe("the door in the prose", () => {
     await act(async () =>
       root.render(
         door({
-          door: { kind: "end", pass: "Gist", count: 5, deeper: "More" },
+          door: { kind: "end", noun: "stop", pass: "Gist", count: 5, deeper: "More" },
           onDeeper: () => void deeper++,
         }),
       ),
@@ -1505,15 +1507,15 @@ describe("the door in the prose", () => {
   });
 
   it("offers no button at the end of the deepest pass, only the line saying which pass ended (51)", async () => {
-    await act(async () => root.render(door({ door: { kind: "end", pass: "Most", count: 1, deeper: null } })));
+    await act(async () => root.render(door({ door: { kind: "end", noun: "stop", pass: "Most", count: 1, deeper: null } })));
     expect(host.querySelectorAll("button")).toHaveLength(0);
     expect(text(".skim-door-cue")).toBe("End of Most — 1 stop.");
   });
 
   it("says under the next-stop door where it leads — the next stop's cue, small and muted", async () => {
-    await act(async () => root.render(door({ door: { kind: "next", cue: "Look for the headline comparison." } })));
+    await act(async () => root.render(door({ door: { kind: "next", noun: "stop", cue: "Look for the headline comparison." } })));
     expect(text(".skim-door-cue")).toBe("Look for the headline comparison.");
-    await act(async () => root.render(door({ door: { kind: "next", cue: null } })));
+    await act(async () => root.render(door({ door: { kind: "next", noun: "stop", cue: null } })));
     expect(host.querySelector(".skim-door-cue")).toBeNull();
   });
 
@@ -1531,7 +1533,7 @@ describe("the door in the prose", () => {
     await act(async () =>
       root.render(
         door({
-          door: { kind: "next", cue: null },
+          door: { kind: "next", noun: "stop", cue: null },
           onPrevious: () => void prev++,
           onNext: () => void next++,
           onRoute: () => {},
@@ -1547,7 +1549,7 @@ describe("the door in the prose", () => {
   });
 
   it("offers no previous stop on stop 1 of a pass", async () => {
-    await act(async () => root.render(door({ door: { kind: "next", cue: null }, onPrevious: null })));
+    await act(async () => root.render(door({ door: { kind: "next", noun: "stop", cue: null }, onPrevious: null })));
     expect(host.querySelector(".skim-door-back")).toBeNull();
     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
   });
@@ -1555,7 +1557,7 @@ describe("the door in the prose", () => {
   it("keeps the previous stop at the end of a pass, beside More detail or alone at the deepest", async () => {
     await act(async () =>
       root.render(
-        door({ door: { kind: "end", pass: "Gist", count: 3, deeper: "More" }, onPrevious: () => {} }),
+        door({ door: { kind: "end", noun: "stop", pass: "Gist", count: 3, deeper: "More" }, onPrevious: () => {} }),
       ),
     );
     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
@@ -1563,7 +1565,7 @@ describe("the door in the prose", () => {
       "More detail ›",
     ]);
     await act(async () =>
-      root.render(door({ door: { kind: "end", pass: "Most", count: 3, deeper: null }, onPrevious: () => {} })),
+      root.render(door({ door: { kind: "end", noun: "stop", pass: "Most", count: 3, deeper: null }, onPrevious: () => {} })),
     );
     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
     expect(text(".skim-door-cue")).toBe("End of Most — 3 stops.");
@@ -1635,7 +1637,7 @@ describe("the step controls name their keys", () => {
 
   it("the door's Next stop names → too", async () => {
     await act(async () =>
-      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onPrevious: null, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
+      root.render(createElement(SkimDoor, { door: { kind: "next", noun: "stop", cue: null }, onPrevious: null, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
     );
     await hover(host.querySelector("button")!);
     expect(tip()).toContain("While reading, press →");
@@ -1646,7 +1648,7 @@ describe("the step controls name their keys", () => {
     await act(async () =>
       root.render(
         createElement(SkimDoor, {
-          door: { kind: "next", cue: null },
+          door: { kind: "next", noun: "stop", cue: null },
           onPrevious: () => {},
           onNext: () => {},
           onDeeper: () => {},
@@ -1831,7 +1833,7 @@ describe("the band, walked", () => {
     expect(published[0]).toBe(MARKS.find((m) => m.blockId === B[2]));
     expect(host.querySelector("#state")?.getAttribute("data-open")).toBe(published[0]!.key);
     expect(control?.blockId).toBe(B[2]);
-    expect(control?.door).toEqual({ kind: "next", cue: "Look for the headline comparison." });
+    expect(control?.door).toEqual({ kind: "next", noun: "stop", cue: "Look for the headline comparison." });
     expect(control?.hasPrevious).toBe(false);
   });
 
@@ -1852,7 +1854,7 @@ describe("the band, walked", () => {
       took = control!.step(1);
     });
     expect(took).toBe(false);
-    expect(control?.door).toEqual({ kind: "end", pass: "Gist", count: 2, deeper: "More" });
+    expect(control?.door).toEqual({ kind: "end", noun: "stop", pass: "Gist", count: 2, deeper: "More" });
   });
 
   it("More detail goes to stop 1 of the deeper pass: one pushed entry, depth and stop together (4N)", async () => {
@@ -1873,7 +1875,7 @@ describe("the band, walked", () => {
   it("offers nothing past the end of the deepest pass", async () => {
     history.replaceState(null, "", `/read/a-route?mode=skim&depth=3&stop=${Q[1]}`);
     await mount();
-    expect(control?.door).toEqual({ kind: "end", pass: "Most", count: 1, deeper: null });
+    expect(control?.door).toEqual({ kind: "end", noun: "stop", pass: "Most", count: 1, deeper: null });
     await act(async () => control!.deeper());
     await settled();
     expect(param("stop"), "no deeper pass: nothing moves").toBe(Q[1]);
@@ -2119,7 +2121,7 @@ describe("the band, walked", () => {
       expect(scrolled, "the reader is already there").toEqual([]);
       expect(flashed).toEqual([]);
       /* The door is More's now: on to More's own stop. */
-      expect(control?.door).toEqual({ kind: "next", cue: "Where does it stop holding?" });
+      expect(control?.door).toEqual({ kind: "next", noun: "stop", cue: "Where does it stop holding?" });
 
       /* Back undoes the depth change and nothing else. */
       await act(async () => {
@@ -2699,9 +2701,9 @@ describe("the scrapbook, walked", () => {
 
   it("hands the door the next stop's cue mid-pass, and the pass that ended at its end", async () => {
     await mount();
-    expect(control?.door).toEqual({ kind: "next", cue: "Look for the headline comparison." });
+    expect(control?.door).toEqual({ kind: "next", noun: "stop", cue: "Look for the headline comparison." });
     await act(async () => void control!.step(1));
     await settled();
-    expect(control?.door).toEqual({ kind: "end", pass: "Gist", count: 2, deeper: "More" });
+    expect(control?.door).toEqual({ kind: "end", noun: "stop", pass: "Gist", count: 2, deeper: "More" });
   });
 });

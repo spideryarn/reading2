@@ -1,5 +1,5 @@
 ---
-keywords: peer review reviewer reviewing paper manuscript criteria promises assess evaluate journal conference critique
+keywords: peer review reviewer reviewing paper manuscript criteria promises assess evaluate journal conference critique report major minor notes
 related: for-reviewers, comments
 ---
 
@@ -20,7 +20,7 @@ is built for public preprints, open-review submissions, and drafts the author ha
 conferences count sending one to an AI service as a breach of confidentiality, and where a venue
 does allow AI help it usually asks you to say so.
 
-Five parts, chosen by the chips at the top:
+Six parts, chosen by the chips at the top:
 
 - **Criteria**: write what you are judging against, then press **Run this criterion**. Once you
   have written one of your own, starters appear: checks that are easy to skip, such as
@@ -30,6 +30,10 @@ Five parts, chosen by the chips at the top:
 - **Mirror**: reads your own comments back and flags any an author would find hard to act on, or
   that you should check against the passage. It sees only your comments and the passages you marked.
   It is not saved, so leaving Mirror loses it.
+- **Notes**: your own notes on the paper, for you to sort into **Major** and **Minor**, then
+  **Copy notes** to paste into your report: an empty Summary heading, then Major, Minor, and any
+  you have not sorted yet, each with the passage it is on. Only your words go out; no AI writes or
+  sorts anything here. Highlights and bookmarks with nothing written on them are left out.
 - **Candidates**: the expertise a reviewer would need, then names if you ask. No
   conflict-of-interest check is run, and it may send words from the paper to a search engine.
 - **Hidden text**: the check of the original web page for words a reader would not see but an AI

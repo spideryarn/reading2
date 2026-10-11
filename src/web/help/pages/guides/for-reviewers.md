@@ -49,6 +49,8 @@ preprints, open-review submissions, and drafts the author has agreed to share.
   **Save** or close it.
 - **Read them back** with **Mirror** in Referee, which flags any comment an author would find hard
   to act on.
+- **Sort them** in Referee’s **Notes** into major and minor, then copy them out as the bones of
+  your report — your words only, with the passage each one is on.
 - **Carry lines out in the paper’s own words** with [Quotes](/help/mode-quotes).
 
 How to tell the author’s words from the AI’s is in [The AI’s words and the

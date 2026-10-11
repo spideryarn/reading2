@@ -110,10 +110,10 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?summary=simple")).toBe(true);
   });
 
-  /* Sources' Bibliography | Reception | Claims (Peer review's, until
+  /* Sources' Bibliography | Links | Reception | Claims (Peer review's, until
      2026-10-09), Debate's Reception | Claims before that day (plan 261003o;
-     GPT Sol's F6). Left out of `REMEMBERED`, a reader who was reading Claims
-     comes back to Bibliography. Restoring it spends nothing: each sub-mode
+     GPT Sol's F6). Kept in `REMEMBERED`, a reader who was reading Claims comes
+     back to Claims. Restoring it spends nothing: each generated sub-mode
      makes its list on a press, never on arrival. An old Debate or Peer review
      view stored before a rename comes back on the sub-mode it named
      (tests/sources-old-addresses.test.ts). */
@@ -129,6 +129,12 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?sources=claims")).toBe(true);
     /* The old keys still mark an explicit old link, for `deep`'s reason. */
     expect(hasArticleState("?debate=claims")).toBe(true);
+  });
+
+  it("keeps Sources' Links view without arming or generating anything", () => {
+    expect(rememberableSearch("?mode=sources&sources=links")).toBe("?mode=sources&sources=links");
+    expect(restoredHref("/read/x", "", "?mode=sources&sources=links")).toBe("/read/x?mode=sources&sources=links");
+    expect(hasArticleState("?sources=links")).toBe(true);
   });
 
   /* GPT Sol's F7 on plan 261009w: the sub-mode key was `peer-review` for the

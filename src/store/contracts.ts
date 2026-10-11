@@ -71,6 +71,7 @@ import type {
   ChatThread,
   Comment,
   HighlightColour,
+  Severity,
   FeedbackCursor,
   FeedbackFrom,
   FeedbackDiagnostics,
@@ -477,6 +478,7 @@ export interface GlossaryStore {
  * | `body`                               | `create`, `patchBody`  |
  * | `criterionId`, `valence`             | `create`, `patchMark`  |
  * | `colour`                             | `create`, `patchColour` |
+ * | `severity`                           | `patchSeverity` only    |
  * | `updatedAt`                          | `patchBody`, `patchMark`, server-set |
  * | `threadId`                           | `linkThread`, once, from absent |
  * | `status`, `answer`, `citations`, `searches`, `model`, `error` | `beginAnswer` and `patch` |
@@ -599,6 +601,17 @@ export interface CommentStore {
    * paint. docs/plans/261003e-span-highlights-with-a-colour.md, review S4.
    */
   patchColour(slug: string, id: string, colour: HighlightColour | null): Promise<Comment>;
+
+  /**
+   * The reviewer sorted a note major or minor, or un-sorted it (`null`).
+   * Writes `severity`, nothing else — a sort is not an edit of the words, so
+   * `updatedAt` is left alone. **Never written by `create`**: sorting is a
+   * later step than writing, and keeping it off the create path keeps a resent
+   * Save's 409 comparison exactly what it was. Throws
+   * `NotAnExplanation(id, "missing")` for an unknown id (404).
+   * docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md.
+   */
+  patchSeverity(slug: string, id: string, severity: Severity | null): Promise<Comment>;
 
   /**
    * Point a comment at the conversation it started. Compare-and-set from absent.

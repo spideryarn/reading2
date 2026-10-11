@@ -1,6 +1,6 @@
 {
   "id": "0d4dcd02-3a04-418b-8d79-c8d6fd69b8d2",
-  "prevId": "dbc6c128-929e-4652-98e9-bf2caf42ff52",
+  "prevId": "1346f9fe-0ea7-4940-ae06-2d4526917bb9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4536,6 +4536,18 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "severity_at": {
+          "name": "severity_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -4599,6 +4611,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "comments_severity": {
+          "name": "comments_severity",
+          "value": "\"spideryarn\".\"comments\".\"severity\" is null or \"spideryarn\".\"comments\".\"severity\" in ('major','minor')"
+        },
         "comments_status": {
           "name": "comments_status",
           "value": "\"spideryarn\".\"comments\".\"status\" in ('none','pending','done','error')"
@@ -7372,111 +7388,6 @@
       },
       "isRLSEnabled": false
     },
-    "spideryarn.referee_promises": {
-      "name": "referee_promises",
-      "schema": "spideryarn",
-      "columns": {
-        "article_id": {
-          "name": "article_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "promises": {
-          "name": "promises",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "model": {
-          "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "promises_omitted": {
-          "name": "promises_omitted",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "source_hash": {
-          "name": "source_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "attempt_id": {
-          "name": "attempt_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "referee_promises_article_id_articles_id_fk": {
-          "name": "referee_promises_article_id_articles_id_fk",
-          "tableFrom": "referee_promises",
-          "tableTo": "articles",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "referee_promises_status": {
-          "name": "referee_promises_status",
-          "value": "\"spideryarn\".\"referee_promises\".\"status\" in ('pending','done','error')"
-        },
-        "referee_promises_empty_unless_done": {
-          "name": "referee_promises_empty_unless_done",
-          "value": "\"spideryarn\".\"referee_promises\".\"status\" = 'done' or jsonb_array_length(\"spideryarn\".\"referee_promises\".\"promises\") = 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "spideryarn.revision_blocks": {
       "name": "revision_blocks",
       "schema": "spideryarn",
@@ -8921,6 +8832,111 @@
         "uploads_rejected_has_reason": {
           "name": "uploads_rejected_has_reason",
           "value": "\"spideryarn\".\"uploads\".\"status\" <> 'rejected' or \"spideryarn\".\"uploads\".\"reason\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.referee_promises": {
+      "name": "referee_promises",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "promises": {
+          "name": "promises",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "promises_omitted": {
+          "name": "promises_omitted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt_id": {
+          "name": "attempt_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "referee_promises_article_id_articles_id_fk": {
+          "name": "referee_promises_article_id_articles_id_fk",
+          "tableFrom": "referee_promises",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "referee_promises_status": {
+          "name": "referee_promises_status",
+          "value": "\"spideryarn\".\"referee_promises\".\"status\" in ('pending','done','error')"
+        },
+        "referee_promises_empty_unless_done": {
+          "name": "referee_promises_empty_unless_done",
+          "value": "\"spideryarn\".\"referee_promises\".\"status\" = 'done' or jsonb_array_length(\"spideryarn\".\"referee_promises\".\"promises\") = 0"
         }
       },
       "isRLSEnabled": false

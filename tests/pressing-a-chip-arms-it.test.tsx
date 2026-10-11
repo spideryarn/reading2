@@ -9,7 +9,7 @@
  * running what they open on 2026-09-06
  * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
- *  - Referee's five sub-mode chips, one of which arms and four of which must not;
+ *  - Referee's six sub-mode chips, one of which arms and five of which must not;
  *  - Learn's Recall | Tutorial | Explore | Quiz toggle;
  *  - Summary's Brief | Fuller | Thread control, whose two lengths arm and whose
  *    **Thread** must not: the thread writes itself on arrival
@@ -25,7 +25,7 @@
  * one there: the mode, the band and the hook are all in the tree, so a counted
  * request is the whole chain working. Here the question is narrower and the tree
  * would be most of the reading view — `RefereeBand` alone wants comments, a
- * source scan, five panels and a router.
+ * source scan, six panels and a router.
  *
  * So what is asserted is `pendingActivation`, and that is not a weaker claim
  * about a different thing: an activation token **is** the seam. The hooks on the

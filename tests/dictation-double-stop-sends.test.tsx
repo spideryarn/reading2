@@ -75,6 +75,7 @@ function Box() {
     transcribe: async () => {
       throw new Error("not called");
     },
+    report: () => {},
     doneKey,
     ...(withDone ? { onDone: () => sent.push({ value, busy: f.busy }) } : {}),
   });
