@@ -3,11 +3,11 @@
  * **A dictation that fails says so to somebody besides the reader.**
  * docs/plans/261011i-dictation-failures-reach-sentry.md (spya-m2pyfq).
  *
- * Two halves. The hook: every sentence it shows reaches its `report`, once,
- * with the browser's reason when the microphone would not open — and that
- * reason now chooses the sentence, so a refused permission is not told to
- * "press it again". The product's reporter: what it would send, and that none
- * of it is the sentence or anything else a reader could have put there.
+ * Two halves. The hook: representative failures reach `report`, repeated
+ * presses remain separate occurrences, one failure is not double-reported,
+ * and microphone-opening diagnostics survive or reset at the right boundaries.
+ * The product's reporter: what it would send, and that none of it is the
+ * sentence or anything else a reader could have put there.
  */
 import { act, createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
@@ -18,6 +18,7 @@ import { safeEvent, sanitise } from "../src/monitoring-scrub.js";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import {
   type DictationFailure,
+  type DictationKeeper,
   type TranscriptionResult,
   micErrorName,
 } from "../src/web/transcriber.js";
@@ -130,7 +131,7 @@ afterEach(() => {
 
 /* ----------------------------------------------------------- the harness -- */
 
-function drive() {
+function drive(options: { keep?: DictationKeeper<{ kind: "article"; slug: string }> } = {}) {
   const reports: Array<{ failure: DictationFailure; context: unknown }> = [];
   let state: ReturnType<typeof useDictation> | null = null;
   function Probe(): ReactNode {
@@ -140,6 +141,7 @@ function drive() {
       context: { kind: "article", slug: "a-private-slug" },
       transcribe,
       report: (failure, context) => reports.push({ failure, context }),
+      ...(options.keep && { keep: options.keep }),
     });
     return null;
   }
@@ -229,6 +231,61 @@ describe("a microphone that will not open", () => {
     expect(h.get().error).toContain("[mic-no-start]");
     expect(h.reports[0]?.failure.micError).toBe("no-track");
   });
+
+  it("a fallback that opens a stream with no audio track is `no-track`, not the earlier refusal", async () => {
+    const h = drive();
+    act(() => h.get().chooseDevice("gone"));
+    await settle();
+    gumPlan = ["NotFoundError", "empty"];
+    await press(h);
+    expect(gumWith).toHaveLength(2);
+    expect(h.get().error).toContain("[mic-no-start]");
+    expect(h.reports.at(-1)?.failure.micError).toBe("no-track");
+  });
+
+  it("keeps the final refusal through the complete chosen/default/unconstrained chain", async () => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        ...(navigator.mediaDevices as object),
+        getUserMedia: navigator.mediaDevices.getUserMedia,
+        enumerateDevices: async () => [
+          { kind: "audioinput", deviceId: "gone", label: "Headset" },
+          { kind: "audioinput", deviceId: "default", label: "System default" },
+        ],
+      },
+    });
+    const h = drive();
+    act(() => h.get().chooseDevice("gone"));
+    await settle();
+    gumPlan = ["OverconstrainedError", "NotFoundError", "NotReadableError"];
+    await press(h);
+    expect(gumWith).toHaveLength(3);
+    expect(h.get().error).toContain("[mic-no-start]");
+    expect(h.reports.at(-1)?.failure.micError).toBe("NotReadableError");
+  });
+
+  it("a final unconstrained stream with no audio track is `no-track`", async () => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        ...(navigator.mediaDevices as object),
+        getUserMedia: navigator.mediaDevices.getUserMedia,
+        enumerateDevices: async () => [
+          { kind: "audioinput", deviceId: "gone", label: "Headset" },
+          { kind: "audioinput", deviceId: "default", label: "System default" },
+        ],
+      },
+    });
+    const h = drive();
+    act(() => h.get().chooseDevice("gone"));
+    await settle();
+    gumPlan = ["OverconstrainedError", "NotFoundError", "empty"];
+    await press(h);
+    expect(gumWith).toHaveLength(3);
+    expect(h.get().error).toContain("[mic-no-start]");
+    expect(h.reports.at(-1)?.failure.micError).toBe("no-track");
+  });
 });
 
 describe("a failure after the microphone opened", () => {
@@ -254,6 +311,71 @@ describe("a failure after the microphone opened", () => {
     await press(h);
     expect(h.get().error).toBeNull();
     expect(h.reports).toEqual([]);
+  });
+
+  it("reports one broken-tape occurrence once, though the same sentence survives its ending", async () => {
+    const h = drive();
+    await press(h);
+    clock += 3000;
+    act(() => {
+      const recorder = FakeRecorder.instances.at(-1);
+      recorder?.emit(4000);
+      recorder?.onerror?.();
+    });
+    await settle();
+    expect(h.get().error).toContain("[mic-broken]");
+    expect(h.reports.filter((r) => r.failure.message.includes("[mic-broken]"))).toHaveLength(1);
+  });
+
+  it("a retry of a recovered tape does not inherit the previous press's microphone details", async () => {
+    let recoveries = 0;
+    const recoveredTape = {
+      chunk: () => {},
+      broken: () => {},
+      complete: () => {},
+      intact: async () => true,
+      forget: () => {},
+      release: () => {},
+    };
+    const keep: DictationKeeper<{ kind: "article"; slug: string }> = {
+      box: "chat:a-private-slug",
+      begin: () => null,
+      recover: async () => {
+        recoveries++;
+        if (recoveries === 1) return null;
+        return {
+          tape: recoveredTape,
+          where: { kind: "article", slug: "a-private-slug" },
+          startedAt: Date.now() - 3000,
+          parts: [{ blob: new Blob([new Uint8Array(4000)]), mimeType: "audio/webm", ms: 3000 }],
+          broken: false,
+          complete: true,
+        };
+      },
+    };
+    const h = drive({ keep });
+    await settle();
+    act(() => h.get().chooseDevice("gone"));
+    await press(h);
+    clock += 3000;
+    act(() => FakeRecorder.instances.at(-1)?.emit(4000));
+    await press(h);
+    await settle();
+    expect(h.get().error).toContain("[mic-recovered]");
+
+    answerWith = {
+      ok: false,
+      retryable: true,
+      message: "We couldn't reach the server to transcribe that. [mic-offline]",
+    };
+    act(() => h.get().retry());
+    await settle();
+    expect(h.reports.at(-1)?.failure).toEqual({
+      message: answerWith.message,
+      micError: null,
+      live: false,
+      chosenMic: "none",
+    });
   });
 });
 

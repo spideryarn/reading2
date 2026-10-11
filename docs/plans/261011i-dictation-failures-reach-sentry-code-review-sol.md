@@ -1,0 +1,13 @@
+1. **P2 — A broken recording was reported twice.** `onBroken` reported `[mic-broken]`, then teardown reported the same occurrence again. Changed: added per-session tracking so the sentence remains visible but emits once. Added a regression test. [useDictation.ts](/var/tmp/spideryarn-worktrees/fbm2pyfq-dictation-mic-error/src/web/useDictation.ts:548)
+
+2. **P2 — `no-track` was lost after fallback.** If an earlier request failed and a fallback resolved without an audio track, the earlier refusal incorrectly determined the copy and `mic_error`. Changed: every successful `getUserMedia` request clears the previous refusal. Tests now cover direct, fallback, and final-unconstrained `no-track`, plus the complete three-request rejection chain. [useDictation.ts](/var/tmp/spideryarn-worktrees/fbm2pyfq-dictation-mic-error/src/web/useDictation.ts:2478) [dictation-report.test.tsx](/var/tmp/spideryarn-worktrees/fbm2pyfq-dictation-mic-error/tests/dictation-report.test.tsx:227)
+
+3. **P2 — A recovered tape’s retry inherited another press’s microphone metadata.** Changed: accepting a recovered tape resets `failureCause` before displaying or retrying it. Added a regression proving `micError: null`, `live: false`, and `chosenMic: "none"`. [useDictation.ts](/var/tmp/spideryarn-worktrees/fbm2pyfq-dictation-mic-error/src/web/useDictation.ts:2064)
+
+4. **P3 — The new callback was omitted from hook dependency lists, and comments still described the rejected effect design.** Changed: added `setError` to the affected dependencies and corrected the comments/test description.
+
+5. **P3 — Privacy and copy review found no leak or collision; not changed.** The error name/message are fixed, the slug is reduced to `context.kind`, and every other tag is a closed union. `dictation_code` is grammar-bounded rather than a finite enumeration, but its product input is app-authored failure copy; its bounded suffix is also the only dynamic fingerprint component. `[mic-refused]` has one sentence, and the code scanner passes. The test exercises the event builder, `sanitise`, and `safeEvent`; it does not instantiate a live Sentry SDK scope.
+
+Checks: focused gate passed, 24 files/413 tests. The `npm run typecheck` wrapper could not open its `tsx` IPC socket in this sandbox (`EPERM`); running the same `scripts/typecheck.ts` directly passed all four projects and coverage of all 3,687 source files. Biome reported no errors in the changed files. No full suite was run.
+
+APPROVE WITH CHANGES

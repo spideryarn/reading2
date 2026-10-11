@@ -141,8 +141,9 @@ import { playCappedChime, useLastMinuteChime, useQuietChime } from "./quiet-chim
 
 /**
  * The tape lost audio part-way — one of its recorders failed, never finished,
- * or had to drop a chunk. One sentence wherever it is said, which is twice:
- * when it happens and when the dictation ends. Plan 260929f, R5.
+ * or had to drop a chunk. The failure can first become known while recording or
+ * while the ending is drained; either moment shows this one sentence, once.
+ * Plan 260929f, R5.
  */
 const TAPE_BROKE =
   "The recording broke off part-way, so it couldn't produce a complete transcript. Press the microphone and try again. [mic-broken]";
@@ -544,6 +545,8 @@ interface Session<C> {
   sent: Map<number, Promise<TranscriptionResult>>;
   /** The tape lost audio part-way (`onBroken`). The ending says so. */
   broke: boolean;
+  /** The one `[mic-broken]` occurrence has already been shown and reported. */
+  brokeReported: boolean;
   /** The tape reached its cap and ended this dictation (`onCapped`). */
   capped: boolean;
   /** The keeper this press began with. Like `where`, it may not follow a later render. */
@@ -664,10 +667,10 @@ export interface DictationOptions<C> {
   transcribe: Transcriber<C>;
   /**
    * **Who hears about a failure besides the reader** — Sentry, in the product.
-   * Called once per sentence shown, from one effect on `error`, so a failure
-   * branch added later is reported without anybody remembering to. Held in a
-   * ref, like `transcribe`. [transcriber.ts](./transcriber.ts) says why it is
-   * required.
+   * Called synchronously by the one `setError` wrapper, so repeated identical
+   * sentences and a sentence just before unmount are still occurrences. Held
+   * in a ref, like `transcribe`. [transcriber.ts](./transcriber.ts) says why it
+   * is required.
    */
   report: DictationReporter<C>;
   /**
@@ -1150,8 +1153,12 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (broken) s.kept?.release();
       else s.kept?.forget();
       if (!stillOurs()) return;
-      if (broken) setError(TAPE_BROKE);
-      else if (s.confirmed === 0) {
+      if (broken) {
+        if (!s.brokeReported) {
+          s.brokeReported = true;
+          setError(TAPE_BROKE);
+        }
+      } else if (s.confirmed === 0) {
         setError("We didn't catch that. Press the microphone and try again. [mic-empty]");
       }
     };
@@ -1207,7 +1214,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       }
       const recorded: DictationRecording = { parts: ending.parts };
       if (broken) {
-        setError(TAPE_BROKE);
+        if (!s.brokeReported) {
+          s.brokeReported = true;
+          setError(TAPE_BROKE);
+        }
         setRecording(recorded);
         holdKept(s.kept);
         done();
@@ -1240,7 +1250,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);
       done();
     });
-  }, [deliverTranscript, elsewhere, holdKept]);
+  }, [deliverTranscript, elsewhere, holdKept, setError]);
 
   const stop = useCallback(() => {
     const s = session.current;
@@ -1316,6 +1326,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       upload: new AbortController(),
       sent: new Map(),
       broke: false,
+      brokeReported: false,
       capped: false,
       keeper: keeper.current ?? null,
       kept: undefined,
@@ -1376,6 +1387,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         s.upload.abort();
         s.kept?.broken();
         if (session.current !== s || s.finished) return;
+        s.brokeReported = true;
         setError(TAPE_BROKE);
         stopRef.current();
       },
@@ -1390,7 +1402,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
            `[mic-no-tape]` is for an empty one) — and the microphone would stop
            mid-sentence in silence, leaving rough words that look authoritative.
            GPT Sol's round-two review, C1. */
-        if (s.confirmed > 0) setError(TAPE_BROKE);
+        if (s.confirmed > 0) {
+          s.brokeReported = true;
+          setError(TAPE_BROKE);
+        }
         stopRef.current();
       },
     };
@@ -1778,7 +1793,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       armTape(s, tapeEvents, setEndsAt);
     })();
     return undefined;
-  }, [elsewhere, finish, holdKept]);
+  }, [elsewhere, finish, holdKept, setError]);
 
   const toggle = useCallback((): false | undefined => {
     /* **A press just after the cap was aimed at Stop.** The countdown invites
@@ -1854,7 +1869,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        Plan 261001k. */
     setError(null);
     setPhase("idle");
-  }, [forgetHeld]);
+  }, [forgetHeld, setError]);
 
   const artifact = useCallback(() => artifactSeq.current, []);
 
@@ -1985,7 +2000,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          one's. GPT Sol's code review, R2. */
       setCanRetry(failures.every((r) => r.retryable));
     })();
-  }, [deliverTranscript, elsewhere, forgetHeld, holdKept]);
+  }, [deliverTranscript, elsewhere, forgetHeld, holdKept, setError]);
 
   /**
    * **A recording an earlier page left behind in this box, offered back.**
@@ -2046,6 +2061,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
               capped: false,
             })),
           };
+          /* This tape belongs to an earlier page. A later retry can report its
+             upload failure, but it must not borrow microphone details from the
+             most recent press in this mounted hook. */
+          failureCause.current = NO_CAUSE;
           holdKept(found.tape);
           /* Something new on the strip, so a send that did not see it cannot
              dismiss it. GPT Sol's plan review, F5. */
@@ -2070,7 +2089,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     };
     /* Reconsider a deferred tape when the current dictation ends or its offer
        is settled, without requiring the reader to navigate away and back. */
-  }, [keepBox, phase, recording, holdKept]);
+  }, [keepBox, phase, recording, holdKept, setError]);
 
   /* Leaving the page with the microphone on. `abort` rather than `stop`,
      because `stop` delivers one last result and this component will not be
@@ -2195,8 +2214,8 @@ type CaptureOutcome =
   /**
    * It did not start, and the reader needs telling. `micError` is why, in the
    * browser's word, from the **last** request refused — the one whose refusal
-   * ended the attempt — or null when no request was refused (the press was
-   * abandoned, or a stream came back with no track). It used to be thrown
+   * ended the attempt — `no-track` when a request resolved without audio, or
+   * null when the press was abandoned. It used to be thrown
    * away, so a refused permission and a microphone held by another app were
    * both "could not be started. Press it again" (plan 261011i).
    */
@@ -2458,6 +2477,7 @@ async function beginCapture(
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(ask, defaultListed));
+    refused = null;
     track = stream.getAudioTracks()[0] ?? null;
     if (track) honoured = ask === preferred;
   } catch (err) {
@@ -2482,6 +2502,7 @@ async function beginCapture(
         const stream = await navigator.mediaDevices.getUserMedia(
           audioConstraint(null, fallbackDefaultListed),
         );
+        refused = null;
         track = stream.getAudioTracks()[0] ?? null;
       } catch (fallbackError) {
         refused = micErrorName(fallbackError);
@@ -2492,6 +2513,7 @@ async function beginCapture(
         if (fallbackDefaultListed && deviceMissing(fallbackError)) {
           try {
             const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(null));
+            refused = null;
             track = stream.getAudioTracks()[0] ?? null;
           } catch (finalError) {
             refused = micErrorName(finalError);
