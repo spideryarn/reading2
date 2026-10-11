@@ -11,6 +11,7 @@
  *   value, onChange, box,
  *   context: { kind: "article", slug },
  *   transcribe,
+ *   report: dictationReporter("profile"),
  * })
  * <textarea ref={box} readOnly={dictate.readOnly} … />
  * <DictationStrip {...dictate.strip} />
@@ -63,7 +64,7 @@
  * chat composer.
  */
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
-import type { DictationKeeper, Transcriber } from "./transcriber.js";
+import type { DictationKeeper, DictationReporter, Transcriber } from "./transcriber.js";
 import { type UseDictation, useDictation } from "./useDictation.js";
 
 /**
@@ -137,6 +138,7 @@ export function useDictationField<C>({
   box,
   context,
   transcribe,
+  report,
   keep,
 }: {
   value: string;
@@ -169,6 +171,12 @@ export function useDictationField<C>({
   context: C;
   /** How a recording becomes words. The product passes `useReaderTranscriber()`'s bound sender. */
   transcribe: Transcriber<C>;
+  /**
+   * Who hears about a failure besides the reader. The product passes
+   * `dictationReporter(<this box's surface>)` from
+   * [dictation-report.ts](./dictation-report.ts).
+   */
+  report: DictationReporter<C>;
   /**
    * Where a copy is kept until the words are in the box, so a closed tab does
    * not lose a dictation. The product passes `keepDictation(<this box's name>)`;
@@ -417,6 +425,7 @@ export function useDictationField<C>({
     },
     context,
     transcribe,
+    report,
     ...(keep && { keep }),
   });
 

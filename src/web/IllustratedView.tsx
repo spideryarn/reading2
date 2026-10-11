@@ -82,6 +82,7 @@ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { Excerpt } from "./Excerpt.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /**
  * **What a press buys, in one phrase, in exactly one place** — the work and
@@ -362,6 +363,7 @@ function useSteerNote(slug: string, painted: string | undefined): SteerNote {
     box,
     context: { kind: "article", slug },
     transcribe,
+    report: dictationReporter("illustrated"),
     keep: keepDictation(`illustrated:${slug}`),
   });
   const tooLong = note.trim().length > MAX_ILLUSTRATION_NOTE_CHARS;

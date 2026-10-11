@@ -960,6 +960,9 @@ browser has now:
   arrived, and [`FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) for each mode's band
   ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it)).
   Each calls `captureClientFailure` (Sentry, through the shared scrubber) and `recordLog`.
+- **Every dictation failure**, through the hook's one `setError`: an issue per `[mic-…]` code,
+  named `DictationFailure`, the code and closed tags and never the sentence —
+  [dictation.md § Every failure reaches Sentry](dictation.md#every-failure-reaches-sentry).
 - **`watchUncaughtErrors()`**, called by [`main.tsx`](../../src/web/main.tsx): `window.onerror` and
   `unhandledrejection` into the ring buffer. Not a second reporter — Sentry already sees both — but
   it is what orders a throw against the API calls around it.

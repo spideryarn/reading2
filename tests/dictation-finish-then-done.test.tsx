@@ -145,6 +145,7 @@ function harness() {
       box,
       context: { kind: "profile" },
       transcribe,
+      report: () => {},
     });
     field = current;
     return createElement("textarea", { ref: box, value, readOnly: current.readOnly, onChange() {} });

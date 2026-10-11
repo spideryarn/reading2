@@ -35,6 +35,7 @@ import { useReaderTranscriber } from "./dictation-upload.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { useDictationField } from "./useDictationField.js";
 import { useFitTextarea } from "./useFitTextarea.js";
+import { dictationReporter } from "./dictation-report.js";
 
 export function FeedbackSendBox({
   value,
@@ -96,6 +97,7 @@ export function FeedbackSendBox({
        transcript is primed with the app's words and the reader's profile. */
     context: { kind: "profile" },
     transcribe,
+    report: dictationReporter("feedback-reply"),
     ...(active ? { keep: keepDictation(keeper) } : {}),
     /* A double press on Stop also sends (dictation.md), by the same guarded
        function the button calls, and never from a box out of sight. */

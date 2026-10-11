@@ -226,6 +226,7 @@ function drive(
       }),
       context: { kind: "profile" },
       transcribe,
+      report: () => {},
       ...(keep && { keep }),
     });
     return null;

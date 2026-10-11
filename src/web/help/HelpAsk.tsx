@@ -64,6 +64,7 @@ import { type UseDictationField, useDictationField } from "../useDictationField.
 import { voiceClass } from "../voice.js";
 import { helpAnswerHref } from "./help-answer-links.js";
 import { HELP_LINK_CLASS } from "./help-parts.js";
+import { dictationReporter } from "../dictation-report.js";
 
 /** Where the last question has got to. */
 type Asked =
@@ -214,6 +215,7 @@ export function useHelpAsk(): HelpAskState {
     box,
     context: { kind: "profile" },
     transcribe,
+    report: dictationReporter("help"),
     keep: keepDictation("help-ask"),
     /* A double press on Stop also sends (dictation.md § A double press). */
     onDone: ask,

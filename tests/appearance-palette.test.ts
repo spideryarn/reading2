@@ -87,6 +87,12 @@ const PAIRS: [string, string, number][] = [
   ["--danger", "--page", 4.5],
   ["--danger", "--panel", 4.5],
   ["--danger", "--surface-raised", 4.5],
+  /* The go-ahead green — Send reply in a Needs-a-decision thread — on the
+     same three surfaces, held to the same floor as the error red beside it
+     (plan 261011h). */
+  ["--positive", "--page", 4.5],
+  ["--positive", "--panel", 4.5],
+  ["--positive", "--surface-raised", 4.5],
 ];
 
 describe.each([

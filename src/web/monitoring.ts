@@ -162,16 +162,20 @@ export function setClientMonitoringUser(user: { id: string; email?: string } | n
  * Report a failure the app caught itself — the error boundary, chiefly.
  *
  * `neverAuthored` withholds the message whatever it ends in — see `sanitise`.
+ * `fingerprint` groups issues by something other than the stack — dictation
+ * raises every failure from one line, and wants an issue per code. It must be
+ * built from closed sets only: it is sent as given.
  */
 export function captureClientFailure(
   err: unknown,
   context?: Fields,
-  options?: { neverAuthored?: boolean },
+  options?: { neverAuthored?: boolean; fingerprint?: string[] },
 ): void {
   try {
     if (!started) return;
     const { error, withheld, props } = sanitise(err, options);
     withScope((scope) => {
+      if (options?.fingerprint) scope.setFingerprint(options.fingerprint);
       scope.setTag("message_withheld", withheld);
       for (const [key, value] of Object.entries({ ...props, ...context })) {
         if (value !== undefined && value !== null) scope.setTag(key, String(value));
