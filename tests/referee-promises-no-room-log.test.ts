@@ -1,5 +1,5 @@
 /**
- * **A claims run that thought through its whole allowance and wrote nothing** —
+ * **A promises run that thought through its whole allowance and wrote nothing** —
  * what the log says, and what the referee is told.
  *
  * The failure behind docs/plans/260928c-referee-claims-fail-on-long-pieces.md,
@@ -112,7 +112,7 @@ function noTextLine(): Record<string, unknown> {
   return found;
 }
 
-describe("a claims run that spent its whole allowance thinking", () => {
+describe("a promises run that spent its whole allowance thinking", () => {
   it("logs how much of the allowance went on thinking", () => {
     const line = noTextLine();
     expect(line.finishReason).toBe("length");

@@ -241,7 +241,7 @@ const flat = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
  * the article"* under a label reading *Mark these passages in the paper* shares
  * one content word in three and would pass here. Nothing mechanical reads for
  * meaning. What this file does about that is cover the cards at all — before
- * this stage Claims, Candidates and `PlaceOnCriterion` were never imported here,
+ * this stage Promises, Candidates and `PlaceOnCriterion` were never imported here,
  * so deleting any of their cards left the suite green.
  */
 const STOPWORDS = new Set(
@@ -300,7 +300,7 @@ function words(s: string): string[] {
  *   explicit assertions on the cards that matter.
  * - **The two have to be comparable in length.** A four-line paragraph that
  *   happens to use two of a three-word label's words is not saying the label
- *   again — Claims' *"Marks are off until you ask for them…"* under *Mark these
+ *   again — Promises' *"Marks are off until you ask for them…"* under *Mark these
  *   passages in the paper* scores 0.67 on vocabulary alone and is plainly not a
  *   restatement. Restating means saying the same amount as well as the same
  *   words, so the shorter has to be at least two fifths of the longer.
@@ -736,15 +736,15 @@ describe("Mirror's rows say what they mean by evidence, and where they go", () =
   });
 });
 
-/* --------------------------------------------------- Claims, and its two cards -- */
+/* ------------------------------------------------- Promises, and its two cards -- */
 
 /**
- * **Claims was never imported into this file**, which a cross-family review
+ * **Promises was never imported into this file**, which a cross-family review
  * found on 2026-09-02: deleting either of its cards left the whole suite green.
  * `PromisesView` is a pure function of its props — tests/referee-promises-panel.test.tsx
  * — so it needs no router and no hook.
  */
-describe("Claims says what its two controls do", () => {
+describe("Promises says what its two controls do", () => {
   const CLAIM_BLOCK = "spya-anc234" as BlockId;
   const claim: PaperPromise = {
     id: `${CLAIM_BLOCK}:8`,
@@ -792,7 +792,7 @@ describe("Claims says what its two controls do", () => {
     expect(tick, "the mark checkbox is not drawn").not.toBeNull();
     const card = await cardFor(tick as Element);
     expect(card.head).toBe(flat((tick as Element).textContent));
-    expectEarnsItsHover(card, "Claims' tick");
+    expectEarnsItsHover(card, "Promises' tick");
     /* The refusal is the point of the card: the model asserts linkage, the
        referee decides adequacy. src/web/PromisesPanel.tsx § the three rules. */
     expect(card.body.toLowerCase(), "the card no longer says whose call it is").toContain("your call");
@@ -807,7 +807,7 @@ describe("Claims says what its two controls do", () => {
     const pull = host.querySelector(".prm-run");
     expect(pull, "the pull button is not drawn").not.toBeNull();
     const card = await cardFor(pull as Element);
-    expectEarnsItsHover(card, "Claims' pull");
+    expectEarnsItsHover(card, "Promises' pull");
     expect((pull as Element).hasAttribute("title"), "it fell back to a title").toBe(false);
   });
 });

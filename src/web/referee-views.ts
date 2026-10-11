@@ -5,7 +5,7 @@
  * Three of them help somebody who has been asked to peer-review a piece —
  * `criteria` is their own criteria run over it, `promises` is what the piece
  * promises against where it delivers (called `claims` until 2026-10-11, when
- * Sources took that word; src/web/params.ts lifts the old value), and `mirror` is the model reading *their*
+ * Sources took that word; src/web/router.ts lifts the old value), and `mirror` is the model reading *their*
  * review rather than the paper. The fourth, `candidates`, is for the person on
  * the other side of the desk: an **editor** deciding who should review it.
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md.

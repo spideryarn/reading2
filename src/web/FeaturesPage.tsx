@@ -338,7 +338,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             confidentiality sentence is the one the mode itself shows. */}
         <Showcase shot={SHOTS.referee} title="Referee mode." mode="referee" offset under>
           Helps a referee read a paper without reading it for them. Your own criteria, streamed
-          against the paper with every matching passage marked; the paper’s claims pulled out with
+          against the paper with every matching passage marked; the paper’s promises pulled out with
           where each is taken up; and a mirror that rereads your own draft comments. Nothing here
           forms the judgment for you. For preprints, open review and drafts shared with consent —
           the text goes to AI providers, so not a confidential submission.

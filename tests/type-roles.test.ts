@@ -162,7 +162,7 @@ const REGISTRY: Row[] = [
   { file: "reception.css", selector: ".rcp-meta", role: "meta" },
   { file: "reception.css", selector: ".rcp-group-count", role: "count" },
   { file: "reception.css", selector: ".rcp-group-head:not(.rcp-group-claim)", role: "label" },
-  // Referee: Criteria, Claims, Mirror, Notes, Candidates
+  // Referee: Criteria, Promises, Mirror, Notes, Candidates
   { file: "referee.css", selector: ".crit-criterion", role: "item" },
   { file: "referee.css", selector: ".prm-promise", role: "item" },
   { file: "referee.css", selector: ".cnd-name", role: "item" },

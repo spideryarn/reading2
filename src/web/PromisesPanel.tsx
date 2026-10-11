@@ -359,13 +359,11 @@ export function PromisesView({
    * **What the panel says about the claims the cap cut, and it never says
    * nothing.**
    *
-   * Two sentences because there are two states of knowledge, and the difference
-   * is a route this work was not allowed to touch: `validatePromises` counts the
-   * truncation, but the store is written with `promises` and `model` only, so
-   * `run.promisesOmitted` is absent on every run written so far. With the count we
-   * say it; without it, a full list is still proof the cap was reached, and that
-   * much is said. Silence would be the fourth ranking signal GPT Sol's second
-   * review named: visibility itself.
+   * Two sentences because there are two states of knowledge. New runs store
+   * `promisesOmitted`; older rows predate that field. With the count we say it;
+   * without it, a full list is still proof the cap was reached, and that much is
+   * said. Silence would be the fourth ranking signal GPT Sol's second review
+   * named: visibility itself.
    */
   const cut = run?.promisesOmitted ?? 0;
   const capNote =

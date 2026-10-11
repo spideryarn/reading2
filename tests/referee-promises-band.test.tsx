@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The Claims band, wired to a fetch — is the referee told the paper has
+ * **The Promises band, wired to a fetch — is the referee told the paper has
  * moved?**
  *
  * tests/referee-promises-panel.test.tsx renders `PromisesView` with no hook and no
@@ -19,7 +19,7 @@
  * out as "nothing has moved", silently, which is the wrong way round to be
  * wrong (`isStale`, src/search-stale.ts).
  *
- * No `NuqsAdapter`, unlike the criteria file: Claims owns no query parameter.
+ * No `NuqsAdapter`, unlike the criteria file: Promises owns no query parameter.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -149,7 +149,7 @@ afterEach(async () => {
   host.remove();
 });
 
-describe("a claims run answered about an older paper says so above the list", () => {
+describe("a promises run answered about an older paper says so above the list", () => {
   /** The sentence the referee reads. Not imported — `PromisesPanel` inlines it. */
   const WARNING = "Answered about an earlier version of this paper.";
 

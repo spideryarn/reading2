@@ -1,5 +1,5 @@
 /**
- * A paper's promises run. The only half — src/referee-promises-store.ts, the
+ * A paper's promises run. The only half — src/referee-claims-store.ts, the
  * filesystem one, went on 2026-09-05 with the rest of the filesystem store
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
  * the stage-G section), and what it held that outlives it is here: the
@@ -119,7 +119,7 @@ export const PROMISES_ORPHAN_GRACE_MS = PROMISES_TIMEOUT_MS + 30_000;
 /**
  * What a sweep writes over an abandoned `pending` run.
  *
- * It lived in `src/referee-promises-store.ts` until 2026-09-05, when that module
+ * It lived in `src/referee-claims-store.ts` until 2026-09-05, when that module
  * — the filesystem claims store — was deleted with the rest of the filesystem
  * store
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,

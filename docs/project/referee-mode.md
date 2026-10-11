@@ -405,6 +405,14 @@ valence are two separate numbers that are never the same field —
 tested, and `referee_criteria` is its own table
 ([`src/db/schema.ts`](../../src/db/schema.ts) § *referee criteria*).
 
+Starter criteria are held back until the referee presses **Run this criterion**
+on a question they wrote themselves, so the suggestions cannot anchor the first
+question. That unlock is a per-tab latch for this reader and article: it stays
+open if the run fails or is refused, the last criterion is deleted, or the
+referee changes sub-mode and comes back. The starters are grouped into checks
+worth a second look and questions adapted from referee forms; pressing one only
+fills the editable form and never runs it.
+
 **The prose stripe carries the valence, and until 2026-09-02 it carried criterion identity
 instead.** Greg read a paper with the old rule and found the two halves of the screen contradicting
 each other:

@@ -13,7 +13,7 @@
  * Only the second one is true. A zero-result row can mean the extractor missed
  * a table, a figure or a supplement; that the paper words the thing differently;
  * or that the model simply failed. GPT Sol's review of the plan made this the
- * condition of Claims surviving at all, and the same reasoning binds every
+ * condition of Promises surviving at all, and the same reasoning binds every
  * sub-mode: the danger is a tired referee reading "nothing bears on that" and
  * treating the passage as cleared.
  *
@@ -106,10 +106,10 @@ const WEB = join(ROOT, "src", "web");
  * ## What the five dated comments said, kept because the reasons are not the same
  *
  * **Criteria** is the original, and the branch the scan is aimed at is its
- * zero-result one. **Claims** is the sub-mode this whole file was written for:
+ * zero-result one. **Promises** is the sub-mode this whole file was written for:
  * the cross-family review made *"the model did not find a passage for this"* —
  * never "none", never "unsupported", never "the paper does not address this" —
- * the condition of Claims surviving at all. **Mirror** is the harder case: its
+ * the condition of Promises surviving at all. **Mirror** is the harder case: its
  * null result is not about the paper at all, since it was never given the
  * paper, so *"nothing in this paper bears on that criterion"* is a claim it has
  * no standing whatever to make. **Candidates**' null result is about neither
@@ -415,13 +415,13 @@ const ABOUT_THE_PAPER = [
  * finding 4.
  *
  * Its sentence does not live in a panel file, so the scan below cannot see it:
- * it is the stored `error` on the criterion or on the claims run, and it has to
+ * it is the stored `error` on the criterion or on the promises run, and it has to
  * keep the same rule. Checked as a value rather than as source text, which is
  * the stronger check of the two.
  *
  * **One sentence since 2026-10-04**, `ANSWER_UNUSABLE` in src/messages.ts,
  * thrown by both runners. There were two, one in each runner's file, sharing
- * the one code; Claims' was `PROMISES_UNUSABLE`. The describe after this one
+ * the one code; Claims' was `CLAIMS_UNUSABLE`. The describe after this one
  * holds the same constant to Claims' rules.
  */
 describe("what Referee says when the answer it got was unusable", () => {
@@ -462,7 +462,7 @@ describe("what Referee says when the answer it got was unusable", () => {
 });
 
 /**
- * **Claims' own copy, checked as values.**
+ * **Promises' own copy, checked as values.**
  *
  * Four sentences, and each is a rule rather than a phrasing:
  *
@@ -475,12 +475,12 @@ describe("what Referee says when the answer it got was unusable", () => {
  *   because those two call for different actions.
  * - `ANSWER_UNUSABLE` (src/messages.ts) is the same distinction at the level of
  *   the whole run. It is the sentence Criteria throws too; Claims had its own,
- *   `PROMISES_UNUSABLE`, until 2026-10-04.
+ *   `CLAIMS_UNUSABLE`, until 2026-10-04.
  * - `DOCUMENT_ORDER_NOTE` is the other half of the review's finding: the list is
  *   in the paper's order and is not a ranking, and a reader who assumes
  *   best-first reads the top and stops.
  */
-describe("what Claims says about an empty answer", () => {
+describe("what Promises says about an empty answer", () => {
   it("makes the model the subject of both empty states", () => {
     for (const sentence of [NO_PASSAGE_FOUND, PASSAGES_UNUSABLE, ANSWER_UNUSABLE.message]) {
       expect(sentence.toLowerCase()).toMatch(/^the model /);
@@ -604,7 +604,7 @@ describe("what Referee says when it found nothing", () => {
  * **The two sentences added on 2026-09-01, and they are the ones most likely to
  * drift into being about the paper.**
  *
- * An eval found that Claims could drop a claim from a paper's own abstract and
+ * An eval found that Promises could drop a claim from a paper's own abstract and
  * leave a panel that looked perfectly tidy — the sub-mode's whole defence,
  * `NO_PASSAGE_FOUND`, cannot fire for a claim that never got a row. The answer
  * is a list of the sentences no claim above is anchored in, and **the wording is
@@ -619,7 +619,7 @@ describe("what Referee says when it found nothing", () => {
  * that about the *model's line*, and must not become *this passage does not
  * carry the claim*, which is the verdict itself wearing our clothes.
  */
-describe("what Claims says about the rest of the text its quotes covered", () => {
+describe("what Promises says about the rest of the text its quotes covered", () => {
   it("never puts the paper in the subject position", () => {
     for (const sentence of [
       OTHER_TEXT_HEADING,
@@ -678,7 +678,7 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
 });
 
 /**
- * **What Claims says when one of its own caps cut something.**
+ * **What Promises says when one of its own caps cut something.**
  *
  * GPT Sol's second review, finding 5: the caps were silent, and silence is a
  * ranking — a referee reads an apparently complete list in which the claims the
@@ -690,7 +690,7 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
  * subject position, it puts the *model* there — "the model returned too many
  * claims" is an accusation about an answer that did nothing wrong.
  */
-describe("what Claims says when one of its own caps cut something", () => {
+describe("what Promises says when one of its own caps cut something", () => {
   it("never blames the paper or the model for a cap that is ours", () => {
     for (const sentence of [PASSAGES_CAPPED, PROMISES_AT_CAP, promisesOmittedNote(3), OTHER_TEXT_AT_CAP]) {
       for (const phrase of ABOUT_THE_PAPER) {

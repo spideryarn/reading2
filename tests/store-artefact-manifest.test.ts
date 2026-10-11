@@ -259,7 +259,7 @@ const HOMES: Record<string, string> = {
   "referee-criteria.json": "referee_criteria (results stay JSONB)",
   /* `drizzle/0051_referee_claims.sql`, applied locally on 2026-09-01. **It sat
      in `NOT_MIGRATED` until then**, saying the decision was "not this table, not
-     yet": a claims run is an article-derived reusable artefact whose right home
+     yet": a promises run is an article-derived reusable artefact whose right home
      is a pipeline artefact, and a bespoke table for something already scheduled
      to be replaced is two migrations to reach one place. That is still true and
      `referee_promises` still calls itself an interim — what changed is that the
@@ -268,11 +268,11 @@ const HOMES: Record<string, string> = {
 
      Like `referee-criteria.json` it is **deliberately not in
      `ROUNDTRIP_JSON_ARTEFACTS`**: no article in the committed corpus carries a
-     claims run, so that suite's `preserves %s exactly` row would assert only that
+     promises run, so that suite's `preserves %s exactly` row would assert only that
      the export invented nothing. The export is covered instead by the sentinel
      fixture in tests/store-export-covers-tables.test.ts, which inserts a row and
      requires it back out of this file. See `COVERED_BY_ANOTHER_TEST`. */
-  "referee-promises.json": "referee_promises (one row per article, claims stay JSONB)",
+  "referee-promises.json": "referee_promises (one row per article, promises stay JSONB)",
   "referee-hidden-check.json": "referee_hidden_checks (one finished Opus check per article)",
   "glossary-lookups.json": "glossary_lookups",
   "citation-finds.json": "citation_finds",
@@ -508,11 +508,11 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
       contains: "referee-criteria.json",
     },
   },
-  /* tests/store-export-covers-tables.test.ts:724 inserts a sentinel claims row
+  /* tests/store-export-covers-tables.test.ts:724 inserts a sentinel promises row
      and requires it back out of this exact filename, so an export that stopped
      writing it fails there. */
   "referee-promises.json": {
-    why: "no committed article carries a claims run; a sentinel row is inserted and required back out of this filename",
+    why: "no committed article carries a promises run; a sentinel row is inserted and required back out of this filename",
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "referee_promises",

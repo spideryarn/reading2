@@ -71,7 +71,7 @@ describe("resolvePaperPromise", () => {
     /* The article was re-extracted and the sentence is not there any more. A row
        that did nothing when pressed is worse than a row pointing at the
        paragraph the model meant. `resolveOne` owns this; asserted here because
-       it is the state a stale claims run is actually in. */
+       it is the state a stale promises run is actually in. */
     const [found] = resolvePaperPromise(BLOCKS, {
       id: `${ABSTRACT}:8`,
       slot: 0,
@@ -141,7 +141,7 @@ describe("resolvePaperPromise", () => {
     expect(blockHues(found).get(RESULTS)).toEqual([3]);
     /* "rg" is inert here and the parameter is required rather than defaulted —
        a claim's passage carries no valence at all, which is the next assertion
-       and is what keeps Claims byte-identical to what it was. */
+       and is what keeps Promises byte-identical to what it was. */
     expect(hitMarks(found, null, "rg").get(RESULTS)?.length).toBe(1);
     const mark = hitMarks(found, null, "rg").get(RESULTS)?.[0];
     expect(mark?.hue).toBeUndefined();

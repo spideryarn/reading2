@@ -23,7 +23,7 @@ does allow AI help it usually asks you to say so.
 Six parts, chosen by the chips at the top:
 
 - **Criteria**: write what you are judging against, then press **Run this criterion**. Once you
-  have written one of your own, starters appear: checks that are easy to skip, such as
+  have pressed Run on one of your own, starters appear: checks that are easy to skip, such as
   **Conclusions** or **Numbers**, and what referee forms ask, such as **Controls**. A starter only
   fills the box; nothing runs until you press.
 - **Promises**: what the paper promises, each beside the passages meant to deliver it.

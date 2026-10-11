@@ -10,6 +10,32 @@ import { isDivergingScale, isRefereeCriterionKind } from "../referee-criteria.js
 import { isCriteriaAtCeiling, type SavedCriterion } from "../saved-criteria.js";
 import { storageReader } from "./lib/storage-reader.js";
 
+/**
+ * Whether this tab has already let the referee ask its first criterion for an
+ * article. Unlike the saved rows, this is deliberately a latch: deleting the
+ * last row, changing Referee sub-mode, or a refused/failed first run cannot
+ * make the starter suggestions become "unseen" again.
+ */
+export function criterionStarterLatch(slug: string, reader: string | null) {
+  const key = `spideryarn.criterion-starters.${JSON.stringify([storageReader(reader), slug])}`;
+  return {
+    read() {
+      try {
+        return sessionStorage.getItem(key) === "1";
+      } catch {
+        return false;
+      }
+    },
+    unlock() {
+      try {
+        sessionStorage.setItem(key, "1");
+      } catch {
+        // The mounted hook still holds the latch when storage is unavailable.
+      }
+    },
+  };
+}
+
 function isDraft(value: unknown): value is SavedCriterion {
   if (!value || typeof value !== "object") return false;
   const row = value as Partial<SavedCriterion>;

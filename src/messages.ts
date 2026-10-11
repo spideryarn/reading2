@@ -918,7 +918,7 @@ export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
  * anchor at all. "Nothing it returned could be used" covers all four. Until
  * 2026-10-04 there were two sentences sharing this one code, one in each
  * runner's file: Criteria's said the model "pointed at passages", which a row
- * with no anchor never did, and Promises' (`PROMISES_UNUSABLE`) said nothing "could
+ * with no anchor never did, and Promises' (then Claims, `CLAIMS_UNUSABLE`) said nothing "could
  * be found in the paper", which is not why a shapeless row is dropped. Plan
  * 261004c § R6.
  *
@@ -1009,7 +1009,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
 
 /**
  * The same failure, reported to a screen with **nothing to narrow**: a criterion
- * run, a claims pull, a Mirror run.
+ * run, a promises pull, a Mirror run.
  *
  * See `ANSWER_OVERFLOWED` above for why there are two of these and why this one
  * is the default that `parseHits` uses unless told otherwise. The retry is the

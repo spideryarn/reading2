@@ -254,7 +254,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
 
   /* --------------------------------------------------------------- claims -- */
 
-  it("reads a claims run back, where it used to answer 501", async () => {
+  it("reads a promises run back, where it used to answer 501", async () => {
     /* The exact call that was broken in production: `GET` reaches
        `refereePromisesStore.sweep` and `.sourceHash`, both of which refused with
        a 501. A paper nobody has asked is a 200 with `run: null`

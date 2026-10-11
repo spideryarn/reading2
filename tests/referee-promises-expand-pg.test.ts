@@ -100,6 +100,52 @@ const oldLoad = () =>
     select * from "spideryarn"."referee_claims" where "article_id" = ${articleId}::uuid limit 1`);
 
 describe("the old store, through the referee_claims view", () => {
+  it("keeps the exact old shape, automatic write path, and table DML grants", async () => {
+    const shape = await getDb().execute<{
+      columns: string[];
+      updatable: string;
+      insertable: string;
+      missing_dml_grants: string;
+    }>(sql`
+      select
+        (select array_agg(column_name::text order by ordinal_position)
+           from information_schema.columns
+          where table_schema = 'spideryarn' and table_name = 'referee_claims') as columns,
+        (select is_updatable from information_schema.views
+          where table_schema = 'spideryarn' and table_name = 'referee_claims') as updatable,
+        (select is_insertable_into from information_schema.views
+          where table_schema = 'spideryarn' and table_name = 'referee_claims') as insertable,
+        (with base_acl as (
+          select c.relowner, a.grantee, a.privilege_type, a.is_grantable
+            from pg_class c,
+                 aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+           where c.oid = '"spideryarn"."referee_promises"'::regclass
+             and a.grantee <> c.relowner
+             and a.privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+        ), view_acl as (
+          select a.grantee, a.privilege_type, a.is_grantable
+            from pg_class c,
+                 aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+           where c.oid = '"spideryarn"."referee_claims"'::regclass
+        )
+        select count(*) from base_acl b
+         where not exists (
+           select 1 from view_acl v
+            where v.grantee = b.grantee
+              and v.privilege_type = b.privilege_type
+              and (not b.is_grantable or v.is_grantable)
+         )) as missing_dml_grants`);
+    expect(shape.rows[0]).toMatchObject({
+      columns: [
+        "article_id", "owner_id", "status", "claims", "model", "claims_omitted",
+        "error", "created_at", "source_hash", "attempt_id", "finished_at",
+      ],
+      updatable: "YES",
+      insertable: "YES",
+    });
+    expect(Number(shape.rows[0]?.missing_dml_grants)).toBe(0);
+  });
+
   it("takes a first run's upsert as an insert, with the table's defaults", async () => {
     const attempt = randomUUID();
     const begun = await oldBegin(attempt);

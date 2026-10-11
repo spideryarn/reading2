@@ -1,5 +1,5 @@
 /**
- * **The two things Claims added after an eval found the hole in it** — the
+ * **The two things Promises added after an eval found the hole in it** — the
  * sentences a run did not account for, and the fail-safe on adequacy language.
  *
  * Both are in src/referee-promises.ts, both are pure, and both exist because

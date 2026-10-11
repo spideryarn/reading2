@@ -4,7 +4,7 @@
  *
  * Five components resolve passages and push a `Found[]` up to `Reader`, and
  * three of them hold an `openKey` there beside it: Ideas, Timeline, Search,
- * Criteria and Claims. The two fields are one piece of state — `found` is which
+ * Criteria and Promises. The two fields are one piece of state — `found` is which
  * passages are marked in the prose, `openKey` is which of those marks is *rung*.
  * `TableView` draws the ring from the key alone. So a key that outlives the
  * marks names a passage that is no longer on the page.
@@ -24,7 +24,7 @@
  * 2026-08-27.
  *
  * So the arms below are one per **shape** as well as one per band: `keyed`
- * (Ideas, Timeline, Search, Criteria) and `unkeyed` (Claims). Ideas and
+ * (Ideas, Timeline, Search, Criteria) and `unkeyed` (Promises). Ideas and
  * Timeline are the controls that always passed.
  *
  * **There was a third shape, `derived`, and Quotes was its only caller.** It
@@ -42,7 +42,7 @@
  * can be seen.
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  *
- * **Claims is the one band with no key at all**, which is why it is the `unkeyed`
+ * **Promises is the one band with no key at all**, which is why it is the `unkeyed`
  * shape: nothing rings a claim's passage, so leaving the sub-mode has to take
  * `found` and must not touch a key it does not own. Its marks are default-off,
  * so the arm ticks a claim first.
@@ -52,7 +52,7 @@
  * those names are what six other test files mount its band by, so an arm that
  * used the other names would prove nothing about the band `Reader` renders.
  *
- * **The hand-off between Criteria and Claims is not here**, because they are the
+ * **The hand-off between Criteria and Promises is not here**, because they are the
  * only two producers that share one slot and what that needs asserting about is
  * an ordering rather than a value left behind:
  * tests/passage-slot-hand-off.test.tsx.
@@ -235,7 +235,7 @@ const CRITERION: SavedCriterion = {
 
 
 /**
- * **One claim, taken up one paragraph later.** Claims marks the *passages* a
+ * **One promise, taken up one paragraph later.** Promises marks the *passages* a
  * claim is supported by, not the sentence that makes it, so the mark lands on
  * `TWO` and the claim is anchored in `ONE`.
  *
@@ -308,7 +308,7 @@ const serve = (url: string): Promise<Response> => {
 
 /* ------------------------------------------------------------ the harness -- */
 
-type BandName = "ideas" | "timeline" | "referee" | "claims" | "search";
+type BandName = "ideas" | "timeline" | "referee" | "promises" | "search";
 
 /**
  * `Reader`, in miniature: it owns `found` and `openKey`, and the band is
@@ -351,7 +351,7 @@ function Harness({ band }: { band: BandName | null }) {
     /* **No `openKey` and no `onOpenKey`**, which is this band's shape rather
        than an omission: nothing rings a claim's passage, so leaving the sub-mode
        has to take `found` and must not touch a key it does not own. */
-    band === "claims"
+    band === "promises"
       ? createElement(PromisesBand, {
           key: "b",
           slug: SLUG,
@@ -535,14 +535,14 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     expect(state().openKey, "and the ring cannot outlive the mark it was round").toBe("none");
   });
 
-  it("Claims — the unkeyed shape, which owns no key to lose", async () => {
+  it("Promises — the unkeyed shape, which owns no key to lose", async () => {
     /* **The one band with no `openKey` at all.** Nothing rings a claim's
        passage, so the whole of leaving is `onFound([])` — and the assertion that
        matters as much is the one about the key it does not own: a producer that
        cleared a key belonging to nobody would look exactly like this one until
        the sub-mode it shares a slot with had a key open. */
-    history.replaceState(null, "", `/read/${SLUG}?mode=referee&referee=claims`);
-    show("claims");
+    history.replaceState(null, "", `/read/${SLUG}?mode=referee&referee=promises`);
+    show("promises");
     await flush();
 
     /* Marks are off until the referee asks for them, so the precondition here is
@@ -601,7 +601,7 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
        the **incoming** producer's marks and nothing of the outgoing one's. It
        passes against the pre-fix code too, and that is worth writing down rather
        than leaving to be rediscovered — both of these bands publish an *empty*
-       list on their first commit (Criteria's marks come from a fetch, Claims'
+       list on their first commit (Criteria's marks come from a fetch, Promises'
        from a tick nobody has made), so the outgoing passive clear used to
        overwrite empty with empty and the settled state came out right by luck.
        The ordering that stops it being luck is proved in
@@ -616,9 +616,9 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     await flush();
     expect(state().openKey).toBe(`${CRIT}:${ONE}:0`);
 
-    /* criteria → claims. The key goes with the producer that owned it: Claims
+    /* criteria → promises. The key goes with the producer that owned it: Promises
        has none, so a key surviving here would ring a passage nobody marks. */
-    show("claims");
+    show("promises");
     await flush();
     expect(state().openKey, "criteria's ring must not outlive criteria").toBe("none");
     expect(state().found, "and neither may its marks").toBe(0);
@@ -626,10 +626,10 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     const ticks = [...host.querySelectorAll<HTMLInputElement>(".prm-tick input")];
     act(() => ticks[0]!.click());
     await flush();
-    expect(state().found, "claims now owns the slot").toBe(1);
+    expect(state().found, "promises now owns the slot").toBe(1);
 
-    /* claims → criteria, the other direction, which the first fix for this
-       proposed to leave alone on the grounds that Claims was the exceptional
+    /* promises → criteria, the other direction, which the first fix for this
+       proposed to leave alone on the grounds that Promises was the exceptional
        shape. It is not: the rule is about the phase of the clear, not about
        which producer is keyed. */
     show("referee");

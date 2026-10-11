@@ -1567,10 +1567,10 @@ export interface RefereeCriteriaStore {
  * refuses them.
  *
  * **Two arms, like its siblings, since 2026-10-07.** It was one `Partial<Pick>`
- * with a `status` beside it, which let an `error` finish carry claims. Nothing
+ * with a `status` beside it, which let an `error` finish carry promises. Nothing
  * did, and the database now refuses the row (`referee_promises_empty_unless_done`
  * in src/db/schema.ts), so the type refuses it first. The `error` arm may still
- * say `claims: []`, as the route does: typed as the **empty tuple**, so `[]`
+ * say `promises: []`, as the route does: typed as the **empty tuple**, so `[]`
  * compiles and anything with a claim in it does not.
  * tests/store-pg-referee-promises.test.ts holds both halves.
  */

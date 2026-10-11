@@ -548,8 +548,8 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
        the rollback does, would lose them. */
     at("referee-criteria.json", { criteria: rows.refereeCriteria.map((row) => rowJson(row)) });
   }
-  const claims = rows.refereePromises[0];
-  if (claims) at("referee-promises.json", { run: rowJson(claims) });
+  const promises = rows.refereePromises[0];
+  if (promises) at("referee-promises.json", { run: rowJson(promises) });
   if (rows.sourcesClaimChecks.length) {
     at("sources-claim-checks.json", { checks: rows.sourcesClaimChecks.map((row) => rowJson(row)) });
   }

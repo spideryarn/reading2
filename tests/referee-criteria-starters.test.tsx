@@ -14,6 +14,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CRITERIA_AT_CEILING } from "../src/saved-criteria.js";
 import type { Block, BlockId } from "../src/types.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response> = () =>
@@ -72,6 +73,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   answer = () => Promise.resolve(json({ criteria: [] }));
   calls.length = 0;
+  sessionStorage.clear();
   history.replaceState(null, "", `/read/${SLUG}`);
   host = document.createElement("div");
   document.body.append(host);
@@ -115,6 +117,22 @@ function paint(): void {
   });
 }
 
+function typeCriterion(text: string): void {
+  const box = host.querySelector<HTMLTextAreaElement>("#crit-text");
+  if (!box) throw new Error("criterion box did not render");
+  const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  act(() => {
+    set?.call(box, text);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function remount(): void {
+  act(() => root.unmount());
+  root = createRoot(host);
+  paint();
+}
+
 const starters = () => [...host.querySelectorAll(".crit-preset")];
 const flat = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
@@ -142,6 +160,7 @@ describe("Criteria's starters", () => {
     const headings = [...host.querySelectorAll(".crit-starter-heading")].map((h) => flat(h.firstChild?.textContent));
     expect(headings).toEqual(STARTER_GROUPS.map((g) => g.heading));
     expect(headings).toContain("Worth a second look");
+    expect([...host.querySelectorAll(".crit-starter-group")].every((g) => g.tagName === "FIELDSET")).toBe(true);
     const labels = starters().map((b) => flat(b.textContent));
     expect(labels).toEqual(STARTER_GROUPS.flatMap((g) => g.starters.map((s) => s.label)));
   });
@@ -164,10 +183,14 @@ describe("Criteria's starters", () => {
   /* A latch (GPT Sol's plan review, F3): deleting the criterion cannot undo
      the anchoring the starters were held back to avoid, so they stay. */
   it("keeps the starters once unlocked, after the last criterion is deleted", async () => {
-    answer = (_url, init) =>
-      Promise.resolve(
-        (init.method ?? "GET") === "DELETE" ? json({ ok: true }) : json({ criteria: [OWN] }),
-      );
+    let saved = true;
+    answer = (_url, init) => {
+      if ((init.method ?? "GET") === "DELETE") {
+        saved = false;
+        return Promise.resolve(json({ ok: true }));
+      }
+      return Promise.resolve(json({ criteria: saved ? [OWN] : [] }));
+    };
     paint();
     await flush();
     expect(starters().length).toBeGreaterThan(0);
@@ -177,5 +200,61 @@ describe("Criteria's starters", () => {
     await flush();
     expect(host.querySelector(".crit-del"), "the row was not deleted").toBeNull();
     expect(starters().length, "the starters flickered off with the row").toBeGreaterThan(0);
+    remount();
+    await flush();
+    expect(starters().length, "a sub-mode remount locked the starters again").toBeGreaterThan(0);
+  });
+
+  it("unlocks on Run and keeps the latch when that first request fails", async () => {
+    paint();
+    await flush();
+    answer = () => Promise.resolve(json({ error: "The model call failed." }, 500));
+    typeCriterion("Does the comparison isolate the proposed cause?");
+    const run = host.querySelector<HTMLButtonElement>(".crit-run");
+    expect(run?.getAttribute("aria-disabled")).toBe("false");
+    act(() => run?.click());
+    await flush();
+    expect(starters().length, "the failed first run did not unlock starters").toBeGreaterThan(0);
+
+    answer = () => Promise.resolve(json({ criteria: [] }));
+    remount();
+    await flush();
+    expect(starters().length, "the failed first run's latch did not survive a remount").toBeGreaterThan(0);
+  });
+
+  it("does not reveal a remembered latch before the opening read settles", async () => {
+    answer = () => Promise.resolve(json({ criteria: [OWN] }));
+    paint();
+    await flush();
+    expect(starters().length).toBeGreaterThan(0);
+
+    answer = () => new Promise(() => {});
+    remount();
+    await flush();
+    expect(starters()).toHaveLength(0);
+    expect(host.querySelector(".crit-starters-wait")).toBeNull();
+  });
+
+  it("keeps a refused first criterion without revealing its latch during the next opening read", async () => {
+    paint();
+    await flush();
+    answer = () => Promise.resolve(json({ error: CRITERIA_AT_CEILING }, 409));
+    typeCriterion("Is the primary outcome the one the protocol specified?");
+    act(() => host.querySelector<HTMLButtonElement>(".crit-run")?.click());
+    await flush();
+    expect(flat(host.querySelector(".crit-error")?.textContent)).toContain(CRITERIA_AT_CEILING);
+    expect(starters().length).toBeGreaterThan(0);
+
+    let resolveRead!: (response: Response) => void;
+    answer = () => new Promise<Response>((resolve) => (resolveRead = resolve));
+    remount();
+    await flush();
+    expect(starters()).toHaveLength(0);
+    expect(host.querySelector(".crit-starters-wait")).toBeNull();
+
+    resolveRead(json({ criteria: [] }));
+    await flush();
+    expect(starters().length).toBeGreaterThan(0);
+    expect(flat(host.querySelector(".crit-error")?.textContent)).toContain(CRITERIA_AT_CEILING);
   });
 });

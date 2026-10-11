@@ -31,8 +31,9 @@ preprints, open-review submissions, and drafts the author has agreed to share.
 
 ## Test it against your criteria
 
-- **Write a criterion** under **Criteria** in Referee, or start from a preset, and press **Run this
-  criterion**. “The model did not find a passage” tells you about the search, not the paper.
+- **Write your first criterion** under **Criteria** in Referee and press **Run this criterion**.
+  Presets appear after that first question, so the suggestions cannot shape it. “The model did not
+  find a passage” tells you about the search, not the paper.
 - **Ask [Search](/help/mode-search) by meaning**, for example “where does he concede a weakness?”.
   The marks [down the spine](/help/spine) show whether the matches sit in one place or run through
   the whole piece.

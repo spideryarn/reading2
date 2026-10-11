@@ -57,7 +57,7 @@
  * 1. **A slug that is not an article at all** throws a tagged 404 from
  *    `ownedSlug`, because a slug is globally unique and the row it would
  *    otherwise find belongs to a stranger.
- * 2. **A young abandoned claims run** is left alone for
+ * 2. **A young abandoned promises run** is left alone for
  *    `PROMISES_ORPHAN_GRACE_MS`, because on Vercel the process that is streaming
  *    the answer is a different process from the one being asked.
  *    `RefereePromisesStore.sweep` in src/store/contracts.ts holds that decision,
@@ -102,7 +102,7 @@ const REVISION_ID = "00000000-0000-4000-8000-00000000af11";
 
 /** A slug no article has, in either store — see difference 1 in the header. */
 const ABSENT = "test-referee-parity-no-such-article";
-/** A fingerprint for claims runs whose fingerprint is not what the case is about. */
+/** A fingerprint for promises runs whose fingerprint is not what the case is about. */
 const HASH = "feedfacefeedface";
 
 await pgReady({
@@ -170,7 +170,7 @@ function clockFrom(startMs: number): () => string {
 const clock = () => clockFrom(Date.parse("2026-09-01T00:00:00.000Z"));
 
 /**
- * **A moment far enough in the past that a claims run started at it is already
+ * **A moment far enough in the past that a promises run started at it is already
  * abandoned** — see difference 2 in the header.
  *
  * This is how the Postgres sweep's grace window gets exercised without either
@@ -704,14 +704,14 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
   /* --------------------------------------------------------------- claims -- */
 
   /**
-   * One claims run's whole life, driven through whichever store it is handed.
+   * One promises run's whole life, driven through whichever store it is handed.
    *
    * `startedAt` is the clock, and it is in the past on purpose — see
    * `staleStart`. Both stores are driven from the same number, so the sweep step
    * below is a run both of them consider abandoned rather than a run one of them
    * was told to consider abandoned.
    */
-  async function claimsScript(store: RefereePromisesStore, startedAt: number): Promise<unknown[]> {
+  async function promisesScript(store: RefereePromisesStore, startedAt: number): Promise<unknown[]> {
     const now = clockFrom(startedAt);
     const snapshots: unknown[] = [];
     const take = async (label: string, returned?: unknown) => {
@@ -785,7 +785,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     return snapshots;
   }
 
-  it("walks a claims run through begin, finish, replace, sweep and fail", async () => {
+  it("walks a promises run through begin, finish, replace, sweep and fail", async () => {
     /* **Was a step-by-step comparison against the filesystem store.** Every one
        of these steps has its own case in tests/store-pg-referee-promises.test.ts,
        asserted against literals — `replaces the run rather than adding one`,
@@ -797,7 +797,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        zeros, because a `?? null` or a falsy check turns a truthful "none were
        cut off" into "we did not record it", and the two render as different
        sentences. */
-    const steps = (await claimsScript(pgRefereePromisesStore, staleStart())) as {
+    const steps = (await promisesScript(pgRefereePromisesStore, staleStart())) as {
       label: string;
       run: PromisesRun | null;
     }[];
@@ -841,12 +841,12 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
   /* ------------------------------------------ the two behaviours of its own -- */
 
-  it("leaves a young abandoned claims run alone, which is what the window is for", async () => {
+  it("leaves a young abandoned promises run alone, which is what the window is for", async () => {
     /* **The only guard on `PROMISES_ORPHAN_GRACE_MS` outside
        tests/store-pg-referee-promises.test.ts.** It was `differs about a young
        abandoned claims run, on purpose` while there were two stores — the
        filesystem one swept the moment anybody looked — and without it the past
-       clock the claims script runs on is indistinguishable from an exclusion:
+       clock the promises script runs on is indistinguishable from an exclusion:
        the day the grace window is dropped, the walk above still passes. */
     await pgRefereePromisesStore.begin(SLUG, HASH);
     const spared = await pgRefereePromisesStore.sweep(SLUG, false);

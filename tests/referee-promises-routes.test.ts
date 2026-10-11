@@ -1,5 +1,5 @@
 /**
- * The two routes behind Referee's Claims — `/api/referee/promises/…` in
+ * The two routes behind Referee's Promises — `/api/referee/promises/…` in
  * src/routes.ts.
  *
  * No server and no network: `handleApi` is a plain function over a request and a
@@ -155,7 +155,7 @@ const URL = `/api/referee/promises/${SLUG}`;
 const abandoned = () => () =>
   new Date(Date.now() - PROMISES_ORPHAN_GRACE_MS - 60_000).toISOString();
 
-describe("Referee's claims routes", { timeout: 60_000 }, () => {
+describe("Referee's promises routes", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
   let fresh: ScratchArticle;
 
@@ -177,7 +177,7 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
 
   describe("GET — reading the run back", () => {
     it("answers null for a paper nobody has asked, rather than 404", async () => {
-      /* A paper with no claims run is the ordinary state, not a missing
+      /* A paper with no promises run is the ordinary state, not a missing
          resource. The panel has a sentence for it and needs the 200 to render
          it. Under Postgres this is a `referee_promises` table with no row for
          this article, where on files it was a directory with no JSON file. */

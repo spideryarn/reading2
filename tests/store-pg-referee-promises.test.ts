@@ -1,5 +1,5 @@
 /**
- * **A claims run survives a round trip through the real Postgres store, and a
+ * **A promises run survives a round trip through the real Postgres store, and a
  * second owner cannot reach it.**
  *
  * Claims shipped on 2026-08-31 with a filesystem store only, so under
@@ -370,7 +370,7 @@ describe("the Postgres promises store", { timeout: 20_000 }, () => {
     expect(await store.load(SLUG)).toBeNull();
   });
 
-  /* ------------------------------------- claims are empty unless the run is done -- */
+  /* ----------------------------------- promises are empty unless the run is done -- */
 
   /**
    * **`referee_promises_empty_unless_done`: `status = 'done' or

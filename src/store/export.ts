@@ -825,7 +825,7 @@ export async function exportArticle(
      261011g); nothing reads an export back, so only a reader of old exports
      sees two names. The shape on disk is `{ run }` rather than a bare run, because that is
      what the filesystem claims store wrote and what a restore would have to
-     read back. That store (`src/referee-promises-store.ts`, with its
+     read back. That store (`src/referee-claims-store.ts`, with its
      `loadClaimsRun` reading `parsed.run`) was deleted on 2026-09-05 and this
      wrapper outlived it: the bytes are a rollback format now, and changing the
      envelope would silently invalidate every export already written.

@@ -145,7 +145,7 @@ const gates = vi.hoisted(() => {
   }
   return {
     criterion: makeGate(),
-    claims: makeGate(),
+    promises: makeGate(),
     mirror: makeGate(),
     hidden: makeGate(),
     /** The signal Hidden text's Opus check was handed: `gone`, so leaving stops the paid call. */
@@ -174,8 +174,8 @@ vi.mock("../src/referee-promises-run.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/referee-promises-run.js")>()),
   async *runPromisesStream() {
     yield { type: "promise", promise: { id: "c1", text: "a claim", blockId: "b" } };
-    gates.claims.arrive();
-    await gates.claims.hold();
+    gates.promises.arrive();
+    await gates.promises.hold();
     yield {
       type: "done",
       outcome: { promises: [], model: "stub", dropped: { truncated: 0 } },
@@ -398,7 +398,7 @@ async function ageTheCriteria(articleId: string): Promise<void> {
     .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.status, "pending")));
 }
 
-/** The same, for the claims run, whose sweep ages on `createdAt`. */
+/** The same, for the promises run, whose sweep ages on `createdAt`. */
 async function ageThePromisesRun(articleId: string): Promise<void> {
   await getDb()
     .update(refereePromises)
@@ -415,7 +415,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
   beforeEach(async () => {
     gates.criterion.reset();
-    gates.claims.reset();
+    gates.promises.reset();
     gates.mirror.reset();
     gates.hidden.reset();
     await asTestOwner(async () => {
@@ -430,7 +430,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     /* Release every gate before tearing down: a generator still parked on
        `hold()` keeps a request alive, and the worker would sit on it. */
     gates.criterion.release();
-    gates.claims.release();
+    gates.promises.release();
     gates.mirror.release();
     gates.hidden.release();
     await article?.remove();
@@ -748,16 +748,16 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
   });
 
   describe("POST /api/referee/promises/:slug", () => {
-    /* Written against the claims store rather than by analogy with criteria:
+    /* Written against the promises store rather than by analogy with criteria:
        its lock, key, store method and sweep are all its own (Sol, finding 4). */
     it("holds the request open until the stream is finished", async () => {
       const call = begin("POST", `/api/referee/promises/${SLUG}`);
-      await reachedOrSettled(gates.claims, call, "POST /api/referee/promises/:slug");
+      await reachedOrSettled(gates.promises, call, "POST /api/referee/promises/:slug");
 
       expect(call.settled(), "the request answered while the stream was still running").toBe(false);
       expect(call.ended()).toBe(false);
 
-      gates.claims.release();
+      gates.promises.release();
       await call.promise;
       expect(call.settled()).toBe(true);
       expect(call.ended()).toBe(true);
@@ -765,14 +765,14 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
     it("still holds its own lock while the stream is running, however old the run looks", async () => {
       const call = begin("POST", `/api/referee/promises/${SLUG}`);
-      await reachedOrSettled(gates.claims, call, "POST /api/referee/promises/:slug");
+      await reachedOrSettled(gates.promises, call, "POST /api/referee/promises/:slug");
 
       await ageThePromisesRun(article.articleId);
       const mid = await get(`/api/referee/promises/${SLUG}`);
       const run = mid.run as { status: string } | null;
       expect(run?.status, "an aged run survived only if `pullingPromises` holds it").toBe("pending");
 
-      gates.claims.release();
+      gates.promises.release();
       await call.promise;
     });
 
@@ -781,20 +781,20 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
          same shape as the oracle bug in the draft before that: the two cases
          above both stayed green with `pullingPromises.delete(slug)` deleted,
          because neither of them asks anything after the request has answered.
-         Criteria had this case; claims did not, and claims is a separate lock,
+         Criteria had this case; Promises did not, and Promises is a separate lock,
          key, sweep and store method rather than an instance of criteria. */
       const call = begin("POST", `/api/referee/promises/${SLUG}`);
-      await reachedOrSettled(gates.claims, call, "POST /api/referee/promises/:slug");
-      gates.claims.release();
+      await reachedOrSettled(gates.promises, call, "POST /api/referee/promises/:slug");
+      gates.promises.release();
       await call.promise;
 
-      /* There is one claims run per article, so the key is the slug and the row
+      /* There is one promises run per article, so the key is the slug and the row
          is the row — no id to keep in step. Put back to `pending` and aged past
          the grace, it is collectable if and only if the slug has left
          `pullingPromises`.
 
-         `claims: []` with it, as `begin` writes: a `pending` row may not carry
-         claims (`referee_promises_empty_unless_done`), so this hand-made one has
+         `promises: []` with it, as `begin` writes: a `pending` row may not carry
+         promises (`referee_promises_empty_unless_done`), so this hand-made one has
          to be a row the store could have made. */
       await getDb()
         .update(refereePromises)
@@ -807,7 +807,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     });
 
     it("holds its lock until the answer is stored, not only until the model stops", async () => {
-      /* The criteria case of the same name, against claims' own lock, sweep and
+      /* The criteria case of the same name, against Promises' own lock, sweep and
          store method. */
       const real = refereePromisesStore.finish.bind(refereePromisesStore);
       const spy = vi
@@ -819,8 +819,8 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         });
       try {
         const call = begin("POST", `/api/referee/promises/${SLUG}`);
-        await reachedOrSettled(gates.claims, call, "POST /api/referee/promises/:slug");
-        gates.claims.release();
+        await reachedOrSettled(gates.promises, call, "POST /api/referee/promises/:slug");
+        gates.promises.release();
         await call.promise;
 
         expect(spy, "the wrapped finish never ran, so nothing was tested").toHaveBeenCalledTimes(1);
@@ -839,10 +839,10 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
          from under the second. Each request now releases only its own hold on
          the key — src/live-keys.ts, plans 261002h and 261005i § C. */
       const older = begin("POST", `/api/referee/promises/${SLUG}`);
-      await reachedOrSettled(gates.claims, older, "POST /api/referee/promises/:slug (older)");
-      const releaseOlder = gates.claims.handOver();
+      await reachedOrSettled(gates.promises, older, "POST /api/referee/promises/:slug (older)");
+      const releaseOlder = gates.promises.handOver();
       const newer = begin("POST", `/api/referee/promises/${SLUG}`);
-      await reachedOrSettled(gates.claims, newer, "POST /api/referee/promises/:slug (newer)");
+      await reachedOrSettled(gates.promises, newer, "POST /api/referee/promises/:slug (newer)");
 
       releaseOlder();
       await older.promise;
@@ -853,7 +853,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       const run = mid.run as { status: string } | null;
       expect(run?.status, "the older run took the newer run's lock with it").toBe("pending");
 
-      gates.claims.release();
+      gates.promises.release();
       await newer.promise;
     });
 
@@ -868,12 +868,12 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       try {
         await late.committed;
         newer = begin("POST", `/api/referee/promises/${SLUG}`);
-        await reachedOrSettled(gates.claims, newer, "POST /api/referee/promises/:slug (newer)");
-        releaseNewer = gates.claims.handOver();
+        await reachedOrSettled(gates.promises, newer, "POST /api/referee/promises/:slug (newer)");
+        releaseNewer = gates.promises.handOver();
 
         late.answer();
-        await reachedOrSettled(gates.claims, older, "POST /api/referee/promises/:slug (older)");
-        gates.claims.release();
+        await reachedOrSettled(gates.promises, older, "POST /api/referee/promises/:slug (older)");
+        gates.promises.release();
         await older.promise;
         expect(newer.settled(), "the newer run finished too, so nothing was tested").toBe(false);
 
@@ -887,7 +887,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         late.restore();
         late.answer();
         releaseNewer();
-        gates.claims.release();
+        gates.promises.release();
         await Promise.all([older.promise, newer?.promise]);
       }
     });
@@ -1003,10 +1003,10 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
        starts passing for the old, broken reason — the row is spared by its age
        and the lock is never the explanation, which is exactly the bug this file
        was rewritten to remove. **Both** are asserted: checking only the criteria
-       one left the claims cases free to rot silently, since `claims` sweeps on a
+       one left the promises cases free to rot silently, since Promises sweeps on a
        grace of its own that is derived from a different timeout (Sol's stage 1
        review, P2). */
     expect(CRITERION_ORPHAN_GRACE_MS, "criteria").toBeLessThan(10 * 60_000);
-    expect(PROMISES_ORPHAN_GRACE_MS, "claims").toBeLessThan(10 * 60_000);
+    expect(PROMISES_ORPHAN_GRACE_MS, "promises").toBeLessThan(10 * 60_000);
   });
 });

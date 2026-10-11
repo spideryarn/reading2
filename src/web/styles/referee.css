@@ -411,6 +411,7 @@
    criterion of their own (CriteriaPanel.tsx § `STARTER_GROUPS`); the wait line
    stands in their place until then. */
 .crit-starters { display: flex; flex-direction: column; gap: 0.35rem; }
+.crit-starter-group { min-width: 0; margin: 0; padding: 0; border: 0; }
 .crit-starter-heading { margin: 0 0 0.15rem; font-size: 0.81rem; color: var(--ink); }
 .crit-starter-note,
 .crit-starters-wait { font-size: 0.81rem; color: var(--ink-faint); }

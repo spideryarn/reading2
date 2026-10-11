@@ -738,7 +738,7 @@ export async function* runPromisesStream({
      model saying it looked and found nothing, and here even that is a claim we
      do not make on the panel. The sentence is `ANSWER_UNUSABLE` in
      src/messages.ts, the same one Criteria throws; this file had its own
-     wording, `PROMISES_UNUSABLE`, until 2026-10-04. */
+     wording, `CLAIMS_UNUSABLE`, until 2026-10-04. */
   if (promises.length === 0 && discardedPromises(dropped) > 0) {
     throw new Error(ANSWER_UNUSABLE.message, { cause: "every-claim-discarded" });
   }

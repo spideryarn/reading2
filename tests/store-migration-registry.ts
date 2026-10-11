@@ -3360,7 +3360,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* The five referee suites below were converted together in stage B on
      2026-09-04, and they take the private lane for one reason between them:
      each seeds its own throwaway article through `scratchArticleInPg` and then
-     writes reader state — a claims run, criteria, comments — against it. None
+     writes reader state — a promises run, criteria, comments — against it. None
      goes near GoTrue, and the only Storage traffic is the corpus bytes the
      seeder dedups, except `referee-scan-route`, which stores four small raw
      documents of its own under content-addressed names nothing else can

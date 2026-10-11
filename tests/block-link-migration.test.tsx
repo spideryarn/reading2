@@ -100,7 +100,7 @@ function expectBlockLink(link: Element | null, id: BlockId, jumped: BlockId[]): 
   expect(jumped, "a plain click should jump exactly once").toEqual([id]);
 }
 
-describe("Claims: the quoted passages are block links", () => {
+describe("Promises: the quoted passages are block links", () => {
   function render(jumped: BlockId[]) {
     act(() => {
       root.render(

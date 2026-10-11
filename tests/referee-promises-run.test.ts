@@ -1,5 +1,5 @@
 /**
- * The model call behind a claims run — `runPromisesStream` in
+ * The model call behind a promises run — `runPromisesStream` in
  * src/referee-promises-run.ts.
  *
  * `fetch` is stubbed with real SSE frames, the discipline
@@ -293,7 +293,7 @@ describe("reading the answer back", () => {
       expect(err).toBeInstanceOf(Error);
       /* The one sentence in src/messages.ts that both Referee runners throw,
          whole and unchanged. Claims had its own wording until 2026-10-04
-         (`PROMISES_UNUSABLE`); two sentences sharing one code is what the
+         (`CLAIMS_UNUSABLE`); two sentences sharing one code is what the
          catalogue's "one distinct sentence, one code" rule forbids. Compared
          with the constant rather than with a literal, so the copy stays
          rewritable in one place. */
@@ -338,7 +338,7 @@ describe("reading the answer back", () => {
  * What `classifyEnd` in src/ai-call.ts is allowed to decide here, and what it
  * is not.
  *
- * A claims run reads the same shared classification every other streaming
+ * A promises run reads the same shared classification every other streaming
  * caller does and then makes its own decisions from it — which is why the
  * classifier reports rather than decides. Two of those decisions are worth
  * pinning, because both look like omissions to somebody reading the switch
@@ -402,7 +402,7 @@ describe("what the provider says about how it stopped", () => {
 
   it("accepts a `length` that landed after the object closed, rather than refusing a short answer", async () => {
     /* The control for `case "truncated"` being a `break`. Quiz refuses every
-       `length`; a claims run must not, because a model that fills its budget
+       `length`; a promises run must not, because a model that fills its budget
        with a few good claims and stops has produced a legitimately short
        answer — and a `length` that lands mid-object is already caught by the
        strict parse, which tests/overflow-message-reaches-its-caller.test.ts

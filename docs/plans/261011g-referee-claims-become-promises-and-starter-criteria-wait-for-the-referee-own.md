@@ -236,3 +236,26 @@ plain-reference view; the old store catches no constraint by name).
 - **F6 (P3), accepted:** the `.clm-` CSS namespace and the slash-form route join the rename and the
   done-grep.
 - Keeping the inner `claim` key: Sol agrees.
+
+## Log
+
+- **Merge of `origin/dev`** (`2a21dced5`). Dev had added Referee › Notes as a sixth sub-mode and
+  the `comments_severity` migration. This migration is restamped after it (journal idx 194, its
+  snapshot reparented onto dev's), and the sub-mode order is now criteria, promises, mirror, notes,
+  candidates. `db:chain` is clean; `db:generate --allow-empty` reports no changes.
+- **GPT Sol's code review**, [261011g-code-review-sol.md](261011g-code-review-sol.md): **LAND AFTER
+  FIXES**, which it made. The main one: the starter latch moved out of the panel into `useCriteria`
+  (`startersUnlocked`), held in sessionStorage per reader, article and tab
+  (`criterionStarterLatch`). It also fixed `evals/footnote-digits/snapshot.sql`, which still named the
+  dropped `claims` column; made the view's grants and final check stricter; did more renames; put
+  the starter groups in fieldsets with legends; and edited the copy. Each change was read before
+  it was accepted.
+- **Gates.** `npm run typecheck` passes after Sol's edits. The full `npm test`, run before Sol's
+  edits: 1958 files passed and one failed, `check-exit-does-not-truncate`. That test measures pipe
+  timing and shares nothing with this change, and it passed on a re-run. The 31 files Sol touched,
+  plus doc-links, help-corpus and the old-address and old-name tests, were re-run afterwards: all
+  672 tests pass. The 8 expand tests run on the private-Postgres lane.
+- **Seen red.** Two faults were put into the view: `finished_at` missing, then two columns in
+  swapped order. In both cases the migration's own final check refused to apply it, so every
+  test lane failed to migrate. The expand test sits behind that check, so the check is the guard
+  that has been seen failing. Both faults were edited back out.

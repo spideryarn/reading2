@@ -698,7 +698,7 @@ const NOT_A_ROW: Record<string, string> = {
   "useArc.ts":
     "its `error` is never drawn — Reader reads `capability.arc.arc` and nothing else of it — so there is nothing to put a button beside. Its sentence is checked below.",
   "usePromises.ts":
-    "Referee's claims run is a stored stream run, not a mode panel's artefact read; it already goes through `describeFetchFailure` and words its own load failure.",
+    "Referee's promises run is a stored stream run, not a mode panel's artefact read; it already goes through `describeFetchFailure` and words its own load failure.",
   "useRelations.ts":
     "Marginalia's relation words: a failed read stores no message and draws nothing, the notes simply have no connective.",
   "useCrossrefs.ts":

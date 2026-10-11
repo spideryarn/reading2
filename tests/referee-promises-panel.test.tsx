@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Claims' panel, and the three things about it that are not cosmetic.**
+ * **Promises' panel, and the three things about it that are not cosmetic.**
  *
  * Every one of them is a rule the cross-family review made the condition of this
  * sub-mode surviving at all
@@ -11,7 +11,7 @@
  * 1. **Document order, never thinness order**, and **nothing on a row that could
  *    become a ranking.** The rejected design put the claims with the fewest
  *    passages at the top and called the empty row a finding. The failure it
- *    invites is named in the plan: *a tired referee opens Claims first, reads the
+ *    invites is named in the plan: *a tired referee opens Promises first, reads the
  *    top "thin" rows, and treats everything unlisted as clean.* So the fixture
  *    below is arranged so that document order and thinness order disagree, and
  *    there is a test that no number appears beside a claim at all — because a
@@ -145,7 +145,7 @@ const OTHER_TEXT: OtherText[] = [
 
 /* ------------------------------------------------- rule 1, on the screen -- */
 
-it("acknowledges a Claims run immediately, before any wait timer runs", () => {
+it("acknowledges a Promises run immediately, before any wait timer runs", () => {
   vi.useFakeTimers();
   try {
     render([], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", promises: [] });
@@ -449,7 +449,7 @@ describe("what the panel draws when a claim's own line was withheld", () => {
 /**
  * **A cap nobody is told about is a ranking.**
  *
- * GPT Sol's second review, finding 5: Claims sorts into document order and then
+ * GPT Sol's second review, finding 5: Promises sorts into document order and then
  * deletes everything past claim twenty and passage eight. The counts reached the
  * outcome and the server log and nothing reached the referee — so the panel
  * showed an apparently complete list in which the claims the paper makes last
@@ -478,7 +478,7 @@ describe("what the panel says when a cap cut something", () => {
 
   it("still says the cap was reached when the count did not survive the store", () => {
     /* Every run stored so far is this case: `validatePromises` counts the
-       truncation and the route writes `claims` and `model` only. A full list is
+       truncation and older rows have no `promisesOmitted`. A full list is
        still proof the cap fired, and saying that beats saying nothing. */
     const full = Array.from({ length: MAX_PROMISES }, (_, i) => ({
       ...THIN,

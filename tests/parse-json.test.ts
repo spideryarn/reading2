@@ -76,7 +76,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
  *
  * **The fourth store loader changed twice on the same day**, and the second
  * change is the one worth knowing about. It was briefly `loadClaimsRun`, which
- * was itself deleted hours later when `src/referee-promises-store.ts` went — the
+ * was itself deleted hours later when `src/referee-claims-store.ts` went — the
  * whole filesystem claims store. It is `loadShelf` now, which has live callers:
  * `tests/helpers/seed-reader-state.ts` and `tests/store-parity.test.ts` read a
  * fixture's `shelf.json` through it to seed the columns Postgres keeps.

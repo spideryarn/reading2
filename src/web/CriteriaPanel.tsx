@@ -232,7 +232,7 @@ const SECOND_LOOK_STARTERS: CriterionStarter[] = [
   },
   {
     label: "Sample size",
-    criterion: "Is the number of participants or samples justified, and is how it was decided reported?",
+    criterion: "Is the number of participants or samples justified, and does the paper explain how that number was chosen?",
     kind: "single",
   },
   {
@@ -247,13 +247,13 @@ const SECOND_LOOK_STARTERS: CriterionStarter[] = [
  * Greg, 2026-10-10 (q-fkq30v 4A), carrying the research's condition: a list of
  * starters is the tool suggesting what to judge, which is the anchoring the
  * mode exists to avoid, so the first criterion has to be the referee's. While
- * no starter is on screen, whatever they save first is necessarily their own
- * words. Until 2026-10-11 the form group showed from the first visit.
+ * no starter is on screen, whatever they press Run on first is necessarily
+ * their own words. Until 2026-10-11 the form group showed from the first visit.
  */
 export const STARTER_GROUPS: { heading: string; note: string; starters: CriterionStarter[] }[] = [
   {
     heading: "Worth a second look",
-    note: "Reviewers miss more than they catch: in one study, given papers with nine planted major errors, they found fewer than three on average. These are checks that are easy to skip.",
+    note: "In one study, reviewers found fewer than three of nine planted major errors on average. These are checks worth making on a second pass.",
     starters: SECOND_LOOK_STARTERS,
   },
   {
@@ -263,9 +263,9 @@ export const STARTER_GROUPS: { heading: string; note: string; starters: Criterio
   },
 ];
 
-/** The line in the starters' place until the referee has written one of their own. */
+/** The line in the starters' place until the referee has run one of their own. */
 export const STARTERS_WAIT =
-  "Starters appear here once you have written a criterion of your own, so that your first question is yours.";
+  "Starters appear here after you press Run on a criterion of your own, so that your first question is yours.";
 
 /* ------------------------------------------------------------------ band -- */
 
@@ -452,16 +452,6 @@ function CriteriaView({
      asked for would be an explanation of a thing that is not happening.
      `config.kind` and not `results[0].kind`, because a criterion that is on and
      still streaming is already painting. */
-  /* **A latch, not a count** (GPT Sol's plan review, F3): the starters are
-     unlocked by the referee having written a criterion, and deleting it later
-     cannot un-anchor them, so they stay rather than flicker. Set by a saved
-     row once the list has loaded, or by the referee's own press of Run. Per
-     mount, so a fresh visit to an article with no criteria starts locked
-     again. No chat or MCP path creates a criterion today; one that ever does
-     must not set this. */
-  const [authored, setAuthored] = useState(false);
-  if (!authored && api.criteria.length > 0) setAuthored(true);
-
   const anyDiverging = api.criteria.some(
     (row) => active.includes(row.id) && row.config.kind === "diverging",
   );
@@ -470,11 +460,8 @@ function CriteriaView({
       <NewCriterion
         scale={scale}
         loaded={api.loaded}
-        hasOwn={authored}
-        onAsk={(criterion, config) => {
-          setAuthored(true);
-          onShow(api.ask(criterion, config));
-        }}
+        hasOwn={api.loaded && api.startersUnlocked}
+        onAsk={(criterion, config) => onShow(api.ask(criterion, config))}
       />
 
       {/* Two slots, because they are two facts: the load's failure stays until
@@ -717,8 +704,8 @@ function NewCriterion({
   /**
    * **Has the referee written a criterion of their own?** Pending, done or
    * failed alike: each is something they wrote and pressed Run on. The
-   * starters wait for it (`STARTER_GROUPS`), and `CriteriaView` keeps it set
-   * once it is.
+   * starters wait for it (`STARTER_GROUPS`), and `useCriteria` keeps the latch
+   * set across deletion and sub-mode remounts in this tab.
    */
   hasOwn: boolean;
   onAsk(criterion: string, config: RefereeCriterionConfig): void;
@@ -846,11 +833,11 @@ function NewCriterion({
       {hasOwn ? (
         <div className="crit-starters">
           {STARTER_GROUPS.map((g) => (
-            <div key={g.heading} className="crit-starter-group">
-              <p className="crit-starter-heading">
+            <fieldset key={g.heading} className="crit-starter-group">
+              <legend className="crit-starter-heading">
                 {g.heading}
                 <span className="crit-starter-note"> — {g.note}</span>
-              </p>
+              </legend>
               <div className="crit-presets">
                 {/* **The card says what the press overwrites**, because the press is
                     destructive and nothing on screen says so: it replaces the box, the
@@ -889,7 +876,7 @@ function NewCriterion({
                   ))}
                 </TooltipGroup>
               </div>
-            </div>
+            </fieldset>
           ))}
         </div>
       ) : (

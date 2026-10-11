@@ -922,7 +922,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(refereeCriteria)
     .where(eq(refereeCriteria.articleId, article.id))
     .orderBy(asc(refereeCriteria.createdAt), asc(refereeCriteria.id));
-  const claims = await tx
+  const promises = await tx
     .select()
     .from(refereePromises)
     .where(eq(refereePromises.articleId, article.id))
@@ -993,7 +993,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     chatMessages: messages,
     searchRuns: runs,
     refereeCriteria: criteria,
-    refereePromises: claims,
+    refereePromises: promises,
     sourcesClaimChecks: checks,
     refereeHiddenChecks: hiddenChecks,
     glossaryLookups: lookups,

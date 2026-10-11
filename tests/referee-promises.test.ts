@@ -1,5 +1,5 @@
 /**
- * What a claims run is allowed to become — `validatePromises` in
+ * What a promises run is allowed to become — `validatePromises` in
  * src/referee-promises.ts.
  *
  * Pure, deterministic, no network and no model. This is the file that holds the

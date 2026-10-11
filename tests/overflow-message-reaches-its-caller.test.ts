@@ -3,7 +3,7 @@
  *
  * `ANSWER_OVERFLOWED` carries the narrowing advice and goes to Search alone,
  * because Search's reader typed the ask; `ANSWER_OVERFLOWED_FIXED_ASK` is the
- * retry and nothing else, and is what Criteria, Claims and Mirror get, none of
+ * retry and nothing else, and is what Criteria, Promises and Mirror get, none of
  * which draws a scoping control. The split, and why it is two codes rather than
  * one, is src/messages.ts § `ANSWER_OVERFLOWED`; the parameter that chooses is
  * `AskKind` in src/search.ts.
@@ -189,7 +189,7 @@ describe("the overflow message each public caller gets", () => {
     expect(thrown?.message).toMatch(/\[ai-overflowed-no-ask\]$/);
   });
 
-  it("gives a claims pull the retry alone — it pulls the paper's own claims and has nothing to scope", async () => {
+  it("gives a promises pull the retry alone — it pulls the paper's own claims and has nothing to scope", async () => {
     fetchMock.mockResolvedValue(
       cutOff("claims", {
         blockId: "spya-k3m9qt",
@@ -251,7 +251,7 @@ describe("the overflow message each public caller gets", () => {
 describe("the two sentences, and which one a caller gets by saying nothing", () => {
   it("offers the referee's three callers the one lever their screens have", () => {
     const message = ANSWER_OVERFLOWED_FIXED_ASK.message.toLowerCase();
-    expect(message, "the retry is not offered, and it is the only lever Claims has").toMatch(
+    expect(message, "the retry is not offered, and it is the only lever Promises has").toMatch(
       /trying again/,
     );
     /* No conditional clause either: a criterion **is** the referee's own

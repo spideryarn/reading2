@@ -81,34 +81,46 @@ CREATE VIEW "spideryarn"."referee_claims" AS
          "finished_at"
     FROM "spideryarn"."referee_promises";--> statement-breakpoint
 
--- The view's grants are the table's, copied rather than written out, exactly
--- as drizzle/20261010063350_reception_expand.sql does for its view: the app
--- role reads and writes through the default privileges docs/project/database.md
--- § Step three sets (which a view created by the same owner also gets), and
--- this copies the table's direct grants to roles other than its owner and
--- PUBLIC — production's app-role DML grants are the case it is for.
+-- The view's DML grants are the table's, copied rather than written out,
+-- exactly as drizzle/20261010063350_reception_expand.sql does for its view.
+-- Include PUBLIC and preserve grant options: neither is how production is
+-- configured today, but omitting either would make this compatibility object
+-- subtly less capable than the relation whose old name it carries.
 DO $$
 DECLARE
   g record;
+  grantee_sql text;
 BEGIN
   FOR g IN
-    SELECT pg_get_userbyid(a.grantee) AS grantee, a.privilege_type
-      FROM pg_class c, aclexplode(c.relacl) a
+    SELECT a.grantee, pg_get_userbyid(a.grantee) AS grantee_name,
+           a.privilege_type, a.is_grantable
+      FROM pg_class c,
+           aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
      WHERE c.oid = '"spideryarn"."referee_promises"'::regclass
        AND a.grantee <> c.relowner
-       AND a.grantee <> 0
+       AND a.privilege_type IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
   LOOP
-    EXECUTE format('GRANT %s ON "spideryarn"."referee_claims" TO %I', g.privilege_type, g.grantee);
+    grantee_sql := CASE WHEN g.grantee = 0 THEN 'PUBLIC' ELSE quote_ident(g.grantee_name) END;
+    EXECUTE format(
+      'GRANT %s ON "spideryarn"."referee_claims" TO %s%s',
+      g.privilege_type,
+      grantee_sql,
+      CASE WHEN g.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
+    );
   END LOOP;
 END $$;--> statement-breakpoint
 
 -- **The postcondition**, because a rename that missed and one that worked print
--- the same tick: the old name answers with every row, and every constraint
--- carries the new name.
+-- the same tick: check the old shape, automatic write path and grants as well
+-- as the data and constraint names.
 DO $$
 DECLARE through_view bigint;
 DECLARE in_table bigint;
 DECLARE old_names bigint;
+DECLARE view_columns text[];
+DECLARE view_updatable text;
+DECLARE view_insertable text;
+DECLARE missing_dml_grants bigint;
 BEGIN
   SELECT count(*) INTO through_view FROM "spideryarn"."referee_claims";
   SELECT count(*) INTO in_table FROM "spideryarn"."referee_promises";
@@ -116,9 +128,46 @@ BEGIN
     FROM pg_constraint
    WHERE conrelid = '"spideryarn"."referee_promises"'::regclass
      AND conname LIKE 'referee\_claims\_%';
-  IF through_view <> in_table OR old_names > 0 THEN
+  SELECT array_agg(column_name::text ORDER BY ordinal_position)
+    INTO view_columns
+    FROM information_schema.columns
+   WHERE table_schema = 'spideryarn' AND table_name = 'referee_claims';
+  SELECT is_updatable, is_insertable_into
+    INTO view_updatable, view_insertable
+    FROM information_schema.views
+   WHERE table_schema = 'spideryarn' AND table_name = 'referee_claims';
+  WITH base_acl AS (
+    SELECT c.relowner, a.grantee, a.privilege_type, a.is_grantable
+      FROM pg_class c,
+           aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+     WHERE c.oid = '"spideryarn"."referee_promises"'::regclass
+       AND a.grantee <> c.relowner
+       AND a.privilege_type IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+  ), view_acl AS (
+    SELECT a.grantee, a.privilege_type, a.is_grantable
+      FROM pg_class c,
+           aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+     WHERE c.oid = '"spideryarn"."referee_claims"'::regclass
+  )
+  SELECT count(*) INTO missing_dml_grants
+    FROM base_acl b
+   WHERE NOT EXISTS (
+     SELECT 1 FROM view_acl v
+      WHERE v.grantee = b.grantee
+        AND v.privilege_type = b.privilege_type
+        AND (NOT b.is_grantable OR v.is_grantable)
+   );
+  IF through_view <> in_table
+     OR old_names > 0
+     OR view_columns <> ARRAY[
+       'article_id', 'owner_id', 'status', 'claims', 'model', 'claims_omitted',
+       'error', 'created_at', 'source_hash', 'attempt_id', 'finished_at'
+     ]::text[]
+     OR view_updatable IS DISTINCT FROM 'YES'
+     OR view_insertable IS DISTINCT FROM 'YES'
+     OR missing_dml_grants > 0 THEN
     RAISE EXCEPTION
-      'migration referee_promises: % row(s) through the view against % in the table, and % constraint(s) still named referee_claims_*',
-      through_view, in_table, old_names;
+      'migration referee_promises: view/table rows %/%, old constraints %, columns %, updatable %, insertable %, missing DML grants %',
+      through_view, in_table, old_names, view_columns, view_updatable, view_insertable, missing_dml_grants;
   END IF;
 END $$;

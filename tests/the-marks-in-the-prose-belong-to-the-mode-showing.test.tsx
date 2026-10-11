@@ -26,7 +26,7 @@
  * signed in as its owner, and drives the sequence the review's acceptance
  * criterion names:
  *
- * **Ideas → Timeline → Search with pending work → Criteria ↔ Claims → Plain →
+ * **Ideas → Timeline → Search with pending work → Criteria ↔ Promises → Plain →
  * Back**, and then, under an article change, **A → B → A over Ideas and
  * Timeline only**.
  *
@@ -37,14 +37,14 @@
  * driving the whole sequence three times over would roughly double the file's
  * runtime to re-prove wiring the first two arms already hold. The cost of the
  * choice is real and belongs here rather than in a footnote: **an
- * article-scoped wiring mistake in Search, Criteria or Claims specifically
+ * article-scoped wiring mistake in Search, Criteria or Promises specifically
  * would not be caught by this variant.**
  *
  * ## How a wrong wiring is made visible
  *
  * Every producer marks **its own paragraph and only its own**. Ideas quotes the
  * second paragraph, Timeline the third, Search's literal matcher the fourth,
- * Criteria the fifth and Claims the sixth — so "which blocks are marked" is a
+ * Criteria the fifth and Promises the sixth — so "which blocks are marked" is a
  * sentence naming the band, and a band whose marks went into another band's
  * slot produces an empty prose rather than a subtly wrong one. The mutation
  * that proves it is exactly Sol's: give `TimelineBand` Ideas' setter, and the
@@ -763,7 +763,7 @@ async function readingSession(strict: boolean): Promise<void> {
   await settle();
   agree("search, a row pressed", [P_FIND], [P_FIND]);
 
-  /* ---- Referee: Criteria, then Claims, then Criteria again. The one slot two
+  /* -- Referee: Criteria, then Promises, then Criteria again. The one slot two
      producers share, and the hand-off has to be visible in the prose rather
      than only in the state. */
   await press(MODE_LABEL.referee);
