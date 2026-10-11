@@ -46,7 +46,7 @@ import { CONTACT_EMAIL } from "./site-text.js";
 import type { FetchFailureCode } from "./types.js";
 import { canonicalKey } from "./source.js";
 import { readStreamCapped } from "./read-capped.js";
-import { MAX_UPLOAD_BYTES, uploadContentType } from "./uploads.js";
+import { MAX_UPLOAD_BYTES, convertedFormatFromName, uploadContentType, type UploadFormat } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
@@ -1860,6 +1860,41 @@ export function uploadedDocumentKind(filename: string, bytes: Uint8Array): Docum
   if (kind !== "html") return kind;
   if (evidence.leadingHtml) return "html";
   return evidence.otherVocabulary || evidence.binary ? null : "html";
+}
+
+/**
+ * **What an uploaded file is, in the five formats a reader may upload** — or
+ * `null` for one we will not read. Since 2026-10-11
+ * (docs/plans/261011j-upload-text-markdown-and-word-files.md).
+ *
+ * For a name claiming PDF or HTML this is `uploadedDocumentKind`, unchanged.
+ * For a name claiming text, Markdown or Word, the same evidence decides first
+ * and the claim only after it:
+ *
+ *  - **`%PDF-` at byte zero is a PDF**, whatever it is called. *Only* byte zero,
+ *    unlike `sniffKind`: a `.txt` of notes that quotes a PDF header in its first
+ *    kilobyte is notes, and sending it to the transcriber would bill the reader
+ *    for an empty article.
+ *  - **Leading HTML evidence is a web page**, whatever it is called — the
+ *    invariant `tests/fetch.test.ts` pins, that a filename never contradicts
+ *    what the fetched path would have found. So `page.txt` beginning
+ *    `<!doctype html>` is read as the page it is.
+ *  - **Word must be a zip** (`PK\x03\x04`); whether it is a *Word* zip is for
+ *    mammoth to say, in src/upload-convert.ts.
+ *  - **Text and Markdown must not be binary** (the WHATWG binary-data test,
+ *    BOM-aware, so a UTF-16 file from Notepad passes) and not another markup
+ *    vocabulary's document.
+ */
+export function uploadedFormat(filename: string, bytes: Uint8Array): UploadFormat | null {
+  const claimed = convertedFormatFromName(filename);
+  if (claimed === null) return uploadedDocumentKind(filename, bytes);
+  if (PDF_HEADER.exec(latin1(bytes.subarray(0, 8)))?.index === 0) return "pdf";
+  if (claimed === "docx") {
+    return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04 ? "docx" : null;
+  }
+  const evidence = documentEvidence(bytes, null);
+  if (evidence.leadingHtml) return "html";
+  return evidence.binary || evidence.otherVocabulary ? null : claimed;
 }
 
 /**

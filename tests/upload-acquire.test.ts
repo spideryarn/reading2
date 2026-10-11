@@ -90,10 +90,10 @@ const shaOf = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("
  * An upload that has been minted, claimed, and whose bytes are in the store —
  * exactly the state `POST /api/jobs { uploadId }` leaves behind.
  */
-async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
+async function readyToVerify(bytes: Uint8Array, claimedSha?: string, filename = "paper.pdf") {
   const minted = await mintUpload(
     {
-      filename: "paper.pdf",
+      filename,
       bytes: bytes.byteLength,
       sha256: claimedSha ?? shaOf(bytes),
       /* Its own id, not the one upload-records.test.ts uses — tests/fixture-ids.test.ts
@@ -115,7 +115,7 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
   const slug = `test-upload-${id.slice(0, 8)}`;
   const ctx = {
     slug,
-    upload: { id, filename: "paper.pdf" },
+    upload: { id, filename },
     report: () => {},
     preview: () => {},
     signal: new AbortController().signal,
@@ -171,6 +171,43 @@ describe("acquiring an uploaded file", () => {
        a copy exists somewhere. */
     if (!manifest) throw new Error("the step returned no manifest");
     expect(await readRawBytes(manifest)).toEqual(bytes);
+  });
+
+  /**
+   * **A text upload is stored as the page made from it, and kept as itself** —
+   * docs/plans/261011j-upload-text-markdown-and-word-files.md. Stage 2 reads a
+   * web page; the reader's own file sits beside it under the hash the manifest
+   * records (`sha256`, which `article_revisions.raw_sha256` stores) and the
+   * extension its name carries. Red by deleting the `storeRawSource(got,
+   * format)` line in `acquireUpload`.
+   */
+  it("turns a text file into a web page, and keeps the file it was", async () => {
+    const bytes = new TextEncoder().encode(`Notes ${Date.now()}\n\nFirst <thought> & second.\n`);
+    const { ctx } = await readyToVerify(bytes, undefined, "notes.txt");
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
+    const manifest = product.parts?.raw;
+    if (!manifest) throw new Error("the step returned no manifest");
+    rubbish.push(() => blobs.remove(canonicalKey(manifest.storedSha256 as string, "html")));
+    rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "text")));
+
+    expect(manifest.kind).toBe("html");
+    expect(manifest.filename).toBe("notes.txt");
+    expect(manifest.sha256).toBe(shaOf(bytes));
+    expect(manifest.storedSha256).not.toBe(shaOf(bytes));
+    const page = new TextDecoder().decode(await readRawBytes(manifest));
+    expect(page).toContain("<p>First &lt;thought&gt; &amp; second.</p>");
+    expect(await blobs.get(canonicalKey(shaOf(bytes), "text"))).toEqual(bytes);
+  });
+
+  /* A `.docx` that is not a Word document is the same refusal, the same reason
+     and the same code as any other file whose inside is not what its name says
+     — and nothing of it is kept. */
+  it("refuses a Word file mammoth cannot read, and keeps nothing", async () => {
+    const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x01, 0x02, 0x03]);
+    const { id, ctx } = await readyToVerify(bytes, undefined, "draft.docx");
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(/\[up-pdf\]/);
+    expect((await readUpload(id))?.reason).toBe("not-a-pdf");
+    expect(await blobs.head(canonicalKey(shaOf(bytes), "docx"))).toBeNull();
   });
 
   /** The name is a claim about its contents, so promotion has to be create-only. */
@@ -246,7 +283,7 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
 
     await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(
-      /isn't a PDF or a web page inside/,
+      /isn't one we can read inside/,
     );
     expect((await readUpload(id))?.status).toBe("rejected");
     expect((await readUpload(id))?.reason).toBe("not-a-pdf");

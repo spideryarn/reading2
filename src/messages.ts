@@ -2544,13 +2544,19 @@ export function fetchFailed(code: FetchFailureCode, status: number | null): Read
  * what a reader quotes back to us (docs/project/copy.md), and the reason is a
  * string already written into `uploads.reason` rows that a rename would orphan
  * for nothing. Neither is a spelling anybody but us reads.
+ *
+ * **Five formats since 2026-10-11**
+ * (docs/plans/261011j-upload-text-markdown-and-word-files.md), and the same
+ * sentence for a Word file that mammoth cannot read or the zip guard refuses:
+ * the reader's move is the same — save it again from the program that opens it.
  */
 export const UPLOAD_UNREADABLE_FILE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That file isn't a PDF or a web page inside, whatever its name says. Sending it again will " +
-    "not help, because it will be the same file — but if it opens in a PDF reader or a browser, " +
-    "saving it again from there usually produces one this app can read. [up-pdf]",
+    "That file isn't one we can read inside, whatever its name says — not a PDF, web page, Word " +
+    "document, Markdown or text file. Sending it again will not help, because it will be the same " +
+    "file — but if it opens in another program, saving it again from there as a PDF or a Word " +
+    "document usually produces one this app can read. [up-pdf]",
 };
 
 /**
