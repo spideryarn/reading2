@@ -1,0 +1,1695 @@
+diff --git a/docs/plans/261011j-upload-text-markdown-and-word-files.md b/docs/plans/261011j-upload-text-markdown-and-word-files.md
+new file mode 100644
+index 000000000..18c3b3ae0
+--- /dev/null
++++ b/docs/plans/261011j-upload-text-markdown-and-word-files.md
+@@ -0,0 +1,228 @@
++# Upload a text, Markdown or Word file
++
++**Status:** built, 2026-10-11; awaiting the code review.
++**Why:** feedback report `spya-qxh28e` (#563, `SPIDERYARN-READING2-HC`), from Greg — proven an
++admin's by `feedback-reporter.ts`, exit 0 — so it is built. Queue item `qi-ff2bfwq3`.
++
++> We want to allow the user to be able to upload articles in a wider range of formats, e.g. .txt,
++> .markdown and other text files, and also ideally Word documents if not too complex.
++>
++> see third-party-library-selection.md
++>
++> — Greg, via Feedback, 2026-10-11 01:44 UTC
++
++Today an upload is a PDF or a web page and nothing else (`uploadKind` in
++[`src/uploads.ts`](../../src/uploads.ts); the HTML half is
++[260907b](260907b-upload-an-html-file-and-a-url-for-a-pdf.md), which this follows closely).
++
++## The design: convert to a web page at the door, and let the HTML path do the rest
++
++**A text, Markdown or Word file becomes an HTML document inside stage 1's `acquireUpload`, and from
++then on it *is* an uploaded web page.** Stored as `kind: "html"`, read by stage 2's Readability,
++sanitised by stage 3 like every other page.
++
++```
++ browser ──PUT──▶ staging object ──acquireUpload──▶ what is it? (bytes first, then the name)
++                                                     │
++              pdf ─────────────────────────────────── store as pdf      ─▶ stage 2 (transcribe)
++              html ────────────────────────────────── store as html     ─▶ stage 2 (Readability)
++              text / markdown / docx ──▶ convert ──▶ store as html     ─▶ stage 2 (Readability)
++```
++
++Why this shape:
++
++- **No third `DocumentKind`.** `DocumentKind = "html" | "pdf"` is named in the bucket's content
++  types, `raw_sources.kind`, the feedback attachment map, export, the source scan, the registry
++  backfill. A `"docx"` kind would be a change to each, and a migration, for a format whose only use
++  downstream is to be turned into HTML.
++- **No new defence.** What comes out of the converters is HTML that goes through exactly the
++  Readability → `sanitize.ts` path a hostile `.html` upload already goes through. Uploading an HTML
++  file is already legal, so a converter that emitted anything at all adds no reachable markup that an
++  uploaded `.html` could not already carry.
++- **The rule "stored bytes are the decoded string" is the precedent.** An HTML upload already stores
++  the decoded text rather than the arrived bytes ([260907b § The design](260907b-upload-an-html-file-and-a-url-for-a-pdf.md#the-design-ask-the-question-stage-1-already-answers)).
++  This stores one step further from the arrived bytes, for the same reason: stage 2 reads one shape.
++
++**The simpler option passed over** was to refuse `.docx` and do only text and Markdown. Word is
++the larger half of the value (a reader's own drafts, reports, papers sent as attachments) and
++mammoth makes it a library call, so it is in; what is left out of it is below.
++
++**What this costs, said plainly:**
++
++- ~~The original file is not kept.~~ **It is, since the plan review** (§ After the plan review):
++  stored content-addressed beside the page. Diagnostics and export still carry the converted page,
++  not the original. Fixing a converter later does not reach articles already made, which is true of
++  every stage-1 decision.
++- **The manifest's `contentType` is `text/html`**, ours, as it already is for an upload; the
++  filename keeps the `.docx`/`.md`/`.txt` that says what the reader gave us.
++
++## What is decided by the name, and what by the bytes
++
++Same rule as `uploadedDocumentKind`, extended rather than replaced:
++
++1. **`%PDF-` at byte zero is a PDF**, whatever it is called.
++2. **Leading HTML evidence is a web page**, whatever it is called — the invariant
++   `tests/fetch.test.ts` pins ("evidence the fetched path found may never be contradicted by a
++   filename"). So `page.txt` that starts `<!doctype html>` is read as a page.
++3. **Otherwise the name's claim decides**: `.docx` → Word; `.md`, `.markdown`, `.mdown`, `.mkd` →
++   Markdown; `.txt`, `.text`, `.rst`, `.org` → text — and then the bytes must agree:
++   - Word: a zip (`PK\x03\x04`) that mammoth can read; anything else is refused `[up-pdf]`.
++   - text and Markdown: no binary evidence (`evidence.binary`, the NULs the sniffer already looks
++     for) and not another vocabulary's root.
++4. `.pdf`, `.html`, `.htm` as today.
++
++"Other text files" is **by extension, and only by extension**: `.txt`, `.text`, `.rst`, `.org`
++read as plain text. The browser's `File.type` cannot widen it, because `POST /api/uploads` decides
++on the name alone (`uploadProblem` with `type: ""`, `src/routes.ts`), and a picker that accepted a
++file the server then refused is the disagreement `src/uploads.ts` exists to prevent. Kept narrow on
++purpose: `.tex`, `.rtf`, `.odt`, `.epub`, `.doc` (the old binary Word) are refused with the existing
++sentence. See § Deferred.
++
++## The converters
++
++**Plain text** — ours, a dozen lines. Decode: BOM (UTF-8, UTF-16LE/BE), else strict UTF-8, else
++windows-1252 (what the HTML decoder would default to). Split on blank lines into `<p>`s, every
++character escaped. The first non-empty line is the `<title>` if it is short (≤ 120 chars), else the
++filename's stem. Single newlines are left in the paragraph, so hard-wrapped text (Project
++Gutenberg's 72 columns) reads as prose.
++
++**Markdown** — `micromark`, already in the tree (4.0.2, the tokenizer under
++`mdast-util-from-markdown` which `src/citable.ts` and the help pages use), plus
++`micromark-extension-gfm` for tables, strikethrough, task lists and autolinks. Same author and
++family; `micromark(text, { extensions: [gfm()], htmlExtensions: [gfmHtml()] })` returns HTML.
++**Raw HTML in the Markdown is escaped**, micromark's default (`allowDangerousHtml: false`). Not
++for safety — an `.html` upload is already legal and the sanitiser is downstream — but because it is
++the library's default and the boring choice; a `<details>` in a README shows as text. Title: the
++first `#` heading via Readability's own reading of `<h1>`, else the stem.
++
++**Word** — [mammoth](https://github.com/mwilliamson/mammoth.js), BSD-2, since 2013, still released
++(1.12.x, 2026). Chosen by [third-party-library-selection.md](../reusable/third-party-library-selection.md):
++
++| | mammoth | docx-preview / docx4js | pandoc (binary) | LibreOffice headless |
++|---|---|---|---|---|
++| what it is | docx → semantic HTML (headings, lists, tables, footnotes, links) | docx → styled DOM for a browser | universal converter | full office suite |
++| fits "one server process, TypeScript" | yes, pure JS | browser-first | a binary on Vercel: no | no |
++| community / pretraining | the standard answer, ~13 years | small | huge, but not a library | — |
++
++mammoth's *semantic* output (it maps Word styles to `h1`–`h6`, `ul`/`ol`, `table`, footnotes,
++rather than reproducing fonts and colours) is exactly what Readability and the block splitter want.
++
++**Version ≥ 1.11.0 matters**: 1.11.0 stopped mammoth reading *external* files a document links to
++(a `.docx` can name `file:///etc/passwd` as a linked image — CVE-2025-11849). We pin the current
++release and pass nothing that turns external access on.
++
++**Images are dropped in v1.** mammoth's default inlines them as `data:` URIs; stage 4.5
++(`src/assets.ts`) hosts only absolute `http(s)` images, so they would be dropped there anyway, but a
++50 MB document's base64 would ride through Readability first. So `convertImage` returns no `src`,
++and the media parts are not decompressed at all (below). Hosting a Word document's figures is
++§ Deferred.
++
++### A `.docx` is a zip, so it can be a zip bomb
++
++The 50 MiB cap is on the compressed bytes. mammoth decompresses `word/document.xml` with jszip,
++which grows its output to whatever the stream inflates to, ignoring the declared size — so a 50 MB
++file that inflates to 50 GB takes the process down. **The guard, before mammoth sees anything**
++(`boundedDocxParts`; this is the version after the plan review — the first trusted declared sizes,
++§ After the plan review):
++
++1. fflate's streaming `Unzip` reads the archive **16 KB at a time** and inflates each part we keep,
++   **counting the bytes that actually come out**. Past **32 MiB** in all, it stops and refuses. No
++   header field is believed: not the declared size, not the compressed size, not an offset.
++2. It refuses more than 2,000 entries, a name that appears twice, and any compression method
++   other than stored or deflate; it skips `word/media/`, `word/embeddings/` and `word/fonts/`
++   without inflating them.
++3. The kept parts are re-zipped, stored (level 0), and *that* is what mammoth reads — so whatever
++   the reader's archive says about itself never reaches jszip.
++
++Each refusal has a test built from a hand-made adversarial zip (a lying deflate header, a lying
++stored entry, a streamed archive with data descriptors, a repeated name, an unknown method), and
++each was watched going red with its check removed.
++
++mammoth's XML parser is `@xmldom/xmldom`, which installs only XML's five predefined entities, so
++neither external entities nor billion-laughs expansion is reachable (checked by the reviewer
++against the installed source).
++
++## Where the code goes
++
++| file | change |
++|---|---|
++| `src/uploads.ts` | `uploadKind` returns `"pdf" \| "html" \| "text" \| "markdown" \| "docx" \| null`; `uploadContentType` labels the PUT (`text/plain` for text and Markdown, the Word MIME for `.docx`); `uploadLimits()` and `uploadProblem`'s sentence name the formats |
++| `src/fetch.ts` | `uploadedFormat(filename, bytes)` beside `uploadedDocumentKind`, same evidence, the rule above |
++| `src/upload-convert.ts` (new, server-only) | `convertUpload(format, bytes, filename)`: the three converters and the zip guard |
++| `src/source.ts`, `src/store/blobs.ts` | `StoredKind` gains the three formats (extension, content type), so the original is stored like any other object |
++| `src/pipeline.ts` § `acquireUpload` | ask `uploadedFormat`; for the three, convert and continue as `kind: "html"` with the converted text; a converter failure is `refuse("not-a-pdf")` |
++| `scripts/stage.ts` § `ingestFile` | the same function, so `npm run ingest -- notes.md` agrees with the browser |
++| `src/messages.ts` | `UPLOAD_UNREADABLE_FILE`'s sentence names the formats; code `[up-pdf]` and reason `"not-a-pdf"` unchanged, for 260907b's reasons |
++| `src/web/UploadPicker.tsx` | `accept` lists the new extensions and types |
++| `supabase/config.toml` | the `sources` bucket allows `text/plain` and `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
++
++**The bucket change does not reach production by itself.** `scripts/deploy.ts` refuses on
++bucket drift until the repair, `npx tsx scripts/check-buckets.ts --prod --apply`, has run
++([deployment.md](../project/deployment.md)). That is the Overseer's to run as part of the deploy,
++not this session's; the note says so, and until it runs a text or Word upload gets a 415 at the
++bucket while PDF and HTML are untouched.
++
++## Not a defence edit
++
++None of `security-map.md § Where the defences physically live` is touched: not the sanitiser, not
++`routes.ts` (the upload route already asks `uploadProblem` by name), not `fetch.ts`'s scheme/size
++envelope (the new function sits beside `uploadedDocumentKind`, which is classification, not the
++envelope). The zip guard is new defensive code in a new module.
++
++## Stages
++
++1. **Classification and conversion**: `uploads.ts`, `fetch.ts`, `upload-convert.ts`, `acquireUpload`,
++   `ingestFile`, the bucket line, tests (unit for each converter and the zip guard; the pipeline's
++   upload test for one text and one `.docx` through to an article). Run against the local stack with
++   `npm run ingest -- <file>` on a real `.txt`, `.md` and `.docx`.
++2. **What the reader sees**: picker `accept`, `uploadLimits()`, the two refusal sentences, docs
++   ([ingest-queue.md](../project/ingest-queue.md), [content-extraction.md](../project/content-extraction.md),
++   `/help` if it lists formats), and one browser pass uploading each kind.
++
++## After the plan review
++
++GPT Sol said **REWORK** ([plan-review-sol](261011j-upload-text-markdown-and-word-files-plan-review-sol.md)).
++What each finding became:
++
++1. **Keep the original (high).** Accepted: vision.md principle 6, *never lose what the reader gave
++   us*. `acquireUpload` now stores the arrived bytes too, content-addressed as
++   `sha256/<raw_sha256>.{txt,md,docx}` — the hash `article_revisions.raw_sha256` already holds and
++   the extension `raw_filename` already carries, so the original is findable with **no migration
++   and no new column**. Nothing in this repo ever deletes a blob. Export and the Feedback
++   diagnostics still carry the converted page, which is what the pipeline read; carrying the
++   original too is deferred below. **On the injection scan** (`src/injection-scan.ts`, a defence
++   this work does not touch): its question is whether the model reads text the reader cannot
++   see, and mammoth flattens white, one-point and Word-"hidden" text into ordinary paragraphs, so
++   what the model reads and what the reader sees are the same page — the scan examines the right
++   thing. A test pins that flattening, so a mammoth upgrade that kept any of it would go red.
++2. **The zip guard was not sound (high).** Accepted and rebuilt: § A `.docx` is a zip. The
++   reviewer was right that `unzipSync` bounds the buffer but not the work, and that stored and
++   duplicated entries escaped the count.
++3. **mammoth hardening (medium).** Floor raised to **1.12.3** (1.12.2 fixed a prototype pollution
++   that could re-enable external file access; 1.12.3 a ReDoS); `includeEmbeddedStyleMap: false`
++   added. **A worker with a timeout was not added**: no document parser here runs in one — pdf.js
++   and Readability read hostile files in-process — and what a `.docx` adds over those, the zip, is
++   now bounded. Isolating every parser is its own piece of work, queued below.
++4. **CLI and deploy contract (low).** The CLI uses `uploadedFormat` and `formatContentType`, and
++   the bucket line says plainly that `check-buckets --prod --apply` must run before the deploy's
++   gate passes; the deploy only refuses.
++5. **Test seams (low).** Added: Markdown end to end (CLI), browser-type variants
++   (`tests/uploads.test.ts`), the staging type against the declared bucket list, an embedded
++   picture, the adversarial zips, and `acquireUpload` against the database for a text file and a
++   bad `.docx`. Not added: a converter timeout (there is none, per 3).
++
++## Deferred (each gets an overseer-queue entry)
++
++- **Images from a Word document**, hosted like a web page's figures (extract `word/media/*`, store
++  through `src/assets.ts`).
++- **More formats**: `.odt`, `.rtf`, `.epub`, old binary `.doc`, LaTeX `.tex`.
++- **Maths in Markdown** (`$…$`) drawn as maths, via the existing TeX path.
++- **Export and Feedback diagnostics carry the original file** of a converted upload, beside the
++  page made from it.
++- **Run untrusted document parsers in a worker with a timeout** — mammoth, pdf.js, Readability —
++  as their READMEs recommend.
++
++## Review
++
++- Plan: GPT Sol, `--sandbox review` — [261011j-…-plan-review-sol.md](261011j-upload-text-markdown-and-word-files-plan-review-sol.md).
++- Code: GPT Sol, fixes in place — [261011j-…-code-review-sol.md](261011j-upload-text-markdown-and-word-files-code-review-sol.md).
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index 618f34f92..490857410 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -94,7 +94,8 @@ What the add box did before there was a queue is in [261007g-ingest-queue-histor
+ | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
+ | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
+ | [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |
+-| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a file worth uploading — PDF or web page — and how big is too big |
++| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a file worth uploading — PDF, web page, Word, Markdown or text — and how big is too big |
++| [`src/upload-convert.ts`](../../src/upload-convert.ts) | a Word, Markdown or text upload turned into a web page at stage 1, the original kept beside it, and the zip-bomb guard ([261011j](../plans/261011j-upload-text-markdown-and-word-files.md)) |
+ 
+ ## Uploading a PDF
+ 
+diff --git a/package.json b/package.json
+index 65840ded1..bcb930c4f 100644
+--- a/package.json
++++ b/package.json
+@@ -117,7 +117,10 @@
+     "idb": "^8.0.3",
+     "jsdom": "^29.1.1",
+     "lucide-react": "^1.34.0",
++    "mammoth": "^1.12.3",
+     "mdast-util-from-markdown": "^2.0.3",
++    "micromark": "^4.0.2",
++    "micromark-extension-gfm": "^3.0.0",
+     "nuqs": "^2.10.0",
+     "p-queue": "^9.3.3",
+     "pdf-lib": "^1.17.1",
+diff --git a/scripts/stage.ts b/scripts/stage.ts
+index 32a08e3ee..d9cf5f2d4 100644
+--- a/scripts/stage.ts
++++ b/scripts/stage.ts
+@@ -124,8 +124,8 @@ let getJob: typeof import("../src/jobs.js").getJob;
+ let environmentOwnerId: typeof import("../src/owner.js").environmentOwnerId;
+ let isStepName: typeof import("../src/pipeline.js").isStepName;
+ let stagingKey: typeof import("../src/source.js").stagingKey;
+-let uploadedDocumentKind: typeof import("../src/fetch.js").uploadedDocumentKind;
+-let CONTENT_TYPE: typeof import("../src/store/blobs.js").CONTENT_TYPE;
++let uploadedFormat: typeof import("../src/fetch.js").uploadedFormat;
++let formatContentType: typeof import("../src/uploads.js").formatContentType;
+ let postgresBlobStore: typeof import("../src/store/blobs.js").postgresBlobStore;
+ let claimUpload: typeof import("../src/upload-records.js").claimUpload;
+ let mintUpload: typeof import("../src/upload-records.js").mintUpload;
+@@ -143,10 +143,10 @@ async function loadRuntime(): Promise<void> {
+   ({ environmentOwnerId } = await import("../src/owner.js"));
+   ({ isStepName } = await import("../src/pipeline.js"));
+   ({ stagingKey } = await import("../src/source.js"));
+-  ({ uploadedDocumentKind } = await import("../src/fetch.js"));
+-  ({ CONTENT_TYPE, postgresBlobStore } = await import("../src/store/blobs.js"));
++  ({ uploadedFormat } = await import("../src/fetch.js"));
++  ({ postgresBlobStore } = await import("../src/store/blobs.js"));
+   ({ claimUpload, mintUpload, noteSlug, readUpload } = await import("../src/upload-records.js"));
+-  ({ MAX_UPLOAD_BYTES } = await import("../src/uploads.js"));
++  ({ MAX_UPLOAD_BYTES, formatContentType } = await import("../src/uploads.js"));
+ }
+ 
+ type Job = Awaited<ReturnType<typeof enqueue>>;
+@@ -466,17 +466,17 @@ async function ingestFile(file: string): Promise<never> {
+     );
+   }
+   const filename = path.basename(file);
+-  /* **`uploadedDocumentKind` is the same function `acquireUpload` uses**, so
+-     the two cannot disagree about what a file is — and since 2026-09-07 that
+-     matters twice over, because the answer is no longer a boolean. It decides
+-     the `Content-Type` the bytes go into the bucket under a few lines down, and
+-     a CLI that guessed `application/pdf` for a web page would be refused by the
++  /* **`uploadedFormat` is the same function `acquireUpload` uses**, so the two
++     cannot disagree about what a file is — and since 2026-09-07 that matters
++     twice over, because the answer is no longer a boolean. It decides the
++     `Content-Type` the bytes go into the bucket under a few lines down, and a
++     CLI that guessed `application/pdf` for a web page would be refused by the
+      bucket's own allowlist with a status nobody could read. */
+-  const kind = uploadedDocumentKind(filename, bytes);
++  const kind = uploadedFormat(filename, bytes);
+   if (kind === null) {
+     die(
+-      `${file} is neither a PDF nor a web page, so nothing here can read it.\n` +
+-        "  This takes a `.pdf` or an `.html`; an address is `npm run ingest -- <url>`.",
++      `${file} is not a file we can read.\n` +
++        "  This takes a `.pdf`, `.html`, `.docx`, `.md` or `.txt`; an address is `npm run ingest -- <url>`.",
+     );
+   }
+   const sha256 = createHash("sha256").update(bytes).digest("hex");
+@@ -494,7 +494,7 @@ async function ingestFile(file: string): Promise<never> {
+     stagingKey,
+   );
+   const id = minted.record.id;
+-  await store.putIfAbsent(stagingKey(id), bytes, CONTENT_TYPE[kind]);
++  await store.putIfAbsent(stagingKey(id), bytes, formatContentType(kind));
+ 
+   const claim = await claimUpload(id, { owner, arrived: true });
+   if (!claim.ok) die(`Could not claim the upload we had just minted: ${claim.why}.`);
+diff --git a/src/fetch.ts b/src/fetch.ts
+index 4f622cb38..5512e0b65 100644
+--- a/src/fetch.ts
++++ b/src/fetch.ts
+@@ -46,7 +46,7 @@ import { CONTACT_EMAIL } from "./site-text.js";
+ import type { FetchFailureCode } from "./types.js";
+ import { canonicalKey } from "./source.js";
+ import { readStreamCapped } from "./read-capped.js";
+-import { MAX_UPLOAD_BYTES, uploadContentType } from "./uploads.js";
++import { MAX_UPLOAD_BYTES, convertedFormatFromName, uploadContentType, type UploadFormat } from "./uploads.js";
+ import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
+ 
+ /* ------------------------------------------------------------------ *
+@@ -1862,6 +1862,41 @@ export function uploadedDocumentKind(filename: string, bytes: Uint8Array): Docum
+   return evidence.otherVocabulary || evidence.binary ? null : "html";
+ }
+ 
++/**
++ * **What an uploaded file is, in the five formats a reader may upload** — or
++ * `null` for one we will not read. Since 2026-10-11
++ * (docs/plans/261011j-upload-text-markdown-and-word-files.md).
++ *
++ * For a name claiming PDF or HTML this is `uploadedDocumentKind`, unchanged.
++ * For a name claiming text, Markdown or Word, the same evidence decides first
++ * and the claim only after it:
++ *
++ *  - **`%PDF-` at byte zero is a PDF**, whatever it is called. *Only* byte zero,
++ *    unlike `sniffKind`: a `.txt` of notes that quotes a PDF header in its first
++ *    kilobyte is notes, and sending it to the transcriber would bill the reader
++ *    for an empty article.
++ *  - **Leading HTML evidence is a web page**, whatever it is called — the
++ *    invariant `tests/fetch.test.ts` pins, that a filename never contradicts
++ *    what the fetched path would have found. So `page.txt` beginning
++ *    `<!doctype html>` is read as the page it is.
++ *  - **Word must be a zip** (`PK\x03\x04`); whether it is a *Word* zip is for
++ *    mammoth to say, in src/upload-convert.ts.
++ *  - **Text and Markdown must not be binary** (the WHATWG binary-data test,
++ *    BOM-aware, so a UTF-16 file from Notepad passes) and not another markup
++ *    vocabulary's document.
++ */
++export function uploadedFormat(filename: string, bytes: Uint8Array): UploadFormat | null {
++  const claimed = convertedFormatFromName(filename);
++  if (claimed === null) return uploadedDocumentKind(filename, bytes);
++  if (PDF_HEADER.exec(latin1(bytes.subarray(0, 8)))?.index === 0) return "pdf";
++  if (claimed === "docx") {
++    return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04 ? "docx" : null;
++  }
++  const evidence = documentEvidence(bytes, null);
++  if (evidence.leadingHtml) return "html";
++  return evidence.binary || evidence.otherVocabulary ? null : claimed;
++}
++
+ /**
+  * Bytes as characters, one for one. Only ever used to look at markup, never to
+  * keep.
+diff --git a/src/messages.ts b/src/messages.ts
+index 7b3a7b507..c0187d635 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -2544,13 +2544,19 @@ export function fetchFailed(code: FetchFailureCode, status: number | null): Read
+  * what a reader quotes back to us (docs/project/copy.md), and the reason is a
+  * string already written into `uploads.reason` rows that a rename would orphan
+  * for nothing. Neither is a spelling anybody but us reads.
++ *
++ * **Five formats since 2026-10-11**
++ * (docs/plans/261011j-upload-text-markdown-and-word-files.md), and the same
++ * sentence for a Word file that mammoth cannot read or the zip guard refuses:
++ * the reader's move is the same — save it again from the program that opens it.
+  */
+ export const UPLOAD_UNREADABLE_FILE: ReaderFacingFailure = {
+   kind: "blocked",
+   message:
+-    "That file isn't a PDF or a web page inside, whatever its name says. Sending it again will " +
+-    "not help, because it will be the same file — but if it opens in a PDF reader or a browser, " +
+-    "saving it again from there usually produces one this app can read. [up-pdf]",
++    "That file isn't one we can read inside, whatever its name says — not a PDF, web page, Word " +
++    "document, Markdown or text file. Sending it again will not help, because it will be the same " +
++    "file — but if it opens in another program, saving it again from there as a PDF or a Word " +
++    "document usually produces one this app can read. [up-pdf]",
+ };
+ 
+ /**
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index e216937fb..3f48163fc 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -52,6 +52,7 @@ import { ChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } fr
+ import {
+   cameFromAnUpload,
+   decodeHtml,
++  type DocumentKind,
+   FetchFailure,
+   type FetchedDocument,
+   fetchDocument,
+@@ -59,9 +60,11 @@ import {
+   RawDocumentUnavailable,
+   readRawBytes,
+   storedDocumentBytes,
+-  uploadedDocumentKind,
++  uploadedFormat,
+   writeRaw,
+ } from "./fetch.js";
++import { convertUpload } from "./upload-convert.js";
++import type { ConvertedFormat } from "./uploads.js";
+ import {
+   GLOSSARY_OUTPUT_SCHEMA,
+   generateGlossary,
+@@ -1542,6 +1545,21 @@ async function refuseAnOverlongPdf(
+   }
+ }
+ 
++/**
++ * A text, Markdown or Word upload as the page it becomes, in the shape
++ * `decodeHtml` returns — or the upload refused, when the bytes are not the
++ * format the name claimed. src/upload-convert.ts.
++ */
++async function convertedText(
++  format: ConvertedFormat,
++  bytes: Uint8Array,
++  filename: string,
++  refuse: () => Promise<never>,
++): Promise<{ text: string; encoding: string | null }> {
++  const converted = (await convertUpload(format, bytes, filename)) ?? (await refuse());
++  return { text: converted.html, encoding: converted.encoding };
++}
++
+ /**
+  * **Stage 1 for a file the reader gave us** — the verification the plan calls
+  * `verify-source`, living inside the acquisition step rather than beside it.
+@@ -1647,11 +1665,18 @@ async function acquireUpload(
+      next forty lines, so every use of it needs a cast or a second check — and a
+      cast here would be a claim that a refusal happened, which is the one thing
+      nothing downstream could verify. This way the compiler knows. */
+-  const kind = uploadedDocumentKind(upload.filename, got) ?? (await refuse("not-a-pdf"));
++  const format = uploadedFormat(upload.filename, got) ?? (await refuse("not-a-pdf"));
+ 
+   const sha256 = createHash("sha256").update(got).digest("hex");
+   if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
+ 
++  /* **What is stored, as against what arrived.** Text, Markdown and Word are
++     turned into a web page below and are a web page from then on — no third
++     `DocumentKind`, and nothing after this step can tell them from an uploaded
++     `.html` except by the filename on the manifest
++     (docs/plans/261011j-upload-text-markdown-and-word-files.md). */
++  const kind: DocumentKind = format === "pdf" ? "pdf" : "html";
++
+   /* **After the hash, before the promotion**, and the position is the whole of
+      it: three lines further down the record is `verified` and nothing can move
+      it again. Not through `refuse` above, because that throws the *static*
+@@ -1679,8 +1704,26 @@ async function acquireUpload(
+      filename carries none. Passing `text/html` there would be handing the
+      sniffer a charset claim nobody made. So the encoding comes from the BOM,
+      then the document's own `<meta charset>`, then windows-1252 — which is what
+-     a browser does with a file off a disk too. */
+-  const decoded = kind === "html" ? decodeHtml(got, null) : null;
++     a browser does with a file off a disk too.
++
++     **For a converted format the "decoded string" is the converter's page**,
++     and a `.docx` mammoth cannot read is refused here with the same sentence as
++     any other file whose inside is not what its name says. */
++  const decoded =
++    format === "pdf"
++      ? null
++      : format === "html"
++        ? decodeHtml(got, null)
++        : await convertedText(format, got, upload.filename, () => refuse("not-a-pdf"));
++
++  /* **And the file itself, kept**, because it is the reader's (vision.md,
++     principle 6) and the page above is only what we made of it. Under the
++     arrived bytes' own hash — the `sha256` this manifest records and
++     `article_revisions.raw_sha256` stores — with the extension of the format,
++     so `raw_filename` and `raw_sha256` are enough to find it again. After the
++     conversion, so a file we refuse is not kept; before the page is stored, so
++     a page is never stored without its original. */
++  if (format !== "pdf" && format !== "html") await storeRawSource(got, format);
+   const storedBytes = storedDocumentBytes(
+     decoded === null ? { kind: "pdf", bytes: got } : { kind: "html", text: decoded.text },
+   );
+diff --git a/src/source.ts b/src/source.ts
+index 5167a5757..8824b434d 100644
+--- a/src/source.ts
++++ b/src/source.ts
+@@ -61,7 +61,7 @@ import {
+   UPLOAD_TOO_BIG,
+   UPLOAD_TOO_MANY_PAGES,
+ } from "./messages.js";
+-import { MAX_UPLOAD_BYTES } from "./uploads.js";
++import { type ConvertedFormat, MAX_UPLOAD_BYTES } from "./uploads.js";
+ 
+ /* ------------------------------------------------------------- the axes -- */
+ 
+@@ -168,8 +168,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  * document* a revision was made from; an image is not the document, so
+  * `raw_sources.kind`'s `check (kind in ('pdf','html'))` stays exactly as it is
+  * and the `assets` manifest is the record instead.
++ *
++ * **Nor does the file a text, Markdown or Word upload arrived as**, since
++ * 2026-10-11. Stage 1 turns those into a web page and the page is the document
++ * (`raw_sources` row and all); the arrived file is kept beside it, under the
++ * hash `article_revisions.raw_sha256` already records and the extension
++ * `raw_filename` already carries — so it is findable with no new column, and
++ * kept because a reader's file is theirs (vision.md, principle 6).
++ * docs/plans/261011j-upload-text-markdown-and-word-files.md.
+  */
+-export type StoredKind = DocumentKind | AssetExt;
++export type StoredKind = DocumentKind | AssetExt | ConvertedFormat;
+ 
+ const EXTENSION: Record<StoredKind, string> = {
+   html: "html",
+@@ -177,6 +185,9 @@ const EXTENSION: Record<StoredKind, string> = {
+   png: "png",
+   jpeg: "jpeg",
+   gif: "gif",
++  text: "txt",
++  markdown: "md",
++  docx: "docx",
+ };
+ 
+ /**
+diff --git a/src/store/blobs.ts b/src/store/blobs.ts
+index e4ade44d9..e47ceb8d3 100644
+--- a/src/store/blobs.ts
++++ b/src/store/blobs.ts
+@@ -36,6 +36,7 @@
+ import { createHash } from "node:crypto";
+ 
+ import { canonicalKey, type StoredKind } from "../source.js";
++import { formatContentType } from "../uploads.js";
+ import { fsBlobs } from "./blobs-fs.js";
+ import { StorageFailed, supabaseBlobs } from "./blobs-supabase.js";
+ 
+@@ -124,6 +125,11 @@ export const CONTENT_TYPE: Record<StoredKind, string> = {
+   png: "image/png",
+   jpeg: "image/jpeg",
+   gif: "image/gif",
++  /* The file a converted upload arrived as, kept beside the page made from it
++     (src/source.ts § `StoredKind`). The same types its staging PUT carried. */
++  text: formatContentType("text"),
++  markdown: formatContentType("markdown"),
++  docx: formatContentType("docx"),
+ };
+ 
+ /**
+diff --git a/src/upload-convert.ts b/src/upload-convert.ts
+new file mode 100644
+index 000000000..200fffb6b
+--- /dev/null
++++ b/src/upload-convert.ts
+@@ -0,0 +1,352 @@
++/**
++ * **A text, Markdown or Word upload, turned into a web page** — stage 1's
++ * half of docs/plans/261011j-upload-text-markdown-and-word-files.md.
++ *
++ * `acquireUpload` (src/pipeline.ts) calls this for the three converted formats
++ * and from then on the upload *is* an uploaded web page: stored as `html`, read
++ * by Readability at stage 2, sanitised at stage 3 like any other page. So this
++ * module makes no promise about safety and needs none — an `.html` upload is
++ * already legal, and anything a converter could emit, a reader could already
++ * have written into one. What it does promise is that **a `.docx` cannot make
++ * us inflate more than `DOCX_MAX_INFLATED`**, whatever it claims about itself:
++ * the zip guard below.
++ *
++ * Server-only: mammoth and micromark are not in the browser bundle.
++ */
++import { Unzip, UnzipInflate, zipSync } from "fflate";
++import mammoth from "mammoth";
++import { micromark } from "micromark";
++import { gfm, gfmHtml } from "micromark-extension-gfm";
++import type { ConvertedFormat } from "./uploads.js";
++
++/** What a conversion made: a whole HTML document, and the text encoding it was read in. */
++export interface ConvertedUpload {
++  html: string;
++  /** The encoding a text or Markdown file was decoded with; `null` for Word. */
++  encoding: string | null;
++}
++
++/**
++ * Turn one upload into an HTML document, or `null` when the bytes are not the
++ * format the name claimed — a `.docx` that is some other zip, or one past the
++ * zip guard's limits. The caller refuses with `[up-pdf]`.
++ */
++export async function convertUpload(
++  format: ConvertedFormat,
++  bytes: Uint8Array,
++  filename: string,
++): Promise<ConvertedUpload | null> {
++  const stem = filenameStem(filename);
++  switch (format) {
++    case "text": {
++      const { text, encoding } = decodeText(bytes);
++      return { html: textToHtml(text, stem), encoding };
++    }
++    case "markdown": {
++      const { text, encoding } = decodeText(bytes);
++      return { html: markdownToHtml(text, stem), encoding };
++    }
++    case "docx": {
++      const html = await docxToHtml(bytes, stem);
++      return html === null ? null : { html, encoding: null };
++    }
++  }
++}
++
++/* ------------------------------------------------------------------ *
++ * Text
++ * ------------------------------------------------------------------ */
++
++/**
++ * **Bytes to a string, the way a browser opening a local `.txt` would.** A BOM
++ * decides if there is one (UTF-8, or UTF-16 either way round, which is what
++ * Windows Notepad's "Unicode" writes); otherwise UTF-8 if the bytes are valid
++ * UTF-8, otherwise windows-1252 — the same default `decodeHtml` (src/fetch.ts)
++ * falls back to, for the same reason: it is what old files with no declaration
++ * almost always are, and it never fails.
++ */
++export function decodeText(bytes: Uint8Array): { text: string; encoding: string } {
++  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
++    return { text: new TextDecoder("utf-8").decode(bytes.subarray(3)), encoding: "utf-8" };
++  }
++  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
++    return { text: new TextDecoder("utf-16le").decode(bytes.subarray(2)), encoding: "utf-16le" };
++  }
++  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
++    return { text: new TextDecoder("utf-16be").decode(bytes.subarray(2)), encoding: "utf-16be" };
++  }
++  try {
++    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), encoding: "utf-8" };
++  } catch {
++    return { text: new TextDecoder("windows-1252").decode(bytes), encoding: "windows-1252" };
++  }
++}
++
++/** The longest first line we will take as a plain-text file's title. */
++const TITLE_LINE_MAX = 120;
++
++/**
++ * **Paragraphs on blank lines, every character escaped**, and nothing else.
++ *
++ * Single newlines stay inside the paragraph, where the prose's own white-space
++ * rule folds them into spaces — so a hard-wrapped file (Project Gutenberg's 72
++ * columns, an email) reads as prose rather than as a column of short lines. A
++ * poem loses its line breaks; that is the trade, and prose is the common case.
++ *
++ * The title is the first line when it is short enough to be one, else the
++ * filename.
++ */
++export function textToHtml(text: string, stem: string): string {
++  const paragraphs = text
++    .replace(/\r\n?/g, "\n")
++    .split(/\n[ \t]*\n/)
++    .map((p) => p.trim())
++    .filter((p) => p !== "");
++  const first = paragraphs[0]?.split("\n")[0]?.trim() ?? "";
++  const title = first !== "" && first.length <= TITLE_LINE_MAX ? first : stem;
++  const body = paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n");
++  return htmlDocument(title, body);
++}
++
++/* ------------------------------------------------------------------ *
++ * Markdown
++ * ------------------------------------------------------------------ */
++
++/**
++ * **CommonMark plus GitHub's tables, strikethrough, task lists and autolinks**,
++ * by micromark — the tokenizer `mdast-util-from-markdown` is built on, already
++ * in the tree for chat and the help pages.
++ *
++ * **Raw HTML inside the Markdown is escaped**, micromark's default. Not for
++ * safety — see this module's header — but because it is the library's default
++ * and the boring choice: a `<details>` in a README shows as text.
++ */
++export function markdownToHtml(text: string, stem: string): string {
++  const body = micromark(text, { extensions: [gfm()], htmlExtensions: [gfmHtml()] });
++  return htmlDocument(firstHeading(body) ?? stem, body);
++}
++
++/* ------------------------------------------------------------------ *
++ * Word
++ * ------------------------------------------------------------------ */
++
++/** The most entries a `.docx` may hold. A real one has a few dozen. */
++export const DOCX_MAX_ENTRIES = 2000;
++
++/**
++ * The most a `.docx`'s kept parts may inflate to, in all. 32 MiB of XML is a
++ * document of a couple of thousand pages; past it we refuse rather than find
++ * out what mammoth does with it.
++ */
++export const DOCX_MAX_INFLATED = 32 * 1024 * 1024;
++
++/**
++ * Parts we never inflate: the pictures (dropped in v1 — stage 4.5 hosts only
++ * images with a web address), embedded objects and fonts. They are most of a
++ * large document's weight and none of its words.
++ */
++const DOCX_SKIPPED_PREFIXES = ["word/media/", "word/embeddings/", "word/fonts/"];
++
++/** Why a `.docx` was turned away by the guard rather than by mammoth. */
++export class DocxTooLarge extends Error {}
++
++/** Why a `.docx` was refused by the guard as damaged rather than as too large. */
++export class DocxUnreadable extends Error {}
++
++/**
++ * How much compressed input the guard hands the inflater at once. Deflate
++ * expands at most ~1032:1, so one push can emit at most ~16 MiB before the
++ * count below sees it and stops.
++ */
++const PUSH_BYTES = 16 * 1024;
++
++/**
++ * **The zip-bomb guard**: the `.docx`'s parts, inflated while counting the
++ * bytes that actually come out, stopped the moment the count passes the cap,
++ * and re-zipped for mammoth.
++ *
++ * mammoth inflates with jszip, which grows its output to whatever the stream
++ * produces and ignores the size the header declares — so a 50 MiB file that
++ * inflates to 50 GiB would take the process with it.
++ *
++ * **Counted, not declared.** The first version trusted fflate's `unzipSync` to
++ * inflate each part into a buffer of its *declared* size, and GPT Sol showed
++ * that bounds the memory but not the work: the inflater runs the whole stream
++ * and discards what does not fit, a stored entry copies its *compressed* size,
++ * and several directory entries can point at one stream
++ * (docs/plans/261011j-upload-text-markdown-and-word-files-plan-review-sol.md,
++ * finding 2). So this streams the archive through `Unzip` a small push at a
++ * time and counts what each part emits; no header field is believed.
++ *
++ * **Re-zipping is what makes the bound reach mammoth.** It reads our archive,
++ * not the reader's, so whatever the original's central directory says — sizes,
++ * offsets, a second copy of a name — never reaches jszip.
++ *
++ * @throws `DocxTooLarge` past `DOCX_MAX_ENTRIES` or `DOCX_MAX_INFLATED`;
++ *   `DocxUnreadable` for a repeated name, a part that never finished, or a
++ *   compression method other than stored and deflate; and whatever fflate
++ *   throws for something that is not a zip.
++ */
++export function boundedDocxParts(bytes: Uint8Array): Uint8Array {
++  const parts: Record<string, Uint8Array> = {};
++  const unfinished = new Set<string>();
++  let entries = 0;
++  let inflated = 0;
++  let failure: Error | null = null;
++  const fail = (error: Error) => {
++    failure ??= error;
++  };
++
++  const unzip = new Unzip((file) => {
++    if (failure) return;
++    entries += 1;
++    if (entries > DOCX_MAX_ENTRIES) return fail(new DocxTooLarge(`more than ${DOCX_MAX_ENTRIES} entries`));
++    if (DOCX_SKIPPED_PREFIXES.some((prefix) => file.name.startsWith(prefix))) return;
++    if (file.name in parts || unfinished.has(file.name)) return fail(new DocxUnreadable(`${file.name} twice`));
++    if (file.compression !== 0 && file.compression !== 8) {
++      return fail(new DocxUnreadable(`compression method ${file.compression}`));
++    }
++    const chunks: Uint8Array[] = [];
++    unfinished.add(file.name);
++    file.ondata = (error, data, final) => {
++      if (failure) return;
++      if (error) return fail(new DocxUnreadable(error.message));
++      inflated += data.byteLength;
++      if (inflated > DOCX_MAX_INFLATED) {
++        file.terminate();
++        return fail(new DocxTooLarge(`parts inflate past ${DOCX_MAX_INFLATED} bytes`));
++      }
++      chunks.push(data);
++      if (final) {
++        unfinished.delete(file.name);
++        parts[file.name] = concat(chunks);
++      }
++    };
++    file.start();
++  });
++  unzip.register(UnzipInflate);
++
++  for (let at = 0; at < bytes.byteLength && !failure; at += PUSH_BYTES) {
++    const end = Math.min(at + PUSH_BYTES, bytes.byteLength);
++    unzip.push(bytes.subarray(at, end), end === bytes.byteLength);
++  }
++  if (failure) throw failure;
++  if (unfinished.size > 0) throw new DocxUnreadable(`${unfinished.size} part(s) never finished`);
++  /* Level 0: stored, so jszip's read of our archive costs a copy, not a second inflate. */
++  return zipSync(parts, { level: 0 });
++}
++
++function concat(chunks: readonly Uint8Array[]): Uint8Array {
++  const out = new Uint8Array(chunks.reduce((n, c) => n + c.byteLength, 0));
++  let at = 0;
++  for (const chunk of chunks) {
++    out.set(chunk, at);
++    at += chunk.byteLength;
++  }
++  return out;
++}
++
++/**
++ * A `.docx` to an HTML document by mammoth, or `null` if it is not one we can
++ * read.
++ *
++ * mammoth maps Word's *styles* to structure — Heading 1 to `<h1>`, list
++ * paragraphs to `<ul>`/`<ol>`, tables, footnotes, links — and drops fonts and
++ * colours, which is the shape Readability and the block splitter want.
++ *
++ * **`externalFileAccess: false`, said out loud** although it is the default
++ * since mammoth 1.11.0: a `.docx` can name `file:///…` as a linked image, and
++ * before that version mammoth read it (CVE-2025-11849). **The floor in
++ * package.json is 1.12.3, not 1.11.0**: 1.12.2 fixed a prototype pollution that
++ * could turn that option back on, and 1.12.3 a ReDoS (mammoth's NEWS; GPT Sol,
++ * plan review finding 3). The images converter returns no address and never
++ * calls `read`, so no picture is inflated or fetched; the `<img>` it leaves is
++ * removed below.
++ *
++ * **In-process, like pdf.js and Readability.** mammoth's README recommends a
++ * separate thread with a timeout for untrusted documents, and so would pdf.js's
++ * for hostile PDFs; neither runs in one here. What a `.docx` adds over those —
++ * the zip — is bounded by `boundedDocxParts`; isolating every document parser is
++ * its own piece of work, queued rather than started for one format.
++ */
++async function docxToHtml(bytes: Uint8Array, stem: string): Promise<string | null> {
++  let rezipped: Uint8Array;
++  try {
++    rezipped = boundedDocxParts(bytes);
++  } catch {
++    return null;
++  }
++  let body: string;
++  try {
++    const result = await mammoth.convertToHtml(
++      { buffer: Buffer.from(rezipped.buffer, rezipped.byteOffset, rezipped.byteLength) },
++      {
++        externalFileAccess: false,
++        /* A `.docx` can carry its own mammoth style map, which would let the
++           file choose what its paragraphs become. Ours only. */
++        includeEmbeddedStyleMap: false,
++        /* Word's own *Title* style is not in mammoth's default map, so a
++           document's title came out as a plain paragraph and the page was named
++           after its first section (measured on calibre's demo.docx). */
++        styleMap: ["p[style-name='Title'] => h1:fresh"],
++        convertImage: mammoth.images.imgElement(async () => ({ src: "" })),
++      },
++    );
++    body = result.value;
++  } catch {
++    return null;
++  }
++  /* mammoth's own output, so its text is already escaped and an `<img` here
++     can only be one of the tags it wrote. */
++  body = body.replace(/<img\b[^>]*>/g, "");
++  return htmlDocument(firstHeading(body) ?? stem, body);
++}
++
++/* ------------------------------------------------------------------ *
++ * Shared
++ * ------------------------------------------------------------------ */
++
++/** A complete page around a converted body, UTF-8 declared so stage 1's decoder agrees. */
++function htmlDocument(title: string, body: string): string {
++  return (
++    `<!doctype html>\n<html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>\n` +
++    `<body><article>\n${body}\n</article></body></html>\n`
++  );
++}
++
++/**
++ * The text of the first `<h1>` in a converter's output, for the `<title>`.
++ * Readability reads `<title>` first and an uploaded file has no other, so
++ * without this a Word document headed *Quarterly review* would be titled
++ * after whatever its file was called.
++ *
++ * A regex over *generated* HTML, not over anything a reader wrote: micromark
++ * and mammoth escape text, so the only tags here are theirs.
++ */
++function firstHeading(body: string): string | null {
++  const match = /<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(body);
++  if (!match?.[1]) return null;
++  const text = decodeEntities(match[1].replace(/<[^>]*>/g, "")).trim();
++  return text === "" ? null : text;
++}
++
++/** The filename without its last extension, for a title of last resort. */
++function filenameStem(filename: string): string {
++  const dot = filename.lastIndexOf(".");
++  const stem = (dot > 0 ? filename.slice(0, dot) : filename).trim();
++  return stem === "" ? "Untitled" : stem;
++}
++
++function escapeHtml(text: string): string {
++  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
++}
++
++/** Undo the escaping micromark and mammoth do, so `escapeHtml` does not double it. */
++function decodeEntities(text: string): string {
++  return text
++    .replace(/&lt;/g, "<")
++    .replace(/&gt;/g, ">")
++    .replace(/&quot;/g, '"')
++    .replace(/&#x27;|&#39;/g, "'")
++    .replace(/&amp;/g, "&");
++}
+diff --git a/src/uploads.ts b/src/uploads.ts
+index 344cc4601..319a79186 100644
+--- a/src/uploads.ts
++++ b/src/uploads.ts
+@@ -4,7 +4,9 @@
+  * **Two kinds since 2026-09-07** — a PDF and a web page — and one function says
+  * which (`uploadKind`). Before that this module was named entirely around PDFs,
+  * and several sentences below still lead with one because a PDF is where every
+- * one of the hard-won details came from.
++ * one of the hard-won details came from. **Five formats since 2026-10-11**:
++ * plain text, Markdown and Word as well, each turned into a web page at stage 1
++ * (src/upload-convert.ts, docs/plans/261011j-upload-text-markdown-and-word-files.md).
+  *
+  * A module of its own for the same reason src/ingest.ts is one: **the answer
+  * has to be the same in the browser and on the server**, and they are different
+@@ -87,7 +89,10 @@ export const MAX_PAGES = 250;
+  * `pdfTooManyPages` for the pages.
+  */
+ export function uploadLimits(): string {
+-  return `PDF or web page, up to ${formatBytes(MAX_UPLOAD_BYTES)}. PDFs up to ${MAX_PAGES} pages.`;
++  return (
++    `PDF, web page, Word, Markdown or text file, up to ${formatBytes(MAX_UPLOAD_BYTES)}. ` +
++    `PDFs up to ${MAX_PAGES} pages.`
++  );
+ }
+ 
+ /** What the reader chose, in the small part of `File` that matters here. */
+@@ -142,8 +147,8 @@ export function uploadProblem(file: ChosenFile): string | null {
+        branch it always was — renaming it would strand every report that already
+        quotes it in exchange for a tidier spelling. */
+     return (
+-      "That doesn't look like a PDF or a web page. Uploads are PDF and HTML files — or a web " +
+-      "address can go in the box above instead. [pick-pdf]"
++      "That doesn't look like a file we can read. Uploads are PDF, HTML, Word, Markdown and text " +
++      "files — or a web address can go in the box above instead. [pick-pdf]"
+     );
+   }
+   if (file.size === 0) {
+@@ -155,6 +160,61 @@ export function uploadProblem(file: ChosenFile): string | null {
+   return null;
+ }
+ 
++/**
++ * **What a reader can upload**, as a claim about one file.
++ *
++ * `pdf` and `html` are stored as what they are. `text`, `markdown` and `docx`
++ * are turned into a web page at stage 1 and stored as `html` from then on
++ * (src/upload-convert.ts) — so this is wider than `DocumentKind` in
++ * src/fetch.ts, deliberately, and the two meet in `uploadedFormat` there.
++ */
++export type UploadFormat = "pdf" | "html" | ConvertedFormat;
++
++/** The three formats that are turned into a web page before they are stored. */
++export type ConvertedFormat = "text" | "markdown" | "docx";
++
++/**
++ * The extensions of the three converted formats, and what each one claims.
++ * **By extension only**, because `POST /api/uploads` decides on the name alone
++ * (`uploadProblem` with `type: ""`, src/routes.ts), and a picker that took a
++ * file the server then refused is the disagreement this module exists to
++ * prevent.
++ */
++const CONVERTED_EXTENSIONS: Readonly<Record<string, ConvertedFormat>> = {
++  txt: "text",
++  text: "text",
++  rst: "text",
++  org: "text",
++  md: "markdown",
++  markdown: "markdown",
++  mdown: "markdown",
++  mkd: "markdown",
++  docx: "docx",
++};
++
++/**
++ * The file picker's `accept`, built from the same list `uploadKind` reads, so
++ * the picker cannot offer a file the check refuses or hide one it takes.
++ */
++export const UPLOAD_ACCEPT = [
++  "application/pdf",
++  ".pdf",
++  "text/html",
++  ".html",
++  ".htm",
++  ...Object.keys(CONVERTED_EXTENSIONS).map((extension) => `.${extension}`),
++].join(",");
++
++/** What the extension alone claims, for the three converted formats. */
++export function convertedFormatFromName(name: string): ConvertedFormat | null {
++  const dot = name.lastIndexOf(".");
++  if (dot < 0) return null;
++  return CONVERTED_EXTENSIONS[name.slice(dot + 1).toLowerCase()] ?? null;
++}
++
++/** The registered type of a Word `.docx`. Also in the `sources` bucket's allowlist. */
++export const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
++
+ /**
+  * **What this file claims to be**, before anybody has looked at a single byte —
+  * or `null` for a claim we will not take.
+@@ -175,12 +235,21 @@ export function uploadProblem(file: ChosenFile): string | null {
+  * to disagree. A `.html` whose bytes begin `%PDF-` is a PDF, and
+  * `acquireUpload` is where that is settled.
+  *
++ * **Three more since 2026-10-11, and for those the name alone decides.** An
++ * OS's guess at the type of a Markdown or an Org-mode file is anything from the empty
++ * string to `text/x-markdown` to Lotus Organizer, so the strict "a definite
++ * type beats the name" rule below would refuse good files on the strength of a
++ * mime database. The server checks the bytes — no binary data, a zip for Word —
++ * before converting anything (`uploadedFormat`, src/fetch.ts).
++ *
+  * This module deliberately does not import `DocumentKind` for the return type.
+  * It has no dependencies at all — that is the whole reason it exists, so the
+  * browser can hold it — and src/fetch.ts brings the network stack with it.
+  * `tests/uploads.test.ts` pins that the two spellings stay the same two words.
+  */
+-export function uploadKind(file: ChosenFile): "pdf" | "html" | null {
++export function uploadKind(file: ChosenFile): UploadFormat | null {
++  const converted = convertedFormatFromName(file.name);
++  if (converted !== null) return converted;
+   if (file.type === "application/pdf") return "pdf";
+   if (file.type === "text/html") return "html";
+   const name = file.name.toLowerCase();
+@@ -225,9 +294,31 @@ export function uploadKind(file: ChosenFile): "pdf" | "html" | null {
+  *
+  * Falls back to `application/pdf` for a file `uploadKind` refused, because
+  * `uploadProblem` has already stopped that file and there is no PUT to label.
++ *
++ * **Every value it returns must be in the `sources` bucket's
++ * `allowed_mime_types`** (supabase/config.toml) — on the live bucket, not only
++ * in the file; `scripts/check-buckets.ts --prod` says which.
+  */
+ export function uploadContentType(file: ChosenFile): string {
+-  return uploadKind(file) === "html" ? "text/html" : "application/pdf";
++  return formatContentType(uploadKind(file));
++}
++
++/** The staging `Content-Type` for a format — `uploadContentType`'s rule, for a caller that already knows it. */
++export function formatContentType(format: UploadFormat | null): string {
++  switch (format) {
++    case "html":
++      return "text/html";
++    /* Markdown is text, and one type for both keeps the bucket's allowlist an
++       entry shorter; the filename is what says which it is. */
++    case "text":
++    case "markdown":
++      return "text/plain";
++    case "docx":
++      return DOCX_CONTENT_TYPE;
++    case "pdf":
++    case null:
++      return "application/pdf";
++  }
+ }
+ 
+ /**
+diff --git a/src/web/UploadPicker.tsx b/src/web/UploadPicker.tsx
+index 0b5839dfc..852c91371 100644
+--- a/src/web/UploadPicker.tsx
++++ b/src/web/UploadPicker.tsx
+@@ -48,7 +48,7 @@
+ import { useRef, useState } from "react";
+ import { FileText, Upload, X } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+-import { type ChosenFile, formatBytes, uploadLimits, uploadProblem } from "../uploads.js";
++import { type ChosenFile, formatBytes, UPLOAD_ACCEPT, uploadLimits, uploadProblem } from "../uploads.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+ import { addUploadHref, navigate } from "./router.js";
+ import { batchUpload } from "./batchUpload.js";
+@@ -272,7 +272,7 @@ export function UploadPicker({
+       <input
+         ref={input}
+         type="file"
+-        accept="application/pdf,.pdf,text/html,.html,.htm"
++        accept={UPLOAD_ACCEPT}
+         /* Several at once go to the batch — see `take`. */
+         multiple
+         className="tw:hidden"
+@@ -290,7 +290,7 @@ export function UploadPicker({
+         /* The words the dashed box used to say. They were the only thing
+            advertising that dropping works at all, so they move to the title of
+            the control that replaced it rather than disappearing. */
+-        title="Choose a PDF or an HTML file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
++        title="Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
+         /* **The caps, for somebody who cannot see the caption.** The line under
+            this row states them; this is what makes a screen reader read it out
+            as part of the control rather than as a stray paragraph after it.
+diff --git a/src/web/help/pages/adding-articles.md b/src/web/help/pages/adding-articles.md
+index 85304c04a..82b2234bb 100644
+--- a/src/web/help/pages/adding-articles.md
++++ b/src/web/help/pages/adding-articles.md
+@@ -1,13 +1,15 @@
+ ---
+ title: Adding an article
+ summary: How to add an article from a web address or a file, and what to try when one will not come in.
+-keywords: add import paste url link pdf upload file html save page paywall failed error stuck bookmarklet new article stop cancel give up
++keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet new article stop cancel give up
+ related: shelf, plans, first-article
+ ---
+ 
+ Paste a web address into **Add an article** on your shelf and press **Add**. You can leave off the
+-`https://`. To add a file, press **File** or drop one on that box: a PDF, or a web page you saved as
+-HTML. One file is read in full. Choose several at once and each is added with only its title,
++`https://`. To add a file, press **File** or drop one on that box: a PDF, a web page you saved as
++HTML, a Word document (`.docx`), or a Markdown (`.md`) or plain text (`.txt`) file. Pictures in a
++Word document are left out for now; its words, headings, lists and tables come in. One file is
++read in full. Choose several at once and each is added with only its title,
+ authors and abstract read; open one and press **Read this** when you want the whole of it.
+ 
+ ![The Add an article box: an address field, a File button and an Add button](images/adding-articles.png "Add an article, on your shelf: paste an address and press Add, or press File for a PDF or a saved web page.")
+diff --git a/supabase/config.toml b/supabase/config.toml
+index feb522ce7..3d594c33b 100644
+--- a/supabase/config.toml
++++ b/supabase/config.toml
+@@ -192,7 +192,23 @@ file_size_limit = "50MiB"
+ # scripts/deploy-checks.ts hand-parsed the file and read a list only beside its
+ # key. It parses with smol-toml since 2026-09-03, so a multi-line list is fine
+ # now — the constraint was ours, never TOML's.
+-allowed_mime_types = ["application/pdf", "text/html", "image/png", "image/jpeg", "image/gif"]
++#
++# `text/plain` and the Word type since 2026-10-11, for the *staging* object of
++# a text, Markdown or Word upload only: stage 1 converts those to a web page and
++# stores the page as `text/html`, so nothing canonical is ever stored under
++# either. The browser's PUT labels them by `uploadContentType` in
++# src/uploads.ts. See docs/plans/261011j-upload-text-markdown-and-word-files.md.
++# Production's bucket needs `npx tsx scripts/check-buckets.ts --prod --apply`
++# before these uploads work there; `npm run deploy` refuses until it has.
++allowed_mime_types = [
++  "application/pdf",
++  "text/html",
++  "image/png",
++  "image/jpeg",
++  "image/gif",
++  "text/plain",
++  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
++]
+ 
+ # Allow connections via S3 compatible clients
+ [storage.s3_protocol]
+diff --git a/tests/one-size-limit.test.ts b/tests/one-size-limit.test.ts
+index 580b09816..43a2b8bf1 100644
+--- a/tests/one-size-limit.test.ts
++++ b/tests/one-size-limit.test.ts
+@@ -1,7 +1,7 @@
+ /**
+  * **One size limit for a file chosen and a document fetched by address.**
+  *
+- * The dialog says "PDF or web page, up to 50 MB" (`uploadLimits()` in
++ * The dialog says "PDF, web page, Word, Markdown or text file, up to 50 MB" (`uploadLimits()` in
+  * src/uploads.ts). Until 2026-10-04 that was true of an upload and false of an
+  * address, which stopped at a second number typed into src/fetch.ts: 32 MiB.
+  * Greg, 2026-10-04: "make them consistent (and perhaps reuse the same
+diff --git a/tests/stated-limits.test.ts b/tests/stated-limits.test.ts
+index c44c70322..3ffc0c83c 100644
+--- a/tests/stated-limits.test.ts
++++ b/tests/stated-limits.test.ts
+@@ -105,7 +105,7 @@ describe("the limits the upload dialog states", () => {
+ 
+   it("says the sentence these tests are about", () => {
+     /* Red by changing MAX_PAGES to 251 in src/uploads.ts. */
+-    expect(uploadLimits()).toBe("PDF or web page, up to 50 MB. PDFs up to 250 pages.");
++    expect(uploadLimits()).toBe("PDF, web page, Word, Markdown or text file, up to 50 MB. PDFs up to 250 pages.");
+     expect(MAX_PAGES).toBe(250);
+     expect(MAX_UPLOAD_BYTES).toBe(50 * 1024 * 1024);
+   });
+diff --git a/tests/upload-acquire.test.ts b/tests/upload-acquire.test.ts
+index a826b2924..c91eb0e41 100644
+--- a/tests/upload-acquire.test.ts
++++ b/tests/upload-acquire.test.ts
+@@ -90,10 +90,10 @@ const shaOf = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("
+  * An upload that has been minted, claimed, and whose bytes are in the store —
+  * exactly the state `POST /api/jobs { uploadId }` leaves behind.
+  */
+-async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
++async function readyToVerify(bytes: Uint8Array, claimedSha?: string, filename = "paper.pdf") {
+   const minted = await mintUpload(
+     {
+-      filename: "paper.pdf",
++      filename,
+       bytes: bytes.byteLength,
+       sha256: claimedSha ?? shaOf(bytes),
+       /* Its own id, not the one upload-records.test.ts uses — tests/fixture-ids.test.ts
+@@ -115,7 +115,7 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
+   const slug = `test-upload-${id.slice(0, 8)}`;
+   const ctx = {
+     slug,
+-    upload: { id, filename: "paper.pdf" },
++    upload: { id, filename },
+     report: () => {},
+     preview: () => {},
+     signal: new AbortController().signal,
+@@ -173,6 +173,43 @@ describe("acquiring an uploaded file", () => {
+     expect(await readRawBytes(manifest)).toEqual(bytes);
+   });
+ 
++  /**
++   * **A text upload is stored as the page made from it, and kept as itself** —
++   * docs/plans/261011j-upload-text-markdown-and-word-files.md. Stage 2 reads a
++   * web page; the reader's own file sits beside it under the hash the manifest
++   * records (`sha256`, which `article_revisions.raw_sha256` stores) and the
++   * extension its name carries. Red by deleting the `storeRawSource(got,
++   * format)` line in `acquireUpload`.
++   */
++  it("turns a text file into a web page, and keeps the file it was", async () => {
++    const bytes = new TextEncoder().encode(`Notes ${Date.now()}\n\nFirst <thought> & second.\n`);
++    const { ctx } = await readyToVerify(bytes, undefined, "notes.txt");
++    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
++    const manifest = product.parts?.raw;
++    if (!manifest) throw new Error("the step returned no manifest");
++    rubbish.push(() => blobs.remove(canonicalKey(manifest.storedSha256 as string, "html")));
++    rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "text")));
++
++    expect(manifest.kind).toBe("html");
++    expect(manifest.filename).toBe("notes.txt");
++    expect(manifest.sha256).toBe(shaOf(bytes));
++    expect(manifest.storedSha256).not.toBe(shaOf(bytes));
++    const page = new TextDecoder().decode(await readRawBytes(manifest));
++    expect(page).toContain("<p>First &lt;thought&gt; &amp; second.</p>");
++    expect(await blobs.get(canonicalKey(shaOf(bytes), "text"))).toEqual(bytes);
++  });
++
++  /* A `.docx` that is not a Word document is the same refusal, the same reason
++     and the same code as any other file whose inside is not what its name says
++     — and nothing of it is kept. */
++  it("refuses a Word file mammoth cannot read, and keeps nothing", async () => {
++    const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x01, 0x02, 0x03]);
++    const { id, ctx } = await readyToVerify(bytes, undefined, "draft.docx");
++    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(/\[up-pdf\]/);
++    expect((await readUpload(id))?.reason).toBe("not-a-pdf");
++    expect(await blobs.head(canonicalKey(shaOf(bytes), "docx"))).toBeNull();
++  });
++
+   /** The name is a claim about its contents, so promotion has to be create-only. */
+   it("promotes the bytes to a key that is their own hash", async () => {
+     const bytes = aPdf("promotion");
+@@ -246,7 +283,7 @@ describe("acquiring an uploaded file", () => {
+     const { id, ctx } = await readyToVerify(bytes);
+ 
+     await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(
+-      /isn't a PDF or a web page inside/,
++      /isn't one we can read inside/,
+     );
+     expect((await readUpload(id))?.status).toBe("rejected");
+     expect((await readUpload(id))?.reason).toBe("not-a-pdf");
+diff --git a/tests/upload-convert.test.ts b/tests/upload-convert.test.ts
+new file mode 100644
+index 000000000..c376d3b82
+--- /dev/null
++++ b/tests/upload-convert.test.ts
+@@ -0,0 +1,306 @@
++/**
++ * Text, Markdown and Word uploads turned into a web page — src/upload-convert.ts,
++ * and the decision of which one a file is — `uploadedFormat` in src/fetch.ts.
++ * docs/plans/261011j-upload-text-markdown-and-word-files.md.
++ *
++ * The `.docx` fixtures are built here from their XML parts rather than checked
++ * in, so each test says exactly which Word feature it is about.
++ */
++import { strToU8, unzipSync, Zip, ZipDeflate, zipSync } from "fflate";
++import { describe, expect, it } from "vitest";
++import { uploadedFormat } from "../src/fetch.js";
++import {
++  boundedDocxParts,
++  convertUpload,
++  decodeText,
++  DOCX_MAX_INFLATED,
++  DocxTooLarge,
++  DocxUnreadable,
++  markdownToHtml,
++  textToHtml,
++} from "../src/upload-convert.js";
++
++const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
++const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
++
++/** A minimal Word document: the given `<w:body>` contents, a Heading 1 style, and an image relationship. */
++function docx(body: string, extra: Record<string, Uint8Array> = {}): Uint8Array {
++  return zipSync({
++    "[Content_Types].xml": strToU8(
++      `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
++        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
++        `<Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/>` +
++        `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
++        `<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`,
++    ),
++    "_rels/.rels": strToU8(
++      `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
++        `<Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`,
++    ),
++    "word/_rels/document.xml.rels": strToU8(
++      `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
++        `<Relationship Id="rId1" Type="${R}/styles" Target="styles.xml"/>` +
++        `<Relationship Id="rId9" Type="${R}/image" Target="media/image1.png"/></Relationships>`,
++    ),
++    "word/styles.xml": strToU8(
++      `<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="${W}">` +
++        `<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style></w:styles>`,
++    ),
++    "word/document.xml": strToU8(
++      `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="${W}" xmlns:r="${R}" ` +
++        `xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ` +
++        `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
++        `xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}</w:body></w:document>`,
++    ),
++    ...extra,
++  });
++}
++
++const heading = (text: string) => `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
++const para = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
++const picture =
++  `<w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="Picture 1" descr="A chart"/>` +
++  `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>` +
++  `<pic:blipFill><a:blip r:embed="rId9"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
++
++const utf8 = (text: string) => new TextEncoder().encode(text);
++
++describe("convertUpload — Word", () => {
++  it("keeps the headings and paragraphs, and titles the page after the first heading", async () => {
++    const got = await convertUpload("docx", docx(heading("Quarterly review") + para("Sales rose.")), "q3-final-v2.docx");
++    expect(got?.html).toContain("<title>Quarterly review</title>");
++    expect(got?.html).toContain("<h1>Quarterly review</h1>");
++    expect(got?.html).toContain("<p>Sales rose.</p>");
++    expect(got?.encoding).toBeNull();
++  });
++
++  it("escapes the document's text rather than passing it through as markup", async () => {
++    const got = await convertUpload("docx", docx(para("a &lt;script&gt;alert(1)&lt;/script&gt; b")), "x.docx");
++    expect(got?.html).not.toContain("<script>");
++    expect(got?.html).toContain("&lt;script&gt;");
++  });
++
++  /* The picture's bytes are not even in the archive mammoth reads: the guard
++     skips word/media/, and the converter never asks for them. */
++  it("drops pictures without reading them", async () => {
++    const png = new Uint8Array(4096).fill(7);
++    const got = await convertUpload("docx", docx(para("Before.") + picture + para("After."), { "word/media/image1.png": png }), "x.docx");
++    expect(got?.html).toContain("Before.");
++    expect(got?.html).toContain("After.");
++    expect(got?.html).not.toContain("<img");
++    expect(got?.html).not.toContain("data:");
++  });
++
++  it("falls back to the filename when there is no heading", async () => {
++    const got = await convertUpload("docx", docx(para("Just prose.")), "My notes.docx");
++    expect(got?.html).toContain("<title>My notes</title>");
++  });
++
++  it("refuses a zip that is not a Word document, and bytes that are not a zip", async () => {
++    expect(await convertUpload("docx", zipSync({ "hello.txt": utf8("hi") }), "x.docx")).toBeNull();
++    expect(await convertUpload("docx", utf8("PK\u0003\u0004 and then nonsense"), "x.docx")).toBeNull();
++  });
++});
++
++describe("boundedDocxParts — the zip-bomb guard", () => {
++  /** Rewrite every header's uncompressed size to `declared` — a liar about how big the part is. */
++  const lieAboutSizes = (zip: Uint8Array, declared: number): Uint8Array => {
++    const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
++    for (let i = 0; i + 4 <= zip.length; i++) {
++      const signature = view.getUint32(i, true);
++      if (signature === 0x04034b50) view.setUint32(i + 22, declared, true); // local header
++      if (signature === 0x02014b50) view.setUint32(i + 24, declared, true); // central directory
++    }
++    return zip;
++  };
++
++  /**
++   * **The claim the guard rests on**: what is counted is what comes out of the
++   * inflater, never what a header says. 64 MiB of zeros compresses to ~64 KB,
++   * and both headers are rewritten to declare 1 KB. jszip, which mammoth uses,
++   * would inflate all 64 MiB; the first version of this guard bounded the
++   * *buffer* to 1 KB but still inflated the whole stream (Sol, finding 2).
++   */
++  it("refuses a part whose header understates what it inflates to", () => {
++    const bomb = lieAboutSizes(zipSync({ "word/document.xml": new Uint8Array(64 * 1024 * 1024) }), 1024);
++    expect(() => boundedDocxParts(bomb)).toThrow(DocxTooLarge);
++  });
++
++  /* A stored (uncompressed) entry is copied, not inflated, and the first version
++     copied its *compressed* size while counting its declared one. */
++  it("counts a stored part by what it really holds", () => {
++    const stored = lieAboutSizes(
++      zipSync({ "word/document.xml": new Uint8Array(DOCX_MAX_INFLATED + 1) }, { level: 0 }),
++      1024,
++    );
++    expect(() => boundedDocxParts(stored)).toThrow(DocxTooLarge);
++  });
++
++  /* Archives written as a stream carry their sizes after the data (a "data
++     descriptor"), so there is no header size to check at all — only the count. */
++  it("reads a streamed archive, and refuses a streamed bomb", () => {
++    const streamed = (files: Record<string, Uint8Array>): Uint8Array => {
++      const out: Uint8Array[] = [];
++      const zip = new Zip((error, chunk) => {
++        if (error) throw error;
++        out.push(chunk);
++      });
++      for (const [name, data] of Object.entries(files)) {
++        const entry = new ZipDeflate(name);
++        zip.add(entry);
++        entry.push(data, true);
++      }
++      zip.end();
++      return new Uint8Array(out.flatMap((c) => [...c]));
++    };
++    const fine = boundedDocxParts(streamed({ "word/document.xml": utf8("<w:document/>") }));
++    expect(unzipSync(fine)["word/document.xml"]).toEqual(utf8("<w:document/>"));
++    expect(() => boundedDocxParts(streamed({ "word/document.xml": new Uint8Array(40 * 1024 * 1024) }))).toThrow(
++      DocxTooLarge,
++    );
++  });
++
++  /* Two directory entries for one name is how one stream gets counted once and
++     read twice; a real Word file never has it. */
++  it("refuses a name that appears twice", () => {
++    const twice = zipSync({ "word/document.xml": utf8("a"), "word/documenX.xml": utf8("b") }, { level: 0 });
++    const name = utf8("documenX");
++    for (let i = 0; i + name.length <= twice.length; i++) {
++      if (name.every((byte, j) => twice[i + j] === byte)) twice[i + 7] = "t".charCodeAt(0);
++    }
++    expect(() => boundedDocxParts(twice)).toThrow(DocxUnreadable);
++  });
++
++  it("refuses a compression method it does not know", () => {
++    const zip = zipSync({ "word/document.xml": utf8("hello") }, { level: 0 });
++    const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
++    for (let i = 0; i + 4 <= zip.length; i++) {
++      const signature = view.getUint32(i, true);
++      if (signature === 0x04034b50) view.setUint16(i + 8, 14, true); // LZMA, local header
++      if (signature === 0x02014b50) view.setUint16(i + 10, 14, true); // and central directory
++    }
++    expect(() => boundedDocxParts(zip)).toThrow(DocxUnreadable);
++  });
++
++  it("refuses parts that honestly declare more than the cap", () => {
++    const big = zipSync({ "word/document.xml": new Uint8Array(DOCX_MAX_INFLATED + 1) });
++    expect(() => boundedDocxParts(big)).toThrow(DocxTooLarge);
++  });
++
++  it("does not count the pictures towards the cap, because it never inflates them", () => {
++    const heavy = docx(para("x"), { "word/media/huge.png": new Uint8Array(DOCX_MAX_INFLATED + 1) });
++    expect(() => boundedDocxParts(heavy)).not.toThrow();
++  });
++
++  it("refuses an archive with too many entries", () => {
++    const entries: Record<string, Uint8Array> = {};
++    for (let i = 0; i < 2001; i++) entries[`junk/${i}.xml`] = new Uint8Array(0);
++    expect(() => boundedDocxParts(zipSync(entries))).toThrow(DocxTooLarge);
++  });
++});
++
++describe("textToHtml", () => {
++  it("makes a paragraph of each block between blank lines, and escapes everything", () => {
++    const html = textToHtml("A title\n\nFirst line\nwrapped here.\r\n\r\n<b>not bold</b> & co", "file");
++    expect(html).toContain("<title>A title</title>");
++    expect(html).toContain("<p>First line\nwrapped here.</p>");
++    expect(html).toContain("<p>&lt;b&gt;not bold&lt;/b&gt; &amp; co</p>");
++  });
++
++  it("takes the filename as the title when the first line is too long to be one", () => {
++    expect(textToHtml(`${"word ".repeat(40)}\n\nmore`, "notes")).toContain("<title>notes</title>");
++  });
++});
++
++describe("decodeText", () => {
++  it("reads UTF-8, a BOM either way round, and falls back to windows-1252", () => {
++    expect(decodeText(utf8("café"))).toEqual({ text: "café", encoding: "utf-8" });
++    expect(decodeText(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69]))).toEqual({ text: "hi", encoding: "utf-8" });
++    expect(decodeText(new Uint8Array([0xff, 0xfe, 0x68, 0x00, 0x69, 0x00]))).toEqual({ text: "hi", encoding: "utf-16le" });
++    expect(decodeText(new Uint8Array([0xfe, 0xff, 0x00, 0x68, 0x00, 0x69]))).toEqual({ text: "hi", encoding: "utf-16be" });
++    /* 0x93/0x94 are curly quotes in windows-1252 and invalid as UTF-8. */
++    expect(decodeText(new Uint8Array([0x93, 0x68, 0x69, 0x94]))).toEqual({
++      text: "“hi”",
++      encoding: "windows-1252",
++    });
++  });
++});
++
++describe("markdownToHtml", () => {
++  it("renders CommonMark and GitHub tables, and titles the page after the first heading", () => {
++    const html = markdownToHtml("# Notes on *Dune*\n\nSome **bold**.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n", "file");
++    expect(html).toContain("<title>Notes on Dune</title>");
++    expect(html).toContain("<strong>bold</strong>");
++    expect(html).toContain("<table>");
++  });
++
++  it("escapes raw HTML in the Markdown", () => {
++    const html = markdownToHtml("Hello <script>alert(1)</script>\n", "file");
++    expect(html).not.toContain("<script>");
++    expect(html).toContain("&lt;script&gt;");
++  });
++});
++
++describe("uploadedFormat", () => {
++  it("believes the name for text, Markdown and Word when the bytes agree", () => {
++    expect(uploadedFormat("notes.txt", utf8("Just some notes.\n"))).toBe("text");
++    expect(uploadedFormat("README.md", utf8("# Hi\n\ntext"))).toBe("markdown");
++    expect(uploadedFormat("draft.docx", docx(para("x")))).toBe("docx");
++  });
++
++  /* The invariant tests/fetch.test.ts pins for the HTML path: what the bytes
++     say the fetched path would have found is never contradicted by a name. */
++  it("lets the bytes overrule the name", () => {
++    expect(uploadedFormat("page.txt", utf8("<!doctype html><html><body><p>hi</p></body></html>"))).toBe("html");
++    expect(uploadedFormat("paper.md", utf8("%PDF-1.7\n1 0 obj"))).toBe("pdf");
++    expect(uploadedFormat("paper.docx", utf8("%PDF-1.7\n1 0 obj"))).toBe("pdf");
++  });
++
++  /* Only byte zero makes a text file a PDF: notes *about* PDFs are notes. */
++  it("does not send a text file that mentions a PDF header to the transcriber", () => {
++    expect(uploadedFormat("notes.txt", utf8("The header is %PDF-1.7 and then objects."))).toBe("text");
++  });
++
++  it("refuses binary dressed as text, and a Word file that is not a zip", () => {
++    expect(uploadedFormat("notes.txt", new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x41]))).toBeNull();
++    expect(uploadedFormat("draft.docx", utf8("not a zip"))).toBeNull();
++  });
++
++  it("reads a UTF-16 text file with a BOM as text, not as binary", () => {
++    const bytes = new Uint8Array([0xff, 0xfe, ...[..."Hello"].flatMap((c) => [c.charCodeAt(0), 0])]);
++    expect(uploadedFormat("notes.txt", bytes)).toBe("text");
++  });
++
++  it("leaves PDF and HTML names to the rule they always had", () => {
++    expect(uploadedFormat("paper.pdf", utf8("%PDF-1.7\n"))).toBe("pdf");
++    expect(uploadedFormat("saved.html", utf8("<p>hello</p>"))).toBe("html");
++  });
++});
++
++describe("Word's ways of hiding text", () => {
++  /**
++   * **Why the injection scan reads the converted page and not the `.docx`**
++   * (src/injection-scan.ts, a defence this work does not touch). Its question
++   * is whether the model reads text the reader cannot see. mammoth keeps no
++   * colour, size or the hidden-text flag, so white, one-point and "hidden"
++   * text all come out as ordinary paragraphs — in the page the reader reads and
++   * the model reads alike. If a mammoth upgrade ever kept one of them, this
++   * goes red and the scan has a Word-shaped blind spot to answer for.
++   */
++  it("comes out as ordinary visible prose", async () => {
++    const run = (props: string, text: string) => `<w:p><w:r><w:rPr>${props}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
++    const got = await convertUpload(
++      "docx",
++      docx(
++        run('<w:color w:val="FFFFFF"/>', "WHITE-TEXT") +
++          run('<w:sz w:val="2"/>', "TINY-TEXT") +
++          run('<w:highlight w:val="white"/><w:vanish/>', "VANISHED-TEXT"),
++      ),
++      "x.docx",
++    );
++    expect(got?.html).toContain("<p>WHITE-TEXT</p>");
++    expect(got?.html).toContain("<p>TINY-TEXT</p>");
++    expect(got?.html).toContain("<p>VANISHED-TEXT</p>");
++    expect(got?.html).not.toMatch(/style=|class=|hidden/);
++  });
++});
+diff --git a/tests/uploads.test.ts b/tests/uploads.test.ts
+index 962ccb4ec..2c32285eb 100644
+--- a/tests/uploads.test.ts
++++ b/tests/uploads.test.ts
+@@ -12,11 +12,15 @@
+  * Where a message is checked it is for one number in it, because that number
+  * is the thing a reader acts on.
+  */
++import { readFileSync } from "node:fs";
++import path from "node:path";
+ import { describe, expect, it } from "vitest";
+ import {
++  DOCX_CONTENT_TYPE,
+   formatBytes,
+   MAX_PAGES,
+   MAX_UPLOAD_BYTES,
++  UPLOAD_ACCEPT,
+   uploadContentType,
+   uploadKind,
+   uploadLimits,
+@@ -48,7 +52,7 @@ describe("uploadProblem", () => {
+   });
+ 
+   it("refuses something that is plainly not a PDF", () => {
+-    expect(uploadProblem(pdf({ name: "notes.txt", type: "text/plain" }))).not.toBeNull();
++    expect(uploadProblem(pdf({ name: "holiday.mp4", type: "video/mp4" }))).not.toBeNull();
+     expect(uploadProblem(pdf({ name: "scan.png", type: "image/png" }))).not.toBeNull();
+   });
+ 
+@@ -103,7 +107,7 @@ describe("the pick- codes", () => {
+    * stays distinguishable from `up-`, which means the server did.
+    */
+   const refusals = [
+-    uploadProblem(pdf({ name: "notes.txt", type: "text/plain" })),
++    uploadProblem(pdf({ name: "holiday.mp4", type: "video/mp4" })),
+     uploadProblem(pdf({ size: 0 })),
+     uploadProblem(pdf({ size: MAX_UPLOAD_BYTES + 1 })),
+   ];
+@@ -190,10 +194,48 @@ describe("uploadKind", () => {
+     expect(uploadKind(file("saved.html", "image/png"))).toBeNull();
+   });
+ 
+-  it("refuses what is neither", () => {
+-    expect(uploadKind(file("notes.txt", "text/plain"))).toBeNull();
++  it("refuses what is none of them", () => {
+     expect(uploadKind(file("holiday.mp4", "video/mp4"))).toBeNull();
+     expect(uploadKind(file("no-extension", ""))).toBeNull();
++    /* The neighbours deliberately left out (plan 261011j § Deferred). */
++    expect(uploadKind(file("thesis.doc", "application/msword"))).toBeNull();
++    expect(uploadKind(file("notes.odt", ""))).toBeNull();
++    expect(uploadKind(file("paper.tex", "text/x-tex"))).toBeNull();
++  });
++
++  /**
++   * **Text, Markdown and Word since 2026-10-11, decided by the name alone** —
++   * plan 261011j. The server route asks with `type: ""`, so a picker that let
++   * the browser's type widen or narrow this would disagree with it; and an OS's
++   * guess at `.md` or `.org` is anything from `""` to Lotus Organizer.
++   */
++  it("takes text, Markdown and Word by extension, whatever the browser guessed", () => {
++    expect(uploadKind(file("notes.txt", "text/plain"))).toBe("text");
++    expect(uploadKind(file("NOTES.TXT", ""))).toBe("text");
++    expect(uploadKind(file("intro.rst", ""))).toBe("text");
++    expect(uploadKind(file("plan.org", "application/vnd.lotus-organizer"))).toBe("text");
++    expect(uploadKind(file("README.md", ""))).toBe("markdown");
++    expect(uploadKind(file("essay.markdown", "text/markdown"))).toBe("markdown");
++    expect(uploadKind(file("draft.docx", DOCX_CONTENT_TYPE))).toBe("docx");
++    expect(uploadKind(file("draft.docx", ""))).toBe("docx");
++  });
++
++  /* The server's view is a name and `type: ""`, so the picker's answer for the
++     same name must not be stricter or looser than that. */
++  it("agrees with the server's name-only view for every converted extension", () => {
++    for (const name of ["a.txt", "a.text", "a.rst", "a.org", "a.md", "a.markdown", "a.mdown", "a.mkd", "a.docx"]) {
++      expect(uploadKind(file(name, "application/x-anything"))).toBe(uploadKind(file(name, "")));
++      expect(uploadProblem(file(name, ""))).toBeNull();
++    }
++  });
++
++  it("offers in the picker exactly the extensions it takes", () => {
++    for (const ext of [".pdf", ".html", ".htm", ".docx", ".md", ".markdown", ".txt", ".rst", ".org"]) {
++      expect(UPLOAD_ACCEPT.split(",")).toContain(ext);
++    }
++    for (const accepted of UPLOAD_ACCEPT.split(",").filter((a) => a.startsWith("."))) {
++      expect(uploadKind(file(`x${accepted}`, ""))).not.toBeNull();
++    }
+   });
+ });
+ 
+@@ -210,6 +252,21 @@ describe("uploadContentType", () => {
+   it("labels each kind as the bucket's allowlist spells it", () => {
+     expect(uploadContentType(file("saved.html", ""))).toBe("text/html");
+     expect(uploadContentType(file("paper.pdf", ""))).toBe("application/pdf");
++    expect(uploadContentType(file("notes.txt", ""))).toBe("text/plain");
++    expect(uploadContentType(file("README.md", ""))).toBe("text/plain");
++    expect(uploadContentType(file("draft.docx", ""))).toBe(DOCX_CONTENT_TYPE);
++  });
++
++  /* Red by removing `text/plain` from the bucket's list in supabase/config.toml:
++     the label the browser puts on a PUT is one the bucket must accept, or the
++     upload dies at Storage with a 415 (docs/postmortems/260828a). */
++  it("only ever labels a PUT with a type the sources bucket declares", async () => {
++    const { declaredBuckets } = await import("../scripts/deploy-checks.js");
++    const toml = readFileSync(path.join(import.meta.dirname, "..", "supabase", "config.toml"), "utf8");
++    const sources = declaredBuckets(toml).find((b) => b.name === "sources");
++    for (const name of ["a.pdf", "a.html", "a.txt", "a.md", "a.docx", "a.mp4"]) {
++      expect(sources?.allowedMimeTypes).toContain(uploadContentType(file(name, "")));
++    }
+   });
+ 
+   /* A file `uploadProblem` has already stopped, so there is no PUT to label and

@@ -1,6 +1,6 @@
 # Upload a text, Markdown or Word file
 
-**Status:** built, 2026-10-11; awaiting the code review.
+**Status:** shipped to `dev`, 2026-10-11. Screenshots: [txt](261011j-shot-1-txt.png), [docx](261011j-shot-2-docx.png), [md](261011j-shot-3-md.png), [refusal](261011j-shot-4-refusal.png).
 **Why:** feedback report `spya-qxh28e` (#563, `SPIDERYARN-READING2-HC`), from Greg — proven an
 admin's by `feedback-reporter.ts`, exit 0 — so it is built. Queue item `qi-ff2bfwq3`.
 
@@ -226,3 +226,23 @@ What each finding became:
 
 - Plan: GPT Sol, `--sandbox review` — [261011j-…-plan-review-sol.md](261011j-upload-text-markdown-and-word-files-plan-review-sol.md).
 - Code: GPT Sol, fixes in place — [261011j-…-code-review-sol.md](261011j-upload-text-markdown-and-word-files-code-review-sol.md).
+  Verdict REWORK; what each finding became:
+  1. **`uploadedFormat` broke the byte-evidence invariant (medium).** Fixed by me (Sol left
+     `src/fetch.ts` alone, reading the whole file as a defence; only its scheme/size envelope is):
+     the converted names now take `classify`'s reading first, exactly as the fetched path does, and
+     the invariant corpus in `tests/fetch.test.ts` runs every converted extension — red before the
+     fix on `page.docx`. The "PDF header only at byte zero" exception for text names is gone.
+  2. **mammoth in-process, no deadline (medium).** Kept as deferred, now recorded where risks are
+     recorded: [security-risks.md R19](../project/security-risks.md), beside pdf.js, the same
+     risk. Queue `qi-ymdddydy`.
+  3. **The original is kept but nothing reads it (medium).** Sol fixed the three sentences that
+     called the converted page the original (Metadata's export card and *View the original*, the
+     Feedback tick-box). Using the original in export and diagnostics stays queued
+     (`qi-5pthxgvh`).
+  4. **Adversarial-zip tests incomplete (low).** Added: a bomb with its central directory cut
+     off, trailing junk, an archive cut mid-part. Sol confirmed the counted bound holds on every
+     path, and corrected the module header's overstatement of it.
+  5. **Reader-facing claims (low).** Fixed by Sol, each with a test seen red.
+
+  And from the browser check: a text file's first line was both the title and a repeated first
+  paragraph; it is now the page's `<h1>`.

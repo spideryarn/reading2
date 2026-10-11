@@ -509,7 +509,7 @@ describe("the feedback dialog", () => {
     const words = (host.querySelector(".fb-consent")?.textContent ?? "").replace(/\s+/g, " ");
     expect(words).toContain("Send extra diagnostics.");
     expect(words).toContain("On one of your own articles");
-    expect(words).toContain("may also send the file the article was made from");
+    expect(words).toContain("may also send the PDF or web page Spideryarn read");
     expect(words).toContain("within a size limit");
     expect(words).toContain("what you've told us about yourself");
     /* "Never" is about the diagnostics, not the whole report: the reader can type

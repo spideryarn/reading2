@@ -1871,14 +1871,13 @@ export function uploadedDocumentKind(filename: string, bytes: Uint8Array): Docum
  * For a name claiming text, Markdown or Word, the same evidence decides first
  * and the claim only after it:
  *
- *  - **`%PDF-` at byte zero is a PDF**, whatever it is called. *Only* byte zero,
- *    unlike `sniffKind`: a `.txt` of notes that quotes a PDF header in its first
- *    kilobyte is notes, and sending it to the transcriber would bill the reader
- *    for an empty article.
- *  - **Leading HTML evidence is a web page**, whatever it is called — the
- *    invariant `tests/fetch.test.ts` pins, that a filename never contradicts
- *    what the fetched path would have found. So `page.txt` beginning
- *    `<!doctype html>` is read as the page it is.
+ *  - **Whatever the fetched path would read in the bytes wins**, whatever the
+ *    file is called — the invariant `tests/fetch.test.ts` pins for every
+ *    extension. So `page.docx` beginning `<!doctype html>` is read as the page
+ *    it is, and a PDF header in the first kilobyte is a PDF. The first cut
+ *    took a PDF header only at byte zero for these names, so that notes
+ *    *quoting* one would stay notes; GPT Sol's code review showed that was a
+ *    second rule contradicting the first, for a case too rare to keep one for.
  *  - **Word must be a zip** (`PK\x03\x04`); whether it is a *Word* zip is for
  *    mammoth to say, in src/upload-convert.ts.
  *  - **Text and Markdown must not be binary** (the WHATWG binary-data test,
@@ -1888,12 +1887,14 @@ export function uploadedDocumentKind(filename: string, bytes: Uint8Array): Docum
 export function uploadedFormat(filename: string, bytes: Uint8Array): UploadFormat | null {
   const claimed = convertedFormatFromName(filename);
   if (claimed === null) return uploadedDocumentKind(filename, bytes);
-  if (PDF_HEADER.exec(latin1(bytes.subarray(0, 8)))?.index === 0) return "pdf";
+  /* What the fetched path would read in these bytes, first and whatever the
+     name — `kindFrom`'s own order, so a PDF header and leading HTML evidence
+     mean here exactly what they mean there. */
+  const { kind, evidence } = classify(null, bytes);
+  if (kind !== null) return kind;
   if (claimed === "docx") {
     return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04 ? "docx" : null;
   }
-  const evidence = documentEvidence(bytes, null);
-  if (evidence.leadingHtml) return "html";
   return evidence.binary || evidence.otherVocabulary ? null : claimed;
 }
 

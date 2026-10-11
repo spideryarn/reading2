@@ -193,11 +193,12 @@ file_size_limit = "50MiB"
 # key. It parses with smol-toml since 2026-09-03, so a multi-line list is fine
 # now — the constraint was ours, never TOML's.
 #
-# `text/plain` and the Word type since 2026-10-11, for the *staging* object of
-# a text, Markdown or Word upload only: stage 1 converts those to a web page and
-# stores the page as `text/html`, so nothing canonical is ever stored under
-# either. The browser's PUT labels them by `uploadContentType` in
-# src/uploads.ts. See docs/plans/261011j-upload-text-markdown-and-word-files.md.
+# `text/plain` and the Word type since 2026-10-11, for the staging object and
+# the content-addressed original retained beside the page: stage 1 converts the
+# document to canonical `text/html`, but keeps the bytes the reader uploaded
+# under their own type. The browser's PUT labels the staging copy by
+# `uploadContentType` in src/uploads.ts. See
+# docs/plans/261011j-upload-text-markdown-and-word-files.md.
 # Production's bucket needs `npx tsx scripts/check-buckets.ts --prod --apply`
 # before these uploads work there; `npm run deploy` refuses until it has.
 allowed_mime_types = [

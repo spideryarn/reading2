@@ -171,6 +171,37 @@ describe("boundedDocxParts — the zip-bomb guard", () => {
     expect(() => boundedDocxParts(twice)).toThrow(DocxUnreadable);
   });
 
+  /* The stream reader walks local headers and never needs the central
+     directory, so cutting it off, or appending junk after it, changes nothing
+     the count depends on (Sol, code review finding 4). */
+  it("still counts a bomb whose central directory is cut off", () => {
+    const bomb = zipSync({ "word/document.xml": new Uint8Array(40 * 1024 * 1024) });
+    const view = new DataView(bomb.buffer, bomb.byteOffset, bomb.byteLength);
+    let central = bomb.length;
+    for (let i = 0; i + 4 <= bomb.length; i++) {
+      if (view.getUint32(i, true) === 0x02014b50) {
+        central = i;
+        break;
+      }
+    }
+    expect(central).toBeLessThan(bomb.length);
+    expect(() => boundedDocxParts(bomb.subarray(0, central))).toThrow(DocxTooLarge);
+  });
+
+  it("reads a real document with junk after the archive", async () => {
+    const withJunk = new Uint8Array([...docx(para("Still here.")), ...utf8("trailing junk ".repeat(100))]);
+    expect((await convertUpload("docx", withJunk, "x.docx"))?.html).toContain("<p>Still here.</p>");
+  });
+
+  /* fflate's own "unexpected end" error, not ours — the guard's contract is to
+     throw, and `convertUpload` turns any throw into a refusal. */
+  it("refuses an archive cut off in the middle of a part", async () => {
+    const whole = docx(para("x".repeat(100_000)));
+    const half = Math.floor(whole.length / 2);
+    expect(() => boundedDocxParts(whole.subarray(0, half))).toThrow();
+    expect(await convertUpload("docx", whole.subarray(0, half), "x.docx")).toBeNull();
+  });
+
   it("refuses a compression method it does not know", () => {
     const zip = zipSync({ "word/document.xml": utf8("hello") }, { level: 0 });
     const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
@@ -203,6 +234,8 @@ describe("textToHtml", () => {
   it("makes a paragraph of each block between blank lines, and escapes everything", () => {
     const html = textToHtml("A title\n\nFirst line\nwrapped here.\r\n\r\n<b>not bold</b> & co", "file");
     expect(html).toContain("<title>A title</title>");
+    expect(html).toContain("<h1>A title</h1>");
+    expect(html).not.toContain("<p>A title</p>");
     expect(html).toContain("<p>First line\nwrapped here.</p>");
     expect(html).toContain("<p>&lt;b&gt;not bold&lt;/b&gt; &amp; co</p>");
   });
@@ -256,9 +289,13 @@ describe("uploadedFormat", () => {
     expect(uploadedFormat("paper.docx", utf8("%PDF-1.7\n1 0 obj"))).toBe("pdf");
   });
 
-  /* Only byte zero makes a text file a PDF: notes *about* PDFs are notes. */
-  it("does not send a text file that mentions a PDF header to the transcriber", () => {
-    expect(uploadedFormat("notes.txt", utf8("The header is %PDF-1.7 and then objects."))).toBe("text");
+  /* One rule with the fetched path, not a second one for text names: a PDF
+     header past byte zero is still a PDF, and leading HTML still a page, even
+     in a file called `.docx` (GPT Sol, code review finding 1). The full corpus
+     is in tests/fetch.test.ts. */
+  it("reads the bytes exactly as the fetched path would, whatever the converted name", () => {
+    expect(uploadedFormat("notes.txt", utf8("\n%PDF-1.7\n1 0 obj"))).toBe("pdf");
+    expect(uploadedFormat("page.docx", utf8("<!doctype html><html><body><p>hi</p></body></html>"))).toBe("html");
   });
 
   it("refuses binary dressed as text, and a Word file that is not a zip", () => {

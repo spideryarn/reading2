@@ -8,8 +8,9 @@
  * module makes no promise about safety and needs none — an `.html` upload is
  * already legal, and anything a converter could emit, a reader could already
  * have written into one. What it does promise is that **a `.docx` cannot make
- * us inflate more than `DOCX_MAX_INFLATED`**, whatever it claims about itself:
- * the zip guard below.
+ * us retain more than `DOCX_MAX_INFLATED` of inflated parts**, and that refusal
+ * happens after at most one bounded input push's additional output, whatever the
+ * archive claims about itself: the zip guard below.
  *
  * Server-only: mammoth and micromark are not in the browser bundle.
  */
@@ -104,7 +105,13 @@ export function textToHtml(text: string, stem: string): string {
     .filter((p) => p !== "");
   const first = paragraphs[0]?.split("\n")[0]?.trim() ?? "";
   const title = first !== "" && first.length <= TITLE_LINE_MAX ? first : stem;
-  const body = paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n");
+  /* A first paragraph that is only that title line is the file's heading, and
+     is drawn as one — not as a paragraph repeating the title (seen in the
+     browser check). */
+  const headed = paragraphs[0] === title;
+  const body = paragraphs
+    .map((p, i) => (i === 0 && headed ? `<h1>${escapeHtml(p)}</h1>` : `<p>${escapeHtml(p)}</p>`))
+    .join("\n");
   return htmlDocument(title, body);
 }
 
@@ -176,15 +183,16 @@ const PUSH_BYTES = 16 * 1024;
  * and several directory entries can point at one stream
  * (docs/plans/261011j-upload-text-markdown-and-word-files-plan-review-sol.md,
  * finding 2). So this streams the archive through `Unzip` a small push at a
- * time and counts what each part emits; no header field is believed.
+ * time and counts what each part emits; no declared uncompressed size is
+ * trusted as the count.
  *
  * **Re-zipping is what makes the bound reach mammoth.** It reads our archive,
  * not the reader's, so whatever the original's central directory says — sizes,
  * offsets, a second copy of a name — never reaches jszip.
  *
  * @throws `DocxTooLarge` past `DOCX_MAX_ENTRIES` or `DOCX_MAX_INFLATED`;
- *   `DocxUnreadable` for a repeated name, a part that never finished, or a
- *   compression method other than stored and deflate; and whatever fflate
+ *   `DocxUnreadable` for a repeated kept name, a part that never finished, or
+ *   a compression method other than stored and deflate; and whatever fflate
  *   throws for something that is not a zip.
  */
 export function boundedDocxParts(bytes: Uint8Array): Uint8Array {
