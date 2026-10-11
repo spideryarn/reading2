@@ -1,0 +1,547 @@
+diff --git a/docs/project/narrow-windows.md b/docs/project/narrow-windows.md
+index 16aa28ff2..c8f60777e 100644
+--- a/docs/project/narrow-windows.md
++++ b/docs/project/narrow-windows.md
+@@ -168,7 +168,10 @@ Three things worth carrying to whatever is built next:
+ - **But More is never past the edge.** A scrolling row hides whatever is beyond the fold, and the
+   one button that must not be there is More, which holds five modes. On a phone the row is at its
+   44px floor, so its buttons stand at the same x at 390, 375 and 360, and with Diagram drawn More's
+-  place after Skim is x 354–398 (WebKit, 2026-10-09). No label rung fits 360. So when that place is
++  place after Skim was x 354–398 (WebKit, 2026-10-09). No label rung fits 360. Since 2026-10-11
++  More's place is after Summary, two buttons earlier
++  ([261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md)), which every phone
++  measured so far shows; the guard stays, because it is measured, not keyed to a state. When that place is
+   past the bar's edge, More moves to the front of the bands' frame, in the DOM as well as on screen.
+   The test is where More's *home* ends, never where it is drawn, or moving it would send it straight
+   back: `moreOffTheEdge` in [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), `bandsInOrder` in
+diff --git a/docs/project/reading-view-overview.md b/docs/project/reading-view-overview.md
+index 5f32c760d..70eb0b0f9 100644
+--- a/docs/project/reading-view-overview.md
++++ b/docs/project/reading-view-overview.md
+@@ -130,7 +130,9 @@ readers never are.
+ 
+ **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
+ FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands straight
+-after Skim, at the end of the Structure–Summary run (it stood alone after the other modes until
++after Summary, inside the Structure–Summary run, since 2026-10-11 (Greg: *"to the right of the
++summary"*, [261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md); it stood after
++Skim from 2026-10-08, and alone after the other modes until
+ 2026-10-08, when Greg asked for it *"as part of that group, rather than out on their own"*, which
+ puts a menu button inside the modes' radiogroup —
+ [261008d § D2](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md)
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 5cf204472..6b4a3357b 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -701,7 +701,8 @@ interface Props {
+  * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
+  * mode icon into the same group after structure and summary"* (spya-wm5gu2,
+  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
+- * The More button stands at the end of the same run (`MORE_AFTER`).
++ * The More button stands in the same run, straight after Summary since
++ * 2026-10-11 (`MORE_AFTER`).
+  */
+ type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
+ 
+@@ -883,7 +884,9 @@ const MODES_UI = [
+      **In the shape run, at its end, since 2026-10-08** — Greg: *"move the
+      skim mode icon into the same group after structure and summary"*
+      (spya-wm5gu2). Its row did not move, so it still leads into the Quotes it
+-     walks, which are now under More, the button drawn straight after it.
++     walks, which are now under More. More was drawn straight after it until
++     2026-10-11, and since then it has stood before Diagram and Skim, after
++     Summary (spya-hdde62, plan 261011x).
+      docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
+   {
+     mode: "skim",
+@@ -1207,30 +1210,31 @@ function drawnCount(bar: DockBar): number {
+ }
+ 
+ /**
+- * **The run the More button ends.** Greg, 2026-10-08 (spya-mcs4gb): *"just
+- * after the skim mode, just after structure and summary as part of that
+- * group, rather than out on their own."* Skim is the last row of the shape run
+- * (its `MODES_UI` row), so More stands straight after it, inside the bands'
+- * frame, with no line between them.
+- * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
++ * **The row More stands straight after: Summary.** Greg, 2026-10-11
++ * (spya-hdde62): *"the triple dot more button that displays more modes. Let's
++ * move that to the right of the summary, and maybe, maybe to the right of the
++ * skim mode."* It had stood after Skim, at the end of the shape run, since
++ * 2026-10-08 (spya-mcs4gb, plan 261008d); it is still inside that run, so no
++ * line stands either side of it, and Diagram and Skim follow it.
++ * docs/plans/261011x-more-button-after-summary-in-the-bottom-bar.md.
+  * **Wherever that place can be seen** — on a phone where it is off the edge,
+- * More leads the frame instead (`bandsInOrder`, plan 261009c).
++ * More leads the frame instead (`bandsInOrder`, plan 261009c), which since
++ * this move no phone the bar has been measured on needs.
+  */
+-const MORE_AFTER: ModeGroup = "shape";
++const MORE_AFTER: Mode = "summary";
+ 
+ /**
+- * **The bands' frame, cut where More goes**: everything up to the last drawn
+- * row of `MORE_AFTER`'s run, and everything after it. With none of that run
+- * drawn — no bar today — More goes at the end rather than vanishing, so the
+- * gathered modes stay reachable. Both arms cut here, so they cannot disagree.
++ * **The bands' frame, cut where More goes**: everything up to the drawn row of
++ * `MORE_AFTER`, and everything after it. With that row not drawn — no bar
++ * today — More goes at the end rather than vanishing, so the gathered modes
++ * stay reachable. Both arms cut here, so they cannot disagree.
+  *
+  * Exported for tests/dock-groups.test.tsx.
+  */
+ export function cutForMore(bands: readonly ModeUi[]): readonly [readonly ModeUi[], readonly ModeUi[]] {
+-  /* `findLastIndex` is ES2023, past the client's lib. */
+-  const at = bands.length - [...bands].reverse().findIndex((m) => m.group === MORE_AFTER);
+-  if (at > bands.length) return [bands, []];
+-  return [bands.slice(0, at), bands.slice(at)];
++  const at = bands.findIndex((m) => m.mode === MORE_AFTER);
++  if (at < 0) return [bands, []];
++  return [bands.slice(0, at + 1), bands.slice(at + 1)];
+ }
+ 
+ /** `MORE_HOME_ATTR` on the row More's home follows, spread into its props. */
+@@ -3089,7 +3093,8 @@ function DockModes({
+      **The More button had a fourth, from 2026-10-07 to 2026-10-08**, after
+      the radiogroup. Greg then asked for it *"just after the skim mode … as part
+      of that group, rather than out on their own"* (spya-mcs4gb), so it stands
+-     inside the bands' frame at the end of the shape run (`cutForMore`) — and
++     inside the bands' frame in the shape run (`cutForMore`; straight after
++     Summary since 2026-10-11, spya-hdde62) — and
+      so inside the `role="radiogroup"`, which 261007c D6 had kept it out of.
+      It is between two radios in reading order, so in the DOM it has to be;
+      the cost and the options weighed are in
+@@ -3464,10 +3469,10 @@ type MorePick =
+  *
+  * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
+  *
+- * **Not a radio, but inside the radiogroup since 2026-10-08**, straight after
+- * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
+- * after the skim mode … as part of that group, rather than out on their own"*
+- * (spya-mcs4gb) — or first in that frame where its place is off a phone's
++ * **Not a radio, but inside the radiogroup since 2026-10-08**, in the bands'
++ * frame (`cutForMore`), because Greg asked for it *"just after the skim mode …
++ * as part of that group, rather than out on their own"* (spya-mcs4gb), and
++ * straight after Summary since 2026-10-11 (`MORE_AFTER`, spya-hdde62) — or first in that frame where its place is off a phone's
+  * edge (`bandsInOrder`, plan 261009c). It had a frame of its own after the radiogroup for a day
+  * (261007c D6), kept out because a menu button is not one of *what the middle
+  * column shows*. Between two radios in reading order, the DOM has to put it
+diff --git a/src/web/dock-fit.ts b/src/web/dock-fit.ts
+index 8bc27a635..3948ed438 100644
+--- a/src/web/dock-fit.ts
++++ b/src/web/dock-fit.ts
+@@ -190,7 +190,8 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
+ export const MORE_HOME_ATTR = "data-more-home";
+ 
+ /**
+- * **Whether More's own place, straight after Skim, is past the bar's visible
++ * **Whether More's own place, straight after Summary (after Skim until
++ * 2026-10-11), is past the bar's visible
+  * edge with the row at rest** — and so whether More leads the bands' frame
+  * instead (queue item `qi-t22r9mt4`;
+  * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
+diff --git a/src/web/help/pages/the-reading-view.md b/src/web/help/pages/the-reading-view.md
+index f0bfd39cc..16c3da092 100644
+--- a/src/web/help/pages/the-reading-view.md
++++ b/src/web/help/pages/the-reading-view.md
+@@ -16,14 +16,14 @@ related: spine, gutter, modes, keyboard
+   panel.
+ - **The bottom bar** starts with the way home (the Spideryarn wordmark). On your own article, that
+   is followed by the **Commands** button. Next come the mode buttons. **More**, just after
+-  Structure, Summary and Skim, opens a short list of the modes you will want less often (Quotes,
++  Structure and Summary, opens a short list of the modes you will want less often (Quotes,
+   Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come
+   **Marginalia** and **Comments**, side by side, and **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
+   Every bar has a **Help** link near its right-hand end, which opens Help at the page about the mode
+   you are in. On your own article you can also press **Commands** and type *help*, and wherever
+   a mode has an (i), its card ends in **More in Help**.
+ 
+-![The bottom bar: the wordmark, Commands, Plain, Structure, Summary, Skim, More and the other mode buttons, Marginalia and Comments, Quick search, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Plain open. Most mode buttons show only an icon: point at one for its name.")
++![The bottom bar: the wordmark, Commands, Plain, Structure, Summary, More, Skim and the other mode buttons, Marginalia and Comments, Quick search, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Plain open. Most mode buttons show only an icon: point at one for its name.")
+ 
+ When there is not room for everything, the mode buttons drop their words and show only icons. Point
+ at one to see its name and what it does; each mode also shows its name for a few seconds when you
+diff --git a/src/web/styles/dock-fit.css b/src/web/styles/dock-fit.css
+index e771a1190..db95f5de4 100644
+--- a/src/web/styles/dock-fit.css
++++ b/src/web/styles/dock-fit.css
+@@ -58,7 +58,8 @@
+    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+ 
+    **The More button and Comments sit inside these frames since 2026-10-08**
+-   (plan 261008d): More in the bands' frame straight after Skim (first in it
++   (plan 261008d): More in the bands' frame straight after Summary since
++   2026-10-11, plan 261011x (first in it
+    where that place is off a phone's edge — plan 261009c), Comments in
+    Marginalia's after the toggle. More had a fourth frame of its own for a day.
+    Neither needs a rule of its own here: each is a `.dock-btn` with a
+diff --git a/tests/a-second-press-closes-the-mode.test.tsx b/tests/a-second-press-closes-the-mode.test.tsx
+index 7a3b41319..da99ebeb4 100644
+--- a/tests/a-second-press-closes-the-mode.test.tsx
++++ b/tests/a-second-press-closes-the-mode.test.tsx
+@@ -476,11 +476,12 @@ describe("Plain closes both columns", () => {
+ });
+ 
+ /* Three since 2026-10-08 (plan 261008d): More stands inside the bands' frame,
+-   straight after Skim, and Comments in Marginalia's, after it — Greg,
++   straight after Summary since 2026-10-11 (spya-hdde62, plan 261011x; after
++   Skim before that), and Comments in Marginalia's, after it — Greg,
+    spya-mcs4gb. From 2026-10-07 More had a frame of its own (plan 261007c, D6),
+    and from 2026-10-02 there were three. */
+ describe("the bar is three frames: Plain, the bands with More, Marginalia with Comments", () => {
+-  it("draws Plain alone in the first frame, More after Skim in the second and Comments after Marginalia in the last", async () => {
++  it("draws Plain alone in the first frame, More after Summary in the second and Comments after Marginalia in the last", async () => {
+     await open("?margin=1");
+     const frames = [...host.querySelectorAll(".dock-modes .dock-frame")];
+     expect(frames).toHaveLength(3);
+@@ -490,8 +491,8 @@ describe("the bar is three frames: Plain, the bands with More, Marginalia with C
+     expect(labels(frames[1])).toEqual([
+       MODE_LABEL.structure,
+       MODE_LABEL.summary,
+-      MODE_LABEL.skim,
+       "More",
++      MODE_LABEL.skim,
+       /* In every reader's bar since 2026-10-09 (plan 261009l). */
+       MODE_LABEL.sources,
+       MODE_LABEL.search,
+diff --git a/tests/arrows-belong-to-the-article.test.tsx b/tests/arrows-belong-to-the-article.test.tsx
+index 8ddc7566d..e5f1f96ba 100644
+--- a/tests/arrows-belong-to-the-article.test.tsx
++++ b/tests/arrows-belong-to-the-article.test.tsx
+@@ -213,8 +213,8 @@ describe("the bottom bar's mode segment", () => {
+     paintDock();
+     const group = host.querySelector<HTMLElement>(".dock-modes-radios");
+     expect(group).not.toBeNull();
+-    /* The radios, and since 2026-10-08 the More button between Skim and
+-       Search (plan 261008d § D2). */
++    /* The radios, and since 2026-10-08 the More button among them (plan
++       261008d § D2), between Summary and Skim since 2026-10-11 (plan 261011x). */
+     expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(
+       String(group?.querySelectorAll(".dock-btn").length),
+     );
+diff --git a/tests/dock-corner-controls.test.tsx b/tests/dock-corner-controls.test.tsx
+index 3832422d8..cabc89c76 100644
+--- a/tests/dock-corner-controls.test.tsx
++++ b/tests/dock-corner-controls.test.tsx
+@@ -593,8 +593,8 @@ describe("the route walk: branded home controls and Feedback triggers stay in th
+     const drawn = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter((m) => m.mode !== "marginalia");
+     expect(drawn.length, "the fixture draws a bar").toBeGreaterThan(5);
+     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(drawn.length);
+-    /* More stands inside the group since 2026-10-08, between Skim and Search
+-       (plan 261008d § D2), and is not counted among its radios: it is a menu
++    /* More stands inside the group since 2026-10-08 (plan 261008d § D2),
++       between Summary and Skim since 2026-10-11 (plan 261011x), and is not counted among its radios: it is a menu
+        button, never `role="radio"`. */
+     const more = group?.querySelector(".dock-more-trigger");
+     expect(more).not.toBeNull();
+diff --git a/tests/dock-groups.test.tsx b/tests/dock-groups.test.tsx
+index 6f7cdb9c6..d5d1bbecb 100644
+--- a/tests/dock-groups.test.tsx
++++ b/tests/dock-groups.test.tsx
+@@ -11,6 +11,10 @@
+  * which tests/dock-mode-order.test.ts holds.) Both arms of the bar, because the
+  * links arm is the half this bar keeps forgetting (Dock.tsx § `DockModeLinks`).
+  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
++ *
++ * And, 2026-10-11, inside that group: *"Let's move that to the right of the
++ * summary, and maybe, maybe to the right of the skim mode."* (spya-hdde62;
++ * docs/plans/261011x-more-button-after-summary-in-the-bottom-bar.md).
+  */
+ import { act, createElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+@@ -83,28 +87,28 @@ const frames = () =>
+ const L = MODE_LABEL;
+ 
+ describe("the reading view's frames", () => {
+-  it("draws More straight after Skim in Structure's frame, and Comments after Marginalia", () => {
++  it("draws More straight after Summary in Structure's frame, and Comments after Marginalia", () => {
+     reading();
+     expect(frames()).toEqual([
+       [L.plain],
+-      [L.structure, L.summary, L.skim, "More", L.sources, L.search, L.chat, L.learn],
++      [L.structure, L.summary, "More", L.skim, L.sources, L.search, L.chat, L.learn],
+       [L.marginalia, "Comments"],
+     ]);
+   });
+ 
+-  it("with the switch on, More still ends the shape run, after Diagram and Skim", () => {
++  it("with the switch on, More still stands after Summary, before Diagram and Skim", () => {
+     reading({ experimental: EXPERIMENTAL_ON });
+-    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
++    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, "More", L.diagram, L.skim]);
+   });
+ 
+-  it("a gathered mode drawn while open stands after More, as a run of its own", () => {
++  it("a gathered mode drawn while open stands after the shape run, as a run of its own", () => {
+     reading({ mode: "glossary" });
+-    expect(frames()[1]).toEqual([L.structure, L.summary, L.skim, "More", L.glossary, L.sources, L.search, L.chat, L.learn]);
++    expect(frames()[1]).toEqual([L.structure, L.summary, "More", L.skim, L.glossary, L.sources, L.search, L.chat, L.learn]);
+     const glossary = host.querySelector(`[aria-label="${L.glossary}"]`) as HTMLElement;
+     expect(glossary.classList.contains("dock-group-start")).toBe(true);
+   });
+ 
+-  it("every gathered mode, open, stands straight after More, switch on or off", () => {
++  it("every gathered mode, open, stands straight after Skim, switch on or off, and More after Summary", () => {
+     for (const [experimental, modes] of [
+       [EXPERIMENTAL_OFF, ["quotes", "glossary", "ideas"]],
+       [EXPERIMENTAL_ON, ["quotes", "glossary", "faq", "ideas", "timeline"]],
+@@ -112,18 +116,20 @@ describe("the reading view's frames", () => {
+       for (const mode of modes) {
+         reading({ experimental, mode });
+         const bands = frames()[1] ?? [];
+-        expect(bands[bands.indexOf("More") + 1], `${mode}, switch ${experimental.on}`).toBe(L[mode]);
+-        expect(bands[bands.indexOf("More") - 1], `${mode}, switch ${experimental.on}`).toBe(L.skim);
++        expect(bands[bands.indexOf(L.skim) + 1], `${mode}, switch ${experimental.on}`).toBe(L[mode]);
++        expect(bands[bands.indexOf("More") - 1], `${mode}, switch ${experimental.on}`).toBe(L.summary);
+       }
+     }
+   });
+ 
+-  it("draws no line between Skim and More, and one after More", () => {
++  it("draws no line either side of More, and one after Skim", () => {
+     reading();
+     const more = moreTrigger(host) as HTMLElement;
+     expect(more.classList.contains("dock-group-start")).toBe(false);
+     const skim = host.querySelector(`[aria-label="${L.skim}"]`) as HTMLElement;
+     expect(skim.classList.contains("dock-group-start")).toBe(false);
++    const sources = host.querySelector(`[aria-label="${L.sources}"]`) as HTMLElement;
++    expect(sources.classList.contains("dock-group-start")).toBe(true);
+     const search = host.querySelector(`[aria-label="${L.search}"]`) as HTMLElement;
+     expect(search.classList.contains("dock-group-start")).toBe(true);
+   });
+@@ -160,11 +166,11 @@ describe("the reading view's frames", () => {
+ });
+ 
+ describe("off the reading view, the same frames as links", () => {
+-  it("draws More after Skim and the Comments link after Marginalia", () => {
++  it("draws More after Summary and the Comments link after Marginalia", () => {
+     loose();
+     expect(frames()).toEqual([
+       [L.plain],
+-      [L.structure, L.summary, L.skim, "More", L.sources, L.search, L.chat, L.learn],
++      [L.structure, L.summary, "More", L.skim, L.sources, L.search, L.chat, L.learn],
+       [L.marginalia, "Comments"],
+     ]);
+     const comments = host.querySelector<HTMLElement>('[aria-label="Comments"]') as HTMLElement;
+diff --git a/tests/dock-more-leads.test.tsx b/tests/dock-more-leads.test.tsx
+index 5de56fbbf..4fe3ee0e9 100644
+--- a/tests/dock-more-leads.test.tsx
++++ b/tests/dock-more-leads.test.tsx
+@@ -3,11 +3,15 @@
+  * **On a phone, More is never off the edge of the bar** (queue item
+  * `qi-t22r9mt4`). Measured in WebKit on 2026-10-09: every phone width is on the
+  * last rung with the row at its 44px floor, and with Diagram drawn — Diagram
+- * open, or Experimental on — More's place after Skim is x 354–398, past a 390,
+- * 375 or 360 window. No label rung fits 360, so More moves to the front of the
+- * bands' frame when, and only when, its own place is out of view.
++ * open, or Experimental on — More's place after Skim was x 354–398, past a
++ * 390, 375 or 360 window. No label rung fits 360, so More moves to the front of
++ * the bands' frame when, and only when, its own place is out of view.
+  * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md.
+  *
++ * Since 2026-10-11 More's place is after Summary (spya-hdde62, plan 261011x),
++ * two buttons earlier, which every measured phone shows. The fake's buttons
++ * are wide enough that the move is still exercised.
++ *
+  * jsdom has no layout, so the fake below lays the bar out **by DOM order**,
+  * each button `W` wide from the bar's left edge. That is what makes the test
+  * honest about the one property the design depends on: once More has moved,
+@@ -22,8 +26,13 @@ import { MODE_LABEL } from "../src/title-text.js";
+ import { Dock } from "../src/web/Dock.js";
+ import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+ 
+-/** One button's width in the fake layout. */
+-const W = 50;
++/**
++ * One button's width in the fake layout: wide by default, so More's place can
++ * be past the edge and the fallback is still exercised. The last `describe`
++ * sets it to the phone's 44px floor.
++ */
++const WIDE = 70;
++let W = WIDE;
+ /** Everything in the row the fake lays out, in order. */
+ const LAID_OUT = ".dock-home, .dock-btn";
+ 
+@@ -36,6 +45,7 @@ function rect(left: number, w: number): DOMRect {
+ }
+ 
+ beforeEach(() => {
++  W = WIDE;
+   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+   history.replaceState(null, "", "/read/a-piece");
+   host = document.createElement("div");
+@@ -126,30 +136,32 @@ function resize(nextWidth: number): void {
+   raf.mockRestore();
+ }
+ 
+-/* The fake row: Spideryarn, Commands, Plain, then the bands' frame. With the
+-   switch on, More's home is the eighth slot — [350, 400] — past a 360 bar. With
+-   it off it is the seventh — [300, 350] — inside one. */
++/* The fake row: Spideryarn, Commands, Plain, then the bands' frame. More's
++   home, after Summary, is the sixth slot — [350, 420] — past a 360 or a 410 bar
++   and inside a 430 one, with the switch on or off: Diagram is drawn after it. */
+ 
+ describe("More stays on the bar where its own place is off the edge", () => {
+-  it("leads the bands' frame when its place after Skim is past the bar's edge", () => {
++  it("leads the bands' frame when its place after Summary is past the bar's edge", () => {
+     width = 360;
+     reading({ experimental: EXPERIMENTAL_ON });
+     expect(bands().slice(0, 5)).toEqual(["More", L.structure, L.summary, L.diagram, L.skim]);
+   });
+ 
+-  it("stays after Skim where its place is in view — Greg's placement holds wherever it can be seen", () => {
+-    width = 360;
++  it("stays after Summary where its place is in view — Greg's placement holds wherever it can be seen", () => {
++    width = 430;
+     reading({ experimental: EXPERIMENTAL_OFF });
+-    expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, L.skim, "More"]);
++    expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, "More", L.skim]);
+     width = 1440;
+     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
+-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
++    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, "More", L.diagram, L.skim]);
+   });
+ 
+-  it("Diagram open with the switch off pushes More out too, and More leads", () => {
+-    width = 390;
++  it("Diagram drawn, open or by the switch, no longer pushes More's place out: it stands after More", () => {
++    width = 430;
+     reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
+-    expect(bands()[0]).toBe("More");
++    expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, "More", L.diagram]);
++    reading({ experimental: EXPERIMENTAL_ON });
++    expect(bands()[2]).toBe("More");
+   });
+ 
+   it("the links arm (the metadata page) moves More the same way", () => {
+@@ -166,7 +178,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
+     /* A re-render with a changed signature re-measures; a resize would do the
+        same through the ResizeObserver jsdom does not have. */
+     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
+-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
++    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, "More", L.diagram, L.skim]);
+   });
+ 
+   it("repositions on resize even when the rung and content stay the same, in both arms", () => {
+@@ -174,9 +186,9 @@ describe("More stays on the bar where its own place is off the edge", () => {
+       width = 390;
+       render({ experimental: EXPERIMENTAL_ON });
+       expect(bands()[0]).toBe("More");
+-      resize(410);
++      resize(430);
+       expect(host.querySelector(".dock")?.classList.contains("dock-fit-4")).toBe(true);
+-      expect(bands()[4]).toBe("More");
++      expect(bands()[2]).toBe("More");
+       resize(390);
+       expect(bands()[0]).toBe("More");
+     }
+@@ -193,13 +205,13 @@ describe("More stays on the bar where its own place is off the edge", () => {
+   });
+ 
+   it("keeps More ahead of the protected right padding", () => {
+-    width = 410;
++    width = 430;
+     reading({ experimental: EXPERIMENTAL_ON });
+-    expect(bands()[4]).toBe("More");
++    expect(bands()[2]).toBe("More");
+     const dock = host.querySelector<HTMLElement>(".dock");
+     expect(dock).not.toBeNull();
+     if (dock) dock.style.paddingRight = "20px";
+-    resize(410);
++    resize(430);
+     expect(bands()[0]).toBe("More");
+   });
+ 
+@@ -208,8 +220,8 @@ describe("More stays on the bar where its own place is off the edge", () => {
+     reading({ experimental: EXPERIMENTAL_ON });
+     resize(0);
+     expect(bands()[0]).toBe("More");
+-    resize(410);
+-    expect(bands()[4]).toBe("More");
++    resize(430);
++    expect(bands()[2]).toBe("More");
+   });
+ 
+   /* One keyed array (`bandsInOrder`), so a re-order moves nodes rather than
+@@ -222,7 +234,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
+     act(() => more?.focus());
+     width = 1440;
+     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
+-    expect(bands()[4]).toBe("More");
++    expect(bands()[2]).toBe("More");
+     expect(host.querySelector(`[aria-label="${L.skim}"]`)).toBe(skim);
+     expect(host.querySelector(".dock-more-trigger")).toBe(more);
+     expect(document.activeElement).toBe(more);
+@@ -244,3 +256,22 @@ describe("More stays on the bar where its own place is off the edge", () => {
+     }
+   });
+ });
++
++/* **What a phone actually draws since 2026-10-11** (plan 261011x): every
++   button at the 44px floor, as measured in WebKit on 2026-10-09, so More's
++   home after Summary ends at 6 × 44 = 264 — inside 360 with Diagram drawn,
++   which is exactly the state that used to send it to the front. */
++describe("on a phone's 44px floor, More stays after Summary", () => {
++  it("with Experimental on, or Diagram open, at 360 and 390, in both arms", () => {
++    W = 44;
++    for (const w of [360, 390]) {
++      width = w;
++      reading({ experimental: EXPERIMENTAL_ON });
++      expect(bands().slice(0, 4), `${w}, switch on`).toEqual([L.structure, L.summary, "More", L.diagram]);
++      reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
++      expect(bands().slice(0, 4), `${w}, Diagram open`).toEqual([L.structure, L.summary, "More", L.diagram]);
++      loose({ experimental: EXPERIMENTAL_ON });
++      expect(bands().slice(0, 4), `${w}, links arm`).toEqual([L.structure, L.summary, "More", L.diagram]);
++    }
++  });
++});
+diff --git a/tests/dock-more.test.tsx b/tests/dock-more.test.tsx
+index a92466b50..0bc1a7a00 100644
+--- a/tests/dock-more.test.tsx
++++ b/tests/dock-more.test.tsx
+@@ -211,8 +211,9 @@ describe("the More button on the reading view", () => {
+   /* Its own frame, between the radiogroup and Marginalia's, from 2026-10-07;
+      straight after Skim inside the bands' frame since 2026-10-08, Greg:
+      *"just after the skim mode … as part of that group, rather than out on
+-     their own"* (plan 261008d; tests/dock-groups.test.tsx has the frames). */
+-  it("is not a radio, and stands in the bands' frame straight after Skim", () => {
++     their own"* (plan 261008d; tests/dock-groups.test.tsx has the frames);
++     straight after Summary since 2026-10-11 (spya-hdde62, plan 261011x). */
++  it("is not a radio, and stands in the bands' frame straight after Summary", () => {
+     reading();
+     const more = moreTrigger(host) as HTMLButtonElement;
+     expect(more.getAttribute("role")).toBeNull();
+@@ -221,8 +222,8 @@ describe("the More button on the reading view", () => {
+     const frame = more.closest(".dock-frame") as HTMLElement;
+     const buttons = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
+     const at = buttons.indexOf(more);
+-    expect(buttons[at - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
+-    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.sources);
++    expect(buttons[at - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.summary);
++    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
+   });
+ 
+   it("opens a menu of exactly the gathered modes this reader has, in order", () => {
+@@ -303,7 +304,7 @@ describe("the More button on the reading view", () => {
+       (host.querySelector(".dock-modes-radios") as HTMLElement).style.getPropertyValue("--dock-radio-count"),
+     ).toBe("9");
+     const frame = (moreTrigger(host) as HTMLElement).closest(".dock-frame") as HTMLElement;
+-    /* Structure, Summary, Skim, More, Sources, Search, Chat, Learn. */
++    /* Structure, Summary, More, Skim, Sources, Search, Chat, Learn. */
+     expect(frame.style.getPropertyValue("--dock-frame-count")).toBe("8");
+   });
+ });
+@@ -340,10 +341,10 @@ describe("the More button off the reading view", () => {
+     expect(links).toEqual(
+       labelsOf(["plain", "structure", "summary", "skim", "sources", "search", "chat", "learn", "marginalia"]),
+     );
+-    /* In the bands' frame, straight after Skim, as on the reading view. */
++    /* In the bands' frame, straight after Summary, as on the reading view. */
+     const frame = more.closest(".dock-frame") as HTMLElement;
+     const inFrame = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
+-    expect(inFrame[inFrame.indexOf(more) - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
++    expect(inFrame[inFrame.indexOf(more) - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.summary);
+   });
+ 
+   it("its items are the links the bar used to draw", () => {

@@ -190,15 +190,17 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
 export const MORE_HOME_ATTR = "data-more-home";
 
 /**
- * **Whether More's own place, straight after Skim, is past the bar's visible
+ * **Whether More's own place, straight after Summary (after Skim until
+ * 2026-10-11), is past the bar's visible
  * edge with the row at rest** — and so whether More leads the bands' frame
  * instead (queue item `qi-t22r9mt4`;
  * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
  *
  * Measured in WebKit, 2026-10-09: every phone width sits on the last rung with
  * the row at its 44px floor, so the buttons have the same x at 390, 375 and
- * 360, and with Diagram drawn More's place is x 354–398 — off the edge of all
- * three. No label rung fits 360, so this is not a rung: it changes no width,
+ * 360. With Diagram drawn, More's old place after Skim was x 354–398 — off the
+ * edge of all three. Since 2026-10-11 its place after Summary is two buttons
+ * earlier. No label rung fits 360, so this is not a rung: it changes no width,
  * only where More stands, and the ladder's measurement is untouched by it.
  *
  * **The answer must not depend on which order is drawn**, or moving More would
@@ -213,7 +215,7 @@ export const MORE_HOME_ATTR = "data-more-home";
  * the bar's scroll added back, because a rect moves with the scroll and the
  * question is about the row before anyone has dragged it. **Past that query the
  * notch is carried by `.dock-tail` instead, and this does not subtract it**: a
- * phone held landscape is 667px wide or more, and More's home is about 400px in,
+ * phone held landscape is 667px wide or more, and More's home is about 310px in,
  * so the inset cannot decide the answer there. Revisit if More ever moves right.
  */
 export function moreOffTheEdge(el: HTMLElement): boolean {

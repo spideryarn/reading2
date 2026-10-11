@@ -2,7 +2,7 @@
  * Eval — does a question about a passage reach for the web when it is really a
  * question about the world, and stay off it when it is not?
  *
- *     npx tsx evals/chat-web-reach.ts --label baseline [--runs N]
+ *     npx tsx evals/chat-web-reach.ts --label baseline [--runs N] [--kind learn]
  *     npx tsx evals/chat-web-reach.ts --list            # slugs in the local database
  *     npx tsx evals/chat-web-reach.ts --show <slug>     # its blocks, to pick a passage
  *
@@ -45,6 +45,7 @@ import { withLedger } from "../src/cli-ledger.js";
 import { environmentOwnerId, runAsOwner } from "../src/owner.js";
 import { isMain } from "../src/is-main.js";
 import { askAboutBlock, HELP_QUESTION } from "../src/web/chat-handoff.js";
+import { renderProfile } from "../src/profile.js";
 import type { Block, ChatAnchor, Meta } from "../src/types.js";
 
 /**
@@ -55,16 +56,27 @@ import type { Block, ChatAnchor, Meta } from "../src/types.js";
  * picture" question has somewhere to go. `word` is one the article really uses,
  * so the control has a true answer that needs no search.
  */
-const ARTICLES: readonly { slug: string; blockId: string; word: string }[] = [
+const ARTICLES: readonly { slug: string; blockId: string; word: string; page: string }[] = [
   /* Anil Seth, "The Mythology Of Conscious AI" — the passage introducing
-     Searle's biological naturalism, a live position with a literature around it. */
-  { slug: "noema-mythology-of-conscious-ai", blockId: "spya-hj5y6s", word: "Turing" },
+     Searle's biological naturalism, a live position with a literature around it.
+     `page` is for the `url` case: a page a reader might hand over. */
+  {
+    slug: "noema-mythology-of-conscious-ai",
+    blockId: "spya-hj5y6s",
+    word: "Turing",
+    page: "https://en.wikipedia.org/wiki/Biological_naturalism",
+  },
   /* Gwern, "The Scaling Hypothesis" (2020) — the paragraph defining the strong
      scaling hypothesis, which six years of models have tested since. */
-  { slug: "scaling-hypothesis", blockId: "spya-m3gtj6", word: "cyanobacteria" },
+  {
+    slug: "scaling-hypothesis",
+    blockId: "spya-m3gtj6",
+    word: "cyanobacteria",
+    page: "https://en.wikipedia.org/wiki/Neural_scaling_law",
+  },
 ];
 
-type CaseName = "help" | "broader" | "since" | "plain" | "word";
+type CaseName = "help" | "broader" | "since" | "plain" | "word" | "situate" | "url" | "remember";
 
 interface Case {
   readonly name: CaseName;
@@ -72,7 +84,7 @@ interface Case {
   readonly help: boolean;
   readonly anchored: boolean;
   /** What the reader typed; for `help`, the question the "?" sends. */
-  readonly typed: (word: string) => string;
+  readonly typed: (word: string, page: string) => string;
 }
 
 const CASES: readonly Case[] = [
@@ -108,7 +120,78 @@ const CASES: readonly Case[] = [
   },
 ];
 
+/**
+ * **The cases for every kind but Chat** — Learn's Recall (`learn`), Tutorial,
+ * Explore and the guide. Added by
+ * docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md
+ * after Greg's `spya-drbkvc`: a reader in a Learn sub-mode asked how the piece
+ * sat among others, and it would not search. None is anchored and none is a
+ * "?" press, because those are Chat's; each is something a reader could say in
+ * that conversation.
+ *
+ *   situate   where the piece sits among other work — TARGET
+ *   since     what has happened with the idea since — TARGET
+ *   url       a page the reader hands over — TARGET for `read_web_page`
+ *   remember  a half-memory of the piece — CONTROL, the mode's own job
+ *   word      does the article use the word X — CONTROL
+ */
+const OTHER_KIND_CASES: readonly Case[] = [
+  {
+    name: "situate",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: () =>
+      "How does this piece compare with other things written on the same question? Where does it sit?",
+  },
+  {
+    name: "since",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: () => "What has happened with this idea since this was written?",
+  },
+  {
+    name: "url",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: (_word, page) => `I found this page: ${page} How does what it says relate to this piece?`,
+  },
+  {
+    name: "remember",
+    role: "control",
+    help: false,
+    anchored: false,
+    typed: () =>
+      "What I remember is that the author argues against one popular view, but I can't remember quite which, or why.",
+  },
+  {
+    name: "word",
+    role: "control",
+    help: false,
+    anchored: false,
+    typed: (word) => `Does the article ever use the word "${word}"?`,
+  },
+];
+
+/* The kinds a reader converses in; Candidates is Referee's and has its own eval. */
+const KINDS = ["chat", "learn", "tutorial", "explore", "guide"] as const;
+type EvalKind = (typeof KINDS)[number];
+const casesFor = (kind: EvalKind): readonly Case[] => (kind === "chat" ? CASES : OTHER_KIND_CASES);
+
+/* A neutral reason, so the guide does not spend its first turn asking for one
+   (GUIDE_SYSTEM: "If they still have not said why they are reading it, ask that
+   first"). The same for every non-Chat kind, so it favours none of them. The
+   guide also gets what the route gives it (`streamChat`, src/routes.ts): the
+   saved fields its offers compare against, and an experience bucket — GPT Sol's
+   F3 on the plan, so the guide's numbers measure searching and not a turn spent
+   asking. */
+const PURPOSE = "Reading it for a reading group next week.";
+const PROFILE = renderProfile({ purpose: PURPOSE });
+
 interface Outcome {
+  kind: EvalKind;
   run: number;
   slug: string;
   blockId: string;
@@ -136,8 +219,8 @@ interface Outcome {
  * `{ blockId }` anchor carries no words. The unanchored control is sent bare,
  * the way a question typed into an unanchored chat is.
  */
-function questionFor(c: Case, blockId: string, block: Block, word: string): string {
-  const typed = c.typed(word);
+function questionFor(c: Case, blockId: string, block: Block, word: string, page: string): string {
+  const typed = c.typed(word, page);
   if (!c.anchored) return typed;
   return askAboutBlock({ blockId, ...(c.help ? { quote: block.text } : {}), question: typed });
 }
@@ -156,7 +239,8 @@ async function ask(
   question: string,
   anchor: ChatAnchor | null,
   help: boolean,
-): Promise<Omit<Outcome, "run" | "slug" | "blockId" | "case" | "role" | "question" | "seconds">> {
+  kind: EvalKind,
+): Promise<Omit<Outcome, "kind" | "run" | "slug" | "blockId" | "case" | "role" | "question" | "seconds">> {
   for await (const event of converse({ power: "standard",
     meta,
     blocks,
@@ -165,7 +249,13 @@ async function ask(
     slug,
     anchor,
     help,
-    kind: "chat",
+    kind,
+    /* Chat's cases ran with no profile before `--kind` existed; keep their bytes. */
+    profile: kind === "chat" ? null : PROFILE,
+    ...(kind === "guide" && {
+      saved: { purpose: PURPOSE, profile: null },
+      experience: "a-few" as const,
+    }),
     useTools: true,
   })) {
     if (event.type !== "done") continue;
@@ -185,8 +275,15 @@ async function ask(
   throw new Error("converse ended without a done event");
 }
 
-function parseArgs(argv: string[]): { label: string; runs: number; list: boolean; show?: string } {
+function parseArgs(argv: string[]): {
+  label: string;
+  runs: number;
+  kind: EvalKind;
+  list: boolean;
+  show?: string;
+} {
   let label = "unlabelled";
+  let kind: EvalKind = "chat";
   let runs = 1;
   let list = false;
   let show: string | undefined;
@@ -194,12 +291,18 @@ function parseArgs(argv: string[]): { label: string; runs: number; list: boolean
     const a = argv[i];
     if (a === "--label") label = argv[++i] ?? label;
     else if (a === "--runs") runs = Number(argv[++i]);
-    else if (a === "--list") list = true;
+    else if (a === "--kind") {
+      const k = argv[++i];
+      if (!(KINDS as readonly string[]).includes(k ?? "")) {
+        throw new Error(`--kind must be one of ${KINDS.join(", ")}`);
+      }
+      kind = k as EvalKind;
+    } else if (a === "--list") list = true;
     else if (a === "--show") show = argv[++i];
-    else throw new Error(`unknown argument "${a}". Use --label, --runs, --list or --show <slug>.`);
+    else throw new Error(`unknown argument "${a}". Use --label, --runs, --kind, --list or --show <slug>.`);
   }
   if (!Number.isInteger(runs) || runs < 1) throw new Error("--runs must be a positive integer");
-  return { label, runs, list, ...(show ? { show } : {}) };
+  return { label, runs, kind, list, ...(show ? { show } : {}) };
 }
 
 async function main(): Promise<void> {
@@ -238,16 +341,17 @@ async function main(): Promise<void> {
       if (!blocks.some((b) => b.text.toLowerCase().includes(a.word.toLowerCase()))) {
         throw new Error(`${a.slug} never uses "${a.word}", so the control has no true answer`);
       }
-      for (const c of CASES) {
-        const question = questionFor(c, a.blockId, block, a.word);
+      for (const c of casesFor(opts.kind)) {
+        const question = questionFor(c, a.blockId, block, a.word, a.page);
         const anchor: ChatAnchor | null = c.anchored ? { blockId: a.blockId } : null;
         const started = performance.now();
         let outcome: Outcome;
         try {
           const got = await runAsOwner(owner, () =>
-            ask(meta, blocks, a.slug, question, anchor, c.help),
+            ask(meta, blocks, a.slug, question, anchor, c.help, opts.kind),
           );
           outcome = {
+            kind: opts.kind,
             run,
             slug: a.slug,
             blockId: a.blockId,
@@ -259,6 +363,7 @@ async function main(): Promise<void> {
           };
         } catch (err) {
           outcome = {
+            kind: opts.kind,
             run,
             slug: a.slug,
             blockId: a.blockId,
@@ -281,7 +386,7 @@ async function main(): Promise<void> {
         outcomes.push(outcome);
         const o = outcome;
         console.log(
-          `\n[run ${run}] ${a.slug} · ${c.name} (${c.role})${o.error ? " — FAILED: " + o.error : ""}`,
+          `\n[run ${run}] ${opts.kind} · ${a.slug} · ${c.name} (${c.role})${o.error ? ` — FAILED: ${o.error}` : ""}`,
         );
         console.log(
           `  searches=${o.searches} tools=[${o.tools.join(", ")}] links=${o.links.length} blockIds=${o.blockIds.length} sources=${o.sources} ${o.seconds}s${o.truncated ? " TRUNCATED" : ""}`,
@@ -291,23 +396,23 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log("\n## Summary");
-  console.log("case     role     searched  mean-searches  mean-links  mean-blockIds");
-  for (const c of CASES) {
+  console.log(`\n## Summary (${opts.kind})`);
+  console.log("case     role     searched  read-page  mean-searches  mean-links  mean-blockIds");
+  for (const c of casesFor(opts.kind)) {
     const rows = outcomes.filter((o) => o.case === c.name && !o.error);
     const n = rows.length || 1;
     const mean = (f: (o: Outcome) => number) =>
       (rows.reduce((s, o) => s + f(o), 0) / n).toFixed(2);
     console.log(
-      `${c.name.padEnd(8)} ${c.role.padEnd(8)} ${rows.filter((o) => o.searches > 0).length}/${rows.length}       ${mean((o) => o.searches).padStart(6)}        ${mean((o) => o.links.length).padStart(6)}      ${mean((o) => o.blockIds.length).padStart(6)}`,
+      `${c.name.padEnd(8)} ${c.role.padEnd(8)} ${rows.filter((o) => o.searches > 0).length}/${rows.length}       ${rows.filter((o) => o.tools.includes("read_web_page")).length}/${rows.length}        ${mean((o) => o.searches).padStart(6)}        ${mean((o) => o.links.length).padStart(6)}      ${mean((o) => o.blockIds.length).padStart(6)}`,
     );
   }
 
-  const out = path.resolve(import.meta.dirname, "results", `chat-web-reach-${opts.label}-${stamp}.json`);
+  const out = path.resolve(import.meta.dirname, "results", `chat-web-reach-${opts.kind}-${opts.label}-${stamp}.json`);
   await mkdir(path.dirname(out), { recursive: true });
   await writeFile(
     out,
-    `${JSON.stringify({ label: opts.label, runs: opts.runs, at: new Date().toISOString(), articles: ARTICLES, outcomes }, null, 2)}\n`,
+    `${JSON.stringify({ label: opts.label, kind: opts.kind, runs: opts.runs, at: new Date().toISOString(), articles: ARTICLES, outcomes }, null, 2)}\n`,
     "utf-8",
   );
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);
