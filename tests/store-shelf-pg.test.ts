@@ -67,6 +67,7 @@ import {
   quizAttempts,
   staleNoticeDismissals,
   commandSuggestionDismissals,
+  relatedWorkSearches,
   realtimeSessions,
   refereePromises,
   refereeHiddenChecks,
@@ -1085,6 +1086,14 @@ describe("destroying an article", () => {
           articleId: GONE_ARTICLE,
           readFrom: "0123456789abcdef",
           dismissed: ["fedcba9876543210"],
+        }),
+      /* Sources › Not cited's last OpenAlex search — plan 261011ac. It goes with the article. */
+      related_work_searches: () =>
+        db.insert(relatedWorkSearches).values({
+          articleId: GONE_ARTICLE,
+          fingerprint: `related-work/1:${"0".repeat(64)}`,
+          yearLimit: 2017,
+          results: [{ openalexId: "W1", title: "A related paper", authors: [], authorCount: 0 }],
         }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({

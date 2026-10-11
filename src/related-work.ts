@@ -103,7 +103,7 @@ import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { log, type Log } from "./log.js";
 import { registryTitleAgrees } from "./paper-evidence.js";
 import { CONTACT_EMAIL } from "./site-text.js";
-import type { FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
+import type { FetchAllowanceStore, RatePolicy, RelatedWorkStore } from "./store/contracts.js";
 import type { CitedWork, RelatedWork, RelatedWorkResult } from "./types.js";
 
 /* ------------------------------------------------------------ the policy -- */
@@ -198,11 +198,8 @@ export interface RelatedWorkLoaded {
   stored: StoredRelatedWork | null;
 }
 
-/** What `searchRelatedWork` needs from the database. src/store/pg-related-work.ts is the real one. */
-export interface RelatedWorkStore {
-  /** Replace the article's kept search. Returns when the database says it was searched, ISO. */
-  write(articleId: string, search: RelatedWorkSearch): Promise<string>;
-}
+/** The store's contract lives with the others (src/store/contracts.ts § `RelatedWorkStore`). */
+export type { RelatedWorkStore };
 
 /**
  * **The store and the allowance are handed in, never imported** — the route

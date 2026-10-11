@@ -49,6 +49,7 @@ import type { StaleNoticeMode } from "../stale-notice.js";
 import { isAdmin, type AdminUser } from "../admin.js";
 import type { HiddenCheckResult, StoredHiddenCheck } from "../referee-hidden-check-types.js";
 import type { OwnerId } from "../owner.js";
+import type { RelatedWorkLoaded, RelatedWorkSearch } from "../related-work.js";
 import type { Db } from "../db/client.js";
 import type { Assets } from "../assets.js";
 import type { DocumentKind } from "../fetch.js";
@@ -1915,6 +1916,21 @@ export interface StaleNoticeStore {
    * `dismissed_at` forward. `created_at` stays the first dismissal's.
    */
   dismiss(slug: string, mode: StaleNoticeMode, identities: readonly string[]): Promise<void>;
+}
+
+/**
+ * **Sources › Not cited's store** — src/store/pg-related-work.ts, plan
+ * 261011ac. The orchestration (src/related-work.ts) is handed it by the route.
+ */
+export interface RelatedWorkStore {
+  /**
+   * Everything one request needs, in one snapshot, through the owner filter:
+   * somebody else's slug throws the store's 404. Only the route calls it;
+   * `searchRelatedWork` is handed what it read.
+   */
+  load(slug: string): Promise<RelatedWorkLoaded>;
+  /** Replace the article's kept search. Returns when the database says it was searched, ISO. */
+  write(articleId: string, search: RelatedWorkSearch): Promise<string>;
 }
 
 /**

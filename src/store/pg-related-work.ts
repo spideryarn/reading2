@@ -33,12 +33,12 @@ import {
   MAX_QUERY_BODY,
   type RelatedWorkLoaded,
   type RelatedWorkSearch,
-  type RelatedWorkStore,
   type StoredRelatedWork,
   relatedWorkOf,
 } from "../related-work.js";
 import { citedMetaFingerprintOf } from "../source-hash.js";
 import type { Bibliography, RelatedWork, Tree } from "../types.js";
+import type { RelatedWorkStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { ownedSlug } from "./owned-slug.js";
 import { blockHashQuery, notFound, requireSlug } from "./pg.js";
@@ -176,7 +176,7 @@ async function loadRelatedWork(slug: string): Promise<RelatedWorkLoaded> {
   }, SNAPSHOT);
 }
 
-const rawPgRelatedWorkStore: RelatedWorkStore & { load(slug: string): Promise<RelatedWorkLoaded> } = {
+const rawPgRelatedWorkStore: RelatedWorkStore = {
   load: loadRelatedWork,
 
   async write(articleId: string, search: RelatedWorkSearch): Promise<string> {
@@ -205,4 +205,4 @@ const rawPgRelatedWorkStore: RelatedWorkStore & { load(slug: string): Promise<Re
 };
 
 /** Guarded at the export, like every adapter here — tests/store-guarded.test.ts. */
-export const pgRelatedWorkStore = guardDbStore("related-work", rawPgRelatedWorkStore);
+export const pgRelatedWorkStore: RelatedWorkStore = guardDbStore("related-work", rawPgRelatedWorkStore);

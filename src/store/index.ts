@@ -66,7 +66,6 @@
 import { log } from "../log.js";
 import { type InvestigateCitationDeps, makeInvestigateCitation, readCitedPaper } from "../citation-investigate.js";
 import { makeGuessSource } from "../source-guess-run.js";
-import type { RelatedWorkStore } from "../related-work.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
   AdminStore,
@@ -80,6 +79,7 @@ import type {
   SkimNoticeStore,
   StaleNoticeStore,
   SuggestionDismissalStore,
+  RelatedWorkStore,
   QuizAttemptStore,
   FeedbackStore,
   FetchAllowanceStore,

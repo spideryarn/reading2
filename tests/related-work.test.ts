@@ -403,6 +403,9 @@ class MemoryLimiter implements ServiceLimiter {
 class MemoryStore implements RelatedWorkStore {
   writes: { articleId: string; search: RelatedWorkSearch }[] = [];
   fail = false;
+  async load(): Promise<RelatedWorkLoaded> {
+    throw new Error("the orchestration is handed what the route loaded");
+  }
   async write(articleId: string, search: RelatedWorkSearch): Promise<string> {
     if (this.fail) throw new Error("insert failed: params: Attention Is All You Need");
     this.writes.push({ articleId, search });
@@ -436,7 +439,7 @@ const OPENING = ["The dominant sequence transduction models are based on complex
 
 function loaded(over: Partial<RelatedWorkLoaded> = {}): RelatedWorkLoaded {
   return {
-    articleId: "11111111-1111-4111-8111-111111111111",
+    articleId: "00000000-0000-4000-8000-0000ca401e12",
     article: TRANSFORMER,
     opening: OPENING,
     bibliography: {
