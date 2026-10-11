@@ -42,11 +42,13 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import type { SendHow } from "../src/web/ChatPanel.js";
 import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 
 const sent: { open: string[]; fresh: string[] } = { open: [], fresh: [] };
+const freshHow: (SendHow | undefined)[] = [];
 
 /* Real ids, because `?thread=` is parsed as a block id — `t1` would be rejected
    before it ever reached the panel, which would make the URL claim these tests
@@ -89,8 +91,9 @@ function paint(
           sent.open.push(q);
         },
         onNew: () => {},
-        onSendNew: (q: string) => {
+        onSendNew: (q: string, how?: SendHow) => {
           sent.fresh.push(q);
+          freshHow.push(how);
         },
         onDiscard: () => {},
         onRename: () => {},
@@ -141,6 +144,7 @@ beforeEach(() => {
   forgetChatDrafts();
   sent.open = [];
   sent.fresh = [];
+  freshHow.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -162,6 +166,7 @@ describe("the composer under the conversation list", () => {
     ask(render(), "Does it ever answer the objection?");
     expect(sent.fresh).toEqual(["Does it ever answer the objection?"]);
     expect(sent.open).toEqual([]);
+    expect(freshHow).toEqual([{ typed: true, modality: "typed" }]);
   });
 
   it("empties itself, so the next question does not arrive with the last one", () => {

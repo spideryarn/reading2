@@ -117,3 +117,27 @@ GPT Sol, 2026-10-11, `-plan-review-sol.md`: REWORK, six findings, all taken. F1 
 answers are `written`), F2 (snapshot before the Live hand-off), F3 (reset on any clear), F4 (a
 seeded draft is null), F5 (the rollback restore helper), F6 (`dictated_edited` claimed an order it
 cannot know → `mixed`; `via` → `modality`). Folded into the sections above.
+
+## Code review
+
+GPT Sol, 2026-10-11, `-code-review-sol.md`: SHIP AFTER FIXES. Two findings, both fixed by the
+reviewer with a red-first test each:
+
+- C1: the paragraph-side chat dialog (`ChatDialog.tsx`) dropped the composer's `SendHow` on new
+  and follow-up questions.
+- C2: the "Ask something new…" list composer (`onSendNew`) dropped it too.
+
+The class: TypeScript accepts a callback with fewer parameters, so a one-argument adapter
+typechecks while discarding the second. Any new adapter around `Composer` has to forward `how`.
+
+## What landed
+
+Commit `adae047e8` holds the column, the CHECK, the plumbing, the tests and the docs. The commit
+after it holds the review fixes.
+
+- Typed, dictated and mixed are now stored from every `Composer`: the band, the list, and the
+  dialog.
+- Both halves of a live exchange are stored as `spoken`.
+- Every streamed answer is stored as `written`.
+- Deferred: the command bar's "Ask the guide" box (qi-9pknjrsf).
+- How to review the live-voice answers: [live-conversation.md § What a spoken row carries](../project/live-conversation.md#what-a-spoken-row-carries-that-a-typed-one-does-not).

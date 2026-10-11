@@ -1434,7 +1434,7 @@ export function ConversationBand({
          `startNew` raises it — this *is* a new conversation being started, and
          the reader who typed to start it should still have a caret when it
          opens, in the composer that has just replaced the one they typed into. */
-      onSendNew={(question) => {
+      onSendNew={(question, how) => {
         if (resettingNow.current) return;
         heldOnList.current = null;
         /* `null` for the thread, so this mints a new one — and therefore this
@@ -1443,6 +1443,9 @@ export function ConversationBand({
           onThreadId: (corrected) => void setThread(corrected),
           kind,
           ...(onScreen ? { visible: onScreen() } : {}),
+          /* The list owns a real Composer too; keep the provenance it saw
+             instead of losing the second callback argument at this adapter. */
+          ...(how?.modality ? { modality: how.modality } : {}),
         });
         void setThread(id);
         /* **Not on a soft keyboard.** The send lets go of the keys there so

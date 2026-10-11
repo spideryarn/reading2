@@ -265,7 +265,7 @@ interface Props {
    * reader's question to a stored conversation under a placeholder promising a
    * new one; GPT-5.6 found it, 2026-08-27. This one always mints.
    */
-  onSendNew(question: string): void;
+  onSendNew(question: string, how?: SendHow): void;
   /**
    * Forget a conversation nobody ever said anything in.
    *
