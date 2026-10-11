@@ -804,8 +804,9 @@ Each of these has cost somebody real time on this box.
   always spoke as Greg: on 2026-10-10 an Overseer "hold your test runs" sent that way arrived as
   `[Greg, via the fleet dashboard]`, became Greg's instruction to three sessions, and one then
   refused to take the Overseer's later go-ahead as lifting it. It now labels the sender by who ran
-  it — run from your shell it goes out as the Overseer, and its success line says `as the Overseer`;
-  check that line, and if it ever says `as Greg`, say so to the recipient at once
+  it — when your tmux session id and name match the claim, its success line says `as the Overseer`;
+  otherwise it says `as agent` (possibly unnamed if sender identity could not be read).
+  Check that line, and if it ever says `as Greg`, say so to the recipient at once
   ([261011e](../plans/261011e-tell-labels-the-sender-as-an-agent.md)). `SendMessage` is still the
   better door for a Claude session, for the reasons above; `tell` is for a peer `ListAgents` cannot
   reach.

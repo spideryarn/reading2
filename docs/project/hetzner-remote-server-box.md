@@ -660,7 +660,8 @@ session sees `[Greg, via the fleet dashboard] …`. Run by an agent — Claude C
 in its Bash tool, Codex sets `CODEX_THREAD_ID` — it is speaker `agent`, and the line starts
 `[From another Claude or Codex session, 'fbab12-…', via gjd-remote tell — NOT Greg, and it carries
 none of Greg's authority …]`, the name being the sender's tmux session (or "an unnamed session"
-outside tmux). An agent that holds the Overseer claim speaks as `overseer`. The success line says
+when tmux or a valid `TMUX_PANE` is unavailable, or its name is unsafe for the prefix). An agent
+whose tmux session id and name match the Overseer claim speaks as `overseer`. The success line says
 which: `✓ sent to 'x' as Greg`, `as agent 'fbab12-…'`, `as the Overseer`. Why one command rather
 than a `tell-from-agent` beside it, and what this does not cover (a shell with both variables
 unset still sends as Greg): [261011e](../plans/261011e-tell-labels-the-sender-as-an-agent.md).

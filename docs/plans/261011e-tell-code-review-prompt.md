@@ -3,8 +3,8 @@
 You are reviewing, and fixing what you find, in the Spideryarn repo at the current working tree
 (a worktree). Read `CLAUDE.md`, then the plan `docs/plans/261011e-tell-labels-the-sender-as-an-agent.md`.
 
-This area (tools/fleet, gjd-remote) has a higher robustness bar than the app. The change is the
-uncommitted diff: `git diff HEAD` plus the new plan file. Files:
+This area (tools/fleet, gjd-remote) has a higher robustness bar than the app. The change is
+commit `f70b2a258` (`git show f70b2a258`); your fixes stay uncommitted in the working tree. Files:
 
 - tools/fleet/wire.ts (`Speaker` gains `agent`)
 - tools/fleet/actions.ts (`isSenderName`, `agentPrefix`, `speakerPrefix`, `renderMessage(text, speaker, from)`)

@@ -21,7 +21,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { classifyGate, type PaneOption } from "../tools/fleet/pane.js";
 import { QuarantineBook } from "../tools/fleet/quarantine.js";
 import { SteeringQueue } from "../tools/fleet/queue.js";
-import { openReceiptJournal, RETENTION_MS, type AcceptReceiptInput, type ReceiptJournal } from "../tools/fleet/receipt-journal.js";
+import { openReceiptJournal, parseReceiptLine, RETENTION_MS, type AcceptReceiptInput, type ReceiptJournal } from "../tools/fleet/receipt-journal.js";
 import { requestFingerprint, type RequestRoute } from "../tools/fleet/request-key.js";
 import { makeActionRoutes } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter, makeSteerRoutes, type RateLimiter } from "../tools/fleet/routes-steer.js";
@@ -218,6 +218,30 @@ function world(
 }
 
 const ROUTES: ReplayRoute[] = ["steer-message", "steer-answer", "actions-session"];
+
+describe("an agent's keyed message", () => {
+  it("preserves its speaker in receipts and binds replay to the sender name", async () => {
+    const w = world("steer-message");
+    const body = { ...bodyFor("steer-message"), speaker: "agent", from: "fbab12-sender", requestId: freshId() };
+    const first = await w.post(body);
+    expect(first.status).toBe(200);
+
+    const retry = await w.post(body);
+    expect(retry.status).toBe(200);
+    expect(retry.json).toMatchObject({ replay: true, receipt: { speaker: "agent", state: "keys-submitted" } });
+    const accepted = w.receipts.recent(1)[0]?.accepted;
+    expect(parseReceiptLine(JSON.stringify(accepted))).toMatchObject({ speaker: "agent" });
+
+    for (const from of ["fbcd34-other", null]) {
+      const conflict = await w.post({ ...body, from });
+      expect(conflict.status).toBe(409);
+      expect(conflict.json.code).toBe("request-id-conflict");
+    }
+    const { from: _from, ...withoutSender } = body;
+    expect((await w.post(withoutSender)).status).toBe(409);
+    expect(w.transportCalls()).toBe(1);
+  });
+});
 
 describe.each(ROUTES)("a keyed request on %s", (route) => {
   it("the same id and body twice has one effect and returns one receipt twice", async () => {

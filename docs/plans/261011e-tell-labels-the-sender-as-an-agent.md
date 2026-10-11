@@ -31,7 +31,7 @@ changes: speaker `greg`.
 An agent is then one of two speakers:
 
 - **`overseer`**, the existing arm, when the sender's tmux session (`tmux display-message -p` against
-  `$TMUX_PANE`, only when `$TMUX` is set) has the same tmux id and name as the row holding the
+  a valid `$TMUX_PANE`, only when `$TMUX` is set) has the same tmux id and name as the row holding the
   Overseer claim in the dashboard snapshot `tell` already reads.
 - **`agent`**, a new arm, otherwise. Its prefix names the sending tmux session when it is knowable
   and says "an unnamed session" when not, says it is NOT Greg and carries none of Greg's authority,
@@ -75,3 +75,24 @@ Greg — needs the agent's shell to have lost both variables.
 The fleet dashboard must be restarted for the route change to take effect. Until it is, the old
 route refuses `speaker: "agent"`, so an agent's `tell` fails with nothing typed rather than going
 out as Greg.
+
+## Code review evidence, 2026-10-11
+
+The Codex reviewer's own shell sets `CODEX_VERSION`, `CODEX_SESSION_ID`, `CODEX_THREAD_ID`,
+`CODEX_CI` and `CODEX_SANDBOX_NETWORK_DISABLED` (names only). `CODEX_THREAD_ID` is present, as
+assumed; `runByAgent` needs no detection change.
+
+Review found that missing `TMUX_PANE` produced an untargeted query, which could name another
+client's session. The query now requires a literal `%N` pane id and otherwise uses an unnamed
+agent. Four direct regression cases failed before the fix: absent, empty, named and newline-bearing
+pane targets. The root cause is recorded in
+[the postmortem](../postmortems/261011e-incomplete-identity-turns-a-targeted-lookup-into-an-ambient-one.md).
+
+Validation in the review sandbox: 32 tell-helper tests, all 58 steer-route tests, and 165 tests
+across actions, request replay and browser receipts passed. Added coverage pins changed/null/absent
+`from` as replay conflicts and `agent` as readable in both receipt parsers. The required combined
+tell/steer run was interrupted after hanging in subprocess fixtures: even an independent Node
+stdin probe timed out, and output probes reported `spawnSync … EPERM`. The CLI integration suite
+therefore needs an unrestricted-shell rerun. `npm run typecheck` was blocked by tsx's `listen EPERM`;
+`node --import tsx scripts/typecheck.ts` passed all four projects and source coverage. Scoped lint
+passed with informational suggestions only. Rerun outside the sandbox (2026-10-11): the tell, steer-route, actions, replay, envelope, box-jobs and doc-links suites, 346 tests, and `npm run typecheck`, all green.

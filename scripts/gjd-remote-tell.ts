@@ -100,13 +100,16 @@ export function runByAgent(env: NodeJS.ProcessEnv): boolean {
 
 /**
  * The `tmux` argv that names the session this process is running in, or null
- * when it is not in tmux at all. `-t $TMUX_PANE` asks about this pane rather
- * than whichever client tmux thinks is current.
+ * when tmux or the sender's pane id is unavailable. `-t $TMUX_PANE` asks
+ * about this pane rather than whichever client tmux thinks is current.
+ * Never omit the target: missing identity must give an unnamed sender, not
+ * another client's session (which might even hold the Overseer claim).
  */
 export function ownSessionQuery(env: NodeJS.ProcessEnv): string[] | null {
   if (!nonEmpty(env["TMUX"])) return null;
   const pane = env["TMUX_PANE"];
-  return ["display-message", "-p", ...(nonEmpty(pane) ? ["-t", pane] : []), "#{session_name}\t#{session_id}"];
+  if (pane === undefined || !/^%\d+$/.test(pane)) return null;
+  return ["display-message", "-p", "-t", pane, "#{session_name}\t#{session_id}"];
 }
 
 /** `ownSessionQuery`'s answer, or null for anything that is not one name and one `$N` id. */

@@ -7,7 +7,7 @@ import { parseMessageBody } from "../tools/fleet/routes-steer.js";
 import { steerMessageBody } from "../tools/fleet/web/src/steer-client.js";
 import { parseRow } from "../tools/fleet/web/src/types.js";
 
-import { overseerTarget, readTellAnswer, sessionTarget, splitStatus, tellPostCommand } from "../scripts/gjd-remote-tell.js";
+import { overseerTarget, ownSessionQuery, readTellAnswer, sessionTarget, splitStatus, tellPostCommand, voiceFor } from "../scripts/gjd-remote-tell.js";
 
 const NOW = "2026-10-09T22:43:28.580Z";
 
@@ -43,6 +43,17 @@ function hasTerminalControl(text: string): boolean {
     return code < 0x20 || (code >= 0x7f && code <= 0x9f);
   });
 }
+
+describe("ownSessionQuery", () => {
+  it.each([undefined, "", "Overseer", "%42\n"])("does not guess a session when TMUX_PANE is %j", (pane) => {
+    const env = { CLAUDECODE: "1", TMUX: "/tmp/tmux-1000/default,1,2", TMUX_PANE: pane };
+    const query = ownSessionQuery(env);
+    // The fallback must carry no identity, rather than querying tmux's active
+    // client and treating that client's session as the sender.
+    expect(query).toBeNull();
+    expect(voiceFor(snapshot([overseer]), env, null)).toEqual({ speaker: "agent", from: null });
+  });
+});
 
 describe("overseerTarget", () => {
   it("builds the steer body from the row holding the claim, as speaker greg", () => {
@@ -415,6 +426,16 @@ if (command.includes("/api/state")) {
       expect(r.post).toMatchObject({ speaker: "agent", from: null });
       expect(r.tmuxArgv).toBeNull();
       expect(r.stdout).toContain("as an agent (unnamed session)");
+    });
+
+    it.each([undefined, "", "Overseer", "%42\n"])("does not guess the sender when TMUX_PANE is %j", (pane) => {
+      const env = { CLAUDECODE: "1", TMUX: inTmux.TMUX, ...(pane === undefined ? {} : { TMUX_PANE: pane }) };
+      // An untargeted tmux query can select another client's session. Make it
+      // return the Overseer so a wrong query is visible in the posted voice.
+      const r = run(send, "", "peer", env, `Overseer\t${overseer.id}`);
+      expect(r.status, r.error?.message ?? r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ speaker: "agent", from: null });
+      expect(r.tmuxArgv).toBeNull();
     });
 
     it("says an unnamed session when tmux cannot answer", () => {
