@@ -73,6 +73,26 @@ export type DictationVerdict =
 const LANGUAGE =
   "Speech recognition does not support this page's language. You can still type. [mic-language]";
 
+/**
+ * **The sentence the capture shares with the recogniser**, exported so that
+ * `useDictation.ts` § `couldNotStart` points at it rather than copying it: no
+ * microphone at all is the same thing to the reader whichever of the two found
+ * out, and one code may carry only one sentence (`tests/dictation-codes.test.ts`).
+ * Plan 261011i.
+ */
+export const MIC_NONE =
+  "No microphone was available. Check the input device your computer is set to use. [mic-none]";
+
+/**
+ * **The microphone was refused to this page** — `getUserMedia`'s
+ * `NotAllowedError` or `SecurityError`. Not `[mic-blocked]`, whose "Allow it for
+ * this site" is one of several places the refusal can come from: the device's
+ * own privacy settings, the browser's, a policy, or a WebKit failure with
+ * permission granted. So it names both places and blames neither. Plan 261011i.
+ */
+export const MIC_REFUSED =
+  "This page wasn't allowed to use the microphone. Check the microphone permission for this site in your browser, and in your device's privacy settings, then try again. [mic-refused]";
+
 const MESSAGES: Record<string, string> = {
   "not-allowed":
     "Your browser blocked the microphone. Allow it for this site and try again. [mic-blocked]",
@@ -104,8 +124,7 @@ const MESSAGES: Record<string, string> = {
      because the tape is what produces the words. */
   network:
     "Speech recognition needs an internet connection, and the connection failed. Check you are online, then press the microphone again. [mic-no-connection]",
-  "audio-capture":
-    "No microphone was available. Check the input device your computer is set to use. [mic-none]",
+  "audio-capture": MIC_NONE,
   "language-not-supported": LANGUAGE,
   /* **These two carried the sentence without the code**, for a year, because
      they were written as literals beside it rather than pointed at it — and

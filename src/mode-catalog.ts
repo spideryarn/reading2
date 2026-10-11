@@ -337,17 +337,20 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        and `reviewer` was passed over only because it would have sat beside it.
        `referee` is what journals call the person; `review` is what everyone
        else calls the job. src/modes.ts § referee has the whole argument. */
-    /* Not `critique`: Reception has `critiques`, and Referee comes first in the
-       bar, so the shorter word here would take every start of the longer one.
-       Not `criteria`, which is the chip's own row. */
+    /* Not `critique`: Reception has `critiques`, and every mode row precedes
+       every sub-mode row in the command bar, so the shorter word here would
+       take every start of the longer one. Not `criteria`, which is the chip's
+       own row. */
     /* "peer review" was here until 2026-10-09, when it went to the mode
        then named Peer review, now Sources (plan 261009l § The name, plan
        261009w), which keeps it as its old name. The person doing one, who is
        who this mode is for, is here as `for peer reviewers`, the landing
        tile's words, rather than `peer reviewer` as it was until Sources took
-       `peer review`: Referee comes first in the bar, so a nickname here that
-       *starts* `peer review` would take Sources' (rule 5 above). Typed, `peer
-       reviewer` still finds this mode, a tier lower, inside the longer word. */
+       `peer review`: while Referee came first in the bar, a nickname here that
+       *started* `peer review` would take Sources' query (rule 5 above). Sources
+       has come first since 2026-10-10, but no alias change is needed: typed,
+       `peer reviewer` still finds this mode, a tier lower, inside the longer
+       word. */
     aliases: ["review", "reviewer", "for peer reviewers", "referee report", "assess", "assessment"],
     experimental: true,
   },

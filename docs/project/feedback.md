@@ -460,9 +460,15 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 A question leaves the dialog when an agent marks its file `status: answered` and that commit is
 deployed, unless the browser is still holding an unsent reply to it as above.
 
-**The dialog is bigger on a big screen** (`spya-frpy22`): from 1024px wide it is up to 46rem wide
-rather than 34rem, and on a window at least 760px tall at least `min(90%, 44rem)` tall. A phone is
-unchanged.
+**The dialog is bigger on a big screen** (`spya-frpy22`, then `spya-tfp3zw`): from 1024px wide it
+is up to 46rem wide rather than 34rem, and on a window at least 760px tall at least
+`min(90%, 44rem)` tall; from 1280px wide, up to 56rem, and on a window at least 900px tall at least
+`min(90%, 56rem)` tall. A phone is unchanged
+([261011h](../plans/261011h-feedback-dialog-bigger-still-and-green-send-red-defer.md)).
+
+**In a thread, Send reply is green and Defer for now red** (`spya-zjsqe6`): `--positive` and
+`--danger`, on the text and border only, since a wash behind took Light under 4.5:1. Bring back and
+the addendum box's send stay neutral. `tests/feedback-dialog-styles.test.ts` holds the cascade.
 
 
 ### Adding to an earlier report, since 2026-10-10

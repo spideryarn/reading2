@@ -175,6 +175,7 @@ function drive(options: { keep?: (box: string) => DictationKeeper<unknown>; show
       box,
       context: { kind: "profile" },
       transcribe,
+      report: () => {},
       ...(target !== null && { keep: (options.keep ?? keeper)(`comment:${target}`) }),
     });
     field = f;

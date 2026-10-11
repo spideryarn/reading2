@@ -141,6 +141,7 @@ import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { useVisualViewport } from "./useVisualViewport.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /** Where the reader is: the address bar, and the article if there is one. */
 export interface FeedbackWhere {
@@ -806,6 +807,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
     box,
     context: where.slug === null ? { kind: "profile" } : { kind: "article", slug: where.slug },
     transcribe,
+    report: dictationReporter("feedback"),
     /* **Only while open.** This dialog is mounted on every page whether or not
        it is showing, so a keeper here while shut would let any background tab
        claim a recording left from a closed one — and hold it where nobody can

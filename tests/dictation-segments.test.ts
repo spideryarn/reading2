@@ -255,6 +255,7 @@ function drive(send = transcribe) {
       onEnd: () => ends.push(1),
       context: { kind: "profile" },
       transcribe: send,
+      report: () => {},
     });
     return null;
   }
@@ -289,6 +290,7 @@ function driveField(onDone?: () => void) {
       box,
       context: { kind: "profile" },
       transcribe,
+      report: () => {},
       ...(onDone && { onDone }),
     });
     return createElement("textarea", {

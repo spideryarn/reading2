@@ -173,6 +173,7 @@ import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /** The passage a box is about. Always a selection, never a bare block. */
 type Anchor = Extract<ChatAnchor, { quote: string }>;
@@ -435,6 +436,7 @@ export function AnnotateDialog({
     box,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe,
+    report: dictationReporter("annotate"),
     /* One box per passage, as the draft itself is — the whole key, quote
        included, since two selections can start at the same character. The
        keeper's name is also what a transcript is bound to (dictation.md §

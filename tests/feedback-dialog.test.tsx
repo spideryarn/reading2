@@ -2252,6 +2252,12 @@ describe("the Earlier tab", () => {
         ]);
         /* Shut until pressed. */
         expect(panelOf("Earlier").querySelector(".fb-addendum-box")).toBeNull();
+        /* Opened, its Send stays neutral: the green is a thread's (plan 261011h). */
+        click(button(item(214), "Add to this report"));
+        const addBox = item(214).querySelector(".fb-addendum-box");
+        expect(addBox).not.toBeNull();
+        expect(addBox?.classList.contains("fb-reply-thread")).toBe(false);
+        expect(addBox?.querySelector(".fb-defer")).toBeNull();
       });
 
       it("draws each report's addenda under its words, oldest first, timed, as text with its lines, on any status", async () => {
@@ -3297,6 +3303,9 @@ describe("the Earlier tab", () => {
       /* Decision 3 (spya-t6nmxt): "not now", reversible, a timestamp. */
       it("defers a thread, and brings it back, with exactly the question and whether", async () => {
         await openThread();
+        /* Green to send and red to defer, by these classes (spya-zjsqe6, plan 261011h). */
+        expect(button(thread(), "Send reply").closest(".fb-reply")?.classList.contains("fb-reply-thread")).toBe(true);
+        expect(button(thread(), "Defer for now").classList.contains("fb-defer")).toBe(true);
         answer = deferral();
         click(button(thread(), "Defer for now"));
         await settle();
@@ -3309,6 +3318,8 @@ describe("the Earlier tab", () => {
         expect(thread().textContent).toMatch(/Deferred .*No agent will chase it/);
         expect(hasButton(thread(), "Bring back")).toBe(true);
         expect(hasButton(thread(), "Defer for now")).toBe(false);
+        /* Bring back undoes a deferral, so it is not drawn as one. */
+        expect(button(thread(), "Bring back").classList.contains("fb-defer")).toBe(false);
         click(button(thread(), "‹ All threads"));
         expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);

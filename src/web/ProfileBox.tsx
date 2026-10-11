@@ -53,6 +53,7 @@ import { Tooltip } from "./Tooltip.js";
 import { warnBeforeUnload } from "./unload-guard.js";
 import type { SaveState } from "./useAutosavedText.js";
 import { useDictationField } from "./useDictationField.js";
+import { dictationReporter } from "./dictation-report.js";
 
 /**
  * How long the box must sit still before it saves. Long enough to be a pause
@@ -203,6 +204,7 @@ export function ProfileBox({
     box,
     context: { kind: "profile" },
     transcribe,
+    report: dictationReporter("profile"),
     keep: keepDictation(article === null ? `profile:${id}` : `profile:${id}:${article}`),
   });
   const dictation = dictate.dictation;

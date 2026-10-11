@@ -42,6 +42,10 @@
  * run, at its end; the guides run is the five under More, and is drawn only
  * while one of them is open —
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
+ *
+ * And on 2026-10-10 (spya-eyaf3n): *"Sources should be to the left of referee
+ * in the bottom bar."* The critical run's two swap, so its line falls before
+ * Sources — docs/plans/261011a-sources-left-of-referee-in-the-bottom-bar.md.
  */
 import { describe, expect, it } from "vitest";
 import { groupStarts, splitForMore, visibleModes } from "../src/web/Dock.js";
@@ -63,8 +67,9 @@ const RUNS = [
   ["structure", "summary", "diagram", "skim"],
   ["quotes", "glossary", "faq", "ideas", "timeline"],
   /* Citations, Referee, Debate until 2026-10-09, when Citations and Debate
-     became Sources, in Debate's place (plan 261009l). */
-  ["referee", "sources"],
+     became Sources, in Debate's place (plan 261009l); Sources first since
+     2026-10-10 (spya-eyaf3n, plan 261011a). */
+  ["sources", "referee"],
   ["search", "chat", "learn"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
      one of the bands, at the right-hand end like its column
@@ -92,7 +97,7 @@ describe("the mode bar's order", () => {
        Marginalia already have frame edges (Dock.tsx § the three frames). The
        guides run is all under More, so with none of it open it draws no line. */
     const starts = groupStarts(drawnBands(true));
-    expect([...starts].sort()).toEqual(["structure", "referee", "search"].sort());
+    expect([...starts].sort()).toEqual(["structure", "sources", "search"].sort());
   });
 
   it("keeps each run in one piece, so a run never draws two lines", () => {
@@ -165,15 +170,23 @@ describe("the mode bar's order", () => {
     }
   });
 
-  it("puts a retained experimental mode in its run, and the run's line before it", () => {
+  it("puts a retained experimental mode in its run, after the run's line", () => {
     /* A reader with the switch off, sitting in Referee by URL: the bar draws
-       Referee beside Sources, and the critical run's line moves to
-       Referee, its first. It was Debate alone in its run until 2026-10-09,
-       when Debate became Sources and left the switch (plan 261009l). */
+       Referee after Sources, in the same run, so the critical run's line stays
+       before Sources, its first, and none is drawn between the two. Referee
+       was the run's first until 2026-10-10 (spya-eyaf3n, plan 261011a). */
     const drawn = drawnBands(false, "referee");
-    expect(drawn.map((m) => m.mode)).toContain("referee");
-    expect([...groupStarts(drawn)]).toContain("referee");
-    expect([...groupStarts(drawn)]).not.toContain("sources");
-    expect([...groupStarts(drawn)]).toContain("search");
+    expect(drawn.map((m) => m.mode)).toEqual([
+      "plain",
+      "structure",
+      "summary",
+      "skim",
+      "sources",
+      "referee",
+      "search",
+      "chat",
+      "learn",
+    ]);
+    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "sources", "search"].sort());
   });
 });

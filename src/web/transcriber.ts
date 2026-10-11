@@ -1,7 +1,8 @@
 /**
  * **What a dictation's words come back as, and who is allowed to fetch them.**
  *
- * A contract file: two types, no imports, no runtime values. It exists so that
+ * A contract file: types, the one closed list of microphone errors they name,
+ * and no imports. It exists so that
  * [`useDictation`](./useDictation.ts) can be told where to send a recording
  * instead of knowing.
  *
@@ -158,3 +159,75 @@ export interface RecoveredTape<C> {
   /** Every part closed and no chunk is missing. See {@link KeptTape.complete}. */
   complete: boolean;
 }
+
+/**
+ * **A dictation that failed, as the hook saw it** — handed to a
+ * {@link DictationReporter} when the reader is shown the sentence.
+ *
+ * Until 2026-10-11 nothing heard about these but the reader. Greg hit "some
+ * kind of error" on the microphone and asked for it to be found
+ * (SPIDERYARN-READING2-H0): it had failed in the browser, before any upload,
+ * so the server's logs had nothing and neither did Sentry.
+ * docs/plans/261011i-dictation-failures-reach-sentry.md.
+ */
+export interface DictationFailure {
+  /** The sentence the reader was shown, ending in its `[mic-…]` or `[ai-…]` code. */
+  message: string;
+  /**
+   * When the microphone would not open: why, in the browser's own word
+   * (`NotAllowedError`, `NotReadableError`…); `unsupported` when there is no
+   * `getUserMedia` at all, `no-track` when it answered with no audio in it.
+   * `null` for every other failure.
+   */
+  micError: MicErrorName | null;
+  /** Whether the browser's live recogniser was running on this press. */
+  live: boolean;
+  /**
+   * Whether the reader had chosen a microphone, and if so whether that is the
+   * one that opened. A fallback followed by `[mic-silent]` is the strongest
+   * clue that the wrong device was listening (GPT Sol's plan review, F5).
+   */
+  chosenMic: "none" | "honoured" | "not-honoured";
+}
+
+/**
+ * The `getUserMedia` refusals we name, and `other` for the rest. A closed set,
+ * so that the name can travel to a monitoring service as a tag: an arbitrary
+ * error's `name` is whatever the code that threw it chose.
+ */
+export const MIC_ERROR_NAMES = [
+  "NotAllowedError",
+  "SecurityError",
+  "NotFoundError",
+  "OverconstrainedError",
+  "NotReadableError",
+  "AbortError",
+  "InvalidStateError",
+  "TypeError",
+  "unsupported",
+  "no-track",
+  "other",
+] as const;
+export type MicErrorName = (typeof MIC_ERROR_NAMES)[number];
+
+/** A thrown value's name, if it is one we name; `other` otherwise. */
+export function micErrorName(err: unknown): MicErrorName {
+  const name = (err as { name?: unknown } | null)?.name;
+  return (MIC_ERROR_NAMES as readonly unknown[]).includes(name) &&
+    name !== "unsupported" &&
+    name !== "no-track"
+    ? (name as MicErrorName)
+    : "other";
+}
+
+/**
+ * **Somebody to tell when a dictation fails**, a parameter for the same reason
+ * {@link Transcriber} is one: the hook is shared with the fleet dashboard and
+ * must not import the product's Sentry. **Required, not optional**, so a box
+ * that forgets to wire it does not compile — a forgotten optional reporter is
+ * exactly the silence it exists to end. The product passes
+ * `dictationReporter(<surface>)` from [`dictation-report.ts`](./dictation-report.ts).
+ *
+ * **It must not throw.**
+ */
+export type DictationReporter<C> = (failure: DictationFailure, context: C) => void;
