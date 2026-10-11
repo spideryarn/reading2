@@ -800,10 +800,16 @@ Each of these has cost somebody real time on this box.
   Greg, 2026-09-08: *"SendMessage for Claude agents where available, and fall back to tmux as a
   backup plan."* Your own peer name is whatever `ListAgents` prints at the top; Greg sets it with
   `/rename`, and it is not the tmux session name.
-- **Never use `gjd-remote tell` yourself: it speaks as Greg.** It is Greg's tool, and what it sends
-  arrives prefixed `[Greg, via the fleet dashboard]`, whatever the text says about who wrote it. On
-  2026-10-10 an Overseer "hold your test runs" sent that way became Greg's instruction to three
-  sessions, and one then refused to take the Overseer's later go-ahead as lifting it.
+- **Prefer `SendMessage` to `gjd-remote tell` for a Claude session.** Until 2026-10-11 `tell`
+  always spoke as Greg: on 2026-10-10 an Overseer "hold your test runs" sent that way arrived as
+  `[Greg, via the fleet dashboard]`, became Greg's instruction to three sessions, and one then
+  refused to take the Overseer's later go-ahead as lifting it. It now labels the sender by who ran
+  it — when your tmux session id and name match the claim, its success line says `as the Overseer`;
+  otherwise it says `as agent` (possibly unnamed if sender identity could not be read).
+  Check that line, and if it ever says `as Greg`, say so to the recipient at once
+  ([261011e](../plans/261011e-tell-labels-the-sender-as-an-agent.md)). `SendMessage` is still the
+  better door for a Claude session, for the reasons above; `tell` is for a peer `ListAgents` cannot
+  reach.
 - **An empty `ListAgents` is not a dead peer.** `ListAgents` and `SendMessage` find peers per Claude
   config directory. A session started under another one sees only the sessions registered there,
   and its `SendMessage` to you answers *"No agent named 'Overseer' is reachable."* Seen 2026-09-10,

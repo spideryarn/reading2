@@ -583,6 +583,11 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.staleNoticeDismissals.length) {
     at("stale-notices.json", { dismissals: rows.staleNoticeDismissals.map((row) => rowJson(row)) });
   }
+  if (rows.commandSuggestionDismissals.length) {
+    at("suggestion-dismissals.json", {
+      dismissals: rows.commandSuggestionDismissals.map((row) => rowJson(row)),
+    });
+  }
   return out;
 }
 
@@ -645,7 +650,10 @@ one thing that will make the rest of these files make sense.
       tags.json            Your own tags on the article.
       quiz-attempts.json   Your answers to the quiz questions, and the mark each was given.
       stale-notices.json   The "older version of the article" notices you dismissed, by mode.
-      ideas.json           Propositions the article takes as given.
+      suggestion-dismissals.json
+                           The command bar's suggestions you dismissed, as fingerprints rather
+                           than words, and the fingerprint of the reason they were made from.
+      ideas.json          Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
       bibliography.json    Every work the article cites, and the link the article gave for it.
@@ -842,6 +850,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/tags.json": "Your own tags on the article.",
   "augmentations/quiz-attempts.json": "Your answers to the quiz questions, and the mark each was given.",
   "augmentations/stale-notices.json": "The \"older version of the article\" notices you dismissed, by mode.",
+  "augmentations/suggestion-dismissals.json":
+    "The command bar's suggestions you dismissed, as fingerprints rather than words, and the fingerprint of the reason they were made from.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
@@ -1005,6 +1015,10 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "your tags", n: rows.articleTags.length },
     { label: "quiz answers", n: rows.quizAttempts.length },
     { label: "notices you dismissed", n: rows.staleNoticeDismissals.length },
+    {
+      label: "suggestions you dismissed",
+      n: rows.commandSuggestionDismissals.reduce((sum, row) => sum + row.dismissed.length, 0),
+    },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

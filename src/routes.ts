@@ -51,6 +51,7 @@ import {
   glossaryHiddenStore,
   skimNoticeStore,
   staleNoticeStore,
+  suggestionDismissalStore,
   quizAttemptStore,
   loadArticle,
   loadGlossary,
@@ -302,6 +303,7 @@ import type {
   ClaimsFinish,
   CriterionFinish,
   NewFeedback,
+  NewFeedbackAddendum,
   NewFeedbackAnswer,
   NewFeedbackDeferral,
   SearchFinish,
@@ -456,7 +458,14 @@ import {
 } from "./transcribe.js";
 import { type PickAnswer, parsePickRequest } from "./command-pick.js";
 import { pickCommand } from "./command-pick-call.js";
-import { type SuggestAnswer, parseSuggestRequest, readFromHash } from "./command-suggest.js";
+import {
+  DISMISS_STALE,
+  type SuggestAnswer,
+  parseDismissRequest,
+  parseSuggestRequest,
+  readFromHash,
+  withoutDismissed,
+} from "./command-suggest.js";
 import { suggestCommands, suggestableOptions } from "./command-suggest-call.js";
 import { parseHelpChatRequest } from "./help-chat.js";
 import { admitHelpChat, askHelp } from "./help-chat-call.js";
@@ -527,6 +536,7 @@ import {
 import {
   ADMIN_EARLIER_FEEDBACK_SHOWS,
   type AdminEarlierFeedbackPage,
+  type AdminFeedbackAddendumReceipt,
   type AdminFeedbackAnswerReceipt,
   type AdminFeedbackQuestion,
   type AdminFeedbackQuestionAnswer,
@@ -542,6 +552,7 @@ import {
   FEEDBACK_KINDS,
   MAX_FEEDBACK_URL_CHARS,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_BODY_CHARS,
   MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   /* A value, and the same number the panel's textarea counts against — one
@@ -8285,10 +8296,41 @@ async function suggestFromWhyReading(
     const outcome = await suggestCommands({ rendered, rows: parsed.request.rows }, gone.signal);
     if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
     if (outcome.suggestions === null) return { kind: "nothing", why: "no-list" };
-    return { kind: "suggestions", readFrom: readFromHash({ profile, purpose }), ...outcome.suggestions };
+    /* What the reader dismissed under this fingerprint goes after the model
+       has answered, never into what it is sent (plan 261010u, F2). Under any
+       other fingerprint nothing is filtered (F6). */
+    const readFrom = readFromHash({ profile, purpose });
+    const kept = withoutDismissed(outcome.suggestions, await suggestionDismissalStore.forFingerprint(slug, readFrom));
+    if (kept === null) return { kind: "nothing", why: "no-list" };
+    return { kind: "suggestions", readFrom, ...kept };
   } finally {
     res.off("close", drop);
   }
+}
+
+/**
+ * **Dismissing one of the bar's suggestions** — `POST
+ * /api/command-suggest/:slug/dismiss`, plan 261010u (Greg, 2026-10-10,
+ * `spya-yf23zk`). The body is `{ readFrom, identity }`, both hashes
+ * (src/command-suggest.ts § `parseDismissRequest`): no words reach the
+ * server. Owner only, checked by name first as for `suggestFromWhyReading`,
+ * and again inside the store. Never spends.
+ */
+async function dismissSuggestion(slug: string, req: IncomingMessage): Promise<void> {
+  await ownedArticleIdentity(slug);
+  const parsed = parseDismissRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  /* A late write from a list made before either profile box changed must not
+     replace dismissals already saved for the current list. Re-read the two
+     stored inputs here; the client supplies neither words nor authority. */
+  const parts = await resolveProfileParts(slug);
+  if (parts.purposeFailed) throw httpError(503, REASON_NOT_READ.message);
+  const currentReadFrom = readFromHash({
+    profile: normaliseProfileText(parts.profile),
+    purpose: normaliseProfileText(parts.purpose),
+  });
+  if (parsed.request.readFrom !== currentReadFrom) throw httpError(409, DISMISS_STALE);
+  await suggestionDismissalStore.dismiss(slug, parsed.request.readFrom, parsed.request.identity);
 }
 
 /* ------------------------------------------------------------- feedback -- */
@@ -8959,6 +9001,48 @@ function parseFeedbackAnswer(raw: unknown): NewFeedbackAnswer {
   const body = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
   if (body === null) throw httpError(400, "A reply needs something written in it. [fa-empty]");
   return { id, questionId: question, body, environment: feedbackEnvironment() };
+}
+
+/** The three fields an addendum may carry. **Exactly these**, for `FEEDBACK_FIELDS`' reasons. */
+const FEEDBACK_ADDENDUM_FIELDS = ["id", "report", "body"] as const;
+
+/**
+ * The most bytes an addendum's request may be, worked out as
+ * `MAX_FEEDBACK_ANSWER_BODY_BYTES` is: the cap's worth of characters at JSON's
+ * worst (a six-byte `\uXXXX` escape each), and room for the envelope (F7).
+ */
+const MAX_FEEDBACK_ADDENDUM_BODY_BYTES = MAX_FEEDBACK_BODY_CHARS * 6 + 1024;
+
+/**
+ * **An addendum to one of the caller's own reports, built field by field** —
+ * `POST /api/admin/feedback/addenda` (plan 261010o), by `parseFeedbackAnswer`'s
+ * rules: an unknown key is refused in fixed prose, nothing sent reaches a
+ * message, and the environment is this process's own. One addendum is at most
+ * `MAX_FEEDBACK_BODY_CHARS`, the same as a report, since it is more of the
+ * report; all of a report's together are held to the same by the store.
+ * Whether the report is the caller's, and still open, is the store's to say.
+ */
+function parseFeedbackAddendum(raw: unknown): NewFeedbackAddendum {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw httpError(400, "Expected a JSON object [fx-type]");
+  }
+  const sent = raw as Record<string, unknown>;
+  for (const key of Object.keys(sent)) {
+    if (!(FEEDBACK_ADDENDUM_FIELDS as readonly string[]).includes(key)) {
+      throw httpError(400, "An addendum has a field this endpoint does not take [fx-field]");
+    }
+  }
+  const id = sent.id;
+  if (typeof id !== "string" || !isSpideryarnId(id)) {
+    throw httpError(400, "id must be an addendum id [fx-id]");
+  }
+  const report = sent.report;
+  if (typeof report !== "string" || !isSpideryarnId(report)) {
+    throw httpError(400, "report must be a report id [fx-report]");
+  }
+  const body = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_BODY_CHARS);
+  if (body === null) throw httpError(400, "An addendum needs something written in it. [fx-empty]");
+  return { id, reportId: report, body, environment: feedbackEnvironment() };
 }
 
 
@@ -10114,20 +10198,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       const page = await feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show);
       const { open, waiting, aside, shipped } = page.counts;
-      const reports = page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt }) => ({
-        id,
-        createdAt,
-        kind,
-        body,
-        page: filedFrom,
-        at,
-        number,
-        status,
-        comment: feedbackComment(id),
-        ignoredAt,
-      }));
+      const reports = page.reports.map(
+        ({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt, addenda }) => ({
+          id,
+          createdAt,
+          kind,
+          body,
+          page: filedFrom,
+          at,
+          number,
+          status,
+          comment: feedbackComment(id),
+          ignoredAt,
+          addenda: addenda.map(({ id: addendumId, body: words, createdAt: added }) => ({
+            id: addendumId,
+            body: words,
+            createdAt: added,
+          })),
+        }),
+      );
       /* Whole reports, as many as fit one response, as the plain route does
-         below: fifty at 20,000 characters can pass 4.5 MB. Plan 261007j. */
+         below: fifty at 20,000 characters can pass 4.5 MB. Plan 261007j. A
+         report's addenda are inside it, so they are kept or cut with it, and
+         all of them together are at most another report (plan 261010o, F1). */
       const fitting = prefixWithinBytes(reports, FEEDBACK_LIST_BYTES);
       const envelope = {
         reports: fitting,
@@ -10188,6 +10281,56 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         default: {
           const unreachable: never = stored;
           throw new Error(`unknown answer outcome: ${String(unreachable)}`);
+        }
+      }
+    },
+  },
+
+  /* **An addendum to one of the admin's own earlier reports** — the *Add to
+     this report* box in the Earlier tab. Plan 261010o. Under `/api/admin/`,
+     so the namespace gate has refused everybody else before this runs; the
+     row is the signed-in owner's, and the report must be theirs too (the
+     composite foreign key, and the store's locked read before it).
+
+     Mirrors `/answers`: 201 new; 200 with the stored row for the same addendum
+     again, even if the report has closed since; 409 when the id is already a
+     different addendum. And three of its own: 404 when the caller has no such
+     report (never whether somebody else does); 409 when it has been shipped or
+     set aside since the page loaded; 409 when its addenda are full. No rate
+     limit: admin-only, as replies are. */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/feedback/addenda",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const addendum = parseFeedbackAddendum(await readBody(req, MAX_FEEDBACK_ADDENDUM_BODY_BYTES));
+      const stored = await feedbackStore.submitAddendum(addendum, feedbackIdsByEnding());
+      /* Ids and a length, never the words: docs/project/logging.md. */
+      log("http").info(
+        { id: addendum.id, report: addendum.reportId, kind: stored.kind, chars: addendum.body.length },
+        "feedback addendum answered",
+      );
+      switch (stored.kind) {
+        case "conflict":
+          throw httpError(409, "That addendum's id has already been used for a different addendum. [fx-reused]");
+        case "missing":
+          throw httpError(404, "There is no such report of yours. [fx-missing]");
+        case "closed":
+          throw httpError(409, "That report has been closed since this page was loaded. [fx-closed]");
+        case "full":
+          throw httpError(409, "This report has as much added to it as it can take. [fx-full]");
+        case "created":
+        case "duplicate": {
+          const { id, body, createdAt } = stored.addendum;
+          const receipt: AdminFeedbackAddendumReceipt = { addendum: { id, body, createdAt } };
+          send(res, stored.kind === "created" ? 201 : 200, receipt);
+          return;
+        }
+        default: {
+          const unreachable: never = stored;
+          throw new Error(`unknown addendum outcome: ${String(unreachable)}`);
         }
       }
     },
@@ -10638,6 +10781,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* Words made from the reader's profile: never a shared cache's. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, answer);
+    },
+  },
+  /* **Dismissing one of those suggestions** — plan 261010u. Answers
+     `{ ok: true }`. The pattern above takes one segment after the prefix, so
+     it never swallows this one. Never spends. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/command-suggest\/([\w.%-]+)\/dismiss$/,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      await dismissSuggestion(slugPart(captures, 1), req);
+      send(res, 200, { ok: true });
     },
   },
 

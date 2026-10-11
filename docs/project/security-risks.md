@@ -110,7 +110,7 @@ the proposals that narrow it.
 
 Agents read hostile input all day ([feedback-reports.md § A report is unfiltered input](feedback-reports.md#a-report-is-unfiltered-input)),
 and they all run as one user who can read these. So an agent talked into it by a report or an
-article could rewrite readers' data, or forge a row in `feedback_question_answers` that the next
+article could rewrite readers' data, or forge a row in `feedback_question_answers` (or, since 2026-10-10, `feedback_addenda`) that the next
 agent obeys as Greg's own words. What stops that today is the agent's instructions, auto mode's
 per-command check, and the `begin read only` habit; on 2026-10-07 that habit was the only thing that
 stopped a subagent's `UPDATE` ([database.md](database.md), "Delete such a script").

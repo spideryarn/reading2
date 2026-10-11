@@ -13,6 +13,9 @@
  *     wikipedia:  <sup id="cite_ref-…"><a href="#cite_note-…">   the sup wraps the anchor
  *     substack:   <a class="footnote-anchor" id="footnote-anchor-1" href="#footnote-1">1</a>
  *                 …and the note is <div class="footnote"><a id="footnote-1">1</a><div>…</div></div>
+ *     biblegateway: <sup class="crossreference">(<a href="#cen-NIV-27949A">A</a>)</sup>
+ *                 …and the note is <li id="cen-NIV-27949A"> in <div class="crossrefs">
+ *                 (a fifth, added 2026-10-11 — see its entry in ANCHOR_SHAPES)
  *     tufte:      <label class="margin-toggle sidenote-number"></label>
  *                 <input type="checkbox" id="sn-…"><span class="sidenote">…</span>
  *
@@ -201,8 +204,8 @@ export const NOTE_ID_PATTERN = /^spya-note-[0-9a-f]{10}(?:-[0-9]+)?$/;
  */
 const RESERVED = [NOTE_ATTR, REF_ATTR, BACK_ATTR, CONTAINER_ATTR];
 
-/** The four publishers we recognise, and nothing else. */
-export type NoteShape = "gwern" | "wikipedia" | "substack" | "tufte";
+/** The five publishers we recognise, and nothing else. */
+export type NoteShape = "gwern" | "wikipedia" | "substack" | "tufte" | "biblegateway";
 
 export interface NoteStats {
   /** Distinct notes canonicalised. Not the number of markers, and not the number of blocks. */
@@ -222,7 +225,7 @@ const EMPTY_STATS = (): NoteStats => ({
   markers: 0,
   backlinks: 0,
   synthesised: 0,
-  shapes: { gwern: 0, wikipedia: 0, substack: 0, tufte: 0 },
+  shapes: { gwern: 0, wikipedia: 0, substack: 0, tufte: 0, biblegateway: 0 },
 });
 
 /**
@@ -291,6 +294,13 @@ interface AnchorShape {
    * digit, which has to go, so there is nothing to keep.
    */
   reuseBacklinks: boolean;
+  /**
+   * Must the note link back to one of its markers before we believe it? True
+   * for every shape whose markup could be mistaken for a cross-reference — see
+   * `collectAnchorPairs`. False only where the publisher's own markup on *both*
+   * halves is unambiguous by itself and its back-link aims somewhere else.
+   */
+  roundTrip: boolean;
 }
 
 /** `el.matches` with a selector we wrote — never one built from page content. */
@@ -299,6 +309,9 @@ const is = (el: Element, selector: string): boolean => el.matches(selector);
 /** A list item, and really in a list — where every pandoc note lives. */
 const isListItem = (t: Element): boolean =>
   t.tagName === "LI" && (t.parentElement?.tagName === "OL" || t.parentElement?.tagName === "UL");
+
+/** Kind, translation and numeric verse, followed by the note's letter(s). */
+const BIBLEGATEWAY_NOTE_ID = /^([cf])en-([A-Za-z0-9]+)-(\d+)[A-Za-z]+$/;
 
 const ANCHOR_SHAPES: readonly AnchorShape[] = [
   {
@@ -321,6 +334,7 @@ const ANCHOR_SHAPES: readonly AnchorShape[] = [
       t.closest("[role='doc-endnotes'], .footnotes") !== null ||
       (/^fn\d/.test(t.id) && isListItem(t)),
     reuseBacklinks: true,
+    roundTrip: true,
   },
   {
     /* Wikipedia/Parsoid: the sup wraps the anchor, and the id that back-links aim
@@ -332,6 +346,7 @@ const ANCHOR_SHAPES: readonly AnchorShape[] = [
       t.closest(".mw-references, .references, ol.references") !== null ||
       (/^cite_note/.test(t.id) && isListItem(t)),
     reuseBacklinks: true,
+    roundTrip: true,
   },
   {
     /* Substack: no `<sup>` anywhere, and the note arrives as a `<div>` whose
@@ -344,6 +359,33 @@ const ANCHOR_SHAPES: readonly AnchorShape[] = [
       is(t, ".footnote-number, .footnote, [data-component-name='FootnoteToDOM']") ||
       t.closest(".footnote, [data-component-name='FootnoteToDOM']") !== null,
     reuseBacklinks: false,
+    roundTrip: true,
+  },
+  {
+    /* Bible Gateway: a lettered cross-reference `(A)` and a lettered footnote
+       `[a]` — an anchor at `#cen-NIV-27949A` / `#fen-NIV-27949a` inside a
+       `<sup class="crossreference">` / `<sup class="footnote">` — and each note
+       an `<li>` in the `.crossrefs` / `.footnotes` list after the passage.
+       Readability drops the cross-reference list as link-dense furniture and
+       keeps the markers, so without this every `(A)` is a link to nothing
+       (tests/notes-biblegateway.test.ts).
+
+       No round trip, because the note's back-link — the "Romans 1:18" it opens
+       with — aims at the *verse*, and the first verse after a heading has no id
+       of its own: Bible Gateway puts it on the heading's span. Both halves are
+       the publisher's own class-and-id scheme, which is the evidence the round
+       trip stands in for elsewhere. */
+    name: "biblegateway",
+    marker: (a) => {
+      const id = BIBLEGATEWAY_NOTE_ID.exec((a.getAttribute("href") ?? "").slice(1));
+      return id !== null && a.closest(id[1] === "c" ? "sup.crossreference" : "sup.footnote") !== null;
+    },
+    target: (t) => {
+      const id = BIBLEGATEWAY_NOTE_ID.exec(t.id);
+      return id !== null && isListItem(t) && t.closest(id[1] === "c" ? ".crossrefs" : ".footnotes") !== null;
+    },
+    reuseBacklinks: true,
+    roundTrip: false,
   },
 ];
 
@@ -485,12 +527,12 @@ function noteBodyFor(target: Element, isForeignMarker: (el: Element) => boolean)
 }
 
 /**
- * Gwern, Wikipedia and Substack — three adapters sharing one validator.
+ * The anchor-based publishers share one validator.
  *
  * A pair is a note when **its publisher's own markup says so** (`ANCHOR_SHAPES`),
  * the marker is short enough to *be* a marker, its target is a bounded piece of
- * prose rather than a section, and **the note links back** to at least one of the
- * places it is cited.
+ * prose rather than a section, and (except for Bible Gateway's verse links)
+ * **the note links back** to at least one of the places it is cited.
  *
  * That last one is validation, not recognition — the first version of this file
  * used it as the whole rule and it accepted table cells and navigation prose. It
@@ -553,8 +595,15 @@ function collectAnchorPairs(doc: Document, byName: Map<string, Element>): Candid
     if (!body) continue;
     if (markers.some((m) => body.contains(m))) continue; // a back-link, not a marker
 
-    const backwards = Array.from(body.querySelectorAll("a[href^='#']")).filter(pointsBackAt);
-    if (backwards.length === 0) continue;
+    // Bible Gateway's authored return link can name a heading instead of the
+    // verse's prose. Identify it by the verse encoded in the note's own id;
+    // canonicaliseNotes will aim it at the citing marker without changing its text.
+    const bibleId = shape.name === "biblegateway" ? BIBLEGATEWAY_NOTE_ID.exec(target.id) : null;
+    const verseHref = bibleId ? `#en-${bibleId[2]}-${bibleId[3]}` : null;
+    const backwards = Array.from(body.querySelectorAll("a[href^='#']")).filter(
+      (a) => pointsBackAt(a) || (verseHref !== null && a.getAttribute("href") === verseHref),
+    );
+    if (backwards.length === 0 && shape.roundTrip) continue;
 
     out.push({
       body,
@@ -667,6 +716,29 @@ function commonAncestor(els: Element[]): Element | null {
   return current;
 }
 
+/** Elements the notes container may be appended to: sections of a page, not a paragraph. */
+const HOST_TAGS = new Set(["DIV", "SECTION", "ARTICLE", "MAIN", "BODY"]);
+
+/**
+ * Where the notes container goes: at the end of the element that holds the
+ * prose citing them.
+ *
+ * Bible Gateway's notes sit outside the passage's prose wrapper, so putting
+ * the container at their common ancestor leaves it outside Readability's top
+ * candidate. Use the markers alone for that publisher. Keep the wider host for
+ * other shapes: putting a long note inside a lone marker's opening wrapper can
+ * make Readability select only that wrapper and discard the rest of the article
+ * (tests/notes-canonical.test.ts). Mixed systems keep that wider placement too.
+ * Climb to a structural container so a single bare Tufte span cannot be both
+ * the note being removed and the host we append its replacement to.
+ */
+function notesHost(candidates: Candidate[]): Element | null {
+  const bibleGatewayOnly = candidates.every((c) => c.shape === "biblegateway");
+  let host = commonAncestor(candidates.flatMap((c) => bibleGatewayOnly ? c.markers : [c.body, ...c.markers]));
+  while (host && !HOST_TAGS.has(host.tagName)) host = host.parentElement;
+  return host;
+}
+
 /**
  * Form controls and hidden text, out of a note before anything reads it.
  *
@@ -777,7 +849,7 @@ export function canonicaliseNotes(doc: Document): NoteStats {
   const taken = new Set<string>(Array.from(doc.querySelectorAll("[id]"), (el) => el.id));
   const stats = EMPTY_STATS();
 
-  const host = commonAncestor(candidates.flatMap((c) => [c.body, ...c.markers]));
+  const host = notesHost(candidates);
   if (!host) return EMPTY_STATS();
 
   const container = doc.createElement("section");
@@ -838,11 +910,16 @@ export function canonicaliseNotes(doc: Document): NoteStats {
       replaceMarker(doc, original, { noteId, markerId, label });
       stats.markers++;
 
-      /* Stamped in place where the author wrote one. Not the text, not the href,
-         not the element — the note block's words have to come out exactly as
-         they went in, or the block loses its id on the next re-extraction. */
-      const existing = backFor.get(original) ?? [];
+      /* Stamped in place where the author wrote one. Preserve the text and
+         element so the block's words keep their identity. Preserve the href too,
+         except for Bible Gateway's verse links, which can aim at a heading. */
+      const existing = candidate.shape === "biblegateway"
+        ? (i === 0 ? Array.from(keptSet) : [])
+        : backFor.get(original) ?? [];
       for (const back of existing) {
+        // Its verse id may be on a heading, or missing entirely after extraction.
+        // Keep the author's words, but return to the marker that cites this note.
+        if (candidate.shape === "biblegateway") back.setAttribute("href", `#${markerId}`);
         back.setAttribute(BACK_ATTR, noteId);
         stats.backlinks++;
       }

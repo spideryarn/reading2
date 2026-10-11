@@ -62,6 +62,7 @@ import { closeDb, getDb } from "../src/db/client.js";
  */
 import {
   feedback as feedbackTable,
+  feedbackAddenda as addendaTable,
   feedbackQuestionAnswers as answersTable,
   feedbackQuestionDeferrals as deferralsTable,
 } from "../src/db/schema.js";
@@ -205,6 +206,8 @@ async function warmPool(): Promise<void> {
 async function clear(): Promise<void> {
   const db = getDb();
   for (const owner of [ALICE, BOB]) {
+    /* Addenda first: their key on the report is `restrict` (plan 261010o). */
+    await db.delete(addendaTable).where(eq(addendaTable.ownerId, owner));
     await db.delete(feedbackTable).where(eq(feedbackTable.ownerId, owner));
     await db.delete(deferralsTable).where(eq(deferralsTable.ownerId, owner));
     await db.delete(answersTable).where(eq(answersTable.ownerId, owner));
@@ -1035,7 +1038,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       const id = await file(ALICE, "what I said");
       const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(10, NONE, "all"));
       expect(Object.keys(reports[0] ?? {}).sort()).toEqual(
-        ["at", "body", "createdAt", "id", "ignoredAt", "kind", "number", "page", "status"].sort(),
+        ["addenda", "at", "body", "createdAt", "id", "ignoredAt", "kind", "number", "page", "status"].sort(),
       );
       expect(reports[0]?.id).toBe(id);
       expect(JSON.stringify(reports)).not.toContain("reporter@example.invalid");
@@ -1131,6 +1134,229 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       ]);
       /* An empty table: nothing to backfill, and the first report is 1. */
       expect(await run("")).toEqual([{ id: "after", number: 1 }]);
+    });
+  });
+
+  /**
+   * **An admin's addenda to their own reports** — plan 261010o. The store's
+   * transaction: an existing row first, then the owner's report locked, its
+   * status by the list's own expression, the aggregate cap, the insert.
+   */
+  describe("an admin's addenda to their own reports (261010o)", () => {
+    const NONE = { shipped: [], declined: [], awaiting: [] };
+    const addendum = (over: { id?: string; reportId: string; body?: string }) => ({
+      id: mintId(),
+      body: "Actually, only the Open ones.",
+      environment: "test" as FeedbackEnvironment,
+      ...over,
+    });
+    async function file(owner: OwnerId, id = mintId()): Promise<string> {
+      await runAsOwner(owner, () => pgFeedbackStore.submit(report({ id })));
+      return id;
+    }
+    const addendaOf = async (owner: OwnerId) =>
+      getDb().select().from(addendaTable).where(eq(addendaTable.ownerId, owner));
+
+    it("stores one on an open report, under the owner, with the server's environment", async () => {
+      const parent = await file(ALICE);
+      const sent = addendum({ reportId: parent });
+      const stored = await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(sent, NONE));
+      expect(stored.kind).toBe("created");
+      if (stored.kind !== "created") throw new Error("unreachable");
+      expect(stored.addendum).toMatchObject({ id: sent.id, reportId: parent, body: sent.body });
+      expect(Number.isNaN(Date.parse(stored.addendum.createdAt))).toBe(false);
+      expect(await addendaOf(ALICE)).toEqual([
+        expect.objectContaining({ id: sent.id, ownerId: ALICE, reportId: parent, environment: "test" }),
+      ]);
+    });
+
+    it("takes one on a report waiting on a decision, and refuses shipped and set aside, writing nothing", async () => {
+      const waiting = await file(ALICE);
+      const shipped = await file(ALICE);
+      const declined = await file(ALICE);
+      const ignored = await file(ALICE);
+      await getDb()
+        .update(feedbackTable)
+        .set({ ignoredAt: new Date() })
+        .where(and(eq(feedbackTable.ownerId, ALICE), eq(feedbackTable.id, ignored)));
+      const endings = { shipped: [shipped], declined: [declined], awaiting: [waiting] };
+      const on = (reportId: string) =>
+        runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ reportId }), endings));
+
+      expect((await on(waiting)).kind).toBe("created");
+      expect(await on(shipped)).toEqual({ kind: "closed", status: "shipped" });
+      expect(await on(declined)).toEqual({ kind: "closed", status: "aside" });
+      expect(await on(ignored)).toEqual({ kind: "closed", status: "aside" });
+      expect((await addendaOf(ALICE)).map((row) => row.reportId)).toEqual([waiting]);
+    });
+
+    it("is the caller's own reports only: another owner's report id is missing, and so is none", async () => {
+      const bobs = await file(BOB);
+      const missing = await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submitAddendum(addendum({ reportId: bobs }), NONE),
+      );
+      expect(missing).toEqual({ kind: "missing" });
+      expect(
+        await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ reportId: mintId() }), NONE)),
+      ).toEqual({ kind: "missing" });
+      expect(await addendaOf(ALICE)).toEqual([]);
+      expect(await addendaOf(BOB)).toEqual([]);
+      /* The positive control: Bob may add to his own. */
+      expect(
+        (await runAsOwner(BOB, () => pgFeedbackStore.submitAddendum(addendum({ reportId: bobs }), NONE))).kind,
+      ).toBe("created");
+    });
+
+    it("is the key and not only the store: the database refuses a row naming another owner's report", async () => {
+      const bobs = await file(BOB);
+      await expect(
+        getDb().insert(addendaTable).values({ id: mintId(), ownerId: ALICE, reportId: bobs, body: "x", environment: "test" }),
+      ).rejects.toThrow();
+      /* And a report with addenda cannot be deleted out from under them. */
+      await runAsOwner(BOB, () => pgFeedbackStore.submitAddendum(addendum({ reportId: bobs }), NONE));
+      await expect(
+        getDb().delete(feedbackTable).where(and(eq(feedbackTable.ownerId, BOB), eq(feedbackTable.id, bobs))),
+      ).rejects.toThrow();
+    });
+
+    it("is idempotent three ways: the same again, the id with other words, the id on another report", async () => {
+      const parent = await file(ALICE);
+      const other = await file(ALICE);
+      const sent = addendum({ reportId: parent });
+      const first = await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(sent, NONE));
+      if (first.kind !== "created") throw new Error(`expected created, got ${first.kind}`);
+
+      const again = await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(sent, NONE));
+      expect(again).toEqual({ kind: "duplicate", addendum: first.addendum });
+      expect(
+        await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum({ ...sent, body: "other words" }, NONE)),
+      ).toEqual({ kind: "conflict" });
+      expect(
+        await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum({ ...sent, reportId: other }, NONE)),
+      ).toEqual({ kind: "conflict" });
+      expect(await addendaOf(ALICE)).toHaveLength(1);
+
+      /* A retry of a stored addendum is the same row even after the report has
+         closed: it is a 200, not a 409 (F3). */
+      const closed = { shipped: [parent], declined: [], awaiting: [] };
+      expect(await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(sent, closed))).toEqual({
+        kind: "duplicate",
+        addendum: first.addendum,
+      });
+      /* The same id under another owner is that owner's own, and legal. */
+      const bobs = await file(BOB);
+      expect(
+        (await runAsOwner(BOB, () => pgFeedbackStore.submitAddendum({ ...sent, reportId: bobs }, NONE))).kind,
+      ).toBe("created");
+    });
+
+    it("stores one row when two copies of one addendum arrive together", async () => {
+      await warmPool();
+      const parent = await file(ALICE);
+      const sent = addendum({ reportId: parent });
+      const both = await Promise.all(
+        Array.from({ length: 4 }, () => runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(sent, NONE))),
+      );
+      expect(both.map((one) => one.kind).sort()).toEqual(["created", "duplicate", "duplicate", "duplicate"]);
+      expect(await addendaOf(ALICE)).toHaveLength(1);
+    });
+
+    /* F1: all of one report's addenda together at most MAX_FEEDBACK_BODY_CHARS. */
+    it("holds a report's addenda together to a report's cap, the largest permitted taken whole", async () => {
+      const parent = await file(ALICE);
+      const largest = addendum({ reportId: parent, body: "x".repeat(MAX_FEEDBACK_BODY_CHARS) });
+      expect((await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(largest, NONE))).kind).toBe("created");
+      expect(
+        await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ reportId: parent, body: "y" }), NONE)),
+      ).toEqual({ kind: "full" });
+      /* A retry of the one stored is still its row, not "full". */
+      expect((await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(largest, NONE))).kind).toBe("duplicate");
+
+      /* Summed, not each: two halves fit, and one character more does not. */
+      const halves = await file(ALICE);
+      for (let i = 0; i < 2; i++) {
+        const half = addendum({ reportId: halves, body: "z".repeat(MAX_FEEDBACK_BODY_CHARS / 2) });
+        expect((await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(half, NONE))).kind).toBe("created");
+      }
+      expect(
+        await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ reportId: halves, body: "!" }), NONE)),
+      ).toEqual({ kind: "full" });
+      /* Per report: another report of the same owner is untouched by it. */
+      const fresh = await file(ALICE);
+      expect(
+        (await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ reportId: fresh }), NONE))).kind,
+      ).toBe("created");
+    });
+
+    /* F3: Ignore's update holds the row; the addendum waits on it and then
+       sees the report as it is once Ignore has landed. */
+    it("waits on an Ignore in flight, and then refuses the report it closed", async () => {
+      await warmPool();
+      const parent = await file(ALICE);
+      let locked!: () => void;
+      const isLocked = new Promise<void>((resolve) => (locked = resolve));
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      const ignoring = getDb().transaction(async (tx) => {
+        await tx
+          .update(feedbackTable)
+          .set({ ignoredAt: new Date() })
+          .where(and(eq(feedbackTable.ownerId, ALICE), eq(feedbackTable.id, parent)));
+        locked();
+        await released;
+      });
+      await isLocked;
+      let settled = false;
+      const adding = runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ reportId: parent }), NONE)).then(
+        (outcome) => {
+          settled = true;
+          return outcome;
+        },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(settled, "the addendum waits for the row Ignore holds").toBe(false);
+      release();
+      await ignoring;
+      expect(await adding).toEqual({ kind: "closed", status: "aside" });
+      expect(await addendaOf(ALICE)).toEqual([]);
+    });
+
+    it("lists each report's addenda with it, oldest first, the owner's own only", async () => {
+      const shared = mintId();
+      await file(ALICE, shared);
+      const plain = await file(ALICE);
+      await file(BOB, shared);
+      const firstId = mintId();
+      const secondId = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ id: firstId, reportId: shared, body: "first" }), NONE));
+      await runAsOwner(ALICE, () => pgFeedbackStore.submitAddendum(addendum({ id: secondId, reportId: shared, body: "second" }), NONE));
+      /* Bob's addendum to his report under the same id must never reach Alice's list. */
+      await runAsOwner(BOB, () => pgFeedbackStore.submitAddendum(addendum({ reportId: shared, body: "Bob's" }), NONE));
+      /* Written in the order above; the clock is the database's, so make the order certain. */
+      await getDb()
+        .update(addendaTable)
+        .set({ createdAt: sql`now() - interval '1 minute'` })
+        .where(and(eq(addendaTable.ownerId, ALICE), eq(addendaTable.id, firstId)));
+
+      const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMineByStatus(10, NONE, "all"));
+      const withAddenda = reports.find((one) => one.id === shared);
+      expect(withAddenda?.addenda.map((one) => one.body)).toEqual(["first", "second"]);
+      expect(Object.keys(withAddenda?.addenda[0] ?? {}).sort()).toEqual(["body", "createdAt", "id"]);
+      expect(reports.find((one) => one.id === plain)?.addenda).toEqual([]);
+      expect(JSON.stringify(reports)).not.toContain("Bob's");
+      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMineByStatus(10, NONE, "all"));
+      expect(bobs.reports[0]?.addenda.map((one) => one.body)).toEqual(["Bob's"]);
+    });
+
+    it("logs ids and a length, never the words", async () => {
+      const parent = await file(ALICE);
+      const logged = await logLinesWhile(async () => {
+        await runAsOwner(ALICE, () =>
+          pgFeedbackStore.submitAddendum(addendum({ reportId: parent, body: "a thaumaturgical thought" }), NONE),
+        );
+      });
+      expect(logged).toContain(parent);
+      expect(logged).not.toContain("thaumaturgical");
     });
   });
 

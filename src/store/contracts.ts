@@ -1905,6 +1905,24 @@ export interface StaleNoticeStore {
 }
 
 /**
+ * The command bar's suggestions the owner dismissed on one article —
+ * docs/plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md.
+ * Both methods are owner-scoped (a stranger's slug is a 404). `readFrom` and
+ * `identity` are sixteen hex digits the route has checked
+ * (src/command-suggest.ts § `parseDismissRequest`); nothing here is words.
+ */
+export interface SuggestionDismissalStore {
+  /**
+   * Remember `identity` under `readFrom`. Under the stored fingerprint it is
+   * appended if absent, keeping the newest `MAX_DISMISSED_SUGGESTIONS`; under
+   * another it replaces the row. Atomic: two at once both land.
+   */
+  dismiss(slug: string, readFrom: string, identity: string): Promise<void>;
+  /** The identities dismissed under `readFrom`, or none if the row is another fingerprint's. */
+  forFingerprint(slug: string, readFrom: string): Promise<ReadonlySet<string>>;
+}
+
+/**
  * The reader's global profile — "about you", true on every article rather
  * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
  * is where the two boxes (this one and `ShelfState.purpose`) become one string
@@ -2506,7 +2524,7 @@ export type {
   FeedbackKind,
 } from "../types.js";
 import type { FeedbackEnding } from "../feedback-ending-values.js";
-import type { EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
+import type { AdminFeedbackAddendum, EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
 
 /** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
 export type MyFeedback = Omit<EarlierFeedback, "shipped">;
@@ -2527,13 +2545,57 @@ export interface FeedbackIdFilter {
 /** The report ids this build has a note for, under the ending each has (src/feedback-ending.ts). */
 export type FeedbackEndingIds = Readonly<Record<FeedbackEnding, readonly string[]>>;
 
-/** One earlier report with what only an admin's list carries from the row: its number, status and mark. */
+/** One earlier report with what only an admin's list carries from the row: its number, status, mark and addenda. */
 export interface MyFeedbackWithStatus extends MyFeedback {
   number: number;
   status: EarlierFeedbackStatus;
   /** ISO, or null. */
   ignoredAt: string | null;
+  /** This owner's addenda to it, oldest first, from the same snapshot as the row. */
+  addenda: AdminFeedbackAddendum[];
 }
+
+/**
+ * **An addendum to one of the caller's own reports, as the route hands it to
+ * the store** (plan 261010o). Named field by field; the owner is
+ * `currentOwnerId()`, never here.
+ */
+export interface NewFeedbackAddendum {
+  /** Client-minted, and the idempotency key. A Spideryarn id. */
+  id: string;
+  /** The report it adds to: one of the caller's own `feedback.id`s, or the store says `missing`. */
+  reportId: string;
+  body: string;
+  /** The server's own, never the browser's. */
+  environment: FeedbackEnvironment;
+}
+
+/** An addendum as it is stored: no owner and no environment, as `StoredFeedbackAnswer`. */
+export interface StoredFeedbackAddendum extends AdminFeedbackAddendum {
+  reportId: string;
+}
+
+/**
+ * **Six outcomes, in the order the store decides them** (plan 261010o, F3), a
+ * union so the route must say which status each is:
+ *
+ * - `created`: written.
+ * - `duplicate`: this owner already stored exactly this addendum under this
+ *   id, so nothing was written and the stored row comes back — even if the
+ *   report has closed since, because it is the same row.
+ * - `conflict`: this id is already a different addendum; nothing changed.
+ * - `missing`: the caller has no report with that id. Never whether another
+ *   owner has one.
+ * - `closed`: the report is shipped or set aside (`ADDENDUM_STATUSES`).
+ * - `full`: its addenda together would pass `MAX_FEEDBACK_BODY_CHARS` (F1).
+ */
+export type FeedbackAddendumSubmission =
+  | { kind: "created"; addendum: StoredFeedbackAddendum }
+  | { kind: "duplicate"; addendum: StoredFeedbackAddendum }
+  | { kind: "conflict" }
+  | { kind: "missing" }
+  | { kind: "closed"; status: EarlierFeedbackStatus }
+  | { kind: "full" };
 
 export interface MyFeedbackStatusPage {
   reports: MyFeedbackWithStatus[];
@@ -2912,6 +2974,8 @@ export interface FeedbackStore {
    * row, the filter and the counts, so the three cannot disagree. `show`
    * narrows **before** the cap: the newest `limit` reports of that status.
    * `counts` is per status, uncapped, in the same snapshot as the list.
+   * Each report carries this owner's addenda to it, oldest first, from the
+   * same snapshot (plan 261010o).
    */
   listMineByStatus(
     limit: number,
@@ -2925,6 +2989,17 @@ export interface FeedbackStore {
    * the only route that calls it is in the admin namespace.
    */
   submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission>;
+  /**
+   * **Add to one of the caller's own reports** — `POST
+   * /api/admin/feedback/addenda` (plan 261010o). One transaction: an existing
+   * row under `(owner, id)` is the idempotent answer; otherwise the owner's
+   * report row is locked `for update`, its status worked out by the same
+   * expression as `listMineByStatus` from `endings`, the addenda already on it
+   * summed against `MAX_FEEDBACK_BODY_CHARS`, and only then the insert.
+   * Ignore's update waits on the lock, so the status checked is the status
+   * the row has when the addendum lands. No rate limit: admin-only.
+   */
+  submitAddendum(input: NewFeedbackAddendum, endings: FeedbackEndingIds): Promise<FeedbackAddendumSubmission>;
   /**
    * **Every reply of this owner's to these questions**, oldest first; a
    * question they have not replied to has none. Owner-scoped: another admin's

@@ -66,8 +66,16 @@
  * the daily worktree sweep — telling the Overseer what it measured. Its own arm
  * rather than `dashboard`, whose prefix says a person started a session; the
  * message route is the only one that accepts it (`parseMessageSpeaker`).
+ *
+ * `agent` (2026-10-11, plan 261011e) is another Claude or Codex session that
+ * ran `gjd-remote tell`, which until then always spoke as `greg` — and on
+ * 2026-10-10 an Overseer request to pause tests became "Greg's instruction" to
+ * three sessions that way. `tell` picks it when its shell says an agent is
+ * running it (`CLAUDECODE`, `CODEX_THREAD_ID`). It is the one arm whose prefix
+ * names somebody: the sender's tmux session, carried as the message body's
+ * `from` and checked by `isSenderName`. Message route only, like `box`.
  */
-export type Speaker = "greg" | "overseer" | "dashboard" | "box";
+export type Speaker = "greg" | "overseer" | "dashboard" | "box" | "agent";
 
 /*
  * **`dashboard` IS A REPORT, NEVER AN INSTRUCTION, AND THE ARM SPLITS IF THAT

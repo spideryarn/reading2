@@ -699,6 +699,14 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      before it arrived (261008i): nothing changed either way. */
   "fb-defer": "retry",
   "fb-defer-settled": "retry",
+  /* An addendum to an admin's own earlier report (261010o): not getting
+     through, or reaching a server older than the page, both leave the words in
+     the box; the report closed since the page loaded, or holding as much as it
+     can take, are `blocked`, because sending the same words again cannot work. */
+  "fb-addendum": "retry",
+  "fb-addendum-stale": "retry",
+  "fb-addendum-closed": "blocked",
+  "fb-addendum-full": "blocked",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -6171,6 +6179,57 @@ export const FEEDBACK_DEFER_SETTLED: ReaderFacingFailure = {
   kind: "retry",
   message:
     "That question has been settled since this page was loaded, so nothing changed. Reload the page and look again. [fb-defer-settled]",
+};
+
+/**
+ * **An addendum to an earlier report did not get through** — the *Add to this
+ * report* box in an admin's Earlier tab (plan 261010o). `retry`: the words are
+ * still in the box, and sending the same words again is safe, because the
+ * addendum carries an id the server answers twice with the one stored row.
+ */
+export const FEEDBACK_ADDENDUM_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That addendum did not get through. Your words are still in the box — trying again in a moment " +
+    "usually works. [fb-addendum]",
+};
+
+/**
+ * **The server this page reached has no way to take an addendum** — a 404
+ * from `POST /api/admin/feedback/addenda`: a page loaded from a newer build
+ * than the server answering it, or a report this server does not have. The
+ * reply box's `FEEDBACK_REPLY_STALE`, for an addendum.
+ */
+export const FEEDBACK_ADDENDUM_STALE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This page and the server are out of step, so that addendum was not sent. Your words are still " +
+    "in the box: copy them, reload the page, and add them again. [fb-addendum-stale]",
+};
+
+/**
+ * **The report was shipped or set aside after the page loaded** — the
+ * route's 409 `[fx-closed]`. Nothing can be added to it now, so the sentence
+ * says where the words can go instead.
+ */
+export const FEEDBACK_ADDENDUM_CLOSED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That report has been closed since this page was loaded, so nothing was added to it, and sending " +
+    "again will not help. Your words are still in the box: copy them into a new report if they still " +
+    "matter. [fb-addendum-closed]",
+};
+
+/**
+ * **The report holds as much added to it as it can take** — the route's 409
+ * `[fx-full]`: all of one report's addenda together are at most a report's
+ * length (plan 261010o, F1).
+ */
+export const FEEDBACK_ADDENDUM_FULL: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This report has as much added to it as it can take, so nothing was added, and sending again will " +
+    "not help. Your words are still in the box: copy them into a new report instead. [fb-addendum-full]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

@@ -1,0 +1,5 @@
+Review this plan, read-only, before it is built: docs/plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md
+
+Context in the repo: src/command-suggest.ts (shapes and caps), src/command-suggest-call.ts (prompt + call), src/routes.ts § suggestFromWhyReading (~line 8243), src/web/CommandBar.tsx (suggestionRows, the `shown` list ~line 1950, render ~2600), src/web/command-suggest-client.ts, src/db/schema.ts, docs/project/reader-profile.md § The command bar's suggestions, docs/project/sql.md, docs/project/security-map.md.
+
+Look for: wrong assumptions about the code; a simpler design that meets Greg's two quoted asks; the dismissal identity (kind+value, per article) being wrong or leaky; security/ownership gaps on the new route; a11y problems with a dismiss button inside role=option and a collapse button outside the listbox; whether telling the model the dismissed items in the user message is wise; anything about the Guide row ordering. Number findings F1..Fn with severity, and end with a one-line verdict: "VERDICT: build as is", "VERDICT: build with changes", or "VERDICT: rethink".
