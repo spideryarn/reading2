@@ -78,6 +78,7 @@ import {
   type Skim,
   type SkimDepth,
   type SkimDrops,
+  type SkimIntros,
   type SkimStop,
   type Tree,
   type TreeNode,
@@ -87,6 +88,7 @@ export type {
   Skim,
   SkimDepth,
   SkimDrops,
+  SkimIntros,
   SkimStop,
 } from "./types.js";
 
@@ -172,8 +174,21 @@ export type {
  * does not grow. The input hash is unchanged; the version alone makes a stored
  * route outdated, which is not announced.
  * docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
+ *
+ * `skim/13`, 2026-10-11: **More walks more than Gist too, by the deeper
+ * passes getting longer** (Greg's answer B to q-vzd2xt: *"rather than the
+ * least detailed one getting shorter"*) — More's own target is at least Gist
+ * + 1, the rule is `w₁ < w₂ < w₃` from eight quotes, and `growPasses` first
+ * carries a stop into a pass that is too short. And, from Greg's report
+ * spya-wu83xh: **each pass gets an intro** (`intros`, section 4), a sentence
+ * or two of map read before its first stop; and **each quote record states
+ * its length in words**, with a bias to shorter stops in Gist and More
+ * (`LONG_STOP_WORDS`). The word count is derived from text already hashed, so
+ * the input hash is unchanged; the version alone makes a stored route
+ * outdated, which is not announced.
+ * docs/plans/261011r-skim-more-always-longer-than-gist-a-pass-intro-shorter-quotes-skim-for-box.md.
  */
-export const PROMPT_VERSION = "skim/12";
+export const PROMPT_VERSION = "skim/13";
 
 /**
  * **A cue is a sentence or two, not a paragraph about the passage**: an
@@ -192,6 +207,36 @@ export const PROMPT_VERSION = "skim/12";
  * routes still carry and the band still draws when there is no cue.
  */
 export const MAX_CUE_CHARS = 200;
+
+/**
+ * **A pass's intro is a sentence or two**: what this walk goes through and in
+ * what order, read before its first stop (`skim/13`, plan 261011r). Greg,
+ * 2026-10-11 (`spya-wu83xh`): *"can we somehow situate them? So maybe we
+ * include guidance or brief kind of introductory or summary or linking
+ * statements, because right now. It feels a bit disorienting and
+ * disjointed."* Over this it becomes `null` (`badIntro`) and the route is kept.
+ */
+export const MAX_INTRO_CHARS = 240;
+
+/**
+ * **A quote longer than this is a slow stop for a skim**: its record is
+ * marked LONG, and the prompt allows Gist one and More two, each only when it
+ * carries a key idea no shorter quote carries (`skim/13`, plan 261011r). 60
+ * words is about the top eighth of production's quotes (2026-10-11, 940
+ * quotes: median 34 words, 90th percentile 63, longest 114). A first wording
+ * at 90 words with no mark and no limit moved nothing; this one halved the
+ * long stops in Gist and More
+ * (docs/investigations/261011b-skim-more-beats-gist-intros-and-short-stops.md). Greg, 2026-10-11 (`spya-wu83xh`): *"we should have a bias
+ * towards the quotes not being too enormous."* A bias, not a filter: the
+ * Quotes step's length is Greg's own ask (`quotes/6`, *long enough to stand on
+ * their own*), and a long quote may be the only one carrying an Idea.
+ */
+export const LONG_STOP_WORDS = 60;
+
+/** Words in a quote, as the prompt states them — derived from text already in the input hash. */
+export function wordCount(text: string): number {
+  return text.split(/\s+/).filter((w) => w !== "").length;
+}
 
 /** How much of each quote the prompt carries. Quotes are rarely longer. */
 export const MAX_QUOTE_PROMPT_CHARS = 1200;
@@ -226,7 +271,8 @@ const EFFORT: Effort = "low";
  * tests/skim.test.ts builds the largest permitted answer and checks it
  * fits.
  */
-export const ANSWER_TOKENS = 300 + MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 80) / 3);
+export const ANSWER_TOKENS =
+  300 + Math.ceil((3 * MAX_INTRO_CHARS + 60) / 3) + MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 80) / 3);
 
 /* ------------------------------------------------------------ pure helpers -- */
 
@@ -260,11 +306,18 @@ export function emptyDrops(): SkimDrops {
  * is more than More: Gist is the old target; More is about 40% of the rest,
  * kept below half of it; Most is everything left, within the cumulative cap.
  *
- * **More may equal Gist**, on purpose. Making More strictly longer too was
- * built and measured (docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md):
- * at 11–13 quotes it forces a two-stop Gist, which covered 4–5 fewer of 49
- * Ideas across six articles. Greg reported a deeper pass with FEWER stops;
- * whether a tie is worth that is his call — q-vzd2xt.
+ * **More walks more than Gist, and Gist is not shortened for it**, since
+ * `skim/13`. Greg chose it (q-vzd2xt, B): *"maybe that means that the more
+ * detailed sub-modes get longer, rather than the least detailed one getting
+ * shorter"*. The B measured on 2026-10-10 cut Gist to two stops at 11–13
+ * quotes and cost it 4–5 of 49 Ideas
+ * (docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md), so
+ * Gist's target stays where it was and More's own target is at least Gist + 1
+ * — which fits within half the rest whenever `3g + 2 ≤ q`, true for every q
+ * from `GROWTH_MIN_QUOTES` (g ≤ 5). Where More's own target is then exactly
+ * half the rest (q = 8, 11: 2/3/3, 3/4/4), Most is longer only by a stop
+ * carried into it, which the prompt asks for and `growPasses` adds when it is
+ * missing. Plan 261011r.
  */
 export function targetsFor(q: number): { gist: number; more: number; most: number } {
   if (q <= 0) return { gist: 0, more: 0, most: 0 };
@@ -278,9 +331,11 @@ export function targetsFor(q: number): { gist: number; more: number; most: numbe
     const more = rest === 1 ? 1 : Math.floor(rest / 2);
     return { gist, more, most: rest - more };
   }
-  /* Below half of the rest, so Most has more; at least Gist when that fits. */
+  /* About 40% of the rest, kept below half of it so Most has more of its own;
+     but always more than Gist, which may take it to exactly half (q = 8, 11),
+     where a stop carried into Most makes Most the longer. */
   const below = Math.floor((rest - 1) / 2);
-  const more = Math.max(Math.min(1, rest), Math.min(10, Math.max(gist, Math.round(0.4 * rest)), below));
+  const more = Math.min(10, Math.max(gist + 1, Math.min(Math.round(0.4 * rest), below)));
   const most = Math.max(0, Math.min(DEPTH_CAPS[2] - gist - more, rest - more));
   return { gist, more, most };
 }
@@ -931,10 +986,13 @@ export function passSizes(stops: readonly SkimStop[]): [number, number, number] 
  * More 5, Most 4 (spya-nbmce7, plan 261010t).
  *
  * With at least `GROWTH_MIN_QUOTES` offered quotes, all three passes and
- * `1 ≤ w₁ ≤ w₂ < w₃`: Most always walks more than More, and More at least as
- * many as Gist — `targetsFor` says why More may equal Gist (q-vzd2xt). With
- * fewer, a shorter spiral is allowed — Gist has a stop, a pass may be absent,
- * and no offered pass is shorter than the offered one before it.
+ * `1 ≤ w₁ < w₂ < w₃`: each pass walks more than the one before. More could
+ * equal Gist until `skim/13`; Greg's answer to q-vzd2xt made it longer
+ * (`targetsFor` says how, without shortening Gist). With fewer, a shorter
+ * spiral is allowed — Gist has a stop, a pass may be absent, and no offered
+ * pass is shorter than the offered one before it: three strictly growing
+ * passes often do not exist in two to seven quotes, and a route that fails
+ * this rule writes nothing.
  */
 export function growthFailure(
   sizes: readonly [number, number, number],
@@ -947,99 +1005,208 @@ export function growthFailure(
   if (walked.some((w, i) => i > 0 && w < walked[i - 1]!)) {
     return `The route shrinks as it deepens (${said}).`;
   }
-  if (offered >= GROWTH_MIN_QUOTES && !(w2 >= 1 && w2 < w3)) {
+  if (offered >= GROWTH_MIN_QUOTES && !(w1 < w2 && w2 < w3)) {
     return (
-      `With ${offered} quotes, the route needs all three passes and Most has to be longer ` +
-      `than More, and this route does not (${said}).`
+      `With ${offered} quotes, the route needs all three passes, More longer than Gist and ` +
+      `Most longer than More, and this route does not (${said}).`
     );
   }
   return null;
 }
 
 /**
- * **Make no pass shorter than the one before, and Most longer than More,
- * where the model's route does not** — rule 9, after `validateRoute`'s eight,
- * since `skim/12` (plan 261010t); the rule itself is `growthFailure`'s. The
- * prompt asks for it; this is the backstop, so that More is never longer
- * than Most by luck of the draw (spya-nbmce7: Gist 3, More 5, Most 4, and a
- * re-run that happened to grow).
+ * **Make each pass grow where the model's route does not** — rule 9, after
+ * `validateRoute`'s eight, since `skim/12` (plan 261010t); the rule itself is
+ * `growthFailure`'s. The prompt asks for it; this is the backstop, so that a
+ * deeper pass is never shorter by luck of the draw (spya-nbmce7: Gist 3, More
+ * 5, Most 4, and a re-run that happened to grow).
  *
- * For each adjacent pair of offered passes, shallow pair first, while the
- * shallower walks more than the deeper — or, for More and Most with at least
- * `GROWTH_MIN_QUOTES` quotes, as many:
+ * **Plan the sizes first, then touch the stops** (since `skim/13`, plan
+ * 261011r). Until then it repaired greedily, pair by pair; GPT Sol's plan
+ * review found routes it left broken that a different order would have fixed
+ * (own 2/1/1 can become 1/2/3, and the greedy order ended at 1/1/3), so now
+ * `repairSizes` searches every reachable choice of how many stops move a pass
+ * deeper and how many are carried into More and into Most, and keeps the best
+ * that passes `growthFailure`:
  *
- * 1. drop a stop's `again` entry into the shallower pass, the latest in route
- *    order first — a carried stop is an extra, and the stop is kept
- *    (`shrinkCarried`);
- * 2. with none left, move the shallower pass's **least important own stop**
- *    one pass deeper — lowest quote priority (`priorityOf`, what the prompt
- *    shows; none is lowest), the latest on a tie — keeping
- *    its place in the route and any `again` deeper than its new depth
- *    (`shrinkMoved`). Never the last stop of a pass, so no pass is emptied and
- *    no `again` loses the pass it names.
+ * 1. **the most Gist stops** — Greg on q-vzd2xt: *"the more detailed
+ *    sub-modes get longer, rather than the least detailed one getting
+ *    shorter"*;
+ * 2. then the fewest stops moved a pass deeper;
+ * 3. then the fewest of the model's carried entries dropped — it chose them;
+ * 4. then the fewest carried entries added.
  *
- * Then round again, since a stop moved into More can make it as long as Most.
- * It ends: every step removes a carried entry or moves a stop deeper, and
- * there are finitely many of both. Rule 6 never demotes (Sol F8) because that
- * would bloat a deeper pass past its cap; a move here lowers a shallower
- * cumulative count and leaves the deepest unchanged, so every cap still holds,
- * and room for carrying never shrinks in the pass a stop moves into.
+ * Then it applies that plan:
  *
- * Whatever it cannot fix — a pass of one stop as long as the next — is left
- * for `growthFailure`, and the job fails as before.
+ * - **a move** takes the pass's **least important own stop** — lowest quote
+ *   priority (`priorityOf`, what the prompt shows; none is lowest), the latest
+ *   on a tie — one pass deeper (past an absent More, to Most), keeping its
+ *   place in the route and any `again` deeper than its new depth
+ *   (`shrinkMoved`). Never the last stop of a pass, so no pass is emptied or
+ *   created and no `again` loses the pass it names;
+ * - **a carry added** is the most important stop placed shallower and not yet
+ *   walked there, the earliest in route order on a tie (`growCarried`), within
+ *   `maxCarried`;
+ * - **a carry dropped** is the latest in route order (`shrinkCarried`); the
+ *   stop is kept.
+ *
+ * Rule 6 never demotes (Sol F8) because that would bloat a deeper pass past
+ * its cap; a move here lowers a shallower cumulative count and leaves the
+ * deepest unchanged, so every cap still holds. A route that already grows is
+ * returned as it was. Whatever no choice can fix — one stop at each depth
+ * over nine quotes — is left for `growthFailure`, and the job fails as before.
  */
 export function growPasses(
   stops: readonly SkimStop[],
   quotes: readonly Quote[],
   dropped: SkimDrops,
 ): SkimStop[] {
+  const route = stops.map((s): SkimStop => ({ ...s, ...(s.again ? { again: [...s.again] } : {}) }));
+  const q = quotes.length;
+  if (growthFailure(passSizes(route), q) === null) return route;
+  const own = (d: SkimDepth) => route.reduce((n, s) => (s.depth === d ? n + 1 : n), 0);
+  const carried = (d: SkimDepth) => route.reduce((n, s) => (s.again?.includes(d) ? n + 1 : n), 0);
+  const plan = repairSizes({ own: [own(1), own(2), own(3)], carried: [carried(2), carried(3)] }, q);
+  if (plan === null) return route;
+
   /* The priority the prompt shows (`priorityOf`); none is the lowest, as `collapseQuotes` ranks it. */
-  const byId = new Map(quotes.map((q) => [q.id, q]));
+  const byId = new Map(quotes.map((quote) => [quote.id, quote]));
   const importance = (id: string) => {
-    const q = byId.get(id);
-    return (q && priorityOf(q)) ?? Number.NEGATIVE_INFINITY;
+    const quote = byId.get(id);
+    return (quote && priorityOf(quote)) ?? Number.NEGATIVE_INFINITY;
   };
-  const strict = quotes.length >= GROWTH_MIN_QUOTES;
-  const route = stops.map((s) => ({ ...s }));
-  const tooLong = (a: SkimDepth, b: SkimDepth, sizes: readonly number[]) =>
-    strict && a === 2 && b === 3 ? sizes[1]! >= sizes[2]! : sizes[a - 1]! > sizes[b - 1]!;
-
-  /** The first pair of adjacent offered passes that does not grow, shallow first. */
-  const failing = (): [SkimDepth, SkimDepth] | null => {
-    const sizes = passSizes(route);
-    const offered = ([1, 2, 3] as const).filter((d) => sizes[d - 1]! > 0);
-    for (let i = 0; i + 1 < offered.length; i++) {
-      const [a, b] = [offered[i]!, offered[i + 1]!];
-      if (tooLong(a, b, sizes)) return [a, b];
-    }
-    return null;
-  };
-
-  for (let pair = failing(); pair !== null; pair = failing()) {
-    const [shallow, deep] = pair;
-    const s = [...route].reverse().find((r) => r.again?.includes(shallow) ?? false);
-    if (s !== undefined) {
-      const again = s.again!.filter((d) => d !== shallow);
-      if (again.length > 0) s.again = again;
-      else delete s.again;
-      dropped.shrinkCarried = (dropped.shrinkCarried ?? 0) + 1;
-      continue;
-    }
-    const own = route.filter((s) => s.depth === shallow);
-    if (own.length <= 1) break;
-    const least = own.reduce((low, s) =>
-      importance(s.quoteId) <= importance(low.quoteId) ? s : low,
-    );
-    /* One pass deeper is `deep` itself only when no pass lies between them;
-       a pass is offered only when a stop is first placed there, so a stop
-       moved past an absent pass would offer it — move it to `deep`. */
-    least.depth = deep;
-    const again = least.again?.filter((d) => d > deep) ?? [];
+  const moveDeeper = (from: SkimDepth, to: SkimDepth) => {
+    const least = route
+      .filter((s) => s.depth === from)
+      .reduce((low, s) => (importance(s.quoteId) <= importance(low.quoteId) ? s : low));
+    least.depth = to;
+    const again = least.again?.filter((d) => d > to) ?? [];
     if (again.length > 0) least.again = again;
     else delete least.again;
     dropped.shrinkMoved = (dropped.shrinkMoved ?? 0) + 1;
-  }
+  };
+  const gistTo: SkimDepth = own(2) > 0 ? 2 : 3;
+  for (let i = 0; i < plan.moved[0]; i++) moveDeeper(1, gistTo);
+  for (let i = 0; i < plan.moved[1]; i++) moveDeeper(2, 3);
+
+  const carryTo = (deep: SkimDepth, want: number) => {
+    for (let have = carried(deep); have > want; have--) {
+      const s = [...route].reverse().find((r) => r.again?.includes(deep) ?? false)!;
+      const again = s.again!.filter((d) => d !== deep);
+      if (again.length > 0) s.again = again;
+      else delete s.again;
+      dropped.shrinkCarried = (dropped.shrinkCarried ?? 0) + 1;
+    }
+    for (let have = carried(deep); have < want; have++) {
+      const best = route
+        .filter((s) => s.depth < deep && !(s.again?.includes(deep) ?? false))
+        .reduce((top, s) => (importance(s.quoteId) > importance(top.quoteId) ? s : top));
+      best.again = [...(best.again ?? []), deep].sort((a, b) => a - b);
+      dropped.growCarried = (dropped.growCarried ?? 0) + 1;
+    }
+  };
+  if (own(2) > 0) carryTo(2, plan.carried[0]);
+  if (own(3) > 0) carryTo(3, plan.carried[1]);
   return route;
+}
+
+/** How many stops `growPasses` moves out of Gist and out of More, and how many end up carried into More and into Most. */
+export interface SizePlan {
+  moved: [number, number];
+  carried: [number, number];
+}
+
+/**
+ * **The best reachable pass sizes, or `null` when none grows** — the search
+ * behind `growPasses`, over counts alone. `own` is each depth's own stops and
+ * `carried` the stops carried into More and into Most now. A move goes one
+ * pass deeper (Gist to Most when More is absent) and never empties or creates
+ * a pass; a pass of `n` own stops carries at most `maxCarried(n)`, and never
+ * more than the stops placed shallower. Ranked: the most Gist stops, then the
+ * fewest moves, then the fewest carried entries dropped, then the fewest added
+ * (both counted against `carried`). At most 7 × 15 moves × 15 × 18 carry
+ * counts, so a plain loop.
+ */
+export function repairSizes(
+  now: { own: readonly [number, number, number]; carried: readonly [number, number] },
+  offered: number,
+): SizePlan | null {
+  const [g, m, o] = now.own;
+  let best: { plan: SizePlan; rank: [number, number, number] } | null = null;
+  const before = (a: readonly number[], b: readonly number[]) => {
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i]! < b[i]!;
+    return false;
+  };
+  for (let g2 = g; g2 >= Math.min(1, g); g2--) {
+    const k1 = g - g2;
+    if (k1 > 0 && m === 0 && o === 0) continue;
+    const m1 = m > 0 ? m + k1 : 0;
+    const o1 = m > 0 ? o : o + k1;
+    for (let k2 = 0; k2 <= Math.max(0, m1 - 1); k2++) {
+      if (k2 > 0 && o === 0) break;
+      const [m2, o2] = [m1 - k2, o1 + k2];
+      const moves = k1 + k2;
+      const top2 = m2 > 0 ? Math.min(maxCarried(m2), g2) : 0;
+      const top3 = o2 > 0 ? Math.min(maxCarried(o2), g2 + m2) : 0;
+      for (let c2 = 0; c2 <= top2; c2++) {
+        for (let c3 = 0; c3 <= top3; c3++) {
+          const sizes: [number, number, number] = [g2, m2 > 0 ? m2 + c2 : 0, o2 > 0 ? o2 + c3 : 0];
+          if (growthFailure(sizes, offered) !== null) continue;
+          const drops = Math.max(0, now.carried[0] - c2) + Math.max(0, now.carried[1] - c3);
+          const adds = Math.max(0, c2 - now.carried[0]) + Math.max(0, c3 - now.carried[1]);
+          const rank: [number, number, number] = [moves, drops, adds];
+          if (best === null || before(rank, best.rank)) {
+            best = { plan: { moved: [k1, k2], carried: [c2, c3] }, rank };
+          }
+        }
+      }
+    }
+    /* The outer loop is the first rank: a plan that keeps more of Gist wins. */
+    if (best !== null) return best.plan;
+  }
+  return null;
+}
+
+/**
+ * **Each offered pass's intro, from whatever the model wrote** (`skim/13`,
+ * plan 261011r), read after the stops are final so "offered" is the route's
+ * own: a pass is offered when a stop is first placed there (`passSizes`, the
+ * band's `offeredDepths`). A string within `MAX_INTRO_CHARS` once trimmed is
+ * kept. Anything else for an offered pass — missing, empty, not a string, too
+ * long — is `null` and counted (`badIntro`): the prompt asks for one on every
+ * pass it offers. A pass that is not offered should say `""`; anything else
+ * there is `null` too, and counted, since a reader can never see it (a pass
+ * the repair emptied cannot happen: `growPasses` never empties one). The
+ * intro of a pass whose own stops `growPasses` moved in or out is `null` too
+ * (`movedIntro`): it maps a walk that is no longer the one drawn. A carried
+ * stop added or dropped does not count — it is a stop the reader meets in
+ * another pass, and the map's parts and order still hold. **Never fails the route**: an
+ * intro is a help, as a cue is.
+ */
+export function introsOf(
+  raw: unknown,
+  stops: readonly SkimStop[],
+  dropped: SkimDrops,
+  rearranged: ReadonlySet<SkimDepth> = new Set(),
+): SkimIntros {
+  const sizes = passSizes(stops);
+  const said = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const one = (key: "gist" | "more" | "most", depth: SkimDepth): string | null => {
+    const value = said[key];
+    const text = typeof value === "string" ? value.trim() : null;
+    const offered = sizes[depth - 1]! > 0;
+    const bad = () => {
+      dropped.badIntro = (dropped.badIntro ?? 0) + 1;
+      return null;
+    };
+    if (!offered) return text ? bad() : null;
+    if (rearranged.has(depth)) {
+      dropped.movedIntro = (dropped.movedIntro ?? 0) + 1;
+      return null;
+    }
+    return text && text.length <= MAX_INTRO_CHARS ? text : bad();
+  };
+  return [one("gist", 1), one("more", 2), one("most", 3)];
 }
 
 /**
@@ -1052,7 +1219,7 @@ export function growPasses(
  * There is no automatic retry in v1; the reader can press re-run.
  */
 export function buildSkim(
-  parsed: { stops?: unknown },
+  parsed: { stops?: unknown; intros?: unknown },
   opts: {
     slug: string;
     /** The usable quotes — the ones the model was offered. */
@@ -1078,7 +1245,16 @@ export function buildSkim(
     );
   }
   const d = opts.dropped;
-  const stops = growPasses(validateRoute(parsed.stops, opts.quotes, d), opts.quotes, d);
+  const validated = validateRoute(parsed.stops, opts.quotes, d);
+  const stops = growPasses(validated, opts.quotes, d);
+  /* The passes whose own stops the repair changed: the model's intro for
+     them describes a walk that is no longer the one drawn (GPT Sol, plan
+     review F3). `growPasses` keeps the order, so index pairs them. */
+  const rearranged = new Set<SkimDepth>();
+  for (const [i, was] of validated.entries()) {
+    const is = stops[i]!;
+    if (is.depth !== was.depth) rearranged.add(was.depth).add(is.depth);
+  }
   if (stops.length === 0) {
     throw new Error(
       `The model named ${parsed.stops.length} stops and none of them survived, so there is ` +
@@ -1108,6 +1284,7 @@ export function buildSkim(
     sourceHash: opts.sourceHash,
     profileHash: opts.profileHash,
     stops,
+    intros: introsOf(parsed.intros, stops, d, rearranged),
     visible,
     offered: opts.quotes.length,
     dropped: { ...d },
@@ -1130,8 +1307,8 @@ WHAT YOU ARE GIVEN
    where there is one, and how many quotes sit in it.
 3. The article's own best lines, already chosen: its QUOTES. Each has a label
    (Q1, Q2, …), the section of the article it sits in, how much the piece rests
-   on it (a priority from 0 to 1, where given), which key ideas it carries, and
-   its words. "carries I2" means the quote's own paragraph is one where the
+   on it (a priority from 0 to 1, where given), which key ideas it carries, how
+   many words it has, and its words. "carries I2" means the quote's own paragraph is one where the
    article makes or uses idea I2. "beside I3" means the paragraph next to it is,
    so a reader stopping there meets I3 too, a little less directly. We worked
    these out from where each idea appears; trust them.
@@ -1168,13 +1345,22 @@ WHAT YOU DECIDE
    1 = GIST: the few stops that give the gist on their own;
    2 = MORE: go round again, in more detail — the stops that fill in how and why;
    3 = MOST: nearly everything else worth stopping at.
-   The reader walks each pass on its own and expects a deeper pass never to
-   be SHORTER than the one before: MORE walks at least as many stops as GIST,
-   and MOST at least as many as MORE, counting the stops carried into each.
-   With eight or more quotes, all three passes are offered and MOST must be
-   longer than MORE. So follow the targets for each pass's own stops, and carry
-   a stop into MORE only while those size rules still hold. When a target is 0
-   because few quotes were offered, that pass may be absent.
+   The reader walks each pass on its own and expects each deeper pass to be
+   LONGER than the one before, counting the stops carried into each. With
+   eight or more quotes, all three passes are offered, MORE walks more stops
+   than GIST, and MOST walks more than MORE. With fewer, a deeper pass is
+   never shorter than the one before, and when a target is 0 that pass may be
+   absent. So follow the targets for each pass's own stops. When MOST's target
+   is no bigger than MORE's, carry at least one earlier stop into MOST, and
+   never carry so many into MORE that it walks as many stops as MOST.
+
+   SHORT STOPS FOR A SKIM. Each quote record says how many words it has, and
+   one of more than ${LONG_STOP_WORDS} words is marked LONG. A reader who is
+   skimming reads a long quote slowly and holds it badly. So GIST has at most
+   one LONG quote, and MORE at most two, and a LONG quote goes in either only
+   when it carries a key idea that no shorter quote carries. Otherwise give it
+   depth 3, or leave it out. Of two quotes that carry the same idea, choose
+   the shorter.
 
    And "again" for each stop: the deeper passes it is ALSO walked in. The
    reader walks one pass at a time. A pass is its own stops (the ones whose
@@ -1310,6 +1496,30 @@ WHAT YOU DECIDE
    before", "the previous stop", "now"), because a reader can arrive at any
    stop from anywhere.
 
+4. AN INTRO for each pass you offer, which the reader reads before its first
+   stop. The route jumps about the article out of its order, and without a
+   map a reader loses track of where they are and why one passage follows
+   another. The intro is that map: one or two complete sentences, at most
+   ${MAX_INTRO_CHARS} characters, saying what this walk goes through and in
+   what order, as the parts of the piece it visits or the questions it takes
+   up. Name the parts and the key ideas in the records' own words.
+   GOOD, for GIST: "Starts with the central claim, then the experiment behind
+   it, and ends on the limits the authors admit."
+   GOOD, for MORE: "Goes back for how the method is built and tested, and
+   how it compares with the earlier approaches the piece names."
+   For MORE and MOST, say what this walk adds to the one before it.
+   The cue's rules hold for an intro too: never say what the piece found,
+   concluded or chose, and give no number from it; only what the records
+   say; whole sentences. Never address or mention the reader.
+   Name what a passage is about, never which way it comes out: "the effect of
+   the delay", not "how the delay weakens the effect"; "the results on small
+   datasets", not "the weak results on small datasets".
+   BAD, it gives the finding away: "Shows that the new method beats the old
+   one and trains in a fraction of the time."
+   BAD, it is a list of the quotes rather than a map: "Seven passages on
+   the method, the data and the results."
+   A pass you do not offer, because no stop has that depth, gets "".
+
 RULES
 
 - Only the labels given (Q1, Q2, …), exactly as written. Never invent one.
@@ -1330,9 +1540,11 @@ JSON only, no prose, no code fence. The array order IS the route:
   {"quote": "Q7", "depth": 1, "again": [2], "cue": "..."},
   {"quote": "Q3", "depth": 1, "again": [], "cue": ""},
   {"quote": "Q12", "depth": 2, "again": [], "cue": "..."}
-]}
+],
+ "intros": {"gist": "...", "more": "...", "most": "..."}}
 
-"cue": "" means that stop has no cue.
+"cue": "" means that stop has no cue. An intro is "" only for a pass you do
+not offer.
 
 THE ANSWER MUST PARSE. Inside a string, a straight double quote ends the
 string: a cue never needs one, so do not use one — write the words bare, or
@@ -1390,7 +1602,13 @@ export function renderPromptParts(opts: {
       const priority = r.priority === null ? "" : ` · priority ${r.priority.toFixed(2)}`;
       const carries = r.carries.length > 0 ? ` · carries ${r.carries.join(", ")}` : "";
       const beside = r.beside.length > 0 ? ` · beside ${r.beside.join(", ")}` : "";
-      return untrustedRecord("QUOTE RECORD", `${labelOf(i)} · ${where}${priority}${carries}${beside}\n${r.text}`);
+      /* Derived from `r.text`, which the input hash already covers. */
+      const n = wordCount(r.text);
+      const words = ` · ${n} words${n > LONG_STOP_WORDS ? " · LONG" : ""}`;
+      return untrustedRecord(
+        "QUOTE RECORD",
+        `${labelOf(i)} · ${where}${priority}${carries}${beside}${words}\n${r.text}`,
+      );
     })
     .join("\n\n");
 
@@ -1462,15 +1680,17 @@ export function fromLabels(stops: readonly unknown[], quotes: readonly Quote[]):
   });
 }
 
-function parseJson(raw: string): { stops?: unknown } {
-  return parseJsonAnswer<{ stops?: unknown }>(raw, "the model's answer");
+function parseJson(raw: string): { stops?: unknown; intros?: unknown } {
+  return parseJsonAnswer<{ stops?: unknown; intros?: unknown }>(raw, "the model's answer");
 }
 
 /** The model-answer shape `parseJson` and `buildSkim` consume. */
 export const SKIM_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["stops"],
+  /* `stops` first: the intros describe the route, so the model writes them
+     after it has one. */
+  required: ["stops", "intros"],
   properties: {
     stops: {
       type: "array",
@@ -1489,6 +1709,17 @@ export const SKIM_OUTPUT_SCHEMA = {
           again: { type: "array", items: { type: "integer", enum: [2, 3] } },
           cue: { type: "string" },
         },
+      },
+    },
+    /* One per pass, `""` for a pass the route does not offer (`introsOf`). */
+    intros: {
+      type: "object",
+      additionalProperties: false,
+      required: ["gist", "more", "most"],
+      properties: {
+        gist: { type: "string" },
+        more: { type: "string" },
+        most: { type: "string" },
       },
     },
   },

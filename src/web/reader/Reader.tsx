@@ -1095,7 +1095,7 @@ export function Reader({
     (sentence: string) => {
       const question = sentence.trim();
       if (question === "") return;
-      setChatHandoff({ slug, target: "guide", question, send: true });
+      setChatHandoff({ slug, target: "guide", question, send: true, typed: true });
       showBand("chat");
     },
     [slug, showBand],

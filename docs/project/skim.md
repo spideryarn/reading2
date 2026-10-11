@@ -614,9 +614,9 @@ on most short articles. 8 of the 29 routes in production did not grow as walked.
   fixed fails the job as before. Counted in `dropped.shrinkCarried` / `shrinkMoved`. Measured, it
   almost never has to move a stop
   ([261010a](../investigations/261010a-skim-per-pass-targets-and-walked-growth.md)).
-- **More may equal Gist.** Strictly longer was built and measured first: on articles with 11–13
-  quotes it forced a two-stop Gist, which covered 4–5 fewer of 49 Ideas. Put to Greg as
-  [q-vzd2xt](../user-feedback/questions/q-vzd2xt.md).
+- **More may equal Gist** — until `skim/13`, below. Strictly longer was built and measured first:
+  on articles with 11–13 quotes it forced a two-stop Gist, which covered 4–5 fewer of 49 Ideas. Put
+  to Greg as [q-vzd2xt](../user-feedback/questions/q-vzd2xt.md), and he chose B the other way round.
 - **Routes planned before `skim/12` keep their walk** until planned again; the version stales them
   silently, as every Skim version has.
 
@@ -673,6 +673,63 @@ controller, arriving at a block — is
 [`modes/skim/walk.ts`](../../src/web/modes/skim/walk.ts). A switch between walks puts the target
 stop in the `SkimArrival` mailbox before the one URL write, and the walk that mounts claims it. The
 chips are one component, `SkimParts`, and the stepper one, `SkimHead`, both in `SkimPanel.tsx`.
+
+**`skim/13`: More beats Gist, a map for each pass, shorter stops, and a skim-for box** — Greg,
+2026-10-11, his answer to q-vzd2xt and report `spya-wu83xh`,
+[plan 261011r](../plans/261011r-skim-more-always-longer-than-gist-a-pass-intro-shorter-quotes-skim-for-box.md),
+measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-short-stops.md):
+
+> B (and maybe that means that the more detailed sub-modes get longer, rather than the least
+> detailed one getting shorter)
+>
+> — Greg, 2026-10-11, reply `spya-sfm0g4` to q-vzd2xt
+
+> Can we, beyond just providing lots of quotes, can we somehow situate them? So maybe we include
+> guidance or brief kind of introductory or summary or linking statements, because right now. It
+> feels a bit disorienting and disjointed. […] I think we should have a bias towards the quotes not
+> being too enormous.
+>
+> — Greg, 2026-10-11 (`spya-wu83xh`)
+
+- **Gist < More < Most, as walked**, with eight or more quotes; below eight, unchanged. Gist's
+  target is unchanged; More's own target is at least Gist + 1 (`targetsFor`), and where that leaves
+  More's and Most's own targets equal (8 and 11 quotes), the prompt asks for a stop carried into
+  Most. **The repair now plans before it touches anything** (`growPasses` over `repairSizes`): it
+  searches every reachable choice of stops moved one pass deeper and stops carried into More and
+  Most, and takes the one that keeps the most Gist stops, then moves the fewest, then drops the
+  fewest of the model's carries, then adds the fewest. So a short More gets a carried stop rather
+  than costing Gist one. Counted in `dropped.growCarried`. The greedy order before it could leave a
+  fixable route broken (GPT Sol, plan review F1).
+- **Each pass opens with an intro** (`intros`, owner only for now): one or two sentences above the
+  stops, in the model's face, saying what the walk goes through and in what order, naming what each
+  passage is about and never which way it comes out. Written in the same call. A pass whose own
+  stops the repair moved loses its intro (`movedIntro`), since it maps a different walk. **Why not a
+  linking line on every stop**: a stop can be walked in two passes after different stops, and a
+  reader arrives at any stop from anywhere, so a bridge would read wrong after a jump; and every line
+  beside a quote is another chance to give its finding away, which is what sank the every-cue scene
+  (above). Whether a visitor sees the intros too is Greg's call,
+  [q-t5xjqn](../user-feedback/questions/q-t5xjqn.md): adding them means editing the visitor
+  allowlist, a listed defence. A linking line per stop is queued, for if the intro is not enough.
+- **Shorter stops.** Each quote record states its length in words, and one over `LONG_STOP_WORDS`
+  (60, about the top eighth of production's quotes) is marked LONG; Gist may hold one LONG quote and
+  More two, each only when it carries a key idea no shorter quote carries. A first wording, a 90-word
+  bar with no mark and no limit, moved nothing. The Quotes step is unchanged: its length is Greg's own
+  ask (*long enough to stand on their own*, `quotes/6`).
+- **The purpose box is editable in place: *What are you skimming for?*** — the *experiment* Greg
+  asked for (*"an optional input box so that you could say what it is that you're trying to skim
+  for"*), at its simplest. *Edit* on *Reading for: …* opens the box filled with the sentence;
+  *Plan the route for this* saves it and re-plans (unforced: the purpose is in the profile hash).
+  It is the article's purpose, the same sentence as Metadata's, and says so under the box. Not under
+  a banner, which already offers the re-plan, and held while a route is being planned. **A
+  Skim-only focus**, separate from the purpose and closer to a search query, was weighed and not
+  built: its own column, its own stamp field, and either several routes per article or a rule for
+  which one wins — the "a lot of complexity" Greg said to push back on. Queued, for if the shared
+  purpose feels wrong in use.
+- What Greg wondered might already exist did: the route is planned for the reading goals (§ The
+  route says what it was planned for), and a changed goal brings up the profile-changed banner, with
+  *Plan it again* and an ×.
+- Routes planned before `skim/13` keep their walk and have no intros until planned again; the
+  version stales them silently.
 
 ### What we tried for v2
 
