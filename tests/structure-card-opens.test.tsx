@@ -155,6 +155,7 @@ function render() {
     reactRoot.render(
       <StructurePanel
         root={summaryRoot}
+        figures={[]}
         focusRow={IN_PART_TWO}
         allowParagraphs={true}
         onJump={() => {}}
@@ -298,6 +299,7 @@ function renderCounting(): BlockId[] {
     reactRoot.render(
       <StructurePanel
         root={summaryRoot}
+        figures={[]}
         focusRow={IN_PART_TWO}
         allowParagraphs={true}
         onJump={(id) => jumps.push(id)}

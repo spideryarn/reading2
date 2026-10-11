@@ -55,8 +55,8 @@
   padding: 0 0.7rem 0.7rem;
 }
 
-/* ---- Bibliography | Reception | Claims ----
-   Sources' three sub-modes (SourcesMode.tsx § SourcesViews; Debate's
+/* ---- Bibliography | Links | Reception | Claims ----
+   Sources' four sub-modes (SourcesMode.tsx § SourcesViews; Debate's
    Reception | Claims until 2026-10-09), drawn with the part-switcher every mode
    shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the part-switcher),
    so the segmented controls cannot drift apart. The row is the band's head

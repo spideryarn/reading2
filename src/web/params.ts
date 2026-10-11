@@ -477,8 +477,8 @@ export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
 export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * **Skim's depth** — `depth=1|2|3`, Gist · More · Most. Absent is Gist, the
- * first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * **Skim's depth** — `depth=1|2|3`, Gist · More · Most, or `depth=figures`
+ * (`SkimPart`, below). Absent is Gist, the first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § URL.
  *
  * `push`: changing depth is choosing a different walk through the piece, and
@@ -495,14 +495,26 @@ export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
  * plan 261003l), so on a route with no carried stop the depth never matters
  * once a stop is named.
  */
-export const depthParam = createParser<SkimDepth>({
-  parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
+export const depthParam = createParser<SkimPart>({
+  parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : v === "figures" ? "figures" : null),
   serialize: (v) => String(v),
 }).withOptions({ history: "push" });
 
 /**
+ * **What `?depth=` can name**: one of the route's passes, or `figures` — the
+ * walk through the article's figures, tables and media (plan 261011b § Half 1,
+ * spya-sb0c7e). Client-only: the stored route's `SkimDepth` is unchanged, so
+ * nothing on the server can be handed `"figures"` as a pass (GPT Sol's plan
+ * review F4). Under `figures`, `?stop=` is the figure's own block id.
+ */
+export type SkimPart = SkimDepth | "figures";
+
+/**
  * **The Skim stop the reader is on** — the quote's id, which is minted
- * by `mintId` and so validated by `parseAsBlockId` like `?quote=`.
+ * by `mintId` and so validated by `parseAsBlockId` like `?quote=`; under
+ * `?depth=figures`, the figure's block id, which is the same shape. The depth
+ * says which of the two it is. A figure stop naming no figure falls back to
+ * the first (FiguresWalk.tsx).
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not
  * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
@@ -1402,13 +1414,14 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' three sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' four sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
  * `liftLegacySources`; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
  *
  * `bibliography` is what the piece cites (the Citations mode until that day);
+ * `links` is the web addresses in the article's own markup;
  * `reception` is what others have written about the piece itself; `claims` is
  * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
  * § 2), with an older search's claim sources under it. The last two were
@@ -1425,15 +1438,18 @@ export function learnInSearch(search: string): LearnView {
  * press and only then — the mode's button, the sub-mode's command-bar row or
  * its chip: a press landing on Bibliography arms the `bibliography` list, on
  * Reception the `reception` search, on Claims the `sources-claims` list
- * (activation.ts § `activationForSources`). Back, a pasted link and a
+ * (activation.ts § `activationForSources`). Links, the article's own
+ * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
+ * off the blocks in the browser. Back, a pasted link and a
  * last-view restore arrive here and buy nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "reception", "claims"] as const;
+export const SOURCES_VIEWS = ["bibliography", "links", "reception", "claims"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
  * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
+ * Bibliography and Links have a panel each.
  */
-export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography">;
+export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "links">;
 
 export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),

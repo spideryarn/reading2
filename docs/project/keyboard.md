@@ -210,7 +210,9 @@ the table by adding one attribute, and why a new panel would too.
 
 **While Skim is the mode, ← / → step its stops instead of moving the stride** — the stops
 of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
-through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
+through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) — or,
+on the *Figures* chip since 2026-10-11, the article's figures, tables and media, one at a time, by
+the same rules ([skim.md](skim.md) § What shipped, plan 261011b). Everywhere else
 they are the browser's (the stride is gone, see the status above), and ↑ / ↓ are the article's in every mode, Skim
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:

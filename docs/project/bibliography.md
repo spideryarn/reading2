@@ -960,6 +960,10 @@ behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-5
 
 ## Deferred
 
+**Not deferred, but next door:** the article's hyperlinks that are not works have their own list,
+[Sources › Links](sources.md#links), whose row says *In Bibliography* when its address is a work's
+here. Folding them into this list was the other option, and was passed over there.
+
 Selecting a work to mark every passage that cites it (`?cite=`), and with it an *In Bibliography* foot
 button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*

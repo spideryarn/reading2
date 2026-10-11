@@ -31,6 +31,7 @@
 
 import { useQueryState } from "nuqs";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { figuresOf } from "../../../figures.js";
 import type { Article, BlockId, NodeId, TreeNode } from "../../../types.js";
 import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
@@ -224,6 +225,12 @@ export function StructureBand({
   );
 
   /**
+   * **The article's figures, tables and media**, once for both faces — the
+   * mark after each row's title (FigureMark.tsx; Greg, spya-sb0c7e).
+   */
+  const figures = useMemo(() => figuresOf(article.blocks), [article.blocks]);
+
+  /**
    * Where the reader is — one sampler for both faces, so they can never
    * disagree about which section is under the focus line. A face change at a
    * resize must not also move "here".
@@ -329,6 +336,7 @@ export function StructureBand({
       <OutlinePanel
         surfaceRef={setBand}
         root={root}
+        figures={figures}
         supplementOf={supplementOf}
         arcByRow={arcByRow}
         focusRow={live.focusRow}
@@ -344,6 +352,7 @@ export function StructureBand({
     <StructurePanel
       surfaceRef={setBand}
       root={root}
+      figures={figures}
       focusRow={live.focusRow}
       allowParagraphs={proseBeside && labelsReady}
       onJump={onJump}

@@ -14,7 +14,9 @@
  * docs/plans/260828aw-outline-mode.md has the intent, the ladder, and the reasoning.
  */
 import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
+import { FigureMark } from "./FigureMark.js";
 import {
   outlineProjection,
   RUNGS,
@@ -47,6 +49,11 @@ function revealRow(list: HTMLOListElement, row: HTMLElement) {
 interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
   root: SummaryNode | null;
+  /**
+   * `figuresOf(article.blocks)`, worked out once by `StructureBand` — the
+   * marks after each row's title (FigureMark.tsx).
+   */
+  figures: readonly Figure[];
   supplementOf: ReadonlyMap<NodeId, TreeNode>;
   /** The arc, keyed by the row each part starts on. Null until stage 5b has run. */
   arcByRow: Map<number, ArcCell> | null;
@@ -108,6 +115,7 @@ interface Props {
 
 export function OutlinePanel({
   root,
+  figures,
   supplementOf,
   arcByRow,
   focusRow,
@@ -597,6 +605,7 @@ export function OutlinePanel({
             <Row
               key={row.node.id}
               row={row}
+              figures={figures}
               id={rowId(row)}
               focused={i === focused}
               onJump={() => jump(row)}
@@ -619,7 +628,7 @@ export function OutlinePanel({
             <ol className="outln-list" key={c.rung} data-rung={c.rung}>
               {c.rows.map((row) => (
                 <li key={row.node.id} className={rowClass(row, false)}>
-                  <RowBody row={row} />
+                  <RowBody row={row} figures={figures} />
                 </li>
               ))}
             </ol>
@@ -648,11 +657,13 @@ export function OutlinePanel({
  */
 function Row({
   row,
+  figures,
   id,
   focused,
   onJump,
 }: {
   row: OutlineRow;
+  figures: readonly Figure[];
   id: string;
   focused: boolean;
   onJump(): void;
@@ -692,7 +703,7 @@ function Row({
           if (reveal.commit(e)) onJump();
         }}
       >
-        <RowBody row={row} />
+        <RowBody row={row} figures={figures} />
       </li>
     </Tooltip>
   );
@@ -719,11 +730,16 @@ function rowClass(row: OutlineRow, focused: boolean): string {
 }
 
 /** The row's content, shared with the hidden candidates so both measure alike. */
-function RowBody({ row }: { row: OutlineRow }) {
+function RowBody({ row, figures }: { row: OutlineRow; figures: readonly Figure[] }) {
   return (
     <>
       <span className="outln-num">{row.number}</span>
-      <span className={withVoice("outln-text", row.voice)}>{row.text}</span>
+      <span className={withVoice("outln-text", row.voice)}>
+        {row.text}
+        {/* Inside the title so it trails the last word; here so the hidden
+            candidates carry it too (FigureMark.tsx). */}
+        <FigureMark figures={figures} startRow={row.startRow} endRow={row.endRow} />
+      </span>
       {row.arc ? <p className="outln-arc">{row.arc}</p> : null}
       {row.sentence ? <p className="outln-gist">{row.sentence}</p> : null}
     </>

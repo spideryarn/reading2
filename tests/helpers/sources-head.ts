@@ -1,7 +1,7 @@
 /**
  * **Sources' chip row, for a test that draws one panel on its own** — the
- * header `SourcesBand` hands BibliographyPanel and ReceptionAndClaimsPanel since
- * 2026-10-09, built from the same selectors (sources-counts.ts), so a
+ * header `SourcesBand` hands BibliographyPanel, LinksPanel and
+ * ReceptionAndClaimsPanel, built from the same selectors (sources-counts.ts), so a
  * panel test that presses a chip or reads its count is testing the row a
  * reader gets. docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
  */
@@ -18,6 +18,8 @@ export function sourcesHead(args: {
   /** The owner's slug, so a press arms; `null` for a visitor. */
   ownerSlug: string | null;
   works?: readonly unknown[] | null;
+  /** Links' rows (outbound-links.ts); none unless a test gives some. */
+  links?: readonly unknown[];
   reception?: Reception | PublicReception | null;
   /** The owner's claims-list hook, or a visitor's list. */
   claimList?:
@@ -31,6 +33,7 @@ export function sourcesHead(args: {
     list.kind === "owner" && list.status === "ready" ? checkedSources(list.checks ?? [], list.claimList) : 0;
   const counts = sourcesCounts({
     works: args.works ?? null,
+    links: args.links ?? [],
     reception: args.reception ?? null,
     listed: listedClaims(list.kind === "owner" ? { kind: "owner", status: list.status, claimList: list.claimList } : list),
     checked,

@@ -49,7 +49,7 @@
  * everything on screen.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
  *
- * **Since 2026-10-09 they are two of Sources' three sub-modes**
+ * **Since 2026-10-09 they are two of Sources' sub-modes**
  * (`?sources=`), after Bibliography, which is the Citations panel. This
  * panel draws Reception or Claims under the chip row the mode hands it as
  * `head` (SourcesMode.tsx § `SourcesViews`), and the chips' numbers and

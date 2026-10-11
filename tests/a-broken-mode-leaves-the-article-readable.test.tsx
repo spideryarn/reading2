@@ -1484,11 +1484,12 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "TimelineBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
-  /* One band for all three sub-modes since 2026-10-09, and a witness on each
+  /* One band for all four sub-modes (Links since 2026-10-11), and a witness on each
      view, since the sub-mode decides which panel is drawn under it (GPT Sol's
      F4 on plan 261009l). */
   sources: [
     { label: "SourcesBand", as: "owner" },
+    { label: "SourcesBand", as: "owner", extra: "&sources=links" },
     { label: "SourcesBand", as: "owner", extra: "&sources=reception" },
     { label: "SourcesBand", as: "owner", extra: "&sources=claims" },
     { label: "VisitorBand", as: "visitor" },
