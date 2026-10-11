@@ -47,7 +47,7 @@
 /** What the owner's purpose read said. `unknown` is a failed read, an unreadable shelf, or no owner's read at all. */
 export type PurposeOutcome = "stored" | "none" | "unknown";
 
-/** The guide on a first open: Chat's band, opened on the guide (last-view.ts § `firstOpenSearch` adds the notes). */
+/** The guide on a first open: Chat's band, opened on the guide (last-view.ts § `firstOpenSearch`). */
 export const GUIDE_FIRST_OPEN = "?mode=chat&guide=1";
 
 /**

@@ -168,11 +168,10 @@ options passed over and GPT Sol's review are in
   The owner's column mounting is what asks ([`src/web/useRelations.ts`](../../src/web/useRelations.ts),
   through `useAutoRunOnArrival` in [`useAutoRun.ts`](../../src/web/useAutoRun.ts), the rule the
   thread in Summary already used). So it does not matter what showed the column: a press of the
-  toggle, the first-open default that turns it on with nobody pressing anything
-  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)),
-  a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press could
-  not carry it, because the default arrives without one, and a new article would then have had no
-  words until the column was turned off and on.
+  toggle, a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press
+  could not carry the last three. (From 2026-10-05 to 2026-10-11 the first-open default turned the
+  column on too, which is why the rule was made; it no longer does —
+  [url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default).)
   - **One attempt per article per page load**, and unforced, so the step's own stamp check has the
     last word. Turning the column off and on again buys nothing, and a failed run does not loop.
   - **A stale or outdated list counts as none**, so the next showing rewrites it.
