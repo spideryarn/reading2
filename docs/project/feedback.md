@@ -319,12 +319,29 @@ owner-scoped in the store as `listMine` is, but behind the `/api/admin/` gate
 everyone is a question for Greg, in the plan.
 
 - **One of four statuses**, with five pills, **All · Open · Needs a decision · Set aside ·
-  Shipped**, each with its count of reports. *Shipped*: the notes combine to shipped. Otherwise
-  *Set aside*: an admin pressed Ignore, or the notes say declined. Otherwise *Needs a decision*:
-  the notes say awaiting. Otherwise *Open*: no note yet. The order is the rule, so an ignored
+  Shipped**. *Shipped*: the notes combine to shipped. Otherwise *Set aside*: an admin pressed
+  Ignore, or the notes say declined. Otherwise *waiting*, which its row calls **Waiting**: the
+  notes say awaiting. Otherwise *Open*: no note yet. The order is the rule, so an ignored
   report never asks for a decision. It is one SQL expression (`statusOf` in
   [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts)), used for the row, the filter and
-  the counts. No new ending was added to the notes.
+  the server's counts. No new ending was added to the notes.
+- **Four pills count reports; *Needs a decision* counts threads**, since 2026-10-11 — the threads
+  waiting on you, the same number as the button beside the tabs (§ Questions for an admin). Greg,
+  `spya-h2d3my`:
+
+  > the needs a decision in the top right next to Write and Earlier gives a different count than
+  > the needs a decision next to open, shipped, etc. And one of them says it needs my decision for
+  > something that I think I deferred
+  >
+  > — Greg, 2026-10-11
+
+  The pill had shown the waiting *reports*, with `· N to decide` beside it. A report stays waiting
+  until an agent's note lands, so it went on asking after Greg had replied or deferred, while the
+  button, which counts threads, had already let it go. The button opens exactly what the pill
+  opens, so they are one control and say one thing; and a waiting report's row says *Waiting*,
+  keeping *Needs a decision* for a thread that needs one. What that gives up: the five pills no
+  longer sum to All, and no pill counts the waiting reports (the server's `counts` still do, and
+  are still checked). [261011ad](../plans/261011ad-needs-a-decision-one-count.md).
 - **A number, `#212`**, at the start of the row; say "feedback 212". It is `feedback.number`: one
   sequence across all owners, stored, so it names one report and keeps naming it. Reports from
   before the column were numbered in the order they were filed.

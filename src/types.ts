@@ -8086,7 +8086,8 @@ export interface AdminFeedbackDeferralReceipt {
  * `questions` is every open question, oldest first, **the same under every
  * `show`**: a question's report may be shipped, set aside or absent, so the
  * list is not narrowed by the filter (plan 261007d, decision 7). The dialog
- * draws them in *Needs a decision* and counts them beside that pill.
+ * draws them in *Needs a decision*, and that pill's number is the threads
+ * waiting, not `counts.waiting` (plan 261011ad).
  */
 export interface AdminEarlierFeedbackPage {
   reports: AdminEarlierFeedback[];

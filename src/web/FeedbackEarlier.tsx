@@ -56,8 +56,8 @@
  *
  * So the admin's answer also carries **every open question an agent has
  * asked** (a file under docs/user-feedback/questions/, compiled into the
- * server). They are drawn at the top of *Needs a decision*, counted beside
- * that pill in every view, and each has a reply box with a microphone
+ * server). They are drawn at the top of *Needs a decision*, whose number in
+ * every view is the threads waiting (plan 261011ad), and each has a reply box with a microphone
  * (`EarlierThreads`). A reply is a row of its own, never a report.
  *
  * ## Once per opening, per filter
@@ -1049,10 +1049,24 @@ const ADMIN_CAP_NOUN: Record<AdminEarlierFeedbackShow, string> = {
   shipped: "shipped reports",
 };
 
+/**
+ * **A report's own word, on its row.** The pills' words but one: a report
+ * whose notes say awaiting is *Waiting*, not *Needs a decision*, because it
+ * stays so until an agent's note lands, after Greg has replied or deferred
+ * too. *Needs a decision* is kept for a thread waiting on him (`spya-h2d3my`,
+ * plan 261011ad).
+ */
+const STATUS_WORD: Record<EarlierFeedbackStatus, string> = {
+  open: "Open",
+  waiting: "Waiting",
+  aside: "Set aside",
+  shipped: "Shipped",
+};
+
 /** What a status word means, for the pointer that rests on it. */
 const STATUS_TITLE: Record<EarlierFeedbackStatus, string> = {
   open: "Nothing has been written up about this yet: it is new, or being worked on.",
-  waiting: "This is waiting on a decision from you.",
+  waiting: "An agent has asked you about this, or will; its question is under Needs a decision.",
   aside: "This was declined, or marked Ignore on /admin/feedback.",
   shipped: "We shipped a change for this, and it is in the version of Spideryarn you're using.",
 };
@@ -1114,10 +1128,9 @@ export function EarlierFilter({
 }: {
   choice: EarlierChoice;
   onShow(show: AnyShow): void;
-  /** The threads waiting on a decision, for an admin, as on the shortcut; null or none says nothing on the pill. */
+  /** The threads waiting on a decision, for an admin, as on the shortcut: *Needs a decision*'s number. Null draws none. */
   questionCount?: number | null;
 }) {
-  const questions = questionCount ?? 0;
   /* Three pills for every reader, five for an admin (261007d). A row that
      wraps: five do not fit one line on a phone (`.fb-kind`). */
   const pills: { which: AnyShow; word: string; count: number | null }[] =
@@ -1125,7 +1138,13 @@ export function EarlierFilter({
       ? ADMIN_EARLIER_FEEDBACK_SHOWS.map((which) => ({
           which,
           word: ADMIN_SHOW_WORD[which],
-          count: choice.counts === null ? null : choice.counts[which],
+          /* **Needs a decision counts the threads waiting on you**, the
+             shortcut's number, not the reports whose notes say awaiting (Greg,
+             `spya-h2d3my`: the two disagreed, and the report count kept one he
+             had answered). A reply or a Defer moves a thread out; nothing
+             moves a report but its note. So this one pill counts threads and
+             the five no longer sum to All. Plan 261011ad. */
+          count: which === "waiting" ? questionCount : choice.counts === null ? null : choice.counts[which],
         }))
       : EARLIER_FEEDBACK_SHOWS.map((which) => ({
           which,
@@ -1150,14 +1169,6 @@ export function EarlierFilter({
               <span className="fb-show-count">{count}</span>
             </>
           )}
-          {/* Beside the report count, never added to it: a question is not a
-              report, and the pills' counts still sum to All (261007d). */}
-          {which === "waiting" && choice.detail === "admin" && questions > 0 ? (
-            <span className="fb-show-questions">
-              {" · "}
-              {questions} to decide
-            </span>
-          ) : null}
         </button>
       ))}
     </fieldset>
@@ -1276,7 +1287,7 @@ function AdminRow({ report, now, adding }: { report: AdminRowReport; now: number
         <RowMeta report={report} now={now} />
         {" · "}
         <span className={statusClass(report.status)} data-status={report.status} title={STATUS_TITLE[report.status]}>
-          {ADMIN_SHOW_WORD[report.status]}
+          {STATUS_WORD[report.status]}
         </span>
       </p>
       <p className="fb-earlier-body">{report.body}</p>
