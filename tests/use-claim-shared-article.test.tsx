@@ -8,8 +8,9 @@
  * What is pinned:
  *
  * - a signed-in visitor by a link's key asks `GET /api/billing/usage` once,
- *   and re-reads when this slug is in `claimedArticles`;
- * - not when it is absent, not when the call fails;
+ *   then re-reads: another simultaneous usage request may have won the claim;
+ * - on failure, re-read once because the claim may already have committed
+ *   before the response was lost;
  * - never for a signed-out reader, nor for one not visiting by a link;
  * - once per slug and reader, however often the page renders.
  *
@@ -33,7 +34,7 @@ vi.mock("../src/web/lib/api.js", async (importActual) => ({
   },
 }));
 
-import { useClaimSharedArticle } from "../src/web/article/useClaimSharedArticle.js";
+import { shouldCheckSharedArticleClaim, useClaimSharedArticle } from "../src/web/article/useClaimSharedArticle.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,6 +75,13 @@ afterEach(() => {
 });
 
 describe("useClaimSharedArticle", () => {
+  it("checks a signed-in dead link because another request may just have cleared its key", () => {
+    expect(shouldCheckSharedArticleClaim({ kind: "not-shared" }, true)).toBe(true);
+    expect(shouldCheckSharedArticleClaim({ kind: "not-shared" }, false)).toBe(false);
+    expect(shouldCheckSharedArticleClaim({ kind: "public", sharedBy: "link" }, true)).toBe(true);
+    expect(shouldCheckSharedArticleClaim({ kind: "public", sharedBy: "public" }, true)).toBe(false);
+  });
+
   it("re-reads when this slug moved to the reader", async () => {
     answer = async () => json({ plan: {}, claimedArticles: ["the-gift"] });
     await draw({ slug: "the-gift", readerId: "bob", byLink: true });
@@ -81,20 +89,20 @@ describe("useClaimSharedArticle", () => {
     expect(rereads).toBe(1);
   });
 
-  it("does not re-read when another slug moved, or none", async () => {
+  it("re-reads when this request moved nothing, because another request may have won the claim", async () => {
     answer = async () => json({ claimedArticles: ["another"] });
     await draw({ slug: "the-gift", readerId: "bob", byLink: true });
     expect(calls).toHaveLength(1);
-    expect(rereads).toBe(0);
+    expect(rereads).toBe(1);
   });
 
-  it("is silent when the call fails", async () => {
+  it("re-reads when the call fails, because the claim may already have committed", async () => {
     answer = async () => {
       throw new Error("offline");
     };
     await draw({ slug: "the-gift", readerId: "bob", byLink: true });
     expect(calls).toHaveLength(1);
-    expect(rereads).toBe(0);
+    expect(rereads).toBe(1);
   });
 
   it("asks nothing of a signed-out reader, or one not visiting by a link", async () => {
@@ -112,6 +120,8 @@ describe("useClaimSharedArticle", () => {
     await draw({ slug: "the-gift", readerId: "bob", byLink: true });
     expect(calls).toHaveLength(1);
     await draw({ slug: "another", readerId: "bob", byLink: true });
+    expect(calls).toHaveLength(2);
+    await draw({ slug: "the-gift", readerId: "bob", byLink: true });
     expect(calls).toHaveLength(2);
   });
 });

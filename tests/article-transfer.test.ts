@@ -316,6 +316,23 @@ describe("transferArticle — the move", () => {
        where id = $1`,
       [a.id],
     );
+    await pool.query(
+      `update spideryarn.article_revisions
+          set requested_url = 'https://alice:secret@example.com/private',
+              final_url = 'https://example.com/piece?sig=ALICE_SECRET',
+              raw_filename = 'alice-private-draft.pdf',
+              illustrated = $2::jsonb
+        where article_id = $1`,
+      [
+        a.id,
+        JSON.stringify({
+          version: "illustrated/test",
+          note: "Alice's private direction",
+          style: "A private direction copied into the painting",
+          plates: [],
+        }),
+      ],
+    );
     const kinds = await seedReaderState(a, ALICE);
     /* The seed and READER_STATE are two spellings of one list. */
     expect([...kinds].sort()).toEqual(READER_STATE.map((k) => k.table).sort());
@@ -376,6 +393,11 @@ describe("transferArticle — the move", () => {
       high_power_since: null,
       updated_at: null,
     });
+    const { rows: revisions } = await pool.query(
+      "select requested_url, final_url, raw_filename, illustrated from spideryarn.article_revisions where article_id = $1",
+      [a.id],
+    );
+    expect(revisions).toEqual([{ requested_url: null, final_url: null, raw_filename: "document", illustrated: null }]);
 
     /* The ledger: unlinked and priced at what it was, public, in one statement. */
     const { rows: ledger } = await pool.query(
@@ -420,6 +442,37 @@ describe("transferArticle — the move", () => {
       [a.id],
     );
     expect(rows[0]).toEqual({ v: 0, l: 0 });
+  });
+
+  it("keeps safe public provenance and an illustration that has no reader note", async () => {
+    const a = await seed("safe-revision-state");
+    const illustrated = {
+      version: "illustrated/test",
+      style: "A model-made painting",
+      plates: [],
+    };
+    await pool.query(
+      `update spideryarn.article_revisions
+          set requested_url = 'https://example.com/original',
+              final_url = 'https://www.example.org/final#section',
+              illustrated = $2::jsonb
+        where article_id = $1`,
+      [a.id, JSON.stringify(illustrated)],
+    );
+    expect(await transferBetween({ articleId: a.id, from: ALICE, to: BOB, actor: ADMIN })).toMatchObject({
+      kind: "transferred",
+    });
+    const { rows } = await pool.query(
+      "select requested_url, final_url, illustrated from spideryarn.article_revisions where article_id = $1",
+      [a.id],
+    );
+    expect(rows).toEqual([
+      {
+        requested_url: "https://example.com/original",
+        final_url: "https://www.example.org/final",
+        illustrated,
+      },
+    ]);
   });
 
   it("runs inside a caller's savepoint, as the voucher claim will (D3)", async () => {

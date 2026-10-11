@@ -48,7 +48,7 @@ import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
-import { useClaimSharedArticle } from "./useClaimSharedArticle.js";
+import { shouldCheckSharedArticleClaim, useClaimSharedArticle } from "./useClaimSharedArticle.js";
 import { type LateStructure, useLateStructure } from "./useLateStructure.js";
 import { type StepJob, useStepJob } from "../useStepJob.js";
 import {
@@ -118,7 +118,7 @@ export function ArticlePage({
   /* A signed-in reader on a private link may be the gift's recipient, whose
      sign-in has just made it theirs: asked once, and re-read as the owner if
      so (useClaimSharedArticle.ts, plan 261011n § D3). */
-  useClaimSharedArticle(slug, readerId, access.kind === "public" && access.sharedBy === "link", reread);
+  useClaimSharedArticle(slug, readerId, shouldCheckSharedArticleClaim(access, shareKey !== null), reread);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 

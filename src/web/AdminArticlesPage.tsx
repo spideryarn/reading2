@@ -163,6 +163,7 @@ function TransferConfirm({ article, preview, transfer, accounts, onCancel, onDon
       }
       if (!samePreview(shown, again.value)) {
         setShown(again.value);
+        if (target.id === again.value.ownerId) setTo("");
         setNote("This article changed since you opened it. Check what will happen again, then press Transfer.");
         return;
       }
@@ -179,6 +180,11 @@ function TransferConfirm({ article, preview, transfer, accounts, onCancel, onDon
   }
 
   const deleted = shown ? describeCounts(shown.counts) : null;
+  const shownOwner =
+    shown === null
+      ? ownerLabel(article)
+      : (choices?.find((choice) => choice.id === shown.ownerId)?.email ??
+        (shown.ownerId === article.ownerId ? ownerLabel(article) : shown.ownerId));
   const unshare =
     shown?.visibility === "public"
       ? "It is public now, and will be taken off the public shelf."
@@ -193,7 +199,7 @@ function TransferConfirm({ article, preview, transfer, accounts, onCancel, onDon
     >
       <h2 className="tw:mb-2 tw:text-base tw:font-medium">Transfer this article</h2>
       <p className="tw:mb-3">
-        <ArticleCell article={article} /> belongs to <strong>{ownerLabel(article)}</strong>.
+        <ArticleCell article={article} /> belongs to <strong>{shownOwner}</strong>.
       </p>
       {message && <Refusal message={message} />}
       {shown === null ? (
@@ -226,7 +232,7 @@ function TransferConfirm({ article, preview, transfer, accounts, onCancel, onDon
                 ? `Deleted, as the old owner's: ${deleted}.`
                 : "Nothing of the old owner's is on it to delete."}{" "}
               Their reading position, title, purpose and archive state on it are reset. Their charges for it stay
-              theirs.
+              theirs. Any personal illustration directions, and paintings made from them, are deleted.
             </li>
           </ul>
           {shown.blocked && <Refusal message={BLOCKED[shown.blocked]} />}

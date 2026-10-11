@@ -250,6 +250,33 @@ describe("claimVouchersFor — the starter stays, and the voucher is claimed any
     expect(await count("reading_time", a.id)).toBe(1);
   });
 
+  it("leaves it when an illustration contains the creator's own direction", async () => {
+    const a = await seed("illustrated-note");
+    await pool.query(
+      `update spideryarn.article_revisions
+          set illustrated = $2::jsonb
+        where article_id = $1`,
+      [
+        a.id,
+        JSON.stringify({
+          version: "illustrated/test",
+          note: "Draw this in the style of my childhood home",
+          style: "A personal painting",
+          plates: [],
+        }),
+      ],
+    );
+    const v = await voucher(a);
+    expect(await claimAsBob()).toMatchObject({ claimed: 1, articles: [] });
+    expect(await ownerOf(a.id)).toBe(ALICE);
+    expect(await claimedBy(v)).toBe(BOB);
+    const { rows } = await pool.query(
+      "select illustrated from spideryarn.article_revisions where article_id = $1",
+      [a.id],
+    );
+    expect((rows[0] as { illustrated: { note: string } }).illustrated.note).toContain("childhood home");
+  });
+
   it("leaves a public one on the public shelf", async () => {
     const a = await seed("public", { visibility: "public" });
     const v = await voucher(a);

@@ -194,6 +194,7 @@ describe("/admin/articles", () => {
     expect(text).toContain("questions and notes 2, chats 1, passages with reading time 4");
     expect(text).toContain("made private");
     expect(text).toContain("private link is on, and will be turned off");
+    expect(text).toContain("personal illustration directions");
     /* The current owner and the unconfirmed account cannot be chosen. */
     const options = [...(confirmation()?.querySelectorAll("option") ?? [])];
     expect(options.find((o) => o.value === ALICE)?.disabled).toBe(true);
@@ -228,6 +229,24 @@ describe("/admin/articles", () => {
     /* Pressed again on what it now shows, it goes. */
     await click(buttonIn(confirmation(), "Transfer"));
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+  });
+
+  it("names a newly observed owner before offering to transfer their article", async () => {
+    previews = [previewOf(), previewOf({ ownerId: BOB })];
+    await mount();
+    await openFor("alice@example.test");
+    await choose(BOB);
+    await click(buttonIn(confirmation(), "Transfer"));
+
+    expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+    expect(confirmation()?.textContent).toContain("belongs to bob@example.test");
+    expect(buttonIn(confirmation(), "Transfer")?.disabled).toBe(true);
+
+    await choose(ALICE);
+    await click(buttonIn(confirmation(), "Transfer"));
+    expect(calls.filter((c) => c.method === "POST")).toEqual([
+      { method: "POST", url: `/api/admin/articles/${THEIRS}/transfer`, body: { to: ALICE, expectedFrom: BOB } },
+    ]);
   });
 
   it("shows a refusal in the server's words", async () => {

@@ -58,7 +58,7 @@
  * theirs gets a 404. Fencing every owner-scoped write is queued, not built.
  */
 
-import { and, desc, eq, getTableName, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableName, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -101,6 +101,7 @@ import {
 } from "../db/schema.js";
 import { isUuid } from "../ids.js";
 import { log } from "../log.js";
+import { publicSourceUrl } from "../urls.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 
@@ -128,6 +129,7 @@ export const ARTICLE_TABLES = {
   /* ---- moves: the article itself, and what it is ---- */
   /** The row. Re-owned, made private and reset (steps 2–4). */
   articles: "moves",
+  /** Moves after resetRevisionReaderState removes its mixed reader-private fields. */
   article_revisions: "moves",
   block_identities: "moves",
   revision_blocks: "moves",
@@ -379,6 +381,59 @@ export type ClaimTransferRefusal = "public" | "shared" | "own-words";
 
 export type ClaimTransferAnswer = TransferAnswer | { readonly kind: "refused"; readonly reason: ClaimTransferRefusal };
 
+/** The one revision artefact that stores the reader's exact words. */
+function hasIllustrationNote(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "note" in value &&
+    typeof (value as { note?: unknown }).note === "string" &&
+    (value as { note: string }).note.trim() !== ""
+  );
+}
+
+/** Keep upload provenance and the source control without carrying the reader's local name. */
+function neutralUploadFilename(filename: string | null, kind: string | null, source: string | null): string | null {
+  if (filename === null) return null;
+  if (kind === "pdf" || source === "pdf") return "document.pdf";
+  if (kind === "html") return "document.html";
+  return "document";
+}
+
+/**
+ * Revision rows mostly describe the article, but three fields belong to the
+ * old reader. Keep only provenance URLs safe to show a stranger, drop their
+ * local filename, and remove an illustration whose brief or image may repeat
+ * their exact steering note.
+ */
+async function resetRevisionReaderState(tx: TransferTx, articleId: string): Promise<void> {
+  const revisions = await tx
+    .select({
+      id: articleRevisions.id,
+      requestedUrl: articleRevisions.requestedUrl,
+      finalUrl: articleRevisions.finalUrl,
+      rawFilename: articleRevisions.rawFilename,
+      rawSourceKind: articleRevisions.rawSourceKind,
+      source: articleRevisions.source,
+      illustrated: articleRevisions.illustrated,
+    })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.articleId, articleId))
+    .orderBy(asc(articleRevisions.id))
+    .for("update");
+  for (const revision of revisions) {
+    await tx
+      .update(articleRevisions)
+      .set({
+        requestedUrl: revision.requestedUrl === null ? null : publicSourceUrl(revision.requestedUrl),
+        finalUrl: revision.finalUrl === null ? null : publicSourceUrl(revision.finalUrl),
+        rawFilename: neutralUploadFilename(revision.rawFilename, revision.rawSourceKind, revision.source),
+        illustrated: hasIllustrationNote(revision.illustrated) ? null : revision.illustrated,
+      })
+      .where(eq(articleRevisions.id, revision.id));
+  }
+}
+
 /**
  * **A claimed voucher's starter article, moved to its claimant only if D3's
  * rules all hold** — `transferArticle` with three more refusals, asked under
@@ -410,6 +465,13 @@ export async function transferStarterOnClaim(
        count and the delete without the article's row, which they cannot
        resolve once the move commits (the D2 residual aside). */
     if (ownWordsIn(await countsOn(tx, row.id)) > 0) return "own-words";
+    const revisions = await tx
+      .select({ illustrated: articleRevisions.illustrated })
+      .from(articleRevisions)
+      .where(eq(articleRevisions.articleId, row.id))
+      .orderBy(asc(articleRevisions.id))
+      .for("update");
+    if (revisions.some((revision) => hasIllustrationNote(revision.illustrated))) return "own-words";
     return null;
   });
 }
@@ -446,6 +508,13 @@ async function transferLocked<R extends string>(
   if (blocked) return { kind: "refused", reason: blocked };
   const gated = gate === null ? null : await gate(row);
   if (gated !== null) return { kind: "refused", reason: gated };
+
+  /* `article_revisions` is mostly article essence, but its URL provenance,
+     upload filename and an illustration's steering note can be the old
+     reader's secrets. Scrub them before the id carries the rows to its new
+     owner. An automatic claim with a note was refused by the gate above; the
+     administrator's confirmation explicitly warns that its artefact goes. */
+  await resetRevisionReaderState(tx, row.id);
 
   /* Step 5: the old owner's words and activity, in READER_STATE's order. */
   const deleted = zeroCounts();

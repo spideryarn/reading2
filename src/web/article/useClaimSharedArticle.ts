@@ -11,14 +11,17 @@
  * `BillingUsage`). The shelf and `/profile` call it anyway; a recipient who
  * signs in straight from the link lands back here instead, so this asks it
  * **once per slug and reader**, only while the page is a signed-in reader
- * visiting by a link's key. If this slug moved, `reread` loads the article
- * again — owner first, link second (access.ts), so it now opens as theirs.
+ * visiting by a link's key. It then calls `reread` — owner first, link second
+ * (access.ts) — because another usage request may have won the same claim and
+ * the response only reports articles moved by this request.
  *
  * Here, in its own file, and called from `ArticlePage` rather than from
  * access.ts, which holds the sanitiser's ingress (docs/project/security-map.md);
  * this reads nothing of the article and decides nothing about access.
- * Failures are silent: the reader is reading already, and the shelf's own call
- * claims what this one missed.
+ * A failed response still causes one re-read. The claim and move commit before
+ * the route reads the billing summary, so a lost or failed response can hide a
+ * move that already happened; the ordinary owner-first read is the safe way to
+ * discover it.
  *
  * No billing cache to tell: `useBilling` keeps none between its instances, and
  * every surface that draws the plan reads it fresh when it mounts.
@@ -28,43 +31,51 @@ import { useEffect, useRef } from "react";
 
 import { apiFetch, readJson } from "../lib/api.js";
 
-/** Whether `body` is a `GET /api/billing/usage` answer that moved `slug`. Asked of the body, not cast. */
-export function claimedHere(body: unknown, slug: string): boolean {
-  if (typeof body !== "object" || body === null) return false;
-  const claimed = (body as { claimedArticles?: unknown }).claimedArticles;
-  return Array.isArray(claimed) && claimed.includes(slug);
+/**
+ * A successful private-link read is the ordinary case. `not-shared` with a
+ * key is the narrow race where another usage request transferred the article
+ * after our owner read but before the link fallback, clearing that key.
+ */
+export function shouldCheckSharedArticleClaim(
+  access: { readonly kind: string; readonly sharedBy?: string },
+  hasShareKey: boolean,
+): boolean {
+  return (
+    (access.kind === "public" && access.sharedBy === "link") ||
+    (access.kind === "not-shared" && hasShareKey)
+  );
 }
 
 /**
- * @param visitorByLink this page is drawing the article as a visitor who came
- *   by its private link's key (`access.kind === "public"`, `sharedBy === "link"`).
+ * @param claimCheckNeeded the page either read through the private key, or
+ *   reached `not-shared` with that key during the transfer race described by
+ *   `shouldCheckSharedArticleClaim`.
  */
 export function useClaimSharedArticle(
   slug: string,
   readerId: string | null,
-  visitorByLink: boolean,
+  claimCheckNeeded: boolean,
   reread: () => void,
 ): void {
-  /* The slug and reader asked about, so each pair is asked once however often
-     the page renders or the effect re-runs (StrictMode's double run included). */
-  const asked = useRef<string | null>(null);
+  /* Every slug and reader asked about during this mount, so returning to an
+     earlier pair does not ask it twice (StrictMode's double run included). */
+  const asked = useRef(new Set<string>());
   /* Who the page is for now: an answer for a slug or reader it has left is dropped. */
   const current = useRef({ slug, readerId });
   current.current = { slug, readerId };
 
   useEffect(() => {
-    if (!visitorByLink || readerId === null) return;
+    if (!claimCheckNeeded || readerId === null) return;
     const key = JSON.stringify([slug, readerId]);
-    if (asked.current === key) return;
-    asked.current = key;
-    apiFetch("/api/billing/usage", {}, readerId)
-      .then((r) => readJson<unknown>(r))
-      .then((body) => {
-        if (current.current.slug !== slug || current.current.readerId !== readerId) return;
-        if (claimedHere(body, slug)) reread();
-      })
-      .catch(() => {
-        /* Silent, on purpose: see the header. */
-      });
-  }, [slug, readerId, visitorByLink, reread]);
+    if (asked.current.has(key)) return;
+    asked.current.add(key);
+    void (async () => {
+      try {
+        await readJson<unknown>(await apiFetch("/api/billing/usage", {}, readerId));
+      } catch {
+        /* The claim may have committed before the response failed. */
+      }
+      if (current.current.slug === slug && current.current.readerId === readerId) reread();
+    })();
+  }, [slug, readerId, claimCheckNeeded, reread]);
 }
