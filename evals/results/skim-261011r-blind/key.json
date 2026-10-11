@@ -1,0 +1,174 @@
+{
+  "newOnA": 7,
+  "tPairs": 16,
+  "key": [
+    {
+      "id": "P1",
+      "kind": "c",
+      "slug": "arxiv-1706-03762-spya-wyt7j0",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P2",
+      "kind": "t",
+      "slug": "arxiv-1706-03762-spya-wyt7j0",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "id": "P3",
+      "kind": "t",
+      "slug": "arxiv-1706-03762-spya-wyt7j0",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "id": "P4",
+      "kind": "c",
+      "slug": "2608-13566v1-spya-yurten",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P5",
+      "kind": "t",
+      "slug": "2608-13566v1-spya-yurten",
+      "A": "new#1",
+      "B": "old#1"
+    },
+    {
+      "id": "P6",
+      "kind": "t",
+      "slug": "2608-13566v1-spya-yurten",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "id": "P7",
+      "kind": "c",
+      "slug": "pmc13013618-spya-uekgh6",
+      "A": "old#1",
+      "B": "old#2"
+    },
+    {
+      "id": "P8",
+      "kind": "t",
+      "slug": "pmc13013618-spya-uekgh6",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "id": "P9",
+      "kind": "t",
+      "slug": "pmc13013618-spya-uekgh6",
+      "A": "old#2",
+      "B": "new#2"
+    },
+    {
+      "id": "P10",
+      "kind": "c",
+      "slug": "bf03197835-spya-qfwsw2",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P11",
+      "kind": "t",
+      "slug": "bf03197835-spya-qfwsw2",
+      "A": "new#1",
+      "B": "old#1"
+    },
+    {
+      "id": "P12",
+      "kind": "t",
+      "slug": "bf03197835-spya-qfwsw2",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "id": "P13",
+      "kind": "c",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P14",
+      "kind": "t",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "id": "P15",
+      "kind": "t",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "old#2",
+      "B": "new#2"
+    },
+    {
+      "id": "P16",
+      "kind": "c",
+      "slug": "cargocult-spya-rz663q",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P17",
+      "kind": "t",
+      "slug": "cargocult-spya-rz663q",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "id": "P18",
+      "kind": "t",
+      "slug": "cargocult-spya-rz663q",
+      "A": "old#2",
+      "B": "new#2"
+    },
+    {
+      "id": "P19",
+      "kind": "c",
+      "slug": "source-spya-furjgs",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P20",
+      "kind": "t",
+      "slug": "source-spya-furjgs",
+      "A": "new#1",
+      "B": "old#1"
+    },
+    {
+      "id": "P21",
+      "kind": "t",
+      "slug": "source-spya-furjgs",
+      "A": "old#2",
+      "B": "new#2"
+    },
+    {
+      "id": "P22",
+      "kind": "c",
+      "slug": "cephalometry-spya-tafdaf",
+      "A": "old#2",
+      "B": "old#1"
+    },
+    {
+      "id": "P23",
+      "kind": "t",
+      "slug": "cephalometry-spya-tafdaf",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "id": "P24",
+      "kind": "t",
+      "slug": "cephalometry-spya-tafdaf",
+      "A": "new#2",
+      "B": "old#2"
+    }
+  ]
+}

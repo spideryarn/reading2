@@ -1460,9 +1460,36 @@ export interface SkimDrops {
    * `skim/12`, read it as 0.
    */
   shrinkMoved?: number;
+  /**
+   * `again` entries **added** for the same rule, before anything is dropped
+   * or moved: the most important shallower stop carried into a deeper pass
+   * that was not longer than the one before — `growPasses` in src/skim.ts,
+   * since `skim/13` (q-vzd2xt, answer B; docs/plans/261011r-skim-more-always-longer-than-gist-a-pass-intro-shorter-quotes-skim-for-box.md).
+   * Absent before, read it as 0.
+   */
+  growCarried?: number;
+  /**
+   * Pass intros set to `null`: missing, empty, not a string or over
+   * `MAX_INTRO_CHARS` on a pass the route offers, or anything said for one it
+   * does not — `introsOf` in src/skim.ts, since `skim/13`. The route is kept.
+   * Absent before, read it as 0.
+   */
+  badIntro?: number;
+  /**
+   * Pass intros set to `null` because `growPasses` moved one of that pass's
+   * own stops in or out, so the intro maps a different walk — `introsOf`,
+   * since `skim/13` (GPT Sol, plan review F3). Absent before, read it as 0.
+   */
+  movedIntro?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
+
+/**
+ * Each pass's intro — `[gist, more, most]` — what that walk goes through, in
+ * the model's words; never a finding (src/skim.ts § `MAX_INTRO_CHARS`).
+ */
+export type SkimIntros = [string | null, string | null, string | null];
 
 /** The artefact. The `skim` column on `article_revisions`. */
 export interface Skim {
@@ -1488,6 +1515,14 @@ export interface Skim {
   profileHash: string | null;
   /** **The array order is the route.** Each pass walks its own and carried stops in this order (see `SkimDepth`). */
   stops: SkimStop[];
+  /**
+   * **One line per pass, read before its first stop** — Gist, More, Most;
+   * `null` for a pass the route does not offer or whose intro was bad.
+   * **Absent** on routes written before `skim/13`, which draw none.
+   * Owner only: the visitor's route (src/public/dto.ts § `publicSkim`) is built
+   * field by field and does not carry it. Plan 261011r.
+   */
+  intros?: SkimIntros;
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
    * and validated. Growing, by construction. Not what the band counts: it counts the own and
