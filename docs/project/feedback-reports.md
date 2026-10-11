@@ -585,8 +585,12 @@ edit a defence. Then, in the question file, in one commit with the work or the d
 1. quote the reply under the body, with its date;
 2. add its id to the header's `acted:` line (comma-separated when there are several), which is what
    stops `--answers` printing it again;
-3. set `status: answered` when the question is settled, and leave it `open` when his reply asks
-   for more;
+3. set `status: answered` once he owes no further reply, even if building what he chose is still
+   to come: unfinished work belongs in the queue, not in an open question. If a follow-up does
+   remain, rewrite the short part above `Details` so it holds the current question, its options and
+   your recommendation (the dialog then shows the thread as *Needs a decision again*); if the
+   follow-up is materially a different question, set this one answered and ask that in a new file
+   (Greg approved this wording on 2026-10-11, reply `spya-evextp` to `q-jpy4xv`);
 4. update the report's note (`ending:` and `comment:`) if the answer changes how the report ended;
 5. run `npx tsx scripts/feedback-endings.ts`. An answered question leaves the dialog at the next
    deploy.

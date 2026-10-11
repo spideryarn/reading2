@@ -106,6 +106,7 @@ function Page() {
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "sources") return createElement("p", null, `band: ${mode}`);
   return createElement(VisitorSourcesBand, {
+    blocks: [], sourceUrl: null,
     bibliography: citations, reception, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
     publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: (workId) => openedWorks.push(workId),
   });

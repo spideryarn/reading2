@@ -131,7 +131,7 @@ const SUB_MODE_PARAMS = {
  * - **`anyone`**: Summary (a visitor gets the plain-words lengths and the
  *   thread too, off the payload — SummaryMode.tsx § `VisitorSummaryBand`),
  *   Structure (Fisheye and Expanded are two bands for anyone, off the payload)
- *   and Sources (Bibliography, Reception and Claims, read by both
+ *   and Sources (Bibliography, Links, Reception and Claims, read by both
  *   `SourcesBand` and `VisitorSourcesBand` — SourcesMode.tsx).
  *
  * A `Record`, so a new mode with sub-modes is a compile error until somebody

@@ -2,10 +2,11 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band with three sub-modes: **Bibliography**, the works the piece cites (the
-Citations mode until 2026-10-09), then **Reception**, what others have written about the piece, and
-**Claims**, the claims it rests on for the reader to check against the web (Debate's two). Out of
-the experimental switch, in every reader's bar, since the day it was made.
+One mode in the band with four sub-modes: **Bibliography**, the works the piece cites (the
+Citations mode until 2026-10-09), **Links**, every web address its own text links to (since
+2026-10-11), then **Reception**, what others have written about the piece, and **Claims**, the
+claims it rests on for the reader to check against the web (Debate's two). Out of the experimental
+switch, in every reader's bar, since the day it was made.
 
 > I'm inclined to go with B and then C1 to begin with. … For question two, I guess let's move this
 > out of experimental, this combined mode. I am hesitating what to call it. Debate doesn't feel
@@ -28,10 +29,11 @@ for Reception and Claims. This page owns the merge.
 
 ## In this doc
 
-- [§ The band](#the-band) — one chip row, two panels, one surface
+- [§ The band](#the-band) — one chip row, three panels, one surface
+- [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
 - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
-- [§ Visitors](#visitors) — open on any one of its three artefacts
+- [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one)
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
 - [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate) — Peer review, then Sources
@@ -40,8 +42,9 @@ for Reception and Claims. This page owns the merge.
 ## The band
 
 ```
- ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                      (i)
+ ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐           (i)
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
+ │ LinksPanel                                          ← Links
  │ ReceptionAndClaimsPanel, as the Debate mode drew it         ← Reception, Claims
 ```
 
@@ -55,12 +58,59 @@ under it.
 **Each chip's number is its own list's**, worked out by the pure selectors in
 [`sources-counts.ts`](../../src/web/sources-counts.ts) that the panels draw their lists
 with, so a number and the list under it cannot disagree (GPT Sol's F4): every work cited for
-Bibliography (no number while there is no list), Reception's rows through its thread, Claims' listed
+Bibliography (no number while there is no list), Links' distinct addresses, Reception's rows through its thread, Claims' listed
 claims or, once checked, the sources the checks found.
 
 **The description is the frame Greg gave**, *"What this piece cites, and what others say about
 it"*, and each chip's card leads with one half of it (sub-modes.ts § `SOURCES_SUB_MODES`).
 There is no description line in the band ([mode.md § The client](mode.md#the-client)).
+
+## Links
+
+Asked for through the Feedback button, on this mode:
+
+> Maybe sources should have a submode for external links as well, or perhaps include those in the
+> bibliography somehow.
+>
+> — Greg, 2026-10-10 (spya-s5mzkd)
+
+**One row per web address the article's own prose links to**, in the order a reader first meets
+it: the author's words for it (others it is linked under, quietly, after), the host and any DOI,
+arXiv id or file kind the href carries (`describeLink`, [links.md](links.md)), and the paragraphs
+that link it, each a jump. The title opens a new tab. Left out: a link to another part of the
+piece, a footnote marker, a link with no words of its own, the article's own address written the
+long way round, anything that is not `http(s)`, and an address with a user name or password in it.
+
+**Nothing makes it.** [`outbound-links.ts`](../../src/web/outbound-links.ts) reads the blocks the
+prose already draws, in the browser, into an inert `<template>`: no model, no fetch, nothing
+stored, no step, and a press on the chip arms nothing (`activationForSources` returns `null`). No
+hover card on a row either, because the prose card's async half asks our server
+([links.md § What our own server can reach](links.md#what-our-own-server-can-reach)).
+
+**A second parse of the article's links, on purpose.** Chat's `articleLinks`
+([chat-tools.md](chat-tools.md#the-links-the-prompt-does-not-carry)) is the first, and it is the
+scope check behind `/api/link-preview`, a defence ([security-map.md](security-map.md)); folding the
+two into one module would edit it, so they stay apart and
+[`tests/outbound-links.test.ts`](../../tests/outbound-links.test.ts) runs the same fixtures through
+both. The two differences are deliberate and in the module's header.
+
+**In Bibliography**, on a row, opens the cited work at that address (`openBibliographyWork`), by
+the same address or, for a work Bibliography linked by its DOI or arXiv id, the same paper at
+another address: Bibliography rewrites a publisher's DOI page to `doi.org` and an arXiv PDF to
+`/abs/`, so a plain address comparison would miss the commonest case (GPT Sol's F2,
+`workAt`). That is the "include those in the bibliography somehow" half, done as a join.
+
+**Why a sub-mode and not a fold into Bibliography.** Bibliography is a list of works, made by one
+model call and holding [one safety property](bibliography.md#the-one-safety-property); most
+hyperlinks are not works (a Wikipedia page, a homepage, a news story), so a fold would either give
+them the shape of a citation or make Bibliography two kinds of row. A derived "other links" section
+under it would need no model, but would be hidden while no Bibliography exists and empty-looking
+when one has no works. The plan, its review and what was passed over are
+[261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md).
+
+**A PDF has no links** (stage 2 renders prose, not hyperlinks), and the owner's empty list says so
+from `meta.source`; a visitor gets the neutral sentence, because their meta does not carry
+`source` and a missing `url` there may be a refused address, not an upload.
 
 ## The address, and old links
 
@@ -93,8 +143,9 @@ beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered
 *tests/reception-navigation.test.tsx*.
 
 **In the command bar the old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
-*citations* and the bibliography words (*references*, *works cited*) find Bibliography, *debate* and
-Debate's words (*critiques*, *reception*) find Reception, and *debate claims* finds Claims. *peer
+*citations* and the bibliography words (*references*, *works cited*) find Bibliography; *links*,
+*hyperlinks*, *external links*, *outbound links*, *web links* and *urls* find Links; *debate* and
+Debate's words (*critiques*, *reception*) find Reception; and *debate claims* finds Claims. *peer
 review* left Referee's aliases when this mode took the name, and stays this mode's alias now that
 the name has gone. Referee keeps *referee report*, and has the person as *for peer reviewers*
 rather than *peer reviewer*, which starts with this mode's nickname. While Referee came first in the
@@ -106,8 +157,9 @@ rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *p
 
 **Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
 button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForSources`): the `bibliography` list for Bibliography, the `reception` web search for
-Reception, the `sources-claims` list for Claims. Every read stays mounted in all three sub-modes, so
+`activationForSources`): the `bibliography` list for Bibliography, nothing for Links, the `reception`
+web search for Reception, and the `sources-claims` list for Claims. Every read stays mounted in all
+four sub-modes, so
 the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
 lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
 anything.
@@ -132,6 +184,13 @@ has asked the web about this one yet* — rather than closing the mode on a visi
 other two. With none of the three, the band is the usual not-built gap, naming both. The visitor
 band, `VisitorSourcesBand`, mounts none of the owner's reads, so it can neither read the owner's
 lists nor start anything.
+
+**Links does not open the mode for a visitor.** It needs no artefact and draws the same list for a
+visitor as for the owner once the mode is open, but the policy still asks for one of the three
+stored lists, so a public article with links and none of them shows the not-built gap. Teaching
+the policy about blocks would change what every public article shows, and was left out of
+[261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
+the report.
 
 ## Cited in this paragraph
 
@@ -207,9 +266,12 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   — the owner's band, the visitor's, and the chip row (`SourcesViews`).
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
-- [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) and
-  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the two panels; both take the chip row
+- [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx),
+  [`src/web/LinksPanel.tsx`](../../src/web/LinksPanel.tsx) and
+  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the three panels; each takes the chip row
   as `head`, and ReceptionAndClaimsPanel draws C1's cited works under claims.
+- [`src/web/outbound-links.ts`](../../src/web/outbound-links.ts) — Links' rows and the
+  *In Bibliography* join.
 - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
   `activationForSources`.

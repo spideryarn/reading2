@@ -604,6 +604,31 @@
   ]
  },
  {
+  "id": "submode:sources:links",
+  "label": "Links",
+  "description": "Where this piece links to: every web address in its text, in the order you meet it",
+  "aliases": [
+   "Sources",
+   "Links Sources",
+   "Sources Links",
+   "Links mode",
+   "hyperlinks",
+   "external links",
+   "outbound links",
+   "web links",
+   "urls"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:sources:reception",
   "label": "Reception",
   "description": "What others say about this piece: replies, reviews, and work that cites it",

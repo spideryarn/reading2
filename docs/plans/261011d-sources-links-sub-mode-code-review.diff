@@ -1,0 +1,1458 @@
+diff --git a/docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md b/docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md
+new file mode 100644
+index 000000000..a2145dfe3
+--- /dev/null
++++ b/docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md
+@@ -0,0 +1,214 @@
++# Sources › Links — the article's own hyperlinks, as a sub-mode
++
++Up: [sources.md](../project/sources.md) · report `spya-s5mzkd` (SPIDERYARN-READING2-GV), queue item
++`qi-85fzjzm8`
++
++## The ask
++
++Greg, through the Feedback button, on
++`lawrence-kuhn-2024-a-landscape-of-consciousness-spya-hs82mz?mode=sources`, 2026-10-10:
++
++> Maybe sources should have a submode for external links as well, or perhaps include those in the
++> bibliography somehow.
++
++The brief: *pick the simpler that reads well and say why in the plan.*
++
++## What we build
++
++A fourth chip in Sources, **Links**, second in the row:
++
++```
++ ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐                 (i)
++ │
++ │  Integrated information theory              philpapers.org · PhilPapers TONIIT
++ │     linked in 3 paragraphs: ¶ ¶ ¶                          In Bibliography
++ │  "a recent survey"                          arxiv.org · arXiv 2308.08708
++ │     linked in ¶
++ │  Wikipedia: Panpsychism                     en.wikipedia.org
++ │  …
++```
++
++One row per **distinct destination** the article links to, in the order a reader first meets it:
++
++- **the author's own words for it** (the link text; where the article links one address under
++  several phrases, the first, with the others listed after it, quietly)
++- **where it goes**, read off the href by `describeLink` ([`link-preview.ts`](../../src/web/link-preview.ts)):
++  host, a file kind (`PDF`), the scholarly id the path carries (`arXiv 2308.08708`), and the full
++  address in the title's tooltip. The title is the link, out to a new tab, `noreferrer noopener`,
++  as everything outbound is ([links.md § Every link that leaves the app opens a new
++  tab](../project/links.md#every-link-that-leaves-the-app-opens-a-new-tab)).
++- **where the article links it**: how many paragraphs, and a jump to the first (the same jump
++  Bibliography's *first cited* uses — `BlockRef`), with the rest a press away.
++- **In Bibliography**, when Bibliography holds a work whose address is this one: a press that opens
++  that work's row (Reader's `openBibliographyWork`, which already exists for Claims' *Cited in this
++  paragraph*). This is the "or perhaps include those in the bibliography somehow" half, done as a
++  join rather than a merge.
++
++The chip's number is the count of rows. **No model call, no fetch, no stored artefact, no job, no
++step**: the list is computed in the browser from the blocks the prose already draws. So it costs
++nothing, is there the moment the article is, draws the same list for an owner and a visitor once
++the mode is open (a visitor's mode still opens only on a stored list, § Passed over), and a press
++on the Links chip arms nothing.
++
++Out of the list: in-article anchors and footnote markers (they go nowhere outside the piece), links
++around an image with no words, the article's own address written the long way round, and anything
++that is not `http(s)` — exactly what `articleLinks` already excludes for chat's `article_links`
++tool (below).
++
++## Why a sub-mode and not a fold into Bibliography
++
++Both were offered. The sub-mode is simpler and reads better:
++
++- **Bibliography is a list of works, and a list with a promise.** It is one model call's reading of
++  *what this piece cites*, each row a work with authors, year, scores, a registry record, *Ask in
++  chat*, and the one safety property that every address on a row came from the article and was
++  found by code ([bibliography.md § The one safety
++  property](../project/bibliography.md#the-one-safety-property)). Most hyperlinks are not works:
++  a Wikipedia page, a homepage, a news story, the magazine's own back catalogue. Folding them in
++  either gives those rows the shape of a citation they are not, or makes Bibliography two kinds of
++  row with two sets of rules.
++- **The overlap is already handled where it is real.** A hyperlink that *is* a cited work is
++  already a Bibliography row (`linkFrom: "article"`: the article's own anchor whose text is the
++  title). A fold would have to de-duplicate those against the raw list, and decide what a row is
++  when the two disagree. The join (*In Bibliography* on a Links row) shows the overlap without
++  merging two lists that are made in different ways.
++- **A derived fold is possible, and worse.** An "other links" section appended under Bibliography
++  in the browser would need no model or migration (GPT Sol's F1 corrected the first draft here).
++  But it would be hidden while no Bibliography exists, look empty under a list with no works, and
++  still mix two kinds of row in one list.
++- **The bar's frame still fits.** Sources is *"What this piece cites, and what others say about
++  it"*; a hyperlink is the plainest kind of citing, and Links sits next to Bibliography in the
++  "cites" half.
++
++What the sub-mode costs is a fourth chip, and the places a sub-mode has to be told about (below),
++all of them compiler-checked tables except the help text and the docs.
++
++## Reused, and the one thing deliberately not reused
++
++**The obvious reuse is not taken, because it sits under a defence.** `articleLinks` in
++[`src/chat-tools.ts`](../../src/chat-tools.ts) is the existing, reviewed reading of "the links in
++this article" (three GPT Sol corrections in its comments), and the first draft of this plan moved
++it into a shared module with the parser injected. But it is also **the scope check of
++`/api/link-preview`**: [`src/link-previews.ts`](../../src/link-previews.ts) fetches a stranger's
++page only when the article's own `articleLinks` contain the URL
++([security-map.md § Where the defences physically live](../project/security-map.md)). A
++behaviour-preserving move is still an edit to the code a defence runs, and that is not this
++session's to make. So `chat-tools.ts` and `link-previews.ts` are untouched, and the browser has its
++own parse.
++
++**Why a second parse is acceptable here.** The comment on `articleLinks` warns against a second
++parse *for an allowlist*, where disagreeing about what counts as a link would be a hole. This one
++decides only what a list draws; the worst a disagreement can do is a row too many or too few. It is
++kept to the same rules by importing the same pieces rather than re-deriving them — `isWebUrl` and
++`sameTarget` from [`src/urls.ts`](../../src/urls.ts), `describeLink` from
++[`link-preview.ts`](../../src/web/link-preview.ts), the note-marker attribute names from
++`src/notes.ts` — and by tests that run the same fixtures through both and expect the same set of
++external addresses. Merging the two into one module is written up for Greg as a follow-up (it needs
++a reviewer's eye on the defence, not just mine).
++
++**The rows**: [`src/web/outbound-links.ts`](../../src/web/outbound-links.ts),
++`outboundLinks(blocks, sourceUrl)`. For each block with an `<a`, parse its html into an inert
++`<template>` (whose content is never connected, so a `<base>` in a block reaches nothing — the
++reason the server chose one too), take every `a[href]` with words of its own, resolve the href as
++`destinationOf` does (absolute `isWebUrl`, else against `sourceUrl`; a `#…` href or the article's
++own address by `sameTarget` is not external), group by address, union phrases and block ids in
++article order, attach `describeLink`. `sourceUrl` is `meta.url` (absent for an upload). Memoised on
++the blocks array in the panel.
++
++**The bibliography join** is `sameTarget(link.url, work.url)` for every work whose `linkFrom` is
++not a Scholar search, so a fragment or a percent-encoding difference does not hide the match.
++`sameTarget` is allowed to over-match (its comment), which here only means showing *In
++Bibliography* on a row whose address differs by a fragment: acceptable.
++
++## Where it is wired
++
++Each of these is a table or a switch the compiler will name once `SOURCES_VIEWS` grows:
++
++- `params.ts` § `SOURCES_VIEWS` gains `links` after `bibliography`; `ReceptionAndClaimsView`
++  excludes it as well.
++- `sub-modes.ts` § `SOURCES_SUB_MODES`: label *Links*, description *"Where this piece links to: every
++  web address in its text, in the order you meet it"*, aliases *links*, *hyperlinks*, *external
++  links*, *outbound links*, *urls*. (No other mode or sub-mode claims these today; checked in
++  `mode-catalog.ts`.)
++- `activation.ts` § `activationForSources` returns `null` for `links` (nothing to arm), and its
++  callers take `null` as the Diagram ones already do — the chip and the command-bar row arm
++  nothing.
++- `sources-counts.ts` gains the links count; `SourcesMode.tsx` § `countOf` and `VIEW_HOW`
++  (*"Read off the article's own markup in your browser: no model, no search, nothing fetched. Only
++  links with words of their own are listed."*).
++- `SourcesBand` / `VisitorSourcesBand` take `blocks` and `sourceUrl` and draw a new
++  **`LinksPanel`** for `view === "links"`, with the shared chip row as its `head`, one
++  `ModeSurface` with `mode="sources"` as the other two panels have, and Bibliography's works
++  (owner: the read already mounted; visitor: the payload's) for the join.
++- `item-focus.ts`, `thread-source.ts`, `rerun-commands.ts`, `Dock.tsx`, `auto-modes.ts`: whatever
++  the compiler asks for. Links has no focus, no chat origin, no re-run and no auto-run.
++- Help: `/help/mode-sources`'s text names the fourth sub-mode
++  ([help-page.md](../project/help-page.md)).
++- Docs: [sources.md](../project/sources.md) gains § Links (and its band diagram the fourth chip);
++  [links.md](../project/links.md) a line pointing at it; [bibliography.md](../project/bibliography.md)
++  a line on the *In Bibliography* join.
++
++## Passed over
++
++- **The fold into Bibliography** — above.
++- **A hover card on each row** like the prose's link card (Wikipedia summary, server preview,
++  *Add to Spideryarn*). It would reuse `ProseHoverCard`'s async half, which fetches through our
++  server on hover ([links.md § What our own server can reach](../project/links.md#what-our-own-server-can-reach)).
++  Not needed for v1, and it is the one way this feature could reach the network; the row says what
++  the href says and nothing more. The server's fetch defence is untouched.
++- **Opening Sources for a visitor because the article has links.** A visitor's mode opens on any one
++  of the three stored artefacts (visitor.ts § `POLICY`, `any-artefact`); a public article with
++  links and none of the three still shows the not-built gap. Teaching the policy about blocks is a
++  wider change than this report asks for; noted in sources.md § Visitors.
++- **Orders and a filter** (by host, by count, internal vs leaving the publication). Article order
++  is what a reader expects of a list of links, and the rows already show the host. Add one when a
++  long list shows it is needed.
++- **A PDF's links.** A PDF-ingested article has none (links.md § What is actually in an article):
++  stage 2 renders prose, not hyperlinks. The sub-mode says so — *"This piece has no web links in
++  its text. An article read from a PDF never does."* — when the list is empty and there is no
++  `meta.url`, and plainly *"This piece links to nothing outside itself"* otherwise. The addresses
++  a PDF prints in its reference list are Bibliography's to find, and already are.
++
++## Stages
++
++1. `outboundLinks`, the fourth view in every table, `LinksPanel`, the join, the help text, the docs.
++   Tests: `outboundLinks` (grouping, ordering, self-link, `mailto:`, image-only, footnote marker,
++   one URL under two phrases, a relative href against `sourceUrl`); the chip count and its
++   accessible name; the panel's empty states; the join; `?sources=links` round-trips and an unknown
++   value still reads as Bibliography; a Links press arms nothing.
++2. Browser check in a Sonnet subagent on the box (Playwright), on an article with links and one
++   from a PDF, at 1440 and 390 wide.
++
++GPT Sol reviews the plan before building, and the code before the push.
++
++## Plan review (GPT Sol), and what changed
++
++[261011d-sources-links-sub-mode-plan-review-sol.md](261011d-sources-links-sub-mode-plan-review-sol.md),
++verdict *build with the fixes above*. The review read the first draft, which still moved
++`articleLinks` into a shared module; that was dropped before building, for the defence reason above.
++
++1. **P2, the fold's cost was overstated.** Taken: § Why a sub-mode says a derived fold needs no
++   model, and why it is still worse.
++2. **P1, `sameTarget` misses the commonest overlap**, because Bibliography rewrites a publisher's
++   DOI page to `doi.org` and an arXiv PDF to `/abs/`. Taken: `workAt` matches by address, then by
++   paper (DOI lower-cased, arXiv id without its version, both read by `describeLink`), for works
++   linked by `doi` or `arxiv`. Tests for both shapes. `"anchor"` corrected to `"article"`.
++3. **P2, the parity claim was loose.** Taken in part: the two differences are written in
++   outbound-links.ts's header, phrases are clipped at 80 as chat's are, and the parity test covers
++   the rules meant to match. **Not taken: `carriesCredential` instead of `hasCredentials`.** It
++   refuses `?key=`, `?code=` and `?share=` on purpose, for a shared cache; here it would hide a link
++   the prose beside the list already shows, so the list would silently miss rows with no gain in
++   exposure. The network trace is taken: `?mode=sources&sources=links` joins the visitor sweep in
++   tests/public-network-trace.test.tsx, which asserts no request but public GETs.
++4. **P2, visitors do not get it unless a stored list opens the mode.** True, and left: changing the
++   visitor policy changes what every public article shows, wider than this report. The plan's
++   claim is corrected and sources.md § Visitors says so.
++5. **P1, a missing `meta.url` is not "a PDF".** Taken: the owner's empty sentence reads
++   `meta.source === "pdf"`; otherwise, and always for a visitor, the neutral *This piece has no web
++   links in its text.*
++6. **P2, copy and enumerating tests.** Taken: the catalog's `how`, the help page and its corpus.
++   `SHARED_LINK_CARRIES` is left: it lists the reading aids made for the piece, and its links are
++   part of the piece. The enumerating tests are updated where the suite asked.
++7. **P2, wording and bounds.** Taken: *linked in N paragraphs*, at most three other phrases then
++   *and N more*, and the chip's spoken count is *addresses*.
++
+diff --git a/docs/project/bibliography.md b/docs/project/bibliography.md
+index c03416301..281068f36 100644
+--- a/docs/project/bibliography.md
++++ b/docs/project/bibliography.md
+@@ -947,6 +947,10 @@ behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-5
+ 
+ ## Deferred
+ 
++**Not deferred, but next door:** the article's hyperlinks that are not works have their own list,
++[Sources › Links](sources.md#links), whose row says *In Bibliography* when its address is a work's
++here. Folding them into this list was the other option, and was passed over there.
++
+ Selecting a work to mark every passage that cites it (`?cite=`), and with it an *In Bibliography* foot
+ button on the hover card that starts nothing; marking every occurrence of a
+ mention in its block rather than only an unambiguous one; joining the citation section to the *link*
+diff --git a/docs/project/links.md b/docs/project/links.md
+index d0e974052..a3367821d 100644
+--- a/docs/project/links.md
++++ b/docs/project/links.md
+@@ -1017,6 +1017,8 @@ against `splitCitations`, and what happens to a URL that is still being streamed
+   server, so its count of "how many links are in this article" is a distinct-destination count and
+   differs from the raw one in the table above; it is also where a link the reader asks *about* gets
+   followed, which this card deliberately never does
++- [sources.md § Links](sources.md#links) — every one of these links at once, as a list in the
++  band: one row per address, read in the browser like the free card, with no fetch
+ - [glossary.md](glossary.md) — the other half of the same card
+ - [block-ids.md](block-ids.md) — why an in-article anchor points at an id we minted, and what stage 3
+   had to do to the author's own ids to make that work
+diff --git a/docs/project/sources.md b/docs/project/sources.md
+index b766b2add..1caf07043 100644
+--- a/docs/project/sources.md
++++ b/docs/project/sources.md
+@@ -2,10 +2,11 @@
+ 
+ Up: [reading-view-overview.md](reading-view-overview.md)
+ 
+-One mode in the band with three sub-modes: **Bibliography**, the works the piece cites (the
+-Citations mode until 2026-10-09), then **Reception**, what others have written about the piece, and
+-**Claims**, the claims it rests on for the reader to check against the web (Debate's two). Out of
+-the experimental switch, in every reader's bar, since the day it was made.
++One mode in the band with four sub-modes: **Bibliography**, the works the piece cites (the
++Citations mode until 2026-10-09), **Links**, every web address its own text links to (since
++2026-10-11), then **Reception**, what others have written about the piece, and **Claims**, the
++claims it rests on for the reader to check against the web (Debate's two). Out of the experimental
++switch, in every reader's bar, since the day it was made.
+ 
+ > I'm inclined to go with B and then C1 to begin with. … For question two, I guess let's move this
+ > out of experimental, this combined mode. I am hesitating what to call it. Debate doesn't feel
+@@ -28,10 +29,11 @@ for Reception and Claims. This page owns the merge.
+ 
+ ## In this doc
+ 
+-- [§ The band](#the-band) — one chip row, two panels, one surface
++- [§ The band](#the-band) — one chip row, three panels, one surface
++- [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
+ - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
+ - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
+-- [§ Visitors](#visitors) — open on any one of its three artefacts
++- [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one)
+ - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
+ - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
+ - [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate) — Peer review, then Sources
+@@ -40,8 +42,9 @@ for Reception and Claims. This page owns the merge.
+ ## The band
+ 
+ ```
+- ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                      (i)
++ ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐           (i)
+  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
++ │ LinksPanel                                          ← Links
+  │ ReceptionAndClaimsPanel, as the Debate mode drew it         ← Reception, Claims
+ ```
+ 
+@@ -55,13 +58,60 @@ under it.
+ **Each chip's number is its own list's**, worked out by the pure selectors in
+ [`sources-counts.ts`](../../src/web/sources-counts.ts) that the panels draw their lists
+ with, so a number and the list under it cannot disagree (GPT Sol's F4): every work cited for
+-Bibliography (no number while there is no list), Reception's rows through its thread, Claims' listed
++Bibliography (no number while there is no list), Links' distinct addresses, Reception's rows through its thread, Claims' listed
+ claims or, once checked, the sources the checks found.
+ 
+ **The description is the frame Greg gave**, *"What this piece cites, and what others say about
+ it"*, and each chip's card leads with one half of it (sub-modes.ts § `SOURCES_SUB_MODES`).
+ There is no description line in the band ([mode.md § The client](mode.md#the-client)).
+ 
++## Links
++
++Asked for through the Feedback button, on this mode:
++
++> Maybe sources should have a submode for external links as well, or perhaps include those in the
++> bibliography somehow.
++>
++> — Greg, 2026-10-10 (spya-s5mzkd)
++
++**One row per web address the article's own prose links to**, in the order a reader first meets
++it: the author's words for it (others it is linked under, quietly, after), the host and any DOI,
++arXiv id or file kind the href carries (`describeLink`, [links.md](links.md)), and the paragraphs
++that link it, each a jump. The title opens a new tab. Left out: a link to another part of the
++piece, a footnote marker, a link with no words of its own, the article's own address written the
++long way round, anything that is not `http(s)`, and an address with a user name or password in it.
++
++**Nothing makes it.** [`outbound-links.ts`](../../src/web/outbound-links.ts) reads the blocks the
++prose already draws, in the browser, into an inert `<template>`: no model, no fetch, nothing
++stored, no step, and a press on the chip arms nothing (`activationForSources` returns `null`). No
++hover card on a row either, because the prose card's async half asks our server
++([links.md § What our own server can reach](links.md#what-our-own-server-can-reach)).
++
++**A second parse of the article's links, on purpose.** Chat's `articleLinks`
++([chat-tools.md](chat-tools.md#the-links-the-prompt-does-not-carry)) is the first, and it is the
++scope check behind `/api/link-preview`, a defence ([security-map.md](security-map.md)); folding the
++two into one module would edit it, so they stay apart and
++[`tests/outbound-links.test.ts`](../../tests/outbound-links.test.ts) runs the same fixtures through
++both. The two differences are deliberate and in the module's header.
++
++**In Bibliography**, on a row, opens the cited work at that address (`openBibliographyWork`), by
++the same address or, for a work Bibliography linked by its DOI or arXiv id, the same paper at
++another address: Bibliography rewrites a publisher's DOI page to `doi.org` and an arXiv PDF to
++`/abs/`, so a plain address comparison would miss the commonest case (GPT Sol's F2,
++`workAt`). That is the "include those in the bibliography somehow" half, done as a join.
++
++**Why a sub-mode and not a fold into Bibliography.** Bibliography is a list of works, made by one
++model call and holding [one safety property](bibliography.md#the-one-safety-property); most
++hyperlinks are not works (a Wikipedia page, a homepage, a news story), so a fold would either give
++them the shape of a citation or make Bibliography two kinds of row. A derived "other links" section
++under it would need no model, but would be hidden while no Bibliography exists and empty-looking
++when one has no works. The plan, its review and what was passed over are
++[261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md).
++
++**A PDF has no links** (stage 2 renders prose, not hyperlinks), and the owner's empty list says so
++from `meta.source`; a visitor gets the neutral sentence, because their meta does not carry
++`source` and a missing `url` there may be a refused address, not an upload.
++
+ ## The address, and old links
+ 
+ `?mode=sources`, and `?sources=reception` or `claims`; Bibliography is the default and is
+@@ -131,6 +181,13 @@ other two. With none of the three, the band is the usual not-built gap, naming b
+ band, `VisitorSourcesBand`, mounts none of the owner's reads, so it can neither read the owner's
+ lists nor start anything.
+ 
++**Links does not open the mode for a visitor.** It needs no artefact and draws the same list for a
++visitor as for the owner once the mode is open, but the policy still asks for one of the three
++stored lists, so a public article with links and none of them shows the not-built gap. Teaching
++the policy about blocks would change what every public article shows, and was left out of
++[261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
++the report.
++
+ ## Cited in this paragraph
+ 
+ **The first link between the two halves** (C1 in
+@@ -205,9 +262,12 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
+   — the owner's band, the visitor's, and the chip row (`SourcesViews`).
+ - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
+   lists behind them, shared with the panels.
+-- [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) and
+-  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the two panels; both take the chip row
++- [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx),
++  [`src/web/LinksPanel.tsx`](../../src/web/LinksPanel.tsx) and
++  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the three panels; each takes the chip row
+   as `head`, and ReceptionAndClaimsPanel draws C1's cited works under claims.
++- [`src/web/outbound-links.ts`](../../src/web/outbound-links.ts) — Links' rows and the
++  *In Bibliography* join.
+ - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)
+   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
+   `activationForSources`.
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index 68ab52cc5..a0b1fcbc0 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -275,9 +275,9 @@
+   "group": "The modes",
+   "title": "Sources",
+   "summary": "What this piece cites, and what others say about it.",
+-  "keywords": "peer review citations references bibliography sources works cited papers links doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim peer review literature further reading sources",
++  "keywords": "peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim peer review literature further reading sources",
+   "experimental": false,
+-  "body": "## In short\n\nA piece sits among other people’s work: the works it builds on, and what others have said about it\nsince. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;\n**Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,\nso you can check what others say about each one. Every source links out, so you can check it rather\nthan take our word for it.\n\n(Picture: The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button. Caption: Bibliography, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.)\n\n## How it works\n\nWhat this piece cites, and what others say about it.\n\nBibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.\n\n## When to use it\n\nFor an academic paper or a report, where the questions are “what is this built on, and where do I\nfind it?” and “what have others made of it?”. Three buttons at the top choose the view; the number\non each is how much it has to show. Bibliography is usually prepared in the background when the\narticle is added; if it was not, pressing Bibliography makes it. Reception and Claims are never\nmade in the background: pressing their view makes them (as does running them again from the\narticle's details page), and each is kept. Reception’s is a search of the open web: it takes\nabout a minute, and often finds nothing, which it says plainly, because many pieces have no\nreception at all. A link or Back to a view never starts anything; it shows a button instead, such as\n**Search the web**. Only whoever added the article can make these; visitors to a shared article see\nwhat has already been made.\n\nSources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links\nto any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode\nfor that.\n\n## Reading it\n\n**Bibliography**\n\n- Each row says what we have read of the work, which is usually nothing: the sentence on what the\n  piece uses it for is written from the article, not from the cited work.\n- Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the\n  model’s memory of the work, not a citation count. New lists give a number only when the model is\n  confident it knows the work; a low number then means a work it knows and thinks minor. If\n  relevance was scored but influence has no usable score, the row says *influence unknown*. Older\n  lists keep their numbers, including low scores that could mean the model did not know the work,\n  until regenerated from Metadata.\n- A row’s influence bar marked *from the web* was read from a web page about the work by an\n  earlier web search on that row; point at those words, or tap them, to see the site, the day and\n  the page’s own words. It is an AI estimate from web evidence, not a citation count, and the page’s\n  words may be about something else on that page.\n- Some rows also say something like *cited 357 times · Crossref*. That one is a real count, not the\n  model’s view: Crossref is the registry that issues most DOIs, and where the article gives a DOI\n  that Crossref holds, this is its own number for the work. Point at the words, or tap them, for the\n  day we read it; it is not refreshed after that. Crossref only counts citations from works whose\n  publishers have sent it their reference lists, so the number is usually lower than Google\n  Scholar’s, and it should not be compared across fields or between an old work and a new one. *no\n  citations recorded* means Crossref has none on file, not that nobody has cited the work. Most rows\n  have no count, because most works are cited without a DOI. It sits beside influence and does not\n  change the order or what the slider hides.\n- The **chat icon** opens a new conversation in [Chat](/help/mode-chat) and asks a question about\n  the work straight away, with the work named; if one exists, it reopens that instead. Chat can search the web and your library to answer,\n  and you can go back and forth. It is on the row, and on the card you get by pointing at a\n  citation in the text. A longer reading kept on a row from before (once made by a button called\n  **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a\n  line with the chat's short summary; press it to open that conversation again beside\n  Bibliography. The conversation is also in Chat’s list, marked with Sources’ icon. Only\n  whoever added the article has this.\n- **first cited** jumps to where the article first cites it. *only in the references* means the\n  article lists it but never cites it in the text.\n- **In your library** or **On the public shelf** means the work is already an article here, and\n  links straight to it.\n- Once the list exists, the places a work is cited are underlined with a dashed line in the text, in\n  every mode. Point at one, or tap it, to see the work.\n- Orders: **prioritised** (the default, with a slider), **first cited**, **relevance** and\n  **influence**. The slider hides the works that score lowest on relevance and influence together,\n  relevance counting double; a work whose influence is unknown is judged on its relevance alone\n  when available. Ordered by influence, the unknown ones come last, the most relevant first.\n\n**Reception**\n\n- What others have written about this piece itself: replies, reviews, and work that cites it and\n  says something about it. Pages that link to the piece or quote it come first. Pages that only\n  mention its title follow under **Names this piece by its title only**: often a paper citing it,\n  sometimes a page about something else with the same title, so check before you rely on one.\n- **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and\n  is there before you search: it comes from OpenAlex, a public index of published work, which we\n  ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of\n  those papers says about the piece. It needs the piece to have a DOI on record, and only whoever\n  added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s\n  title.\n- To look at the piece from an angle of your own, such as how it relates to another paper, type it\n  in the box at the top and press **Ask in chat**. It does not change the results shown here: it\n  opens a new conversation in [Chat](/help/mode-chat) and sends a question that asks for a web\n  search from that angle. You can do this before searching at all. **Your angles**, under the box,\n  lists the conversations you started this way once you send their first question; press one to\n  open it again. Only whoever added the article has this.\n- **Threads across these sources**, at the top, are themes several sources share. Press one to show\n  only its sources. Reception can be ordered **as found**, by **date** or by **stance** (most\n  critical first).\n\n**Claims**\n\n- Opening **Claims** makes the list the first time, with one AI call over the piece and no web\n  search; a link or Back to Claims only shows **List its claims**. Each claim is quoted in the\n  piece’s own words, with a link to that passage, and under it a short line in the AI’s words. If\n  the piece changes afterwards, the list is shown with **List again**. The number on Claims is how\n  many claims are listed, or, once you have checked some, how many sources the checks found.\n- Under a claim, **Cited in this paragraph** names the works the piece cites in the same paragraph\n  as the claim, once Bibliography has been made. Press one to open its row in Bibliography, with its\n  link. It only means the work is cited near the claim: it does not say the work supports it, and a\n  work the piece cites many times may be missing from a later paragraph.\n- To check claims on the web, tick up to four in the list, or type one of your own in **Check a\n  claim of your own**, and press **Check**. That is one web search over all of them together, takes\n  about a minute and a half, and costs real money; nothing is searched until you press. The sources\n  it finds appear under each claim, with your own claim after the list. **This search found nothing\n  it could quote on this claim** is a real answer. If the search did not answer for a claim at all,\n  it says so in different words, and you can check it again. **Dig further**, beside a claim that\n  has been checked, runs one more search for that claim alone and looks for sources it has not\n  found yet. One check runs at a time per article, and there is a limit on how many web searches you\n  can ask for in an hour and in a day. Visitors see the list, not the checks or anything you typed.\n- To look into one claim yourself, press the chat icon beside it. It opens a new conversation in\n  [Chat](/help/mode-chat) and sends a question with the claim quoted; if one exists, it reopens that\n  instead. Once you have asked, the icon becomes a line with the chat's short summary; press it to\n  open that conversation again. Only whoever added the article has this.\n- A search made before 2026-10-08 also picked three or four claims by itself and searched those;\n  it still shows them, under **Claims the earlier search chose**, each with the sources on it.\n  Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to\n  bear on their claim only loosely or partly.\n\n(Picture: The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work. Caption: Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.)\n\nAnything tagged **AI** is the AI’s reading, checked against nothing: the threads across sources, the\nkey-source picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could\nnot tell) and its relevance. Quoted excerpts, by contrast, are checked against what the search\nreturned."
++  "body": "## In short\n\nA piece sits among other people’s work: the works it builds on, and what others have said about it\nsince. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;\n**Links** lists every web address the piece itself links to;\n**Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,\nso you can check what others say about each one. Every source links out, so you can check it rather\nthan take our word for it.\n\n(Picture: The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button. Caption: Bibliography, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.)\n\n## How it works\n\nWhat this piece cites, and what others say about it.\n\nBibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Links is every web address the article's own text links to, read off its markup in your browser with no model and nothing fetched. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.\n\n## When to use it\n\nFor an academic paper or a report, where the questions are “what is this built on, and where do I\nfind it?” and “what have others made of it?”. Four buttons at the top choose the view; the number\non each is how much it has to show. Bibliography is usually prepared in the background when the\narticle is added; if it was not, pressing Bibliography makes it. Reception and Claims are never\nmade in the background: pressing their view makes them (as does running them again from the\narticle's details page), and each is kept. Reception’s is a search of the open web: it takes\nabout a minute, and often finds nothing, which it says plainly, because many pieces have no\nreception at all. A link or Back to a view never starts anything; it shows a button instead, such as\n**Search the web**. Only whoever added the article can make these; visitors to a shared article see\nwhat has already been made.\n\nSources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links\nto any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode\nfor that.\n\n## Reading it\n\n**Bibliography**\n\n- Each row says what we have read of the work, which is usually nothing: the sentence on what the\n  piece uses it for is written from the article, not from the cited work.\n- Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the\n  model’s memory of the work, not a citation count. New lists give a number only when the model is\n  confident it knows the work; a low number then means a work it knows and thinks minor. If\n  relevance was scored but influence has no usable score, the row says *influence unknown*. Older\n  lists keep their numbers, including low scores that could mean the model did not know the work,\n  until regenerated from Metadata.\n- A row’s influence bar marked *from the web* was read from a web page about the work by an\n  earlier web search on that row; point at those words, or tap them, to see the site, the day and\n  the page’s own words. It is an AI estimate from web evidence, not a citation count, and the page’s\n  words may be about something else on that page.\n- Some rows also say something like *cited 357 times · Crossref*. That one is a real count, not the\n  model’s view: Crossref is the registry that issues most DOIs, and where the article gives a DOI\n  that Crossref holds, this is its own number for the work. Point at the words, or tap them, for the\n  day we read it; it is not refreshed after that. Crossref only counts citations from works whose\n  publishers have sent it their reference lists, so the number is usually lower than Google\n  Scholar’s, and it should not be compared across fields or between an old work and a new one. *no\n  citations recorded* means Crossref has none on file, not that nobody has cited the work. Most rows\n  have no count, because most works are cited without a DOI. It sits beside influence and does not\n  change the order or what the slider hides.\n- The **chat icon** opens a new conversation in [Chat](/help/mode-chat) and asks a question about\n  the work straight away, with the work named; if one exists, it reopens that instead. Chat can search the web and your library to answer,\n  and you can go back and forth. It is on the row, and on the card you get by pointing at a\n  citation in the text. A longer reading kept on a row from before (once made by a button called\n  **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a\n  line with the chat's short summary; press it to open that conversation again beside\n  Bibliography. The conversation is also in Chat’s list, marked with Sources’ icon. Only\n  whoever added the article has this.\n- **first cited** jumps to where the article first cites it. *only in the references* means the\n  article lists it but never cites it in the text.\n- **In your library** or **On the public shelf** means the work is already an article here, and\n  links straight to it.\n- Once the list exists, the places a work is cited are underlined with a dashed line in the text, in\n  every mode. Point at one, or tap it, to see the work.\n- Orders: **prioritised** (the default, with a slider), **first cited**, **relevance** and\n  **influence**. The slider hides the works that score lowest on relevance and influence together,\n  relevance counting double; a work whose influence is unknown is judged on its relevance alone\n  when available. Ordered by influence, the unknown ones come last, the most relevant first.\n\n**Links**\n\n- Every web address the article’s own text links to, one row each, in the order you meet them in\n  the piece. Each row is the article’s words for the link, then the site it goes to (and a DOI or\n  arXiv number when the address carries one), then the paragraphs that link it, each a jump to that\n  paragraph. Press the words to open the page in a new tab.\n- It is read straight off the article in your browser: no AI, no search, and nothing is fetched, so\n  it is there as soon as the article is and costs nothing. Links to another part of the piece,\n  footnote markers, and links with no words of their own (around a picture) are left out.\n- **In Bibliography**, on a row, means Bibliography lists a work at that address, or the same paper\n  at another address; press it to open that work’s row.\n- An article read from a PDF has no links of its own: its addresses, if any, are in Bibliography.\n\n**Reception**\n\n- What others have written about this piece itself: replies, reviews, and work that cites it and\n  says something about it. Pages that link to the piece or quote it come first. Pages that only\n  mention its title follow under **Names this piece by its title only**: often a paper citing it,\n  sometimes a page about something else with the same title, so check before you rely on one.\n- **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and\n  is there before you search: it comes from OpenAlex, a public index of published work, which we\n  ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of\n  those papers says about the piece. It needs the piece to have a DOI on record, and only whoever\n  added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s\n  title.\n- To look at the piece from an angle of your own, such as how it relates to another paper, type it\n  in the box at the top and press **Ask in chat**. It does not change the results shown here: it\n  opens a new conversation in [Chat](/help/mode-chat) and sends a question that asks for a web\n  search from that angle. You can do this before searching at all. **Your angles**, under the box,\n  lists the conversations you started this way once you send their first question; press one to\n  open it again. Only whoever added the article has this.\n- **Threads across these sources**, at the top, are themes several sources share. Press one to show\n  only its sources. Reception can be ordered **as found**, by **date** or by **stance** (most\n  critical first).\n\n**Claims**\n\n- Opening **Claims** makes the list the first time, with one AI call over the piece and no web\n  search; a link or Back to Claims only shows **List its claims**. Each claim is quoted in the\n  piece’s own words, with a link to that passage, and under it a short line in the AI’s words. If\n  the piece changes afterwards, the list is shown with **List again**. The number on Claims is how\n  many claims are listed, or, once you have checked some, how many sources the checks found.\n- Under a claim, **Cited in this paragraph** names the works the piece cites in the same paragraph\n  as the claim, once Bibliography has been made. Press one to open its row in Bibliography, with its\n  link. It only means the work is cited near the claim: it does not say the work supports it, and a\n  work the piece cites many times may be missing from a later paragraph.\n- To check claims on the web, tick up to four in the list, or type one of your own in **Check a\n  claim of your own**, and press **Check**. That is one web search over all of them together, takes\n  about a minute and a half, and costs real money; nothing is searched until you press. The sources\n  it finds appear under each claim, with your own claim after the list. **This search found nothing\n  it could quote on this claim** is a real answer. If the search did not answer for a claim at all,\n  it says so in different words, and you can check it again. **Dig further**, beside a claim that\n  has been checked, runs one more search for that claim alone and looks for sources it has not\n  found yet. One check runs at a time per article, and there is a limit on how many web searches you\n  can ask for in an hour and in a day. Visitors see the list, not the checks or anything you typed.\n- To look into one claim yourself, press the chat icon beside it. It opens a new conversation in\n  [Chat](/help/mode-chat) and sends a question with the claim quoted; if one exists, it reopens that\n  instead. Once you have asked, the icon becomes a line with the chat's short summary; press it to\n  open that conversation again. Only whoever added the article has this.\n- A search made before 2026-10-08 also picked three or four claims by itself and searched those;\n  it still shows them, under **Claims the earlier search chose**, each with the sources on it.\n  Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to\n  bear on their claim only loosely or partly.\n\n(Picture: The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work. Caption: Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.)\n\nAnything tagged **AI** is the AI’s reading, checked against nothing: the threads across sources, the\nkey-source picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could\nnot tell) and its relevance. Quoted excerpts, by contrast, are checked against what the search\nreturned."
+  },
+  {
+   "anchor": "mode-structure",
+diff --git a/src/mode-catalog.ts b/src/mode-catalog.ts
+index 7bffcb64a..c35e5497a 100644
+--- a/src/mode-catalog.ts
++++ b/src/mode-catalog.ts
+@@ -483,8 +483,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+     aliases: ["chronology", "dates", "events", "history", "sequence", "chronological", "time line", "order of events"],
+     experimental: true,
+   },
+-  /* **Citations and Debate until 2026-10-09**, now this mode's three
+-     sub-modes (src/web/sub-modes.ts § `SOURCES_SUB_MODES`, where the
++  /* **Citations and Debate until 2026-10-09**, now two of this mode's four
++     sub-modes (Links joined them on 2026-10-11, plan 261011d) (src/web/sub-modes.ts § `SOURCES_SUB_MODES`, where the
+      retired words and the bibliography words are the sub-mode rows' own
+      aliases, so each opens the view it means). Called Peer review until later
+      that day.
+@@ -518,8 +518,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+          press, per claim (src/reception.ts § `admitSourcesClaimCheck`).
+        - "Every source links out": every Reception and checked-claim row is a
+          page with its address (ReceptionAndClaimsPanel.tsx § Row).
++       - Links, "read off the article's own markup in your browser … nothing
++         fetched": src/web/outbound-links.ts parses the blocks the prose draws,
++         and LinksPanel.tsx draws no hover card and asks no server (plan 261011d).
+        No price — mode.md § The card on the button. */
+-    how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
++    how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Links is every web address the article's own text links to, read off its markup in your browser with no model and nothing fetched. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
+     /* "peer review" left Referee's aliases on 2026-10-09 for this mode, then
+        called Peer review (plan 261009l § The name). It stays here as the
+        mode's old name, so typing it still finds this mode first; Referee has
+diff --git a/src/web/LinksPanel.tsx b/src/web/LinksPanel.tsx
+new file mode 100644
+index 000000000..413ba60fb
+--- /dev/null
++++ b/src/web/LinksPanel.tsx
+@@ -0,0 +1,166 @@
++/**
++ * **Sources › Links** — every web address the article's own prose links to,
++ * one row per address, in the order a reader first meets it.
++ *
++ * ```
++ *  ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐          (i)
++ *  │ Integrated information theory ↗
++ *  │   philpapers.org · PhilPapers TONIIT   linked in 3 paragraphs: ¶ ¶ ¶   In Bibliography
++ * ```
++ *
++ * Greg, 2026-10-10 (spya-s5mzkd): *"Maybe sources should have a submode for
++ * external links as well, or perhaps include those in the bibliography
++ * somehow."* A sub-mode, with *In Bibliography* on a row whose address is a
++ * cited work's, rather than a fold into Bibliography: that list is works, made
++ * by a model and stamped, and most links are not works. Plan
++ * docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md.
++ *
++ * **No model, no fetch, nothing stored, nothing armed**: the rows are the
++ * blocks' own markup, read in the browser by outbound-links.ts, so the owner
++ * and a visitor draw the same list. Each row says what its href says
++ * (link-preview.ts § `describeLink`) and no more: no hover card, which would
++ * reach our server's link preview (docs/project/links.md).
++ */
++import { ExternalLink } from "lucide-react";
++import type { ReactNode } from "react";
++import type { BlockId } from "../types.js";
++import { MODE_LABEL } from "../title-text.js";
++import { BlockRef } from "./BlockRef.js";
++import { ModeSurface } from "./ModeSurface.js";
++import type { LinkableWork, OutboundLink } from "./outbound-links.js";
++import { workAt } from "./outbound-links.js";
++
++/** A paragraph list longer than this ends in *and N more*; the rest are a scroll of the prose away. */
++const MAX_PLACES = 5;
++/** The other phrases one address is linked under, at most this many before *+N more*. */
++const MAX_OTHER_PHRASES = 3;
++
++/**
++ * The empty list. Neutral, because the panel cannot always say why: a
++ * visitor's meta carries no `source`, and an absent `url` there may be a
++ * refused address rather than an upload (src/public-types.ts). GPT Sol's F5.
++ */
++export const LINKS_NONE = "This piece has no web links in its text.";
++/** The empty list, for the owner of a PDF: a PDF's prose carries no hyperlinks (docs/project/links.md). */
++export const LINKS_NONE_PDF = "This piece has no web links in its text. An article read from a PDF never does.";
++
++/** The (i)'s paragraph on how the rows were got. */
++export const LINKS_ABOUT =
++  "Read off the article's own markup in your browser: no model, no search, nothing fetched. A link to another part of this piece, a footnote marker, and a link with no words of its own (around a picture) are left out.";
++
++export function LinksPanel({
++  links,
++  fromPdf,
++  works,
++  head,
++  onJump,
++  onOpenWork,
++}: {
++  /** The rows (outbound-links.ts § `outboundLinks`), worked out once by the band for the chip's count too. */
++  links: readonly OutboundLink[];
++  /** The owner's `meta.source === "pdf"`; always false for a visitor, whose meta does not say. */
++  fromPdf: boolean;
++  /** Bibliography's works, for *In Bibliography*; empty while there is no list. */
++  works: readonly LinkableWork[];
++  /** Sources' chip row (SourcesMode.tsx § `SourcesViews`). */
++  head: ReactNode;
++  onJump(id: BlockId): void;
++  /** Open Bibliography on one work (Reader.tsx § `openBibliographyWork`). */
++  onOpenWork(workId: string): void;
++}) {
++  const about = (
++    <>
++      <p>{LINKS_ABOUT}</p>
++      {links.length > 0 && (
++        <p>
++          {links.length} {links.length === 1 ? "address" : "addresses"} linked.
++        </p>
++      )}
++    </>
++  );
++  return (
++    <ModeSurface label={MODE_LABEL.sources} feature="gloss links sources" mode="sources" about={about} head={head}>
++      {links.length === 0 ? (
++        <p className="gloss-quiet">{fromPdf ? LINKS_NONE_PDF : LINKS_NONE}</p>
++      ) : (
++        <div className="tl-scroll">
++          <ol className="tl-list cite-list">
++            {links.map((link) => (
++              <LinkRow key={link.url} link={link} work={workAt(link, works)} onJump={onJump} onOpenWork={onOpenWork} />
++            ))}
++          </ol>
++        </div>
++      )}
++    </ModeSurface>
++  );
++}
++
++function LinkRow({
++  link,
++  work,
++  onJump,
++  onOpenWork,
++}: {
++  link: OutboundLink;
++  work: LinkableWork | null;
++  onJump(id: BlockId): void;
++  onOpenWork(workId: string): void;
++}) {
++  const [first, ...others] = link.phrases;
++  const shownOthers = others.slice(0, MAX_OTHER_PHRASES);
++  const moreOthers = others.length - shownOthers.length;
++  const { host, citation, file, sameSite } = link.preview;
++  const places = link.blockIds.slice(0, MAX_PLACES);
++  const more = link.blockIds.length - places.length;
++  return (
++    <li className="tl-item cite-item link-item" data-link-url={link.url}>
++      <p className="cite-title">
++        {/* Every link that leaves the app opens a new tab, `noreferrer noopener`
++            (docs/project/links.md). The full address is its tooltip. */}
++        <a href={link.url} target="_blank" rel="noreferrer noopener" title={link.url}>
++          <span className="link-phrase">{first}</span>
++          <ExternalLink size={11} aria-hidden="true" className="cite-out" />
++        </a>
++      </p>
++      {others.length > 0 && (
++        <p className="cite-by link-also">
++          also linked as{" "}
++          {shownOthers.map((phrase, i) => (
++            <span key={phrase}>
++              {i > 0 && ", "}“<span className="link-phrase">{phrase}</span>”
++            </span>
++          ))}
++          {moreOthers > 0 && ` and ${moreOthers} more`}
++        </p>
++      )}
++      <p className="cite-meta">
++        <span className="cite-source">
++          {host}
++          {citation && ` · ${citation.label} ${citation.id}`}
++          {file && ` · ${file}`}
++          {sameSite === true && " · same site"}
++        </span>
++        <span className="cite-first link-places">
++          {link.blockIds.length === 1 ? "linked in" : `linked in ${link.blockIds.length} paragraphs:`}{" "}
++          {places.map((id, i) => (
++            <span key={id}>
++              {i > 0 && " "}
++              <BlockRef id={id} onJump={onJump} />
++            </span>
++          ))}
++          {more > 0 && ` and ${more} more`}
++        </span>
++        {work && (
++          <button
++            type="button"
++            className="gloss-btn link-in-bib"
++            title="Bibliography lists a cited work at this address: open its row"
++            onClick={() => onOpenWork(work.id)}
++          >
++            In Bibliography
++          </button>
++        )}
++      </p>
++    </li>
++  );
++}
+diff --git a/src/web/activation.ts b/src/web/activation.ts
+index d528fe9b5..c92713968 100644
+--- a/src/web/activation.ts
++++ b/src/web/activation.ts
+@@ -604,11 +604,15 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
+  * is showing (useReception.ts, useSourcesClaims.ts), so neither press can buy the
+  * other's work.
+  */
+-export function activationForSources(view: SourcesView): AutoRunTarget {
++export function activationForSources(view: SourcesView): AutoRunTarget | null {
+   switch (view) {
+     /* Citations' fixed target until 2026-10-09: the list of works cited. */
+     case "bibliography":
+       return "bibliography";
++    /* The article's own hyperlinks, read off the blocks in the browser: nothing
++       to buy (plan 261011d). */
++    case "links":
++      return null;
+     case "reception":
+       return "reception";
+     case "claims":
+diff --git a/src/web/help/pages/modes/sources.md b/src/web/help/pages/modes/sources.md
+index 2e3cdc6b2..7d9195c62 100644
+--- a/src/web/help/pages/modes/sources.md
++++ b/src/web/help/pages/modes/sources.md
+@@ -1,5 +1,5 @@
+ ---
+-keywords: peer review citations references bibliography sources works cited papers links doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
++keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
+ related: mode-referee, faq-beyond-the-article
+ ---
+ 
+@@ -7,6 +7,7 @@ related: mode-referee, faq-beyond-the-article
+ 
+ A piece sits among other people’s work: the works it builds on, and what others have said about it
+ since. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;
++**Links** lists every web address the piece itself links to;
+ **Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,
+ so you can check what others say about each one. Every source links out, so you can check it rather
+ than take our word for it.
+@@ -16,7 +17,7 @@ than take our word for it.
+ ## When to use it
+ 
+ For an academic paper or a report, where the questions are “what is this built on, and where do I
+-find it?” and “what have others made of it?”. Three buttons at the top choose the view; the number
++find it?” and “what have others made of it?”. Four buttons at the top choose the view; the number
+ on each is how much it has to show. Bibliography is usually prepared in the background when the
+ article is added; if it was not, pressing Bibliography makes it. Reception and Claims are never
+ made in the background: pressing their view makes them (as does running them again from the
+@@ -74,6 +75,19 @@ for that.
+   relevance counting double; a work whose influence is unknown is judged on its relevance alone
+   when available. Ordered by influence, the unknown ones come last, the most relevant first.
+ 
++**Links**
++
++- Every web address the article’s own text links to, one row each, in the order you meet them in
++  the piece. Each row is the article’s words for the link, then the site it goes to (and a DOI or
++  arXiv number when the address carries one), then the paragraphs that link it, each a jump to that
++  paragraph. Press the words to open the page in a new tab.
++- It is read straight off the article in your browser: no AI, no search, and nothing is fetched, so
++  it is there as soon as the article is and costs nothing. Links to another part of the piece,
++  footnote markers, and links with no words of their own (around a picture) are left out.
++- **In Bibliography**, on a row, means Bibliography lists a work at that address, or the same paper
++  at another address; press it to open that work’s row.
++- An article read from a PDF has no links of its own: its addresses, if any, are in Bibliography.
++
+ **Reception**
+ 
+ - What others have written about this piece itself: replies, reviews, and work that cites it and
+diff --git a/src/web/modes/sources/SourcesMode.tsx b/src/web/modes/sources/SourcesMode.tsx
+index d034d0371..1624a8f31 100644
+--- a/src/web/modes/sources/SourcesMode.tsx
++++ b/src/web/modes/sources/SourcesMode.tsx
+@@ -47,7 +47,7 @@
+  */
+ 
+ import { useQueryState } from "nuqs";
+-import { useRef } from "react";
++import { useMemo, useRef } from "react";
+ import type { BlockId } from "../../../types.js";
+ import type { PublicBibliography, PublicReception, PublicSourcesClaimList } from "../../../public-types.js";
+ import {
+@@ -77,6 +77,15 @@ import type { ItemFocus } from "../../item-focus.js";
+ import { yearOf } from "../../reception-order.js";
+ import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
+ import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
++import { type LinkableWork, type LinkedBlock, type OutboundLink, outboundLinks } from "../../outbound-links.js";
++import { LinksPanel } from "../../LinksPanel.js";
++
++/** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
++function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
++  return useMemo(() => outboundLinks(blocks, sourceUrl), [blocks, sourceUrl]);
++}
++
++const NO_WORKS: readonly LinkableWork[] = [];
+ 
+ /**
+  * **The owner's band.** Every read the three sub-modes need, the chip row, and
+@@ -91,6 +100,9 @@ import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from
+  */
+ export function SourcesBand({
+   slug,
++  blocks,
++  sourceUrl,
++  fromPdf,
+   bibliographyRead,
+   onJump,
+   blockOrder,
+@@ -105,6 +117,12 @@ export function SourcesBand({
+   onOpenWork,
+ }: {
+   slug: string;
++  /** The article's blocks, for Links (outbound-links.ts). */
++  blocks: readonly LinkedBlock[];
++  /** Where the article came from (`meta.url`), or `null` for an upload. */
++  sourceUrl: string | null;
++  /** `meta.source === "pdf"`, for Links' empty sentence. */
++  fromPdf: boolean;
+   /** Bibliography's opening read, shared with the prose (useBibliography.ts § `useBibliographyRead`). */
+   bibliographyRead: BibliographyRead;
+   /** `passage` is Bibliography's: `citePassageKey(work.id)` when a row names the citing words. */
+@@ -143,9 +161,11 @@ export function SourcesBand({
+   const citers = useCiters(slug, view === "reception");
+   const citeControls = useCitationControls();
+   const receptionAndClaimsControls = useReceptionAndClaimsControls();
++  const links = useOutboundLinks(blocks, sourceUrl);
+ 
+   const counts = sourcesCounts({
+     works: bibliography.bibliography?.citations ?? null,
++    links,
+     reception: reception.reception,
+     listed: listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList }),
+     checked: claimList.status === "ready" ? checkedSources(checks.checks, claimList.claimList) : 0,
+@@ -165,6 +185,17 @@ export function SourcesBand({
+         onFocusTaken={onCiteFocusTaken}
+       />
+     );
++  if (view === "links")
++    return (
++      <LinksPanel
++        links={links}
++        fromPdf={fromPdf}
++        works={bibliography.bibliography?.citations ?? NO_WORKS}
++        head={head}
++        onJump={onJump}
++        onOpenWork={onOpenWork}
++      />
++    );
+   return (
+     <ReceptionAndClaimsPanel
+       access={{ kind: "owner", owner: reception, claimList, checks, citers, claimChats }}
+@@ -205,6 +236,8 @@ function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string
+  * visitor has them all.
+  */
+ export function VisitorSourcesBand({
++  blocks,
++  sourceUrl,
+   bibliography,
+   reception,
+   claimList,
+@@ -216,6 +249,10 @@ export function VisitorSourcesBand({
+   onCiteFocusTaken,
+   onOpenWork,
+ }: {
++  /** The article's blocks, for Links — the same markup the visitor's prose draws. */
++  blocks: readonly LinkedBlock[];
++  /** Where the article came from (`meta.url`), or `null` for an upload. */
++  sourceUrl: string | null;
+   bibliography: PublicBibliography | null;
+   reception: PublicReception | null;
+   /** Claims' list, read-only — `PublicSourcesClaimList`, src/public-types.ts. */
+@@ -235,8 +272,10 @@ export function VisitorSourcesBand({
+   const [view, setView] = useQueryState("sources", sourcesParam);
+   const citeControls = useCitationControls();
+   const receptionAndClaimsControls = useReceptionAndClaimsControls();
++  const links = useOutboundLinks(blocks, sourceUrl);
+   const counts = sourcesCounts({
+     works: bibliography?.citations ?? null,
++    links,
+     reception,
+     listed: listedClaims({ kind: "visitor", claimList }),
+     checked: 0,
+@@ -255,6 +294,17 @@ export function VisitorSourcesBand({
+         {...(onCiteFocusTaken ? { onFocusTaken: onCiteFocusTaken } : {})}
+       />
+     );
++  if (view === "links")
++    return (
++      <LinksPanel
++        links={links}
++        fromPdf={false}
++        works={bibliography?.citations ?? NO_WORKS}
++        head={head}
++        onJump={onJump}
++        onOpenWork={onOpenWork}
++      />
++    );
+   return (
+     <ReceptionAndClaimsPanel
+       access={{ kind: "visitor", reception, claimList }}
+@@ -387,6 +437,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
+       return counts.bibliography === null
+         ? null
+         : { n: counts.bibliography, noun: plural(counts.bibliography, "work") };
++    case "links":
++      return { n: counts.links, noun: counts.links === 1 ? "address" : "addresses" };
+     case "reception":
+       return { n: counts.reception, noun: plural(counts.reception, "source") };
+     case "claims":
+@@ -402,6 +454,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
+ const VIEW_HOW: Record<SourcesView, string> = {
+   bibliography:
+     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
++  links:
++    "Read off the article's own markup in your browser: no model, no search, nothing fetched. One row for each web address, whatever words the article links it with.",
+   reception:
+     "Found by a search of the open web, run once and kept. Each page has to link, quote or name this piece, and each quotation is checked against what the search returned.",
+   claims:
+diff --git a/src/web/outbound-links.ts b/src/web/outbound-links.ts
+new file mode 100644
+index 000000000..7ec086d86
+--- /dev/null
++++ b/src/web/outbound-links.ts
+@@ -0,0 +1,180 @@
++/**
++ * **Where the article sends its reader** — Sources › Links' rows: every web
++ * address the article's own prose links to, one row per address, in the order
++ * a reader first meets it.
++ *
++ * Asked for through the Feedback button, Greg, 2026-10-10 (spya-s5mzkd):
++ * *"Maybe sources should have a submode for external links as well, or perhaps
++ * include those in the bibliography somehow."* Plan
++ * docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md.
++ *
++ * **Read off the blocks the prose already draws**: no model, no fetch, nothing
++ * stored, so it is the same for an owner and a visitor and is there the moment
++ * the article is.
++ *
++ * **A second parse of the article's links, on purpose.** `articleLinks` in
++ * src/chat-tools.ts is the first, and it is also the scope check behind
++ * `/api/link-preview` — a defence (docs/project/security-map.md), which this
++ * feature does not edit. Its comment warns against a second parse *for an
++ * allowlist*; this one only decides what a list draws, so a disagreement costs
++ * a row, never a fetch. It keeps the same rules by importing the same pieces:
++ * `isWebUrl` and `sameTarget` (src/urls.ts), the inert `<template>` (a `<base>`
++ * inside a block reaches nothing), and words-of-its-own for a link to count.
++ * tests/outbound-links.test.ts runs fixtures through both and expects the same
++ * external addresses.
++ *
++ * **Two deliberate differences**, both about drawing rather than choosing:
++ * an address with a user name or password in it (`hasCredentials`) is left
++ * out, as chat's renderer leaves it out (Cited.tsx); and a phrase is clipped
++ * at `MAX_PHRASE_CHARS`, as chat's is, but *after* grouping, so one address is
++ * one row. Not `carriesCredential`'s wider net: it refuses `?key=` and
++ * `?share=` on purpose for a shared cache, and here it would only hide a link
++ * the prose beside the list already shows.
++ *
++ * Imports no React, so a test can call it on fixtures alone.
++ */
++import type { BlockId, CitationLinkFrom } from "../types.js";
++import { hasCredentials, isWebUrl, sameTarget } from "../urls.js";
++import { type Citation, describeLink, type ExternalPreview } from "./link-preview.js";
++
++/** A phrase longer than this is clipped at a word for the row; chat's `MAX_LINK_TEXT_CHARS` is the same 80. */
++export const MAX_PHRASE_CHARS = 80;
++
++function clipped(phrase: string): string {
++  if (phrase.length <= MAX_PHRASE_CHARS) return phrase;
++  const cut = phrase.slice(0, MAX_PHRASE_CHARS);
++  const space = cut.lastIndexOf(" ");
++  return `${(space > MAX_PHRASE_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
++}
++
++/** The fields of a block this reads — an owner's `Block` and a visitor's both have them. */
++export interface LinkedBlock {
++  id: BlockId;
++  html: string;
++}
++
++/** One address the article links to. */
++export interface OutboundLink {
++  /** The absolute http(s) address, as the article gives it (resolved against its own address when relative). */
++  url: string;
++  /** The author's own words for it, whitespace collapsed, each phrase once, first-met first. */
++  phrases: string[];
++  /** Every block that links it, in article order, each once. */
++  blockIds: BlockId[];
++  /** What the href says about itself (link-preview.ts § `describeLink`). */
++  preview: ExternalPreview;
++}
++
++/**
++ * `null` for a link that does not leave the article, or that this list cannot
++ * name: a `#fragment`, the article's own address written the long way round,
++ * `mailto:`, `javascript:`, an address carrying a user name or password.
++ */
++function externalUrl(href: string, sourceUrl: string | null): string | null {
++  if (href === "" || href.startsWith("#")) return null;
++  let absolute: string | null = null;
++  if (isWebUrl(href)) absolute = href;
++  else if (sourceUrl) {
++    try {
++      const resolved = new URL(href, sourceUrl).href;
++      absolute = isWebUrl(resolved) ? resolved : null;
++    } catch {
++      absolute = null;
++    }
++  }
++  if (absolute === null || hasCredentials(absolute)) return null;
++  if (sourceUrl && sameTarget(absolute, sourceUrl)) return null;
++  return absolute;
++}
++
++/**
++ * **The rows.** `sourceUrl` is where the article came from (`meta.url`), or
++ * `null` for an upload — then a relative href has nothing to resolve against
++ * and is left out, and no row says whether it leaves the publication.
++ *
++ * `doc` is the document whose `<template>` parses each block: the page's own
++ * in the browser, a jsdom one in a test.
++ */
++export function outboundLinks(
++  blocks: readonly LinkedBlock[],
++  sourceUrl: string | null,
++  doc: Document = document,
++): OutboundLink[] {
++  const template = doc.createElement("template");
++  const byUrl = new Map<string, OutboundLink>();
++  for (const block of blocks) {
++    /* Case-insensitive, as `articleLinks`'s shortcut is: `<A HREF=…>` is valid markup. */
++    if (!block.html || !/<a[\s>]/i.test(block.html)) continue;
++    template.innerHTML = block.html;
++    for (const a of Array.from(template.content.querySelectorAll("a[href]"))) {
++      /* An `<a>` around an image has nothing to say about where it goes. */
++      const words = (a.textContent ?? "").replace(/\s+/g, " ").trim();
++      if (words === "") continue;
++      const phrase = clipped(words);
++      const url = externalUrl((a.getAttribute("href") ?? "").trim(), sourceUrl);
++      if (url === null) continue;
++      const row = byUrl.get(url);
++      if (row) {
++        if (!row.phrases.includes(phrase)) row.phrases.push(phrase);
++        if (!row.blockIds.includes(block.id)) row.blockIds.push(block.id);
++        continue;
++      }
++      const preview = describeLink(url, sourceUrl);
++      /* `externalUrl` admitted only a parseable http(s) address with a host, which is
++         `describeLink`'s `external`; anything else is a disagreement to skip, not draw. */
++      if (preview.kind !== "external") continue;
++      byUrl.set(url, { url, phrases: [phrase], blockIds: [block.id], preview });
++    }
++  }
++  return [...byUrl.values()];
++}
++
++/** The cited work a link's address belongs to, if Bibliography has one — the *In Bibliography* press. */
++export interface LinkableWork {
++  id: string;
++  /** Absent on a visitor's row whose address the public boundary refused (src/public/dto.ts). */
++  url?: string | undefined;
++  linkFrom: CitationLinkFrom;
++}
++
++/**
++ * **The paper an address names, as one comparable string**, or `null`: a DOI
++ * lower-cased (DOIs are case-insensitive), an arXiv id without its version.
++ * Read by `describeLink`, the same reader the prose's link card uses.
++ */
++function paperKey(citation: Citation | null): string | null {
++  if (citation === null) return null;
++  if (citation.label === "DOI") return `doi:${citation.id.toLowerCase()}`;
++  if (citation.label === "arXiv") return `arxiv:${citation.id.replace(/v\d+$/, "")}`;
++  return null;
++}
++
++/**
++ * **Bibliography's work at this address**, or `null`. Two ways to match:
++ *
++ * 1. **The same address**, by `sameTarget`, which ignores the fragment and may
++ *    over-match (src/urls.ts) — costing only an *In Bibliography* on an
++ *    address that differs by `#…`.
++ * 2. **The same paper**, for a work whose link Bibliography made from an
++ *    identifier: it rewrites a publisher's DOI page to `doi.org/…` and an arXiv
++ *    PDF to `/abs/…` (src/bibliography.ts § `fromAnchor`), so the prose's
++ *    `science.org/doi/10.1126/…` and the row's `doi.org/10.1126/…` are one work
++ *    at two addresses. GPT Sol's F2 on plan 261011d.
++ *
++ * A Scholar search is never a match: it is a search for the title, not an
++ * address the article gave.
++ */
++export function workAt(link: Pick<OutboundLink, "url" | "preview">, works: readonly LinkableWork[]): LinkableWork | null {
++  const paper = paperKey(link.preview.citation);
++  for (const work of works) {
++    if (work.linkFrom === "search" || work.url === undefined) continue;
++    if (sameTarget(link.url, work.url)) return work;
++  }
++  if (paper === null) return null;
++  for (const work of works) {
++    if ((work.linkFrom !== "doi" && work.linkFrom !== "arxiv") || work.url === undefined) continue;
++    const theirs = describeLink(work.url, null);
++    if (theirs.kind === "external" && paperKey(theirs.citation) === paper) return work;
++  }
++  return null;
++}
+diff --git a/src/web/params.ts b/src/web/params.ts
+index b20f4ecce..7f5f4ee0c 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -1424,15 +1424,18 @@ export function learnInSearch(search: string): LearnView {
+  * press and only then — the mode's button, the sub-mode's command-bar row or
+  * its chip: a press landing on Bibliography arms the `bibliography` list, on
+  * Reception the `reception` search, on Claims the `sources-claims` list
+- * (activation.ts § `activationForSources`). Back, a pasted link and a
++ * (activation.ts § `activationForSources`). Links, the article's own
++ * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
++ * off the blocks in the browser. Back, a pasted link and a
+  * last-view restore arrive here and buy nothing.
+  */
+-export const SOURCES_VIEWS = ["bibliography", "reception", "claims"] as const;
++export const SOURCES_VIEWS = ["bibliography", "links", "reception", "claims"] as const;
+ export type SourcesView = (typeof SOURCES_VIEWS)[number];
+ /**
+  * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
++ * Bibliography and Links have a panel each.
+  */
+-export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography">;
++export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "links">;
+ 
+ export const sourcesParam = createParser<SourcesView>({
+   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 79d5e3011..732413de0 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -3753,6 +3753,8 @@ export function Reader({
+         if (!owner)
+           return artefacts?.bibliography || artefacts?.reception || artefacts?.sourcesClaims ? (
+             <VisitorSourcesBand
++              blocks={article.blocks}
++              sourceUrl={article.meta.url ?? null}
+               bibliography={artefacts.bibliography ?? null}
+               reception={artefacts.reception ?? null}
+               claimList={artefacts.sourcesClaims ?? null}
+@@ -3768,6 +3770,9 @@ export function Reader({
+         return (
+           <SourcesBand
+             slug={slug}
++            blocks={article.blocks}
++            sourceUrl={article.meta.url ?? null}
++            fromPdf={article.meta.source === "pdf"}
+             bibliographyRead={owner.bibliography}
+             onJump={bandJump}
+             blockOrder={blockOrder}
+diff --git a/src/web/sources-counts.ts b/src/web/sources-counts.ts
+index cf63509b8..96b67794e 100644
+--- a/src/web/sources-counts.ts
++++ b/src/web/sources-counts.ts
+@@ -117,6 +117,8 @@ export function claimsCount(
+ /** **The three chips' numbers.** Bibliography's is `null` while there is no list to count. */
+ export interface SourcesCounts {
+   bibliography: number | null;
++  /** The distinct web addresses the article links to (outbound-links.ts). */
++  links: number;
+   reception: number;
+   claims: ClaimsCount;
+ }
+@@ -124,6 +126,8 @@ export interface SourcesCounts {
+ export interface SourcesCountsInput {
+   /** The works cited, or `null` while there is no list (not made, or still loading). */
+   works: readonly unknown[] | null;
++  /** Links' rows, `outboundLinks` over the blocks — always there, since nothing makes them. */
++  links: readonly unknown[];
+   reception: AnyReception | null;
+   /** Claims' list of the article's claims, or `null` when none is read. */
+   listed: readonly ListedClaim[] | null;
+@@ -141,6 +145,7 @@ export function sourcesCounts(input: SourcesCountsInput): SourcesCounts {
+   const claims = claimsSelection(input.reception, threads, input.relevance, input.thread);
+   return {
+     bibliography: input.works === null ? null : input.works.length,
++    links: input.links.length,
+     reception: reception.shown.length,
+     claims: claimsCount(input.listed, input.checked, claims.shown.length),
+   };
+diff --git a/src/web/styles/voices.css b/src/web/styles/voices.css
+index c67dd0587..62e838ffd 100644
+--- a/src/web/styles/voices.css
++++ b/src/web/styles/voices.css
+@@ -74,6 +74,8 @@
+     .rcp-group-quote,
+     /* "first cited" — the words the article cites the work with */
+     .cite-at,
++    /* Sources › Links: the words the article links an address with */
++    .link-phrase,
+     /* the search hit card's passage */
+     .tip-hit-quote,
+     /* Timeline's date phrase: the article's own characters, wrapped so our
+diff --git a/src/web/sub-modes.ts b/src/web/sub-modes.ts
+index 5509d244e..96c1e9a55 100644
+--- a/src/web/sub-modes.ts
++++ b/src/web/sub-modes.ts
+@@ -261,6 +261,15 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
+       "citations", "references", "works cited", "refs", "reference list", "cited works",
+     ],
+   },
++  /* The article's own hyperlinks, read off its markup in the browser: no model,
++     nothing stored, nothing armed. Greg, 2026-10-10 (spya-s5mzkd): *"Maybe
++     sources should have a submode for external links as well"*. Plan 261011d. */
++  links: {
++    label: "Links",
++    description: "Where this piece links to: every web address in its text, in the order you meet it",
++    experimental: false,
++    aliases: ["hyperlinks", "external links", "outbound links", "web links", "urls"],
++  },
+   reception: {
+     label: "Reception",
+     description: "What others say about this piece: replies, reviews, and work that cites it",
+diff --git a/tests/helpers/sources-head.ts b/tests/helpers/sources-head.ts
+index e897c2296..f6de85864 100644
+--- a/tests/helpers/sources-head.ts
++++ b/tests/helpers/sources-head.ts
+@@ -18,6 +18,8 @@ export function sourcesHead(args: {
+   /** The owner's slug, so a press arms; `null` for a visitor. */
+   ownerSlug: string | null;
+   works?: readonly unknown[] | null;
++  /** Links' rows (outbound-links.ts); none unless a test gives some. */
++  links?: readonly unknown[];
+   reception?: Reception | PublicReception | null;
+   /** The owner's claims-list hook, or a visitor's list. */
+   claimList?:
+@@ -31,6 +33,7 @@ export function sourcesHead(args: {
+     list.kind === "owner" && list.status === "ready" ? checkedSources(list.checks ?? [], list.claimList) : 0;
+   const counts = sourcesCounts({
+     works: args.works ?? null,
++    links: args.links ?? [],
+     reception: args.reception ?? null,
+     listed: listedClaims(list.kind === "owner" ? { kind: "owner", status: list.status, claimList: list.claimList } : list),
+     checked,
+diff --git a/tests/links-panel.test.tsx b/tests/links-panel.test.tsx
+new file mode 100644
+index 000000000..3b27f4af5
+--- /dev/null
++++ b/tests/links-panel.test.tsx
+@@ -0,0 +1,101 @@
++// @vitest-environment jsdom
++/**
++ * **Sources › Links, drawn** — LinksPanel.tsx and its chip. Plan
++ * docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md.
++ *
++ * The rows themselves are tests/outbound-links.test.ts; this is what a reader
++ * sees of them: the chip's count and its spoken name, a row's link out, its
++ * jumps, *In Bibliography*, the two empty sentences, and that a press on the
++ * chip arms nothing.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { sourcesHead } from "./helpers/sources-head.js";
++import type { BlockId } from "../src/types.js";
++import { LINKS_NONE, LINKS_NONE_PDF, LinksPanel } from "../src/web/LinksPanel.js";
++import { outboundLinks } from "../src/web/outbound-links.js";
++import { activationForSources, subModeGenerates } from "../src/web/activation.js";
++import type { SourcesView } from "../src/web/params.js";
++
++const SELF = "https://essays.example/on-minds";
++const BLOCKS = [
++  { id: "spya-aaaaaa" as BlockId, html: '<p>See <a href="https://www.science.org/doi/10.1126/science.aan8871">the paper</a>.</p>' },
++  { id: "spya-bbbbbb" as BlockId, html: '<p><a href="https://en.wikipedia.org/wiki/Panpsychism">panpsychism</a> and <a href="https://www.science.org/doi/10.1126/science.aan8871">Dehaene 2017</a></p>' },
++];
++
++let root: Root;
++let host: HTMLDivElement;
++beforeEach(() => {
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++function draw(props: { links: ReturnType<typeof outboundLinks>; fromPdf?: boolean; onOpenWork?: (id: string) => void; jumps?: BlockId[] }) {
++  const jumps = props.jumps ?? [];
++  act(() =>
++    root.render(
++      createElement(LinksPanel, {
++        links: props.links,
++        fromPdf: props.fromPdf ?? false,
++        works: [{ id: "w1", url: "https://doi.org/10.1126/science.aan8871", linkFrom: "doi" }],
++        head: sourcesHead({ view: "links", onView: () => {}, ownerSlug: null, links: props.links }),
++        onJump: (id) => jumps.push(id),
++        onOpenWork: props.onOpenWork ?? (() => {}),
++      }),
++    ),
++  );
++}
++
++describe("LinksPanel", () => {
++  it("draws one row per address, each title a link out to a new tab", () => {
++    draw({ links: outboundLinks(BLOCKS, SELF) });
++    const rows = host.querySelectorAll("li.link-item");
++    expect(rows).toHaveLength(2);
++    const out = rows[0]?.querySelector<HTMLAnchorElement>(".cite-title a");
++    expect(out?.getAttribute("href")).toBe("https://www.science.org/doi/10.1126/science.aan8871");
++    expect(out?.target).toBe("_blank");
++    expect(out?.rel).toBe("noreferrer noopener");
++    expect(rows[0]?.textContent).toContain("also linked as “Dehaene 2017”");
++    expect(rows[0]?.textContent).toContain("science.org · DOI 10.1126/science.aan8871");
++    expect(rows[0]?.textContent).toContain("linked in 2 paragraphs");
++  });
++
++  it("offers In Bibliography on the row whose paper Bibliography lists, and opens that work", () => {
++    const opened: string[] = [];
++    draw({ links: outboundLinks(BLOCKS, SELF), onOpenWork: (id) => opened.push(id) });
++    const rows = host.querySelectorAll("li.link-item");
++    expect(rows[1]?.querySelector(".link-in-bib")).toBeNull();
++    const press = rows[0]?.querySelector<HTMLButtonElement>(".link-in-bib");
++    act(() => press?.click());
++    expect(opened).toEqual(["w1"]);
++  });
++
++  it("counts the addresses on the chip, and says what it counts", () => {
++    draw({ links: outboundLinks(BLOCKS, SELF) });
++    const chip = [...host.querySelectorAll<HTMLButtonElement>("button[role=radio]")].find((b) => b.textContent?.startsWith("Links"));
++    expect(chip?.getAttribute("aria-label")).toBe("Links, 2 addresses");
++    expect(chip?.getAttribute("aria-checked")).toBe("true");
++  });
++
++  it("says a PDF has none only when it knows the piece is one", () => {
++    draw({ links: [], fromPdf: true });
++    expect(host.textContent).toContain(LINKS_NONE_PDF);
++    draw({ links: [], fromPdf: false });
++    expect(host.textContent).toContain(LINKS_NONE);
++    expect(host.textContent).not.toContain("PDF");
++  });
++});
++
++describe("a press on Links", () => {
++  it("arms nothing and is not marked as starting work", () => {
++    const view: SourcesView = "links";
++    expect(activationForSources(view)).toBeNull();
++    expect(subModeGenerates({ mode: "sources", view })).toBe(false);
++  });
++});
+diff --git a/tests/outbound-links.test.ts b/tests/outbound-links.test.ts
+new file mode 100644
+index 000000000..6b94c71d1
+--- /dev/null
++++ b/tests/outbound-links.test.ts
+@@ -0,0 +1,166 @@
++// @vitest-environment jsdom
++/**
++ * **Sources › Links' rows** — src/web/outbound-links.ts. Plan
++ * docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md.
++ *
++ * The last block runs the same fixtures through chat's `articleLinks`
++ * (src/chat-tools.ts), the first parse of the article's links and the scope
++ * check behind `/api/link-preview`: the two must agree on which external
++ * addresses an article has, bar the one deliberate difference (an address
++ * carrying a user name or password, which this list does not draw).
++ */
++import { describe, expect, it } from "vitest";
++import { articleLinks } from "../src/chat-tools.js";
++import type { Block } from "../src/types.js";
++import { describeLink, type ExternalPreview } from "../src/web/link-preview.js";
++import { type LinkableWork, MAX_PHRASE_CHARS, outboundLinks, workAt } from "../src/web/outbound-links.js";
++
++const SELF = "https://www.noemamag.com/the-mythology-of-conscious-ai/";
++const b = (id: string, html: string) => ({ id, html });
++
++describe("outboundLinks", () => {
++  it("gives one row per address, in the order a reader first meets it", () => {
++    const rows = outboundLinks(
++      [
++        b("spya-aaaaaa", '<p><a href="https://b.example/x">second</a> and <a href="https://a.example/">first</a></p>'),
++        b("spya-bbbbbb", '<p>Again <a href="https://a.example/">first</a>.</p>'),
++      ],
++      SELF,
++    );
++    expect(rows.map((r) => r.url)).toEqual(["https://b.example/x", "https://a.example/"]);
++    expect(rows[1]?.blockIds).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
++  });
++
++  it("keeps every phrase the article links one address under, each once", () => {
++    const rows = outboundLinks(
++      [
++        b("spya-aaaaaa", '<p><a href="https://philpapers.org/rec/BUTAAT">Butlin et al.</a></p>'),
++        b("spya-bbbbbb", '<p><a href="https://philpapers.org/rec/BUTAAT">the  report</a> and <a href="https://philpapers.org/rec/BUTAAT">Butlin et al.</a></p>'),
++      ],
++      SELF,
++    );
++    expect(rows).toHaveLength(1);
++    expect(rows[0]?.phrases).toEqual(["Butlin et al.", "the report"]);
++    expect(rows[0]?.blockIds).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
++  });
++
++  it("says what the href says, through describeLink", () => {
++    const [row] = outboundLinks([b("spya-aaaaaa", '<p><a href="https://arxiv.org/abs/2308.08708">a survey</a></p>')], SELF);
++    expect(row?.preview).toMatchObject({ kind: "external", host: "arxiv.org", sameSite: false });
++    expect(row?.preview.citation).toEqual({ label: "arXiv", id: "2308.08708" });
++  });
++
++  it("leaves out what goes nowhere outside the piece", () => {
++    const rows = outboundLinks(
++      [
++        b(
++          "spya-aaaaaa",
++          '<p><a href="#spya-bbbbbb">that section</a>' +
++            ' <a href="#fn1" data-spya-note-ref="spya-note-0000000001">1</a>' +
++            ` <a href="${SELF}">this essay</a> <a href="${SELF}#spya-bbbbbb">here</a>` +
++            ' <a href="mailto:x@y.z">write</a> <a href="javascript:alert(1)">go</a>' +
++            ' <a href="https://ok.example/"><img src="https://ok.example/i.png" alt=""></a>' +
++            ' <a href="https://user:pw@secret.example/">secret</a>' +
++            ' <a href="">empty</a></p>',
++        ),
++      ],
++      SELF,
++    );
++    expect(rows).toEqual([]);
++  });
++
++  it("resolves a relative href against the article's address, and drops it for an upload", () => {
++    const html = [b("spya-aaaaaa", '<p><a href="/other">there</a></p>')];
++    expect(outboundLinks(html, "https://example.com/essays/x").map((r) => r.url)).toEqual(["https://example.com/other"]);
++    expect(outboundLinks(html, null)).toEqual([]);
++  });
++
++  it("ignores a <base> inside a block", () => {
++    const rows = outboundLinks(
++      [b("spya-aaaaaa", '<p><base href="https://evil.example/"><a href="/other">there</a></p>')],
++      "https://example.com/x",
++    );
++    expect(rows.map((r) => r.url)).toEqual(["https://example.com/other"]);
++  });
++
++  it("does not see markup that is only an attribute's value", () => {
++    const rows = outboundLinks(
++      [b("spya-aaaaaa", '<p data-note="&lt;a href=&quot;https://evil.example/&quot;&gt;x&lt;/a&gt;">a note</p>')],
++      SELF,
++    );
++    expect(rows).toEqual([]);
++  });
++
++  it("clips a long phrase at a word, as chat's tool does", () => {
++    const long = "word ".repeat(40).trim();
++    const [row] = outboundLinks([b("spya-aaaaaa", `<p><a href="https://a.example/">${long}</a></p>`)], SELF);
++    expect(row?.phrases[0]?.endsWith("…")).toBe(true);
++    expect(row?.phrases[0]?.length).toBeLessThanOrEqual(MAX_PHRASE_CHARS + 1);
++  });
++
++  it("says nothing about leaving the site when the article came from nowhere", () => {
++    const [row] = outboundLinks([b("spya-aaaaaa", '<p><a href="https://a.example/">a</a></p>')], null);
++    expect(row?.preview.sameSite).toBeNull();
++  });
++});
++
++describe("workAt — the In Bibliography join", () => {
++  const works: LinkableWork[] = [
++    { id: "w1", url: "https://doi.org/10.1126/Science.aan8871", linkFrom: "doi" },
++    { id: "w2", url: "https://scholar.google.com/scholar?q=Some+title", linkFrom: "search" },
++    { id: "w3", url: "https://philpapers.org/rec/BUTAAT", linkFrom: "article" },
++    { id: "w4", url: "https://arxiv.org/abs/2308.08708", linkFrom: "arxiv" },
++    { id: "w5", linkFrom: "article" },
++  ];
++  const at = (url: string) => ({ url, preview: describeLink(url, SELF) as ExternalPreview });
++
++  it("finds the work at the same address, ignoring a fragment", () => {
++    expect(workAt(at("https://philpapers.org/rec/BUTAAT#abstract"), works)?.id).toBe("w3");
++    expect(workAt(at("https://doi.org/10.1126/Science.aan8871"), works)?.id).toBe("w1");
++  });
++
++  it("finds the same paper at a publisher's DOI page, whatever the DOI's case", () => {
++    /* Bibliography rewrites a publisher's DOI link to doi.org (src/bibliography.ts § fromAnchor). */
++    expect(workAt(at("https://www.science.org/doi/10.1126/science.aan8871"), works)?.id).toBe("w1");
++  });
++
++  it("finds the same arXiv paper at its PDF, whatever the version", () => {
++    expect(workAt(at("https://arxiv.org/pdf/2308.08708v3"), works)?.id).toBe("w4");
++  });
++
++  it("never matches a Scholar search, which is not an address the article gave", () => {
++    expect(workAt(at("https://scholar.google.com/scholar?q=Some+title"), works)).toBeNull();
++  });
++
++  it("is null for an address no work has, and for a different paper", () => {
++    expect(workAt(at("https://elsewhere.example/"), works)).toBeNull();
++    expect(workAt(at("https://arxiv.org/abs/2308.08709"), works)).toBeNull();
++  });
++});
++
++describe("agrees with chat's articleLinks on the external addresses", () => {
++  /* The fixtures chat's own suite uses (tests/chat-tools.test.ts § articleLinks),
++     and the corpus shapes this list draws. */
++  const FIXTURES: Array<{ base: string | null; html: string }> = [
++    { base: SELF, html: '<p>Google’s engineer <a href="https://www.washingtonpost.com/technology/2022/06/11/google-ai-lamda-blake-lemoine/">claimed</a> otherwise.</p>' },
++    { base: SELF, html: `<p><a href="${SELF}">The Mythology Of Conscious AI</a> <a href="${SELF}?page=2">page two</a> <a href="#gone">that bit</a></p>` },
++    { base: null, html: '<p><a href="mailto:x@y.z">write</a> <a href="javascript:alert(1)">go</a> <a href="tel:+15551234">ring</a> <a href="https://ok.example/">read</a></p>' },
++    { base: "https://example.com/essays/x", html: '<p><a href="/other">there</a> <a HREF="https://UPPER.example/">loud</a></p>' },
++    { base: null, html: '<p><a href="/other">there</a></p>' },
++    { base: "https://example.com/x", html: '<p><base href="https://evil.example/"><a href="/other">there</a></p>' },
++    { base: SELF, html: '<p><a href="https://ok.example/"><img src="x.png" alt=""></a> <a href="https://ok.example/">   </a></p>' },
++  ];
++
++  for (const [i, { base, html }] of FIXTURES.entries()) {
++    it(`fixture ${i}`, () => {
++      const block = { id: "spya-aaaaaa", html, text: html.replace(/<[^>]*>/g, "") } as unknown as Block;
++      const chat = new Set(
++        articleLinks([block], base ?? undefined)
++          .map((l) => l.url)
++          .filter((u): u is string => u !== null),
++      );
++      const ours = new Set(outboundLinks([block], base).map((r) => r.url));
++      expect(ours).toEqual(chat);
++    });
++  }
++});
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index 50fdb53cd..c004e73e6 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -2200,8 +2200,10 @@ describe("a signed-out browser on a shared document", () => {
+       "timeline",
+       "skim",
+       "faq",
+-      /* Sources in each of its three sub-modes, and the two old words. */
++      /* Sources in each of its four sub-modes, and the two old words. Links
++         (plan 261011d) is read off the blocks and must ask nothing at all. */
+       "sources",
++      "sources&sources=links",
+       "sources&sources=reception",
+       "sources&sources=claims",
+       "citations",
+diff --git a/tests/reception-navigation.test.tsx b/tests/reception-navigation.test.tsx
+index 699409379..a505da246 100644
+--- a/tests/reception-navigation.test.tsx
++++ b/tests/reception-navigation.test.tsx
+@@ -106,6 +106,7 @@ function Page() {
+   if (route.kind !== "read") return createElement("p", null, "not found");
+   if (mode !== "sources") return createElement("p", null, `band: ${mode}`);
+   return createElement(VisitorSourcesBand, {
++    blocks: [], sourceUrl: null,
+     bibliography: citations, reception, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
+     publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: (workId) => openedWorks.push(workId),
+   });
+diff --git a/tests/rewrite-hold.test.tsx b/tests/rewrite-hold.test.tsx
+index dbcb751b1..8f9532f26 100644
+--- a/tests/rewrite-hold.test.tsx
++++ b/tests/rewrite-hold.test.tsx
+@@ -290,6 +290,9 @@ function SourcesOuter({ show }: { show: boolean }) {
+   return show
+     ? createElement(SourcesBand, {
+         slug: SLUG,
++        blocks: BLOCKS,
++        sourceUrl: null,
++        fromPdf: false,
+         bibliographyRead: read,
+         onJump: noop,
+         blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),

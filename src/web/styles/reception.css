@@ -55,8 +55,8 @@
   padding: 0 0.7rem 0.7rem;
 }
 
-/* ---- Bibliography | Reception | Claims ----
-   Sources' three sub-modes (SourcesMode.tsx § SourcesViews; Debate's
+/* ---- Bibliography | Links | Reception | Claims ----
+   Sources' four sub-modes (SourcesMode.tsx § SourcesViews; Debate's
    Reception | Claims until 2026-10-09), drawn with the part-switcher every mode
    shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the part-switcher),
    so the segmented controls cannot drift apart. The row is the band's head
@@ -340,6 +340,16 @@
   margin-left: auto;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+}
+/* The gist on its own line under the angle, lined up with the words after the
+   icon; two lines then an ellipsis, from `.origin-chat-gist` (plan 261011c). */
+.rcp-angle:has(.rcp-angle-gist) { flex-wrap: wrap; }
+.rcp-angle-gist {
+  flex: 1 0 100%;
+  min-width: 0;
+  padding-left: calc(12px + 0.35rem);
+  color: var(--ink-faint);
+  font-size: 0.78rem;
 }
 @media (pointer: coarse) {
   .rcp-lens-send,

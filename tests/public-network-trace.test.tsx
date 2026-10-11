@@ -1488,10 +1488,11 @@ describe("a signed-out browser on a shared document", () => {
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_WORK);
     /* A visitor has no verdict and no Dig deeper answer, so never the model's
-       sentence about the work (plan 261003j) — only that we have not read it. */
+       sentence about the work (plan 261003j) — only, once above the list,
+       that we have not read the works (plan 261011c). */
     expect(text).not.toContain("The theory the piece argues against.");
     expect(text).toContain("Tononi");
-    expect(text).toContain("We have not read this work");
+    expect(text.split("we have read none of these works")).toHaveLength(2);
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Sources is for whoever added this article");
@@ -1572,14 +1573,14 @@ describe("a signed-out browser on a shared document", () => {
        Claims, a press away — and the press asks the server nothing. */
     expect(text).not.toContain("Somebody else answers what it claims.");
     expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
-    /* The old `?mode=debate` link landed on Reception, Sources' second
-       chip since 2026-10-09 (router.ts § `liftLegacySources`). */
+    /* The old `?mode=debate` link lands on Reception
+       (router.ts § `liftLegacySources`). */
     expect(new URLSearchParams(location.search).get("mode")).toBe("sources");
     expect(new URLSearchParams(location.search).get("sources")).toBe("reception");
     const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".rcp-views [role='radio']") ?? [])];
     /* No bibliography on this payload, so Bibliography's chip has no count. */
     expect(chips[0]?.textContent, "the Bibliography chip, with no count").toBe("Bibliography");
-    const claims = chips[2];
+    const claims = chips.find((chip) => chip.textContent?.startsWith("Claims"));
     expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
     await act(async () => claims?.click());
     await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
@@ -2200,8 +2201,10 @@ describe("a signed-out browser on a shared document", () => {
       "timeline",
       "skim",
       "faq",
-      /* Sources in each of its three sub-modes, and the two old words. */
+      /* Sources in each of its four sub-modes, and the two old words. Links
+         (plan 261011d) is read off the blocks and must ask nothing at all. */
       "sources",
+      "sources&sources=links",
       "sources&sources=reception",
       "sources&sources=claims",
       "citations",

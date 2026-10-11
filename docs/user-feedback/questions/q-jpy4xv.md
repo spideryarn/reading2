@@ -1,10 +1,11 @@
 ---
 id: q-jpy4xv
 report: spya-j4sg9g
-status: open
+status: answered
 asked: 2026-10-10
 title: May I sharpen the rule for when an agent closes your question?
 refs: docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md (§ The rule proposal) · docs/plans/261010h-plan-review-sol.md (P2-3) · docs/project/feedback-reports.md § To act on one, step 3 · docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md · SPIDERYARN-READING2-GE · qi-yf62kckg
+acted: spya-evextp
 ---
 You answered A to q-rstqvz three times. Every reply was stored, but agents kept the question open while A was still to be built, even though you had nothing more to decide. The rule agents follow says to leave a question open "when his reply asks for more", and that was read loosely. May I change it?
 
@@ -25,3 +26,9 @@ The wording I would put in its place:
 "set status: answered once he owes no further reply, even if building what he chose is still to come: unfinished work belongs in the queue, not in an open question. If a follow-up does remain, rewrite the short part above Details so it holds the current question, its options and your recommendation (the dialog then shows the thread as Needs a decision again); if the follow-up is materially a different question, set this one answered and ask that in a new file;"
 
 Why it is your call: that doc's wording is a rule other agents follow, and those are changed only with your approval. What would decide it: A stops settled questions sitting in Needs a decision; B costs nothing now and relies on the dialog fix alone.
+
+Greg's answer, 2026-10-11 (reply spya-evextp, in the Feedback dialog):
+
+> A
+
+Done: step 3 of docs/project/feedback-reports.md § Asking Greg a question, and acting on his answer now carries the wording above, by the feedback sweep of 2026-10-11 (queue item qi-r3mn3bx4).

@@ -289,12 +289,13 @@ describe("referee mode parameters", () => {
 describe("Sources' sub-mode, and Reception's order", () => {
   /**
    * **`?sources=` is which list the band draws** — Bibliography (the
-   * default, and absent from the address), Reception or Claims. It replaced
+   * default, and absent from the address), Links, Reception or Claims. It replaced
    * Debate's `?debate=` on 2026-10-09 (plan 261009l); an old one is lifted
    * before anything parses it (tests/sources-old-addresses.test.ts).
    */
-  it("reads the three sub-modes, and anything else as Bibliography", () => {
-    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "reception", "claims"]);
+  it("reads the four sub-modes, and anything else as Bibliography", () => {
+    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "links", "reception", "claims"]);
+    expect(sourcesParam.parse("links")).toBe("links");
     expect(sourcesParam.parse("claims")).toBe("claims");
     expect(sourcesParam.parse("reception")).toBe("reception");
     expect(sourcesParam.parse("bibliography")).toBe("bibliography");

@@ -1,5 +1,5 @@
 ---
-keywords: peer review citations references bibliography sources works cited papers links doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
+keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
 related: mode-referee, faq-beyond-the-article
 ---
 
@@ -7,16 +7,17 @@ related: mode-referee, faq-beyond-the-article
 
 A piece sits among other people’s work: the works it builds on, and what others have said about it
 since. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;
+**Links** lists every web address the piece itself links to;
 **Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,
 so you can check what others say about each one. Every source links out, so you can check it rather
 than take our word for it.
 
-![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
+![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with its two bars, and where the piece first cites it.")
 
 ## When to use it
 
 For an academic paper or a report, where the questions are “what is this built on, and where do I
-find it?” and “what have others made of it?”. Three buttons at the top choose the view; the number
+find it?” and “what have others made of it?”. Four buttons at the top choose the view; the number
 on each is how much it has to show. Bibliography is usually prepared in the background when the
 article is added; if it was not, pressing Bibliography makes it. Reception and Claims are never
 made in the background: pressing their view makes them (as does running them again from the
@@ -34,8 +35,10 @@ for that.
 
 **Bibliography**
 
-- Each row says what we have read of the work, which is usually nothing: the sentence on what the
-  piece uses it for is written from the article, not from the cited work.
+- When a visible row has no more-specific reading line, one line above the list says we have read
+  none of those works, only the article that cites them. A row says more only when that changes: a
+  page found for it, a search extract read, or the paper itself read. The sentence on what the piece
+  uses a work for is written from the article, not from the cited work.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the
   model’s memory of the work, not a citation count. New lists give a number only when the model is
   confident it knows the work; a low number then means a work it knows and thinks minor. If
@@ -73,6 +76,19 @@ for that.
   **influence**. The slider hides the works that score lowest on relevance and influence together,
   relevance counting double; a work whose influence is unknown is judged on its relevance alone
   when available. Ordered by influence, the unknown ones come last, the most relevant first.
+
+**Links**
+
+- Every web address the article’s own text links to, one row each, in the order you meet them in
+  the piece. Each row is the article’s words for the link, then the site it goes to (and a DOI or
+  arXiv number when the address carries one), then the paragraphs that link it, each a jump to that
+  paragraph. Press the words to open the page in a new tab.
+- It is read straight off the article in your browser: no AI, no search, and nothing is fetched, so
+  it is there as soon as the article is and costs nothing. Links to another part of the piece,
+  footnote markers, and links with no words of their own (around a picture) are left out.
+- **In Bibliography**, on a row, means Bibliography lists a work at that address, or the same paper
+  at another address; press it to open that work’s row.
+- An article read from a PDF has no links of its own: its addresses, if any, are in Bibliography.
 
 **Reception**
 

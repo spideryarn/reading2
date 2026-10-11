@@ -486,8 +486,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["chronology", "dates", "events", "history", "sequence", "chronological", "time line", "order of events"],
     experimental: true,
   },
-  /* **Citations and Debate until 2026-10-09**, now this mode's three
-     sub-modes (src/web/sub-modes.ts § `SOURCES_SUB_MODES`, where the
+  /* **Citations and Debate until 2026-10-09**, now two of this mode's four
+     sub-modes (Links joined them on 2026-10-11, plan 261011d) (src/web/sub-modes.ts § `SOURCES_SUB_MODES`, where the
      retired words and the bibliography words are the sub-mode rows' own
      aliases, so each opens the view it means). Called Peer review until later
      that day.
@@ -521,8 +521,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          press, per claim (src/reception.ts § `admitSourcesClaimCheck`).
        - "Every source links out": every Reception and checked-claim row is a
          page with its address (ReceptionAndClaimsPanel.tsx § Row).
+       - Links, "read off the article's own markup in your browser … nothing
+         fetched": src/web/outbound-links.ts parses the blocks the prose draws,
+         and LinksPanel.tsx draws no hover card and asks no server (plan 261011d).
        No price — mode.md § The card on the button. */
-    how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
+    how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Links is every web address the article's own text links to, read off its markup in your browser with no model and nothing fetched. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
     /* "peer review" left Referee's aliases on 2026-10-09 for this mode, then
        called Peer review (plan 261009l § The name). It stays here as the
        mode's old name, so typing it still finds this mode first; Referee has

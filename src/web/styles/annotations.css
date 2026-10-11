@@ -1219,6 +1219,14 @@ td.text.has-hit[data-hues="8"] {
   margin: 0 0 0.6rem;
   font-size: 0.81rem;
 }
+/* Under the link, which then gives up its own bottom margin to it (plan 261011c). */
+.cmt-open-thread:has(+ .cmt-thread-gist) { margin-bottom: 0.15rem; }
+.cmt-thread-gist {
+  margin: 0 0 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.81rem;
+  line-height: 1.4;
+}
 
 .cmt-error {
   font-size: 0.88rem;
