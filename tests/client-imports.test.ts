@@ -318,6 +318,11 @@ const SHARED = new Set([
      261010c). Types and three constants, no imports: the same wire-contract
      argument as `admin-vouchers.js`. */
   "admin-author-gifts.js",
+  /* How an email address is stored and compared, and the `Name <address>`
+     split the admin address boxes apply on paste (plan 261011k). Pure, and
+     imports nothing — its header says so, which is why the server's voucher
+     tables and the browser's boxes can share one rule. */
+  "email-address.js",
   /* The `/admin/costs` wire shape and the pure filter, group and pivot over
      it, shared with the analysis script so a figure has one definition. Imports
      `step-order.js` and nothing else; `category` is a string the server fills
