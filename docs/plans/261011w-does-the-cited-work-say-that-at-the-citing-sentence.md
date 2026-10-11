@@ -231,7 +231,7 @@ the matched page; matching `why` as well as titles).
 as the card's button sends it (anchored on the citing paragraph, `askDoesItSayThat`). The four
 local articles with a DOI or arXiv citation; $0.54 for nine model calls. Results file:
 `evals/results/read-cited-work-v1-2026-10-11T12-45-35-631Z.json`; investigation:
-[does chat read the cited work?](../investigations/261011c-does-chat-read-the-cited-work.md).
+[does chat read the cited work?](../investigations/261011d-does-chat-read-the-cited-work.md).
 
 | Article · work | Tools | Paper read | What the answer said |
 |---|---|---|---|
