@@ -494,7 +494,7 @@ the addendum box's send stay neutral. `tests/feedback-dialog-styles.test.ts` hol
 >
 > — Greg, 2026-10-10 (`spya-saz0yw`)
 
-**For an admin, on their own reports that have not ended**: *Open* and *Needs a decision*, never
+**For an admin, on their own reports that have not ended**: *Open* and *Waiting*, never
 *Shipped* or *Set aside*. Each such row in the admin's Earlier tab has **Add to this report**, which
 opens a box like the reply box (it grows, it has its own microphone, keeper
 `feedback-addendum:<report id>`, and a half-written one holds the page against a reload). What was

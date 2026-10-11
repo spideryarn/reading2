@@ -7936,11 +7936,11 @@ export type EarlierFeedbackShow = (typeof EARLIER_FEEDBACK_SHOWS)[number];
  * - `shipped`: its notes combine to shipped (a change went out);
  * - otherwise `aside` (shown *Set aside*): an admin pressed Ignore on
  *   `/admin/feedback`, or its notes say declined;
- * - otherwise `waiting` (shown *Needs a decision*): its notes say awaiting;
+ * - otherwise `waiting` (shown *Waiting* on the row): its notes say awaiting;
  * - otherwise `open`: no note yet, so it is new or in hand.
  *
- * The order is the rule: an ignored report no longer asks for a decision, and
- * a shipped one stays shipped whatever else is true of it. The one place the
+ * The order is the rule: an ignored report is no longer waiting, and a shipped
+ * one stays shipped whatever else is true of it. The one place the
  * rule is executed is src/store/pg-feedback.ts § `statusOf`.
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */

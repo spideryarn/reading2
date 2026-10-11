@@ -292,8 +292,8 @@ a.fb-earlier-page:focus-visible {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* "Waiting" is the one status that asks something of the reader: full
-   ink and the same weight Shipped has, with no colour of its own. */
+/* An unresolved "Waiting" report stays prominent: full ink and the same
+   weight Shipped has, with no colour of its own. */
 .fb-earlier-waiting {
   color: var(--ink);
   font-weight: 600;

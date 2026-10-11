@@ -123,7 +123,6 @@ import {
   shortcutTitle,
   threadShowing,
   useEarlierFeedback,
-  waitingThreads,
 } from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
@@ -1305,7 +1304,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
                 choose("earlier");
               }}
             >
-              Needs a decision <span className="fb-show-count">{waitingQuestionCount ?? waitingThreads(liveQuestions)}</span>
+              Needs a decision <span className="fb-show-count">{waitingQuestionCount}</span>
             </button>
           ) : null}
         </div>

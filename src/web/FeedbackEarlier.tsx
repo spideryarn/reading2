@@ -40,7 +40,7 @@
  * > — Greg, 2026-10-06 (`spya-cnbv8f`)
  *
  * So **an admin's tab** says one of four things about each report (Open ·
- * Needs a decision · Set aside · Shipped), numbers it (`#212`), and carries
+ * Waiting · Set aside · Shipped), numbers it (`#212`), and carries
  * the one line its note says about it. It reads a route of its own under
  * `/api/admin/`; every other reader's tab, and the route it reads, are as they
  * were. `admin` here is the cosmetic flag (src/admin.ts): it picks which route
@@ -1035,8 +1035,8 @@ const ADMIN_SHOW_WORD: Record<AdminEarlierFeedbackShow, string> = {
 
 const ADMIN_EMPTY: Record<AdminEarlierFeedbackShow, string> = {
   all: "You haven't sent us any feedback yet.",
-  open: "None of your reports is open: each has shipped, been set aside, or is waiting on a decision.",
-  waiting: "None of your reports needs a decision.",
+  open: "None of your reports is open: each has shipped, been set aside, or is waiting.",
+  waiting: "None of your reports is waiting.",
   aside: "None of your reports has been set aside.",
   shipped: "None of your reports has a shipped change yet.",
 };
@@ -1044,7 +1044,7 @@ const ADMIN_EMPTY: Record<AdminEarlierFeedbackShow, string> = {
 const ADMIN_CAP_NOUN: Record<AdminEarlierFeedbackShow, string> = {
   all: "reports",
   open: "open reports",
-  waiting: "reports that need a decision",
+  waiting: "waiting reports",
   aside: "set-aside reports",
   shipped: "shipped reports",
 };
@@ -1071,7 +1071,7 @@ const STATUS_TITLE: Record<EarlierFeedbackStatus, string> = {
   shipped: "We shipped a change for this, and it is in the version of Spideryarn you're using.",
 };
 
-/** The status word's look. Shipped is the good news; a decision is the one that asks something of the reader. */
+/** The status word's look. Shipped is the good news; unresolved Waiting stays equally prominent. */
 function statusClass(status: EarlierFeedbackStatus): string {
   switch (status) {
     case "shipped":

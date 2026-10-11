@@ -2183,7 +2183,7 @@ describe("the Earlier tab", () => {
     });
 
     /* docs/plans/261010o-addendum-to-an-earlier-feedback-report.md: the admin
-       adds to one of their own reports that is Open or Needs a decision, and
+       adds to one of their own reports that is Open or Waiting, and
        sees what they added under its words. Everything is keyed by report. */
     describe("adding to an earlier report", () => {
       const ADDENDA_PATH = "/api/admin/feedback/addenda";
@@ -2244,7 +2244,7 @@ describe("the Earlier tab", () => {
         addendumMicUses.length = 0;
       });
 
-      it("offers Add to this report on Open and Needs a decision reports, and on no other", async () => {
+      it("offers Add to this report on Open and Waiting reports, and on no other", async () => {
         await openAll();
         expect([215, 214, 213, 212, 211].map((n) => hasButton(item(n), "Add to this report"))).toEqual([
           false,
@@ -2676,12 +2676,12 @@ describe("the Earlier tab", () => {
 
       it("says how many are open beside the pill in every view, and draws them only in Needs a decision", async () => {
         await openWaiting();
-        /* The report count on the pill is still the report count; the questions are beside it. */
+        /* The pill counts waiting threads, not reports. */
         expect(pills()).toContain("Needs a decision 2");
         /* The one waiting report is Q1's, so it is inside that thread and not listed. */
         expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(0);
 
-        /* In All: counted on the pill, after its report count, and not drawn. */
+        /* In All: still counted on the pill, and not drawn in this view. */
         click(pill("All"));
         await settle();
         expect(lists).toEqual([WAITING_URL, ALL_URL]);
@@ -3149,6 +3149,7 @@ describe("the Earlier tab", () => {
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
         expect(inGroup("responded")).toEqual(["q-aaaaaa"]);
         expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+        expect(pills()).toContain("Needs a decision 1");
       });
 
       /* F4: a reply just sent stands until a read started after it lands. A
@@ -3365,6 +3366,7 @@ describe("the Earlier tab", () => {
         expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
         expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+        expect(pills()).toContain("Needs a decision 1");
 
         click(row("q-aaaaaa"));
         click(button(thread(), "Bring back"));
@@ -3749,7 +3751,7 @@ describe("the Earlier tab", () => {
         expect(rows()).toContain("q-bbbbbb");
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
         expect(inGroup("retained")).toEqual(["q-aaaaaa"]);
-        expect(shortcut()?.getAttribute("title")).toMatch(/^1 needs a decision/);
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
         expect(
           [...panelOf("Earlier").querySelectorAll(".fb-orphans .fb-earlier-number")].map((number) => number.textContent),
         ).toEqual(["#214"]);
