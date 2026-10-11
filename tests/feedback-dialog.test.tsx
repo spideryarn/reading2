@@ -80,8 +80,36 @@ const replyMic = { supported: true, armed: false, transcribing: false };
 const replyMicToggles: string[] = [];
 const replyMicUses: { keep: string | null; doneKey: string; context: unknown }[] = [];
 let replyMicDone: (() => void) | undefined;
+/**
+ * **An addendum box's microphone** (261010o), told apart by a `doneKey` that
+ * starts `addendum:`. One state for all of them: a test arms it and looks at
+ * which box was told what.
+ */
+const addendumMic = { supported: true, armed: false, transcribing: false };
+const addendumMicToggles: string[] = [];
+const addendumMicUses: { keep: string | null; doneKey: string; context: unknown }[] = [];
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: (options: { doneKey?: string; keep?: { box: string }; context?: unknown; onDone?: () => void }) => {
+    if (String(options.doneKey).startsWith("addendum:")) {
+      addendumMicUses.push({ keep: options.keep?.box ?? null, doneKey: String(options.doneKey), context: options.context });
+      return {
+        dictation: {
+          ...addendumMic,
+          recording: null,
+          toggle: () => {
+            addendumMicToggles.push("hook");
+          },
+          artifact: () => 0,
+          dismiss: () => {},
+        },
+        readOnly: addendumMic.transcribing,
+        busy: addendumMic.transcribing || addendumMic.armed,
+        toggle: () => {
+          addendumMicToggles.push("field");
+        },
+        sendingAfter: false,
+      };
+    }
     if (String(options.doneKey).startsWith("reply:")) {
       replyMicUses.push({ keep: options.keep?.box ?? null, doneKey: String(options.doneKey), context: options.context });
       replyMicDone = options.onDone;
@@ -2149,6 +2177,359 @@ describe("the Earlier tab", () => {
       await settle();
       expect(lists.at(-1)).toBe(url("open"));
       expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    });
+
+    /* docs/plans/261010o-addendum-to-an-earlier-feedback-report.md: the admin
+       adds to one of their own reports that is Open or Needs a decision, and
+       sees what they added under its words. Everything is keyed by report. */
+    describe("adding to an earlier report", () => {
+      const ADDENDA_PATH = "/api/admin/feedback/addenda";
+      const OPEN_ID = "spya-a5b2c3";
+      const WAITING_ID = "spya-a2b2c3";
+      const FIRST = { id: "spya-adaaa2", body: "Only the <b>Open</b> ones.\nThe rest have threads.", createdAt: "2026-10-09T09:12:00.000Z" };
+      const SECOND = { id: "spya-adaaa3", body: "And the waiting ones.", createdAt: "2026-10-10T09:12:00.000Z" };
+      const LATE = { id: "spya-adaaa4", body: "Added before it shipped.", createdAt: "2026-10-01T08:00:00.000Z" };
+      /** The admin answer from a server that knows about addenda: two on #211, one on the shipped #215. */
+      const WITH_ADDENDA = {
+        ...ADMIN_REPORTS,
+        reports: ADMIN_REPORTS.reports.map((report) => ({
+          ...report,
+          addenda: report.id === OPEN_ID ? [FIRST, SECOND] : report.id === "spya-k3m9qt" ? [LATE] : [],
+        })),
+      };
+      const item = (number: number) => {
+        const found = [...panelOf("Earlier").querySelectorAll<HTMLLIElement>(".fb-earlier-list > li")].find(
+          (li) => li.querySelector(".fb-earlier-number")?.textContent === `#${number}`,
+        );
+        if (!found) throw new Error(`no row #${number}`);
+        return found;
+      };
+      const button = (within: Element, name: string) => {
+        const found = [...within.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim() === name);
+        if (!found) throw new Error(`no ${name} button`);
+        return found;
+      };
+      const hasButton = (within: Element, name: string) =>
+        [...within.querySelectorAll("button")].some((b) => (b.textContent ?? "").trim() === name);
+      const box = (within: Element) => within.querySelector<HTMLTextAreaElement>(".fb-addendum-box textarea");
+      const words = (within: Element) => [...within.querySelectorAll(".fb-addendum-body")].map((p) => p.textContent);
+      function typeInto(within: Element, text: string) {
+        const target = box(within);
+        if (!target) throw new Error("no addendum box");
+        act(() => {
+          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set?.call(target, text);
+          target.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      }
+      const sent = (index: number) => JSON.parse(String(posts[index]?.init.body)) as Record<string, unknown>;
+      /** The route's receipt for the last POST: the stored addendum. */
+      const stored = (status: number, createdAt = "2026-10-10T21:00:00.000Z") => async () => {
+        const last = JSON.parse(String(posts.at(-1)?.init.body)) as { id: string; body: string };
+        return new Response(JSON.stringify({ addendum: { id: last.id, body: last.body, createdAt } }), { status });
+      };
+      const refused = (status: number, error: string) => async () => new Response(JSON.stringify({ error }), { status });
+      async function openAll(body: unknown = WITH_ADDENDA) {
+        asAdmin = true;
+        listAnswer = serve(body as typeof WITH_ADDENDA);
+        await openEarlier();
+        expect(pill("All").getAttribute("aria-pressed")).toBe("true");
+      }
+      beforeEach(() => {
+        addendumMic.armed = false;
+        addendumMic.transcribing = false;
+        addendumMicToggles.length = 0;
+        addendumMicUses.length = 0;
+      });
+
+      it("offers Add to this report on Open and Needs a decision reports, and on no other", async () => {
+        await openAll();
+        expect([215, 214, 213, 212, 211].map((n) => hasButton(item(n), "Add to this report"))).toEqual([
+          false,
+          true,
+          false,
+          false,
+          true,
+        ]);
+        /* Shut until pressed. */
+        expect(panelOf("Earlier").querySelector(".fb-addendum-box")).toBeNull();
+      });
+
+      it("draws each report's addenda under its words, oldest first, timed, as text with its lines, on any status", async () => {
+        await openAll();
+        expect(words(item(211))).toEqual([FIRST.body, SECOND.body]);
+        /* Text, never markup. */
+        expect(item(211).querySelector(".fb-addendum-body b")).toBeNull();
+        const first = item(211).querySelector(".fb-addendum");
+        expect(first?.querySelector(".fb-earlier-meta")?.textContent).toMatch(/^Added /);
+        expect(first?.querySelector("time")?.getAttribute("datetime")).toBe(FIRST.createdAt);
+        /* After the report's own words. */
+        const order = [...item(211).children].map((el) => el.className);
+        expect(order.indexOf("fb-addenda")).toBeGreaterThan(order.indexOf("fb-earlier-body"));
+        /* Shipped since: still shown, and no box. */
+        expect(words(item(215))).toEqual([LATE.body]);
+        expect(words(item(214))).toEqual([]);
+        expect(item(214).querySelector(".fb-addenda")).toBeNull();
+      });
+
+      it("offers no box on a report from a server that sent no addenda key", async () => {
+        const mixed = {
+          ...WITH_ADDENDA,
+          reports: WITH_ADDENDA.reports.map((report) => {
+            if (report.id !== OPEN_ID) return report;
+            const { addenda: _none, ...rest } = report;
+            return rest;
+          }),
+        };
+        await openAll(mixed);
+        expect(hasButton(item(211), "Add to this report")).toBe(false);
+        expect(words(item(211))).toEqual([]);
+        expect(hasButton(item(214), "Add to this report")).toBe(true);
+      });
+
+      it("offers no box anywhere on an answer with no addenda at all (an older server)", async () => {
+        await openAll(ADMIN_REPORTS);
+        expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(5);
+        expect(hasButton(panelOf("Earlier"), "Add to this report")).toBe(false);
+      });
+
+      it.each([
+        ["null", null],
+        ["not a list", { id: FIRST.id }],
+        ["a field more", [{ ...FIRST, environment: "production" }]],
+        ["a field fewer", [{ id: FIRST.id, body: FIRST.body }]],
+        ["a time that is not one", [{ ...FIRST, createdAt: "yesterday" }]],
+        ["an id that is not a spya- id", [{ ...FIRST, id: "add-1" }]],
+        ["empty words", [{ ...FIRST, body: "  " }]],
+        ["one id twice", [FIRST, { ...SECOND, id: FIRST.id }]],
+      ])("refuses an answer whose addenda are %s: the failure sentence, no rows", async (_case, addenda) => {
+        const bad = {
+          ...WITH_ADDENDA,
+          reports: WITH_ADDENDA.reports.map((report) => (report.id === OPEN_ID ? { ...report, addenda } : report)),
+        };
+        asAdmin = true;
+        listAnswer = answerBy({ waiting: only(WITH_ADDENDA, "waiting"), all: bad });
+        await openEarlier();
+        expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+        expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+      });
+
+      it("sends an addendum with a minted id, then shows it at once, shuts the box and forgets the draft", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        expect(box(item(211))).not.toBeNull();
+        expect(box(item(211))?.getAttribute("aria-label")).toBe("What to add to report #211");
+        typeInto(item(211), "  One more thing.\nOn two lines.  ");
+        answer = stored(201);
+        click(button(item(211), "Send addendum"));
+        await settle();
+
+        expect(posts).toHaveLength(1);
+        expect(posts[0]?.input).toBe(ADDENDA_PATH);
+        expect(posts[0]?.init.method).toBe("POST");
+        expect(Object.keys(sent(0)).sort()).toEqual(["body", "id", "report"]);
+        expect(sent(0)).toMatchObject({ report: OPEN_ID, body: "One more thing.\nOn two lines." });
+        expect(isSpideryarnId(sent(0).id as string)).toBe(true);
+
+        expect(words(item(211))).toEqual([FIRST.body, SECOND.body, "One more thing.\nOn two lines."]);
+        expect(box(item(211))).toBeNull();
+        expect(hasButton(item(211), "Add to this report")).toBe(true);
+        /* Opened again, the box is empty, and the next send is a new id. */
+        click(button(item(211), "Add to this report"));
+        expect(box(item(211))?.value).toBe("");
+        typeInto(item(211), "And another.");
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(sent(1).id).not.toBe(sent(0).id);
+        expect(words(item(211)).slice(-2)).toEqual(["One more thing.\nOn two lines.", "And another."]);
+      });
+
+      it("keeps an addendum just sent when a read that started before it lands afterwards, and not after a later read", async () => {
+        const gate: { release?: () => void } = {};
+        asAdmin = true;
+        const openUrl = url("open");
+        const serveAll = serve(WITH_ADDENDA);
+        listAnswer = (input) =>
+          input === openUrl
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify(only(WITH_ADDENDA, "open")), { status: 200 }));
+              })
+            : serveAll(input);
+        await openEarlier();
+        /* Open is asked for and has not answered; back to All, and send. */
+        click(pill("Open"));
+        await settle();
+        click(pill("All"));
+        click(button(item(211), "Add to this report"));
+        typeInto(item(211), "Sent while Open was being read.");
+        answer = stored(201);
+        click(button(item(211), "Send addendum"));
+        await settle();
+        await act(async () => gate.release?.());
+        await settle();
+        click(pill("Open"));
+        expect(words(item(211)).at(-1)).toBe("Sent while Open was being read.");
+
+        /* The next opening's read started after the send: it is the server's word. */
+        listAnswer = serve(WITH_ADDENDA);
+        reopen();
+        click(tab("Earlier"));
+        await settle();
+        click(pill("All"));
+        await settle();
+        expect(words(item(211))).toEqual([FIRST.body, SECOND.body]);
+      });
+
+      it("keeps the words when the send fails; a retry of the same words carries the same id, edited words a new one", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        typeInto(item(211), "Retry me.");
+        answer = ok(500);
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(box(item(211))?.value).toBe("Retry me.");
+        expect(item(211).textContent).toContain("[fb-addendum]");
+        expect(words(item(211))).toEqual([FIRST.body, SECOND.body]);
+
+        answer = async () => {
+          throw new Error("offline");
+        };
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(sent(1).id).toBe(sent(0).id);
+
+        typeInto(item(211), "Retry me, edited.");
+        answer = stored(200);
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(sent(2).id).not.toBe(sent(0).id);
+        expect(words(item(211)).at(-1)).toBe("Retry me, edited.");
+        expect(item(211).textContent).not.toContain("[fb-addendum]");
+      });
+
+      it.each([
+        ["closed", "That report has been closed since this page was loaded. [fx-closed]", "[fb-addendum-closed]"],
+        ["full", "This report has as much added to it as it can take. [fx-full]", "[fb-addendum-full]"],
+        ["reused", "That addendum's id has already been used for a different addendum. [fx-reused]", "[fb-addendum]"],
+      ])("says so on a 409 %s, and keeps the words", async (_case, error, code) => {
+        await openAll();
+        click(button(item(214), "Add to this report"));
+        typeInto(item(214), "Too late?");
+        answer = refused(409, error);
+        click(button(item(214), "Send addendum"));
+        await settle();
+        expect(box(item(214))?.value).toBe("Too late?");
+        expect(item(214).querySelector('[role="alert"]')?.textContent).toContain(code);
+        expect(words(item(214))).toEqual([]);
+      });
+
+      it("says to copy the words and reload on a 404, and keeps them", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        typeInto(item(211), "Typed at length.");
+        answer = refused(404, "Not found");
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(box(item(211))?.value).toBe("Typed at length.");
+        expect(item(211).textContent).toContain("[fb-addendum-stale]");
+        expect(item(211).textContent).toMatch(/copy them, reload/);
+      });
+
+      it("keeps each report's draft apart, across filters, and both boxes open while they hold words", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        typeInto(item(211), "for the open one");
+        click(button(item(214), "Add to this report"));
+        typeInto(item(214), "for the waiting one");
+        /* The first box still holds words, so it is still open. */
+        expect(box(item(211))?.value).toBe("for the open one");
+        expect(box(item(214))?.value).toBe("for the waiting one");
+
+        click(pill("Open"));
+        await settle();
+        expect(box(item(211))?.value).toBe("for the open one");
+        click(pill("Shipped"));
+        await settle();
+        click(pill("All"));
+        expect(box(item(211))?.value).toBe("for the open one");
+        expect(box(item(214))?.value).toBe("for the waiting one");
+
+        answer = stored(201);
+        click(button(item(214), "Send addendum"));
+        await settle();
+        expect(sent(0)).toMatchObject({ report: WAITING_ID, body: "for the waiting one" });
+        expect(words(item(214))).toEqual(["for the waiting one"]);
+        expect(words(item(211))).toEqual([FIRST.body, SECOND.body]);
+        expect(box(item(211))?.value).toBe("for the open one");
+      });
+
+      it("shuts an empty box when another is opened, and Cancel shuts a box and forgets its words", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        click(button(item(214), "Add to this report"));
+        expect(box(item(211))).toBeNull();
+        typeInto(item(214), "never mind");
+        click(button(item(214), "Cancel"));
+        expect(box(item(214))).toBeNull();
+        click(button(item(214), "Add to this report"));
+        expect(box(item(214))?.value).toBe("");
+      });
+
+      it("gives each box its own microphone, named for its report, and Send off while it is busy", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        expect(addendumMicUses.at(-1)).toEqual({
+          keep: `feedback-addendum:${OPEN_ID}`,
+          doneKey: `addendum:${OPEN_ID}`,
+          context: { kind: "profile" },
+        });
+        typeInto(item(211), "a draft");
+        click(button(item(214), "Add to this report"));
+        expect(addendumMicUses.map((use) => use.keep)).toContain(`feedback-addendum:${WAITING_ID}`);
+        expect(button(item(211), "Send addendum").disabled).toBe(false);
+
+        addendumMic.armed = true;
+        typeInto(item(211), "a draft, said");
+        expect(button(item(211), "Send addendum").disabled).toBe(true);
+        addendumMic.armed = false;
+        addendumMic.transcribing = true;
+        typeInto(item(211), "a draft, said.");
+        expect(button(item(211), "Send addendum").disabled).toBe(true);
+        expect(box(item(211))?.readOnly).toBe(true);
+      });
+
+      it("stops a box's microphone on the way to Write, with the hook's own toggle", async () => {
+        await openAll();
+        click(button(item(211), "Add to this report"));
+        addendumMic.armed = true;
+        typeInto(item(211), "talking");
+        addendumMicToggles.length = 0;
+        click(tab("Write"));
+        expect(addendumMicToggles).toEqual(["hook"]);
+        expect(addendumMicUses.at(-1)).toMatchObject({ keep: null, doneKey: "addendum:hidden" });
+      });
+
+      it("holds the page against a reload while an addendum is half-written", async () => {
+        await openAll();
+        expect(reloadVeto()).toBeNull();
+        click(button(item(211), "Add to this report"));
+        expect(reloadVeto()).toBeNull();
+        typeInto(item(211), "half an addendum");
+        expect(reloadVeto()).not.toBeNull();
+        /* On another filter, out of sight, still held. */
+        click(pill("Shipped"));
+        await settle();
+        expect(reloadVeto()).not.toBeNull();
+        click(pill("All"));
+        answer = stored(201);
+        click(button(item(211), "Send addendum"));
+        await settle();
+        expect(reloadVeto()).toBeNull();
+        click(button(item(211), "Add to this report"));
+        typeInto(item(211), "and then not");
+        expect(reloadVeto()).not.toBeNull();
+        click(button(item(211), "Cancel"));
+        expect(reloadVeto()).toBeNull();
+      });
     });
 
     /* Stage 2 of 261007d: an agent's questions, in Needs a decision, each with

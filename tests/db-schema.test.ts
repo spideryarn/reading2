@@ -1014,6 +1014,7 @@ describe("the schema keeps the promises the plan makes", () => {
             and conname in ('articles_owner_fk','comments_owner_fk','jobs_owner_fk',
                             'articles_current_revision_fk','reader_profiles_owner_fk',
                             'uploads_owner_fk','feedback_owner_fk',
+                            'feedback_addenda_owner_fk',
                             'feedback_question_answers_owner_fk',
                             'feedback_question_deferrals_owner_fk',
                             'import_records_owner_fk','import_records_ingest_event_fk',
@@ -1032,6 +1033,9 @@ describe("the schema keeps the promises the plan makes", () => {
            delete that took it silently would take the evidence with it. */
         "billing_accounts_owner_fk",
         "comments_owner_fk",
+        /* drizzle/20261010235243, appended by hand. RESTRICT, as
+           `feedback_owner_fk` is: an addendum is more of the report. */
+        "feedback_addenda_owner_fk",
         /* drizzle/0040. A bug report must outlive the account that filed it —
            see that migration on why RESTRICT means more here than elsewhere. */
         "feedback_owner_fk",

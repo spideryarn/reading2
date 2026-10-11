@@ -5690,6 +5690,68 @@ export const staleNoticeDismissals = spideryarn.table(
 );
 
 /**
+ * **The command bar's suggestions the owner dismissed** — one row per article.
+ * Greg, 2026-10-10 (`spya-yf23zk`): *"It should be possible to dismiss some of
+ * them so that they don't come up again if they're not helpful."*
+ * docs/plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md.
+ *
+ * - **Hashes, never words.** `dismissed` holds identities — sixteen hex digits
+ *   from src/command-suggest.ts § `suggestionIdentity`, a hash of the kind and
+ *   the folded words or mode id. A suggestion's words are written from the
+ *   reader's profile; storing them would keep that text after the reader
+ *   changed or cleared the profile (GPT Sol's plan review, F2). Nothing here
+ *   is ever sent to a model.
+ * - **`read_from` is the fingerprint the dismissals belong to** — the
+ *   `readFromHash` of the profile and reason the list was made from. Once
+ *   either box is edited the list is about somebody else, so a dismissal
+ *   posted under a different fingerprint **replaces** the row, and the suggest
+ *   route filters only when the stored fingerprint is the one it has just
+ *   computed (F6).
+ * - **Bounded here as well as in the route**: 1–50 identities, newest kept
+ *   (src/store/pg-suggestion-dismissals.ts drops the oldest), each sixteen
+ *   lowercase hex digits, one-dimensional, no nulls. The hex-only test on the
+ *   joined array is independent of the newline-delimited length test, as in
+ *   `stale_notice_dismissals`: otherwise one element holding a newline looks
+ *   exactly like two valid elements.
+ * - **No `owner_id`**, like `stale_notice_dismissals`: only the owner writes,
+ *   and ownership is inherited through the article, which also deletes it.
+ * - **`created_at` is when this article first acquired the row and never
+ *   moves; `dismissed_at` is the latest dismissal**, including one under a new
+ *   fingerprint — docs/project/sql.md § Store when it happened. Nothing reads
+ *   either yet.
+ *
+ * Read by `POST /api/command-suggest/:slug`; never on the public read.
+ */
+/**
+ * The bound `command_suggestion_dismissals`' check holds — the same as
+ * src/command-suggest.ts's `MAX_DISMISSED_SUGGESTIONS`, written out here rather
+ * than imported, because the public read's predicates import this file and
+ * must reach nothing else (tests/public-imports.test.ts).
+ * tests/command-suggest-route.test.ts holds the two copies equal.
+ */
+export const SUGGESTION_DISMISSAL_TABLE = { maxIdentities: 50 } as const;
+
+export const commandSuggestionDismissals = spideryarn.table(
+  "command_suggestion_dismissals",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    readFrom: text("read_from").notNull(),
+    dismissed: text("dismissed").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("command_suggestion_dismissals_read_from", sql`${t.readFrom} ~ '^[0-9a-f]{16}$'`),
+    check(
+      "command_suggestion_dismissals_dismissed",
+      sql`cardinality(${t.dismissed}) between 1 and ${sql.raw(String(SUGGESTION_DISMISSAL_TABLE.maxIdentities))} and array_ndims(${t.dismissed}) = 1 and array_position(${t.dismissed}, null) is null and array_to_string(${t.dismissed}, '') ~ '^[0-9a-f]+$' and array_to_string(${t.dismissed}, chr(10)) ~ '^[0-9a-f]{16}(\\n[0-9a-f]{16})*$'`,
+    ),
+  ],
+);
+
+/**
  * **Every finished mark in the quiz** — the reader's answer and the mark it was
  * given, so that both are still there when they come back.
  * docs/plans/261005b-quiz-answers-are-kept-and-restored.md § The table (report
@@ -6367,6 +6429,74 @@ export const feedbackQuestionDeferrals = spideryarn.table(
       "feedback_question_deferrals_environment",
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
+  ],
+);
+
+/**
+ * **More words an admin added to one of their own earlier reports** — one row
+ * an addendum, written only by `POST /api/admin/feedback/addenda`, read by the
+ * admin's Earlier tab (under the report's own words) and by
+ * `scripts/feedback-reporter.ts` and `scripts/feedback-unswept.ts` (for agents).
+ * docs/plans/261010o-addendum-to-an-earlier-feedback-report.md.
+ *
+ * > Make it possible for me to add a reply as a kind of addendum to any
+ * > earlier open feedback reports.
+ * >
+ * > — Greg, 2026-10-10 (`spya-saz0yw`)
+ *
+ * **A table of its own**, not a column on `feedback` and not rows of
+ * `feedback_question_answers`: a reply belongs to a question, an addendum to a
+ * report, and one table for both would be a nullable `question_id` beside a
+ * nullable `report_id`. Not a report either: never mirrored, never rate-capped,
+ * never in the endings map. Append-only; rows are never deleted.
+ *
+ * **The composite foreign key is what makes "own reports only" a key** rather
+ * than a good intention (docs/project/sql.md): the row is written under the
+ * signed-in owner, so an addendum to a report id that is not that owner's own
+ * cannot exist. `restrict`, so an addendum is never silently lost with its
+ * report.
+ */
+export const feedbackAddenda = spideryarn.table(
+  "feedback_addenda",
+  {
+    /** Client-minted, and the idempotency key, exactly as `feedback.id` is. */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the migration by hand, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** The report it adds to: `feedback.id`, under the same owner. */
+    reportId: text("report_id").notNull(),
+    /** What the admin typed or said. Plain text. */
+    body: text("body").notNull(),
+    /** Which deployment wrote the row, asked of the server, as `feedback_question_answers.environment`. */
+    environment: text("environment").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /** The composite key is the idempotency key, as on `feedback`. */
+    primaryKey({ columns: [t.ownerId, t.id] }),
+    foreignKey({
+      name: "feedback_addenda_feedback_fk",
+      columns: [t.ownerId, t.reportId],
+      foreignColumns: [feedback.ownerId, feedback.id],
+    }).onDelete("restrict"),
+    check("feedback_addenda_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("feedback_addenda_report_id_format", sql`${t.reportId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* `feedback_environment`'s list, written out for the reason given there. */
+    check(
+      "feedback_addenda_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /* Non-empty and under a ceiling that only catches a runaway, in
+       `feedback_body_shape`'s style. The product's limit is the route's: all of
+       one report's addenda together at most `MAX_FEEDBACK_BODY_CHARS`
+       (src/types.ts), checked under the report's row lock in
+       src/store/pg-feedback.ts § `submitAddendum`. */
+    check(
+      "feedback_addenda_body_shape",
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 1000000`,
+    ),
+    /** The Earlier list's and the scripts' lookup: a report's addenda. */
+    index("feedback_addenda_owner_report_idx").on(t.ownerId, t.reportId),
   ],
 );
 

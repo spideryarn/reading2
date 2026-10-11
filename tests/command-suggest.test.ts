@@ -31,12 +31,18 @@ import {
   MAX_SUGGESTED_LENS_CHARS,
   MAX_SUGGESTED_SEARCH_CHARS,
   MAX_SUGGESTED_WHY_CHARS,
+  IDENTITY_FORM,
   type SuggestRequest,
+  type Suggestions,
+  commandSuggestDismissPath,
   commandSuggestPath,
+  parseDismissRequest,
   parseSuggestRequest,
   readFromHash,
   readSuggestAnswer,
   readSuggestions,
+  suggestionIdentity,
+  withoutDismissed,
 } from "../src/command-suggest.js";
 import { NOT_CONFIGURED } from "../src/messages.js";
 import { PROFILE_RULES } from "../src/profile.js";
@@ -264,6 +270,114 @@ describe("where the bar posts", () => {
   it("is the article's own address, which the route's pattern takes", () => {
     expect(commandSuggestPath("a-piece")).toBe("/api/command-suggest/a-piece");
     expect(/^\/api\/command-suggest\/([\w.%-]+)$/.test(commandSuggestPath("a piece"))).toBe(true);
+  });
+
+  it("dismisses at an address the dismiss pattern takes and the suggest pattern does not", () => {
+    const path = commandSuggestDismissPath("a piece");
+    expect(path).toBe("/api/command-suggest/a%20piece/dismiss");
+    expect(/^\/api\/command-suggest\/([\w.%-]+)\/dismiss$/.test(path)).toBe(true);
+    expect(/^\/api\/command-suggest\/([\w.%-]+)$/.test(path)).toBe(false);
+  });
+});
+
+/* ------------------------------------------------- dismissals, plan 261010u -- */
+
+describe("suggestionIdentity", () => {
+  it("is sixteen lowercase hex digits, and the same for the same suggestion", () => {
+    const id = suggestionIdentity("search", "missing data");
+    expect(id).toMatch(IDENTITY_FORM);
+    expect(suggestionIdentity("search", "missing data")).toBe(id);
+  });
+
+  it("folds case and space in words, so the same suggestion written again is the same identity", () => {
+    const id = suggestionIdentity("search", "missing data");
+    expect(suggestionIdentity("search", "  Missing\n  DATA ")).toBe(id);
+    expect(suggestionIdentity("lens", "Criticism  of it")).toBe(suggestionIdentity("lens", "criticism of it"));
+    expect(suggestionIdentity("search", "missing date")).not.toBe(id);
+  });
+
+  it("keeps the kinds apart: the same words as a search and as a lens are two suggestions", () => {
+    expect(suggestionIdentity("search", "missing data")).not.toBe(suggestionIdentity("lens", "missing data"));
+    expect(suggestionIdentity("mode", "mode:skim")).not.toBe(suggestionIdentity("search", "mode:skim"));
+  });
+
+  it("takes a mode's row id as it is", () => {
+    expect(suggestionIdentity("mode", "mode:skim")).not.toBe(suggestionIdentity("mode", "mode:quiz"));
+    expect(suggestionIdentity("mode", "mode:skim")).toBe(suggestionIdentity("mode", "mode:skim"));
+  });
+});
+
+describe("withoutDismissed", () => {
+  const list: Suggestions = {
+    searches: [
+      { words: "missing data", why: "a" },
+      { words: "loss to follow-up", why: "b" },
+    ],
+    modes: [{ key: { id: "mode:skim", label: "Skim" }, why: "c" }],
+    lens: { words: "criticism of it", why: "d" },
+  };
+
+  it("hands back the list itself when nothing is dismissed", () => {
+    expect(withoutDismissed(list, new Set())).toBe(list);
+  });
+
+  it("drops a dismissed search, mode and lens, and keeps the rest in order", () => {
+    const dismissed = new Set([
+      suggestionIdentity("search", "Missing  Data"),
+      suggestionIdentity("mode", "mode:skim"),
+      suggestionIdentity("lens", "criticism of it"),
+    ]);
+    expect(withoutDismissed(list, dismissed)).toEqual({
+      searches: [{ words: "loss to follow-up", why: "b" }],
+      modes: [],
+      lens: null,
+    });
+  });
+
+  it("does not drop a search because the same words were dismissed as a lens", () => {
+    const got = withoutDismissed(list, new Set([suggestionIdentity("lens", "missing data")]));
+    expect(got?.searches).toHaveLength(2);
+  });
+
+  it("is null when nothing is left", () => {
+    const all = new Set([
+      suggestionIdentity("search", "missing data"),
+      suggestionIdentity("search", "loss to follow-up"),
+      suggestionIdentity("mode", "mode:skim"),
+      suggestionIdentity("lens", "criticism of it"),
+    ]);
+    expect(withoutDismissed(list, all)).toBeNull();
+  });
+});
+
+describe("parseDismissRequest", () => {
+  const readFrom = readFromHash({ profile: null, purpose: "the evidence" });
+  const identity = suggestionIdentity("search", "missing data");
+
+  it("takes exactly a fingerprint and an identity", () => {
+    expect(parseDismissRequest({ readFrom, identity })).toEqual({ ok: true, request: { readFrom, identity } });
+  });
+
+  it("refuses anything else, with fixed prose", () => {
+    const refused: unknown[] = [
+      null,
+      "[1]",
+      [readFrom, identity],
+      { readFrom },
+      { identity },
+      { readFrom, identity, words: "missing data" },
+      { readFrom: readFrom.toUpperCase(), identity },
+      { readFrom, identity: `${identity}0` },
+      { readFrom, identity: identity.slice(1) },
+      { readFrom, identity: "missing data" },
+      { readFrom: 12, identity },
+      { readFrom, identity: `${identity.slice(0, 15)}g` },
+    ];
+    for (const body of refused) {
+      const got = parseDismissRequest(body);
+      expect(got.ok, JSON.stringify(body)).toBe(false);
+      if (!got.ok) expect(got.reason).not.toContain("missing data");
+    }
   });
 });
 

@@ -22,6 +22,10 @@
  * set aside, what the open question is, or which half is still queued. An
  * admin's Earlier tab shows it under the report
  * (docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md).
+ * `addenda:` names, comma-separated, the ids of an admin's addenda to the
+ * report that the note dealt with; it only stops scripts/feedback-unswept.ts
+ * listing them, and is never compiled
+ * (docs/plans/261010o-addendum-to-an-earlier-feedback-report.md).
  *
  * This reads those headers and writes one line per report. The server imports
  * the result, so a report counts as shipped **in the build that carries its
@@ -78,7 +82,7 @@ export const QUESTIONS_GENERATED_PATH = path.join(ROOT, "src/feedback-questions.
 /** Files in docs/user-feedback/ that are not one report's note. */
 const NOT_A_NOTE = new Set(["awaiting-approval.md"]);
 
-const HEADER_FIELDS = new Set(["reports", "ending", "parts", "comment"]);
+const HEADER_FIELDS = new Set(["reports", "ending", "parts", "comment", "addenda"]);
 
 export interface NoteHeader {
   /** Empty for `reports: none` — a report that never had a row id. */
@@ -88,6 +92,13 @@ export interface NoteHeader {
   parts?: number;
   /** One line of plain text for the report's own row in the Earlier tab; absent when the note has none. */
   comment?: string;
+  /**
+   * The addenda this note dealt with, by their own `spya-` ids
+   * (plan 261010o, F2): what `scripts/feedback-unswept.ts` counts as covering
+   * them. **Never compiled**: an addendum has no ending of its own, so it is
+   * not in the endings map. Absent when the note names none.
+   */
+  addenda?: string[];
 }
 
 /**
@@ -162,6 +173,20 @@ export function parseNoteHeader(text: string): NoteHeader | null | string {
     const problem = commentProblem(comment);
     if (problem !== null) return problem;
     header.comment = comment;
+  }
+  const added = fields.get("addenda");
+  if (added !== undefined) {
+    const addenda = added
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id !== "");
+    if (addenda.length === 0) return "addenda: names no addendum id (leave the line out instead)";
+    /* The same id rule as `reports:`: an addendum's id is minted as a report's is. */
+    const badAddenda = addenda.filter((id) => !isSpideryarnId(id));
+    if (badAddenda.length > 0) return `not an addendum id: ${badAddenda.join(", ")}`;
+    const again = addenda.filter((id, index) => addenda.indexOf(id) !== index);
+    if (again.length > 0) return `addendum id named more than once: ${[...new Set(again)].join(", ")}`;
+    header.addenda = addenda;
   }
   return header;
 }

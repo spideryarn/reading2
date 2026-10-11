@@ -66,6 +66,7 @@ import {
   linkSummaries,
   quizAttempts,
   staleNoticeDismissals,
+  commandSuggestionDismissals,
   realtimeSessions,
   refereeClaims,
   refereeHiddenChecks,
@@ -1077,6 +1078,13 @@ describe("destroying an article", () => {
           articleId: GONE_ARTICLE,
           mode: "glossary",
           dismissedFor: ["2026-10-10T00:00:00.000Z"],
+        }),
+      /* A dismissed command-bar suggestion, as a hash — plan 261010u. It goes with the article. */
+      command_suggestion_dismissals: () =>
+        db.insert(commandSuggestionDismissals).values({
+          articleId: GONE_ARTICLE,
+          readFrom: "0123456789abcdef",
+          dismissed: ["fedcba9876543210"],
         }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({

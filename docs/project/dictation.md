@@ -705,7 +705,7 @@ A box that has merely **shut** has no keeper, and that is not a different box: F
 command bar still receive a transcript that arrives after closing, as
 [§ A double press on Stop also sends](#a-double-press-on-stop-also-sends) needs. **A box that serves
 several targets from one mount must name its keeper for what the words are *about*** — Feedback's
-reply box is `feedback-reply:<question>` and Annotate's is the whole `annotateKey` for that reason.
+reply box is `feedback-reply:<question>`, its addendum box `feedback-addendum:<report>`, and Annotate's is the whole `annotateKey` for that reason.
 Plan
 [261009a](../plans/261009a-dictation-transcript-lands-in-the-next-box.md);
 `tests/dictation-lands-in-its-own-box.test.tsx`.
@@ -736,7 +736,7 @@ passed over, and GPT Sol's review.
   [`transcriber.ts`](../../src/web/transcriber.ts) is types only; the product passes
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
-  itself: `feedback`, `feedback-reply:<question>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
+  itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
   `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
   `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
   `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
@@ -751,8 +751,8 @@ passed over, and GPT Sol's review.
   offered by another, and a dead tab's tape is offered by one page only. No Web Locks, no keeping.
 - **Feedback keeps only while open**, because the dialog is mounted on every page whether or not it
   is showing — a keeper there while shut would let a background tab claim the recording invisibly.
-  Its reply box keeps only while it can be seen, for the same reason (`ReplyBox` in
-  [`FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx)).
+  Its reply box and addendum boxes keep only while they can be seen, for the same reason (both are
+  [`FeedbackSendBox.tsx`](../../src/web/FeedbackSendBox.tsx)).
 - **The row says so only when it is true.** "The audio is kept on this device, even if you close the
   page" appears only when every write landed (`KeptTape.intact()`); a failed keeper is never
   described as holding anything, and never touches the dictation.

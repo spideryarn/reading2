@@ -13,6 +13,9 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD } from "../src/admin.js";
 import {
+  ADDENDA_NOT_DEPLOYED,
+  ADDENDUM_END,
+  type AddendumRow,
   BODY_END,
   BODY_START,
   CannotTell,
@@ -46,6 +49,7 @@ const row = (over: Partial<ReportRow> = {}): ReportRow => ({
   hasDiagnostics: false,
   createdAt: new Date("2026-09-30T12:00:00Z"),
   sentryEventId: EVENT_ID,
+  addenda: [],
   ...over,
 });
 
@@ -163,6 +167,66 @@ describe("run", () => {
       expect(out).toContain("is not a report id or number");
       expect(read, given).toBe(false);
     }
+  });
+
+  /* Plan 261010o: an admin's addenda are printed under the report's words,
+     each with its id, time and environment, and a row not written by
+     production says so first and loudly. */
+  it("prints the report's addenda under its words, oldest first, each with its id, time and environment", async () => {
+    const addenda: AddendumRow[] = [
+      {
+        id: "spya-addzz2",
+        ownerId: ADMIN_USER_ID_PROD,
+        reportId: REPORT_ID,
+        body: "Actually, only the Open ones.",
+        environment: "production",
+        createdAt: new Date("2026-10-10T09:12:00Z"),
+      },
+      {
+        id: "spya-addzz3",
+        ownerId: ADMIN_USER_ID_PROD,
+        reportId: REPORT_ID,
+        body: "Written from a laptop.",
+        environment: "development",
+        createdAt: new Date("2026-10-10T09:13:00Z"),
+      },
+    ];
+    const { status, out } = await collect(["--report-id", REPORT_ID], found(row({ addenda })));
+    expect(status).toBe(0);
+    const after = out.slice(out.indexOf(BODY_END));
+    expect(after).toContain("addenda: 2, oldest first");
+    expect(after).toContain(
+      `----- addendum spya-addzz2 · added 2026-10-10T09:12:00.000Z · production -----\nActually, only the Open ones.\n${ADDENDUM_END}`,
+    );
+    expect(after).toContain(
+      "addendum spya-addzz3 · added 2026-10-10T09:13:00.000Z · ! NOT WRITTEN IN PRODUCTION (environment: development)",
+    );
+    expect(after.indexOf("spya-addzz2")).toBeLessThan(after.indexOf("spya-addzz3"));
+  });
+
+  it("says when production has no addenda table yet, and when a report has none", async () => {
+    const before = await collect(["--report-id", REPORT_ID], found(row({ addenda: null })));
+    expect(before.status).toBe(0);
+    expect(before.out).toContain(ADDENDA_NOT_DEPLOYED);
+    const none = await collect(["--report-id", REPORT_ID], found(row()));
+    expect(none.out).toContain("addenda: none");
+    expect(none.out).not.toContain(ADDENDA_NOT_DEPLOYED);
+  });
+
+  it("does not print a reader's addenda any more than their words", async () => {
+    const addenda: AddendumRow[] = [
+      {
+        id: "spya-addzz2",
+        ownerId: STRANGER_ID,
+        reportId: REPORT_ID,
+        body: "a thaumaturgical aside",
+        environment: "production",
+        createdAt: new Date("2026-10-10T09:12:00Z"),
+      },
+    ];
+    const { status, out } = await collect(["--report-id", REPORT_ID], found(row({ ownerId: STRANGER_ID, addenda })));
+    expect(status).toBe(1);
+    expect(out).not.toContain("thaumaturgical");
   });
 
   it("says out loud when it proved the row and not the event", async () => {
@@ -303,33 +367,91 @@ describe("the production read transaction", () => {
     return { fake, value: fake as unknown as Parameters<typeof readReportRows>[0] };
   };
 
-  it("performs exactly one SELECT inside BEGIN READ ONLY and ROLLBACK", async () => {
-    const { fake, value } = client(async (sql) => ({ rows: /^select /i.test(sql) ? [stored] : [] }));
+  /** What production holds, by statement: the probes, the addenda, and the report row for anything else. */
+  const answering =
+    (addenda: unknown[] | "absent" = []) =>
+    async (sql: string) => ({
+      rows: /to_regclass/.test(sql)
+        ? [{ deployed: addenda !== "absent" }]
+        : /feedback_addenda/.test(sql)
+          ? addenda === "absent"
+            ? []
+            : addenda
+          : /information_schema/.test(sql)
+            ? [{ numbered: true }]
+            : /^select /i.test(sql)
+              ? [stored]
+              : [],
+    });
+
+  it("performs its SELECTs, the row and then its addenda, inside one BEGIN READ ONLY and ROLLBACK", async () => {
+    const { fake, value } = client(answering());
     await expect(readReportRows(value, REPORT_ID)).resolves.toMatchObject([
-      { ownerId: ADMIN_USER_ID_PROD, sentryEventId: EVENT_ID },
+      { ownerId: ADMIN_USER_ID_PROD, sentryEventId: EVENT_ID, addenda: [] },
     ]);
     const statements = fake.query.mock.calls.map(([sql]) => sql.trim());
-    expect(statements).toHaveLength(3);
+    expect(statements).toHaveLength(5);
     expect(statements[0]).toBe("begin read only");
     expect(statements[1]).toMatch(/^select /i);
-    expect(statements[1]).not.toMatch(/\b(insert|update|delete|set)\b/i);
-    expect(statements[2]).toBe("rollback");
+    expect(statements[2]).toMatch(/^select to_regclass\('spideryarn\.feedback_addenda'\)/i);
+    expect(statements[3]).toMatch(/^select .* from spideryarn\.feedback_addenda/is);
+    for (const statement of statements.slice(1, 4)) {
+      expect(statement).not.toMatch(/\b(insert|update|delete|set)\b/i);
+    }
+    expect(statements[4]).toBe("rollback");
     expect(fake.query.mock.calls[1]?.[1]).toEqual([REPORT_ID]);
+    expect(fake.query.mock.calls[3]?.[1]).toEqual([[REPORT_ID]]);
     expect(fake.end).toHaveBeenCalledOnce();
   });
 
-  it("by number: asks first whether production has numbers, then reads the one row (261007d)", async () => {
+  it("keeps only the addenda of the row it read: the same owner and the same report id (261010o)", async () => {
+    const addendum = (id: string, owner: string, createdAt: string) => ({
+      id,
+      owner_id: owner,
+      report_id: REPORT_ID,
+      body: `words of ${id}`,
+      environment: "production",
+      created_at: new Date(createdAt),
+    });
+    const { value } = client(
+      answering([
+        addendum("spya-addzz2", ADMIN_USER_ID_PROD, "2026-10-10T09:12:00Z"),
+        /* The same report id under another owner is another report: never this one's. */
+        addendum("spya-addzz3", STRANGER_ID, "2026-10-10T09:13:00Z"),
+        addendum("spya-addzz4", ADMIN_USER_ID_PROD, "2026-10-10T09:14:00Z"),
+      ]),
+    );
+    const [read] = await readReportRows(value, REPORT_ID);
+    expect(read?.addenda?.map((one) => one.id)).toEqual(["spya-addzz2", "spya-addzz4"]);
+    expect(read?.addenda?.[0]).toMatchObject({ body: "words of spya-addzz2", environment: "production" });
+  });
+
+  it("before the deploy, reads no addenda and says none can be told, rather than failing (F4)", async () => {
+    const { fake, value } = client(answering("absent"));
+    await expect(readReportRows(value, REPORT_ID)).resolves.toMatchObject([{ id: REPORT_ID, addenda: null }]);
+    const statements = fake.query.mock.calls.map(([sql]) => sql.trim());
+    expect(statements.some((sql) => /from spideryarn\.feedback_addenda/.test(sql))).toBe(false);
+    expect(statements.at(-1)).toBe("rollback");
+  });
+
+  it("cannot tell when production does not answer whether the table exists", async () => {
     const { fake, value } = client(async (sql) => ({
-      rows: /information_schema/.test(sql) ? [{ numbered: true }] : /^select /i.test(sql) ? [stored] : [],
+      rows: /to_regclass/.test(sql) ? [{ deployed: "maybe" }] : /^select /i.test(sql) ? [stored] : [],
     }));
+    await expect(readReportRows(value, REPORT_ID)).rejects.toBeInstanceOf(CannotTell);
+    expect(fake.query.mock.calls.at(-1)?.[0]).toBe("rollback");
+  });
+
+  it("by number: asks first whether production has numbers, then reads the one row (261007d)", async () => {
+    const { fake, value } = client(answering());
     await expect(readReportRows(value, 212)).resolves.toMatchObject([{ id: REPORT_ID, number: 212 }]);
     const statements = fake.query.mock.calls.map(([sql]) => sql.trim());
-    expect(statements).toHaveLength(4);
+    expect(statements).toHaveLength(6);
     expect(statements[0]).toBe("begin read only");
     expect(statements[1]).toMatch(/^select exists/i);
     expect(statements[2]).toMatch(/^select /i);
     expect(statements[2]).not.toMatch(/\b(insert|update|delete|set)\b/i);
-    expect(statements[3]).toBe("rollback");
+    expect(statements[5]).toBe("rollback");
     expect(fake.query.mock.calls[2]?.[1]).toEqual([212]);
   });
 
@@ -350,7 +472,7 @@ describe("the production read transaction", () => {
 
   it("by id, the number column is never required: a row from before it reads as no number", async () => {
     const { fake, value } = client(async (sql) => ({
-      rows: /^select /i.test(sql) ? [{ ...stored, number: null }] : [],
+      rows: /to_regclass/.test(sql) ? [{ deployed: false }] : /^select /i.test(sql) ? [{ ...stored, number: null }] : [],
     }));
     await expect(readReportRows(value, REPORT_ID)).resolves.toMatchObject([{ id: REPORT_ID, number: null }]);
     expect(fake.query.mock.calls.map(([sql]) => sql.trim()).some((sql) => /information_schema/.test(sql))).toBe(false);
