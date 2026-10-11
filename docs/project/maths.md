@@ -65,7 +65,7 @@ re-import fixes it.
 > — Greg, 2026-10-09 (spya-pqae7m)
 
 **The article's words, wherever a mode shows them, are drawn from the block's own markup** — a
-quote in Skim or Quotes, a passage in FAQ or Claims, a reader's selection in a dialog, a snippet
+quote in Skim or Quotes, a passage in FAQ or Referee's Promises, a reader's selection in a dialog, a snippet
 around a search hit. A stored quote is a slice of `block.text`, which holds a formula as its TeX
 source and has lost every `<em>`, so drawn as a string it showed `\(d_k\)` beside a paragraph that
 showed *d*<sub>k</sub>. `src/web/Excerpt.tsx` § `Excerpt` finds the words in the block **as it was

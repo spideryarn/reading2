@@ -29,7 +29,7 @@
  *
  * So what is asserted is `pendingActivation`, and that is not a weaker claim
  * about a different thing: an activation token **is** the seam. The hooks on the
- * far side of it — `useClaims`, `useQuiz`, the Candidates band — are covered
+ * far side of it — `usePromises`, `useQuiz`, the Candidates band — are covered
  * where they live (`tests/referee-candidates-press.test.tsx`,
  * `tests/quiz-panel.test.tsx`), and what has never been covered anywhere is
  * *which gesture mints one*. That is the half where the money is: a press mints,
@@ -118,7 +118,7 @@ function click(selector: string): void {
  * tests/arrows-belong-to-the-article.test.tsx already relies on: the band owns
  * `?referee=` and would want a router, and the chips are what a referee presses.
  */
-function mountRefereeChips(view: "criteria" | "claims" | "mirror" | "candidates" | "hidden"): void {
+function mountRefereeChips(view: "criteria" | "promises" | "mirror" | "candidates" | "hidden"): void {
   act(() => {
     root.render(createElement(RefereeViews, { slug: SLUG, view, onView: () => {} }));
   });
@@ -133,11 +133,11 @@ function chip(label: string): string {
 }
 
 describe("Referee's sub-mode chips", () => {
-  it("arms Claims when the Claims chip is pressed", () => {
+  it("arms Promises when the Promises chip is pressed", () => {
     mountRefereeChips("criteria");
-    expect(armed("claims")).toBe(false);
-    click(chip("Claims"));
-    expect(armed("claims")).toBe(true);
+    expect(armed("promises")).toBe(false);
+    click(chip("Promises"));
+    expect(armed("promises")).toBe(true);
   });
 
   it("arms nothing when the Candidates chip is pressed", () => {
@@ -160,17 +160,17 @@ describe("Referee's sub-mode chips", () => {
        and it is left out because it stores nothing — every open would be a fresh
        paid call and the session cap would make the second open behave unlike the
        first. activation.ts § REFEREE_TARGET. */
-    mountRefereeChips("claims");
+    mountRefereeChips("promises");
     click(chip("Criteria"));
     click(chip("Mirror"));
-    expect(armed("claims")).toBe(false);
+    expect(armed("promises")).toBe(false);
     expect(armed("candidates")).toBe(false);
   });
 
   it("arms nothing when Hidden text is pressed", () => {
     mountRefereeChips("criteria");
     click(chip("Hidden text"));
-    expect(armed("claims")).toBe(false);
+    expect(armed("promises")).toBe(false);
     expect(armed("candidates")).toBe(false);
   });
 
@@ -178,20 +178,20 @@ describe("Referee's sub-mode chips", () => {
     /* The bar's own mode buttons behave this way, and it is the only way back
        from a read that failed: the failed read keeps the press and re-reads, and
        nothing re-fires without a fresh nonce. */
-    mountRefereeChips("claims");
-    click(chip("Claims"));
-    const first = pendingActivation(SLUG, "claims");
-    click(chip("Claims"));
-    expect(pendingActivation(SLUG, "claims")).not.toBe(first);
-    expect(armed("claims")).toBe(true);
+    mountRefereeChips("promises");
+    click(chip("Promises"));
+    const first = pendingActivation(SLUG, "promises");
+    click(chip("Promises"));
+    expect(pendingActivation(SLUG, "promises")).not.toBe(first);
+    expect(armed("promises")).toBe(true);
   });
 
   it("arms nothing when a sub-mode is merely on screen", () => {
-    /* A pasted `?referee=claims`, a Back step, or a Diagram press on a URL that
-       already said `claims`. All three mount this component with `view` already
+    /* A pasted `?referee=promises`, a Back step, or a Diagram press on a URL that
+       already said `promises`. All three mount this component with `view` already
        set, and none of them is anybody asking for anything. */
-    mountRefereeChips("claims");
-    expect(armed("claims")).toBe(false);
+    mountRefereeChips("promises");
+    expect(armed("promises")).toBe(false);
     mountRefereeChips("candidates");
     expect(armed("candidates")).toBe(false);
   });

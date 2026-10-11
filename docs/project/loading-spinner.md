@@ -41,7 +41,7 @@ container is mounted at once and carries the caller's class (`gloss-quiet`, `dia
 words are announced when they arrive and the band does not jump; `.band-waiting` in `mode-band.css`
 adds the row and one line's height at zero specificity. Mount it only while waiting, and a wait
 that ends inside 600ms never shows. It began as Chat's `ChatListLoading` and now draws that one too,
-and the Glossary, Ideas, Timeline, Skim, FAQ, Citations, Tweets, Quiz, Debate, Criteria, Claims,
+and the Glossary, Ideas, Timeline, Skim, FAQ, Citations, Tweets, Quiz, Debate, Criteria, Promises,
 Quotes and Simple waits, Sketch's, Illustrated's (and each plate's), Diagram's projection, Candidates'
 first read, the dock's comments and Search's saved searches — Search with its own
 hue through `spinnerClassName` (plan

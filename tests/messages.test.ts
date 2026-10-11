@@ -298,7 +298,7 @@ describe("the code table and the messages are one fact, not two", () => {
    * silently required that **every registered code's sentence lives in this
    * file**. That is not true and was never quite true: `ai-unusable` was raised
    * by two sentences in the Referee runners' own files
-   * (src/referee-claims-run.ts and src/referee-criteria-run.ts), both of which
+   * (src/referee-promises-run.ts and src/referee-criteria-run.ts), both of which
    * asked in their own comments to be registered here. They are one sentence in
    * src/messages.ts since 2026-10-04, `ANSWER_UNUSABLE`, so that example has
    * gone; the assumption is still not one this file should make.

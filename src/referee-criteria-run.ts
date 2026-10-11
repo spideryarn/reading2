@@ -149,7 +149,7 @@ export const LITERATURE_STALL_MS = 45_000;
  * **`max_tokens` is thinking plus answer, and until 2026-09-28 it was sized for
  * the answer alone** — 4,000, 6,000 for `literature`. With no effort named,
  * a `single` criterion on an 8,290-word essay thought for up to 1,558 tokens and
- * used 94% of its 4,000: the Referee Claims failure
+ * used 94% of its 4,000: the Referee Promises failure
  * (docs/plans/260928c-referee-claims-fail-on-long-pieces.md), one notch away.
  * The effort is `CHAT_REASONING`'s row for this job (src/ai-call.ts), which the
  * gateway sends; these are the two terms sized against it.

@@ -24,10 +24,10 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Claim, ClaimsRun } from "../src/referee-claims.js";
+import type { PaperPromise, PromisesRun } from "../src/referee-promises.js";
 import type { Block, BlockId } from "../src/types.js";
-import { ClaimsView } from "../src/web/ClaimsPanel.js";
-import type { ClaimsApi } from "../src/web/useClaims.js";
+import { PromisesView } from "../src/web/PromisesPanel.js";
+import type { PromisesApi } from "../src/web/usePromises.js";
 import { SketchView } from "../src/web/SketchView.js";
 import type { PublicSketch } from "../src/public-types.js";
 
@@ -36,7 +36,7 @@ const CLAIM_AT = "spya-anc234" as BlockId;
 const PASSAGE_AT = "spya-cmr456" as BlockId;
 const OTHER_AT = "spya-dfw567" as BlockId;
 
-const CLAIM: Claim = {
+const CLAIM: PaperPromise = {
   id: `${CLAIM_AT}:8`,
   blockId: CLAIM_AT,
   quote: "the method halves annotation time",
@@ -46,9 +46,9 @@ const CLAIM: Claim = {
   discarded: 0,
 };
 
-const RUN: ClaimsRun = { status: "done", createdAt: "2026-09-01T00:00:00.000Z", claims: [CLAIM] };
+const RUN: PromisesRun = { status: "done", createdAt: "2026-09-01T00:00:00.000Z", promises: [CLAIM] };
 
-const API: ClaimsApi = {
+const API: PromisesApi = {
   run: RUN,
   stale: false,
   loaded: true,
@@ -100,13 +100,13 @@ function expectBlockLink(link: Element | null, id: BlockId, jumped: BlockId[]): 
   expect(jumped, "a plain click should jump exactly once").toEqual([id]);
 }
 
-describe("Claims: the quoted passages are block links", () => {
+describe("Promises: the quoted passages are block links", () => {
   function render(jumped: BlockId[]) {
     act(() => {
       root.render(
-        createElement(ClaimsView, {
+        createElement(PromisesView, {
           api: API,
-          claims: [CLAIM],
+          promises: [CLAIM],
           otherText: [{ blockId: OTHER_AT, text: "uses less peak memory than the allocator,", start: 74 }],
           slots: new Map([[CLAIM.id, 0]]),
           showing: [],
@@ -120,7 +120,7 @@ describe("Claims: the quoted passages are block links", () => {
   it("the claim's own quote", () => {
     const jumped: BlockId[] = [];
     render(jumped);
-    const link = host.querySelector(`a.clm-jump[data-block-link="${CLAIM_AT}"]`);
+    const link = host.querySelector(`a.prm-jump[data-block-link="${CLAIM_AT}"]`);
     expectBlockLink(link, CLAIM_AT, jumped);
     // The words are beside the link already, so the card says only where.
     expect(link?.getAttribute("data-block-preview")).toBe("off");
@@ -129,19 +129,19 @@ describe("Claims: the quoted passages are block links", () => {
   it("each passage the model found", () => {
     const jumped: BlockId[] = [];
     render(jumped);
-    expectBlockLink(host.querySelector(`a.clm-jump[data-block-link="${PASSAGE_AT}"]`), PASSAGE_AT, jumped);
+    expectBlockLink(host.querySelector(`a.prm-jump[data-block-link="${PASSAGE_AT}"]`), PASSAGE_AT, jumped);
   });
 
   it("the other text inside the quoted passages", () => {
     const jumped: BlockId[] = [];
     render(jumped);
-    expectBlockLink(host.querySelector(`a.clm-jump[data-block-link="${OTHER_AT}"]`), OTHER_AT, jumped);
+    expectBlockLink(host.querySelector(`a.prm-jump[data-block-link="${OTHER_AT}"]`), OTHER_AT, jumped);
   });
 
-  it("leaves no clm-jump a button", () => {
+  it("leaves no prm-jump a button", () => {
     render([]);
-    expect(host.querySelectorAll("button.clm-jump")).toHaveLength(0);
-    expect(host.querySelectorAll("a.clm-jump")).toHaveLength(3);
+    expect(host.querySelectorAll("button.prm-jump")).toHaveLength(0);
+    expect(host.querySelectorAll("a.prm-jump")).toHaveLength(3);
   });
 });
 

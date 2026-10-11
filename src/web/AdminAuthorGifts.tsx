@@ -28,6 +28,7 @@ import { RefreshCw } from "lucide-react";
 import { formatCostNanos } from "../admin.js";
 import type { AdminAuthorGift, AdminAuthorLookup, AuthorGiftStatus } from "../admin-author-gifts.js";
 import { freeArticles, RECIPIENT_NAME_MAX, cleanRecipientName } from "../admin-vouchers.js";
+import { addressBoxChange } from "../email-address.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
 import {
   BUTTON,
@@ -474,7 +475,12 @@ function DraftEditor({
             enterKeyHint="done"
             value={email}
             disabled={busy}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              /* `Name <a@b>` pasted keeps the address and fills an empty name (plan 261011k). */
+              const next = addressBoxChange(e.target.value, name);
+              setEmail(next.email);
+              setName(next.name);
+            }}
             className={`${INPUT} tw:w-full`}
           />
         </label>

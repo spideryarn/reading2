@@ -347,7 +347,7 @@ export function ownedByReader() {
  *
  * ## Why it lives here
  *
- * It was copied into `pg-chat.ts`, `pg-searches.ts`, `pg-referee-claims.ts`,
+ * It was copied into `pg-chat.ts`, `pg-searches.ts`, `pg-referee-promises.ts`,
  * `pg-referee-criteria.ts`, `pg-lookups.ts` and `pg-comments.ts`, and by
  * 2026-09-03 **five of the six called `requireSlug` and `pg-comments.ts` did
  * not** — so a malformed slug reaching a comment method fell through to a query
@@ -412,7 +412,7 @@ export async function ownedArticleIdentity(
  * A serialising lock on a row that is already known to exist, held by three
  * stores that keep runs or one thread per article: chat, searches and referee
  * criteria all read the current state and then write a new one, and two
- * requests doing that at once would otherwise both win. (Referee claims held
+ * requests doing that at once would otherwise both win. (Referee promises held
  * it until 2026-10-03, for a fingerprint read its `begin` no longer makes; its
  * write is one upsert.)
  *
@@ -1806,8 +1806,8 @@ export function relationsFingerprintQuery(
  * store reports itself current against the other's idea of current.
  *
  * It is one function because it was three. `pg-searches.ts`, `pg-referee-criteria.ts`
- * and `pg-referee-claims.ts` each carried a byte-identical private copy, and
- * `pg-referee-claims.ts`'s comment called itself "the third copy of this query
+ * and `pg-referee-promises.ts` each carried a byte-identical private copy, and
+ * `pg-referee-promises.ts`'s comment called itself "the third copy of this query
  * in src/store/" and named the two things that must not drift — while nothing
  * compared them and no test named any of them. Written down is not checked; see
  * docs/reusable/written-down-is-not-checked.md.

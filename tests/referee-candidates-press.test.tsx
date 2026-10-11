@@ -52,7 +52,7 @@
  * words promise rather than pretending to have counted anything.
  *
  * Harness: `CandidatesBand` over a stubbed `apiFetch`, the `vi.mock` from
- * tests/referee-claims-band.test.tsx. No `NuqsAdapter` — Candidates owns no
+ * tests/referee-promises-band.test.tsx. No `NuqsAdapter` — Candidates owns no
  * query parameter.
  */
 import { act, createElement } from "react";

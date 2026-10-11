@@ -13,7 +13,7 @@
  * Only the second one is true. A zero-result row can mean the extractor missed
  * a table, a figure or a supplement; that the paper words the thing differently;
  * or that the model simply failed. GPT Sol's review of the plan made this the
- * condition of Claims surviving at all, and the same reasoning binds every
+ * condition of Promises surviving at all, and the same reasoning binds every
  * sub-mode: the danger is a tired referee reading "nothing bears on that" and
  * treating the passage as cleared.
  *
@@ -41,9 +41,9 @@ import {
 
 import { ANSWER_UNUSABLE } from "../src/messages.js";
 import {
-  CLAIM_WITHHELD,
-  CLAIMS_AT_CAP,
-  claimsOmittedNote,
+  PROMISE_WITHHELD,
+  PROMISES_AT_CAP,
+  promisesOmittedNote,
   DOCUMENT_ORDER_NOTE,
   NO_PASSAGE_FOUND,
   OTHER_TEXT_AT_CAP,
@@ -52,7 +52,7 @@ import {
   PASSAGES_CAPPED,
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
-} from "../src/referee-claims.js";
+} from "../src/referee-promises.js";
 import { ALL_DROPPED, COI_NOT_CHECKED, NO_NAMES_YET } from "../src/referee-candidates.js";
 import { REFEREE_VIEWS } from "../src/web/referee-views.js";
 
@@ -106,10 +106,10 @@ const WEB = join(ROOT, "src", "web");
  * ## What the five dated comments said, kept because the reasons are not the same
  *
  * **Criteria** is the original, and the branch the scan is aimed at is its
- * zero-result one. **Claims** is the sub-mode this whole file was written for:
+ * zero-result one. **Promises** is the sub-mode this whole file was written for:
  * the cross-family review made *"the model did not find a passage for this"* —
  * never "none", never "unsupported", never "the paper does not address this" —
- * the condition of Claims surviving at all. **Mirror** is the harder case: its
+ * the condition of Promises surviving at all. **Mirror** is the harder case: its
  * null result is not about the paper at all, since it was never given the
  * paper, so *"nothing in this paper bears on that criterion"* is a claim it has
  * no standing whatever to make. **Candidates**' null result is about neither
@@ -129,7 +129,7 @@ const WEB = join(ROOT, "src", "web");
  *
  * **Resolved against the importing file's own directory**, not against
  * `src/web`: a controller under `src/web/modes/referee/` reaches its panels as
- * `../../ClaimsPanel.js`, and a resolver that took the basename and looked in
+ * `../../PromisesPanel.js`, and a resolver that took the basename and looked in
  * `src/web` would agree for the wrong reason today and be wrong outright the
  * first time two directories hold the same file name.
  */
@@ -415,7 +415,7 @@ const ABOUT_THE_PAPER = [
  * finding 4.
  *
  * Its sentence does not live in a panel file, so the scan below cannot see it:
- * it is the stored `error` on the criterion or on the claims run, and it has to
+ * it is the stored `error` on the criterion or on the promises run, and it has to
  * keep the same rule. Checked as a value rather than as source text, which is
  * the stronger check of the two.
  *
@@ -462,7 +462,7 @@ describe("what Referee says when the answer it got was unusable", () => {
 });
 
 /**
- * **Claims' own copy, checked as values.**
+ * **Promises' own copy, checked as values.**
  *
  * Four sentences, and each is a rule rather than a phrasing:
  *
@@ -480,7 +480,7 @@ describe("what Referee says when the answer it got was unusable", () => {
  *   in the paper's order and is not a ranking, and a reader who assumes
  *   best-first reads the top and stops.
  */
-describe("what Claims says about an empty answer", () => {
+describe("what Promises says about an empty answer", () => {
   it("makes the model the subject of both empty states", () => {
     for (const sentence of [NO_PASSAGE_FOUND, PASSAGES_UNUSABLE, ANSWER_UNUSABLE.message]) {
       expect(sentence.toLowerCase()).toMatch(/^the model /);
@@ -493,7 +493,7 @@ describe("what Claims says about an empty answer", () => {
   it("keeps 'found nothing' and 'found things I could not use' apart", () => {
     /* The whole reason there are three sentences and not two. Both of these
        would be false about the other's state, and the panel picks between them
-       on `Claim.discarded`. */
+       on `PaperPromise.discarded`. */
     expect(NO_PASSAGE_FOUND).toMatch(/did not find/i);
     expect(PASSAGES_UNUSABLE).not.toMatch(/did not find/i);
     expect(ANSWER_UNUSABLE.message).not.toMatch(/did not find/i);
@@ -604,7 +604,7 @@ describe("what Referee says when it found nothing", () => {
  * **The two sentences added on 2026-09-01, and they are the ones most likely to
  * drift into being about the paper.**
  *
- * An eval found that Claims could drop a claim from a paper's own abstract and
+ * An eval found that Promises could drop a claim from a paper's own abstract and
  * leave a panel that looked perfectly tidy — the sub-mode's whole defence,
  * `NO_PASSAGE_FOUND`, cannot fire for a claim that never got a row. The answer
  * is a list of the sentences no claim above is anchored in, and **the wording is
@@ -619,14 +619,14 @@ describe("what Referee says when it found nothing", () => {
  * that about the *model's line*, and must not become *this passage does not
  * carry the claim*, which is the verdict itself wearing our clothes.
  */
-describe("what Claims says about the rest of the text its quotes covered", () => {
+describe("what Promises says about the rest of the text its quotes covered", () => {
   it("never puts the paper in the subject position", () => {
     for (const sentence of [
       OTHER_TEXT_HEADING,
       OTHER_TEXT_NOTE,
       OTHER_TEXT_AT_CAP,
       REASONING_WITHHELD,
-      CLAIM_WITHHELD,
+      PROMISE_WITHHELD,
     ]) {
       for (const phrase of ABOUT_THE_PAPER) {
         expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
@@ -670,15 +670,15 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
        label, so a referee who is not told what happened will read the paper's
        sentence as the model having had nothing to say. The subject has to be the
        model's line, and it has to say what stands in its place. */
-    expect(CLAIM_WITHHELD.toLowerCase()).toMatch(/^the model's one-line/);
-    expect(CLAIM_WITHHELD.toLowerCase()).toContain("the paper's own words");
+    expect(PROMISE_WITHHELD.toLowerCase()).toMatch(/^the model's one-line/);
+    expect(PROMISE_WITHHELD.toLowerCase()).toContain("the paper's own words");
     // Never the verdict itself wearing our clothes.
-    expect(CLAIM_WITHHELD.toLowerCase()).not.toMatch(/does not carry|is unsupported|was wrong/);
+    expect(PROMISE_WITHHELD.toLowerCase()).not.toMatch(/does not carry|is unsupported|was wrong/);
   });
 });
 
 /**
- * **What Claims says when one of its own caps cut something.**
+ * **What Promises says when one of its own caps cut something.**
  *
  * GPT Sol's second review, finding 5: the caps were silent, and silence is a
  * ranking — a referee reads an apparently complete list in which the claims the
@@ -690,9 +690,9 @@ describe("what Claims says about the rest of the text its quotes covered", () =>
  * subject position, it puts the *model* there — "the model returned too many
  * claims" is an accusation about an answer that did nothing wrong.
  */
-describe("what Claims says when one of its own caps cut something", () => {
+describe("what Promises says when one of its own caps cut something", () => {
   it("never blames the paper or the model for a cap that is ours", () => {
-    for (const sentence of [PASSAGES_CAPPED, CLAIMS_AT_CAP, claimsOmittedNote(3), OTHER_TEXT_AT_CAP]) {
+    for (const sentence of [PASSAGES_CAPPED, PROMISES_AT_CAP, promisesOmittedNote(3), OTHER_TEXT_AT_CAP]) {
       for (const phrase of ABOUT_THE_PAPER) {
         expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
       }
@@ -705,8 +705,8 @@ describe("what Claims says when one of its own caps cut something", () => {
        missing learns nothing they can act on; one who is told it is the end of
        the paper can go and look at the end of the paper. */
     expect(PASSAGES_CAPPED.toLowerCase()).toContain("latest in the paper");
-    expect(CLAIMS_AT_CAP.toLowerCase()).toContain("end of the paper");
-    expect(claimsOmittedNote(3).toLowerCase()).toContain("end of the paper");
+    expect(PROMISES_AT_CAP.toLowerCase()).toContain("end of the paper");
+    expect(promisesOmittedNote(3).toLowerCase()).toContain("end of the paper");
     expect(OTHER_TEXT_AT_CAP.toLowerCase()).toContain("latest in the paper");
   });
 
@@ -715,6 +715,6 @@ describe("what Claims says when one of its own caps cut something", () => {
        glance from a ranking. Under the list there is nothing to rank, so the
        count of cut claims is allowed and is worth more than a hedge. */
     expect(PASSAGES_CAPPED).not.toMatch(/\d/);
-    expect(claimsOmittedNote(3)).toMatch(/3 further claims/);
+    expect(promisesOmittedNote(3)).toMatch(/3 further claims/);
   });
 });

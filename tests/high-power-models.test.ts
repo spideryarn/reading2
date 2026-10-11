@@ -244,6 +244,6 @@ describe("effort parity on the chat wire", () => {
   });
 
   it("keeps a row's own effort on Opus", async () => {
-    expect((await sent("referee-claims", HIGH_POWER_MODEL_OPENROUTER)).reasoning).toEqual({ effort: "medium" });
+    expect((await sent("referee-promises", HIGH_POWER_MODEL_OPENROUTER)).reasoning).toEqual({ effort: "medium" });
   });
 });

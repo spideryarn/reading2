@@ -26,7 +26,7 @@
  * signed in as its owner, and drives the sequence the review's acceptance
  * criterion names:
  *
- * **Ideas → Timeline → Search with pending work → Criteria ↔ Claims → Plain →
+ * **Ideas → Timeline → Search with pending work → Criteria ↔ Promises → Plain →
  * Back**, and then, under an article change, **A → B → A over Ideas and
  * Timeline only**.
  *
@@ -37,14 +37,14 @@
  * driving the whole sequence three times over would roughly double the file's
  * runtime to re-prove wiring the first two arms already hold. The cost of the
  * choice is real and belongs here rather than in a footnote: **an
- * article-scoped wiring mistake in Search, Criteria or Claims specifically
+ * article-scoped wiring mistake in Search, Criteria or Promises specifically
  * would not be caught by this variant.**
  *
  * ## How a wrong wiring is made visible
  *
  * Every producer marks **its own paragraph and only its own**. Ideas quotes the
  * second paragraph, Timeline the third, Search's literal matcher the fourth,
- * Criteria the fifth and Claims the sixth — so "which blocks are marked" is a
+ * Criteria the fifth and Promises the sixth — so "which blocks are marked" is a
  * sentence naming the band, and a band whose marks went into another band's
  * slot produces an empty prose rather than a subtly wrong one. The mutation
  * that proves it is exactly Sol's: give `TimelineBand` Ideas' setter, and the
@@ -90,7 +90,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, Block, BlockId, Ideas, Timeline } from "../src/types.js";
-import type { Claim, ClaimsRun } from "../src/referee-claims.js";
+import type { PaperPromise, PromisesRun } from "../src/referee-promises.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeDoor } from "./helpers/dock-more.js";
@@ -391,7 +391,7 @@ const CRITERION: SavedCriterion = {
   ],
 };
 
-const CLAIM: Claim = {
+const CLAIM: PaperPromise = {
   id: `${P_CRIT}:0`,
   blockId: P_CRIT,
   quote: CRIT_QUOTE,
@@ -403,10 +403,10 @@ const CLAIM: Claim = {
   discarded: 0,
 };
 
-const CLAIMS_RUN: ClaimsRun = {
+const PROMISES_RUN: PromisesRun = {
   status: "done",
   createdAt: "2026-09-01T09:00:00.000Z",
-  claims: [CLAIM],
+  promises: [CLAIM],
   sourceHash: "h",
 };
 
@@ -507,8 +507,8 @@ function reply(url: string, method: string): Promise<Response> {
   if (path.startsWith("/api/referee/criteria/")) {
     return Promise.resolve(json({ criteria: [CRITERION], sourceHash: "h" }));
   }
-  if (path.startsWith("/api/referee/claims/")) {
-    return Promise.resolve(json({ run: CLAIMS_RUN, sourceHash: "h" }));
+  if (path.startsWith("/api/referee/promises/")) {
+    return Promise.resolve(json({ run: PROMISES_RUN, sourceHash: "h" }));
   }
   if (path.startsWith("/api/search/")) {
     const answer = json({ searches: [], sourceHash: "h" });
@@ -763,7 +763,7 @@ async function readingSession(strict: boolean): Promise<void> {
   await settle();
   agree("search, a row pressed", [P_FIND], [P_FIND]);
 
-  /* ---- Referee: Criteria, then Claims, then Criteria again. The one slot two
+  /* -- Referee: Criteria, then Promises, then Criteria again. The one slot two
      producers share, and the hand-off has to be visible in the prose rather
      than only in the state. */
   await press(MODE_LABEL.referee);
@@ -774,15 +774,15 @@ async function readingSession(strict: boolean): Promise<void> {
   await settle();
   agree("criteria, a row pressed", [P_CRIT], [P_CRIT]);
 
-  await viewChip("Claims");
-  /* Claims marks nothing until the referee ticks one — and Criteria's ring must
-     not have survived the hand-off, because Claims owns no key to hold it. */
-  agree("claims, before the tick", [], []);
-  const ticks = [...host.querySelectorAll<HTMLInputElement>(".clm-tick input")];
+  await viewChip("Promises");
+  /* Promises marks nothing until the referee ticks one — and Criteria's ring must
+     not have survived the hand-off, because Promises owns no key to hold it. */
+  agree("promises, before the tick", [], []);
+  const ticks = [...host.querySelectorAll<HTMLInputElement>(".prm-tick input")];
   expect(ticks, "one claim to tick").toHaveLength(1);
   await act(async () => ticks[0]!.click());
   await settle();
-  agree("claims, ticked", [P_CLAIM], []);
+  agree("promises, ticked", [P_CLAIM], []);
 
   await viewChip("Criteria");
   agree("criteria again", [P_CRIT], []);

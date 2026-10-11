@@ -1207,7 +1207,7 @@ text, the reader's other articles, answers — stays in the gitignored run direc
 report may be promoted.
 
 **Not yet described here**, though they exist: `plain-words/`, `simple/`, `faq-levels/`, `sketch/`,
-`illustrated/`, `shelf-topics/`, `dictation/`, `live/`, `referee-claims.ts`, `referee-mirror.ts`,
+`illustrated/`, `shelf-topics/`, `dictation/`, `live/`, `referee-promises.ts`, `referee-mirror.ts`,
 `learn-recall.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
 or README says what it measures.
 

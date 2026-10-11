@@ -50,7 +50,7 @@ import { pgChatStore } from "../src/store/pg-chat.js";
 import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgGlossaryStore } from "../src/store/pg-glossary.js";
 import { pgGlossaryLookupStore } from "../src/store/pg-lookups.js";
-import { pgRefereeClaimsStore } from "../src/store/pg-referee-claims.js";
+import { pgRefereePromisesStore } from "../src/store/pg-referee-promises.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
@@ -90,7 +90,7 @@ const STORES: readonly (readonly [string, (slug: string) => Promise<unknown>])[]
   ["the comment store", (slug) => pgCommentStore.load(slug)],
   ["the chat store", (slug) => pgChatStore.load(slug)],
   ["the search store", (slug) => pgSearchStore.load(slug)],
-  ["the referee-claims store", (slug) => pgRefereeClaimsStore.load(slug)],
+  ["the referee-promises store", (slug) => pgRefereePromisesStore.load(slug)],
   ["the referee-criteria store", (slug) => pgRefereeCriteriaStore.load(slug)],
   ["the glossary-lookup store", (slug) => pgGlossaryLookupStore.load(slug)],
   ["the visibility switch", (slug) => pgVisibilityStore.set(slug, "public", true)],

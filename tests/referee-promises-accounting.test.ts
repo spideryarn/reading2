@@ -1,8 +1,8 @@
 /**
- * **The two things Claims added after an eval found the hole in it** — the
+ * **The two things Promises added after an eval found the hole in it** — the
  * sentences a run did not account for, and the fail-safe on adequacy language.
  *
- * Both are in src/referee-claims.ts, both are pure, and both exist because
+ * Both are in src/referee-promises.ts, both are pure, and both exist because
  * `evals/results/referee-claims.md` said something the panel could not have
  * shown:
  *
@@ -16,7 +16,7 @@
  *    the other side of that door.
  * 2. **Linkage, never adequacy, was held by nothing but the prompt.** The
  *    ablated control — the same paper with the prompt's refusals cut out — came
- *    back with six adequacy verdicts in eleven passages. `validateClaims` now
+ *    back with six adequacy verdicts in eleven passages. `validatePromises` now
  *    blanks a `reasoning` line that reads as one and hands back what it blanked.
  *
  * **Every fixture here is real committed output**, quoted from that transcript,
@@ -37,8 +37,8 @@ import {
   otherTextInQuotes,
   paperPhrases,
   subtractPaperPhrases,
-  validateClaims,
-} from "../src/referee-claims.js";
+  validatePromises,
+} from "../src/referee-promises.js";
 import type { Block } from "../src/types.js";
 
 const paper = (rows: readonly (readonly [string, string])[]): Block[] =>
@@ -47,7 +47,7 @@ const paper = (rows: readonly (readonly [string, string])[]): Block[] =>
 /* ------------------------------------------------------------ the papers -- */
 
 /**
- * The Ridge paper, in full — `neverTakenUp` in evals/referee-claims.ts.
+ * The Ridge paper, in full — `neverTakenUp` in evals/referee-promises.ts.
  *
  * Its abstract makes **three** claims in one sentence: faster, less memory,
  * robust to adversarial inputs. Both paid runs returned two claims and neither
@@ -157,8 +157,8 @@ const CASCADE = paper([
 
 /* ---------------------------------------- what the answer did not account for -- */
 
-/** `validateClaims` first, so the fixture is the shape a panel is actually handed. */
-const claimsOf = (raw: unknown, blocks: Block[]) => validateClaims(raw, blocks).claims;
+/** `validatePromises` first, so the fixture is the shape a panel is actually handed. */
+const claimsOf = (raw: unknown, blocks: Block[]) => validatePromises(raw, blocks).promises;
 
 describe("the rest of the text inside the passages a run quoted", () => {
   it("surfaces the two claims the Ridge run swallowed into a neighbour's quote", () => {
@@ -318,7 +318,7 @@ const withOneReasoning = (reasoning: string) => ({
 describe("a reasoning line that reads as a verdict", () => {
   it("is blanked rather than printed, on every line the ablation produced", () => {
     for (const line of VERDICTS) {
-      const { claims, withheld } = validateClaims(withOneReasoning(line), CASCADE);
+      const { promises: claims, withheld } = validatePromises(withOneReasoning(line), CASCADE);
       const passage = claims[0]?.passages[0];
       expect(passage?.reasoning, line).toBe("");
       expect(passage?.withheld, line).toBe(true);
@@ -330,7 +330,7 @@ describe("a reasoning line that reads as a verdict", () => {
     /* Failing safe here means failing towards showing the paragraph. The linkage
        is the half a referee uses; dropping the row to be rid of one sentence
        would cost them a real passage to save a bad line. */
-    const { claims } = validateClaims(withOneReasoning(VERDICTS[0] as string), CASCADE);
+    const { promises: claims } = validatePromises(withOneReasoning(VERDICTS[0] as string), CASCADE);
     expect(claims[0]?.passages).toHaveLength(1);
     expect(claims[0]?.passages[0]?.quote).toContain("a relative reduction of 11.5%");
     expect(claims[0]?.discarded).toBe(0);
@@ -338,7 +338,7 @@ describe("a reasoning line that reads as a verdict", () => {
 
   it("leaves an honest linkage sentence alone, including the minimal pairs", () => {
     for (const line of LINKAGE) {
-      const { claims, withheld } = validateClaims(withOneReasoning(line), CASCADE);
+      const { promises: claims, withheld } = validatePromises(withOneReasoning(line), CASCADE);
       expect(claims[0]?.passages[0]?.reasoning, line).toBe(line);
       expect(claims[0]?.passages[0]?.withheld, line).toBeUndefined();
       expect(withheld, line).toEqual([]);
@@ -361,7 +361,7 @@ describe("a reasoning line that reads as a verdict", () => {
     expect(adequacyFrames(line)).not.toEqual([]);
     expect(adequacyFrames(subtractPaperPhrases(line, paperPhrases(blocks)))).toEqual([]);
 
-    const { claims, withheld } = validateClaims(
+    const { promises: claims, withheld } = validatePromises(
       {
         claims: [
           {
@@ -393,7 +393,7 @@ describe("a reasoning line that reads as a verdict", () => {
        from, and not the model's judgement. So the claim survives with a true
        label rather than being dropped. */
     const verdict = "The 40% claim is not supported by the results";
-    const { claims, withheld } = validateClaims(
+    const { promises: claims, withheld } = validatePromises(
       {
         claims: [
           {
@@ -425,7 +425,7 @@ describe("a reasoning line that reads as a verdict", () => {
       "Ridge compiles large programs faster than the current allocator",
       "GRADE-using reviews more often called their evidence insufficient than non-GRADE reviews",
     ]) {
-      const { claims, withheld } = validateClaims(
+      const { promises: claims, withheld } = validatePromises(
         {
           claims: [
             {
@@ -450,7 +450,7 @@ describe("a reasoning line that reads as a verdict", () => {
        free, and the 6/6 in the transcript was in-sample. They are pinned here so
        the frames added for them cannot quietly come undone, and the honest
        reading of a green here is *this code has not regressed*, never *a verdict
-       cannot get through*. `HELD_OUT` in evals/referee-claims.ts is where the
+       cannot get through*. `HELD_OUT` in evals/referee-promises.ts is where the
        misses are counted. */
     for (const line of [
       "The results report 11.5%, while the abstract promises 40%.",
@@ -504,7 +504,7 @@ describe("what the caps leave behind", () => {
       ][i],
       reasoning: "",
     }));
-    const { claims, dropped } = validateClaims(
+    const { promises: claims, dropped } = validatePromises(
       {
         claims: [
           {
@@ -526,7 +526,7 @@ describe("what the caps leave behind", () => {
   it("says nothing on a claim the cap did not touch", () => {
     /* Absent rather than zero, so a run stored before this existed reads the
        same as one where nothing was cut — which is the truth about both. */
-    const { claims } = validateClaims(
+    const { promises: claims } = validatePromises(
       {
         claims: [
           {

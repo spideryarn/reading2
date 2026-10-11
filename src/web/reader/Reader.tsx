@@ -3889,7 +3889,7 @@ export function Reader({
           />
         );
       /* **The owner alone, like every other mode that spends money**, and it is
-         the gate rather than a decoration: Criteria, Claims and Mirror all
+         the gate rather than a decoration: Criteria, Promises and Mirror all
          call a model, so a band a visitor could open would be
          spend on somebody else's paper with nobody's press behind it. `visitorGap`
          fails closed and already answers `owners-only` for this mode, so a

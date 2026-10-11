@@ -857,6 +857,14 @@ a plain table rather than `DataTable`: one order, the server's, and rows that tu
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
 Edit offers the address only while the voucher waits, and a save sends only the fields that changed.
+An address box takes a pasted `Name <address>` (the form's, Edit's, and an author gift's draft):
+it keeps the address and fills *Their name* if that is empty, by `addressBoxChange` in
+[`email-address.ts`](../../src/email-address.ts); anything else stays as typed for the server to
+judge. From a settled, successful list, typing an address with waiting vouchers — or claimed ones
+whose claimant still has that address — says under the box, *"This one adds to them"*. Revoked
+vouchers do not count, and the hint stays silent while the list is loading or known stale
+(billing.md § Gift vouchers)
+([261011k](../plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md)).
 Every write is followed by a fresh read, and a refusal is shown in the server's own words beside the
 row. The wire shape is [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), a flat import-free
 module shared by the store and the client because the browser may not import `pg-vouchers.ts`, even

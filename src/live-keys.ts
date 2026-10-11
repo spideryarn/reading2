@@ -5,11 +5,11 @@
  * before the model call so a crash leaves evidence. Only the running process
  * can tell a call in flight from one that died, so each streaming handler holds
  * a key from the pending row to the stored answer, and a sweep spares what is
- * held (src/routes.ts § `answering`, `searching`, `refereeing`, `pullingClaims`).
+ * held (src/routes.ts § `answering`, `searching`, `refereeing`, `pullingPromises`).
  *
  * **A count, not a flag and not one holder.** Two requests can hold one key: a
  * second press on a comment, a revision of a quick search, a criterion deleted
- * and re-posted, two tabs pulling claims. A flag is dropped by whichever
+ * and re-posted, two tabs pulling promises. A flag is dropped by whichever
  * finishes first. One holder (a `Map<key, symbol>`, until plan 261005i § C) is
  * taken over by whichever *registers* last, and that is not always the newer
  * request: an older one whose `begin` answers late registers second, and its

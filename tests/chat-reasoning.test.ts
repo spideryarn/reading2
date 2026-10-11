@@ -2,7 +2,7 @@
  * **`CHAT_REASONING` is what goes on the wire** — src/ai-call.ts.
  *
  * The table exists because a ceiling sized for the answer alone was spent on
- * thinking, on every long paper Referee Claims was given
+ * thinking, on every long paper Referee Promises was given
  * (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md).
  * Exhaustiveness is the compiler's job; what a test has to hold is that the
  * row is what is *sent*, for every job, because a table the gateway forgot to
@@ -62,7 +62,7 @@ describe("what each chat job sends about thinking", () => {
   });
 
   it("covers the jobs this change decided, with the efforts it decided", () => {
-    expect(effortOf("referee-claims")).toBe("medium");
+    expect(effortOf("referee-promises")).toBe("medium");
     expect(effortOf("referee-criteria")).toBe("medium");
     expect(effortOf("link-summary")).toBe("low");
     expect(effortOf("search")).toBe("medium");
@@ -82,7 +82,7 @@ describe("what each chat job sends about thinking", () => {
     /* `AiRequestBody.reasoning` is `never`, which stops a literal. A body
        assembled from something the type never saw is stopped here. */
     expect((await sent("quiz-mark", { reasoning: { effort: "high" } })).reasoning).toBeUndefined();
-    expect((await sent("referee-claims", { reasoning: { effort: "high" } })).reasoning).toEqual({
+    expect((await sent("referee-promises", { reasoning: { effort: "high" } })).reasoning).toEqual({
       effort: "medium",
     });
   });

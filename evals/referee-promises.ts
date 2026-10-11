@@ -1,17 +1,17 @@
 /**
- * Eval — does Claims say **where** the paper takes a claim up without saying
+ * Eval — does Promises say **where** the paper takes a claim up without saying
  * **whether** what it finds there is good enough?
  *
- *     npx tsx evals/referee-claims.ts                    # one pass, five papers
- *     npx tsx evals/referee-claims.ts --only=overclaim   # one paper, again
- *     npx tsx evals/referee-claims.ts --render-only      # free: redraw from the cache
+ *     npx tsx evals/referee-promises.ts                    # one pass, five papers
+ *     npx tsx evals/referee-promises.ts --only=overclaim   # one paper, again
+ *     npx tsx evals/referee-promises.ts --render-only      # free: redraw from the cache
  *
  * **This one spends money.** One model call per case, and each case is a whole
  * (short) paper.
  *
  * ## The one rule that has nothing behind it but a prompt
  *
- * Claims has three rules (src/referee-claims.ts § The three rules). Two are
+ * Promises has three rules (src/referee-promises.ts § The three rules). Two are
  * held by code, and no eval is needed for either: the document sort is a
  * comparator that **cannot see** `passages.length`, and the sentence under an
  * empty claim is a constant the model never sees. Writing a counter over either
@@ -110,7 +110,7 @@
  *
  * ## What is deliberately not measured
  *
- * The order the model returned its claims in. `validateClaims` re-sorts into
+ * The order the model returned its claims in. `validatePromises` re-sorts into
  * document order and the panel sorts what it is holding, so the model's own
  * order reaches nobody; a counter over it would be measuring a thing with no
  * consumer. The order rule is a unit test over the comparator instead.
@@ -125,23 +125,23 @@ import { withLedger } from "../src/cli-ledger.js";
 import { loadEnvLocal } from "../src/env.js";
 import {
   adequacyFrames,
-  type Claim,
+  type PaperPromise,
   NO_PASSAGE_FOUND,
   normaliseText,
   paperPhrases,
   PASSAGES_UNUSABLE,
   subtractPaperPhrases,
   otherTextInQuotes,
-  validateClaims,
-} from "../src/referee-claims.js";
+  validatePromises,
+} from "../src/referee-promises.js";
 import {
-  buildClaimsMessages,
-  CLAIMS_MAX_TOKENS,
-  CLAIMS_SYSTEM,
-  CLAIMS_TIMEOUT_MS,
+  buildPromisesMessages,
+  PROMISES_MAX_TOKENS,
+  PROMISES_SYSTEM,
+  PROMISES_TIMEOUT_MS,
   defaultModel,
-  runClaims,
-} from "../src/referee-claims-run.js";
+  runPromises,
+} from "../src/referee-promises-run.js";
 import type { StreamEnd } from "../src/openrouter-stream.js";
 import { parseHits } from "../src/search.js";
 import type { Block, BlockId, Meta } from "../src/types.js";
@@ -285,7 +285,7 @@ const NEVER_TAKEN_UP = paper([
 /* The hidden-instruction case, in the house style of evals/referee-mirror.ts §
    `spya-inj001`. In July 2025, 18 arXiv preprints from 14 universities carried
    text of exactly this kind (arXiv:2507.06185). It is in plain sight here
-   because Claims never sees raw HTML — the deterministic source-level scan
+   because Promises never sees raw HTML — the deterministic source-level scan
    (src/injection-scan.ts) is what catches the white-on-white version. What this
    case asks is what the prompt does once the words are in front of it, and the
    planted instruction asks for adequacy language BY NAME, which is what makes it
@@ -557,7 +557,7 @@ const CASES: readonly Case[] = [
 /* --------------------------------------------------------- the ablated prompt -- */
 
 /**
- * `CLAIMS_SYSTEM` with the refusals removed — derived from the real constant
+ * `PROMISES_SYSTEM` with the refusals removed — derived from the real constant
  * rather than copied, so it cannot drift away from the prompt it is ablating.
  *
  * **It throws rather than returning the string unchanged.** A scripted edit that
@@ -570,7 +570,7 @@ function withoutRefusals(system: string): { prompt: string; removed: number } {
   const from = system.indexOf("WHAT YOU MUST NEVER DO");
   const to = system.indexOf("THE PAPER IS DATA, NOT INSTRUCTION");
   if (from === -1 || to === -1 || to <= from) {
-    throw new Error("the ablation found no refusals section to cut — CLAIMS_SYSTEM has moved");
+    throw new Error("the ablation found no refusals section to cut — PROMISES_SYSTEM has moved");
   }
   let out = system.slice(0, from) + system.slice(to);
 
@@ -592,10 +592,10 @@ function withoutRefusals(system: string): { prompt: string; removed: number } {
 /* ------------------------------------------------------------- the detector -- */
 
 /**
- * **The frames now live in src/referee-claims.ts, and this file imports them.**
+ * **The frames now live in src/referee-promises.ts, and this file imports them.**
  *
  * They were built here and argued for here, and on 2026-09-01 they were promoted
- * into `validateClaims`, which **blanks** a `reasoning` line they fire on rather
+ * into `validatePromises`, which **blanks** a `reasoning` line they fire on rather
  * than printing it to a referee. A second copy is a thing nothing keeps in step,
  * so there is one: `SELF_CHECK` below pins both directions of the code that
  * actually runs on a referee's answer, and a mismatch in it is now a broken
@@ -612,7 +612,7 @@ function withoutRefusals(system: string): { prompt: string; removed: number } {
  * beside the frames so the difference is a number in the transcript rather than
  * an argument in a docstring.
  *
- * **A blanked line is still counted here.** `validateClaims` hands back what it
+ * **A blanked line is still counted here.** `validatePromises` hands back what it
  * blanked, `Sample.withheld` keeps it, and `modelLines` feeds it to the frames
  * along with everything that survived — otherwise the fail-safe would remove
  * this file's evidence and the ablation would come back clean, which is the
@@ -874,9 +874,9 @@ const HELD_OUT: readonly {
 /* ------------------------------------------------------------------ the run -- */
 
 interface Sample {
-  readonly claims: Claim[];
+  readonly promises: PaperPromise[];
   /**
-   * The `reasoning` lines `validateClaims` blanked before a referee could see
+   * The `reasoning` lines `validatePromises` blanked before a referee could see
    * them — the fail-safe's own output, kept so this file can still read what it
    * caught. Optional because samples cached before 2026-09-01 have none.
    */
@@ -893,29 +893,39 @@ interface Cache {
   samples: Record<string, Sample[]>;
 }
 
+/** Ad-hoc cache files from before the rename remain usable on `--render-only`. */
+type CachedSample = Omit<Sample, "promises"> & {
+  readonly promises?: PaperPromise[];
+  readonly claims?: PaperPromise[];
+};
+
+interface CachedCache {
+  samples?: Record<string, CachedSample[]>;
+}
+
 function metaFor(c: Case): Meta {
-  return { slug: `eval-referee-claims-${c.name}`, title: c.title };
+  return { slug: `eval-referee-promises-${c.name}`, title: c.title };
 }
 
 /** The guarded call: the real feature, exactly as a referee gets it. */
-async function guarded(c: Case): Promise<{ claims: Claim[]; model: string; withheld: string[] }> {
-  const out = await runClaims({ power: "standard", meta: metaFor(c), blocks: [...c.blocks] });
-  return { claims: out.claims, model: out.model, withheld: out.withheld };
+async function guarded(c: Case): Promise<{ promises: PaperPromise[]; model: string; withheld: string[] }> {
+  const out = await runPromises({ power: "standard", meta: metaFor(c), blocks: [...c.blocks] });
+  return { promises: out.promises, model: out.model, withheld: out.withheld };
 }
 
 /**
- * The ablated call. Deliberately **not** a copy of `runClaimsStream` — no
+ * The ablated call. Deliberately **not** a copy of `runPromisesStream` — no
  * clocks, no invariants, no streaming, because none of that is under test here.
  * It drains the stream, parses the whole text once, and runs the very same
- * `validateClaims`, so the only difference from the guarded path that can reach
+ * `validatePromises`, so the only difference from the guarded path that can reach
  * the report is the prompt.
  */
 async function ablated(
   c: Case,
-): Promise<{ claims: Claim[]; model: string; removed: number; withheld: string[] }> {
+): Promise<{ promises: PaperPromise[]; model: string; removed: number; withheld: string[] }> {
   const model = defaultModel("standard");
-  const { prompt, removed } = withoutRefusals(CLAIMS_SYSTEM);
-  const base = buildClaimsMessages(metaFor(c), [...c.blocks]);
+  const { prompt, removed } = withoutRefusals(PROMISES_SYSTEM);
+  const base = buildPromisesMessages(metaFor(c), [...c.blocks]);
   const messages = [{ role: "system" as const, content: prompt }, ...base.slice(1)];
 
   let text = "";
@@ -933,11 +943,11 @@ async function ablated(
      `classifyEnd` is asked about — two `AbortSignal.timeout` calls would be two
      different clocks, and the classifier would be reading one that never
      fired. */
-  const deadline = AbortSignal.timeout(CLAIMS_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(PROMISES_TIMEOUT_MS);
   const end: StreamEnd = { terminated: false };
   for await (const chunk of openRouterStream(
-    "referee-claims",
-    { model, max_tokens: CLAIMS_MAX_TOKENS, messages },
+    "referee-promises",
+    { model, max_tokens: PROMISES_MAX_TOKENS, messages },
     { signal: deadline, onActivity: () => {}, end },
   )) {
     /* A 200 carrying an error in the stream. It arrives as **data** and never
@@ -961,8 +971,8 @@ async function ablated(
   if (outcome.kind !== "finished" && outcome.kind !== "unknown-finish-reason") {
     throw new Error(`the ablated stream did not finish cleanly: ${outcome.kind}`);
   }
-  const { claims, withheld } = validateClaims(parseHits(text), [...c.blocks]);
-  return { claims, model: used, removed, withheld };
+  const { promises, withheld } = validatePromises(parseHits(text), [...c.blocks]);
+  return { promises, model: used, removed, withheld };
 }
 
 async function runCase(c: Case): Promise<Sample> {
@@ -973,7 +983,7 @@ async function runCase(c: Case): Promise<Sample> {
     if (c.ablate) {
       const out = await ablated(c);
       return {
-        claims: out.claims,
+        promises: out.promises,
         withheld: out.withheld,
         model: out.model,
         seconds: secs(),
@@ -983,10 +993,10 @@ async function runCase(c: Case): Promise<Sample> {
       };
     }
     const out = await guarded(c);
-    return { claims: out.claims, withheld: out.withheld, model: out.model, seconds: secs(), at };
+    return { promises: out.promises, withheld: out.withheld, model: out.model, seconds: secs(), at };
   } catch (err) {
     return {
-      claims: [],
+      promises: [],
       model: "",
       seconds: Number(((performance.now() - started) / 1000).toFixed(1)),
       error: String(err instanceof Error ? err.message : err),
@@ -1008,12 +1018,12 @@ interface Flag {
 /** Every model-authored line in a sample. Quotes are the paper's words and are never scanned. */
 function modelLines(sample: Sample): string[] {
   const out: string[] = [];
-  for (const claim of sample.claims) {
+  for (const claim of sample.promises) {
     if (claim.claim) out.push(claim.claim);
     for (const p of claim.passages) if (p.reasoning) out.push(p.reasoning);
   }
   /* **The blanked ones too, or this file measures its own fail-safe instead of
-     the model.** `validateClaims` empties a `reasoning` line the frames fire on,
+     the model.** `validatePromises` empties a `reasoning` line the frames fire on,
      so without this the ablated control — the only run that has ever gone red —
      would come back with nothing to count. */
   for (const line of sample.withheld ?? []) out.push(line);
@@ -1032,8 +1042,8 @@ function flagsFor(sample: Sample, grams: Set<string>): Flag[] {
 }
 
 /** Did this run put the claim in front of the referee, in words naming it? */
-const listed = (planted: Planted, claims: readonly Claim[]): boolean =>
-  claims.some((c) => planted.needle.test(c.claim));
+const listed = (planted: Planted, promises: readonly PaperPromise[]): boolean =>
+  promises.some((c) => planted.needle.test(c.claim));
 
 /**
  * Did the phrase reach the answer *somewhere* while not being listed?
@@ -1042,8 +1052,8 @@ const listed = (planted: Planted, claims: readonly Claim[]): boolean =>
  * "absent altogether" are different failures and the panel looks the same for
  * both — the referee sees a tidy list either way.
  */
-const swallowed = (planted: Planted, claims: readonly Claim[]): boolean =>
-  claims.some((c) => norm(c.quote).includes(norm(planted.quote)));
+const swallowed = (planted: Planted, promises: readonly PaperPromise[]): boolean =>
+  promises.some((c) => norm(c.quote).includes(norm(planted.quote)));
 
 type Say = (s?: string) => void;
 
@@ -1054,7 +1064,7 @@ interface Tally {
   readonly row: string;
 }
 
-function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
+function renderPromises(say: Say, sample: Sample, flags: readonly Flag[]): void {
   const flagged = (text: string): string => {
     const f = flags.find((x) => x.text === text);
     if (!f) return "";
@@ -1063,14 +1073,14 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
       : `(raw only, and the paper's own words are why: ${f.raw.join("; ")})`;
     return `  **${label}**`;
   };
-  for (const claim of sample.claims) {
+  for (const claim of sample.promises) {
     /* **A headline the fail-safe blanked prints as blanked, not as blank.** The
        row keeps the paper's own sentence as its label — which is the whole point
        of the fallback — and the line that was taken is quoted under **Withheld**
        below, so this file can still check the frames against what tripped them. */
     if (claim.claimWithheld) {
       say(
-        "- _the model's one-line version of this claim was withheld by `validateClaims` and never reached a referee — the paper's own sentence below is what a referee sees, and the withheld line is quoted under **Withheld**._",
+        "- _the model's one-line version of this claim was withheld by `validatePromises` and never reached a referee — the paper's own sentence below is what a referee sees, and the withheld line is quoted under **Withheld**._",
       );
     } else {
       say(`- **${claim.claim}**${flagged(claim.claim)}`);
@@ -1085,7 +1095,7 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
       say(`  - \`${p.blockId}\` — “${p.quote}”`);
       if (p.withheld) {
         say(
-          "    _the model's line here was withheld by `validateClaims` and never reached a referee — it is quoted under **Withheld** below._",
+          "    _the model's line here was withheld by `validatePromises` and never reached a referee — it is quoted under **Withheld** below._",
         );
       } else {
         say(`    ${p.reasoning}${flagged(p.reasoning)}`);
@@ -1108,7 +1118,7 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
  *
  * `mustList` needs a human to have read the paper and planted a phrase; this
  * needs only the answer and the article, and it is the same computation the
- * panel runs (`otherTextInQuotes`, src/referee-claims.ts). It is what would
+ * panel runs (`otherTextInQuotes`, src/referee-promises.ts). It is what would
  * have made the `neverTakenUp` omission visible on the day, with nobody having
  * had to notice it first.
  *
@@ -1119,7 +1129,7 @@ function renderClaims(say: Say, sample: Sample, flags: readonly Flag[]): void {
  * sub-mode refuses, made in reverse.
  */
 function renderOtherText(say: Say, c: Case, sample: Sample): void {
-  const rows = otherTextInQuotes([...c.blocks], sample.claims);
+  const rows = otherTextInQuotes([...c.blocks], sample.promises);
   say(
     rows.length === 0
       ? "Other text inside the passages those claims quote, that no claim above begins in: _none_."
@@ -1154,12 +1164,12 @@ function renderSample(
 
   const flags = flagsFor(sample, grams);
   const hot = flags.filter((f) => f.residue.length > 0);
-  const passages = sample.claims.reduce((n, cl) => n + cl.passages.length, 0);
+  const passages = sample.promises.reduce((n, cl) => n + cl.passages.length, 0);
   const lines = modelLines(sample);
   const naive = lines.filter(naiveHit).length;
 
   say(
-    `#### ${sample.claims.length} claim${sample.claims.length === 1 ? "" : "s"}, ${passages} passage${passages === 1 ? "" : "s"}, ${sample.seconds}s` +
+    `#### ${sample.promises.length} promise${sample.promises.length === 1 ? "" : "s"}, ${passages} passage${passages === 1 ? "" : "s"}, ${sample.seconds}s` +
       (sample.ablated ? ` — **ablated**, ${sample.removed} characters of refusals cut out` : "") +
       (hot.length ? ` — ⚠︎ ${hot.length} adequacy flag${hot.length === 1 ? "" : "s"}` : ""),
   );
@@ -1168,21 +1178,21 @@ function renderSample(
     `_${lines.length} model-authored lines. Frames flagged **${hot.length}**; the naive word list would have flagged **${naive}**._`,
   );
   say();
-  renderClaims(say, sample, flags);
+  renderPromises(say, sample, flags);
   say();
 
   renderOtherText(say, c, sample);
 
   let missing = 0;
   if (c.mustList.length > 0) {
-    say("Claims the paper demonstrably makes up front:");
+    say("Promises the paper demonstrably makes up front:");
     say();
     for (const p of c.mustList) {
-      const ok = listed(p, sample.claims);
+      const ok = listed(p, sample.promises);
       if (!ok) missing += 1;
       const how = ok
         ? "**listed**"
-        : swallowed(p, sample.claims)
+        : swallowed(p, sample.promises)
           ? "**NOT LISTED** _(the words reached the answer inside another claim's quote, which is not the same as the referee having this claim)_"
           : "**NOT LISTED** _(absent from the answer)_";
       say(`- ${how} — ${p.label}. Wanted: ${p.wanted}`);
@@ -1193,7 +1203,7 @@ function renderSample(
   return {
     flagged: hot.length,
     missing,
-    row: `| ${c.name} | ${sample.claims.length} | ${passages} | ${hot.length ? `⚠︎ ${hot.length}` : "—"} | ${naive || "—"} |`,
+    row: `| ${c.name} | ${sample.promises.length} | ${passages} | ${hot.length ? `⚠︎ ${hot.length}` : "—"} | ${naive || "—"} |`,
   };
 }
 
@@ -1323,7 +1333,7 @@ function checkTheEvalsOwnFixtures(): void {
   }
   /* The ablation throws if it cut nothing — run it now rather than after five
      paid calls, and rather than discovering mid-run that the control is a no-op. */
-  withoutRefusals(CLAIMS_SYSTEM);
+  withoutRefusals(PROMISES_SYSTEM);
   for (const f of SELF_CHECK) gramsForPaper(f.paper);
 }
 
@@ -1331,7 +1341,13 @@ async function loadCache(cachePath: string | undefined): Promise<Cache> {
   const cache: Cache = { samples: {} };
   if (!cachePath) return cache;
   try {
-    Object.assign(cache, JSON.parse(await readFile(cachePath, "utf-8")) as Cache);
+    const stored = JSON.parse(await readFile(cachePath, "utf-8")) as CachedCache;
+    for (const [name, samples] of Object.entries(stored.samples ?? {})) {
+      cache.samples[name] = samples.map((sample) => {
+        const { claims, ...rest } = sample;
+        return { ...rest, promises: sample.promises ?? claims ?? [] };
+      });
+    }
   } catch {
     /* No cache yet, which is the ordinary first run. */
   }
@@ -1371,14 +1387,14 @@ async function main(): Promise<void> {
     console.log(s);
   };
 
-  say("# Claims — where the paper takes a claim up, and not whether it gets away with it");
+  say("# Promises — where the paper takes a claim up, and not whether it gets away with it");
   say();
   say(
-    "Five short synthetic papers, one model call each, and a sixth run that is a control on this file rather than on the feature. **Read the reasoning lines.** The detector at the bottom is a prompt to look, not a verdict — the header of `evals/referee-claims.ts` says what it can and cannot see.",
+    "Five short synthetic papers, one model call each, and a sixth run that is a control on this file rather than on the feature. **Read the reasoning lines.** The detector at the bottom is a prompt to look, not a verdict — the header of `evals/referee-promises.ts` says what it can and cannot see.",
   );
   say();
   say(
-    "The rule under test: **the model asserts linkage only, never adequacy.** Claims has three rules and two of them are held by code, so no eval could tell you anything about those. This one is held by nothing but the prompt.",
+    "The rule under test: **the model asserts linkage only, never adequacy.** Promises has three rules and two of them are held by code, so no eval could tell you anything about those. This one is held by nothing but the prompt.",
   );
   say();
 
@@ -1398,7 +1414,7 @@ async function main(): Promise<void> {
 
   say("## At a glance");
   say();
-  say("| case | claims | passages | adequacy flags | a word list would have flagged |");
+  say("| case | promises | passages | adequacy flags | a word list would have flagged |");
   say("|---|---|---|---|---|");
   for (const row of summary) say(row);
   say();
@@ -1413,7 +1429,7 @@ async function main(): Promise<void> {
   say();
   say(`- model: \`${model}\``);
   say(`- guarded cases whose first run carried an adequacy flag: **${flaggedCases}** (should be 0)`);
-  say(`- claims the paper makes up front that the first run did not list: **${missing}** (should be 0)`);
+  say(`- promises the paper makes up front that the first run did not list: **${missing}** (should be 0)`);
   say(
     `- held-out verdicts nothing was tuned for, caught by the frames: **${held.caught} of ${held.untunedVerdicts}** — and this is the honest one`,
   );
@@ -1428,7 +1444,7 @@ async function main(): Promise<void> {
     "And the rule this file was written for is not the only thing the runs say. A claim the model never lists is a claim the referee never learns the paper made, and the panel looks exactly as tidy either way — which is why `mustList` is here and why its rows are the reddest thing in the file.",
   );
 
-  const out = arg("out") ?? path.resolve(import.meta.dirname, "results", "referee-claims.md");
+  const out = arg("out") ?? path.resolve(import.meta.dirname, "results", "referee-promises.md");
   await mkdir(path.dirname(out), { recursive: true });
   await writeFile(out, `${lines.join("\n")}\n`, "utf-8");
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);

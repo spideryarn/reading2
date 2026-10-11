@@ -479,7 +479,7 @@ const TEXT_ROLES: {
     token: "--type-body",
     use: "a sentence under the row that explains it",
     samples: {
-      ui: "The model's line about this passage was withheld.", // Claims, withheld
+      ui: "The model's line about this passage was withheld.", // Promises, withheld
       ai: "This passage leans on the idea without stating it.", // why-lines, glosses
       author: "“in the year the war ended”", // Timeline's phrase inside an explanatory line
     },

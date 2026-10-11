@@ -311,7 +311,7 @@ So the migration is a `baseURL` and a model spelling. The stages kept `client.me
 The other side of the same parameter. On the chat wire, a request with no `reasoning` field leaves
 Sonnet 5 to think as long as it likes — and **`max_tokens` covers the thinking as well as the
 answer**, so a ceiling sized for the answer alone can be spent before a word is written. Referee
-Claims was, on every long paper it was given, until 2026-09-28
+Promises (then called Claims) was, on every long paper it was given, until 2026-09-28
 ([260928b](../postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md)).
 
 So every chat job's decision lives in one table, `CHAT_REASONING` in

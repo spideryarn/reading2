@@ -246,10 +246,10 @@ describe("every stall clock aborts with the shared class", () => {
       "converse.ts",
       "link-summary.ts",
       "quiz-mark.ts",
-      "referee-claims-run.ts",
       "referee-criteria-run.ts",
       "referee-hidden-check.ts",
       "referee-mirror.ts",
+      "referee-promises-run.ts",
       "search.ts",
       "stream-run.ts",
     ]);

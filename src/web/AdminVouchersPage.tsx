@@ -35,6 +35,7 @@ import {
   giftEmailSubject,
 } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
+import { addressBoxChange, normaliseEmail } from "../email-address.js";
 import type { LibraryEntry } from "../types.js";
 import { AuthorGifts } from "./AdminAuthorGifts.js";
 import {
@@ -319,9 +320,46 @@ function StarterPicker({
   );
 }
 
-function CreateForm({ create, canReplay, shelf }: {
+/**
+ * **The gifts this address already has, not revoked**, so the form can say a
+ * new one adds to them. Greg, 2026-10-11 (spya-dkddku): *"It should be
+ * possible to send multiple gift vouchers to the same person and they're
+ * additive."* They always were; this says so (plan 261011k). A waiting
+ * voucher counts by its address, since the claim takes every one at it; a
+ * claimed one only while its claimant's current address is this one, because
+ * a claimed voucher belongs to an account, which may have moved address since
+ * (Sol, plan review F1). From the last successful, settled list: while a list
+ * is loading, or after a refresh failed and left the old list on screen, the
+ * form says nothing rather than making a stale claim.
+ */
+export function giftsAlreadyAt(
+  email: string,
+  vouchers: readonly AdminVoucherRow[] | null,
+): { readonly count: number; readonly articles: number } | null {
+  const address = normaliseEmail(email);
+  if (vouchers === null || address === "") return null;
+  const same = vouchers.filter(
+    (v) =>
+      v.revokedAt === null &&
+      (v.claimedBy === null
+        ? v.email === address
+        : v.claimantEmail !== null && normaliseEmail(v.claimantEmail) === address),
+  );
+  if (same.length === 0) return null;
+  return { count: same.length, articles: same.reduce((sum, v) => sum + v.articles, 0) };
+}
+
+function alreadyLine(already: { readonly count: number; readonly articles: number }): string {
+  const articles = `${already.articles} article${already.articles === 1 ? "" : "s"}`;
+  const gifts = already.count === 1 ? `a gift of ${articles}` : `${already.count} gifts (${articles})`;
+  return `This address already has ${gifts}. This one adds to ${already.count === 1 ? "it" : "them"}.`;
+}
+
+function CreateForm({ create, canReplay, vouchers, shelf }: {
   create: UseAdminVouchers["create"];
   canReplay: UseAdminVouchers["canReplay"];
+  /** The list below, to say when this address already has gifts. */
+  vouchers: UseAdminVouchers["vouchers"];
   /** The administrator's own shelf, for the starter; read once for the page. */
   shelf: StarterShelf;
 }) {
@@ -343,6 +381,7 @@ function CreateForm({ create, canReplay, shelf }: {
 
   const choices = useMemo(() => starterChoices(shelf.articles), [shelf.articles]);
   const starter = starterState(starterSlug, shelf.articles);
+  const already = giftsAlreadyAt(email, vouchers);
   const count = wholeNumber(articles);
   const input: NewVoucherInput | null = count === null ? null : {
     email,
@@ -410,7 +449,13 @@ function CreateForm({ create, canReplay, shelf }: {
             required
             enterKeyHint="go"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            aria-describedby={already ? "voucher-new-already" : undefined}
+            onChange={(e) => {
+              /* `Name <a@b>` pasted keeps the address and fills an empty name (plan 261011k). */
+              const next = addressBoxChange(e.target.value, recipientName);
+              setEmail(next.email);
+              setRecipientName(next.name);
+            }}
             className={`${INPUT} tw:w-full`}
           />
         </label>
@@ -430,6 +475,11 @@ function CreateForm({ create, canReplay, shelf }: {
           />
         </label>
       </div>
+      {already && (
+        <p id="voucher-new-already" className="tw:m-0 tw:mt-2 tw:text-xs tw:text-muted-foreground">
+          {alreadyLine(already)}
+        </p>
+      )}
       {/* Their name, above the note it is drawn above in the email — Greg,
           2026-10-06 (spya-vc6pnm): *"the gift voucher would say something
           like, Dear so-and-so. So maybe it needs a name field as well."*
@@ -870,7 +920,12 @@ function VoucherRow({
             enterKeyHint="done"
             form={`voucher-${voucher.id}`}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              /* `Name <a@b>` pasted keeps the address and fills an empty name (plan 261011k). */
+              const next = addressBoxChange(e.target.value, recipientName);
+              setEmail(next.email);
+              setRecipientName(next.name);
+            }}
             className={`${INPUT} tw:w-56`}
           />
         ) : (
@@ -1015,17 +1070,19 @@ function SignedInForms({
   readerId,
   create,
   canReplay,
+  vouchers,
   onVoucherMade,
 }: {
   readerId: string;
   create: UseAdminVouchers["create"];
   canReplay: UseAdminVouchers["canReplay"];
+  vouchers: UseAdminVouchers["vouchers"];
   onVoucherMade: () => void;
 }) {
   const shelf = useStarterShelf(readerId);
   return (
     <>
-      <CreateForm create={create} canReplay={canReplay} shelf={shelf} />
+      <CreateForm create={create} canReplay={canReplay} vouchers={vouchers} shelf={shelf} />
       <AuthorGifts shelf={shelf} onVoucherMade={onVoucherMade} />
     </>
   );
@@ -1044,7 +1101,7 @@ export function AdminVouchersPage() {
     <Shell title="Gift vouchers" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
       <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
         A voucher adds articles to the free allowance of whoever signs in with that address, and
-        counts only while they are on the Free plan.
+        counts only while they are on the Free plan. Several to one address add up.
       </p>
 
       {readerId === null ? (
@@ -1053,7 +1110,13 @@ export function AdminVouchersPage() {
           <AuthorGifts shelf={null} onVoucherMade={reloadAfterEmail} />
         </>
       ) : (
-        <SignedInForms readerId={readerId} create={create} canReplay={canReplay} onVoucherMade={reloadAfterEmail} />
+        <SignedInForms
+          readerId={readerId}
+          create={create}
+          canReplay={canReplay}
+          vouchers={loading || error !== null ? null : vouchers}
+          onVoucherMade={reloadAfterEmail}
+        />
       )}
 
       {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}

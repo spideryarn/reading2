@@ -224,7 +224,7 @@ read off the input's fields, never the input object, which is fresh every render
 
 `CriteriaBand` and `ClaimsBand` both write `refereeFound`, and **both publish in a `useLayoutEffect`
 and clear in a passive `useEffect`** ([`CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) § 276 and
-307, [`ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) § 257 and 264). So switching sub-mode runs the
+307, [`ClaimsPanel.tsx`](../../src/web/PromisesPanel.tsx) § 257 and 264). So switching sub-mode runs the
 incoming band's publication during the commit and the outgoing band's clear afterwards, and the
 incoming marks are lost. This is the exact class the five mode-level slots exist to prevent, occurring
 one level down where they do not reach.

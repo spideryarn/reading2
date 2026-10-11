@@ -33,7 +33,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checksOwner, claimListOf, claimListOwner } from "./helpers/sources-claims-owner.js";
 import { noticeIdentity, STALE_NOTICE_MODES, type StaleNoticeMode } from "../src/stale-notice.js";
 
-import type { Claim } from "../src/referee-claims.js";
+import type { PaperPromise } from "../src/referee-promises.js";
 import type { PublicSketch } from "../src/public-types.js";
 import type {
   Article,
@@ -58,7 +58,7 @@ import type { QuotesOwner } from "../src/web/QuotesPanel.js";
 import type { TimelineOwner } from "../src/web/TimelinePanel.js";
 import type { SkimView } from "../src/web/modes/skim/SkimMode.js";
 import type { UseBibliography } from "../src/web/useBibliography.js";
-import type { ClaimsApi } from "../src/web/useClaims.js";
+import type { PromisesApi } from "../src/web/usePromises.js";
 import type { UseSourcesClaims } from "../src/web/useSourcesClaims.js";
 import type { UseFaq } from "../src/web/useFaq.js";
 import type { SavedSearch } from "../src/web/useSearch.js";
@@ -127,7 +127,7 @@ const { SkimPanel } = await import("../src/web/SkimPanel.js");
 const { SearchPanel } = await import("../src/web/SearchPanel.js");
 const { SketchView } = await import("../src/web/SketchView.js");
 const { IllustratedView } = await import("../src/web/IllustratedView.js");
-const { ClaimsView } = await import("../src/web/ClaimsPanel.js");
+const { PromisesView } = await import("../src/web/PromisesPanel.js");
 
 /* ----------------------------------------------------------- the article -- */
 
@@ -204,7 +204,7 @@ const AT = {
   skim: "2026-09-01T11:00:00.000Z",
   searchCreated: "2026-09-01T12:00:00.000Z",
   searchFinished: "2026-09-01T12:30:00.000Z",
-  claims: "2026-09-01T13:00:00.000Z",
+  promises: "2026-09-01T13:00:00.000Z",
 } as const;
 
 const SEARCH_RUN_ID = "spya-srch23";
@@ -709,7 +709,7 @@ const STALE_RUN: SavedSearch = {
   stale: true,
 };
 
-const CLAIM: Claim = {
+const CLAIM: PaperPromise = {
   id: "spya-anc234:8",
   blockId: "spya-anc234",
   quote: "the method halves annotation time",
@@ -719,9 +719,9 @@ const CLAIM: Claim = {
   discarded: 0,
 };
 
-function claimsApi(): ClaimsApi {
+function promisesApi(): PromisesApi {
   return {
-    run: { status: "done", createdAt: AT.claims, claims: [CLAIM] },
+    run: { status: "done", createdAt: AT.promises, promises: [CLAIM] },
     stale: true,
     loaded: true,
     loadFailed: false,
@@ -910,18 +910,18 @@ const ROWS: Record<StaleNoticeMode, Row> = {
     mount: () => createElement(IllustratedView, { slug: SLUG, blocks: BLOCKS, onJump: noop }),
     identity: noticeIdentity(JSON.stringify(ILLUSTRATED)),
   },
-  claims: {
+  promises: {
     mount: () =>
-      createElement(ClaimsView, {
-        api: claimsApi(),
-        claims: [CLAIM],
+      createElement(PromisesView, {
+        api: promisesApi(),
+        promises: [CLAIM],
         slots: new Map([[CLAIM.id, 0]]),
         showing: [],
         onToggle: noop,
         onJump: noop,
         slug: SLUG,
       }),
-    identity: AT.claims,
+    identity: AT.promises,
   },
 };
 

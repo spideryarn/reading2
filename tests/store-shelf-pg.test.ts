@@ -68,7 +68,7 @@ import {
   staleNoticeDismissals,
   commandSuggestionDismissals,
   realtimeSessions,
-  refereeClaims,
+  refereePromises,
   refereeHiddenChecks,
   refereeCriteria,
   revisionBlocks,
@@ -1148,9 +1148,9 @@ describe("destroying an article", () => {
           issuedAt: now,
           acceptsUntil: new Date(now.getTime() + 60_000),
         }),
-      referee_claims: () =>
+      referee_promises: () =>
         db
-          .insert(refereeClaims)
+          .insert(refereePromises)
           .values({ articleId: GONE_ARTICLE, ownerId: owner, status: "pending" }),
       referee_hidden_checks: () =>
         db.insert(refereeHiddenChecks).values({

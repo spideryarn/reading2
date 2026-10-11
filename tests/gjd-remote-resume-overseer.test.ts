@@ -32,6 +32,7 @@ import {
 } from "../scripts/gjd-remote-tmux.js";
 
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
+const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
 const UUID = "f101b196-6746-4b73-b7ac-9d885db5b776"; // not the Overseer's real one: fixture-ids wants each uuid in one file
 const DIR = "/home/greg/code/spideryarn2";
 
@@ -149,7 +150,6 @@ describe("against captured tmux replies", () => {
   function runCaptured(cur: string, cx: number, below = "", previous = "", failSend = 0, uuid = "00000000-0000-4000-8000-000000000000", pgrepStatus = 1) {
     const dir = mkdtempSync(path.join(tmpdir(), "gjd-resume-capture-"));
     const sends = path.join(dir, "sends");
-    const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
     try {
       const stub = `#!/bin/bash
 [ "$1" = -S ] || exit 90
@@ -272,7 +272,7 @@ describe.runIf(usable())("against a real tmux server", () => {
   const work = path.join(dir, "work 'q' $(false); `x` & *");
   const record = path.join(dir, "argv");
   const which = path.join(dir, "which");
-  const shell = `/usr/bin/env -i PATH=${bin} HOME=${home} TERM=xterm /bin/bash --norc --noprofile -i`;
+  const shell = `/usr/bin/env -i PATH=${quote(bin)} HOME=${quote(home)} TERM=xterm /bin/bash --norc --noprofile -i`;
   const tmux = (...args: string[]): string =>
     execFileSync("tmux", ["-S", sock, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -286,7 +286,8 @@ describe.runIf(usable())("against a real tmux server", () => {
     tmux("set-environment", "-t", `${name}:`, "CLAUDE_SESSION_ID", FAKE);
     tmux("set-environment", "-t", `${name}:`, "GJD_REMOTE_DIR", work);
     const ready = () => /^bash-[0-9.]+[$#]( |$)/m.test(tmux("capture-pane", "-p", "-t", `${name}:`));
-    for (let i = 0; i < 50 && !ready(); i++) await sleep(50);
+    // A deadline, not a count: a loaded box can take seconds to start bash.
+    for (const deadline = Date.now() + 10_000; Date.now() < deadline && !ready(); ) await sleep(50);
     expect(ready(), "the isolated bash pane must reach its default prompt").toBe(true);
     return tmux("display-message", "-p", "-t", `${name}:`, "#{session_id}").trim();
   }
@@ -294,7 +295,7 @@ describe.runIf(usable())("against a real tmux server", () => {
   const screen = (id: string) => tmux("capture-pane", "-p", "-t", `${id}:`);
 
   function run(id: string, extraPath?: string): { status: number; out: string } {
-    const cmd = resumeOverseerCommand({ id, conversationId: FAKE, dir: work }).replaceAll("tmux ", `tmux -S ${sock} `);
+    const cmd = resumeOverseerCommand({ id, conversationId: FAKE, dir: work }).replaceAll("tmux ", `tmux -S ${quote(sock)} `);
     const env = extraPath ? { ...process.env, PATH: `${extraPath}:${process.env["PATH"] ?? ""}` } : process.env;
     try {
       return { status: 0, out: execFileSync("bash", ["-c", cmd], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] }) };
@@ -303,12 +304,16 @@ describe.runIf(usable())("against a real tmux server", () => {
       return { status: err.status, out: err.stdout };
     }
   }
+  /** Wait for a file that its writer publishes with a rename, so existing
+   * means complete. A generous deadline: on a loaded box (load ~20 in a deploy
+   * gate) a pane's shell can take seconds to get scheduled. */
   async function waitFor(file: string): Promise<boolean> {
-    for (let i = 0; i < 50; i++) {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
       if (existsSync(file)) return true;
       await sleep(100);
     }
-    return false;
+    return existsSync(file);
   }
   /** Set a pane up, then assert the command refuses with `why` and types nothing. */
   async function refuses(setUp: (id: string) => void | Promise<void>, why: RegExp, extraPath?: string, status = 3) {
@@ -328,8 +333,7 @@ describe.runIf(usable())("against a real tmux server", () => {
     for (const d of [bin, badBin, home, work]) mkdirSync(d, { recursive: true });
     // The stub records its argv one per line, then its working directory.
     // Absolute paths only: its PATH holds nothing but itself.
-    const r = JSON.stringify(record);
-    writeFileSync(path.join(bin, "claude"), `#!/bin/bash\n{ printf '%s\\n' "$@"; pwd; } > ${r}.tmp && /bin/mv ${r}.tmp ${r}\n`);
+    writeFileSync(path.join(bin, "claude"), `#!/bin/bash\n{ printf '%s\\n' "$@"; pwd; } > ${quote(`${record}.tmp`)} && /bin/mv ${quote(`${record}.tmp`)} ${quote(record)}\n`);
     chmodSync(path.join(bin, "claude"), 0o755);
     // A pgrep that fails the way a broken one does: neither "found" nor "none".
     writeFileSync(path.join(badBin, "pgrep"), "#!/bin/sh\nexit 2\n");
@@ -345,10 +349,14 @@ describe.runIf(usable())("against a real tmux server", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  // Three waits can each take 10 seconds; leave room for the shell/tmux work too.
   it("types the resume into a shell at an empty prompt, in the launch directory", async () => {
     const id = await fresh();
     // Guard 3: the `claude` this pane would run is the stub, or nothing is typed.
-    keys(id, "-l", `command -v claude > ${which}`);
+    // Written aside and renamed, as the stub does: `> ${which}` alone creates
+    // the file empty before `command -v` writes it, and a loaded box lets
+    // waitFor see it in that gap — which once failed a deploy gate with ''.
+    keys(id, "-l", `command -v claude > ${quote(`${which}.tmp`)} && /bin/mv ${quote(`${which}.tmp`)} ${quote(which)}`);
     keys(id, "Enter");
     expect(await waitFor(which)).toBe(true);
     expect(readFileSync(which, "utf8").trim()).toBe(path.join(bin, "claude"));
@@ -360,7 +368,7 @@ describe.runIf(usable())("against a real tmux server", () => {
     expect(await waitFor(record), screen(id)).toBe(true);
     const lines = readFileSync(record, "utf8").trimEnd().split("\n");
     expect(lines).toEqual(["--resume", FAKE, "--permission-mode", "auto", work]);
-  });
+  }, 40_000);
 
   it("refuses a half-typed line rather than erasing it", async () => {
     await refuses((id) => void keys(id, "-l", "half typed"), /input line|empty shell prompt/);
