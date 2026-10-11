@@ -318,6 +318,10 @@ const SHARED = new Set([
      261010c). Types and three constants, no imports: the same wire-contract
      argument as `admin-vouchers.js`. */
   "admin-author-gifts.js",
+  /* Every article as /admin/articles draws it, and a transfer's preview and
+     answer (plan 261011n). Types, the reader-state kinds and one pure sum, no
+     imports: the same wire-contract argument as `admin-vouchers.js`. */
+  "admin-articles.js",
   /* The `/admin/costs` wire shape and the pure filter, group and pivot over
      it, shared with the analysis script so a figure has one definition. Imports
      `step-order.js` and nothing else; `category` is a string the server fills

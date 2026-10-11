@@ -88,6 +88,9 @@ export const ADMIN_VOUCHERS_URL = `${PUBLIC_ORIGIN}${ADMIN_VOUCHERS_PATH}`;
 /** **The cost explorer**: the router's `ADMIN_COSTS_HREF`. docs/plans/261005a-…. */
 export const ADMIN_COSTS_PATH = "/admin/costs";
 
+/** **Every article, and moving one to another account**: the router's `ADMIN_ARTICLES_HREF`. Plan 261011n § D4. */
+export const ADMIN_ARTICLES_PATH = "/admin/articles";
+
 /**
  * **Where this article lives on Spideryarn** — the link back, from anywhere.
  *

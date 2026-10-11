@@ -175,6 +175,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
     ["../src/store/pg-vouchers.js", "pgVoucherStore", "vouchers"],
     ["../src/store/pg-author-gifts.js", "pgAuthorGiftStore", "author-gifts"],
+    ["../src/store/pg-article-transfer.js", "pgArticleTransferStore", "article-transfer"],
   ];
 
   for (const [module, name, seam] of seams) {
@@ -356,6 +357,9 @@ describe("no Postgres store is selected without a guard", () => {
       "ensureShareLinkForArticle",
       "pgAdminStore",
       "pgArticleReader",
+      /* An article's transfer between accounts, 2026-10-11 (261011n): the
+         list reads across owners. */
+      "pgArticleTransferStore",
       /* Author gifts, 2026-10-09 (261010c): addresses, notes, and through Send
          a voucher create that binds a rendered gift email. */
       "pgAuthorGiftStore",

@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChartColumn, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
+import { ChartColumn, FileText, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -41,6 +41,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
+  ADMIN_ARTICLES_HREF,
   ADMIN_COSTS_HREF,
   ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
@@ -218,9 +219,10 @@ export function AdminHome() {
   return (
     <Shell title="Admin">
       <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
-        Everything on these pages reads across accounts. Two of them can also change something:
-        Gift vouchers makes and edits vouchers, and Feedback can mark a report as ignored. Below
-        them, the public shelf's topics can be rebuilt.
+        Everything on these pages reads across accounts. Three of them can also change something:
+        Gift vouchers makes and edits vouchers, Feedback can mark a report as ignored, and Articles
+        can move an article to another account. Below them, the public shelf's topics can be
+        rebuilt.
       </p>
       <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
         <Entry
@@ -248,6 +250,12 @@ export function AdminHome() {
           icon={<ChartColumn size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
           title="Costs"
           blurb="What model calls cost, by user, article, mode or task, model and day"
+        />
+        <Entry
+          href={ADMIN_ARTICLES_HREF}
+          icon={<FileText size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Articles"
+          blurb="Every article and whose it is, and moving one to another account"
         />
         {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
             > Move the Design link on the logged-in Homepage into /admin
