@@ -111,6 +111,7 @@ import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
 import { hostOf, isWebUrl, sameTarget } from "./urls.js";
 import { untrusted } from "./untrusted-fence.js";
+import { readCitedWork } from "./read-cited-work.js";
 import { savesAtOnce } from "./save-closeness.js";
 
 /* --------------------------------------------------------------- the caps --
@@ -563,9 +564,46 @@ export const READER_NOTES_TOOL: FunctionTool = {
   },
 };
 
+/**
+ * **Chat reads a paper the article cites** (plan 261011w), and **deliberately
+ * not in `CHAT_TOOLS`**, for `READER_NOTES_TOOL`'s reason: Live flattens that
+ * list, and a 25-second PDF read is no part of a spoken turn; Learn, Tutorial
+ * and Candidates have no use for it; the guide is about how to read. Offered
+ * to `chat` and `explore` only. src/read-cited-work.ts is the tool.
+ */
+export const READ_CITED_WORK_TOOL: FunctionTool = {
+  type: "function",
+  function: {
+    name: "read_cited_work",
+    description:
+      "Read a paper THIS article cites, from its citations list: the PDF itself, confirmed by code to be " +
+      "that work, with the passages that bear most on a claim. Use it when the reader asks whether a cited " +
+      "work says, shows or supports what the article uses it for, or what the work actually says. Prefer " +
+      "it to read_web_page for a work in the list: that tool cannot read a PDF and cannot confirm which " +
+      "paper it has. It reads only open copies (a DOI or arXiv link the article gives), so it often says " +
+      "it could not read one; then say so. Do NOT use it for a question the article itself answers.",
+    parameters: {
+      type: "object",
+      properties: {
+        work: {
+          type: "string",
+          description: "The work's title, as article_citations lists it.",
+        },
+        claim: {
+          type: "string",
+          description:
+            "What the article says the work shows or supports, in the article's words where you can: the " +
+            "citing sentence. It aims which passages you are shown.",
+        },
+      },
+      required: ["work", "claim"],
+    },
+  },
+};
+
 /* Built once: tools are rendered ahead of system and messages, so they are part
    of the cached prefix and must be the same bytes on every request of a kind. */
-const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL];
+const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL, READ_CITED_WORK_TOOL];
 
 /**
  * **The guide's tools: this article's, and nothing that leaves it.** The guide
@@ -816,6 +854,11 @@ export function describeCall(name: string, args: Record<string, unknown>): strin
     case "article_citations": {
       const what = quoted(args.query);
       return what ? `looked through the citations for ${what}` : "read this article's citations";
+    }
+    /* The title the model passed; never the claim, which is longer and adds nothing to the row. */
+    case "read_cited_work": {
+      const what = quoted(args.work);
+      return what ? `read the cited work ${what}` : "read a cited work";
     }
     case "reader_notes":
       /* No id and no title: this row is stored on the message and drawn in the
@@ -2403,6 +2446,8 @@ export async function runTool(
       return readCitations(args, ctx);
     case "read_web_page":
       return readWebPage(args.url, ctx);
+    case "read_cited_work":
+      return { label: describeCall("read_cited_work", args), ...(await readCitedWork(args, ctx)) };
     case "reader_notes":
       return readReaderNotes(args, ctx);
     case "offer_to_save":

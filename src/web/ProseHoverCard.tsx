@@ -39,6 +39,7 @@ import {
   CornerDownRight,
   CornerUpLeft,
   ExternalLink,
+  FileSearch,
   FileText,
   Globe,
   MessagesSquare,
@@ -257,6 +258,7 @@ function HoverCard({
   termActions,
   onAskTerm = null,
   onAskCitedWork = null,
+  onCheckCitedWork = null,
   onOpenCitedWork = null,
   quotes = null,
 }: {
@@ -413,6 +415,13 @@ function HoverCard({
    * visitor, who has no chat.
    */
   onAskCitedWork?: ((work: CitedWork) => void) | null;
+  /**
+   * ***Does it say that?* on a cited work's card, opened from a paragraph that
+   * cites it** — Reader's `checkCitedWorkInChat`: a fresh chat anchored on
+   * that paragraph, which chat answers by reading the paper. Plan 261011w.
+   * `null` or absent for a visitor.
+   */
+  onCheckCitedWork?: ((work: CitedWork, blockId: BlockId) => void) | null;
   /**
    * ***Open in Sources* on a cited work's card** — Reader's
    * `openBibliographyWork`, which opens Bibliography and brings the work's row
@@ -794,6 +803,7 @@ function HoverCard({
               work={w}
               showInSpideryarn={showInSpideryarn}
               onAsk={onAskCitedWork}
+              onCheck={onCheckCitedWork}
               onOpen={
                 onOpenCitedWork
                   ? () => {
@@ -2177,6 +2187,7 @@ function CiteCard({
   work,
   showInSpideryarn,
   onAsk,
+  onCheck,
   onOpen,
   here,
   onJump,
@@ -2186,6 +2197,8 @@ function CiteCard({
   showInSpideryarn: boolean;
   /** `null` for a visitor: no Ask in chat. */
   onAsk: ((work: CitedWork) => void) | null;
+  /** *Does it say that?* about the paragraph `here`; `null` for a visitor. */
+  onCheck: ((work: CitedWork, blockId: BlockId) => void) | null;
   /** *Open in Sources*, closing the card first; `null` draws no button. */
   onOpen: (() => void) | null;
   /** The block the card was opened from, which is not a jump (plan 261009e). */
@@ -2198,6 +2211,9 @@ function CiteCard({
   const by = byLineOf(work);
   const line = workByLine(work);
   const why = showsWhy({ lookup: work.lookup });
+  /* A body paragraph that cites the work (`citedAt`, Sol S8), not the
+     reference entry, and not a card with nowhere it was opened from. */
+  const checkHere = onCheck && here !== null && work.citedAt.includes(here) ? here : null;
   const readNote = readNoteOf(work);
 
   return (
@@ -2313,8 +2329,25 @@ function CiteCard({
             2026-10-09 (plan 261009k), then the way into the mode. Ask is the
             band's own sender, so the chat records the same origin as a press
             on the row would. The card closes on either press. */}
-        {(onAsk || onOpen) && (
+        {(onAsk || onOpen || checkHere) && (
           <span className="prose-card-acts">
+            {/* *Does it say that?* (plan 261011w): only where the card was
+                opened from a paragraph that cites the work, since "that" is
+                this paragraph's claim. Labelled, not an icon: the bubbles are
+                the work's own chat, and this starts a fresh one, anchored here. */}
+            {checkHere && onCheck && (
+              <button
+                type="button"
+                className="prose-card-open prose-card-cite-check"
+                onClick={() => {
+                  onCheck(work, checkHere);
+                  onClose();
+                }}
+              >
+                <FileSearch size={10} aria-hidden="true" />
+                {DOES_IT_SAY_THAT}
+              </button>
+            )}
             {onAsk && (
               <CardAskInChat
                 label={ASK_WORK_IN_CHAT}
@@ -2332,6 +2365,9 @@ function CiteCard({
     </div>
   );
 }
+
+/** The citation card's button that asks chat to read the work (plan 261011w). */
+export const DOES_IT_SAY_THAT = "Does it say that?";
 
 /** Past this many the row ends in *and N more*; the count before it stays exact. */
 export const CITED_AT_JUMPS_SHOWN = 20;
