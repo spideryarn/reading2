@@ -595,9 +595,12 @@ export function planChunks(
      * bound's own asserts.
      */
     pageBytes?: ReadonlyMap<number, number>;
+    /** `CHUNK_WORDS` unless an experiment says otherwise — `PdfExtractOptions.chunking`. */
+    chunkWords?: number;
   } = {},
 ): Chunk[] {
   const maxChunkPages = opts.maxChunkPages ?? MAX_CHUNK_PAGES;
+  const chunkWords = opts.chunkWords ?? CHUNK_WORDS;
   const sizes = opts.pageBytes;
   /**
    * **What a page costs *on top of* what every cut costs anyway.**
@@ -626,7 +629,7 @@ export function planChunks(
     const cost = marginal(page.page);
     const full =
       current.length >= maxChunkPages ||
-      words + weight > CHUNK_WORDS ||
+      words + weight > chunkWords ||
       (sizes !== undefined && bytes + cost > MAX_CHUNK_BYTES);
     /* `current.length &&` on every one of these: a bound may close a chunk, and
        must never be able to drop a page. One page over any of the three limits
@@ -2649,6 +2652,12 @@ export interface PdfExtractOptions {
    * Production never passes this.
    */
   width?: number;
+  /**
+   * The two size bounds on a chunk, for an experiment that varies them —
+   * `scripts/eval-pdf-chunk-size.ts`, plan 261011u. Production never passes
+   * this; omitted, the plan is `MAX_CHUNK_PAGES` and `CHUNK_WORDS`.
+   */
+  chunking?: { maxPages: number; words: number };
 }
 
 /**
@@ -2980,7 +2989,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   /* Measured here and nowhere else: this is the only caller of `planChunks`
      that is about to *send* the chunks, so it is the only one that pays for
      knowing how big they are. ~9 ms a page, once. See `MAX_CHUNK_BYTES`. */
-  const chunks = planChunks(pass, { pageBytes: await cuts.measurePages() });
+  const chunks = planChunks(pass, {
+    pageBytes: await cuts.measurePages(),
+    ...(opts.chunking && { maxChunkPages: opts.chunking.maxPages, chunkWords: opts.chunking.words }),
+  });
   /**
    * **Every key, and then one read for all of them.**
    *

@@ -1,0 +1,106 @@
+{
+  "pattern": "cs-%",
+  "totalUsd": 3.1745,
+  "runs": [
+    {
+      "slug": "cs-kuhn-today-1791719507333",
+      "calls": 88,
+      "usd": 0.3444,
+      "cache_read": 38701,
+      "cache_write": 552181,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-kuhn-p3w1600-1791719711424",
+      "calls": 161,
+      "usd": 0.4151,
+      "cache_read": 46867,
+      "cache_write": 758166,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-kuhn-today-1791719953862",
+      "calls": 79,
+      "usd": 0.2588,
+      "cache_read": 550742,
+      "cache_write": 5725,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-kuhn-p3w1600-1791720121604",
+      "calls": 159,
+      "usd": 0.3321,
+      "cache_read": 768269,
+      "cache_write": 25685,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-kuhn-today-1791720335304",
+      "calls": 83,
+      "usd": 0.2718,
+      "cache_read": 582205,
+      "cache_write": 5709,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-kuhn-p3w1600-1791720492473",
+      "calls": 163,
+      "usd": 0.3298,
+      "cache_read": 796007,
+      "cache_write": 21703,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-doctorow250-today-1791720630209",
+      "calls": 118,
+      "usd": 0.3024,
+      "cache_read": 175516,
+      "cache_write": 285943,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-doctorow250-p3w1600-1791720841707",
+      "calls": 172,
+      "usd": 0.3409,
+      "cache_read": 249830,
+      "cache_write": 298554,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-doctorow250-today-1791721052065",
+      "calls": 124,
+      "usd": 0.2796,
+      "cache_read": 417053,
+      "cache_write": 54071,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    },
+    {
+      "slug": "cs-doctorow250-p3w1600-1791721269806",
+      "calls": 172,
+      "usd": 0.2996,
+      "cache_read": 528983,
+      "cache_write": 12708,
+      "not_ok": 0,
+      "r429": 0,
+      "unpriced": 0
+    }
+  ]
+}
