@@ -23,15 +23,18 @@ import type { Found } from "../src/web/search-hits.js";
 import type { SkimArrival, SkimControl } from "../src/web/modes/skim/SkimMode.js";
 
 globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /* ------------------------------------------------------------ the network -- */
 
 let skimBody: unknown = null;
 /** A held route read, so the owner's route is `loading` for as long as a test wants. */
 let skimReply: Promise<Response> | null = null;
+const apiRequests = vi.hoisted(() => [] as string[]);
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
   const apiFetch = async (url: string) => {
+    apiRequests.push(url);
     if (url.startsWith("/api/skim/")) {
       if (skimReply) return skimReply;
       return skimBody === null
@@ -223,6 +226,7 @@ beforeEach(() => {
   flashed.length = 0;
   passages.length = 0;
   jumps.length = 0;
+  apiRequests.length = 0;
   skimBody = SKIM_BODY;
   skimReply = null;
   control = null;
@@ -239,9 +243,19 @@ afterEach(async () => {
   host.remove();
 });
 
-function Harness({ blocks, visitor }: { blocks: Block[]; visitor: boolean }) {
+function Harness({
+  blocks,
+  visitor,
+  armedArrival,
+}: {
+  blocks: Block[];
+  visitor: boolean;
+  armedArrival?: SkimArrival | undefined;
+}) {
   /* As `Reader` arms it on first load: a `?stop=` is a deep link. */
-  const arrival = useRef<SkimArrival>({ stop: new URLSearchParams(location.search).get("stop"), open: false });
+  const arrival = useRef<SkimArrival>(
+    armedArrival ?? { stop: new URLSearchParams(location.search).get("stop"), open: false },
+  );
   const [openKey, setOpenKey] = useState<string | null>(null);
   openKeyNow = openKey;
   const onFound = useCallback((f: Found[]) => {
@@ -294,8 +308,8 @@ async function settled(): Promise<void> {
   });
 }
 
-async function mount(blocks: Block[] = BLOCKS, visitor = false) {
-  await act(async () => root.render(createElement(Harness, { blocks, visitor })));
+async function mount(blocks: Block[] = BLOCKS, visitor = false, armedArrival?: SkimArrival) {
+  await act(async () => root.render(createElement(Harness, { blocks, visitor, armedArrival })));
   await settled();
 }
 
@@ -330,6 +344,11 @@ describe("the Figures chip", () => {
   it("is offered to a visitor too", async () => {
     await mount(BLOCKS, true);
     expect(chipText()).toEqual(["Gist2", "More1", "Figures2"]);
+    await act(async () => chip("Figures").click());
+    await settled();
+    expect(rowTexts()).toHaveLength(2);
+    /* Public payloads are the whole data source: no owner read and no job. */
+    expect(apiRequests).toEqual([]);
   });
 });
 
@@ -387,6 +406,17 @@ describe("the Figures walk", () => {
     expect(flashed).toEqual([FIG]);
   });
 
+  it("an opening token jumps to the first figure once and is consumed", async () => {
+    history.replaceState(null, "", "/read/figs?mode=skim&depth=figures");
+    const arrival: SkimArrival = { stop: null, open: true };
+    await mount(BLOCKS, false, arrival);
+    expect(jumps).toEqual([{ id: FIG, passage: null }]);
+    expect(arrival).toEqual({ stop: null, open: false });
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(jumps).toEqual([{ id: FIG, passage: null }]);
+  });
+
   it("a row press is a jump to that figure's block", async () => {
     history.replaceState(null, "", "/read/figs?mode=skim&depth=figures");
     await mount();
@@ -435,6 +465,35 @@ describe("switching between Figures and a pass", () => {
     expect(control?.door?.noun).toBe("stop");
     expect(published).toHaveLength(1);
   });
+
+  it("Back and Forward switch walks without arming another arrival", async () => {
+    await mount();
+    await act(async () => chip("Figures").click());
+    await settled();
+    expect([param("depth"), param("stop")]).toEqual(["figures", FIG]);
+
+    const traverse = async (go: () => void) => {
+      await act(async () => {
+        const popped = new Promise<void>((resolve) =>
+          window.addEventListener("popstate", () => resolve(), { once: true }),
+        );
+        go();
+        await popped;
+      });
+      await settled();
+    };
+
+    scrolled.length = 0;
+    flashed.length = 0;
+    jumps.length = 0;
+    await traverse(() => history.back());
+    expect([param("depth"), control?.door?.noun]).toEqual([null, "stop"]);
+    expect([scrolled, flashed, jumps]).toEqual([[], [], []]);
+
+    await traverse(() => history.forward());
+    expect([param("depth"), param("stop"), control?.door?.noun]).toEqual(["figures", FIG, "figure"]);
+    expect([scrolled, flashed, jumps]).toEqual([[], [], []]);
+  });
 });
 
 describe("Figures needs no route", () => {
@@ -443,8 +502,23 @@ describe("Figures needs no route", () => {
     history.replaceState(null, "", "/read/figs?mode=skim&depth=figures");
     await mount();
     expect(rowTexts()).toHaveLength(2);
-    expect(chipText()).toEqual(["Figures2"]);
+    expect(chipText()).toEqual(["Route", "Figures2"]);
     expect(control?.blockId).toBe(FIG);
+  });
+
+  it("returns from Figures to the route's empty state even though there is no stop to land on", async () => {
+    skimBody = null;
+    history.replaceState(null, "", "/read/figs?mode=skim&depth=figures");
+    await mount();
+    const before = history.length;
+    await act(async () => chip("Route").click());
+    await settled();
+    expect(history.length).toBe(before + 1);
+    expect([param("depth"), param("stop")]).toEqual(["1", null]);
+    expect(host.textContent).toContain("Nobody has planned a route through this one yet.");
+    expect(rowTexts()).toEqual([]);
+    expect(control).toBeNull();
+    expect([scrolled, flashed, jumps]).toEqual([[], [], []]);
   });
 
   it("offers the Figures chip above the empty state, and it works", async () => {
@@ -464,9 +538,30 @@ describe("Figures needs no route", () => {
     history.replaceState(null, "", "/read/figs?mode=skim&depth=figures");
     await mount();
     expect(rowTexts()).toHaveLength(2);
+    expect(chipText()).toEqual(["Route", "Figures2"]);
     await act(async () => void control!.step(1));
     await settled();
     expect(param("stop")).toBe(TAB);
+    scrolled.length = 0;
+    flashed.length = 0;
+    jumps.length = 0;
+    await act(async () => chip("Route").click());
+    await settled();
+    /* BandWaiting keeps the words visually and accessibly hidden for 600ms,
+       but its ghost already proves this is the loading surface. */
+    expect(host.querySelector('.band-waiting-ghost[data-words="Looking for the route…"]')).not.toBeNull();
+    expect(control).toBeNull();
+    expect([scrolled, flashed, jumps]).toEqual([[], [], []]);
+  });
+
+  it("draws the route's Gist for ?depth=figures with no figures, and treats a figure stop as stale", async () => {
+    history.replaceState(null, "", `/read/figs?mode=skim&depth=figures&stop=${FIG}`);
+    await mount(PLAIN);
+    expect(chipText()).toEqual(["Gist2", "More1"]);
+    expect(control?.blockId).toBe(P[2]);
+    expect(control?.door?.noun).toBe("stop");
+    expect(scrolled).toEqual([P[2]]);
+    expect(flashed).toEqual([P[2]]);
   });
 });
 

@@ -124,8 +124,9 @@ noun:
   comment corrected.
 - The door's noun covers every literal in it: *Previous*, *Next*, the tooltips and the end line (F5).
 - Outline's drawn and measured rows share `RowBody`, not `Row`: the mark goes there (F6).
-- With no route yet, the head shows only the switcher with its *Figures* chip above the
-  empty/loading state, so the figures are reachable while the route is planned.
+- With no route yet, the route's empty/loading/failed surface shows its *Figures* chip. In the
+  Figures walk, a count-less *Route* chip returns to that surface; neither view is a cul-de-sac
+  while the route is planned.
 
 ## Half 2: a mark on each Structure row that holds a figure
 
@@ -134,8 +135,9 @@ its title, a small muted icon for each kind its range holds, with a count when i
 `▣ 2  ⊞ 1`. Its accessible name is *"2 figures, 1 table"*. A part holding a section that holds a
 figure is marked too: the mark is about the range, which is how a reader finds the part to open.
 
-- Counted by row index (`SummaryNode.startRow`/`endRow`, `StructureRow` likewise) over a prefix sum
-  of `figuresOf(blocks)` — never by comparing ids ([block-ids.md](../project/block-ids.md)).
+- Counted by row index (`SummaryNode.startRow`/`endRow`, `StructureRow` likewise) by scanning
+  `figuresOf(blocks)` — never by comparing ids ([block-ids.md](../project/block-ids.md)). Articles
+  have tens of figures, so a prefix-sum structure would add machinery without a useful saving.
 - The row is already a jump to its section; the mark adds no second button inside it. To reach the
   figure itself from there, Skim's Figures walk is one chip away.
 - **The measured copies.** `StructurePanel` renders hidden copies of its rows to measure them

@@ -370,7 +370,10 @@ function useSkimParts(stops: readonly SkimStop[], blocks: readonly Block[], arri
   const switchTo = useCallback(
     (to: SkimPart) => {
       const stop = to === "figures" ? (figures[0]?.blockId ?? null) : firstStopOf(stops, to);
-      if (stop === null) return;
+      /* A route with no stop still has a useful surface: its empty state,
+         loading line or failure. Do not leave Figures as the only pressed
+         chip merely because there is no arrival to arm. */
+      if (to === "figures" && stop === null) return;
       arrival.stop = stop;
       arrival.open = false;
       void setAt({ depth: to, stop }, { history: "push" });

@@ -657,11 +657,11 @@ nothing stored. What it is like to use:
 - **Address**: `?depth=figures&stop=<the figure's block id>`
   ([url-state.md](url-state.md)); a stop naming no figure falls back to the first. Switching
   between a pass and Figures is one pushed entry, landing on the target's first stop.
-- **It needs no route.** While the route is being planned, or never was, the head shows the
-  *Figures* chip alone above the empty or loading state, and the walk works; opening Skim still
-  plans the route underneath. In the Figures walk the pass chips appear once the route is ready.
-  A visitor gets the chip too, but only where a route was stored — a public article with none has
-  no Skim band for a visitor.
+- **It needs no route.** While the route is being planned, has failed, or never was, its state shows
+  a *Figures* chip and the walk works; a count-less *Route* chip in the Figures walk returns to that
+  state. Opening Skim still plans the route underneath. Once it is ready, its pass chips replace
+  *Route*. A visitor gets the chip too, but only where a route was stored — a public article with
+  none has no Skim band for a visitor.
 
 How it is built: the band chooses between **two walks**, each a component with its own hook — the
 route's (`useSkimMode`, now inside `RouteWalk`) and

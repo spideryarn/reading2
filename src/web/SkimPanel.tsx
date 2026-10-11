@@ -608,12 +608,21 @@ export const FIGURES_LABEL = "Figures";
 export interface SkimPartChoice {
   part: SkimPart;
   label: string;
-  count: number;
+  /** `null` for the route while it has no stops yet: there is no honest count to show. */
+  count: number | null;
 }
 
 /** The route's passes, then *Figures* when the article has any. */
-export function partChoices(depths: readonly DepthChoice[], figures: number): SkimPartChoice[] {
-  const out: SkimPartChoice[] = depths.map((d) => ({ part: d.depth, label: d.label, count: d.count }));
+export function partChoices(
+  depths: readonly DepthChoice[],
+  figures: number,
+  /** Keep the route reachable from Figures while it is empty, loading or failed. */
+  waitingRoute = false,
+): SkimPartChoice[] {
+  const out: SkimPartChoice[] =
+    waitingRoute && depths.length === 0
+      ? [{ part: 1, label: "Route", count: null }]
+      : depths.map((d) => ({ part: d.depth, label: d.label, count: d.count }));
   if (figures > 0) out.push({ part: "figures", label: FIGURES_LABEL, count: figures });
   return out;
 }
@@ -621,12 +630,13 @@ export function partChoices(depths: readonly DepthChoice[], figures: number): Sk
 /**
  * **The part-switcher: Gist · More · Most · Figures** — drawn by both walks,
  * the route's (`RouteHead`) and the figures' (FiguresWalk.tsx), so the two
- * cannot drift. Each chip says how many stops its walk has.
+ * cannot drift. Each ready walk's chip says how many stops it has; *Route*
+ * carries no count while its result is not ready.
  *
- * Drawn only when there is a choice — more than one chip — unless `alone`:
- * with no route yet, the head shows the *Figures* chip by itself above the
- * empty or loading state, so the figures are reachable while the route is
- * planned (plan 261011b § How it is built).
+ * Drawn only when there is a choice — more than one chip — unless `alone`.
+ * The route's empty/loading/failed surface uses `alone` to show its one way
+ * into Figures. The Figures surface shows that chip beside a count-less
+ * *Route* chip, so the reader can return to that state (plan 261011b).
  *
  * The part-switcher every mode shares (mode-band.css § the part-switcher,
  * plan 261007h § F2), at the house's 36px rather than its own 26 because it
@@ -664,7 +674,7 @@ export function SkimParts({
           }}
         >
           <span>{p.label}</span>
-          <span className="skim-depth-n">{p.count}</span>
+          {p.count !== null && <span className="skim-depth-n">{p.count}</span>}
         </button>
       ))}
     </fieldset>

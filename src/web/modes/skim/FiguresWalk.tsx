@@ -116,8 +116,9 @@ export function FiguresWalk({
           position={view.position}
           positions={view.rows.map((r) => r.position)}
           onStep={view.onStep}
-          /* `alone`: with no route yet, the one chip still says which walk this is. */
-          parts={<SkimParts parts={partChoices(depths, figures.length)} chosen="figures" onPart={onPart} alone />}
+          /* With no ready route, a count-less Route chip returns to its actual
+              empty/loading/failed surface; Figures must not become a cul-de-sac. */
+          parts={<SkimParts parts={partChoices(depths, figures.length, true)} chosen="figures" onPart={onPart} />}
         />
       }
     >
