@@ -732,6 +732,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/citers/w1"],
   },
   {
+    /* Sources › Not cited — plan 261011ac. GET reads the kept search; POST is
+       the owner's press, which searches OpenAlex. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/related-work\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/related-work/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/bibliography\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/bibliography/w1"],
@@ -1118,8 +1125,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    116 with dismissing one of the bar's suggestions (plan 261010u); 117 with
    an admin's addenda to their own reports (plan 261010o); 118 with a
    reviewer's major/minor comment sort (plan 261011f); 120 with every article
-   and one article's transfer (plan 261011n). */
-const EXPECTED_MATCHER_COUNT = 120;
+   and one article's transfer (plan 261011n); 121 with Sources › Not cited
+   (plan 261011ac). */
+const EXPECTED_MATCHER_COUNT = 121;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1135,8 +1143,9 @@ const EXPECTED_MATCHER_COUNT = 120;
    beside their old paths (plan 261009w Stage 3); 143 with dismissing one of
    the bar's suggestions (plan 261010u); 144 with the addenda's POST (plan
    261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
-   with every article, and a transfer's preview and POST (plan 261011n). */
-const EXPECTED_GUARD_COUNT = 148;
+   with every article, and a transfer's preview and POST (plan 261011n); 150
+   with Not cited's GET and POST (plan 261011ac). */
+const EXPECTED_GUARD_COUNT = 150;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2394,6 +2403,9 @@ describe("the authenticated API's route contract", () => {
         // Reception's old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
+        // Sources › Not cited, 261011ac
+        "GET regex /^\\/api\\/related-work\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/related-work\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/bibliography\\/([\\w.%-]+)$/",
         // Bibliography's old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",

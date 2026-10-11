@@ -7553,6 +7553,81 @@ export type CitersResult =
     };
 
 /**
+ * **One paper close to the article that its Bibliography does not list**, as
+ * OpenAlex's semantic search returned it — Sources' *Not cited*
+ * (src/related-work.ts, plan 261011ac). Every string is plain text and bounded,
+ * and none is a link: the panel builds its link with `citerUrl`
+ * (src/citer-link.ts), from `doi` or `openalexId`. A stranger's words
+ * throughout, and nothing here says the piece should cite it.
+ */
+export interface RelatedWork {
+  /** OpenAlex's id for the work, `W…`, shape-checked. */
+  openalexId: string;
+  /** Lower-cased and shape-checked. Absent when OpenAlex has none. */
+  doi?: string;
+  /** The work's own title: its authors' words, not ours. */
+  title: string;
+  /** The first authors' display names, at most `RELATED_WORK_AUTHORS`. */
+  authors: string[];
+  /** How many authors the work has, which can be more than `authors` holds. */
+  authorCount: number;
+  year?: number;
+  /** Where it appeared: OpenAlex's `primary_location.source.display_name`. */
+  venue?: string;
+  /** How often the work is cited, by OpenAlex's count. */
+  citedByCount?: number;
+  /**
+   * The opening of its abstract, rebuilt from OpenAlex's inverted index and cut
+   * at a word — the work's own words, so the reader can judge its relevance.
+   */
+  abstract?: string;
+}
+
+/**
+ * `GET` and `POST /api/related-work/:slug` — **papers close to this one that
+ * its Bibliography does not list, or why there is no list.** No model made any
+ * of it. Owner-only. docs/plans/261011ac-sources-not-cited-related-work-it-leaves-out.md.
+ *
+ * - `no-bibliography` — the article has no Bibliography yet, so there is
+ *   nothing to leave out of: nothing is searched, and no button is offered.
+ * - `no-query` — no title and no prose to search with.
+ * - `not-searched` — the owner has not pressed *Search OpenAlex* for this
+ *   article yet (the `GET` never asks OpenAlex: the search sends the piece's
+ *   title and opening, so it is the owner's choice, F1).
+ * - `unavailable` — OpenAlex could not be asked just now, or its answer could
+ *   not be read or kept. Worth trying again.
+ * - `rate-limited` — this owner has searched too often lately, or everybody
+ *   together has spent the day's searches (`RELATED_WORK_RATE_POLICY`).
+ * - `found` — the list, closest first, with the works in the Bibliography and
+ *   the piece itself taken out at read time against the **current**
+ *   Bibliography. `excluded` counts those found in the Bibliography (not the
+ *   piece itself). `bibliographyStale` (made from an older version of the
+ *   article) and `bibliographyCapped` (it says it left works out) each mean the
+ *   list may include works the piece does cite (F4). `yearLimited` is the
+ *   piece's year when the search was limited to work published up to it, else
+ *   null. `queryChanged`: the article's title or opening is no longer what was
+ *   searched with, so *Search again* would ask a different question.
+ *   `searchedAt` is when OpenAlex answered, ISO. An empty `works` is its own
+ *   sentence: nothing close that it does not cite.
+ */
+export type RelatedWorkResult =
+  | { kind: "no-bibliography" }
+  | { kind: "no-query" }
+  | { kind: "not-searched" }
+  | { kind: "unavailable" }
+  | { kind: "rate-limited" }
+  | {
+      kind: "found";
+      works: RelatedWork[];
+      excluded: number;
+      bibliographyStale: boolean;
+      bibliographyCapped: boolean;
+      yearLimited: number | null;
+      queryChanged: boolean;
+      searchedAt: string;
+    };
+
+/**
  * As `TimelineFound` and `QuizFound`, and here too it is the *same* type, for
  * the same reason: there is no `profileChanged` for a store adapter to leave
  * out. Named rather than skipped so both adapters agree with their neighbours

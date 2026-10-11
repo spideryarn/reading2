@@ -66,6 +66,7 @@
 import { log } from "../log.js";
 import { type InvestigateCitationDeps, makeInvestigateCitation, readCitedPaper } from "../citation-investigate.js";
 import { makeGuessSource } from "../source-guess-run.js";
+import type { RelatedWorkStore } from "../related-work.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
   AdminStore,
@@ -123,6 +124,7 @@ import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgSkimNoticeStore } from "./pg-skim-notice.js";
 import { pgStaleNoticeStore } from "./pg-stale-notices.js";
 import { pgSuggestionDismissalStore } from "./pg-suggestion-dismissals.js";
+import { pgRelatedWorkStore } from "./pg-related-work.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereePromisesStore } from "./pg-referee-promises.js";
@@ -269,6 +271,12 @@ export const loadBibliography = reader.loadBibliography.bind(reader);
    only. Owner's GET /api/bibliography only — docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
 const citedInSpideryarn = guarded("cited-in-spideryarn", pgCitedInSpideryarnStore);
 export const citedCandidates = citedInSpideryarn.citedCandidates.bind(citedInSpideryarn);
+/* Sources › Not cited: the article as imported, its opening, its current
+   Bibliography and the kept OpenAlex search, in one snapshot and through the
+   owner filter. Guarded in its own file. docs/plans/261011ac-sources-not-cited-related-work-it-leaves-out.md. */
+export const loadRelatedWork = pgRelatedWorkStore.load.bind(pgRelatedWorkStore);
+/* …and where the owner's search is kept, handed to `searchRelatedWork` by the route. */
+export const relatedWorkStore: RelatedWorkStore = pgRelatedWorkStore;
 /* The one read whose answer is bytes. See `ArticleReader.loadSource` in
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);

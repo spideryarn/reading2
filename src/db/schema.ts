@@ -8010,7 +8010,7 @@ export const rateLimitEvents = spideryarn.table(
        rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),
@@ -8490,5 +8490,49 @@ export const citationIndexCiters = spideryarn.table(
     ),
     check("citation_index_citers_year", sql`${t.year} is null or ${t.year} between 1500 and 2100`),
     check("citation_index_citers_cited_by_count", sql`${t.citedByCount} >= 0`),
+  ],
+);
+
+/**
+ * **Sources' *Not cited*: the owner's last OpenAlex search for related work,
+ * one row per article** — src/related-work.ts, src/store/pg-related-work.ts,
+ * docs/plans/261011ac-sources-not-cited-related-work-it-leaves-out.md.
+ *
+ * - **Per article, not a global cache** (the plan review's F2): the search is
+ *   made from the article's own title and opening, so its key is the reader's
+ *   business, and deleting the article deletes it (`on delete cascade`). No
+ *   `owner_id`, as `command_suggestion_dismissals`: only the owner writes, and
+ *   ownership is the article's.
+ * - **`fingerprint` is what was asked**: `related-work/<n>:` and a sha256 of
+ *   the query and the year filter (`relatedWorkFingerprint`). Never logged. A
+ *   later read compares it with what the article would ask now.
+ * - **`results` is OpenAlex's parsed answer, before any exclusion**, a JSON
+ *   array of `RelatedWork` (src/types.ts): every string plain and bounded, no
+ *   address kept. The Bibliography is applied at read time, so a list made
+ *   again is respected at once. JSON rather than rows (docs/project/sql.md
+ *   prefers columns) because it is written and read whole, never queried
+ *   inside, and is re-checked on every read (`relatedWorkOf`).
+ * - **`year_limit`** is the piece's year the search was limited to, or null.
+ * - **`searched_at` is when OpenAlex answered** and moves with every *Search
+ *   again*; `created_at` is the article's first search and never moves.
+ *
+ * A failed search stores nothing. Owner-only; never on the public read.
+ */
+export const relatedWorkSearches = spideryarn.table(
+  "related_work_searches",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    fingerprint: text("fingerprint").notNull(),
+    yearLimit: integer("year_limit"),
+    results: jsonb("results").$type<unknown[]>().notNull(),
+    searchedAt: timestamp("searched_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("related_work_searches_fingerprint", sql`${t.fingerprint} ~ '^related-work/[0-9]+:[0-9a-f]{64}$'`),
+    check("related_work_searches_year_limit", sql`${t.yearLimit} is null or ${t.yearLimit} between 1500 and 2100`),
+    check("related_work_searches_results", sql`jsonb_typeof(${t.results}) = 'array'`),
   ],
 );

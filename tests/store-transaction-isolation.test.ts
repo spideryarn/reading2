@@ -120,6 +120,10 @@ const EXCEPTIONS: Record<string, Options> = {
   /* The Earlier feedback list and its three counts must describe one moment.
      The submit transaction beside it remains read committed. */
   "src/store/pg-feedback.ts#SNAPSHOT": { isolationLevel: "repeatable read", accessMode: "read only" },
+  /* Sources › Not cited's loader: the identity, the opening, the Bibliography
+     and its staleness, and the kept search must be one version of the article
+     (plan 261011ac, F6). It never writes; the write is a separate upsert. */
+  "src/store/pg-related-work.ts#SNAPSHOT": { isolationLevel: "repeatable read", accessMode: "read only" },
 };
 
 /** Where transactions are opened. Both directories, not just the store. */

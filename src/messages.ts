@@ -5866,6 +5866,84 @@ export function citersLines(
   return lines;
 }
 
+/* ---- Sources › Not cited: papers close to the piece its Bibliography does not list ----
+
+   One plain sentence per outcome of `RelatedWorkResult` (src/types.ts), plan
+   261011ac. **Every row is "not among the works Spideryarn found in its
+   bibliography", never "not cited" and never "should cite"** (its review's F4):
+   the list is OpenAlex's search minus our reading of the bibliography, and the
+   reader decides what belongs in it. */
+
+export const RELATED_WORK_HEADING = "Not cited";
+/** Under the heading, always: what the list is, and who decides. */
+export const RELATED_WORK_INTRO =
+  "Papers close to this one that are not among the works Spideryarn found in its bibliography, " +
+  "closest first, by OpenAlex's search on this piece's title and opening. Whether any of them " +
+  "belongs in it is yours to judge.";
+export const RELATED_WORK_LOADING = "Reading the last search for related work…";
+export const RELATED_WORK_SEARCHING = "Searching OpenAlex for related work…";
+/** The press (F1). */
+export const RELATED_WORK_SEARCH = "Search OpenAlex for related work";
+export const RELATED_WORK_SEARCH_AGAIN = "Search again";
+/** Under the press, always: what it sends, because nothing else of ours sends the text (F1). */
+export const RELATED_WORK_SENDS =
+  "This sends the piece's title and the opening of its text (its abstract, on a paper) to " +
+  "OpenAlex, a free index of research papers, with our contact address. No AI is involved.";
+export const RELATED_WORK_NO_BIBLIOGRAPHY =
+  "Spideryarn has not listed this piece's bibliography yet, so there is nothing to compare related work against.";
+export const RELATED_WORK_NO_QUERY = "This piece has no title or text we could search with.";
+export const RELATED_WORK_NOT_SEARCHED = "Nobody has searched for related work for this piece yet.";
+/** The one failure with a Try again beside it. */
+export const RELATED_WORK_UNAVAILABLE = "We could not search OpenAlex just now.";
+/** No Try again straight away: the same press would be refused again. */
+export const RELATED_WORK_RATE_LIMITED =
+  "There have been a lot of searches for related work lately. Try again in an hour or so.";
+/** A found search with nothing left once the bibliography and the piece itself are taken out. */
+export const RELATED_WORK_NONE =
+  "Everything OpenAlex found close to this piece is already among the works in its bibliography.";
+/** Above the list, when the bibliography is stale or capped (F4). */
+export const RELATED_WORK_BIBLIOGRAPHY_STALE =
+  "The bibliography was listed from an older version of this piece, so this list may include works it does cite.";
+export const RELATED_WORK_BIBLIOGRAPHY_CAPPED =
+  "The bibliography Spideryarn listed leaves some works out, so this list may include works the piece does cite.";
+/** The article's title or opening has changed since the search: *Search again* would ask something else. */
+export const RELATED_WORK_QUERY_CHANGED =
+  "This piece's title or opening has changed since this search. Search again to use the new words.";
+/** What the band's (i) says of the chip, for the owner. */
+export const RELATED_WORK_ABOUT =
+  "Not cited lists papers that OpenAlex's search finds close to this piece, taking out the works " +
+  "in the bibliography Spideryarn listed for it and the piece itself. It searches only when you " +
+  "press the button, sending the piece's title and opening. No AI is involved, and we have not read the papers.";
+
+/**
+ * **What a found list says about itself**: how many, how they were found, and
+ * how many the bibliography took out, one sentence each.
+ *
+ * @param day the day OpenAlex answered, already formatted, or undefined.
+ */
+export function relatedWorkLines(
+  found: { listed: number; excluded: number; yearLimited: number | null },
+  day: string | undefined,
+): string[] {
+  if (found.listed === 0) return [RELATED_WORK_NONE];
+  const lines = [
+    `${papers(found.listed)} close to this piece, by OpenAlex's search${day ? ` on ${day}` : ""}, closest first.`,
+  ];
+  lines.push(
+    found.yearLimited === null
+      ? "We do not know when this piece was published, so the list is not limited by date."
+      : `Only work published in ${found.yearLimited} or before.`,
+  );
+  if (found.excluded > 0) {
+    lines.push(
+      found.excluded === 1
+        ? "1 more it found is in the bibliography, and is left out."
+        : `${found.excluded} more it found are in the bibliography, and are left out.`,
+    );
+  }
+  return lines;
+}
+
 /** *"cited 34 times"*, on a citing paper's own line. */
 export function citedTimes(n: number): string {
   return n === 1 ? "cited once" : `cited ${n} times`;

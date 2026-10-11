@@ -73,6 +73,8 @@ import {
   loadReception,
   loadArticleIdentity,
   loadBibliography,
+  loadRelatedWork,
+  relatedWorkStore,
   citedCandidates,
   investigateCitation,
   guessSource,
@@ -269,6 +271,10 @@ import { linkPreview } from "./link-previews.js";
 /* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
 import { citersOf } from "./citation-index.js";
 import type { CitersResult } from "./types.js";
+/* Papers close to the article that its Bibliography does not list, for Sources'
+   Not cited: OpenAlex again, no model. src/related-work.ts. */
+import { relatedWorkAnswer, searchRelatedWork } from "./related-work.js";
+import type { RelatedWorkResult } from "./types.js";
 /* The other half of the same card, and the half we wrote — a model call with a
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
@@ -9689,6 +9695,8 @@ const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
 const SHELF_TAGS_PATTERN = /^\/api\/library\/([\w.%-]+)\/tags$/;
 /* Reading time: GET reads the totals, POST adds to them — two rows, one path. */
 const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
+/* Sources › Not cited: GET reads the kept search, POST searches — two rows, one path. */
+const RELATED_WORK_PATTERN = /^\/api\/related-work\/([\w.%-]+)$/;
 /* Hiding a glossary entry: PUT hides, DELETE shows it again — two rows, one path. */
 const GLOSSARY_HIDDEN_PATTERN = /^\/api\/glossary\/([\w.%-]+)\/hidden\/([\w.%-]+)$/;
 /* The "older version" notices the owner sent away: GET lists, POST replaces one mode's — plan 261010a. */
@@ -12023,6 +12031,61 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const identity = await loadArticleIdentity(slugPart(captures, 1));
       const citers: CitersResult = await citersOf(identity);
       send(res, 200, citers);
+    },
+  },
+
+  /**
+   * **Papers close to this article that its Bibliography does not list** —
+   * Sources' *Not cited*. src/related-work.ts,
+   * docs/plans/261011ac-sources-not-cited-related-work-it-leaves-out.md.
+   *
+   * **The `GET` never asks OpenAlex.** It answers the owner's last search,
+   * filtered now against the current Bibliography, or `not-searched`: the
+   * search sends the piece's title and opening, which nothing else of ours
+   * sends, so it runs only on the owner's press, the `POST` below (the plan
+   * review's F1). Every outcome is a 200 carrying one `RelatedWorkResult`
+   * member, because each has its own sentence in the panel.
+   *
+   * **The owner's only, and in this table**, as Cited by:
+   * `loadRelatedWork` goes through the owner filter, so somebody else's slug is
+   * the same 404 as one that does not exist, thrown before anything is asked.
+   * Not under `/api/public/`: a visitor spending our OpenAlex allowance is the
+   * reason. The title is the imported one, never the reader's rename.
+   */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: RELATED_WORK_PATTERN,
+    /* No model is called; the capture is named because the path names an article. */
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const answer: RelatedWorkResult = relatedWorkAnswer(await loadRelatedWork(slugPart(captures, 1)));
+      send(res, 200, answer);
+    },
+  },
+
+  /* **The owner's press: search OpenAlex, keep the answer, answer it** — one
+     outside request, no model, no money. The same 404 for a slug that is not
+     the caller's, before anything is asked. Nothing is read off the body, so
+     the words searched are always the article's own and never the caller's.
+     Rate-limited per owner, with a global fuse, on the `related-work-search`
+     bucket after the free refusals (src/related-work.ts §
+     `RELATED_WORK_RATE_POLICY`): it costs nothing in money, but ten credits of
+     OpenAlex's anonymous daily allowance, which Cited by shares. The answer is
+     sent only once the search is kept, never before (a Vercel function is
+     frozen once it has answered). */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: RELATED_WORK_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const loaded = await loadRelatedWork(slugPart(captures, 1));
+      const answer: RelatedWorkResult = await searchRelatedWork(loaded, {
+        store: relatedWorkStore,
+        allowance: fetchAllowanceStore,
+      });
+      send(res, 200, answer);
     },
   },
 

@@ -1,0 +1,3435 @@
+{
+ "meta": {
+  "count": 50,
+  "db_response_time_ms": 666,
+  "page": 1,
+  "per_page": 25,
+  "groups_count": null,
+  "cost_usd": 0.001
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W2613904329",
+   "doi": "https://doi.org/10.48550/arxiv.1705.03122",
+   "display_name": "Convolutional Sequence to Sequence Learning",
+   "publication_year": 2017,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5069183549",
+      "display_name": "Jonas Gehring",
+      "orcid": "https://orcid.org/0009-0005-4115-3964",
+      "observed_orcids": [
+       "https://orcid.org/0009-0005-4115-3964"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Gehring, Jonas",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5083212922",
+      "display_name": "Michael Auli",
+      "orcid": "https://orcid.org/0000-0001-5974-4459",
+      "observed_orcids": [
+       "https://orcid.org/0000-0001-5974-4459"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Auli, Michael",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5065912572",
+      "display_name": "David Grangier",
+      "orcid": "https://orcid.org/0000-0002-8847-9532",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-8847-9532"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Grangier, David",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5000725688",
+      "display_name": "Denis Yarats",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Yarats, Denis",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5020785659",
+      "display_name": "Yann Dauphin",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Dauphin, Yann N.",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    }
+   ],
+   "primary_location": {
+    "id": "pmh:oai:arXiv.org:1705.03122",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://arxiv.org/abs/1705.03122",
+    "pdf_url": "https://arxiv.org/pdf/1705.03122",
+    "source": {
+     "id": "https://openalex.org/S4306400194",
+     "display_name": "arXiv (Cornell University)",
+     "issn_l": "2331-8422",
+     "issn": [
+      "2331-8422"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I205783295",
+     "host_organization_name": "Cornell University",
+     "host_organization_lineage": [
+      "https://openalex.org/I205783295"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "text"
+   },
+   "cited_by_count": 2585,
+   "abstract_inverted_index": {
+    "The": [
+     0
+    ],
+    "prevalent": [
+     1
+    ],
+    "approach": [
+     2
+    ],
+    "to": [
+     3,
+     5,
+     12,
+     33
+    ],
+    "sequence": [
+     4,
+     6,
+     11,
+     17
+    ],
+    "learning": [
+     7
+    ],
+    "maps": [
+     8
+    ],
+    "an": [
+     9,
+     24,
+     106
+    ],
+    "input": [
+     10,
+     61
+    ],
+    "a": [
+     13,
+     79
+    ],
+    "variable": [
+     14
+    ],
+    "length": [
+     15
+    ],
+    "output": [
+     16
+    ],
+    "via": [
+     18
+    ],
+    "recurrent": [
+     19,
+     34
+    ],
+    "neural": [
+     20,
+     30
+    ],
+    "networks.": [
+     21,
+     31
+    ],
+    "We": [
+     22,
+     83
+    ],
+    "introduce": [
+     23
+    ],
+    "architecture": [
+     25
+    ],
+    "based": [
+     26
+    ],
+    "entirely": [
+     27
+    ],
+    "on": [
+     28,
+     97,
+     113
+    ],
+    "convolutional": [
+     29
+    ],
+    "Compared": [
+     32
+    ],
+    "models,": [
+     35
+    ],
+    "computations": [
+     36
+    ],
+    "over": [
+     37
+    ],
+    "all": [
+     38
+    ],
+    "elements": [
+     39
+    ],
+    "can": [
+     40
+    ],
+    "be": [
+     41
+    ],
+    "fully": [
+     42
+    ],
+    "parallelized": [
+     43
+    ],
+    "during": [
+     44
+    ],
+    "training": [
+     45
+    ],
+    "and": [
+     46,
+     57,
+     72,
+     101,
+     115
+    ],
+    "optimization": [
+     47
+    ],
+    "is": [
+     48,
+     55
+    ],
+    "easier": [
+     49
+    ],
+    "since": [
+     50
+    ],
+    "the": [
+     51,
+     60,
+     85,
+     88
+    ],
+    "number": [
+     52
+    ],
+    "of": [
+     53,
+     59,
+     65,
+     87,
+     92,
+     108
+    ],
+    "non-linearities": [
+     54
+    ],
+    "fixed": [
+     56
+    ],
+    "independent": [
+     58
+    ],
+    "length.": [
+     62
+    ],
+    "Our": [
+     63
+    ],
+    "use": [
+     64
+    ],
+    "gated": [
+     66
+    ],
+    "linear": [
+     67
+    ],
+    "units": [
+     68
+    ],
+    "eases": [
+     69
+    ],
+    "gradient": [
+     70
+    ],
+    "propagation": [
+     71
+    ],
+    "we": [
+     73
+    ],
+    "equip": [
+     74
+    ],
+    "each": [
+     75
+    ],
+    "decoder": [
+     76
+    ],
+    "layer": [
+     77
+    ],
+    "with": [
+     78
+    ],
+    "separate": [
+     80
+    ],
+    "attention": [
+     81
+    ],
+    "module.": [
+     82
+    ],
+    "outperform": [
+     84
+    ],
+    "accuracy": [
+     86
+    ],
+    "deep": [
+     89
+    ],
+    "LSTM": [
+     90
+    ],
+    "setup": [
+     91
+    ],
+    "Wu": [
+     93
+    ],
+    "et": [
+     94
+    ],
+    "al.": [
+     95
+    ],
+    "(2016)": [
+     96
+    ],
+    "both": [
+     98,
+     112
+    ],
+    "WMT'14": [
+     99,
+     102
+    ],
+    "English-German": [
+     100
+    ],
+    "English-French": [
+     103
+    ],
+    "translation": [
+     104
+    ],
+    "at": [
+     105
+    ],
+    "order": [
+     107
+    ],
+    "magnitude": [
+     109
+    ],
+    "faster": [
+     110
+    ],
+    "speed,": [
+     111
+    ],
+    "GPU": [
+     114
+    ],
+    "CPU.": [
+     116
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2147527908",
+   "doi": "https://doi.org/10.48550/arxiv.1406.6247",
+   "display_name": "Recurrent Models of Visual Attention",
+   "publication_year": 2014,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5008904142",
+      "display_name": "Volodymyr Mnih",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      },
+      {
+       "id": "https://openalex.org/I4210090411",
+       "display_name": "Google DeepMind (United Kingdom)",
+       "ror": "https://ror.org/00971b260",
+       "country_code": "GB",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I4210090411",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "GB",
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Mnih, Volodymyr",
+     "raw_affiliation_strings": [
+      "Google DeepMind;"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google DeepMind;",
+       "institution_ids": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210090411"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5062951341",
+      "display_name": "Nicolas Heess",
+      "orcid": "https://orcid.org/0000-0001-7876-9256",
+      "observed_orcids": [
+       "https://orcid.org/0000-0001-7876-9256"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      },
+      {
+       "id": "https://openalex.org/I4210090411",
+       "display_name": "Google DeepMind (United Kingdom)",
+       "ror": "https://ror.org/00971b260",
+       "country_code": "GB",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I4210090411",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "GB",
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Heess, Nicolas",
+     "raw_affiliation_strings": [
+      "Google DeepMind;"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google DeepMind;",
+       "institution_ids": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210090411"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5043473089",
+      "display_name": "Alex Graves",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      },
+      {
+       "id": "https://openalex.org/I4210090411",
+       "display_name": "Google DeepMind (United Kingdom)",
+       "ror": "https://ror.org/00971b260",
+       "country_code": "GB",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I4210090411",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "GB",
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Graves, Alex",
+     "raw_affiliation_strings": [
+      "Google DeepMind;"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google DeepMind;",
+       "institution_ids": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210090411"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5090341705",
+      "display_name": "Koray Kavukcuoglu",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      },
+      {
+       "id": "https://openalex.org/I4210090411",
+       "display_name": "Google DeepMind (United Kingdom)",
+       "ror": "https://ror.org/00971b260",
+       "country_code": "GB",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I4210090411",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "GB",
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Kavukcuoglu, Koray",
+     "raw_affiliation_strings": [
+      "Google DeepMind;"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google DeepMind;",
+       "institution_ids": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210090411"
+       ]
+      }
+     ]
+    }
+   ],
+   "primary_location": {
+    "id": "pmh:oai:arXiv.org:1406.6247",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://arxiv.org/abs/1406.6247",
+    "pdf_url": "https://arxiv.org/pdf/1406.6247",
+    "source": {
+     "id": "https://openalex.org/S4306400194",
+     "display_name": "arXiv (Cornell University)",
+     "issn_l": "2331-8422",
+     "issn": [
+      "2331-8422"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I205783295",
+     "host_organization_name": "Cornell University",
+     "host_organization_lineage": [
+      "https://openalex.org/I205783295"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "text"
+   },
+   "cited_by_count": 2729,
+   "abstract_inverted_index": {
+    "Applying": [
+     0
+    ],
+    "convolutional": [
+     1,
+     61,
+     121
+    ],
+    "neural": [
+     2,
+     28,
+     62,
+     122
+    ],
+    "networks": [
+     3
+    ],
+    "to": [
+     4,
+     103,
+     138
+    ],
+    "large": [
+     5
+    ],
+    "images": [
+     6
+    ],
+    "is": [
+     7,
+     32,
+     93
+    ],
+    "computationally": [
+     8
+    ],
+    "expensive": [
+     9
+    ],
+    "because": [
+     10
+    ],
+    "the": [
+     11,
+     18,
+     54,
+     64,
+     75,
+     86,
+     91
+    ],
+    "amount": [
+     12,
+     76
+    ],
+    "of": [
+     13,
+     20,
+     34,
+     47,
+     70,
+     77,
+     85
+    ],
+    "computation": [
+     14,
+     78
+    ],
+    "scales": [
+     15
+    ],
+    "linearly": [
+     16
+    ],
+    "with": [
+     17
+    ],
+    "number": [
+     19
+    ],
+    "image": [
+     21,
+     39,
+     88,
+     113
+    ],
+    "pixels.": [
+     22
+    ],
+    "We": [
+     23,
+     107
+    ],
+    "present": [
+     24
+    ],
+    "a": [
+     25,
+     45,
+     68,
+     120,
+     130,
+     140
+    ],
+    "novel": [
+     26
+    ],
+    "recurrent": [
+     27
+    ],
+    "network": [
+     29,
+     123
+    ],
+    "model": [
+     30,
+     66,
+     92,
+     110
+    ],
+    "that": [
+     31
+    ],
+    "capable": [
+     33
+    ],
+    "extracting": [
+     35
+    ],
+    "information": [
+     36
+    ],
+    "from": [
+     37
+    ],
+    "an": [
+     38,
+     144
+    ],
+    "or": [
+     40,
+     49
+    ],
+    "video": [
+     41
+    ],
+    "by": [
+     42
+    ],
+    "adaptively": [
+     43
+    ],
+    "selecting": [
+     44
+    ],
+    "sequence": [
+     46
+    ],
+    "regions": [
+     48,
+     56
+    ],
+    "locations": [
+     50
+    ],
+    "and": [
+     51,
+     128
+    ],
+    "only": [
+     52
+    ],
+    "processing": [
+     53
+    ],
+    "selected": [
+     55
+    ],
+    "at": [
+     57
+    ],
+    "high": [
+     58
+    ],
+    "resolution.": [
+     59
+    ],
+    "Like": [
+     60
+    ],
+    "networks,": [
+     63
+    ],
+    "proposed": [
+     65
+    ],
+    "has": [
+     67
+    ],
+    "degree": [
+     69
+    ],
+    "translation": [
+     71
+    ],
+    "invariance": [
+     72
+    ],
+    "built-in,": [
+     73
+    ],
+    "but": [
+     74
+    ],
+    "it": [
+     79,
+     95,
+     117,
+     136
+    ],
+    "performs": [
+     80
+    ],
+    "can": [
+     81,
+     96
+    ],
+    "be": [
+     82,
+     97
+    ],
+    "controlled": [
+     83
+    ],
+    "independently": [
+     84
+    ],
+    "input": [
+     87
+    ],
+    "size.": [
+     89
+    ],
+    "While": [
+     90
+    ],
+    "non-differentiable,": [
+     94
+    ],
+    "trained": [
+     98
+    ],
+    "using": [
+     99
+    ],
+    "reinforcement": [
+     100
+    ],
+    "learning": [
+     101
+    ],
+    "methods": [
+     102
+    ],
+    "learn": [
+     104
+    ],
+    "task-specific": [
+     105
+    ],
+    "policies.": [
+     106
+    ],
+    "evaluate": [
+     108
+    ],
+    "our": [
+     109
+    ],
+    "on": [
+     111,
+     125,
+     129
+    ],
+    "several": [
+     112
+    ],
+    "classification": [
+     114
+    ],
+    "tasks,": [
+     115
+    ],
+    "where": [
+     116,
+     135
+    ],
+    "significantly": [
+     118
+    ],
+    "outperforms": [
+     119
+    ],
+    "baseline": [
+     124
+    ],
+    "cluttered": [
+     126
+    ],
+    "images,": [
+     127
+    ],
+    "dynamic": [
+     131
+    ],
+    "visual": [
+     132
+    ],
+    "control": [
+     133
+    ],
+    "problem,": [
+     134
+    ],
+    "learns": [
+     137
+    ],
+    "track": [
+     139
+    ],
+    "simple": [
+     141
+    ],
+    "object": [
+     142
+    ],
+    "without": [
+     143
+    ],
+    "explicit": [
+     145
+    ],
+    "training": [
+     146
+    ],
+    "signal": [
+     147
+    ],
+    "for": [
+     148
+    ],
+    "doing": [
+     149
+    ],
+    "so.": [
+     150
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2520375714",
+   "doi": "https://doi.org/10.23915/distill.00001",
+   "display_name": "Attention and Augmented Recurrent Neural Networks",
+   "publication_year": 2016,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5039751155",
+      "display_name": "Chris Olah",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Chris Olah",
+     "raw_affiliation_strings": [
+      "Google Brain"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google Brain",
+       "institution_ids": [
+        "https://openalex.org/I1291425158"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5087762412",
+      "display_name": "Shan Carter",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Shan Carter",
+     "raw_affiliation_strings": [
+      "Google Brain"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google Brain",
+       "institution_ids": [
+        "https://openalex.org/I1291425158"
+       ]
+      }
+     ]
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.23915/distill.00001",
+    "doi": "https://doi.org/10.23915/distill.00001",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.23915/distill.00001",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S4210237340",
+     "display_name": "Distill",
+     "issn_l": "2476-0757",
+     "issn": [
+      "2476-0757"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "cwts-core",
+      "norway-1"
+     ],
+     "host_organization": null,
+     "host_organization_name": null,
+     "host_organization_lineage": [],
+     "host_organization_lineage_names": [],
+     "type": "journal"
+    },
+    "license": "cc-by",
+    "license_id": "https://openalex.org/licenses/cc-by",
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Distill",
+    "raw_type": "journal-article"
+   },
+   "cited_by_count": 63,
+   "abstract_inverted_index": null
+  },
+  {
+   "id": "https://openalex.org/W2964125283",
+   "doi": "https://doi.org/10.18653/v1/e17-2061",
+   "display_name": "Neural Machine Translation with Recurrent Attention Modeling",
+   "publication_year": 2017,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5101461004",
+      "display_name": "Zichao Yang",
+      "orcid": "https://orcid.org/0009-0001-7734-5766",
+      "observed_orcids": [
+       "https://orcid.org/0009-0001-7734-5766"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Zichao Yang",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5085608858",
+      "display_name": "Zhiting Hu",
+      "orcid": "https://orcid.org/0000-0002-6239-5031",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-6239-5031"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Zhiting Hu",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5088888805",
+      "display_name": "Yuntian Deng",
+      "orcid": "https://orcid.org/0000-0002-1257-1797",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-1257-1797"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Yuntian Deng",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5111222692",
+      "display_name": "Chris Dyer",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Chris Dyer",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5090351022",
+      "display_name": "Alex J. Smola",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Alex Smola",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.18653/v1/e17-2061",
+    "doi": "https://doi.org/10.18653/v1/e17-2061",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.18653/v1/e17-2061",
+    "pdf_url": "https://www.aclweb.org/anthology/E17-2061.pdf",
+    "source": {
+     "id": "https://openalex.org/S4306418011",
+     "display_name": "Conference of the European Chapter of the Association for Computational Linguistics",
+     "issn_l": null,
+     "issn": null,
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": null,
+     "host_organization_name": null,
+     "host_organization_lineage": [],
+     "host_organization_lineage_names": [],
+     "type": "conference"
+    },
+    "license": "cc-by",
+    "license_id": "https://openalex.org/licenses/cc-by",
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Proceedings of the 15th Conference of the European Chapter of the Association for Computational Linguistics: Volume 2, Short Papers",
+    "raw_type": "proceedings-article"
+   },
+   "cited_by_count": 50,
+   "abstract_inverted_index": {
+    "Zichao": [
+     0
+    ],
+    "Yang,": [
+     1
+    ],
+    "Zhiting": [
+     2
+    ],
+    "Hu,": [
+     3
+    ],
+    "Yuntian": [
+     4
+    ],
+    "Deng,": [
+     5
+    ],
+    "Chris": [
+     6
+    ],
+    "Dyer,": [
+     7
+    ],
+    "Alex": [
+     8
+    ],
+    "Smola.": [
+     9
+    ],
+    "Proceedings": [
+     10
+    ],
+    "of": [
+     11,
+     15,
+     19
+    ],
+    "the": [
+     12,
+     16,
+     20
+    ],
+    "15th": [
+     13
+    ],
+    "Conference": [
+     14
+    ],
+    "European": [
+     17
+    ],
+    "Chapter": [
+     18
+    ],
+    "Association": [
+     21
+    ],
+    "for": [
+     22
+    ],
+    "Computational": [
+     23
+    ],
+    "Linguistics:": [
+     24
+    ],
+    "Volume": [
+     25
+    ],
+    "2,": [
+     26
+    ],
+    "Short": [
+     27
+    ],
+    "Papers.": [
+     28
+    ],
+    "2017.": [
+     29
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2491408735",
+   "doi": "https://doi.org/10.48550/arxiv.1511.04868",
+   "display_name": "A Neural Transducer",
+   "publication_year": 2015,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5112445699",
+      "display_name": "Navdeep Jaitly",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Jaitly, Navdeep",
+     "raw_affiliation_strings": [
+      "Google Brain"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google Brain",
+       "institution_ids": [
+        "https://openalex.org/I1291425158"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5054372964",
+      "display_name": "David Sussillo",
+      "orcid": "https://orcid.org/0000-0003-1620-1264",
+      "observed_orcids": [
+       "https://orcid.org/0000-0003-1620-1264"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Sussillo, David",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5088551093",
+      "display_name": "Quoc Viet Le",
+      "orcid": "https://orcid.org/0000-0002-1087-2844",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-1087-2844"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Le, Quoc V.",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5003562101",
+      "display_name": "Oriol Vinyals",
+      "orcid": "https://orcid.org/0000-0001-7848-7283",
+      "observed_orcids": [
+       "https://orcid.org/0000-0001-7848-7283"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Vinyals, Oriol",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5006446297",
+      "display_name": "Ilya Sutskever",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Sutskever, Ilya",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5017529415",
+      "display_name": "Samy Bengio",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I1291425158",
+       "display_name": "Google (United States)",
+       "ror": "https://ror.org/00njsd438",
+       "country_code": "US",
+       "type": "company",
+       "lineage": [
+        "https://openalex.org/I1291425158",
+        "https://openalex.org/I4210128969"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Bengio, Samy",
+     "raw_affiliation_strings": [
+      "Google Brain"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Google Brain",
+       "institution_ids": [
+        "https://openalex.org/I1291425158"
+       ]
+      }
+     ]
+    }
+   ],
+   "primary_location": {
+    "id": "pmh:oai:arXiv.org:1511.04868",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://arxiv.org/abs/1511.04868",
+    "pdf_url": "https://arxiv.org/pdf/1511.04868",
+    "source": {
+     "id": "https://openalex.org/S4306400194",
+     "display_name": "arXiv (Cornell University)",
+     "issn_l": "2331-8422",
+     "issn": [
+      "2331-8422"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I205783295",
+     "host_organization_name": "Cornell University",
+     "host_organization_lineage": [
+      "https://openalex.org/I205783295"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "text"
+   },
+   "cited_by_count": 36,
+   "abstract_inverted_index": {
+    "Sequence-to-sequence": [
+     0
+    ],
+    "models": [
+     1
+    ],
+    "have": [
+     2,
+     29
+    ],
+    "achieved": [
+     3
+    ],
+    "impressive": [
+     4
+    ],
+    "results": [
+     5
+    ],
+    "on": [
+     6,
+     45,
+     83
+    ],
+    "various": [
+     7
+    ],
+    "tasks.": [
+     8
+    ],
+    "However,": [
+     9
+    ],
+    "they": [
+     10,
+     39
+    ],
+    "are": [
+     11,
+     201
+    ],
+    "unsuitable": [
+     12
+    ],
+    "for": [
+     13,
+     194
+    ],
+    "tasks": [
+     14,
+     27
+    ],
+    "that": [
+     15,
+     28,
+     58,
+     165,
+     188
+    ],
+    "require": [
+     16
+    ],
+    "incremental": [
+     17,
+     61
+    ],
+    "predictions": [
+     18,
+     62,
+     180
+    ],
+    "to": [
+     19,
+     102,
+     105,
+     121,
+     127,
+     138,
+     147,
+     157,
+     177
+    ],
+    "be": [
+     20,
+     112
+    ],
+    "made": [
+     21
+    ],
+    "as": [
+     22,
+     63,
+     119,
+     181
+    ],
+    "more": [
+     23,
+     64
+    ],
+    "data": [
+     24,
+     110,
+     182
+    ],
+    "arrives": [
+     25
+    ],
+    "or": [
+     26
+    ],
+    "long": [
+     30,
+     195
+    ],
+    "input": [
+     31,
+     48,
+     65,
+     87,
+     120
+    ],
+    "sequences": [
+     32,
+     196
+    ],
+    "and": [
+     33,
+     89,
+     117
+    ],
+    "output": [
+     34,
+     42,
+     107,
+     179
+    ],
+    "sequences.": [
+     35
+    ],
+    "This": [
+     36
+    ],
+    "is": [
+     37,
+     144,
+     175
+    ],
+    "because": [
+     38
+    ],
+    "generate": [
+     40,
+     158
+    ],
+    "an": [
+     41,
+     46,
+     115
+    ],
+    "sequence": [
+     43,
+     88
+    ],
+    "conditioned": [
+     44,
+     82
+    ],
+    "entire": [
+     47,
+     70
+    ],
+    "sequence.": [
+     49,
+     93
+    ],
+    "In": [
+     50
+    ],
+    "this": [
+     51
+    ],
+    "paper,": [
+     52
+    ],
+    "we": [
+     53
+    ],
+    "present": [
+     54
+    ],
+    "a": [
+     55,
+     129,
+     153
+    ],
+    "Neural": [
+     56,
+     76,
+     167,
+     190
+    ],
+    "Transducer": [
+     57,
+     77,
+     168,
+     191
+    ],
+    "can": [
+     59,
+     100,
+     111
+    ],
+    "make": [
+     60
+    ],
+    "arrives,": [
+     66
+    ],
+    "without": [
+     67
+    ],
+    "redoing": [
+     68
+    ],
+    "the": [
+     69,
+     75,
+     79,
+     84,
+     90,
+     98,
+     122,
+     149,
+     166,
+     189
+    ],
+    "computation.": [
+     71
+    ],
+    "Unlike": [
+     72
+    ],
+    "sequence-to-sequence": [
+     73
+    ],
+    "models,": [
+     74
+    ],
+    "computes": [
+     78
+    ],
+    "next-step": [
+     80
+    ],
+    "distribution": [
+     81
+    ],
+    "partially": [
+     85,
+     91
+    ],
+    "observed": [
+     86
+    ],
+    "generated": [
+     92
+    ],
+    "At": [
+     94
+    ],
+    "each": [
+     95
+    ],
+    "time": [
+     96,
+     133
+    ],
+    "step,": [
+     97
+    ],
+    "transducer": [
+     99,
+     150
+    ],
+    "decide": [
+     101
+    ],
+    "emit": [
+     103,
+     128
+    ],
+    "zero": [
+     104
+    ],
+    "many": [
+     106
+    ],
+    "symbols.": [
+     108
+    ],
+    "The": [
+     109,
+     124
+    ],
+    "processed": [
+     113
+    ],
+    "using": [
+     114,
+     152
+    ],
+    "encoder": [
+     116
+    ],
+    "presented": [
+     118
+    ],
+    "transducer.": [
+     123
+    ],
+    "discrete": [
+     125,
+     160
+    ],
+    "decision": [
+     126
+    ],
+    "symbol": [
+     130
+    ],
+    "at": [
+     131
+    ],
+    "every": [
+     132
+    ],
+    "step": [
+     134
+    ],
+    "makes": [
+     135
+    ],
+    "it": [
+     136,
+     174
+    ],
+    "difficult": [
+     137
+    ],
+    "learn": [
+     139
+    ],
+    "with": [
+     140
+    ],
+    "conventional": [
+     141
+    ],
+    "backpropagation.": [
+     142
+    ],
+    "It": [
+     143
+    ],
+    "however": [
+     145
+    ],
+    "possible": [
+     146
+    ],
+    "train": [
+     148
+    ],
+    "by": [
+     151
+    ],
+    "dynamic": [
+     154
+    ],
+    "programming": [
+     155
+    ],
+    "algorithm": [
+     156
+    ],
+    "target": [
+     159
+    ],
+    "decisions.": [
+     161
+    ],
+    "Our": [
+     162
+    ],
+    "experiments": [
+     163
+    ],
+    "show": [
+     164
+    ],
+    "works": [
+     169
+    ],
+    "well": [
+     170,
+     193
+    ],
+    "in": [
+     171
+    ],
+    "settings": [
+     172
+    ],
+    "where": [
+     173
+    ],
+    "required": [
+     176
+    ],
+    "produce": [
+     178
+    ],
+    "come": [
+     183
+    ],
+    "in.": [
+     184
+    ],
+    "We": [
+     185
+    ],
+    "also": [
+     186
+    ],
+    "find": [
+     187
+    ],
+    "performs": [
+     192
+    ],
+    "even": [
+     197
+    ],
+    "when": [
+     198
+    ],
+    "attention": [
+     199
+    ],
+    "mechanisms": [
+     200
+    ],
+    "not": [
+     202
+    ],
+    "used.": [
+     203
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2312383716",
+   "doi": "https://doi.org/10.48550/arxiv.1604.00077",
+   "display_name": "Neural Attention Models for Sequence Classification: Analysis and Application to Key Term Extraction and Dialogue Act Detection",
+   "publication_year": 2016,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5001005225",
+      "display_name": "Sheng-syun Shen",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I16733864",
+       "display_name": "National Taiwan University",
+       "ror": "https://ror.org/05bqach95",
+       "country_code": "TW",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I16733864"
+       ]
+      }
+     ],
+     "countries": [
+      "TW"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Shen, Sheng-syun",
+     "raw_affiliation_strings": [
+      "Graduate Institute of Communication Engineering National Taiwan University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Graduate Institute of Communication Engineering National Taiwan University",
+       "institution_ids": [
+        "https://openalex.org/I16733864"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5040508737",
+      "display_name": "Hung-yi Lee",
+      "orcid": "https://orcid.org/0000-0002-9654-5747",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-9654-5747"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I16733864",
+       "display_name": "National Taiwan University",
+       "ror": "https://ror.org/05bqach95",
+       "country_code": "TW",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I16733864"
+       ]
+      }
+     ],
+     "countries": [
+      "TW"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Lee, Hung-yi",
+     "raw_affiliation_strings": [
+      "Graduate Institute of Communication Engineering National Taiwan University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Graduate Institute of Communication Engineering National Taiwan University",
+       "institution_ids": [
+        "https://openalex.org/I16733864"
+       ]
+      }
+     ]
+    }
+   ],
+   "primary_location": {
+    "id": "pmh:oai:arXiv.org:1604.00077",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://arxiv.org/abs/1604.00077",
+    "pdf_url": "https://arxiv.org/pdf/1604.00077",
+    "source": {
+     "id": "https://openalex.org/S4306400194",
+     "display_name": "arXiv (Cornell University)",
+     "issn_l": "2331-8422",
+     "issn": [
+      "2331-8422"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I205783295",
+     "host_organization_name": "Cornell University",
+     "host_organization_lineage": [
+      "https://openalex.org/I205783295"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "text"
+   },
+   "cited_by_count": 29,
+   "abstract_inverted_index": {
+    "Recurrent": [
+     0
+    ],
+    "neural": [
+     1,
+     9,
+     35
+    ],
+    "network": [
+     2
+    ],
+    "architectures": [
+     3
+    ],
+    "combining": [
+     4
+    ],
+    "with": [
+     5,
+     145
+    ],
+    "attention": [
+     6,
+     10,
+     36,
+     116,
+     147,
+     164
+    ],
+    "mechanism,": [
+     7,
+     148
+    ],
+    "or": [
+     8,
+     92,
+     107
+    ],
+    "model,": [
+     11
+    ],
+    "have": [
+     12
+    ],
+    "shown": [
+     13
+    ],
+    "promising": [
+     14
+    ],
+    "performance": [
+     15
+    ],
+    "recently": [
+     16
+    ],
+    "for": [
+     17,
+     120,
+     136
+    ],
+    "the": [
+     18,
+     53,
+     57,
+     64,
+     67,
+     70,
+     82,
+     96,
+     99,
+     105,
+     112,
+     133,
+     137,
+     146,
+     154,
+     163,
+     167
+    ],
+    "tasks": [
+     19,
+     168
+    ],
+    "including": [
+     20
+    ],
+    "speech": [
+     21
+    ],
+    "recognition,": [
+     22
+    ],
+    "image": [
+     23
+    ],
+    "caption": [
+     24
+    ],
+    "generation,": [
+     25
+    ],
+    "visual": [
+     26
+    ],
+    "question": [
+     27
+    ],
+    "answering": [
+     28
+    ],
+    "and": [
+     29,
+     48,
+     63,
+     172
+    ],
+    "machine": [
+     30
+    ],
+    "translation.": [
+     31
+    ],
+    "In": [
+     32,
+     52
+    ],
+    "this": [
+     33,
+     175
+    ],
+    "paper,": [
+     34
+    ],
+    "model": [
+     37,
+     58
+    ],
+    "is": [
+     38,
+     60,
+     66,
+     79,
+     85,
+     102,
+     118,
+     126
+    ],
+    "applied": [
+     39
+    ],
+    "on": [
+     40
+    ],
+    "two": [
+     41
+    ],
+    "sequence": [
+     42,
+     54,
+     77,
+     84,
+     101,
+     121,
+     135,
+     155
+    ],
+    "classification": [
+     43,
+     113,
+     122,
+     138
+    ],
+    "tasks,": [
+     44,
+     56
+    ],
+    "dialogue": [
+     45
+    ],
+    "act": [
+     46
+    ],
+    "detection": [
+     47
+    ],
+    "key": [
+     49
+    ],
+    "term": [
+     50
+    ],
+    "extraction.": [
+     51
+    ],
+    "labeling": [
+     55,
+     78,
+     156
+    ],
+    "input": [
+     59,
+     71,
+     83
+    ],
+    "a": [
+     61
+    ],
+    "sequence,": [
+     62
+    ],
+    "output": [
+     65
+    ],
+    "label": [
+     68
+    ],
+    "of": [
+     69,
+     76,
+     128,
+     162
+    ],
+    "sequence.": [
+     72
+    ],
+    "The": [
+     73,
+     115,
+     140,
+     160
+    ],
+    "major": [
+     74
+    ],
+    "difficulty": [
+     75
+    ],
+    "that": [
+     80,
+     144
+    ],
+    "when": [
+     81
+    ],
+    "long,": [
+     86
+    ],
+    "it": [
+     87,
+     125
+    ],
+    "can": [
+     88
+    ],
+    "include": [
+     89
+    ],
+    "many": [
+     90
+    ],
+    "noisy": [
+     91,
+     106
+    ],
+    "irrelevant": [
+     93,
+     108
+    ],
+    "part.": [
+     94
+    ],
+    "If": [
+     95
+    ],
+    "information": [
+     97
+    ],
+    "in": [
+     98,
+     153,
+     166,
+     174
+    ],
+    "whole": [
+     100
+    ],
+    "treated": [
+     103
+    ],
+    "equally,": [
+     104
+    ],
+    "part": [
+     109,
+     131
+    ],
+    "may": [
+     110
+    ],
+    "degrade": [
+     111
+    ],
+    "performance.": [
+     114
+    ],
+    "mechanism": [
+     117,
+     165
+    ],
+    "helpful": [
+     119
+    ],
+    "task": [
+     123,
+     157
+    ],
+    "because": [
+     124
+    ],
+    "capable": [
+     127
+    ],
+    "highlighting": [
+     129
+    ],
+    "important": [
+     130
+    ],
+    "among": [
+     132
+    ],
+    "entire": [
+     134
+    ],
+    "task.": [
+     139
+    ],
+    "experimental": [
+     141
+    ],
+    "results": [
+     142
+    ],
+    "show": [
+     143
+    ],
+    "discernible": [
+     149
+    ],
+    "improvements": [
+     150
+    ],
+    "were": [
+     151
+    ],
+    "achieved": [
+     152
+    ],
+    "considered": [
+     158
+    ],
+    "here.": [
+     159
+    ],
+    "roles": [
+     161
+    ],
+    "are": [
+     169
+    ],
+    "further": [
+     170
+    ],
+    "analyzed": [
+     171
+    ],
+    "visualized": [
+     173
+    ],
+    "paper.": [
+     176
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2493383198",
+   "doi": "https://doi.org/10.48550/arxiv.1607.05108",
+   "display_name": "Neural Machine Translation with Recurrent Attention Modeling",
+   "publication_year": 2016,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5101461004",
+      "display_name": "Zichao Yang",
+      "orcid": "https://orcid.org/0009-0001-7734-5766",
+      "observed_orcids": [
+       "https://orcid.org/0009-0001-7734-5766"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Yang, Zichao",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5085608858",
+      "display_name": "Zhiting Hu",
+      "orcid": "https://orcid.org/0000-0002-6239-5031",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-6239-5031"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Hu, Zhiting",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5088888805",
+      "display_name": "Yuntian Deng",
+      "orcid": "https://orcid.org/0000-0002-1257-1797",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-1257-1797"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Deng, Yuntian",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5111222692",
+      "display_name": "Chris Dyer",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Dyer, Chris",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5090351022",
+      "display_name": "Alex J. Smola",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I74973139",
+       "display_name": "Carnegie Mellon University",
+       "ror": "https://ror.org/05x2bcf33",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Smola, Alex",
+     "raw_affiliation_strings": [
+      "Carnegie Mellon University"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Carnegie Mellon University",
+       "institution_ids": [
+        "https://openalex.org/I74973139"
+       ]
+      }
+     ]
+    }
+   ],
+   "primary_location": {
+    "id": "pmh:oai:arXiv.org:1607.05108",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://arxiv.org/abs/1607.05108",
+    "pdf_url": "https://arxiv.org/pdf/1607.05108",
+    "source": {
+     "id": "https://openalex.org/S4306400194",
+     "display_name": "arXiv (Cornell University)",
+     "issn_l": "2331-8422",
+     "issn": [
+      "2331-8422"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I205783295",
+     "host_organization_name": "Cornell University",
+     "host_organization_lineage": [
+      "https://openalex.org/I205783295"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "text"
+   },
+   "cited_by_count": 14,
+   "abstract_inverted_index": {
+    "Knowing": [
+     0
+    ],
+    "which": [
+     1
+    ],
+    "words": [
+     2,
+     24
+    ],
+    "have": [
+     3
+    ],
+    "been": [
+     4
+    ],
+    "attended": [
+     5,
+     27
+    ],
+    "to": [
+     6,
+     28
+    ],
+    "in": [
+     7,
+     29,
+     75
+    ],
+    "previous": [
+     8,
+     49
+    ],
+    "time": [
+     9
+    ],
+    "steps": [
+     10
+    ],
+    "while": [
+     11
+    ],
+    "generating": [
+     12
+    ],
+    "a": [
+     13,
+     16
+    ],
+    "translation": [
+     14,
+     87
+    ],
+    "is": [
+     15
+    ],
+    "rich": [
+     17
+    ],
+    "source": [
+     18
+    ],
+    "of": [
+     19,
+     38,
+     84
+    ],
+    "information": [
+     20
+    ],
+    "for": [
+     21,
+     54
+    ],
+    "predicting": [
+     22
+    ],
+    "what": [
+     23
+    ],
+    "will": [
+     25
+    ],
+    "be": [
+     26
+    ],
+    "the": [
+     30,
+     35,
+     46
+    ],
+    "future.": [
+     31
+    ],
+    "We": [
+     32
+    ],
+    "improve": [
+     33
+    ],
+    "upon": [
+     34
+    ],
+    "attention": [
+     36,
+     52,
+     85
+    ],
+    "model": [
+     37
+    ],
+    "Bahdanau": [
+     39
+    ],
+    "et": [
+     40
+    ],
+    "al.": [
+     41
+    ],
+    "(2014)": [
+     42
+    ],
+    "by": [
+     43
+    ],
+    "explicitly": [
+     44
+    ],
+    "modeling": [
+     45
+    ],
+    "relationship": [
+     47
+    ],
+    "between": [
+     48
+    ],
+    "and": [
+     50,
+     73
+    ],
+    "subsequent": [
+     51
+    ],
+    "levels": [
+     53
+    ],
+    "each": [
+     55
+    ],
+    "word": [
+     56
+    ],
+    "using": [
+     57
+    ],
+    "one": [
+     58
+    ],
+    "recurrent": [
+     59
+    ],
+    "network": [
+     60
+    ],
+    "per": [
+     61
+    ],
+    "input": [
+     62
+    ],
+    "word.": [
+     63
+    ],
+    "This": [
+     64
+    ],
+    "architecture": [
+     65
+    ],
+    "easily": [
+     66
+    ],
+    "captures": [
+     67
+    ],
+    "informative": [
+     68
+    ],
+    "features,": [
+     69
+    ],
+    "such": [
+     70
+    ],
+    "as": [
+     71
+    ],
+    "fertility": [
+     72
+    ],
+    "regularities": [
+     74
+    ],
+    "relative": [
+     76
+    ],
+    "distortion.": [
+     77
+    ],
+    "In": [
+     78
+    ],
+    "experiments,": [
+     79
+    ],
+    "we": [
+     80
+    ],
+    "show": [
+     81
+    ],
+    "our": [
+     82
+    ],
+    "parameterization": [
+     83
+    ],
+    "improves": [
+     86
+    ],
+    "quality.": [
+     88
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2551620312",
+   "doi": null,
+   "display_name": "Sequence to Sequence Transduction with Hard Monotonic Attention",
+   "publication_year": 2017,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5027223654",
+      "display_name": "Roee Aharoni",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Roee Aharoni",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5028476919",
+      "display_name": "Yoav Goldberg",
+      "orcid": "https://orcid.org/0000-0002-6497-829X",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-6497-829X"
+      ]
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Yoav Goldberg",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    }
+   ],
+   "primary_location": {
+    "id": "mag:2551620312",
+    "doi": null,
+    "is_oa": false,
+    "landing_page_url": "https://openreview.net/pdf?id=HkyYqU9lx",
+    "pdf_url": null,
+    "source": null,
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": null
+   },
+   "cited_by_count": 11,
+   "abstract_inverted_index": {
+    "We": [
+     0,
+     29
+    ],
+    "present": [
+     1,
+     63
+    ],
+    "a": [
+     2,
+     10
+    ],
+    "supervised": [
+     3
+    ],
+    "sequence": [
+     4,
+     6
+    ],
+    "to": [
+     5,
+     54,
+     87
+    ],
+    "transduction": [
+     7
+    ],
+    "model": [
+     8,
+     32
+    ],
+    "with": [
+     9,
+     22
+    ],
+    "hard": [
+     11,
+     72
+    ],
+    "attention": [
+     12,
+     75
+    ],
+    "mechanism": [
+     13
+    ],
+    "which": [
+     14
+    ],
+    "combines": [
+     15
+    ],
+    "the": [
+     16,
+     23,
+     31,
+     34,
+     47,
+     55,
+     67,
+     80,
+     89
+    ],
+    "more": [
+     17
+    ],
+    "traditional": [
+     18
+    ],
+    "statistical": [
+     19
+    ],
+    "alignment": [
+     20
+    ],
+    "methods": [
+     21
+    ],
+    "power": [
+     24
+    ],
+    "of": [
+     25,
+     36,
+     46,
+     66
+    ],
+    "recurrent": [
+     26
+    ],
+    "neural": [
+     27,
+     57
+    ],
+    "networks.": [
+     28
+    ],
+    "evaluate": [
+     30
+    ],
+    "on": [
+     33,
+     79
+    ],
+    "task": [
+     35
+    ],
+    "morphological": [
+     37
+    ],
+    "inflection": [
+     38
+    ],
+    "generation": [
+     39
+    ],
+    "and": [
+     40,
+     58,
+     73
+    ],
+    "show": [
+     41
+    ],
+    "that": [
+     42
+    ],
+    "it": [
+     43
+    ],
+    "provides": [
+     44
+    ],
+    "state": [
+     45
+    ],
+    "art": [
+     48
+    ],
+    "results": [
+     49
+    ],
+    "in": [
+     50,
+     85
+    ],
+    "various": [
+     51
+    ],
+    "setups": [
+     52
+    ],
+    "compared": [
+     53
+    ],
+    "previous": [
+     56
+    ],
+    "non-neural": [
+     59
+    ],
+    "approaches.": [
+     60
+    ],
+    "Eventually": [
+     61
+    ],
+    "we": [
+     62
+    ],
+    "an": [
+     64
+    ],
+    "analysis": [
+     65
+    ],
+    "learned": [
+     68
+    ],
+    "representations": [
+     69
+    ],
+    "for": [
+     70
+    ],
+    "both": [
+     71
+    ],
+    "soft": [
+     74
+    ],
+    "models,": [
+     76
+    ],
+    "shedding": [
+     77
+    ],
+    "light": [
+     78
+    ],
+    "features": [
+     81
+    ],
+    "such": [
+     82
+    ],
+    "models": [
+     83
+    ],
+    "extract": [
+     84
+    ],
+    "order": [
+     86
+    ],
+    "solve": [
+     88
+    ],
+    "task.": [
+     90
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2998907126",
+   "doi": null,
+   "display_name": "Sequence Modeling with Recurrent Tensor Networks",
+   "publication_year": 2016,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5080059757",
+      "display_name": "Richard Kelley",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": true,
+     "raw_author_name": "Richard Kelley",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    }
+   ],
+   "primary_location": {
+    "id": "mag:2998907126",
+    "doi": null,
+    "is_oa": false,
+    "landing_page_url": "https://openreview.net/pdf?id=ROVmGqlgmhvnM0J1IpNq",
+    "pdf_url": null,
+    "source": null,
+    "license": null,
+    "license_id": null,
+    "version": null,
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": null
+   },
+   "cited_by_count": 1,
+   "abstract_inverted_index": null
+  }
+ ],
+ "group_by": []
+}

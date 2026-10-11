@@ -313,6 +313,23 @@ export const ARTICLE_TABLE_COVERAGE = {
         "if readers ask for the guessed link in their export, it is one column.",
     },
   },
+  /* Sources › Not cited's last OpenAlex search — plan 261011ac. */
+  related_work_searches: {
+    rollback: {
+      exported: false,
+      why:
+        "OpenAlex's answer to one search on the article's own title and opening — public " +
+        "bibliographic records about other papers, nothing the reader wrote and nothing a " +
+        "model made. Pressing Search again rebuilds it for free.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "A list of other papers from a public index, found from this piece's own words, " +
+        "not anything you wrote. Searching again in Spideryarn gives it back, filtered " +
+        "against the bibliography as it is then.",
+    },
+  },
   checkpoints: {
     rollback: {
       exported: false,

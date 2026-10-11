@@ -139,6 +139,8 @@ export const ARTICLE_TABLES = {
   checkpoints: "moves",
   /** A model's guess at where an uploaded file came from: about the work, not the reader. */
   upload_source_guesses: "moves",
+  /** Sources › Not cited's last search: OpenAlex's papers close to the article's own words, nothing of the reader's. */
+  related_work_searches: "moves",
 
   /* ---- reader-state: the old owner's, deleted (src/admin-articles.ts § READER_STATE) ---- */
   /** Before `referee_criteria`: `comments_criterion` references it and does not cascade. */

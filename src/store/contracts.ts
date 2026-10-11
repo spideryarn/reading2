@@ -3256,7 +3256,12 @@ export type RateBucket =
      `SOURCES_CLAIM_CHECK_RATE_POLICY`, plan 261008i § 3). Not Dig deeper's
      bucket, because Dig deeper's lease is shorter than a check (GPT Sol's E1).
      It was `debate-check` until 2026-10-09: `RETIRED_RATE_BUCKETS` below. */
-  | "sources-claim-check";
+  | "sources-claim-check"
+  /* Sources › Not cited's search — no money, but OpenAlex's anonymous daily
+     allowance, which Cited by shares: one semantic search costs ten credits,
+     so a script pressing it could spend everybody's day
+     (src/related-work.ts § `RELATED_WORK_RATE_POLICY`, plan 261011ac). */
+  | "related-work-search";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan

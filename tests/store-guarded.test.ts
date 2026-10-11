@@ -408,6 +408,9 @@ describe("no Postgres store is selected without a guard", () => {
       "pgRefereeCriteriaStore",
       "pgRefereeHiddenCheckStore",
       "pgRefereePromisesStore",
+      /* Sources › Not cited, 2026-10-11 (261011ac): its write binds the
+         titles and abstracts OpenAlex returned for an article's own words. */
+      "pgRelatedWorkStore",
       "pgSearchStore",
       /* The private link, 2026-10-05: its parameters are the link's key. */
       "pgShareLinkStore",
