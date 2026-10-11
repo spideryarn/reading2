@@ -97,8 +97,10 @@ beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered
 Debate's words (*critiques*, *reception*) find Reception, and *debate claims* finds Claims. *peer
 review* left Referee's aliases when this mode took the name, and stays this mode's alias now that
 the name has gone. Referee keeps *referee report*, and has the person as *for peer reviewers*
-rather than *peer reviewer*, which would start with this mode's nickname and, Referee being first in
-the bar, take it (mode-catalog.ts § `aliases`, rule 5); it ranks after Sources for *peer review*.
+rather than *peer reviewer*, which starts with this mode's nickname. While Referee came first in the
+bar, that shorter alias would have taken Sources' *peer review* query (mode-catalog.ts § `aliases`,
+rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *peer review*; typed,
+*peer reviewer* still finds Referee inside its longer alias.
 
 ## What a press buys
 
