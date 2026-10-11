@@ -8,9 +8,9 @@
  * > — Greg, 2026-10-11, SPIDERYARN-READING2-HD (spya-zh5f23)
  *
  * The search box takes the cursor on arrival (plan 260929g), so a reader who
- * arrives and pastes a link pastes it into the search. Nothing on the shelf
- * matches an address, and the page said nothing. Now it offers to add it — on a
- * press, through the same `/add/<url>` the Add button uses, never by itself.
+ * arrives and pastes a link pastes it into the search. A complete address is a
+ * strong signal that they meant the add box; now the shelf offers to add it —
+ * on a press, through the same `/add/<url>` the Add button uses, never by itself.
  * docs/plans/261011l-shelf-add-box-and-search-box-look-like-different-things.md.
  *
  * The mocks are tests/shelf-search-clear.test.tsx's, plus `navigate` spied on.
@@ -110,7 +110,9 @@ async function show(path: string): Promise<void> {
   await act(async () => {
     root.render(createElement(NuqsAdapter, null, createElement(Library, { readerId: "reader" })));
   });
-  await settle();
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 50));
+  });
 }
 
 /** Longer than the 200ms `?q=` is debounced by (params.ts), so the address has caught up. */
@@ -139,7 +141,6 @@ async function type(value: string): Promise<void> {
     set?.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await settle();
 }
 
 describe("a link in the shelf's search box", () => {
@@ -147,14 +148,15 @@ describe("a link in the shelf's search box", () => {
     await show("/");
     await type("https://example.com/an-essay");
     expect(host.textContent).toContain("That's a link.");
+    expect(offer()?.classList.contains("tap-target")).toBe(true);
     await act(async () => {
       offer()?.click();
     });
-    expect(went).toEqual(["/add/" + encodeURIComponent("https://example.com/an-essay")]);
+    expect(went).toEqual([`/add/${encodeURIComponent("https://example.com/an-essay")}`]);
   });
 
   it("is offered when the address arrives in the page's own ?q=", async () => {
-    await show("/?q=" + encodeURIComponent("http://example.com/x"));
+    await show(`/?q=${encodeURIComponent("http://example.com/x")}`);
     expect(offer()).not.toBeNull();
   });
 
@@ -189,9 +191,9 @@ describe("a link in the shelf's search box", () => {
   it("goes with the query when Escape clears it", async () => {
     await show("/");
     await type("https://example.com/an-essay");
-    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
     await act(async () => {
-      box().dispatchEvent(escape);
+      box().dispatchEvent(escapeKey);
     });
     await settle();
     expect(offer()).toBeNull();
@@ -208,7 +210,7 @@ describe("linkToAdd — what counts as a link meant for the add box", () => {
 
   it("refuses what Add refuses", () => {
     expect(linkToAdd("javascript:alert(1)")).toBeNull();
-    /* Credentials and a local address: the add page would only refuse them. */
+    /* Credentials and local addresses: the add flow refuses these too. */
     expect(linkToAdd("https://user:pass@example.com/x")).toBeNull();
     expect(linkToAdd("http://127.0.0.1/x")).toBeNull();
     expect(linkToAdd("http://localhost/x")).toBeNull();

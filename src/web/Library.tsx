@@ -1271,7 +1271,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
               onChange("");
             }
           }}
-          placeholder="Search your shelf: titles, authors, text"
+          placeholder="Search your shelf"
           aria-label="Search the library"
           /* A ring as well as a border colour on focus. A 1px border changing
              from grey to orange is about one pixel's worth of colour on a
@@ -1322,13 +1322,20 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
       </div>
       {/* **A link here was meant for the add box.** The box above takes the
           cursor on arrival, so a reader who arrives and pastes an address
-          pastes it here, and nothing on a shelf matches an address. Offered,
-          not done: the press goes through the same `/add/<url>` as Add, and
-          Enter still only puts the keyboard away. Plan 261011l. */}
+          pastes it here. A complete address is a strong signal that they meant
+          the add box. Offered, not done: the press goes through the same
+          `/add/<url>` as Add, and Enter still only puts the keyboard away.
+          Plan 261011l. */}
       {link !== null && (
         <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
           That's a link. Add it to your shelf?
-          <Button type="button" size="xs" variant="outline" onClick={() => navigate(addHref(link))}>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="tap-target"
+            onClick={() => navigate(addHref(link))}
+          >
             Add it
           </Button>
         </p>
@@ -1343,7 +1350,8 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
  * `slugFromUrl` is the add box's own test, so this never offers what Add would
  * refuse. On top of it, the query must be one token and carry a scheme or a
  * path: `nature.com` alone is a fair thing to search a shelf for (the site
- * name is on the cards), and `nature.com/articles/x` is not.
+ * name is on the cards), while the path makes `nature.com/articles/x` a much
+ * stronger add signal.
  */
 export function linkToAdd(query: string): string | null {
   const q = query.trim();

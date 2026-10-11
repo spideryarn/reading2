@@ -33,8 +33,8 @@ too far, and it would hide the main thing the page is for.
 1. **The search box: narrower, right-aligned.** `width: min(24rem, 100% - 2rem)` and pushed to the
    right of the shelf column, so on a phone, where 24rem is wider than the column, it still keeps a
    2rem step on the left (GPT Sol's change: a plain `max-width` left the two boxes the same shape at
-   320 and 390). The magnifier stays inside on the left. Placeholder becomes *Search your shelf: titles,
-   authors, text*, so its words say which shelf-side job it does.
+   320 and 390). The magnifier stays inside on the left. Placeholder becomes *Search your shelf*, so its words say which job it does. (It was *Search your
+   shelf: titles, authors, text* until the 390px shot showed it clipped.)
 2. **The add box: narrower, left-aligned, and it says *add*.** The card gets `max-width: 42rem`
    on the left of the column, so the two boxes no longer line up edge to edge. The heading *Add an
    article* (kept word for word: Help and its picture name it) moves from 12px grey to 14px in the
@@ -93,3 +93,21 @@ Before, 1280: [261011l-shot-before-1280.png](261011l-shot-before-1280.png) (and
 [light](261011l-shot-before-1280-light.png), [390](261011l-shot-before-390.png)). The search box,
 which takes the cursor on arrival, is drawn with an orange focus ring and is the most inviting field
 on the page.
+
+After: [1280](261011l-shot-after-1280.png), [1280 light](261011l-shot-after-1280-light.png),
+[768](261011l-shot-after-768.png), [390](261011l-shot-after-390.png),
+[320](261011l-shot-after-320.png), [a pasted link](261011l-shot-after-1280-pasted-link.png),
+[words in the add box](261011l-shot-after-390-add-hint.png). No horizontal overflow at any of the
+four widths. The two boxes no longer line up, which is the point; at 390 the search box's 2rem step
+reads as deliberate. The longer placeholder clipped at 390 and 320 and was shortened. Help's
+`adding-articles.png` was retaken (scaled from 1346 to Help's 1344 cap) and its entry updated.
+
+## Code review
+
+GPT Sol, `--sandbox workspace-write`:
+[261011l-shelf-add-vs-search-code-review-sol.md](261011l-shelf-add-vs-search-code-review-sol.md),
+*SHIP AFTER MY FIXES*. It fixed three things, all read and kept: **Add it** gets the house
+`tap-target` (40px under a finger), pinned by the test; the test no longer waits 350ms after every
+keystroke; and two comments that said nothing on a shelf can match an address, which full-text
+search cannot promise. It verified that the Add page validates before it queues, so a false
+positive cannot spend an allowance, and that Tailwind emits the `min()` width.
