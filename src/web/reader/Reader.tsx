@@ -3792,7 +3792,8 @@ export function Reader({
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
-         unmounts — for either band, since they share `useSkimMode`.
+         unmounts — for either band, and for either walk inside it (the route's
+         `useSkimMode`, or `FiguresWalk` on `?depth=figures`, plan 261011b).
          docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
 
          The visitor's branch is gated on the route itself, like the timeline's:

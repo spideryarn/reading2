@@ -688,6 +688,8 @@ const SKIM_VIEW: SkimView = {
   card: null,
   termActions: null,
   onAskTerm: null,
+  figures: 0,
+  onFigures: noop,
   onDepth: noop,
   onRow: noop,
   onStep: noop,

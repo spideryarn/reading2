@@ -161,6 +161,29 @@
    so the section still reads as the row's heading. */
 .skim-words { color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.4; overflow-wrap: anywhere; }
 .skim-row.current .skim-words { color: var(--ink); }
+/* **A figure's row** (modes/skim/FiguresWalk.tsx, plan 261011b): its kind's
+   icon, then its caption, in the quote's place and at its size. A caption can
+   be a paragraph, so every row but the current one shows two lines of it. */
+.skim-fig-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: var(--type-quote);
+  line-height: 1.4;
+}
+.skim-row.current .skim-fig-label { color: var(--ink); }
+.skim-fig-icon { flex: none; margin-top: 0.2em; color: var(--ink-faint); }
+.skim-fig-text { min-width: 0; overflow-wrap: anywhere; }
+/* The door's next caption, two lines like a row's: a paper's caption can run
+   to nine, and the door is a signpost, not the figure (browser check, 261011b). */
+.skim-door-caption,
+.skim-row:not(.current) .skim-fig-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 /* A stop whose quote has gone says so on its own row (SkimPanel.tsx §
    `SKIM_STOP_MISSING`, plan 261010a): the banner that used to explain it can
    be sent away. */

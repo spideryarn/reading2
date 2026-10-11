@@ -477,8 +477,8 @@ export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
 export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * **Skim's depth** — `depth=1|2|3`, Gist · More · Most. Absent is Gist, the
- * first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+ * **Skim's depth** — `depth=1|2|3`, Gist · More · Most, or `depth=figures`
+ * (`SkimPart`, below). Absent is Gist, the first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § URL.
  *
  * `push`: changing depth is choosing a different walk through the piece, and
@@ -495,14 +495,26 @@ export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
  * plan 261003l), so on a route with no carried stop the depth never matters
  * once a stop is named.
  */
-export const depthParam = createParser<SkimDepth>({
-  parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
+export const depthParam = createParser<SkimPart>({
+  parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : v === "figures" ? "figures" : null),
   serialize: (v) => String(v),
 }).withOptions({ history: "push" });
 
 /**
+ * **What `?depth=` can name**: one of the route's passes, or `figures` — the
+ * walk through the article's figures, tables and media (plan 261011b § Half 1,
+ * spya-sb0c7e). Client-only: the stored route's `SkimDepth` is unchanged, so
+ * nothing on the server can be handed `"figures"` as a pass (GPT Sol's plan
+ * review F4). Under `figures`, `?stop=` is the figure's own block id.
+ */
+export type SkimPart = SkimDepth | "figures";
+
+/**
  * **The Skim stop the reader is on** — the quote's id, which is minted
- * by `mintId` and so validated by `parseAsBlockId` like `?quote=`.
+ * by `mintId` and so validated by `parseAsBlockId` like `?quote=`; under
+ * `?depth=figures`, the figure's block id, which is the same shape. The depth
+ * says which of the two it is. A figure stop naming no figure falls back to
+ * the first (FiguresWalk.tsx).
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not
  * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A

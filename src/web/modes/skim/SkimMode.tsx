@@ -18,11 +18,16 @@
  * (SPIDERYARN-READING2-56,
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  *
+ * **Two walks since 2026-10-11**: on `?depth=figures` either band draws
+ * `FiguresWalk` — the article's figures, tables and media — instead of the
+ * route (`useSkimParts`, below; plan 261011b). Both publish the same
+ * `SkimControl`, so `Reader` cannot tell them apart beyond the door's noun.
+ *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client), docs/project/skim.md.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Quote, Tree, SkimDepth, SkimStop } from "../../../types.js";
 import type {
@@ -33,7 +38,11 @@ import type {
 } from "../../../public-types.js";
 import { blockIndex, sectionNodesOf } from "../../../section-path.js";
 import { titleVoice } from "../../tree.js";
-import { depthParam, stopParam } from "../../params.js";
+import { depthParam, type SkimPart, stopParam } from "../../params.js";
+import { figuresOf } from "../../../figures.js";
+import type { Voice } from "../../voice.js";
+import { FiguresWalk } from "./FiguresWalk.js";
+import { takeArrival, useClaimedArrival, usePublishedControl } from "./walk.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { quoteStroke } from "../../QuotesPanel.js";
@@ -42,11 +51,11 @@ import { scrollToBlock } from "../../scroll.js";
 import { type Found, quoteMarkKey, resolveSkimStop } from "../../search-hits.js";
 import {
   DEPTH_LABEL,
+  type DepthChoice,
+  depthChoices,
   doorAfter,
   firstStopOf,
   locate,
-  offeredDepths,
-  passCount,
   positionsOf,
   stepStop,
   walkedIn,
@@ -54,7 +63,7 @@ import {
 import type { QuotesRead } from "../../useQuotes.js";
 import { type WhereRow, whereForBlock } from "../../where.js";
 import { useSkim } from "../../useSkim.js";
-import { SkimPanel, type SkimPass, type SkimRow } from "../../SkimPanel.js";
+import { type SkimAccess, SkimPanel, type SkimPass, type SkimRow, type StopNoun } from "../../SkimPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
 import type { AskAboutTerm, TermActions } from "../../ProseHoverCard.js";
 import type { GlossaryRead } from "../../useGlossary.js";
@@ -71,6 +80,10 @@ import { useTimelineRead } from "../../useTimeline.js";
  * through a ref, so the object changes only when the stop or the door's words
  * do. A fresh closure per render would republish every render, and `Reader`
  * re-rendering the band that republished is a loop.
+ *
+ * Published by whichever walk is drawn — the route's or the figures'
+ * (FiguresWalk.tsx) — through walk.ts § `usePublishedControl`. A "stop" below
+ * is a figure in the second.
  */
 export interface SkimControl {
   /** The current stop's block — where the door hangs. `null` if its quote has gone. */
@@ -103,8 +116,12 @@ export interface SkimControl {
  * passage.
  */
 export type DoorView =
-  | { kind: "next"; cue: string | null }
-  | { kind: "end"; pass: string; count: number; deeper: string | null };
+  | { kind: "next"; noun: "stop"; cue: string | null }
+  /* **Walking the figures** (FiguresWalk.tsx): the next one's caption, the
+     author's, or its name — *"Table 2"* — which is ours, hence the voice. */
+  | { kind: "next"; noun: "figure"; cue: string; voice: Voice }
+  /* `pass` is *Gist* or *the figures*; `deeper` is always `null` for figures. */
+  | { kind: "end"; noun: StopNoun; pass: string; count: number; deeper: string | null };
 
 /**
  * The one deep-link arrival owned by the reading view, not by this band's
@@ -275,28 +292,110 @@ export function SkimBand({
       timeline.stale,
     ],
   );
-  const view = useSkimMode({
-    sources,
-    /* The read is the owner's *Hide* on a term, as it is for the prose card. */
-    termActions: glossary,
-    onAskTerm,
-    onOpen,
-    canOpen,
-    stops: owner.skim?.stops ?? NO_STOPS,
-    quotes: quotes.quotes?.quotes ?? NO_QUOTES,
-    blocks,
-    tree,
-    quoteMarks,
-    covers,
-    onAway,
-    onJump,
-    onFound,
-    openKey,
-    onOpenKey,
-    onControl,
-    arrival,
+  /* The route's passes are offered only over a route the panel would draw. */
+  const stops = owner.status === "ready" ? (owner.skim?.stops ?? NO_STOPS) : NO_STOPS;
+  const parts = useSkimParts(stops, blocks, arrival);
+  /* **`useSkim` stays up here, above the choice**, so choosing Figures does
+     not stop the route being planned (mode.md: opening a mode starts it). */
+  if (parts.walk === "figures") {
+    return (
+      <FiguresWalk
+        figures={parts.figures}
+        depths={parts.depths}
+        onPart={parts.switchTo}
+        blocks={blocks}
+        tree={tree}
+        covers={covers}
+        away={away}
+        onAway={onAway}
+        onJump={onJump}
+        onControl={onControl}
+        arrival={arrival}
+      />
+    );
+  }
+  return (
+    <RouteWalk
+      access={{ kind: "owner", owner }}
+      away={away}
+      walk={{
+        sources,
+        /* The read is the owner's *Hide* on a term, as it is for the prose card. */
+        termActions: glossary,
+        onAskTerm,
+        onOpen,
+        canOpen,
+        stops: owner.skim?.stops ?? NO_STOPS,
+        quotes: quotes.quotes?.quotes ?? NO_QUOTES,
+        blocks,
+        tree,
+        quoteMarks,
+        covers,
+        onAway,
+        onJump,
+        onFound,
+        openKey,
+        onOpenKey,
+        onControl,
+        arrival,
+        figures: parts.figures.length,
+        onPart: parts.switchTo,
+      }}
+    />
+  );
+}
+
+/**
+ * **Which walk the band draws, and the switch between them** — the route's
+ * passes or the figures (plan 261011b § How it is built). Read off `?depth=`:
+ * `figures` draws `FiguresWalk` when the article has any, and anything else
+ * the route, as before. An address asking for figures in an article with none
+ * draws the route's Gist rather than nothing.
+ *
+ * `switchTo` is the press that crosses between the two: it puts the target's
+ * first stop in the arrival mailbox **synchronously, before the one URL
+ * write**, so the walk that mounts claims it and arrives there — one pushed
+ * entry, as a change of pass is, and no second (GPT Sol's plan review F4). A
+ * change between passes stays the route walk's own (`changeDepth`): nothing
+ * remounts, so nothing needs the mailbox.
+ */
+function useSkimParts(stops: readonly SkimStop[], blocks: readonly Block[], arrival: SkimArrival) {
+  const [asked, setAt] = useQueryStates({
+    depth: depthParam,
+    stop: stopParam,
   });
-  return <SkimPanel access={{ kind: "owner", owner }} view={view} away={away} />;
+  const figures = useMemo(() => figuresOf(blocks), [blocks]);
+  const depths = useMemo(() => depthChoices(stops), [stops]);
+  const walk: "figures" | "route" = asked.depth === "figures" && figures.length > 0 ? "figures" : "route";
+  const switchTo = useCallback(
+    (to: SkimPart) => {
+      const stop = to === "figures" ? (figures[0]?.blockId ?? null) : firstStopOf(stops, to);
+      if (stop === null) return;
+      arrival.stop = stop;
+      arrival.open = false;
+      void setAt({ depth: to, stop }, { history: "push" });
+    },
+    [figures, stops, arrival, setAt],
+  );
+  return { walk, figures, depths, switchTo };
+}
+
+/**
+ * **The route's walk** — `useSkimMode` and the panel it feeds, in a component
+ * of its own so the band's choice between it and `FiguresWalk` is a choice of
+ * child, not a conditional hook.
+ */
+function RouteWalk({
+  access,
+  away,
+  walk,
+}: {
+  access: SkimAccess;
+  away: boolean;
+  walk: Parameters<typeof useSkimMode>[0];
+}) {
+  const view = useSkimMode(walk);
+  return <SkimPanel access={access} view={view} away={away} />;
 }
 
 /** The props both bands take from `Reader` for the walk itself. */
@@ -355,10 +454,43 @@ export function VisitorSkimBand({
     [glossary, ideas, timeline],
   );
   const { away, ...rest } = walk;
+  /* The chip too, through the same pieces as the owner's (plan 261011b). */
+  const parts = useSkimParts(route.stops, rest.blocks, rest.arrival);
+  if (parts.walk === "figures") {
+    return (
+      <FiguresWalk
+        figures={parts.figures}
+        depths={parts.depths}
+        onPart={parts.switchTo}
+        blocks={rest.blocks}
+        tree={rest.tree}
+        covers={rest.covers}
+        away={away}
+        onAway={rest.onAway}
+        onJump={rest.onJump}
+        onControl={rest.onControl}
+        arrival={rest.arrival}
+      />
+    );
+  }
   /* `termActions` and `onAskTerm` null: a visitor may read a term's card and
      change nothing, and has no chat. */
-  const view = useSkimMode({ ...rest, sources, termActions: null, onAskTerm: null, stops: route.stops, quotes });
-  return <SkimPanel access={{ kind: "visitor", route }} view={view} away={away} />;
+  return (
+    <RouteWalk
+      access={{ kind: "visitor", route }}
+      away={away}
+      walk={{
+        ...rest,
+        sources,
+        termActions: null,
+        onAskTerm: null,
+        stops: route.stops,
+        quotes,
+        figures: parts.figures.length,
+        onPart: parts.switchTo,
+      }}
+    />
+  );
 }
 
 /** What the panel draws — see `SkimPanel`. */
@@ -366,7 +498,11 @@ export interface SkimView {
   /** The depth drawn, or `null` for a route with no stops. */
   depth: SkimDepth | null;
   /** Each offered depth, its label and how many stops it walks — carried ones included. */
-  depths: { depth: SkimDepth; label: string; count: number }[];
+  depths: DepthChoice[];
+  /** How many figures the article has — the *Figures* chip, drawn when above 0 (plan 261011b). */
+  figures: number;
+  /** The *Figures* chip: over to `FiguresWalk`, at its first figure. */
+  onFigures(): void;
   rows: SkimRow[];
   /** 1-based position of the current stop on this pass, or 0 for none. */
   position: number;
@@ -404,6 +540,8 @@ function useSkimMode({
   onOpenKey,
   onControl,
   arrival,
+  figures,
+  onPart,
 }: {
   sources: CardSources;
   termActions: TermActions | null;
@@ -423,6 +561,10 @@ function useSkimMode({
   onOpenKey(key: string | null): void;
   onControl(control: SkimControl | null): void;
   arrival: SkimArrival;
+  /** How many figures the article has. */
+  figures: number;
+  /** A switch to the other walk — `useSkimParts`' `switchTo`. */
+  onPart(part: SkimPart): void;
 }): SkimView {
   /* **One `useQueryStates`, so a depth change and the stop it lands on are one
      URL update** — the plan's § URL, F9. The per-call history option decides:
@@ -435,9 +577,12 @@ function useSkimMode({
   /* **The stop wins over the depth** (Sol, plan 260929e review F4): a
      `?stop=` is stood on, in the asked pass when the stop is walked there and
      otherwise in its own — a stop can be in more than one since plan 261003l. */
+  /* `figures` is the other walk's; the band draws this one under it only when
+     the article has none, and then it is the plain Gist an absent depth is. */
+  const askedDepth = asked.depth === "figures" ? null : asked.depth;
   const { depth, route, current } = useMemo(
-    () => locate(stops, asked.depth, asked.stop),
-    [stops, asked.depth, asked.stop],
+    () => locate(stops, askedDepth, asked.stop),
+    [stops, askedDepth, asked.stop],
   );
 
   const byId = useMemo(() => new Map(quotes.map((q) => [q.id, q])), [quotes]);
@@ -595,8 +740,8 @@ function useSkimMode({
       doorKind === null
         ? null
         : doorKind === "next"
-          ? { kind: "next", cue: doorCue }
-          : { kind: "end", pass: passLabel, count: passSize, deeper: deeperLabel },
+          ? { kind: "next", noun: "stop", cue: doorCue }
+          : { kind: "end", noun: "stop", pass: passLabel, count: passSize, deeper: deeperLabel },
     [doorKind, doorCue, passLabel, passSize, deeperLabel],
   );
 
@@ -610,21 +755,10 @@ function useSkimMode({
   const stableDeeper = useCallback(() => latest.current.deeper(), []);
   const stopBlock = current === null ? null : blockOf(current.quoteId);
 
-  /* **This mount claims the arrival before it waits for data.** The mailbox is
-     cleared in a layout effect, while the claimed token stays in this band's
-     ref. If the reader leaves before the route or Quotes resolve, the ref goes
-     with the band: Back cannot inherit the old press and turn traversal into a
-     fresh push. A ref survives StrictMode's synthetic effect replay, so the
-     first setup may claim it without the second losing it (code review F2). */
-  const claimedArrival = useRef<SkimArrival>({ stop: null, open: false });
-  useLayoutEffect(() => {
-    /* StrictMode runs this setup twice around a synthetic cleanup. The second
-       sees an empty mailbox and must leave the first setup's local claim alone. */
-    if (arrival.stop === null && !arrival.open) return;
-    claimedArrival.current = { stop: arrival.stop, open: arrival.open };
-    arrival.stop = null;
-    arrival.open = false;
-  }, [arrival]);
+  /* This mount claims the arrival before it waits for data — walk.ts §
+     `useClaimedArrival`, shared with the figures' walk so the two cannot
+     disagree about a deep link. */
+  const claimedArrival = useClaimedArrival(arrival);
 
   /* **Arriving in the mode: one effect, deep link first** — plan 260929a § 1,
      GPT Sol F4. The mailbox lives on `Reader`'s `arrival`, above the mode
@@ -640,7 +774,8 @@ function useSkimMode({
        reading view restores and the link *is* the entry. A link whose stop
        has gone falls back to the first stop, and is arrived at there, rather
        than leaving the page wherever it opened (Sol F4). The band stays open:
-       on a narrow window the flash waits behind it (flash.ts).
+       on a narrow window the flash waits behind it (flash.ts). A switch here
+       from the Figures walk arrives the same way (plan 261011b).
      - **Opening the mode**: a jump, through `onJump` → `beginJump` — one
        pushed entry stamped with where the reader was, so the *Back to …* chip
        offers the way home (ReturnChip.tsx), centred, the quote flashed. The
@@ -648,17 +783,10 @@ function useSkimMode({
        reader had got to if `?stop=` survived a mode switch. */
   useEffect(() => {
     if (current === null || stopBlock === null) return;
-    const claimed = claimedArrival.current;
-    if (claimed.stop !== null) {
-      claimed.stop = null;
-      claimed.open = false;
-      arrive(stopBlock, current.quoteId);
-      return;
-    }
-    if (!claimed.open) return;
-    claimed.open = false;
-    onJump(stopBlock, quoteMarkKey(current.quoteId, stopBlock));
-  }, [current, stopBlock, onJump]);
+    const how = takeArrival(claimedArrival.current);
+    if (how === "link") arrive(stopBlock, current.quoteId);
+    else if (how === "opening") onJump(stopBlock, quoteMarkKey(current.quoteId, stopBlock));
+  }, [current, stopBlock, onJump, claimedArrival]);
 
   const control = useMemo<SkimControl | null>(
     () =>
@@ -674,19 +802,11 @@ function useSkimMode({
           },
     [current, stopBlock, doorView, hasPrevious, stableStep, stableAdvance, stableDeeper],
   );
-  useLayoutEffect(() => {
-    onControl(control);
-  }, [control, onControl]);
-  /* Its own effect, depending on the setter alone, so it runs on unmount and
-     only then — passage-lifecycle.ts § Rule 3, and why it is a layout cleanup. */
-  useLayoutEffect(() => () => onControl(null), [onControl]);
+  usePublishedControl(control, onControl);
 
   /* ------------------------------------------------ the panel's view -- */
-  const depths = useMemo(
-    () =>
-      offeredDepths(stops).map((d) => ({ depth: d, label: DEPTH_LABEL[d], count: passCount(stops, d) })),
-    [stops],
-  );
+  const depths = useMemo(() => depthChoices(stops), [stops]);
+  const onFigures = useCallback(() => onPart("figures"), [onPart]);
   const positions = useMemo(() => positionsOf(blocks), [blocks]);
   /* **Which passes each stop is in — the pips** (plan 261003l § The mark), or
      `null` for every row when they are not drawn: on a route offering one
@@ -776,6 +896,8 @@ function useSkimMode({
     card,
     termActions,
     onAskTerm,
+    figures,
+    onFigures,
     onDepth: changeDepth,
     onRow,
     onStep,

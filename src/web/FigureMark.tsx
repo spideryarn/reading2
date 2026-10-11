@@ -23,11 +23,14 @@
 import { Film, Image as ImageIcon, type LucideIcon, Table2 } from "lucide-react";
 import { type Figure, type FigureKind, figuresInRange } from "../figures.js";
 
+/** Each kind's icon — here and on Skim's Figures rows (FiguresWalk.tsx). */
+export const FIGURE_ICON: Record<FigureKind, LucideIcon> = { figure: ImageIcon, table: Table2, media: Film };
+
 /** The order the icons are drawn in, and their words. */
 const KINDS: readonly { kind: FigureKind; Icon: LucideIcon; one: string; many: string }[] = [
-  { kind: "figure", Icon: ImageIcon, one: "figure", many: "figures" },
-  { kind: "table", Icon: Table2, one: "table", many: "tables" },
-  { kind: "media", Icon: Film, one: "media item", many: "media items" },
+  { kind: "figure", Icon: FIGURE_ICON.figure, one: "figure", many: "figures" },
+  { kind: "table", Icon: FIGURE_ICON.table, one: "table", many: "tables" },
+  { kind: "media", Icon: FIGURE_ICON.media, one: "media item", many: "media items" },
 ];
 
 export function FigureMark({

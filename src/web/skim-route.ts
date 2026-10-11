@@ -44,6 +44,18 @@ export const DEPTH_LABEL: Record<SkimDepth, string> = {
   3: "Most",
 };
 
+/** One pass the route offers, as its chip draws it: the label and how many stops it walks. */
+export interface DepthChoice {
+  depth: SkimDepth;
+  label: string;
+  count: number;
+}
+
+/** Each pass the route offers, shallowest first — the depth chips (SkimPanel.tsx § `SkimParts`). */
+export function depthChoices(stops: readonly SkimStop[]): DepthChoice[] {
+  return offeredDepths(stops).map((d) => ({ depth: d, label: DEPTH_LABEL[d], count: passCount(stops, d) }));
+}
+
 /**
  * The depth to draw: the one asked for if it is offered, else the deepest
  * offered depth below it, else the shallowest offered — and Gist when nothing

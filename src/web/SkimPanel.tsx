@@ -42,6 +42,9 @@
  * iPad (Sol and Opus agreed). Only the depths that add stops are drawn
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
+ * A fourth, *Figures*, sits after them when the article has any: a walk through
+ * its figures, tables and media, drawn by modes/skim/FiguresWalk.tsx with the
+ * same `SkimParts` (plan 261011b § Half 1).
  */
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import {
@@ -56,6 +59,8 @@ import { type StaleNoticeState, useStaleNotice } from "./useStaleNotices.js";
 import type { PublicSkim } from "../public-types.js";
 import type { BlockId, SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
+import type { SkimPart } from "./params.js";
+import type { DepthChoice } from "./skim-route.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
@@ -212,7 +217,7 @@ function rowWords(row: SkimRow): { shown: string; whole: string | null } | null 
  * a horizontal track in a column of its own, about 53px of a band that can be
  * 280px wide (Greg, SPIDERYARN-READING2-4D).
  */
-function StopPosition({ at, current }: { at: number; current: boolean }) {
+export function StopPosition({ at, current }: { at: number; current: boolean }) {
   const pct = Math.round(Math.min(1, Math.max(0, at)) * 100);
   return (
     <>
@@ -454,19 +459,59 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
 }
 
 /**
- * **The pinned head**: the stepper, and the depth control when there is more
- * than one depth to offer.
+ * **What a walk calls one of its stops** — a route's quote or a figure. Every
+ * fixed word in the stepper and the door says it (GPT Sol's plan review F5).
  */
-function RouteHead({ view, total }: { view: SkimView; total: number }) {
+export type StopNoun = "stop" | "figure";
+
+/** The stepper's and the door's fixed words, for each noun. */
+const STEP_WORDS: Record<StopNoun, { back: string; next: string; on: string; all: string }> = {
+  stop: {
+    back: "Back one stop along the route.",
+    next: "On to the next stop along the route.",
+    on: "Next stop",
+    all: "All stops",
+  },
+  figure: {
+    back: "Back one figure.",
+    next: "On to the next figure.",
+    on: "Next figure",
+    all: "All figures",
+  },
+};
+
+/**
+ * **The pinned head**: the stepper, and the part-switcher when there is a
+ * choice. Drawn by both walks — the route's (`RouteHead`) and the figures'
+ * (FiguresWalk.tsx) — so the arrows, their cards and the spoken count are one
+ * component that says *stop* or *figure*.
+ */
+export function SkimHead({
+  noun,
+  position,
+  positions,
+  onStep,
+  parts,
+}: {
+  noun: StopNoun;
+  /** 1-based, or 0 for none. */
+  position: number;
+  /** Each stop's place in the article, 0 to 1 — the sparkline's dots. */
+  positions: readonly (number | null)[];
+  onStep(dir: -1 | 1): void;
+  /** The part-switcher, `SkimParts`. */
+  parts: ReactNode;
+}) {
   const [sparkOpen, setSparkOpen] = useState(false);
-  const depths = useRef<HTMLFieldSetElement>(null);
-  // A refreshed route can first offer the bar without changing the chosen
-  // depth. Reattach the reveal and its observers when that fieldset appears.
-  useRevealChosen(depths, view.depths.length > 1 ? view.depth : null);
-  const here = view.rows[view.position - 1]?.position ?? null;
+  const total = positions.length;
+  const here = positions[position - 1] ?? null;
+  const Noun = noun === "stop" ? "Stop" : "Figure";
+  const words = STEP_WORDS[noun];
+  const count = `${Noun} ${position} of ${total}`;
   const said =
-    `Stop ${view.position} of ${total}` +
+    count +
     (here === null ? " · position unavailable" : ` · about ${Math.round(here * 100)}% through the article`);
+  const backHead = position <= 1 ? `Back to ${noun} 1` : `Previous ${noun}`;
   return (
     <div className="skim-head">
       {/* **Each arrow names its key on its card** — Greg, SPIDERYARN-READING2-74:
@@ -481,17 +526,17 @@ function RouteHead({ view, total }: { view: SkimView; total: number }) {
               ← does the same (SPIDERYARN-READING2-4K), and the keys may not do
               more than the buttons. */}
           <StepTip
-            head={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
-            what={view.position <= 1 ? "Back to the first stop." : "Back one stop along the route."}
+            head={backHead}
+            what={position <= 1 ? `Back to the first ${noun}.` : words.back}
             keyName="←"
-            enabled={view.position >= 1}
+            enabled={position >= 1}
           >
             <button
               type="button"
               className="skim-arrow"
-              aria-label={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
-              disabled={view.position < 1}
-              onClick={() => view.onStep(-1)}
+              aria-label={backHead}
+              disabled={position < 1}
+              onClick={() => onStep(-1)}
             >
               <ChevronLeft size={20} />
             </button>
@@ -508,63 +553,144 @@ function RouteHead({ view, total }: { view: SkimView; total: number }) {
               aria-expanded={sparkOpen}
               onClick={() => setSparkOpen((was) => !was)}
             >
-              <RouteSpark positions={view.rows.map((r) => r.position)} current={view.position - 1} />
+              <RouteSpark positions={positions} current={position - 1} />
             </button>
           </Tooltip>
           <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-            Stop {view.position} of {total}
+            {count}
           </span>
-          <StepTip
-            head="Next stop"
-            what="On to the next stop along the route."
-            keyName="→"
-            enabled={view.position < total}
-          >
+          <StepTip head={words.on} what={words.next} keyName="→" enabled={position < total}>
             <button
               type="button"
               className="skim-arrow"
-              aria-label="Next stop"
-              disabled={view.position >= total}
-              onClick={() => view.onStep(1)}
+              aria-label={words.on}
+              disabled={position >= total}
+              onClick={() => onStep(1)}
             >
               <ChevronRight size={20} />
             </button>
           </StepTip>
         </div>
       </TooltipGroup>
-      {/* **The depth control, one group that does not wrap**
+      {/* **The part-switcher, one group that does not wrap**
           (SPIDERYARN-READING2-73), so a head too narrow for one row breaks
-          before the depths. It held this head's own (i) too, until that moved
+          before the parts. It held this head's own (i) too, until that moved
           to the band's corner on 2026-10-01 (spya-ucu35y, plan 261001m).
           skim.css § .skim-head-end. */}
-      <div className="skim-head-end">
-        {view.depths.length > 1 && (
-          /* The part-switcher every mode shares (mode-band.css § the
-             part-switcher, plan 261007h § F2), at the house's 36px rather
-             than its own 26 because it is this mode's main control beside the
-             44px stepper (skim.css § the depths). */
-          <fieldset ref={depths} className="skim-depths summ-views" aria-label="How deep">
-            {view.depths.map((d) => (
-              <button
-                key={d.depth}
-                type="button"
-                className={`skim-depth summ-view-btn${d.depth === view.depth ? " on" : ""}`}
-                aria-pressed={d.depth === view.depth}
-                onClick={() => {
-                  if (d.depth !== view.depth) view.onDepth(d.depth);
-                }}
-              >
-                <span>{d.label}</span>
-                <span className="skim-depth-n">{d.count}</span>
-              </button>
-            ))}
-          </fieldset>
-        )}
-      </div>
+      <div className="skim-head-end">{parts}</div>
     </div>
   );
 }
 
+/** The route's head: `SkimHead` over the route's rows, with its passes and *Figures*. */
+function RouteHead({ view }: { view: SkimView }) {
+  return (
+    <SkimHead
+      noun="stop"
+      position={view.position}
+      positions={view.rows.map((r) => r.position)}
+      onStep={view.onStep}
+      parts={
+        <SkimParts
+          parts={partChoices(view.depths, view.figures)}
+          chosen={view.depth}
+          onPart={(part) => (part === "figures" ? view.onFigures() : view.onDepth(part))}
+        />
+      }
+    />
+  );
+}
+
+/** What the fourth chip says. */
+export const FIGURES_LABEL = "Figures";
+
+/** One chip of the part-switcher: a pass of the route, or the figures. */
+export interface SkimPartChoice {
+  part: SkimPart;
+  label: string;
+  count: number;
+}
+
+/** The route's passes, then *Figures* when the article has any. */
+export function partChoices(depths: readonly DepthChoice[], figures: number): SkimPartChoice[] {
+  const out: SkimPartChoice[] = depths.map((d) => ({ part: d.depth, label: d.label, count: d.count }));
+  if (figures > 0) out.push({ part: "figures", label: FIGURES_LABEL, count: figures });
+  return out;
+}
+
+/**
+ * **The part-switcher: Gist · More · Most · Figures** — drawn by both walks,
+ * the route's (`RouteHead`) and the figures' (FiguresWalk.tsx), so the two
+ * cannot drift. Each chip says how many stops its walk has.
+ *
+ * Drawn only when there is a choice — more than one chip — unless `alone`:
+ * with no route yet, the head shows the *Figures* chip by itself above the
+ * empty or loading state, so the figures are reachable while the route is
+ * planned (plan 261011b § How it is built).
+ *
+ * The part-switcher every mode shares (mode-band.css § the part-switcher,
+ * plan 261007h § F2), at the house's 36px rather than its own 26 because it
+ * is this mode's main control beside the 44px stepper (skim.css § the depths).
+ */
+export function SkimParts({
+  parts,
+  chosen,
+  onPart,
+  alone = false,
+}: {
+  parts: readonly SkimPartChoice[];
+  /** The part drawn, or `null` for none — the route's view with no route. */
+  chosen: SkimPart | null;
+  /** Called only for a part other than `chosen`. */
+  onPart(part: SkimPart): void;
+  alone?: boolean;
+}) {
+  const group = useRef<HTMLFieldSetElement>(null);
+  const shown = parts.length > 1 || (alone && parts.length === 1);
+  // A refreshed route can first offer the bar without changing the chosen
+  // part. Reattach the reveal and its observers when that fieldset appears.
+  useRevealChosen(group, shown ? chosen : null);
+  if (!shown) return null;
+  return (
+    <fieldset ref={group} className="skim-depths summ-views" aria-label="What to walk">
+      {parts.map((p) => (
+        <button
+          key={p.part}
+          type="button"
+          className={`skim-depth summ-view-btn${p.part === chosen ? " on" : ""}`}
+          aria-pressed={p.part === chosen}
+          onClick={() => {
+            if (p.part !== chosen) onPart(p.part);
+          }}
+        >
+          <span>{p.label}</span>
+          <span className="skim-depth-n">{p.count}</span>
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
+/**
+ * **A row's section path**, outermost first, each title in its own voice and
+ * the › between them ours — or "—" when the tree does not cover the row.
+ * Shared by the route's rows and the figures' (FiguresWalk.tsx).
+ */
+export function PlacePath({ place }: { place: readonly PlaceStep[] | null }) {
+  return (
+    <span className="skim-place">
+      {place === null
+        ? "—"
+        : place.map((step, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a fixed ancestry, outermost first; position is its identity.
+            <Fragment key={i}>
+              {i > 0 && " › "}
+              <span className={voiceClass(step.voice)}>{step.title}</span>
+            </Fragment>
+          ))}
+    </span>
+  );
+}
 
 /**
  * **Who is looking, and what they hold.** The owner's arm is the whole
@@ -754,7 +880,19 @@ export function SkimPanel({ access, view, away }: Props) {
       /* **A head that stays put**: the stepper and the depth control, pinned
          above the scroller. Present only when there is a route to step — no
          empty row over the loading sentence (mode.md § the header row). */
-      head={routed ? <RouteHead view={view} total={total} /> : null}
+      head={
+        routed ? (
+          <RouteHead view={view} />
+        ) : view.figures > 0 ? (
+          /* No route to step yet — none, loading, failed — but the figures
+             need none: their chip alone, above the state below (plan 261011b). */
+          <div className="skim-head">
+            <div className="skim-head-end">
+              <SkimParts parts={partChoices([], view.figures)} chosen={null} onPart={view.onFigures} alone />
+            </div>
+          </div>
+        ) : null
+      }
       foot={
         /* **A status-only foot.** The promise moved to the head's tooltip
            (SPIDERYARN-READING2-52), and the standing *Plan it again* went —
@@ -838,18 +976,7 @@ export function SkimPanel({ access, view, away }: Props) {
                           {repeatedPlace ? (
                             <span className="sr-only">{place}</span>
                           ) : (
-                            <span className="skim-place">
-                              {row.place === null
-                                ? "—"
-                                : /* Each title in its own voice; the › between them is ours. */
-                                  row.place.map((step, i) => (
-                                    // biome-ignore lint/suspicious/noArrayIndexKey: a fixed ancestry, outermost first; position is its identity.
-                                    <Fragment key={i}>
-                                      {i > 0 && " › "}
-                                      <span className={voiceClass(step.voice)}>{step.title}</span>
-                                    </Fragment>
-                                  ))}
-                            </span>
+                            <PlacePath place={row.place} />
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
@@ -1198,6 +1325,11 @@ function TermChip({
  * (F4). Only a row does that since 2026-10-03: the head's ‹ › and depth
  * buttons keep a covering band up (spya-kudr63, SkimMode.tsx § `moveTo`).
  *
+ * **Walking the figures, every word says *figure*** (`DoorView`'s `noun`, plan
+ * 261011b): *‹ Previous figure*, *Next figure ›* with the next one's caption
+ * under it, *All figures*, and at the last *"End of the figures — 7."* with
+ * nothing deeper.
+ *
  * Drawn by `TableView` after the block's prose, outside `.prose`, on the path
  * `PdfFigureNotes` already uses (TableView.tsx § After the prose) — so it
  * shifts no comment anchor.
@@ -1221,6 +1353,9 @@ export function SkimDoor({
   onRoute: (() => void) | null;
 }) {
   if (door === null && onRoute === null) return null;
+  /* With no door there is only *All stops*, and no walk to name: the route's. */
+  const noun = door?.noun ?? "stop";
+  const words = STEP_WORDS[noun];
   return (
     <div className="skim-door">
       <div className="skim-door-row">
@@ -1229,14 +1364,9 @@ export function SkimDoor({
             as it already is." */}
         {onPrevious && (
           <div className="skim-door-back">
-            <StepTip
-              head="Previous stop"
-              what="Back one stop along the route."
-              keyName="←"
-              placement="top"
-            >
+            <StepTip head={`Previous ${noun}`} what={words.back} keyName="←" placement="top">
               <button type="button" className="skim-door-btn" onClick={onPrevious}>
-                ‹ Previous stop
+                ‹ Previous {noun}
               </button>
             </StepTip>
           </div>
@@ -1245,18 +1375,13 @@ export function SkimDoor({
           {onRoute && (
             <button type="button" className="skim-door-btn quiet" onClick={onRoute}>
               <Route size={14} />
-              All stops
+              {words.all}
             </button>
           )}
           {door?.kind === "next" && (
-            <StepTip
-              head="Next stop"
-              what="On to the next stop along the route."
-              keyName="→"
-              placement="top"
-            >
+            <StepTip head={words.on} what={words.next} keyName="→" placement="top">
               <button type="button" className="skim-door-btn" onClick={onNext}>
-                Next stop ›
+                {words.on} ›
               </button>
             </StepTip>
           )}
@@ -1275,13 +1400,22 @@ export function SkimDoor({
       {/* Where the door leads: the next stop's cue, small and muted — or, at
           the end of a pass, which pass has ended. */}
       {/* The model's cue for the next stop; the fixed "End of …" line below
-          shares `skim-door-cue` and stays UI, so the voice is on a modifier. */}
-      {door?.kind === "next" && door.cue && (
+          shares `skim-door-cue` and stays UI, so the voice is on a modifier.
+          A figure's is its caption, the author's words, or its name, ours —
+          so its voice is computed (fonts.md § How to put an element in its voice). */}
+      {door?.kind === "next" && door.noun === "stop" && door.cue && (
         <p className="skim-door-cue skim-door-cue-next">{door.cue}</p>
+      )}
+      {door?.kind === "next" && door.noun === "figure" && (
+        <p className="skim-door-cue skim-door-caption">
+          <span className={voiceClass(door.voice)}>{door.cue}</span>
+        </p>
       )}
       {door?.kind === "end" && (
         <p className="skim-door-cue">
-          End of {door.pass} — {door.count} {door.count === 1 ? "stop" : "stops"}.
+          {door.noun === "figure"
+            ? `End of ${door.pass} — ${door.count}.`
+            : `End of ${door.pass} — ${door.count} ${door.count === 1 ? "stop" : "stops"}.`}
         </p>
       )}
     </div>

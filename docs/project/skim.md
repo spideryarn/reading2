@@ -49,10 +49,14 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Later](#later) — what is not built
 - [§ Questions for Greg](#questions-for-greg) — seven defaults taken to keep the build moving, each cheap to change
 - Code: [`src/skim.ts`](../../src/skim.ts) (the step) · [`SkimPanel.tsx`](../../src/web/SkimPanel.tsx) ·
-  [`modes/skim/SkimMode.tsx`](../../src/web/modes/skim/SkimMode.tsx) · [`useSkim.ts`](../../src/web/useSkim.ts) ·
+  [`modes/skim/SkimMode.tsx`](../../src/web/modes/skim/SkimMode.tsx) ·
+  [`modes/skim/FiguresWalk.tsx`](../../src/web/modes/skim/FiguresWalk.tsx) (the *Figures* walk) ·
+  [`modes/skim/walk.ts`](../../src/web/modes/skim/walk.ts) (what the two walks share) ·
+  [`useSkim.ts`](../../src/web/useSkim.ts) ·
   [`skim-route.ts`](../../src/web/skim-route.ts) · [`skim.css`](../../src/web/styles/skim.css) ·
   tests: [`skim.test.ts`](../../tests/skim.test.ts), [`skim-route.test.ts`](../../tests/skim-route.test.ts),
-  [`skim-panel.test.tsx`](../../tests/skim-panel.test.tsx)
+  [`skim-panel.test.tsx`](../../tests/skim-panel.test.tsx),
+  [`skim-figures.test.tsx`](../../tests/skim-figures.test.tsx)
 
 ## What shipped
 
@@ -628,6 +632,47 @@ on on the right (`.skim-door-on`: *All stops*, *Next stop ›*, *More detail ›
 is `step(-1)`, what ← does, with the same card. It is **not drawn on stop 1 of a pass**
 (`SkimControl.hasPrevious`, by index in the pass), where ← goes to stop 1's passage again rather
 than back — a different job from what the button's name promises.
+
+**A fourth chip, *Figures*: a walk through the article's figures, tables and media** — Greg,
+2026-10-10, report `spya-sb0c7e`,
+[plan 261011b](../plans/261011b-skim-figures-walk-and-structure-figure-marks.md) § Half 1:
+
+> I would quite like to be able to jump to all the tables and figures and media easily. … Use your
+> judgment about how to add it to skim. Maybe it's a separate fourth submode.
+>
+> — Greg, 2026-10-10 (`spya-sb0c7e`)
+
+The head's part-switcher reads **Gist · More · Most · Figures**, the last offered whenever the
+article has at least one figure. Which blocks count, and each one's caption, is
+[`src/figures.ts`](../../src/figures.ts) § `figuresOf`, read off the stored blocks: no model call,
+nothing stored. What it is like to use:
+
+- **The same walk, other stops.** The stepper says *Figure k of N*, ← / → and ‹ › step, the door
+  in the prose says *‹ Previous figure* and *Next figure ›* with the next one's caption under it,
+  *All figures* when the band has stepped aside, and at the last *"End of the figures — 7."* with
+  nothing deeper. A row is the number and position dot, the section path, a kind icon and the
+  caption — in the author's face — or *"Table 2"* when it has none; no cue, pips or stop card.
+- **Arriving** centres the figure's block and flashes the whole of it; there is no quote to ring.
+  A row press is a jump, as on the route.
+- **Address**: `?depth=figures&stop=<the figure's block id>`
+  ([url-state.md](url-state.md)); a stop naming no figure falls back to the first. Switching
+  between a pass and Figures is one pushed entry, landing on the target's first stop.
+- **It needs no route.** While the route is being planned, or never was, the head shows the
+  *Figures* chip alone above the empty or loading state, and the walk works; opening Skim still
+  plans the route underneath. In the Figures walk the pass chips appear once the route is ready.
+  A visitor gets the chip too, but only where a route was stored — a public article with none has
+  no Skim band for a visitor.
+
+How it is built: the band chooses between **two walks**, each a component with its own hook — the
+route's (`useSkimMode`, now inside `RouteWalk`) and
+[`modes/skim/FiguresWalk.tsx`](../../src/web/modes/skim/FiguresWalk.tsx) — on `?depth=`
+(`SkimMode.tsx` § `useSkimParts`), rather than teaching the quote-keyed controller a second kind of
+stop. Both publish the same `SkimControl`, so `Reader`'s keys and door changed only by the door's
+noun (`DoorView.noun`). What the two must agree on — claiming a deep link, publishing the
+controller, arriving at a block — is
+[`modes/skim/walk.ts`](../../src/web/modes/skim/walk.ts). A switch between walks puts the target
+stop in the `SkimArrival` mailbox before the one URL write, and the walk that mounts claims it. The
+chips are one component, `SkimParts`, and the stepper one, `SkimHead`, both in `SkimPanel.tsx`.
 
 ### What we tried for v2
 
