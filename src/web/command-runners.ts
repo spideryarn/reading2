@@ -424,7 +424,7 @@ export function chatExecutor({
   blocks: Block[];
   jump(blockId: BlockId): void;
   tags: TagsControl;
-  /** Open Search on these words — CommandBar.tsx § `findHref`. */
+  /** Open Search on these words — search-hrefs.ts § `findHref`. */
   find(words: string): void;
 }): CommandExecutor {
   return {

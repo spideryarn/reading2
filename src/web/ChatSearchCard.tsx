@@ -25,7 +25,7 @@
 import { createContext, useContext, useState, type ReactElement, type ReactNode } from "react";
 import type { Block, BlockId } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
-import { findHref, searchRunHref } from "./CommandBar.js";
+import { findHref, searchRunHref } from "./search-hrefs.js";
 import { NOT_HERE } from "./command-proposal.js";
 import { findLiteral } from "./search-hits.js";
 import { startChatSearch, useChatSearch } from "./chat-searches.js";

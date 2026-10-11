@@ -201,7 +201,6 @@ import {
   PUBLIC_LIBRARY_HREF,
   navigate,
   readHref,
-  searchWithoutAny,
 } from "./router.js";
 import { type UseJobs, useJobs } from "./useJobs.js";
 import { stepRunRequest } from "./useStepJob.js";
@@ -212,6 +211,7 @@ import { useVisualViewport } from "./useVisualViewport.js";
 import { voiceClass } from "./voice.js";
 import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
 import { dictationReporter } from "./dictation-report.js";
+import { findHref } from "./search-hrefs.js";
 
 /**
  * **The article the bar was opened over**, or `undefined` where there is none.
@@ -803,14 +803,6 @@ function exportRow(slug: string): Command {
 }
 
 /**
- * **The search parameters a words search is made of**, and the ones of the
- * same kind that a new search replaces rather than sits beside — the block
- * last-view.ts § `NEVER_REMEMBERED` names for the same reason: they are one
- * search, and a stale `?run=` beside a new `?find=` is two.
- */
-const SEARCH_KEYS = new Set(["mode", "match", "find", "run", "runs", "order", "conf"]);
-
-/**
  * **`find <words>`, as a row** — Search in words mode, the words lit up in the
  * prose (`?mode=search&match=words&find=…`, the address the shelf's passage
  * links already make: library-hits.ts § `libraryHitHref`). Greg's
@@ -1101,32 +1093,6 @@ export function suggestionRows(
     }
   }
   return rows.slice(0, MAX_SUGGESTIONS_SHOWN);
-}
-
-/**
- * **The address a words search for `words` is** — the find row's, and the one
- * chat's *Find “X”* chip goes to (Reader.tsx § `chatCommands`), so the two
- * cannot open different searches. `carried` is already through `carriedSearch`.
- */
-export function findHref(slug: string, carried: string, words: string): string {
-  const kept = searchWithoutAny(carried, SEARCH_KEYS);
-  const search = [kept, "mode=search", "match=words", `find=${encodeURIComponent(words)}`]
-    .filter(Boolean)
-    .join("&");
-  return readHref(slug, search, "article");
-}
-
-/**
- * **The address of one saved quick search, switched on in Search** — the
- * *Open in Search* link under a search a chat button ran in place
- * (ChatSearchCard.tsx, plan 261011aa). `findHref`'s rule for what is carried.
- */
-export function searchRunHref(slug: string, carried: string, runId: string): string {
-  const kept = searchWithoutAny(carried, SEARCH_KEYS);
-  const search = [kept, "mode=search", "match=quick", `runs=${encodeURIComponent(runId)}`]
-    .filter(Boolean)
-    .join("&");
-  return readHref(slug, search, "article");
 }
 
 /**

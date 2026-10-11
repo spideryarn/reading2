@@ -131,7 +131,7 @@ import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
 import { ChatSearchHere } from "../ChatSearchCard.js";
-import { findHref } from "../CommandBar.js";
+import { findHref } from "../search-hrefs.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
