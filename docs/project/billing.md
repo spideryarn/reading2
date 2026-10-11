@@ -1093,7 +1093,7 @@ and `starter_slug`, never the private link's key —
 [261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)),
 who made it, and — once claimed — which account claimed it. Only the administrator makes or changes
 one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review are
-[261001m](../plans/261001m-gift-vouchers-for-free-articles.md). Four rules, each for a reason:
+[261001m](../plans/261001m-gift-vouchers-for-free-articles.md). Five rules, each for a reason:
 
 - **It counts on Free only.** `freeEntitlement` in [`pg-billing.ts`](../../src/store/pg-billing.ts)
   adds the claimed, unrevoked sum to every Free answer `entitlementFromRow` gives, and no paid
@@ -1116,6 +1116,11 @@ one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review
   subquery inside the locking statement answers from the snapshot taken before the wait, and would
   miss a revoke that committed meanwhile (F2). `tests/billing-vouchers.test.ts` holds both halves as
   held-transaction tests, beside twenty concurrent ingests on a 3+2 account admitting exactly five.
+- **Several vouchers to one address add up.** Nothing makes an address unique, the claim takes
+  every waiting voucher at it, and the bonus is the sum, so 20 and then 10 to one person raise
+  the Free allowance from 3 to 33 articles, for good; a revoke takes back only its own. Greg asked for exactly this on
+  2026-10-11 (`spya-dkddku`), and it had always been so; a test now holds it
+  ([261011k](../plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md)).
 
 What the reader is told is `ReaderPlan.gifts` — articles, the claim date and an opaque `noticeKey`,
 on the `free` and `lapsed` arms and, since 2026-10-02, the `paid` arm too, where it is drawn as

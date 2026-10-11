@@ -651,6 +651,70 @@ describe("/admin/vouchers", () => {
       expect(cells[heads.indexOf("Private note")]?.textContent).toContain("met at the conference");
     });
     const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
+    const nameBox = () => host.querySelector("#voucher-new-recipient-name") as HTMLInputElement;
+    const emailBox = () => host.querySelector("#voucher-new-email") as HTMLInputElement;
+
+    /* Plan 261011k, Greg 2026-10-11 (spya-cfbp0q). */
+    it("keeps just the address from a pasted `Name <address>`, and fills the name only if it is empty", async () => {
+      await mount();
+      await fill("Firstname Lastname <firstname@example.com>");
+      expect(emailBox().value).toBe("firstname@example.com");
+      expect(nameBox().value).toBe("Firstname Lastname");
+
+      /* A name already typed stays. */
+      await fill('"Someone Else" <else@example.com>');
+      expect(emailBox().value).toBe("else@example.com");
+      expect(nameBox().value).toBe("Firstname Lastname");
+
+      /* Not that shape: kept as typed. */
+      await fill("Half typed <ada@exa");
+      expect(emailBox().value).toBe("Half typed <ada@exa");
+    });
+
+    it("does the same in a waiting voucher's editor", async () => {
+      await mount();
+      const waiting = rowFor("waiting@example.test");
+      await act(async () => buttonIn(waiting, "Edit")?.click());
+      const email = waiting?.querySelector<HTMLInputElement>('input[type="email"]');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(email, "Ada King <ada@example.com>");
+        email?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(email?.value).toBe("ada@example.com");
+      /* It already had a name, so the name is not replaced. */
+      expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]')?.value).toBe("Ada Lovelace");
+    });
+
+    /* Plan 261011k, Greg 2026-10-11 (spya-dkddku): several to one address add up. */
+    it("says when the address already has gifts: waiting by address, claimed by the claimant's address now, never revoked", async () => {
+      listAnswer = [
+        ...VOUCHERS,
+        /* Claimed by whoever has waiting@ now, though it was sent elsewhere. */
+        {
+          ...VOUCHERS[1],
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+          email: "sent-before@example.test",
+          claimantEmail: "waiting@example.test",
+          articles: 7,
+        },
+        { ...VOUCHERS[2], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5", email: "waiting@example.test" },
+      ];
+      await mount();
+      const line = () => host.querySelector("#voucher-new-already")?.textContent ?? null;
+      await fill("nobody@example.test");
+      expect(line()).toBeNull();
+      await fill(" Waiting@Example.test ");
+      expect(line()).toBe("This address already has 2 gifts (27 articles). This one adds to them.");
+      expect(emailBox().getAttribute("aria-describedby")).toBe("voucher-new-already");
+      await fill("revoked@example.test");
+      expect(line()).toBeNull();
+      /* Its claimant has moved to another address, so a gift here would not reach them. */
+      await fill("claimed@example.test");
+      expect(line()).toBeNull();
+      await fill("claimed-now@example.test");
+      expect(line()).toBe("This address already has a gift of 10 articles. This one adds to it.");
+    });
 
     /* Sol's F13 on 261007j: the inputs stay editable while a create is in
        flight, so the answer to the first must not wipe a second draft typed
