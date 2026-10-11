@@ -16,6 +16,7 @@
  * The whole trip into Chat and back is tests/reception-lens-in-chat.test.tsx.
  * Fixtures are tests/sources-claims-chat.test.tsx's, cut down.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -25,9 +26,14 @@ import type { BlockId, ClaimReceptionRow, Reception, ReceptionCounts, ThreadSumm
 import type { PublicReception } from "../src/public-types.js";
 import type { UseReception } from "../src/web/useReception.js";
 
-const { ReceptionAndClaimsPanel, RECEPTION_LENS_LABEL, RECEPTION_LENS_SEND, RECEPTION_ANGLES_HEAD, RECEPTION_ANGLES_SHOWN } = await import(
-  "../src/web/ReceptionAndClaimsPanel.js"
-);
+const {
+  ReceptionAndClaimsPanel,
+  RECEPTION_LENS_LABEL,
+  RECEPTION_LENS_SEND,
+  RECEPTION_ANGLES_HEAD,
+  RECEPTION_ANGLES_SHOWN,
+  RECEPTION_OPEN_ANGLE_CHAT,
+} = await import("../src/web/ReceptionAndClaimsPanel.js");
 
 const BLOCK = "spya-k3m9qt" as BlockId;
 const CLAIM = "a starter needs cool water";
@@ -358,6 +364,14 @@ describe("Your angles", () => {
     const line = gisted?.querySelector(".rcp-angle-gist");
     expect(line?.textContent).toBe(gist);
     expect(line?.classList.contains("voice-ai")).toBe(true);
+    expect(gisted?.getAttribute("aria-label")).toBe(`${RECEPTION_OPEN_ANGLE_CHAT}: ${LENS.lens}`);
+    expect(gisted?.getAttribute("aria-describedby")).toBe(line?.id);
+    expect(gisted?.title).toMatch(/AI's summary/);
+    expect(gisted?.title).toMatch(/1 question so far/);
+    /* The shared gist clamp has to clip as well as count lines. Without this,
+       a long angle summary can paint into the next row in a narrow band. */
+    const css = readFileSync("src/web/styles/origin-chat.css", "utf8");
+    expect(css).toMatch(/\.origin-chat-gist\s*\{[^}]*overflow:\s*hidden;/s);
   });
 
   it("opens that chat on a press, and hands nothing over", () => {

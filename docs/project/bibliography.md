@@ -195,7 +195,7 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 > be really careful to be clear about whether you could get the actual paper, so that we can be sure
 > you're not hallucinating
 
-Nothing that makes the list reads the cited work, so the band says so **once, above the list**:
+Nothing that makes the list reads the cited work, so the band says so **once, above the list**, while a visible row has no line of its own:
 *Unless a row says otherwise, we have read none of these works, only the article that cites them.*
 Until 2026-10-11 every row and hover card said it (*We have not read this work, only the article that
 cites it.*), and Greg asked for it to go:

@@ -1164,6 +1164,31 @@ describe("what a row says we have read", () => {
     expect(CITE_WHY_LABEL).toMatch(/article/);
   });
 
+  it("omits the list-wide default when no visible row needs it", async () => {
+    /* A saved threshold can sit above every scored work. There is then no row
+       for the sentence to qualify. */
+    await draw(owner(), 1);
+    expect(host.querySelectorAll(".cite-item")).toHaveLength(0);
+    expect(host.querySelector(".cite-list-read")).toBeNull();
+
+    /* Nor does it add a vacuous default to a list whose every row has its own,
+       more specific line. */
+    await draw(owner({ bibliography: artefact([FOUND]) }), null, undefined, "document");
+    expect(row(FOUND.id).querySelector(".cite-read")?.textContent).toBe(CITE_PAGE_FOUND);
+    expect(host.querySelector(".cite-list-read")).toBeNull();
+  });
+
+  it("draws the default for a stale ready list, but not while loading or for an empty answer", async () => {
+    await draw(owner({ stale: true }));
+    expect(host.querySelector(".cite-list-read")?.textContent).toBe(CITE_LIST_NOT_READ);
+
+    await draw(owner({ status: "loading" }));
+    expect(host.querySelector(".cite-list-read")).toBeNull();
+
+    await draw(owner({ bibliography: artefact([]) }));
+    expect(host.querySelector(".cite-list-read")).toBeNull();
+  });
+
   it("shows why, labelled as the article's, once something was checked against it", async () => {
     /* The verdict says "supports what the article uses it for", and a kept
        Dig deeper answer opens "Does it back the claim?": each needs the claim

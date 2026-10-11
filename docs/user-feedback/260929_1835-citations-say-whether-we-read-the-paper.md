@@ -71,3 +71,11 @@ what it would take.
 
 Plan: [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
 Commits 229d363b, 6b2afb28, 5bfff263, bed811d5.
+
+## Follow-up, 2026-10-11: the ordinary warning is said once
+
+The ordinary *We have not read this work* sentence is no longer repeated on every row or hover
+card. Bibliography says it once above the visible rows that need it; a row or card has its own line
+only when a page was found, an extract was read, or the work itself was read.
+
+Plan: [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md).

@@ -92,8 +92,9 @@
   font-size: 0.77rem;
 }
 
-/* What we have read of the work — nothing, or a page matching its title. Every
-   row has it, so it is as quiet as the line under it. Plan 260929g stage 1. */
+/* What differs from the list-wide default about what we have read: a page
+   matching the title, a search extract, or the work itself. Plain unread rows
+   have no line (plan 261011c). */
 .cite-read {
   margin: 0.15rem 0 0;
   color: var(--ink-faint);

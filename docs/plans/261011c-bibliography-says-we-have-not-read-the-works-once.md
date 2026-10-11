@@ -65,7 +65,8 @@ author.
   say something different from row to row, and they stand beside words that are about the work.
 - **Said once, above the list**: *Unless a row says otherwise, we have read none of these works,
   only the article that cites them.* A quiet line (`gloss-quiet`) under the order row and the
-  threshold, only when the list has works. Visitors see it too; it is true of their view.
+  threshold, only when a visible row relies on that default. It is absent when the threshold hides
+  every row, or every visible row carries its own more-specific line. Visitors see it too.
 - **The hover card says nothing in that case.** It opens one work from the prose, and the provenance
   it does carry is the entry's own line (*copied from the article, not from the work*) when there is
   an entry. A card has no list to say it once above. The simpler option passed over is keeping the
@@ -84,7 +85,8 @@ Red first, in `tests/bibliography-panel.test.tsx`: a row nobody looked up has no
 the band has the once-line exactly once; a row with a lookup or a found page still has its line.
 `tests/citation-hover-card.test.tsx`: the card for an unread work draws no read line.
 `tests/public-network-trace.test.tsx`: the visitor's band still says, once, that we have not read
-the works.
+the works. The panel suite also covers loading, stale and empty states, an all-hidden threshold,
+and a list whose every row has its own line.
 
 ## Review
 
@@ -96,3 +98,14 @@ GPT Sol on this plan (read-only), and on the code.
   Reception's angles and a comment's chat did not show the gist, so the part-2 claim was overstated:
   built here. P3: `string | null` does not force a check in JSX, and the card's wrapper would be
   left empty: both handled, and a test for the wrapper. P4: the Help copy and screenshot: updated.
+- **Code review** (Codex, fixes applied): C1: the list-wide line was still drawn when the threshold
+  hid every row or every visible row had its own line; it now follows visible rows that need the
+  default, with state tests. C2: an angle's `aria-label` hid its gist from assistive technology;
+  the gist is now its description and the tooltip identifies the AI summary. C3: the shared
+  two-line gist clamp lacked `overflow: hidden`; added and pinned. C4: current CSS comments and the
+  260929 feedback record still stated the old per-row behaviour; corrected with history preserved.
+- **Browser** (Sonnet subagent, Playwright on the box, `scaling-hypothesis`, 1440×900 and 390px):
+  the line once above the list, none on plain rows, a looked-up row keeps its own; no read line
+  and no empty part on an unread work's hover card (`261011c-shot-1`); no console errors. The
+  gist on angles and comments was **not** seen in a browser: no local chat of either kind has a
+  gist yet, so those rest on their unit tests. Help's `mode-bibliography.png` retaken.

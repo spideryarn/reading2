@@ -34,10 +34,10 @@ for that.
 
 **Bibliography**
 
-- A line above the list says we have read none of the works, only the article that cites them. A
-  row says more only when that changes: a page found for it, a search extract read, or the paper
-  itself read. The sentence on what the piece uses a work for is written from the article, not from
-  the cited work.
+- When a visible row has no more-specific reading line, one line above the list says we have read
+  none of those works, only the article that cites them. A row says more only when that changes: a
+  page found for it, a search extract read, or the paper itself read. The sentence on what the piece
+  uses a work for is written from the article, not from the cited work.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the
   model’s memory of the work, not a citation count. New lists give a number only when the model is
   confident it knows the work; a low number then means a work it knows and thinks minor. If

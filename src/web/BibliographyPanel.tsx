@@ -924,6 +924,12 @@ export function BibliographyPanel({
      button and the slider's presence cannot disagree. */
   const order = effectiveOrder(all, chosenOrder);
   const shown = orderWorks(all, order, bar);
+  /* The list-wide default has work to do only when a row on screen relies on
+     it. A saved threshold can hide every row, and a list can consist entirely
+     of rows whose own line says what was found or read; drawing the default in
+     either case would leave another true but vacuous warning (plan 261011c
+     code review). */
+  const showListReadNote = shown.some((work) => readNoteOf(work) === null);
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = bibliography !== null && (owner === null || owner.status === "ready");
   /* A forced run has finished and its result is not here yet: the forced
@@ -1092,8 +1098,9 @@ export function BibliographyPanel({
 
           {all.length === 0 && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE}</p>}
 
-          {/* Once, not on every row (plan 261011c). */}
-          {all.length > 0 && <p className="gloss-quiet cite-list-read">{CITE_LIST_NOT_READ}</p>}
+          {/* Once, not on every row, and only while a visible row needs the
+              default (plan 261011c). */}
+          {showListReadNote && <p className="gloss-quiet cite-list-read">{CITE_LIST_NOT_READ}</p>}
 
           {all.length > 0 && (
             <div className="tl-scroll">
