@@ -103,7 +103,11 @@ time, and whether either missed a central point the other had.
 
 - **Missing a central point**: the old walk 3 times, the new 1, both 3, neither 9.
 - **A side preference**: the judge picked B 12 times and A 6. The new arm sat on B in 9 of 16, so
-  side alone cannot give 10 to 3.
+  side alone cannot give 10 to 3. **The control's sides were not balanced**: old run 1 sat on A
+  in 1 of 8 (GPT Sol, code review F1), so with a judge leaning to B the control's 3 to 2 leans
+  towards run 2 by placement, not by prompt. It is a weaker control than it looks. The pairs script now
+  balances control and test pairs separately. These pairs were judged with the old key and not
+  judged again.
 - Three of the ties are identical walks (cargocult both runs, source run 2).
 - The reasons the judge gave for the new walk were mostly economy: *"covers a fundamental imaging
   limitation and a practical application in nearly half the words"*.
