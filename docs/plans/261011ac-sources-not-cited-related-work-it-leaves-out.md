@@ -174,3 +174,32 @@ where they differ.**
 So the routes are `GET /api/related-work/:slug` (the stored answer, filtered at read time, or
 `not-searched`; never calls OpenAlex) and `POST /api/related-work/:slug` (searches, stores,
 answers). Both owner-only.
+
+## What landed
+
+Built in three commits by stage (server 74ce97fc9 with ff9ec36c9; client 64493e380), then two
+follow-ups from the browser check, then GPT Sol's code review (7f3c6298e).
+
+- **Departures from the plan, kept**: a per-owner allowance on the POST (`related-work-search`: 10
+  an hour, 30 a day, 50 a day for everyone, one at a time), because every other spending POST has
+  one and the anonymous OpenAlex allowance is about 100 of these searches a day, shared with Cited
+  by; `queryChanged` on a stored answer; duplicate records dropped by title too.
+- **Browser check** on the local *Attention Is All You Need* (40-row Bibliography): 23 rows, all
+  2017 or before, none in its bibliography; a reload reads the stored answer and makes no POST; a
+  visitor gets no chip and no request. Screenshots: shot-1 (before the press), shot-2 (the list),
+  shot-4 (390px), shot-5 (visitor).
+- **Two fixes from it.** The "opening" sent was the permissions notice and the author list with
+  their email addresses; the query now takes the abstract's blocks from the Structure tree
+  (`inAbstract`, src/skim.ts), strips anything that looks like an email, and is recipe
+  `related-work/2`. And an OpenAlex `type:` filter keeps errata and proceedings front matter out
+  (syntax checked live, 2026-10-11). The five chips were clipped in the default band; a
+  Sources-only padding makes them fit there. At 390px they scroll sideways with a fade, which is
+  the written rule for every part-switcher (mode-band.css, plan 261007h § F2): wrapping would change
+  it for every mode, so it was left.
+- **GPT Sol's code review** ([answer](261011ac-sources-not-cited-code-review-sol.md)): seven
+  findings, all fixed by the reviewer and read before commit — the list re-read when the
+  Bibliography is re-read, so a newly found work cannot linger (F1); fresh and stored rows capped and
+  deduplicated (F2); comma-joined emails (F3); a real bound on the abstract index (F4); implausible
+  years (F5); an honest empty sentence (F6); the recipe version in the card (F7).
+- **Deferred, queued as `qi-r6ccgvgt`**: an AI-written line per row on why it is relevant, and a
+  visitor's view.
