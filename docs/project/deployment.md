@@ -341,6 +341,16 @@ nobody reran; the readiness loop's next full run is what catches it. The failing
 JSON or its text, because only a reporter is told about unhandled errors, and only one that waits
 for the process to exit sees a teardown fail.
 
+**Whether to accept the partial rerun is a judgement, not only the gate's.** A few failing tests
+whose cause you understand and have fixed: deploy again, and the rerun of those files is enough.
+Many failures, a fix that is complex or risky, or any doubt that the change broke something the
+failing tests don't cover: run the whole suite first with `npm run check`, which the deploy then
+reuses ([readiness.md](readiness.md)). Greg, 2026-10-11: *"if a small number of tests fail, and then
+we pretty sure we understand the problem and we fix those tests, I think it's sufficient to just
+rerun those tests rather than rerunning everything. That said, if there's risk or if it's complex or
+a lot of tests are failing or we're not 100% sure whether we might have broken something else, then
+we should rerun the whole test suite."*
+
 ### When the suite does run, it takes the box
 
 Since 2026-10-10 the gate asks vitest for `VITEST_MAX_WORKERS` at half the machine (8 on the box)
