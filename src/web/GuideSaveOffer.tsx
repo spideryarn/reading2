@@ -1,6 +1,6 @@
 /**
- * **The guide's offer to save, drawn under its answer, and saved only on the
- * reader's press** — plan
+ * **The guide's offer to save, drawn under its answer** — ordinarily saved on
+ * the reader's press, or at once for a checked word-for-word offer — plan
  * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
  *
  * > the guide should have a tool to enable it to save to why you're reading or
@@ -52,7 +52,7 @@ import {
 } from "../types.js";
 import { Link } from "./Link.js";
 import { useMadeFor } from "./lib/made-for.js";
-import { takeAnsweredHere } from "./chat/answered-here.js";
+import { answeredHereWork, takeAnsweredHere, trackAnsweredHereWork } from "./chat/answered-here.js";
 import { savePurpose, storedReader } from "./purpose.js";
 import { PROFILE_HREF, readHref } from "./router.js";
 import { saveProfile } from "./useProfile.js";
@@ -203,19 +203,27 @@ export function GuideSaveOffer({ slug, offer, answer }: { slug: string; offer: S
      watched being written; on any other, shown saved, with its Undo, when
      the words are what is stored (a reload, coming back to it). */
   const tried = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once on this answer-and-field mount; the message id keys the parent and `tried` guards StrictMode's effect replay
   useEffect(() => {
     if (offer.now !== true || tried.current) return;
     tried.current = true;
     if (takeAnsweredHere(answer, offer.field)) {
-      void save(true);
+      void trackAnsweredHereWork(answer, offer.field, () => save(true));
       return;
     }
     void once(
       "offer",
-      async () => ((await current()) === offer.text ? { kind: "saved", before: offer.basis, now: true } : { kind: "offer" }),
+      async () => {
+        /* A previous mount may have started the PATCH and gone away. It cannot
+           cancel an uncertain write, so wait for it before deciding what the
+           store says and whether this mount must show Undo. */
+        await answeredHereWork(answer, offer.field);
+        return (await current()) === offer.text
+          ? { kind: "saved", before: offer.basis, now: true }
+          : { kind: "offer" };
+      },
       { kind: "offer" },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
 
   const undo = (before: string | null) =>

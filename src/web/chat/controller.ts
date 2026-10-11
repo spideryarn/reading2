@@ -764,6 +764,10 @@ export class ChatController {
 
   /** One turn's stream, every frame of it an event carrying this turn's id. */
   #stream(opId: OpId, slug: string, threadId: string, payload: Record<string, unknown>): void {
+    /* Only this request shape can carry a self-saving offer. Besides avoiding
+       an unbounded set of unrelated Chat/Learn answer ids, this keeps a later
+       stored `now` payload from borrowing completion from another turn shape. */
+    const canSaveHere = payload.kind === "guide" && payload.typed === true;
     const sink: TurnSink = {
       began: (begun) => {
         this.dispatch({ type: "turn.began", opId, begun });
@@ -780,7 +784,9 @@ export class ChatController {
            (answered-here.ts). */
         const op = this.state.operations.get(opId);
         this.dispatch({ type: "turn.done", opId, done });
-        if (op?.kind === "turn") markAnsweredHere(op.replyId);
+        if (canSaveHere && op?.kind === "turn" && op.began && !op.superseded) {
+          markAnsweredHere(op.replyId);
+        }
       },
       failed: (error, text) => {
         this.dispatch({

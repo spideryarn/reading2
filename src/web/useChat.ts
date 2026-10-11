@@ -182,8 +182,9 @@ export interface SendOptions {
    */
   help?: true;
   /**
-   * **The reader typed this question into the composer** — not a button's
-   * words, a greeting start, a next step or a suggestion. The route hands a
+   * **The reader wrote this whole question** — in the composer or the command
+   * bar's direct guide row, not a button's words, a greeting start, a next
+   * step or a suggestion. The route hands a
    * typed question to the guide's `offer_to_save`, which may then save words
    * drawn from it without a press (src/save-closeness.ts, plan 261011s). Per
    * turn and never stored; `true` or absent, like `help`.

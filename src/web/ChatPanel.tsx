@@ -151,10 +151,11 @@ import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
 
 /**
- * **How a question was sent.** `typed` only from the composer, where the
- * reader wrote it: a button's words (a greeting start, the guide's next steps,
- * a suggestion) are sent without it. The guide may save words from a typed
- * question without a press (src/save-closeness.ts, plan 261011s).
+ * **How a question was sent.** `typed` only where the reader wrote the whole
+ * question: the composer, and the command bar's direct guide handoff. A
+ * button's words (a greeting start, the guide's next steps, a suggestion) are
+ * sent without it. The guide may save words from a typed question without a
+ * press (src/save-closeness.ts, plan 261011s).
  */
 export interface SendHow {
   typed?: true;

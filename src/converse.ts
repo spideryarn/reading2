@@ -2095,8 +2095,8 @@ export interface ConverseRequest {
    */
   saved?: SavedNow | null;
   /**
-   * **The message the reader typed this turn**, when the request said it came
-   * from the composer (`typed: true`); `null` otherwise. What `offer_to_save`
+   * **The message the reader wrote this turn**, when the request marked the
+   * whole question as theirs (`typed: true`); `null` otherwise. What `offer_to_save`
    * checks an offer against before it may save without a press
    * (src/save-closeness.ts, plan 261011s). Guide only.
    */

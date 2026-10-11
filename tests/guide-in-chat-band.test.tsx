@@ -28,6 +28,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread, ThreadKind } from "../src/types.js";
+import type { SendHow } from "../src/web/ChatPanel.js";
 import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 import type { ChatHandoff } from "../src/web/modes/conversation/ConversationModes.js";
 import { settleChat } from "./helpers/settle-chat.js";
@@ -189,8 +190,8 @@ async function openGuide(): Promise<void> {
   await settleChat();
 }
 
-async function send(question: string): Promise<void> {
-  await act(async () => prop<(q: string) => void>("onSend")(question));
+async function send(question: string, how?: SendHow): Promise<void> {
+  await act(async () => prop<(q: string, how?: SendHow) => void>("onSend")(question, how));
   await settleChat();
 }
 
@@ -213,18 +214,19 @@ describe("sending in the guide", () => {
     await mount();
     await openGuide();
     expect(panel?.threadId).toBe(GUIDE.id);
-    await send("Where next?");
+    await send("Where next?", { typed: true });
     expect(posts).toHaveLength(1);
-    expect(posts[0]?.body).toMatchObject({ question: "Where next?", threadId: GUIDE.id, kind: "guide" });
+    expect(posts[0]?.body).toMatchObject({ question: "Where next?", threadId: GUIDE.id, kind: "guide", typed: true });
     expect(posts[0]?.body).not.toHaveProperty("visible");
   });
 
   it("leaves a chat's send as it was: no kind, and the blocks on screen", async () => {
     stored = [GUIDE, CHAT];
     await mount(`?mode=chat&thread=${CHAT.id}`);
-    await send("What does it say?");
+    await send("What does it say?", { typed: true });
     expect(posts[0]?.body).toMatchObject({ threadId: CHAT.id, visible: ON_SCREEN });
     expect(posts[0]?.body).not.toHaveProperty("kind");
+    expect(posts[0]?.body).not.toHaveProperty("typed");
   });
 
   it("begins one when there is none, and takes the server's id for it", async () => {

@@ -156,6 +156,29 @@ chat-tools.md, reader-profile.md, and the Help page's Chat section (`modes/chat.
   close-but-not-exact is a press. Measured (§ Log): 9 of 14 offers saved at once after a
   one-sentence nudge to prefer an exact quote.
 
+## Code review
+
+[GPT Sol](261011s-code-review-sol.md) on [the diff](261011s-code-review.diff): **land with fixes**,
+all fixed by the reviewer and checked here (its diff read; the suites it could not run, the route
+test among them, run here: 11 files, 301 passed).
+
+- **P1**: Unicode tricks (NFKC and case folding making a compatibility symbol match a letter;
+  astral letters, marks and invisible format characters at a word's edge) could save characters the
+  reader did not type. Now compared as written first, case-insensitively only for NFKC-stable text,
+  with word boundaries that see whole code points.
+- **P1**: About you's old text could run straight into the quote (`evil.` + `com`). A save at once
+  now needs white space between them.
+- **P2**: the "answered here" mark went on any turn; now only a begun, not superseded, typed guide
+  turn's. The route refuses `typed` on anything but a guide question, and the band never sends it
+  elsewhere.
+- **P2**: a card unmounted mid-save lost its Undo; the write is now tracked across mounts, and a
+  remounted card waits for it, reads, and shows *Saved* with Undo.
+- **P2**: a negation is now refused anywhere earlier in the same sentence, not only straight before
+  the run ("I do not really | want links"). Saves fewer, safely: the rest go to the press.
+- **Guide handoffs** are a union now: a question that waits in the box must be the reader's
+  (`typed: true`), so app or model words cannot sit in the composer to be sent as typed.
+- **Left, as named above**: the read-then-write gap against the reader's own other tab.
+
 ## The simpler options passed over
 
 - **Keep the press for everything** (q-t3j8hj's C). Greg chose A, and the report asks for more.

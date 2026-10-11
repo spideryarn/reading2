@@ -149,8 +149,8 @@ describe("what it returns", () => {
     for (const o of outcomes) expect(o.content).toContain(ALREADY_ON_SCREEN);
   });
 
-  /* Plan 261011s: an offer whose words are all the reader's typed words (or
-     linking words) is marked to save at once; anything else waits for the press. */
+  /* Plan 261011s: a contiguous run of the reader's typed words is marked to
+     save at once; anything else waits for the press. */
   describe("saved at once, when the words are the reader's own", () => {
     const typed = (t: string | null) => ({ ...ctx("guide"), typed: t });
 

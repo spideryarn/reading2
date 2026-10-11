@@ -1,10 +1,11 @@
 ---
 id: q-t3j8hj
 report: none
-status: open
+status: answered
 asked: 2026-10-10
 title: May an unattended agent build 2B, the guide saving your words without a press?
 refs: follows q-dqh7t6 (reply spya-t5bfct) · qi-wm5nsweg · docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md · docs/project/security-map.md (the chipFor row) · src/web/GuideSaveOffer.tsx
+acted: spya-ca4fx4
 ---
 You chose 2B on q-dqh7t6: when the guide offers to save your Why you're reading or About you, and the words are a quote of your own message, it saves them straight away with an Undo, instead of waiting for you to press Save. Nothing is built yet, because this loosens a security rule: today nothing a model proposes ever writes without your press. An agent working with nobody watching may not loosen a security rule on a reply alone, so the question is who may build it.
 
@@ -25,3 +26,9 @@ Question q-dqh7t6 asked whether that save should stay a press. The recommendatio
 The security rule. Our security notes (security-map.md, the row for chat buttons) say that anything a model proposes that writes, spends or leaves the article still needs your press, so a planted instruction can at worst move you around the article. 2B is the first exception. Our feedback rules say an unattended agent does not change such a rule even on your reply, which is why q-xh4y0s asked the same thing about a different build, and you answered A there.
 
 What would decide it. Whether you are happy for the exception to be built and reviewed without you watching, given the word-for-word check. The work is queued as qi-wm5nsweg and held until you answer.
+
+## Greg's answer, 2026-10-11 (in the Feedback dialog, reply `spya-ca4fx4`)
+
+> A
+
+Acted on, together with his report `spya-yk3r03` twenty minutes later ("I don't think that it needs to be an exact quote though"). Built on dev, not yet deployed, plan 261011s: an offer that is word for word a run of the message the reader typed (About you: what it held, unchanged, then that run) saves without a press, with an Undo; the security map's chipFor row names the exception, in the same change; GPT Sol reviewed plan and code. A looser "close" rule was built first and broken in review, so the remaining choice, whether rewording should also save by itself, is asked in q-q7mb3w. (fbyk3r03-guide-saves-profile, 2026-10-11.)

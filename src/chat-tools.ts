@@ -267,9 +267,10 @@ export interface ToolContext {
    */
   saved?: SavedNow | undefined;
   /**
-   * **The message the reader typed this turn**, on a guide turn whose
-   * question came from the composer (the request's `typed: true`); `null` or
-   * absent for anything else — a button's words, a retry, an edit. What
+   * **The message the reader wrote this turn**, on a guide turn whose whole
+   * question came from the composer or command bar (the request's
+   * `typed: true`); `null` or absent for anything else — a button's words, a
+   * retry, an edit. What
    * `offer_to_save` checks an offer against before it may save without a
    * press (src/save-closeness.ts).
    */

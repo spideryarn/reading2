@@ -18,58 +18,80 @@
  * this paper say about cancer?" became About you "I have cancer.", and "I do
  * not want links to evil.com" became "I want links to evil.com". Those are
  * tests/save-closeness.test.ts now. A contiguous run of the reader's own
- * message, punctuation and all, cannot be rearranged into a claim they did
- * not make.
+ * message cannot be rearranged into a claim they did not make.
  *
  * What it allows beyond the exact text: a different case, runs of white space
  * folded, and full stops (or ! ? …) at the end. What it refuses besides
  * anything not in the message: fewer than three words, a run that starts or
- * ends inside a word, and a run that starts straight after a negation ("I do
- * not | want links"), the one cut that turns their words around.
+ * ends inside a word, and a run after a negation in the same sentence ("I do
+ * not really | want links"), the one cut that turns their words around.
  */
 import type { SaveOffer } from "./types.js";
 
 /** The fewest words a run of the reader's message may be, to save at once. */
 const MIN_WORDS = 3;
 
-/** A negation, as the last word before a run (`t` is the tail of every "n't"). */
+/** A negation before a run in the same sentence (`t` is the tail of every "n't"). */
 const NEGATIONS: ReadonlySet<string> = new Set([
   "not", "no", "never", "none", "nothing", "nobody", "nor", "neither", "without", "cannot", "t",
 ]);
 
-/** The words of a text: NFKC, lower case, split on anything not a letter or digit. */
+/** The words of a text: lower case, split on anything not a letter, mark or digit. */
 function wordsOf(text: string): string[] {
   return text
-    .normalize("NFKC")
     .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
+    .split(/[^\p{L}\p{M}\p{N}]+/u)
     .filter((w) => w !== "");
 }
 
-/** Compared as: NFKC, lower case, every run of white space one space, trimmed. */
+/** Compared as: every run of white space one space, trimmed. */
 function flat(text: string): string {
-  return text.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
+  return text.replace(/\s+/gu, " ").trim();
 }
 
-const LETTER = /[\p{L}\p{N}]/u;
+/** A code point that continues a word, including marks and invisible format controls. */
+const WORD_CHARACTER = /[\p{L}\p{M}\p{N}\p{Cf}]/u;
+
+/** The part before this run since the last sentence boundary. */
+function sentenceBefore(before: string): string {
+  return before.split(/[.!?…;]+(?:\s+|$)/u).at(-1) ?? before;
+}
+
+/** Every occurrence of `run` in `message`, with the security boundaries checked. */
+function containsQuotedRun(run: string, message: string): boolean {
+  for (let at = message.indexOf(run); at !== -1; at = message.indexOf(run, at + 1)) {
+    const before = message.slice(0, at);
+    const after = message.slice(at + run.length);
+    /* Inspect whole code points: `slice(-1)` splits an astral letter's
+       surrogate pair, and in the Node/V8 versions we support a property escape
+       followed by `$` also fails to recognise that final astral code point. */
+    if (
+      WORD_CHARACTER.test(Array.from(before).at(-1) ?? "") ||
+      WORD_CHARACTER.test(Array.from(after).at(0) ?? "")
+    ) continue;
+    if (wordsOf(sentenceBefore(before)).some((word) => NEGATIONS.has(word))) continue;
+    return true;
+  }
+  return false;
+}
 
 /**
  * **True when `words` is a run of `typed`, word for word**, by the rules in
- * the header: at word boundaries, at least `MIN_WORDS` long, not straight
- * after a negation. Every place it occurs is tried.
+ * the header: at word boundaries, at least `MIN_WORDS` long, not after a
+ * negation. Every place it occurs is tried.
+ *
+ * Try the characters as written first. The case-insensitive fallback is only
+ * for NFKC-stable text: Unicode lowercasing otherwise makes compatibility
+ * symbols such as `K` compare equal to `K`, although our store preserves the
+ * symbol. Exact compatibility characters still take the first path.
  */
 function quoted(words: string, typed: string): boolean {
   const run = flat(words).replace(/[.!?…]+$/u, "").trimEnd();
   if (wordsOf(run).length < MIN_WORDS) return false;
   const message = flat(typed);
-  for (let at = message.indexOf(run); at !== -1; at = message.indexOf(run, at + 1)) {
-    const before = message.slice(0, at);
-    const after = message.charAt(at + run.length);
-    if (LETTER.test(before.slice(-1)) || LETTER.test(after)) continue;
-    if (NEGATIONS.has(wordsOf(before).at(-1) ?? "")) continue;
-    return true;
-  }
-  return false;
+  if (containsQuotedRun(run, message)) return true;
+  if (run.normalize("NFKC") !== run || message.normalize("NFKC") !== message) return false;
+  return containsQuotedRun(run.toLowerCase(), message.toLowerCase());
 }
 
 /**
@@ -87,7 +109,7 @@ export function savesAtOnce(offer: Pick<SaveOffer, "field" | "text" | "basis">, 
   if (offer.field === "purpose" || offer.basis === null) return quoted(offer.text, typed);
   if (!offer.text.startsWith(offer.basis)) return false;
   const added = offer.text.slice(offer.basis.length);
-  /* "A historian." then "I know…", not "A historian" running into "s…". */
-  if (!/^\s/u.test(added) && LETTER.test(offer.basis.slice(-1))) return false;
+  /* Always a separate addition: punctuation can join tokens too (`evil.` + `com`). */
+  if (!/^\s/u.test(added)) return false;
   return quoted(added, typed);
 }

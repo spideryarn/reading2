@@ -359,6 +359,7 @@ describe("a guide turn", () => {
       ["false", { typed: false }],
       ["a retry", { typed: true, retry: "spya-gdrtq9" }],
       ["an edit", { typed: true, edit: "spya-gdrtq9" }],
+      ["a non-guide question", { typed: true, kind: "chat" }],
     ])("is refused on %s, before any model call", async (_what, extra) => {
       expect(await post({ threadId: "spya-gdrtv2", question: "for my journal club", kind: "guide", ...extra })).toBe(400);
       expect(sent).toHaveLength(0);

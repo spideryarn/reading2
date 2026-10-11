@@ -347,21 +347,21 @@ interface ChatHandoffBase {
   readonly send: boolean;
 }
 
-/** To the guide: open it (or begin it) and send, or wait in its box. Nothing else rides along. */
-export interface ChatHandoffToGuide extends ChatHandoffBase {
-  readonly target: "guide";
-  /**
-   * **The reader typed `question` themselves** (the bar's *Ask the guide*
-   * row), so it is sent as typed (`SendHow`) and the guide may save words
-   * quoted from it without a press (src/save-closeness.ts, plan 261011s).
-   * `false` for words anything else wrote. Required, so a new sender has to
-   * say. A question that waits in the box is marked typed by the composer
-   * when the reader sends it, whatever this says: so a sender of words that
-   * are not the reader's must send them (`send: true`, `typed: false`), not
-   * leave them in the box.
-   */
-  readonly typed: boolean;
-}
+/**
+ * To the guide: open it (or begin it) and send, or wait in its box. `typed`
+ * says whether the reader wrote the whole question (the bar's *Ask the guide*
+ * row), so the guide may save a quoted run without a press
+ * (src/save-closeness.ts, plan 261011s).
+ *
+ * A waiting question must be reader-authored: when it eventually leaves via
+ * the composer, the composer correctly marks everything in its box typed. A
+ * sender of app/model words must therefore send them at once with
+ * `typed: false`, never prefill them for the composer to launder. The union
+ * makes a future caller say that in a typechecked shape.
+ */
+export type ChatHandoffToGuide =
+  | (ChatHandoffBase & { readonly target: "guide"; readonly send: true; readonly typed: boolean })
+  | (ChatHandoffBase & { readonly target: "guide"; readonly send: false; readonly typed: true });
 
 /** A fresh chat — every *Ask in chat* sender in `Reader` § `handToChat`. */
 export interface ChatHandoffToChat extends ChatHandoffBase {
@@ -1284,7 +1284,8 @@ export function ConversationBand({
     /* The kind of conversation `to` is, when this render cannot see it yet —
        a guide a handoff has just begun. Otherwise the open thread's own. */
     as?: ThreadKind,
-    /* Whether the reader typed it (`SendHow`): the composer's sends only. */
+    /* Whether the reader typed it (`SendHow`): the composer or the command
+       bar's direct guide handoff. */
     how?: SendHow,
   ): void => {
     if (resettingNow.current) return;
@@ -1330,7 +1331,9 @@ export function ConversationBand({
       ...(origin ? { origin } : {}),
       ...(first?.anchor ? { anchor: first.anchor } : {}),
       ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
-      ...(how?.typed ? { typed: true as const } : {}),
+      /* Only the guide consumes this provenance. Keeping it off Chat and Learn
+         also lets the route refuse a misplaced claim instead of ignoring it. */
+      ...(sendKind === "guide" && how?.typed ? { typed: true as const } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box

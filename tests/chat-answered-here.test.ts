@@ -15,7 +15,10 @@ const THREAD = "spya-ahr4th";
 const MINTED = "spya-ahr4mn";
 const SERVERS = "spya-ahr4sv";
 
-function opened(): TurnSink {
+function opened(payload: Record<string, unknown> = { kind: "guide", typed: true }): {
+  controller: ChatController;
+  sink: TurnSink;
+} {
   let sink: TurnSink | null = null;
   const effects: ChatEffects = {
     loadThreads: () => new Promise(() => {}),
@@ -52,18 +55,18 @@ function opened(): TurnSink {
       began: false,
       attempt: null,
     },
-    payload: {},
+    payload,
   });
   const s = sink as TurnSink | null;
   if (!s) throw new Error("the turn did not open its stream");
-  return s;
+  return { controller: c, sink: s };
 }
 
 beforeEach(() => forgetAnsweredHere());
 
 describe("answered here", () => {
   it("is marked by the stream's done, under the server's id, once per key", () => {
-    const sink = opened();
+    const { sink } = opened();
     sink.began({ threadId: THREAD, title: "why?", messageId: SERVERS });
     expect(takeAnsweredHere(SERVERS, "purpose"), "not before it is done").toBe(false);
     sink.done({ text: "Done", citations: [], searches: 0, model: "m" });
@@ -74,9 +77,37 @@ describe("answered here", () => {
   });
 
   it("is not marked by a stream that fails", () => {
-    const sink = opened();
+    const { sink } = opened();
     sink.began({ threadId: THREAD, title: "why?", messageId: SERVERS });
     sink.failed("it broke");
+    expect(takeAnsweredHere(SERVERS, "purpose")).toBe(false);
+  });
+
+  it("is not marked before begin, on a disconnected turn, or for an untyped turn", () => {
+    const beforeBegin = opened().sink;
+    beforeBegin.done({ text: "Done", citations: [], searches: 0, model: "m" });
+    expect(takeAnsweredHere(MINTED, "purpose")).toBe(false);
+
+    const disconnected = opened().sink;
+    disconnected.began({ threadId: THREAD, title: "why?", messageId: SERVERS });
+    disconnected.disconnected("connection lost");
+    disconnected.done({ text: "Done", citations: [], searches: 0, model: "m" });
+    expect(takeAnsweredHere(SERVERS, "purpose")).toBe(false);
+
+    const untyped = opened({ kind: "guide" }).sink;
+    untyped.began({ threadId: THREAD, title: "why?", messageId: SERVERS });
+    untyped.done({ text: "Done", citations: [], searches: 0, model: "m" });
+    expect(takeAnsweredHere(SERVERS, "purpose")).toBe(false);
+  });
+
+  it("does not mark a turn superseded by deleting its conversation", () => {
+    const { controller, sink } = opened();
+    sink.began({ threadId: THREAD, title: "why?", messageId: SERVERS });
+    controller.dispatch({
+      type: "delete.started",
+      op: { id: asOpId("spya-ahr4dl"), kind: "delete", threadId: THREAD },
+    });
+    sink.done({ text: "Done", citations: [], searches: 0, model: "m" });
     expect(takeAnsweredHere(SERVERS, "purpose")).toBe(false);
   });
 });

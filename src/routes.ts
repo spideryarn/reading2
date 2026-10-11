@@ -3305,8 +3305,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if ((wantsRetry || wantsEdit) && help !== undefined) {
     throw httpError(400, "A retry or an edit takes its help flag from the stored question");
   }
-  /* **`typed: true`: the reader typed this question into the composer**, so
-     the guide's `offer_to_save` may save words drawn from it without a press
+  /* **`typed: true`: the reader wrote this whole question** — in the
+     composer or the command bar's direct guide row — so the guide's
+     `offer_to_save` may save words drawn from it without a press
      (src/save-closeness.ts, plan 261011s). Absent or literally `true`, like
      `help`; and only on a new question, since a retry re-asks a stored row and
      an edit's box starts from words that may have been a button's. Neither is
@@ -3318,6 +3319,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   }
   if ((wantsRetry || wantsEdit) && typed !== undefined) {
     throw httpError(400, "Only a new question can be marked as typed");
+  }
+  if (typed === true && kind !== "guide") {
+    throw httpError(400, "Only a guide question can be marked as typed");
   }
   /* **What was on the reader's screen** — context for "this" and "here",
      hedged in the prompt (`visibleBlocksLine`). A list of block ids, at most

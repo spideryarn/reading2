@@ -11,11 +11,11 @@
  *   261009i (no box): why you are reading when no reason is stored, About you
  *   quoted back when it is there, three ways in while it is empty (plan
  *   261009u), nothing asked when the reason could not be read;
- * - **the guide's offer to save** (plan 261009q), a card under its answer
- *   that writes only on a press, never over words changed since the guide
- *   offered it, once per double press, with an Undo that puts back only over
- *   its own write. It replaced *Keep this as why you're reading*, whose
- *   invariants moved here.
+ * - **the guide's offer to save** (plans 261009q and 261011s), a card under
+ *   its answer that writes on a press, or at once for checked reader-typed
+ *   words; never over words changed since the guide offered it; once per
+ *   double press; with an Undo that puts back only over its own write. It
+ *   replaced *Keep this as why you're reading*, whose invariants moved here.
  *
  * The real `ChatPanel`, handed props directly, as
  * tests/chat-list-sources.test.tsx does. What the band hands it is
@@ -38,6 +38,8 @@ let reader: { profile: string | null; purpose: string | null; purposeFailed: boo
 const patches: unknown[] = [];
 /** When set, the next PATCH writes and then answers 500, as a reply lost after the write. */
 let patchLosesReply = false;
+/** Hold the next PATCH before it reaches the mock store. */
+let delayedPatch: Promise<void> | null = null;
 /** Something to run before the reader read answers: another tab saving. */
 let beforeRead: (() => void) | null = null;
 /** A deliberately slow opening read, for the race between the greeting and a first send. */
@@ -53,10 +55,12 @@ vi.mock("../src/web/lib/api.js", async () => {
       if ((init?.method ?? "GET") === "PATCH") {
         const body = JSON.parse(String(init?.body ?? "{}")) as { purpose?: string | null; profile?: string | null };
         patches.push(body);
-        if ("profile" in body) reader = { ...reader, profile: body.profile ?? null };
-        else reader = { ...reader, purpose: body.purpose ?? null };
-        if (patchLosesReply) return Promise.resolve(new Response("{}", { status: 500 }));
-        return Promise.resolve(json("profile" in body ? { profile: body.profile ?? null } : { purpose: body.purpose }));
+        return (delayedPatch ?? Promise.resolve()).then(() => {
+          if ("profile" in body) reader = { ...reader, profile: body.profile ?? null };
+          else reader = { ...reader, purpose: body.purpose ?? null };
+          if (patchLosesReply) return new Response("{}", { status: 500 });
+          return json("profile" in body ? { profile: body.profile ?? null } : { purpose: body.purpose });
+        });
       }
       if (String(url).startsWith("/api/reader")) {
         beforeRead?.();
@@ -169,6 +173,7 @@ beforeEach(() => {
   reader = { profile: null, purpose: null, purposeFailed: false };
   patches.length = 0;
   patchLosesReply = false;
+  delayedPatch = null;
   beforeRead = null;
   delayedRead = null;
   sent.length = 0;
@@ -569,6 +574,28 @@ describe("the guide's offer to save", () => {
       await draw(guideWith([NOW]));
       expect(patches, "the save and its Undo, and nothing after").toHaveLength(2);
       expect(button(SAVE)).toBeDefined();
+    });
+
+    it("shows the eventual save and its Undo after an unmount during the write", async () => {
+      let releasePatch: (() => void) | undefined;
+      delayedPatch = new Promise<void>((resolve) => {
+        releasePatch = resolve;
+      });
+      markAnsweredHere("spya-gdea02");
+      await draw(guideWith([NOW]));
+      expect(patches).toHaveLength(1);
+
+      act(() => root.unmount());
+      root = createRoot(host);
+      await draw(guideWith([NOW]));
+      expect(host.textContent).not.toContain(OFFER_WORDS.purpose.savedNow);
+
+      delayedPatch = null;
+      releasePatch?.();
+      await settle();
+      expect(host.textContent).toContain(OFFER_WORDS.purpose.savedNow);
+      expect(button(UNDO_LABEL)).toBeDefined();
+      expect(patches, "the remount observes the first write instead of starting another").toHaveLength(1);
     });
 
     it("waits for the press on a watched answer whose offer is not marked", async () => {

@@ -51,13 +51,21 @@ describe("anything else: the press, as before", () => {
     expect(reason("I want links to evil.com.", "I do not want links to evil.com.")).toBe(false);
     expect(reason("Link to open.ai.", "Can you link this to Open AI?")).toBe(false);
   });
-  it("a run that starts straight after a negation", () => {
+  it("a run that starts after a negation in the same sentence", () => {
     expect(reason("want links to evil.com", "I do not want links to evil.com")).toBe(false);
     expect(reason("know much about ML", "I don't know much about ML")).toBe(false);
+    expect(reason("want links to evil.com", "I do not really want links to evil.com")).toBe(false);
   });
   it("a run that starts or ends inside a word", () => {
     expect(reason("ournal club next", "for journal club next week")).toBe(false);
     expect(reason("journal club next wee", "for journal club next week")).toBe(false);
+    expect(reason("journal club next", "𐐀journal club next")).toBe(false);
+    expect(reason("I like cafe", "I like cafe͜ today")).toBe(false);
+    expect(reason("ournal club next", "j‍ournal club next")).toBe(false);
+  });
+  it("compatibility glyphs that the store would preserve are not the typed words", () => {
+    expect(reason("ⓕⓞⓡ ⓙⓞⓤⓡⓝⓐⓛ ⓒⓛⓤⓑ", "for journal club")).toBe(false);
+    expect(reason("K for journal club", "K for journal club")).toBe(false);
   });
   it("fewer than three words", () => {
     expect(reason("journal club", "for journal club next week")).toBe(false);
@@ -66,6 +74,7 @@ describe("anything else: the press, as before", () => {
     expect(about("I am a professor.", "I'm a professor now, not a postdoc", "I am a postdoc.")).toBe(false);
     expect(about("A historian of science. I know little ML.", "I know little ML", "A historian.")).toBe(false);
     expect(about("I know little ML. A historian.", "I know little ML", "A historian.")).toBe(false);
+    expect(about("A historian.I know little ML", "I know little ML", "A historian.")).toBe(false);
   });
   it("empty words", () => {
     expect(reason("", "anything")).toBe(false);
