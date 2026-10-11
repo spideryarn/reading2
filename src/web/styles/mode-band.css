@@ -1116,6 +1116,25 @@ svg.band-waiting-ghost { flex: none; }
 .cmd-chip-generates { flex-shrink: 0; color: var(--ink-faint); font-size: 0.85em; }
 .cmd-chip-said { margin-left: 0.5em; color: var(--ink-faint); font-size: 0.85em; }
 
+/* A search button that ran in the conversation (ChatSearchCard.tsx, plan
+   261011aa): the words it ran, a line on how it went, and the passages as the
+   same block links an answer cites with. A block of its own under the
+   sentence that offered it, since what it found is a list. */
+.chat-search-ran {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.25rem 0;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-size: 0.9em;
+}
+.chat-search-what { display: flex; gap: 0.5em; align-items: baseline; color: var(--ink-soft); }
+.chat-search-status { color: var(--ink-faint); font-size: 0.9em; }
+.chat-search-open { margin-left: 0.25em; }
+.chat-search-hits { display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+
 /* ---- what the model did before it answered ----
    A strip ABOVE the answer, not below it. Sources sit below because they are
    where the answer came from and you want them after reading it; this is what

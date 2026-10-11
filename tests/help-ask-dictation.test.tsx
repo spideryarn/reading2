@@ -133,6 +133,14 @@ function stop() {
   mic.transcribing = true;
   draw();
 }
+/** Stop pressed twice, inside the hold: the field stops at the second press. */
+function stopTwice() {
+  act(() => s().dictate.toggle());
+  act(() => s().dictate.toggle());
+  mic.armed = false;
+  mic.transcribing = true;
+  draw();
+}
 async function end(transcript: string) {
   act(() => {
     options().onTranscript(transcript);
@@ -189,10 +197,8 @@ describe("the microphone on Ask about Spideryarn", () => {
 
   it("sends the transcript, not the live guess, on a double press of Stop", async () => {
     start();
-    stop();
-    const again = s().dictate.again;
-    expect(again).toBeDefined();
-    act(() => again?.());
+    stopTwice();
+    expect(s().dictate.sendingAfter).toBe(true);
     expect(posted).toEqual([]);
     await end("What does the orange line mean?");
     expect(posted).toEqual([{ question: "What does the orange line mean?" }]);
@@ -202,8 +208,7 @@ describe("the microphone on Ask about Spideryarn", () => {
     const long = "word ".repeat(250).trim();
     expect(long.length).toBeGreaterThan(MAX_HELP_QUESTION_CHARS);
     start();
-    stop();
-    act(() => s().dictate.again?.());
+    stopTwice();
     await end(long);
     expect(posted).toEqual([]);
     /* Kept whole: the reader trims it. */

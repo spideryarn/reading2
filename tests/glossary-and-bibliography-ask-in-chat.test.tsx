@@ -60,7 +60,14 @@ import {
   type ThreadSummary,
 } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
-import { askAboutCitedWork, askAboutGlossaryEntry, askAboutIdea, CITED_WORK_QUESTION } from "../src/web/chat-handoff.js";
+import {
+  askAboutBlock,
+  askAboutCitedWork,
+  askAboutGlossaryEntry,
+  askAboutIdea,
+  askDoesItSayThat,
+  CITED_WORK_QUESTION,
+} from "../src/web/chat-handoff.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const who = vi.hoisted(() => {
@@ -1012,6 +1019,31 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
     await until(() => param("thread") === "spya-srvx33" && dialog() !== null, "the earlier conversation");
     expect(chatPosts(), "no new question").toHaveLength(0);
     expect(server.filter((t) => t.origin?.mode === mode), "and no second chat").toHaveLength(1);
+  });
+
+  /* Plan 261011w: *Does it say that?* is not the item's chat. It starts a fresh
+     one, anchored on the paragraph the card was opened from, with no origin,
+     even when the work already has its own chat. */
+  it("Does it say that? starts a fresh chat anchored on the citing paragraph", async () => {
+    who.set(OWNER);
+    server.push(startedFrom("spya-srvx34", { mode: "bibliography", itemId: WORK, quote: WORK_TITLE }, "Earlier."));
+    await open("?mode=sources");
+    const button = await card(".prose mark.cite", ".prose-card-cite-check");
+    await act(async () => button.click());
+    await until(() => chatPosts().length === 1, "the question sent");
+    const sent = chatPosts()[0]?.body as { question: string; origin?: unknown; anchor?: unknown };
+    expect(sent.anchor).toEqual({ blockId: "spya-bbbbbb" });
+    expect(sent.origin).toBeUndefined();
+    expect(sent.question).toBe(
+      askAboutBlock({
+        blockId: "spya-bbbbbb",
+        question: askDoesItSayThat({ title: WORK_TITLE, authors: "Daniel Dennett", year: "1991" }),
+      }),
+    );
+    /* The ordinary passage path stays beside the prose outside Chat/Learn; it
+       does not silently turn a Sources press into navigation to Chat. */
+    expect(param("mode")).toBe("sources");
+    expect(dialog()).not.toBeNull();
   });
 
   /* GPT Sol's F1 on plan 261010s: still in Chat, the summaries have not been

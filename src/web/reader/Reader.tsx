@@ -92,6 +92,7 @@ import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
   citingSentences,
+  askDoesItSayThat,
   askAboutGlossaryEntry,
   askAboutIdea,
   askAboutBlock,
@@ -130,7 +131,8 @@ import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsCon
 import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
-import { findHref } from "../CommandBar.js";
+import { ChatSearchHere } from "../ChatSearchCard.js";
+import { findHref } from "../search-hrefs.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -1127,6 +1129,21 @@ export function Reader({
     (work: Pick<CitedWork, "id" | "title" | "authors" | "year">, citing: readonly string[]) =>
       handToChat(askAboutCitedWork(work, citing), "send", itemOrigin("bibliography", work.id, work.title)),
     [handToChat],
+  );
+  /* **And *Does it say that?* on a citation's card** (plan 261011w): a fresh
+     chat anchored on the citing paragraph, not an item's chat, so it stores no
+     origin and is never reopened; the same work cited in two paragraphs is two
+     questions. Chat answers it by reading the paper (`read_cited_work`). */
+  const checkCitedWorkInChat = useCallback(
+    (work: Pick<CitedWork, "title" | "authors" | "year">, blockId: BlockId) =>
+      askPassageInChat({
+        kind: "draft",
+        anchor: { blockId },
+        opening: article.blocks.find((block) => block.id === blockId)?.text ?? "",
+        question: askDoesItSayThat(work),
+        sendNow: true,
+      }),
+    [article.blocks, askPassageInChat],
   );
   /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009k,
      stage 3). The name and the statement go in the fence; the origin is the
@@ -3112,7 +3129,15 @@ export function Reader({
       const chat = chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
       return chipModes === undefined ? chat : { ...chat, guide: withModeDoor(chat, chipModes.guide) };
     };
-    return { band: forJump(bandJump), dialog: forJump(jumpTo) };
+    return {
+      band: forJump(bandJump),
+      dialog: forJump(jumpTo),
+      /* Where a search button in an answer runs and draws what it found, so
+         the reader stays in the conversation (ChatSearchCard.tsx, plan
+         261011aa). Each surface jumps the way its citations do. */
+      bandSearch: { slug, blocks: article.blocks, jump: bandJump },
+      dialogSearch: { slug, blocks: article.blocks, jump: jumpTo },
+    };
   }, [slug, executor, chipModes, article.blocks, tagsControl, bandJump, jumpTo]);
 
   /**
@@ -3485,6 +3510,7 @@ export function Reader({
              Candidates' prompts never ask for one, so only this arm and the
              chat dialog below are given the executor. CommandChip.tsx. */
           <ChatCommands executor={chatCommands.band}>
+            <ChatSearchHere place={chatCommands.bandSearch}>
             <ConversationBand
               key={mode}
               slug={slug}
@@ -3500,6 +3526,7 @@ export function Reader({
               onOrigin={openOrigin}
               articleTitle={article.meta.title}
             />
+            </ChatSearchHere>
           </ChatCommands>
         ) : null;
       /* **Learn is two bands behind one mode**, and the choice between them
@@ -4600,6 +4627,7 @@ export function Reader({
           being empty. */}
       {owner && overlay && (
         <ChatCommands executor={chatCommands.dialog}>
+          <ChatSearchHere place={chatCommands.dialogSearch}>
           <ChatDialog
             slug={slug}
             target={overlay}
@@ -4647,6 +4675,7 @@ export function Reader({
             onRenamed={owner.chatAnchors.rename}
             onSettled={owner.chatAnchors.refresh}
           />
+          </ChatSearchHere>
         </ChatCommands>
       )}
       {/* **Mounted for a visitor too, since 2026-09-04**, with an `access` of
@@ -4873,6 +4902,7 @@ export function Reader({
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
         onAskTerm={owner ? askEntry : null}
         onAskCitedWork={owner ? askWork : null}
+        onCheckCitedWork={owner ? checkCitedWorkInChat : null}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
            view (plan 261010e). Owner only, as the marks are. */
         onOpenCitedWork={owner ? openBibliographyWork : null}

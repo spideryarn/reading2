@@ -173,6 +173,9 @@ export function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
        the filesystem store has no key on an ordinary question and
        tests/store-roundtrip.test.ts compares the two byte for byte. */
     ...(row.help ? { help: true as const } : {}),
+    /* How it was made (report spya-z30x5n). Named here or it does not exist on
+       the way out; absent rather than `undefined` when not recorded. */
+    ...(row.modality === null ? {} : { modality: row.modality }),
     /* The reader's press on Hint. Named here or it does not exist on the way
        out — the rule the note above `passages` gives. */
     ...(row.hintOpenedAt === null ? {} : { hintOpenedAt: row.hintOpenedAt.toISOString() }),
@@ -328,6 +331,9 @@ export function messageRow(
        press loses its metadata between the route and the database. Same class of
        silent loss as `tools`, which is how that column came to exist. */
     help: message.help ?? false,
+    /* The write half of `modality`: without this line it is never written,
+       and nothing complains because the field is optional. */
+    modality: message.modality ?? null,
     /* The write half of the mapping. Every path that builds a message for
        insert builds a fresh one, so this writes null there; it is named so a
        message that does carry the time is not silently stripped of it. */
@@ -629,6 +635,9 @@ const rawPgChatStore: ChatStore = {
           /* The reader opened the LAST answer's hint. The row is about to hold
              a different answer with a different hint, and that one is closed. */
           hintOpenedAt: null,
+          /* The new answer is streamed text, even when the one it replaces was
+             spoken in a live conversation (Sol's plan review F1, 261011z). */
+          modality: "written",
           // A new attempt on the same row. This is what stops the previous
           // one's late answer landing here.
           attemptId: attempt,

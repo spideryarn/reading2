@@ -646,6 +646,19 @@ describe("chunks and their selection", () => {
     expect(sent).toBeLessThanOrEqual(SENT_WORDS_BUDGET);
     expect(sent).toBeGreaterThan(SENT_WORDS_BUDGET - 250);
   });
+
+  /* Chat's `read_cited_work` (plan 261011w): a claim's terms steer the pick,
+     and a smaller budget holds, while the row's own query is unchanged. */
+  it("a claim aims the pick and a budget caps it", () => {
+    const blind = { why: "", passages: [] as string[] };
+    const holder = chunks.find((c) => c.text.includes("recalled forty percent"))!;
+    const without = selectChunks(chunks, blind, 750);
+    const aimed = selectChunks(chunks, { ...blind, claim: "readers recalled forty percent" }, 750);
+    expect(without).not.toContain(holder.id);
+    expect(aimed).toContain(holder.id);
+    const sent = chunks.filter((c) => aimed.includes(c.id)).reduce((n, c) => n + c.words, 0);
+    expect(sent).toBeLessThanOrEqual(750);
+  });
 });
 
 // ----------------------------------------------------------------- passages

@@ -319,6 +319,15 @@ describe("the transcription request", () => {
     expect(sent).toHaveLength(0);
   });
 
+  /* "Yes", or "next one": a second of 32 kbps WebM is ~4 KB, ~5,400 base64
+     characters. The floor was two seconds of AAC (37,000) until 2026-10-11, and
+     threw a brief instruction away as silence (spya-az6puq, plan 261011y). */
+  it("sends a one-second recording", async () => {
+    const { fetchImpl, sent } = fakeGateway();
+    await transcribeForFleet({ audio: "A".repeat(5_400), format: "webm", vocabulary: [], apiKey: KEY, fetchImpl });
+    expect(sent).toHaveLength(1);
+  });
+
   it("refuses a recording over the shared cap without sending it", async () => {
     const { fetchImpl, sent } = fakeGateway();
     const result = await transcribeForFleet({

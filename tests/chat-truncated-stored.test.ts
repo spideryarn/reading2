@@ -143,7 +143,8 @@ type NotFinishable =
   | "interrupted"
   | "stance"
   | "help"
-  | "hintOpenedAt";
+  | "hintOpenedAt"
+  | "modality";
 type Finishable = Required<Omit<ChatMessage, NotFinishable>>;
 
 describe("chatStore.finish", () => {

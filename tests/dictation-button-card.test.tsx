@@ -25,7 +25,6 @@ function hover(props: {
   doubleStop?: boolean;
   done?: "send" | "enter" | "save";
   disabled?: boolean;
-  again?: () => void;
   sendingAfter?: boolean;
   toggle?: () => void;
 }): string[] {
@@ -37,7 +36,6 @@ function hover(props: {
         doubleStop: props.doubleStop,
         done: props.done,
         disabled: props.disabled,
-        again: props.again,
         sendingAfter: props.sendingAfter,
       }),
     ),
@@ -114,14 +112,15 @@ describe("the dictation button's card", () => {
     expect(hover({ d: { armed: true, phase: "listening" } })).toEqual([]);
   });
 
-  it("stands aside during the second-press window and leaves that click to again", () => {
-    const again = vi.fn();
+  it("stands aside while the words are on their way, and the button takes no press then", () => {
+    /* There is no second-press window after Stop any more: the field holds the
+       Stop press itself, while this is still Stop (plan 261011y). */
     const toggle = vi.fn();
-    expect(hover({ d: { transcribing: true }, again, sendingAfter: false, toggle })).toEqual([]);
+    expect(hover({ d: { transcribing: true }, sendingAfter: false, toggle })).toEqual([]);
     const button = host.querySelector("button");
     if (!button) throw new Error("no button");
+    expect(button.disabled).toBe(true);
     act(() => button.click());
-    expect(again).toHaveBeenCalledOnce();
     expect(toggle).not.toHaveBeenCalled();
   });
 

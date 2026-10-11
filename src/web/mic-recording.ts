@@ -298,8 +298,18 @@ export const MAX_BYTES = 2_100_000;
  *
  * **Applied to the whole dictation, never to a part.** Per part, it would throw
  * away a one-second tail after a rotation — the reader's last words.
+ *
+ * **Well under a second, because a brief instruction is a second long.** It was
+ * two seconds until 2026-10-11, and since this is also what decides whether the
+ * words are transcribed at all, "quotes" said into the command bar came back as
+ * "We didn't catch that" (Greg, spya-az6puq: *"some kind of cutoff for less
+ * than a few seconds that it treats as being basically empty"*). An accidental
+ * start-and-stop is two presses a few hundred ms apart, so this is still above
+ * one. Room tone that does get through is the transcriber's to call empty
+ * (`[mic-silent]`), and the server has its own floor (`MIN_AUDIO_BASE64`).
+ * Plan 261011y.
  */
-const MIN_MS = 2000;
+const MIN_MS = 600;
 /** How long to wait for a recorder to finish before releasing the track anyway. */
 const FLUSH_TIMEOUT_MS = 3000;
 

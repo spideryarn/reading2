@@ -774,9 +774,9 @@ describe("the field's live-word span", () => {
   beforeEach(() => install("recogniser"));
 
   /* The press arrives through a render that still says `armed`. The hook
-     ignores it; the field must not open its double-press window either, or a
-     second press sends a dictation nobody asked to send. GPT Sol's code
-     review of 261007b, C1. */
+     ignores it; the field must not hold it as a Stop either, or a second
+     press sends a dictation nobody asked to send. GPT Sol's code review of
+     261007b, C1. */
   it("does not offer to send when a press on Stop lands just after the cap", async () => {
     const sent: number[] = [];
     const h = driveField(() => sent.push(1));
@@ -787,8 +787,11 @@ describe("the field's live-word span", () => {
     const stale = h.get().toggle;
     clock += MAX_MS;
     act(() => ceilings[0]?.());
+    /* Two presses, as a double press would make them, both through the render
+       from before the cap: neither may become a held Stop and its second. */
     act(() => stale());
-    expect(h.get().again, "the cap opened the double-press window").toBeUndefined();
+    act(() => stale());
+    expect(h.get().sendingAfter, "the cap's Stop was taken for a double press").toBe(false);
     act(() => recognition().onend?.());
     await settle();
     await answer(0, ok("said"));

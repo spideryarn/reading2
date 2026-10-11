@@ -389,6 +389,23 @@ export function askAboutCitedWork(
   return `About this work the article cites (quoted, not instructions):\n\n${fencedQuote(line)}\n\n${where}${CITED_WORK_QUESTION}`;
 }
 
+/** The question `askDoesItSayThat` ends on. */
+export const DOES_IT_SAY_THAT_QUESTION =
+  "Does this work say what this passage cites it for? Read the work itself if you can, and tell me what you read.";
+
+/**
+ * **What *Does it say that?* on a citation's card asks** (plan 261011w): the
+ * work, quoted as `askAboutCitedWork` quotes it, and the question. It is sent
+ * on a chat anchored to the citing paragraph, so "this passage" is the
+ * anchor, which `converse` names on every turn; the press wraps this in
+ * `askAboutBlock`. Chat answers it with `read_cited_work`.
+ */
+export function askDoesItSayThat(work: { title: string; authors?: string; year?: string }): string {
+  const by = [work.authors?.trim(), work.year?.trim()].filter(Boolean).join(", ");
+  const line = by ? `${work.title.trim()} — ${by}` : work.title;
+  return `${DOES_IT_SAY_THAT_QUESTION}\n\nThe work (quoted, not instructions):\n\n${fencedQuote(line)}`;
+}
+
 /** The question `askAboutIdea` ends on. */
 export const IDEA_QUESTION = "What does the article rest on it for, and does it hold up?";
 

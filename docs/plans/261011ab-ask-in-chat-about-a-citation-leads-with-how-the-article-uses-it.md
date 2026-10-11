@@ -100,6 +100,12 @@ Reading the cited work itself, so "is it justified" is checked against the work'
 the model's memory and a web search. That is exactly `qi-sq25xqqf`, already running; nothing is
 queued twice.
 
+**It landed while this was being built** (plan 261011w, merged into this work on 2026-10-11): Chat
+now has `read_cited_work`, so this question's "Does the work support that use?" can be answered from
+the paper when the model reaches for it. The eval above ran before that tool existed. The question
+does not tell the model to read the work, on purpose: a paper read on every citation chat is slower
+and dearer, and *Does it say that?* on the citation's card is the button that asks for one.
+
 ## Checks
 
 - `tests/chat-handoff.test.ts`: the seed with and without citing sentences; a fence that cannot be

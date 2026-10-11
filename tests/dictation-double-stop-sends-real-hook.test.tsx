@@ -164,9 +164,11 @@ describe("double Stop over the real dictation hook", () => {
       clock += 3000;
       act(() => recorder().emit(300));
       act(() => get().toggle());
-      expect(get().again, "the second press is live while the transcript is pending").toBeDefined();
-      act(() => get().again?.());
+      expect(get().dictation.armed, "the first press is held: still listening").toBe(true);
+      act(() => get().toggle());
+      expect(get().sendingAfter, "the second press is taken").toBe(true);
       await settle();
+      expect(get().dictation.armed, "stopped at the second press").toBe(false);
     };
     const answer = async (index: number, result: TranscriptionResult) => {
       const call = calls[index];

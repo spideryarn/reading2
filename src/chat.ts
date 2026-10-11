@@ -32,6 +32,7 @@ import type {
   ChatAnchor,
   ThreadOrigin,
   ChatMessage,
+  ComposerModality,
   ChatThread,
   ThreadKind,
   ToolRun,
@@ -234,6 +235,13 @@ export interface Turn {
    * there is no `false`.
    */
   help?: true;
+  /**
+   * **How the reader made this question**, as the composer saw it arrive —
+   * `ChatMessage.modality`. Absent when not recorded. Only the browser can
+   * know it, so the route takes it from the body, and only these three values:
+   * `spoken` is the `/spoken` route's alone.
+   */
+  modality?: ComposerModality;
 }
 
 /**
@@ -272,7 +280,7 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor, origin, kind, help }: Turn,
+  { threadId, question, anchor, origin, kind, help, modality }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
@@ -332,6 +340,7 @@ export function withTurn(
        for field — an explicit `undefined` and an absent key are not the same
        thing. See `Turn.help`. */
     ...(help ? { help } : {}),
+    ...(modality ? { modality } : {}),
   };
   const reply: ChatMessage = {
     id: mintUniqueId(ids),
@@ -339,6 +348,8 @@ export function withTurn(
     text: "",
     createdAt: at,
     status: "pending",
+    /* Streamed text, whatever the question was. */
+    modality: "written",
     /* No stance. Learn's four stances became one voice on 2026-10-02, so
        nothing new writes `ChatMessage.stance`; older rows keep theirs.
        docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
@@ -551,6 +562,10 @@ export function withSpokenTurn(
     text: spoken.question,
     createdAt: at,
     status: "done",
+    /* Both halves of a live exchange say so: the selector for reviewing what
+       the voice model said (report spya-z30x5n). Set here, never by the
+       browser. */
+    modality: "spoken",
   };
   const reply: ChatMessage = {
     id: mintUniqueId(ids),
@@ -558,6 +573,7 @@ export function withSpokenTurn(
     text: spoken.answer,
     createdAt: at,
     status: "done",
+    modality: "spoken",
     /* Conditional spreads throughout, never `x: undefined`. The two stores are
        compared field for field by tests/store-roundtrip.test.ts, where an
        absent key and an explicit undefined are not the same thing. */
@@ -743,6 +759,8 @@ export function withRetry(
     /* Nothing carried over: everything the old attempt had is deliberately
        dropped, as the note above says. The stance was the one exception until
        Learn's four stances became one voice on 2026-10-02. */
+    /* Streamed text, even when the answer being replaced was spoken. */
+    modality: "written",
   };
   const thread: ChatThread = {
     ...existing,
@@ -836,6 +854,7 @@ export function withEdit(
     text: "",
     createdAt: at,
     status: "pending",
+    modality: "written",
   };
   const thread: ChatThread = {
     ...existing,

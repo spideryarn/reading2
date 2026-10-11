@@ -24,7 +24,8 @@
  *   `chipFor` decides at the draw and at the press whether this reader can
  *   open it here; a mode it refuses draws nothing.
  * - **search** is a box holding the words, which the reader may change, and
- *   the `quick-search` chip for whatever is in it: Search mode, its spinner.
+ *   the `quick-search` chip for whatever is in it, which runs the search under
+ *   the answer (ChatSearchCard.tsx, plan 261011aa).
  * - **share** goes to Metadata's *Access & sharing* card, where the bar's
  *   *Share this article* goes: the private link and the public switch are
  *   pressed there, with their own confirmation.

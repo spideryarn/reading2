@@ -72,19 +72,16 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
  * (GPT Sol's review of 261009g, F1, after its card said "send").
  */
 export type DoneAction = "send" | "enter" | "save";
-const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: string }> = {
+const DONE_WORDS: Record<DoneAction, { button: string; strip: string }> = {
   send: {
-    again: "Send when the words arrive",
     button: "Turning your words into text, then sending",
     strip: "Turning that into text, then sending…",
   },
   enter: {
-    again: "Press Enter when the words arrive",
     button: "Turning your words into text, then pressing Enter",
     strip: "Turning that into text, then pressing Enter…",
   },
   save: {
-    again: "Save when the words arrive",
     button: "Turning your words into text, then saving",
     strip: "Turning that into text, then saving…",
   },
@@ -231,7 +228,6 @@ export function DictationButton({
   dictation,
   toggle,
   disabled,
-  again,
   sendingAfter,
   done = "send",
   doubleStop = false,
@@ -246,23 +242,13 @@ export function DictationButton({
   doubleStop?: boolean | undefined;
   /** What the double press does here, for the button's name. `DoneAction`. */
   done?: DoneAction | undefined;
-  /**
-   * **The second press of a double press on Stop**: `useDictationField().again`,
-   * which is there only for the moment after Stop in which a second press
-   * counts. A double press also sends (Greg, spya-rp8676), and a `disabled`
-   * button is sent no click at all — so while this is given the button stays
-   * live, is named for what a press does, and its only press is this one. It
-   * never starts a dictation there. When the moment has passed, or the press
-   * was taken, this is gone and the button is disabled as it always was.
-   */
-  again?: (() => void) | undefined;
   /** The second press was taken; the name says what happens next. */
   sendingAfter?: boolean | undefined;
 }) {
+  /* **The second press of a double press on Stop lands while this is still
+     Stop**: the field holds a Stop press for a moment before stopping, so
+     nothing here changes between the two presses (plan 261011y). */
   const busy = dictation.transcribing;
-  /* Live through the gap, for the second press. Not when the box itself has
-     switched the button off. */
-  const pressable = busy && again !== undefined && !disabled;
   /* **Read here rather than passed in**, so that all six boxes get it from one
      place and a seventh cannot forget. `false` only; see `useOnline.ts`. */
   /* **Only while idle**, because this one control is also Stop. Disabling it on
@@ -326,9 +312,7 @@ export function DictationButton({
           : busy
             ? sendingAfter
               ? DONE_WORDS[done].button
-              : pressable
-                ? DONE_WORDS[done].again
-                : "Turning your words into text"
+              : "Turning your words into text"
             : dictation.armed
               ? "Stop dictating"
               : "Dictate"
@@ -350,8 +334,8 @@ export function DictationButton({
          microphone is already off; a press here can only mean "start again",
          and starting again two hundred milliseconds before the words arrive
          throws away the dictation the reader just gave. */
-      disabled={disabled || (busy && !pressable) || offline}
-      onClick={pressable ? again : toggle}
+      disabled={disabled || busy || offline}
+      onClick={toggle}
     >
       {busy ? (
         <Loader2 size={13} className="spin" />

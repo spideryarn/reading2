@@ -472,8 +472,20 @@ describe("recording a track", () => {
   it("offers nothing for a recording too short to contain anything", async () => {
     const tape = recordTrack(track);
     latest().emit(4096);
-    vi.setSystemTime(new Date("2026-08-27T14:32:06"));
+    vi.setSystemTime(new Date("2026-08-27T14:32:05.300"));
     expect(await tape?.stop()).toBeNull();
+  });
+
+  /* "Quotes", or "next section", into the command bar: a second and a bit,
+     press to press. Under two seconds used to be thrown away as empty, which
+     made a brief spoken instruction impossible (Greg, spya-az6puq). */
+  it("keeps a one-second dictation, so a brief instruction is heard", async () => {
+    const tape = recordTrack(track);
+    latest().emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:06"));
+    const out = await tape?.stop();
+    expect(out?.parts).toHaveLength(1);
+    expect(out?.parts[0]?.ms).toBe(1000);
   });
 
   it("offers nothing when the recorder errored, however much it had collected", async () => {

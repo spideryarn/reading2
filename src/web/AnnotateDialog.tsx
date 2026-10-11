@@ -699,7 +699,7 @@ export function AnnotateDialog({
 
           <div className="annotate-actions">
             {dictate.dictation.supported && (
-              <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} done="save" />
+              <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} done="save" />
             )}
             {/* **Discard, not Cancel**: it is the only control here that throws
                 the reader's words away, and it says so. */}

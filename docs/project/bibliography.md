@@ -503,7 +503,19 @@ and opened the Citations mode with that row scrolled into view
 *Ask in chat*** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Bibliography row's own sender (`askCitedWorkInChat`), so
 the chat records the same origin as one started from the row, and the card closes. It is the
 card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
-link. The glossary card's is the same shape. The one-shot that opened Citations on a row
+link.
+
+**And *Does it say that?*, since 2026-10-11, on a card opened from a paragraph that cites the work**
+(that paragraph is in the work's `citedAt`; not the reference entry). It is the research's idea 2,
+Greg's 4B on [q-fkq30v](../user-feedback/questions/q-fkq30v.md): *does the cited work say that?*, at
+the citing sentence. A press starts a fresh chat anchored on that paragraph, with no origin, so it is
+not the work's one chat and a second paragraph is a second question. The question names the work,
+fenced (`askDoesItSayThat` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts)), and chat answers
+it by reading the paper with `read_cited_work`
+([chat-tools.md § Reading a cited paper](chat-tools.md#reading-a-cited-paper-read_cited_work)),
+which is Dig deeper's paper read, offered to chat. A text button, one tap for a finger, owner only
+(`onCheckCitedWork`). Plan
+[261011w](../plans/261011w-does-the-cited-work-say-that-at-the-citing-sentence.md). The glossary card's is the same shape. The one-shot that opened Citations on a row
 (`citeFocus`, `BibliographyPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
 `Reader` for the way back from a chat to its row (that plan's stage 2).
 

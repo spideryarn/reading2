@@ -86,10 +86,13 @@ const TIMEOUT_MS = 45_000;
  *
  * A press-and-release with nothing said produces a fraction of a second of
  * container header, and a transcriber handed that invents a sentence — the
- * product's `MIN_AUDIO_BASE64` exists for the same reason. ~2 seconds at the
- * recorder's measured ~14 KB/s, base64'd.
+ * product's `MIN_AUDIO_BASE64` exists for the same reason, and this is now the
+ * same number. It was ~2 seconds at the recorder's ~14 KB/s until 2026-10-11,
+ * which threw away a brief spoken instruction as silence (spya-az6puq, plan
+ * 261011y). The press-and-release case is caught before upload, by `MIN_MS` in
+ * `src/web/mic-recording.ts`; this is the floor under that.
  */
-export const MIN_AUDIO_BASE64 = 37_000;
+export const MIN_AUDIO_BASE64 = 2_000;
 
 /**
  * A transcript far longer than anything that could have been said.

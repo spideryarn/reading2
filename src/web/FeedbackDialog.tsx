@@ -1387,7 +1387,6 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
                 dictation={dictate.dictation}
                 toggle={dictate.toggle}
                 disabled={stage.kind === "sending"}
-                again={dictate.again}
                 sendingAfter={dictate.sendingAfter}
                 doubleStop={dictate.doubleStop}
               />
