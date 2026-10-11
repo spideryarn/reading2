@@ -1334,6 +1334,9 @@ export function ConversationBand({
       /* Only the guide consumes this provenance. Keeping it off Chat and Learn
          also lets the route refuse a misplaced claim instead of ignoring it. */
       ...(sendKind === "guide" && how?.typed ? { typed: true as const } : {}),
+      /* How the composer saw the words arrive, for every kind: stored on the
+         question's row (report spya-z30x5n). */
+      ...(how?.modality ? { modality: how.modality } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box

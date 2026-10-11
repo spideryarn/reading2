@@ -514,6 +514,8 @@ import {
   HIGHLIGHT_COLOURS,
   isHighlightColour,
   isLiveEngine,
+  isComposerModality,
+  COMPOSER_MODALITIES,
   isMicPlacement,
   isSeverity,
   LIVE_ENGINES,
@@ -3216,6 +3218,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     stance,
     help,
     typed,
+    modality,
     sourceCommentId,
     visible,
   } = (body ?? {}) as Record<string, unknown>;
@@ -3325,6 +3328,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   }
   if (typed === true && kind !== "guide") {
     throw httpError(400, "Only a guide question can be marked as typed");
+  }
+  /* **How the reader made this question** (`ChatMessage.modality`, report
+     spya-z30x5n): typed, dictated or mixed, as the composer saw the words
+     arrive. Stored on the question's row. Not `spoken` — only `/spoken` writes
+     that — and an unknown value is a 400 rather than dropped. Only on a new
+     question: a retry re-asks a stored row, and an edit keeps the row's
+     modality (`editedAt` says the words changed). The reader's own claim about
+     their own words, so believing it harms nothing. */
+  if (modality !== undefined && !isComposerModality(modality)) {
+    throw httpError(400, `modality must be one of: ${COMPOSER_MODALITIES.join(", ")}`);
+  }
+  if ((wantsRetry || wantsEdit) && modality !== undefined) {
+    throw httpError(400, "Only a new question can say how it was made");
   }
   /* **What was on the reader's screen** — context for "this" and "here",
      hedged in the prompt (`visibleBlocksLine`). A list of block ids, at most
@@ -3670,6 +3686,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
                above, so neither row receives it. `help`, below, belongs on
                the user row; `withTurn` puts it there for retries to inherit. */
             ...(help === true ? { help: true as const } : {}),
+            ...(isComposerModality(modality) ? { modality } : {}),
           });
   });
   const { thread, reply, user } = begun;

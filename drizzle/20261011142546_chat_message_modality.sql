@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."chat_messages" ADD COLUMN "modality" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_modality" CHECK ("spideryarn"."chat_messages"."modality" is null or ("spideryarn"."chat_messages"."role" = 'user' and "spideryarn"."chat_messages"."modality" in ('typed','dictated','mixed','spoken')) or ("spideryarn"."chat_messages"."role" = 'assistant' and "spideryarn"."chat_messages"."modality" in ('written','spoken')));

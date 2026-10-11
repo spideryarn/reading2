@@ -41,6 +41,7 @@ import type {
   ThreadOrigin,
   ChatMessage,
   ChatThread,
+  ComposerModality,
   LiveEngine,
   ThreadKind,
   ToolRun,
@@ -190,6 +191,13 @@ export interface SendOptions {
    * turn and never stored; `true` or absent, like `help`.
    */
   typed?: true;
+  /**
+   * **How the reader made this question** — typed, dictated or mixed, as the
+   * composer saw the words arrive (`ChatMessage.modality`, report
+   * spya-z30x5n). Stored on the question's row. Absent when the composer could
+   * not tell, and from every other caller.
+   */
+  modality?: ComposerModality;
   /**
    * The comment this conversation is being started from — **only on the send
    * that creates the thread**, and passed straight through to the server.
@@ -544,6 +552,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         text: spoken.question,
         createdAt: now,
         status: "done",
+        modality: "spoken",
       };
       const reply: ChatMessage = {
         id: mintId(),
@@ -551,6 +560,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         text: spoken.answer,
         createdAt: now,
         status: "done",
+        modality: "spoken",
         /* Conditional throughout, never `x: undefined` — the same rule
            `withSpokenTurn` follows on the server, and for the same reason:
            these two rows are compared against the stored ones. */
@@ -720,7 +730,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, origin, kind, help, typed, sourceCommentId, visible } = opts;
+      const { onThreadId, anchor, origin, kind, help, typed, modality, sourceCommentId, visible } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -737,12 +747,15 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
 
          Their ids are provisional: the server mints its own and says so in the
          `begin` frame, and all three are swapped there in one transition. */
+      /* The optimistic rows say what the stored ones will, so this tab and a
+         reload agree (`withTurn`). */
       const question_: ChatMessage = {
         id: mintId(),
         role: "user",
         text: question,
         createdAt: now,
         status: "done",
+        ...(modality ? { modality } : {}),
       };
       const reply: ChatMessage = {
         id: replyId,
@@ -750,6 +763,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         text: "",
         createdAt: now,
         status: "pending",
+        modality: "written",
       };
       controller.startTurn(
         {
@@ -824,6 +838,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
                so this must never write one. */
             ...(help ? { help: true as const } : {}),
             ...(typed ? { typed: true as const } : {}),
+            ...(modality ? { modality } : {}),
             ...(sourceCommentId ? { sourceCommentId } : {}),
           },
         },
@@ -856,6 +871,8 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         text: "",
         createdAt: now,
         status: "pending",
+        /* Streamed text, even when it replaces a spoken answer (`withRetry`). */
+        modality: "written",
       };
       controller.startTurn({
         type: "turn.started",
@@ -921,6 +938,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
             text: "",
             createdAt: now,
             status: "pending",
+            modality: "written",
           },
           /* The rewritten question and the discard of everything under it are
              both **drawn**, and that is the payoff the whole projection was

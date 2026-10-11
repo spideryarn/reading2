@@ -92,6 +92,7 @@ import type {
   ChatMessage,
   ChatThread,
   Citation,
+  ComposerModality,
   ThreadKind,
   ThreadOrigin,
   ToolRun,
@@ -149,6 +150,7 @@ import { useMedia } from "./media.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
+import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
 
 /**
  * **How a question was sent.** `typed` only where the reader wrote the whole
@@ -159,6 +161,12 @@ import { dictationReporter } from "./dictation-report.js";
  */
 export interface SendHow {
   typed?: true;
+  /**
+   * How the composer saw the words arrive: typed, dictated or mixed
+   * (`composerModality`). Absent when it could not tell. Stored on the
+   * question's row; report spya-z30x5n, plan 261011z.
+   */
+  modality?: ComposerModality;
 }
 
 interface Props {
@@ -3144,6 +3152,11 @@ export function Composer({
      this keeps the value because typing into it must not repaint the
      transcript above. */
   const [value, setValue] = useState(draft);
+  /* **How this draft's words arrived**, so the question can be stored with it
+     (report spya-z30x5n). A ref: it decides nothing on screen. Seeded when the
+     box starts non-empty, and then unrecorded until it is emptied
+     (composer-modality.ts). */
+  const provenance = useRef(freshProvenance(draft));
   /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
   const learn = isLearnKind(kind);
   /**
@@ -3223,6 +3236,7 @@ export function Composer({
   const dictate = useDictationField({
     value,
     onChange: (next) => {
+      provenance.current = afterChange(provenance.current, next, "dictation");
       setValue(next);
       onDraft(next);
     },
@@ -3283,11 +3297,16 @@ export function Composer({
     // Revoke never-submitted recovery before the wait: another draft can be
     // typed and the mode left while this question is already on its way.
     onSubmitStarted?.();
+    /* Read before the box is cleared and before Live's hand-off is awaited, and
+       reset at once: the reader may start the next draft during that wait, and
+       its words are not this question's (Sol's plan review F2, 261011z). */
+    const modality = composerModality(provenance.current);
+    provenance.current = freshProvenance("");
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
     /* Typed here, by the reader: the one send that says so (`SendHow`). */
-    onSend(question, { typed: true });
+    onSend(question, { typed: true, ...(modality ? { modality } : {}) });
     /* The question has gone and the answer arrives under the keys: let go of
        a soft keyboard, and only a soft one (useVisualViewport.ts §
        `putKeyboardAway`; Greg, spya-gmtt4b). A live handoff can wait long
@@ -3337,6 +3356,7 @@ export function Composer({
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
+          provenance.current = afterChange(provenance.current, e.target.value, "keyboard");
           setValue(e.target.value);
           // Kept above this component so the words survive it; see `drafts`
           // in ChatPanel.
@@ -3385,6 +3405,7 @@ export function Composer({
           if (e.key === "Escape" && !isImeComposing(e)) {
             if (onStop) onStop();
             else if (value !== "") {
+              provenance.current = freshProvenance("");
               setValue("");
               onDraft("");
             }

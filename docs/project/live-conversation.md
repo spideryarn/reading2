@@ -427,6 +427,33 @@ not this feature's, and it went when the filesystem store did.
 - **`model`** — set server-side, never taken from the browser: `LIVE_MODEL`, or `GPT_LIVE_MODEL`
   when the `/spoken` body names that engine. The browser names an engine, never a model. It is what lets the
   citation instruments tell a spoken answer from a typed one that happened to cite nothing.
+- **`modality = 'spoken'`**, on **both** rows, since 2026-10-11 — set by `withSpokenTurn`, never
+  taken from the browser. A typed question says `typed`, `dictated` or `mixed`, and a streamed
+  answer `written`, so every message says how it was made
+  ([`ChatMessage.modality`](../../src/types.ts); plan
+  [261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). Greg asked for it so the
+  voice model's answers can be looked through for quality:
+
+  > I'm especially interested for you to know which bits of the AI response came from the live,
+  > real-time voice, because we may want to kind of look through those and check to see if they're
+  > doing a good job.
+  >
+  > — Greg, 2026-10-11 (`spya-z30x5n`)
+
+  **Reviewing them is a query, not a screen.** Rows before 2026-10-11 were not backfilled, and
+  are found exactly by `model` instead, so the selector covers both:
+
+  ```sql
+  select a.created_at, a.model, a.interrupted, q.text as question, a.text as answer
+  from spideryarn.chat_messages a
+  join spideryarn.chat_messages q
+    on q.article_id = a.article_id and q.thread_id = a.thread_id and q.ordinal = a.ordinal - 1
+  where a.role = 'assistant'
+    and (a.modality = 'spoken' or a.model like 'gpt-realtime%' or a.model like 'gpt-live%')
+  order by a.created_at desc;
+  ```
+
+  A retried spoken answer is rewritten as streamed text, and becomes `written` with it.
 
 ## Three things that are not obvious and cost an afternoon each
 

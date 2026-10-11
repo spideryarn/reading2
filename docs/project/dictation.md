@@ -463,6 +463,12 @@ const dictate = useDictationField({
 <DictationStrip dictation={dictate.dictation} />
 ```
 
+**A box whose words are stored as a chat question also says how they arrived.** Chat's composer
+keeps score of which `onChange` ran, the hook's or the textarea's, and sends `typed`, `dictated`
+or `mixed` with the question ([`composer-modality.ts`](../../src/web/composer-modality.ts), plan
+[261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). The command bar's
+*Ask the guide* row does not yet, and its questions are stored unrecorded.
+
 `transcribe` comes from `useReaderTranscriber` in
 [`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
 reader the box was mounted for, before recording, tape draining or retries can outlive an account
