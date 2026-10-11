@@ -40,8 +40,8 @@ which kept Explore behind the switch because it was two days old.
   Tutorial. What changes is that every owner can now choose those paid turns and their web
   searches. Changing Tutorial's system prompt and Guide's mode list (below) each cost one cold
   cache write on the next turn, then the stable prefix is reused (GPT Sol's plan review, F4).
-- **Guide may now offer and open Explore**: its mode list drops the *(experimental)* tag and,
-  because opening Explore generates nothing, marks it *Opens at once*.
+- **Guide may now offer Explore**: its mode list drops the *(experimental)* tag and
+  offers its button (it said *Opens at once* until the guide stopped opening modes itself, the same day).
 
 ## The build
 
@@ -58,7 +58,7 @@ One stage; it is small.
    on or off" (no Learn sub-mode flagged; four chips, four (i) lines, four bar rows in every state).
    `tests/command-bar-sub-modes.test.tsx`'s two Explore cases become "offered from every address".
    `tests/guide-kind.test.ts` takes `Diagram › Force` as its experimental sub-mode and requires
-   Explore ordinary and *Opens at once*. `tests/chat-commands.test.ts` used `learn:explore` as its
+   Explore ordinary, with its button. `tests/chat-commands.test.ts` used `learn:explore` as its
    example of an experimental sub-mode; it switches to `diagram:force`.
    `tests/tutorial-kind.test.ts` gains a deterministic check that the section names Explore and not
    Chat. Regenerated: `src/command-pick-catalogue.generated.json` (the server's copy of the
