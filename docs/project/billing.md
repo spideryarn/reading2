@@ -1117,9 +1117,10 @@ one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review
   miss a revoke that committed meanwhile (F2). `tests/billing-vouchers.test.ts` holds both halves as
   held-transaction tests, beside twenty concurrent ingests on a 3+2 account admitting exactly five.
 - **Several vouchers to one address add up.** Nothing makes an address unique, the claim takes
-  every waiting voucher at it, and the bonus is the sum, so 20 and then 10 to one person raise
-  the Free allowance from 3 to 33 articles, for good; a revoke takes back only its own. Greg asked for exactly this on
-  2026-10-11 (`spya-dkddku`), and it had always been so; a test now holds it
+  every waiting voucher at the confirmed address, and the bonus is the sum. Gifts of 20 and 10
+  therefore raise the lifetime Free allowance from 3 to 33; revoking the 10 reduces it to 23 and
+  leaves the 20 in place. Greg asked for exactly this on 2026-10-11 (`spya-dkddku`), and it had
+  always been so; a test now holds it
   ([261011k](../plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md)).
 
 What the reader is told is `ReaderPlan.gifts` — articles, the claim date and an opaque `noticeKey`,

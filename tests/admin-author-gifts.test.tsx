@@ -624,8 +624,8 @@ describe("Author gifts", () => {
   });
 
   /* Plan 261011k, Greg 2026-10-11 (spya-cfbp0q). */
-  it("keeps just the address from a pasted `Name <address>`, and fills an empty name", async () => {
-    giftsAnswer = () => [gift({ email: null, recipientName: null })];
+  it("replaces the address from a pasted `Name <address>`, fills an empty name, and saves both diffs", async () => {
+    giftsAnswer = () => [gift({ email: "old@example.test", recipientName: null })];
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit")?.click());

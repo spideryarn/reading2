@@ -75,6 +75,17 @@ claimed voucher whose account had moved address) and F2 ("33 slots" overstated) 
 above; F3 added the mismatched-quote refusal and the edge tests; F4 corrected what the old tests
 already covered.
 
+GPT Sol, code stage ([prompt](261011k-vouchers-code-review-prompt.md),
+[answer](261011k-vouchers-code-review-sol.md)): *approve with changes*, fixed in place. The hint
+now speaks only from a settled, successful list (not while a refresh is in flight or after one
+failed); the docs say exactly which vouchers it counts; and tests cover Edit filling its own empty
+name, an author gift's replaced address sending both fields, and a claimant whose address could not
+be read.
+
+Browser check (Playwright on the box, a Sonnet subagent): the paste in the form and in Edit, and
+the hint appearing and going, all as above in Chrome, no console errors —
+[the paste](261011k-shot-1-paste.png), [the hint](261011k-shot-2-already.png).
+
 ## Not touched
 
 No schema change, no route change, no defence in security-map.md. The MCP tools are untouched.

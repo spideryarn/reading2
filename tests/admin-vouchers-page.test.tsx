@@ -671,7 +671,8 @@ describe("/admin/vouchers", () => {
       expect(emailBox().value).toBe("Half typed <ada@exa");
     });
 
-    it("does the same in a waiting voucher's editor", async () => {
+    it("fills the waiting voucher editor's own empty name and saves both changes", async () => {
+      listAnswer = [{ ...VOUCHERS[0], recipientName: null }];
       await mount();
       const waiting = rowFor("waiting@example.test");
       await act(async () => buttonIn(waiting, "Edit")?.click());
@@ -682,8 +683,13 @@ describe("/admin/vouchers", () => {
         email?.dispatchEvent(new Event("input", { bubbles: true }));
       });
       expect(email?.value).toBe("ada@example.com");
-      /* It already had a name, so the name is not replaced. */
-      expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]')?.value).toBe("Ada Lovelace");
+      expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]')?.value).toBe("Ada King");
+      await act(async () => buttonIn(waiting, "Save")?.click());
+      await settle();
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+        email: "ada@example.com",
+        recipientName: "Ada King",
+      });
     });
 
     /* Plan 261011k, Greg 2026-10-11 (spya-dkddku): several to one address add up. */
@@ -699,6 +705,12 @@ describe("/admin/vouchers", () => {
           articles: 7,
         },
         { ...VOUCHERS[2], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5", email: "waiting@example.test" },
+        {
+          ...VOUCHERS[1],
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6",
+          email: "claimant-unreadable@example.test",
+          claimantEmail: null,
+        },
       ];
       await mount();
       const line = () => host.querySelector("#voucher-new-already")?.textContent ?? null;
@@ -714,6 +726,35 @@ describe("/admin/vouchers", () => {
       expect(line()).toBeNull();
       await fill("claimed-now@example.test");
       expect(line()).toBe("This address already has a gift of 10 articles. This one adds to it.");
+      /* A claimed voucher belongs to an account; without its current address, the list cannot say a new gift adds to it. */
+      await fill("claimant-unreadable@example.test");
+      expect(line()).toBeNull();
+    });
+
+    it("does not assert from an old list while Refresh is pending or after it fails", async () => {
+      await mount();
+      await fill("waiting@example.test");
+      const line = () => host.querySelector("#voucher-new-already")?.textContent ?? null;
+      expect(line()).toContain("already has a gift");
+
+      const ordinaryFetch = globalThis.fetch;
+      let failRefresh: () => void = () => {};
+      globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+        if ((init?.method ?? "GET") === "GET" && url === "/api/admin/vouchers") {
+          return new Promise<Response>((_resolve, reject) => {
+            failRefresh = () => reject(new TypeError("Failed to fetch"));
+          });
+        }
+        return ordinaryFetch(input, init);
+      }) as typeof fetch;
+
+      const refresh = host.querySelector('button[aria-label="Refresh the vouchers"]') as HTMLButtonElement;
+      await act(async () => refresh.click());
+      expect(line()).toBeNull();
+      await act(async () => failRefresh());
+      await settle();
+      expect(line()).toBeNull();
     });
 
     /* Sol's F13 on 261007j: the inputs stay editable while a create is in

@@ -328,8 +328,9 @@ function StarterPicker({
  * voucher counts by its address, since the claim takes every one at it; a
  * claimed one only while its claimant's current address is this one, because
  * a claimed voucher belongs to an account, which may have moved address since
- * (Sol, plan review F1). From the list the page already holds, so a list still
- * loading says nothing rather than "none".
+ * (Sol, plan review F1). From the last successful, settled list: while a list
+ * is loading, or after a refresh failed and left the old list on screen, the
+ * form says nothing rather than making a stale claim.
  */
 export function giftsAlreadyAt(
   email: string,
@@ -1113,7 +1114,7 @@ export function AdminVouchersPage() {
           readerId={readerId}
           create={create}
           canReplay={canReplay}
-          vouchers={vouchers}
+          vouchers={loading || error !== null ? null : vouchers}
           onVoucherMade={reloadAfterEmail}
         />
       )}
