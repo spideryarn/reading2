@@ -394,18 +394,20 @@ a.fb-earlier-page:focus-visible {
    2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
    shortcut, as colour-scales.md asks of a red/green pair. The addendum box
    shares the send box and stays neutral; so does Bring back, which undoes a
-   deferral and should not look like one. Plan 261011h. Scoped by the thread's
-   wrapper so each rule outweighs `.fb-copy`, which comes later in this file.
+   deferral and should not look like one. Plan 261011h. The thread wrapper plus
+   the shared-shape class make each rule outweigh the later `.fb-copy` rest,
+   hover and `aria-disabled` rules; the last is not used here today, but must
+   not silently neutralise the colour if these controls adopt it.
    **No wash behind**: a tint of the same colour takes the light theme under
    the 4.5:1 the two tokens are measured at (GPT Sol, plan review 1). */
-.fb-reply-thread .fb-reply-send,
-.fb-reply-thread .fb-reply-send:hover,
-.fb-reply-thread .fb-defer,
-.fb-reply-thread .fb-defer:hover { border-color: currentColor; }
-.fb-reply-thread .fb-reply-send,
-.fb-reply-thread .fb-reply-send:hover { color: var(--positive); }
-.fb-reply-thread .fb-defer,
-.fb-reply-thread .fb-defer:hover { color: var(--danger); }
+.fb-reply-thread .fb-copy.fb-reply-send,
+.fb-reply-thread .fb-copy.fb-reply-send:hover,
+.fb-reply-thread .fb-copy.fb-defer,
+.fb-reply-thread .fb-copy.fb-defer:hover { border-color: currentColor; }
+.fb-reply-thread .fb-copy.fb-reply-send,
+.fb-reply-thread .fb-copy.fb-reply-send:hover { color: var(--positive); }
+.fb-reply-thread .fb-copy.fb-defer,
+.fb-reply-thread .fb-copy.fb-defer:hover { color: var(--danger); }
 /* **As tall as its words, never a scroller of its own** (useFitTextarea.ts):
    the panel is the one scroller, which is what lets iOS keep the caret in
    view with the keyboard up (spya-za2tse). */

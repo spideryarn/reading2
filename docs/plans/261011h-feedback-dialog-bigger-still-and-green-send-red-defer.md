@@ -67,6 +67,17 @@ Prior work: [261008i](261008i-needs-a-decision-becomes-threads-you-can-reply-to-
   `var(--positive)` and `var(--danger)`, and that the 1280px steps exist with the widths above.
 - Browser: a Sonnet subagent at 1440×1000 and 1100×800 and 390×740, light and dark, screenshots.
 
+## Browser evidence
+
+A Sonnet subagent, Playwright on the box against this worktree's dev server, local admin, after the
+wash was dropped. `.fb-panel` measured, the same in both themes: **1440×1000 → 896×896** (56rem
+wide, 56rem tall); **1100×800 → 736×704** (46rem, the 44rem floor); **390×740 → 367×666** (the
+window's width, 90% of its height). Computed: Send reply `oklch(0.5 0.13 148)` light /
+`oklch(0.78 0.15 148)` dark, Defer for now `oklch(0.52 0.2 27.325)` / `oklch(0.7 0.2 27.325)`,
+text and border alike, unchanged on hover, background transparent; an empty box's Send at 0.45
+opacity. Bring back was not seen in a browser (no deferred thread locally); the dialog test holds
+it. [light](261011h-shot-thread-light-1440.png) · [dark](261011h-shot-thread-dark-1440.png).
+
 ## What the plan review changed
 
 GPT Sol, read-only, APPROVE WITH CHANGES
@@ -75,6 +86,16 @@ GPT Sol, read-only, APPROVE WITH CHANGES
 words, since it took Light's contrast under 4.5:1; (2) hover selectors that outweigh
 `.fb-copy:hover` for colour *and* border, tested; (3) `--positive` added to `/design`'s swatches;
 (4) the `--div-rg-*` rationale corrected — it does have light values.
+
+## What the code review changed
+
+GPT Sol, workspace-write, APPROVE WITH CHANGES (fixed)
+([prompt](261011h-feedback-dialog-code-review-prompt.md),
+[answer](261011h-feedback-dialog-code-review-sol.md)). Two lows, both fixed by it and read here:
+the selectors now carry `.fb-copy` too, so they outweigh the later `[aria-disabled]:hover` rule
+rather than tie it; and the stylesheet test reads the whole reader cascade, refuses a rule hidden
+in an at-rule, checks specificity, and pins every paint rule that names these buttons. That last
+list is deliberately exact: a later restyle of `.fb-copy` has to update it, which is the point.
 
 ## Not done
 
