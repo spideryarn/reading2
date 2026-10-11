@@ -4,8 +4,8 @@ Up: [security-map.md](security-map.md)
 
 **`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
 and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
-with the Feedback button, in their own words. The others are `/admin/vouchers` (below) and
-`/admin/costs`, which has a doc of its own —
+with the Feedback button, in their own words. The others are `/admin/vouchers` and
+`/admin/articles` (below), and `/admin/costs`, which has a doc of its own —
 [admin-costs.md](admin-costs.md).
 
 Greg, 2026-08-27:
@@ -32,6 +32,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
 - [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
 - [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
+- [§ `/admin/articles`](#adminarticles-moving-an-article-to-another-account) — moving an article to another account
 - [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
 - [§ See also](#see-also) — neighbouring docs
 
@@ -904,11 +905,59 @@ stranger's article; that residual risk is accepted and written up in the plan's 
 
 The add page's half is [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 
+## `/admin/articles` — moving an article to another account
+
+> And more generally, we want a /admin/articles page, which includes a way for me to transfer
+> ownership of an article from one user to another. I realise there are a bunch of potential
+> complexities here. Like, what happens if I'd filled out though why you're reading this for the
+> article? Use your judgement and just pick whatever is going to be good for the user but avoids too
+> much complexity.
+>
+> — Greg, 2026-10-11 (`spya-wqvxjv`)
+
+**The second page here that writes across owners**, after the voucher claim's account binding: it
+changes whose an article is. Every article, newest first, with its owner's address, the short id
+(the article id for one made before short ids), the date, visibility and processing — and **a title
+only for the administrator's own articles and public ones**, never another reader's slug, which
+carries the title's words. A row per article does show how many each reader has and when, which
+`/admin/users` already shows as counts; *which* articles stays in their session. Showing every
+title would be a decision about [§ What it deliberately does not show](#what-it-deliberately-does-not-show),
+and a one-line change in `listArticlesAcrossOwners`.
+
+| Route | Does |
+|---|---|
+| `GET /api/admin/articles` | the list — `private, no-store`; addresses only if the Auth service answered |
+| `GET /api/admin/articles/:id/transfer` | the preview: what a transfer would delete, by kind, or why it would be refused |
+| `POST /api/admin/articles/:id/transfer` | `{ to, expectedFrom }` → the move; 409 when the owner is no longer `expectedFrom`, 400 for an id that is not a UUID or a target that is not a live, confirmed account |
+
+**What a transfer does** (`transferArticle`, [`pg-article-transfer.ts`](../../src/store/pg-article-transfer.ts),
+under the article's row lock): what the article *is* moves — revisions, blocks, structure, every
+mode's model-made artefacts. It is **made private and its link's key dropped**, because a shared view
+carries the owner's notes and a key the old owner handed out must not open the new owner's. The old
+reader's state on the row is reset — *why you're reading this*, their rename, the archive, opens,
+the pasted address, High-powered AI — and **their own words and activity on it are deleted**
+(comments, chats, quiz answers, Referee criteria, searches, tags, glossary terms, reading time …),
+so the new owner never reads the old one's notes. Their ingest rows are frozen at the price they
+paid and unlinked, so their bill does not move with the new owner's choices. It is refused while a
+job or an unsettled slot is live on it, and for an article with only its abstract read. The page's
+confirmation shows the preview, re-read just before the press.
+
+**Every table that touches an article is classed** — moves, reader state, history — in one map in
+that file, and `tests/article-transfer.test.ts` reads `information_schema` and fails on a table in
+none, so a new table cannot ride along to the new owner unnoticed. **Known residual**: a write of
+the old owner's already in flight as the transfer commits lands on the new owner's article; it is
+recorded in the plan with its fix
+([261011n](../plans/261011n-author-gift-link-and-article-ownership-transfer.md)).
+
+The voucher claim moves a gift's starter article the same way, when it safely can
+([billing.md § Gift vouchers](billing.md#gift-vouchers-extra-free-articles-given-by-email)).
+
 ## What it cannot do, and what is not built
 
 - **Nothing on `/admin/users` writes, and `/admin/feedback` writes one timestamp.** No delete, no
   ban, no spend. An admin page that can only look is a much smaller thing to get wrong.
-  `/admin/vouchers`, above, is one exception, and the only thing it can change is a voucher. The
+  `/admin/vouchers`, above, is one exception, and the only thing it can change is a voucher;
+  `/admin/articles` is another, and the only thing it changes is whose an article is. The
   other, since 2026-10-03, is the **Ignore** button on a feedback card: it sets or clears
   `feedback.ignored_at` and changes nothing the reader sent
   ([feedback.md § Ignoring a report](feedback.md#ignoring-a-report-since-2026-10-03)).

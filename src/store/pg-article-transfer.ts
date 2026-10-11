@@ -5,9 +5,9 @@
  *
  * Nothing else in `src/` changes an article's owner. Two callers: the
  * administrator's *Transfer* (`POST /api/admin/articles/:id/transfer`, through
- * `pgArticleTransferStore` below) and, from stage 3, a voucher's claim moving
- * its private starter article to the recipient (D3), which calls
- * `transferArticle` inside its own transaction.
+ * `pgArticleTransferStore` below) and a voucher's claim moving its private
+ * starter article to the recipient (D3), which calls `transferStarterOnClaim`
+ * — the same transfer with three more refusals — inside its own transaction.
  *
  * ## Why `UPDATE articles SET owner_id` is not the whole of it
  *
@@ -58,7 +58,7 @@
  * theirs gets a 404. Fencing every owner-scoped write is queued, not built.
  */
 
-import { and, desc, eq, getTableName, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, getTableName, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -69,6 +69,7 @@ import {
   type TransferCounts,
   type TransferPreview,
   type TransferRequest,
+  ownWordsIn,
 } from "../admin-articles.js";
 import { getDb } from "../db/client.js";
 import {
@@ -77,6 +78,7 @@ import {
   articleTags,
   articleVisibilityChanges,
   articles,
+  billingVouchers,
   chatMessages,
   chatThreads,
   citationFinds,
@@ -349,6 +351,78 @@ export type TransferAnswer =
  * commit its own work (the claim does: the voucher is claimed either way).
  */
 export async function transferArticle(tx: TransferTx, input: TransferInput): Promise<TransferAnswer> {
+  return await transferLocked<never>(tx, input, null);
+}
+
+/** The article row as the transfer locked it: what a gate may decide on. */
+interface LockedArticle {
+  readonly id: string;
+  readonly slug: string;
+  readonly visibility: string;
+}
+
+/**
+ * **Why a voucher's claim leaves its starter where it is** (D3) — on top of
+ * the administrator's refusals, each decided under the same lock and before the
+ * first write:
+ *
+ * - `public`: it is on the public shelf; moving it would pull it off (Opus).
+ *   Only a private article — the one Greg's words name — moves on its own.
+ * - `shared`: another voucher that is not revoked names it too, so it is not
+ *   this recipient's alone to take.
+ * - `own-words`: the creator has words of their own on it (`ownWords` in
+ *   src/admin-articles.ts § READER_STATE). Nothing Greg wrote is deleted
+ *   unattended (Sol F3); the administrator can still move it on
+ *   /admin/articles, seeing what goes.
+ */
+export type ClaimTransferRefusal = "public" | "shared" | "own-words";
+
+export type ClaimTransferAnswer = TransferAnswer | { readonly kind: "refused"; readonly reason: ClaimTransferRefusal };
+
+/**
+ * **A claimed voucher's starter article, moved to its claimant only if D3's
+ * rules all hold** — `transferArticle` with three more refusals, asked under
+ * the article lock and before anything is written, so a refusal leaves the
+ * claim's transaction as it found it. `from` is the voucher's creator: an
+ * article they no longer own is `stale`. The caller runs this in a savepoint
+ * (src/store/pg-vouchers.ts § `claimVouchersFor`), so an error rolls back the
+ * move and not the claim.
+ */
+export async function transferStarterOnClaim(
+  tx: TransferTx,
+  input: TransferInput & { readonly voucherId: string },
+): Promise<ClaimTransferAnswer> {
+  return await transferLocked<ClaimTransferRefusal>(tx, input, async (row) => {
+    if (row.visibility !== "private") return "public";
+    const [other] = await tx
+      .select({ id: billingVouchers.id })
+      .from(billingVouchers)
+      .where(
+        and(
+          eq(billingVouchers.starterArticleId, row.id),
+          ne(billingVouchers.id, input.voucherId),
+          isNull(billingVouchers.revokedAt),
+        ),
+      )
+      .limit(1);
+    if (other) return "shared";
+    /* Counted under the lock: a comment of theirs cannot land between this
+       count and the delete without the article's row, which they cannot
+       resolve once the move commits (the D2 residual aside). */
+    if (ownWordsIn(await countsOn(tx, row.id)) > 0) return "own-words";
+    return null;
+  });
+}
+
+/**
+ * The transfer, with `gate` asked after the shared refusals and before the
+ * first write. Null for the administrator's, who has seen what goes.
+ */
+async function transferLocked<R extends string>(
+  tx: TransferTx,
+  input: TransferInput,
+  gate: ((row: LockedArticle) => Promise<R | null>) | null,
+): Promise<TransferAnswer | { readonly kind: "refused"; readonly reason: R }> {
   const { articleId, from, to, actor } = input;
 
   /* Step 1, under the lock. */
@@ -370,6 +444,8 @@ export async function transferArticle(tx: TransferTx, input: TransferInput): Pro
   if (from === to) return { kind: "refused", reason: "same-owner" };
   const blocked = await blockedBy(tx, row);
   if (blocked) return { kind: "refused", reason: blocked };
+  const gated = gate === null ? null : await gate(row);
+  if (gated !== null) return { kind: "refused", reason: gated };
 
   /* Step 5: the old owner's words and activity, in READER_STATE's order. */
   const deleted = zeroCounts();

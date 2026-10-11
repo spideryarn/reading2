@@ -64,7 +64,7 @@ function gift(over: Partial<AdminAuthorGift> = {}): AdminAuthorGift {
   return {
     id: DRAFT,
     status: "draft",
-    starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson", linkable: true },
+    starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson", linkable: true, owner: null },
     email: null,
     recipientName: null,
     recipientNote: null,
@@ -238,6 +238,34 @@ describe("Author gifts", () => {
     expect(button(card("a4"), "Send")).toBeUndefined();
   });
 
+  /* Plan 261011n § D3: whose the starter is once the gift's voucher is claimed. */
+  it("says Now theirs, unlinked, once the claim moved it, and links /admin/articles when it stayed", async () => {
+    const sent = { status: "sent" as const, email: "x@example.test", voucherId: "v1" };
+    giftsAnswer = () => [
+      gift({ id: "m1", ...sent, starter: { slug: "moved", title: "Moved", linkable: false, owner: "claimant" } }),
+      gift({ id: "s1", ...sent, starter: { slug: "stayed", title: "Stayed", linkable: true, owner: "creator" } }),
+      gift({ id: "w1", ...sent, starter: { slug: "waiting", title: "Waiting", linkable: true, owner: null } }),
+    ];
+    await mount();
+    /* Theirs now: the title stays, but its address would be a 404 for the administrator. */
+    expect(card("m1")?.textContent).toContain("Moved · Now theirs");
+    expect(card("m1")?.querySelector('a[href="/read/moved"]')).toBeNull();
+    expect(card("s1")?.textContent).toContain("Claimed; the article is still yours — transfer it on /admin/articles");
+    expect(card("s1")?.querySelector('a[href="/admin/articles"]')).not.toBeNull();
+    expect(card("s1")?.querySelector('a[href="/read/stayed"]')).not.toBeNull();
+    expect(card("w1")?.textContent).not.toContain("Now theirs");
+    expect(card("w1")?.textContent).not.toContain("still yours");
+  });
+
+  it("says in the Send confirmation that a private article becomes theirs when they sign in", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    expect(card(DRAFT)?.textContent).toContain(
+      "When they sign in, a private article with none of your notes on it becomes theirs.",
+    );
+  });
+
   it("holds Send back without an address, and says why", async () => {
     giftsAnswer = () => [gift()];
     await mount();
@@ -332,7 +360,7 @@ describe("Author gifts", () => {
      Send makes the link, and only after Greg ticks the rights box himself. */
   it("asks for the rights tick before a Send that makes the private link, and sends the tick", async () => {
     giftsAnswer = () => [
-      gift({ email: "ann@example.test", recipientName: "Ann", starter: { slug: "s", title: "T", linkable: false } }),
+      gift({ email: "ann@example.test", recipientName: "Ann", starter: { slug: "s", title: "T", linkable: false, owner: null } }),
     ];
     await mount();
     await act(async () => button(card(DRAFT), "Send")?.click());
@@ -369,7 +397,7 @@ describe("Author gifts", () => {
 
   it("keeps the confirmation's rights tick across a refresh instead of replacing the review", async () => {
     giftsAnswer = () => [
-      gift({ email: "ann@example.test", starter: { slug: "s", title: "T", linkable: false } }),
+      gift({ email: "ann@example.test", starter: { slug: "s", title: "T", linkable: false, owner: null } }),
     ];
     await mount();
     await act(async () => button(card(DRAFT), "Send")?.click());
@@ -388,7 +416,7 @@ describe("Author gifts", () => {
   it("requires a fresh rights tick when a refused Send opens a second confirmation", async () => {
     sendAnswer = { status: 409, body: { error: "The starter moved." } };
     giftsAnswer = () => [
-      gift({ email: "ann@example.test", starter: { slug: "s", title: "T", linkable: false } }),
+      gift({ email: "ann@example.test", starter: { slug: "s", title: "T", linkable: false, owner: null } }),
     ];
     await mount();
     await act(async () => button(card(DRAFT), "Send")?.click());

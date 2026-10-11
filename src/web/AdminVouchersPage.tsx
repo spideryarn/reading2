@@ -41,6 +41,7 @@ import {
   BUTTON,
   INPUT,
   Refusal,
+  StarterOwnerLine,
   StarterSelect,
   type StarterShelf,
   TEXTAREA,
@@ -765,6 +766,12 @@ function StarterLine({ starter }: { starter: AdminVoucherRow["starter"] }) {
         `${starter.slug} (deleted)`
       ) : (
         <span className={voiceClass("author")}>{starter.title}</span>
+      )}
+      {starter.owner != null && (
+        <>
+          {" · "}
+          <StarterOwnerLine owner={starter.owner} />
+        </>
       )}
     </div>
   );

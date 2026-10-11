@@ -38,7 +38,7 @@
  * would admit — the cheap direction.
  */
 
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { type Articles, type Points, articles as articlesOf, budgetFor, ingestHeadroom } from "../billing/points.js";
 import type { Gift } from "../billing-plan.js";
@@ -60,6 +60,7 @@ import {
   wallUsed,
 } from "./pg-billing.js";
 import { guardDbStore } from "./db-errors.js";
+import { type TransferTx, transferStarterOnClaim } from "./pg-article-transfer.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
 import {
@@ -75,6 +76,7 @@ import {
   type AdminVoucher,
   type ClaimantUsage,
   cleanRecipientName,
+  starterOwnerOf,
 } from "../admin-vouchers.js";
 import { isUuid } from "../ids.js";
 import { type Starter, type StarterResolution, resolveStarter } from "./voucher-starter.js";
@@ -108,9 +110,16 @@ export interface ClaimDeps {
 export interface ClaimResult {
   readonly claimed: number;
   readonly deliveries: readonly string[];
+  /**
+   * The slugs of the starter articles this call moved to the claimant (step
+   * 5) — what `GET /api/billing/usage` answers as `claimedArticles`, so the
+   * reading view on one of them can re-read it as its owner. Empty for almost
+   * every call.
+   */
+  readonly articles: readonly string[];
 }
 
-const NOTHING_CLAIMED: ClaimResult = { claimed: 0, deliveries: [] };
+const NOTHING_CLAIMED: ClaimResult = { claimed: 0, deliveries: [], articles: [] };
 
 /**
  * **Bind every waiting voucher addressed to this reader to this reader.**
@@ -140,6 +149,31 @@ const NOTHING_CLAIMED: ClaimResult = { claimed: 0, deliveries: [] };
  *    neither the claim nor any notice commits, the route still serves the plan,
  *    and the next visit claims again. The lock order is the voucher (the
  *    `UPDATE`) and then its delivery (the insert).
+ * 5. **And, still in that transaction, each claimed voucher's starter article
+ *    may become the claimant's** (plan 261011n § D3) — in a savepoint, all or
+ *    nothing, through `transferStarterOnClaim` (src/store/pg-article-transfer.ts),
+ *    which moves it only while it is still the voucher creator's, private, named
+ *    by no other unrevoked voucher, and carries none of the creator's own words.
+ *    Anything else — a refusal, or an error, which rolls back to the savepoint —
+ *    leaves the article where it is and **the voucher claimed regardless**: the
+ *    recipient reads through the link, and the administrator sees *transfer it
+ *    on /admin/articles*. Logged by outcome only, never the slug or title.
+ *
+ * **The lock order with a starter: the articles first, then the vouchers.**
+ * Deleting an article locks its row and then, through
+ * `billing_vouchers.starter_article_id … on delete set null`, every voucher
+ * naming it. A claim that took the vouchers (its `UPDATE`) and then waited on
+ * the article would be that order backwards, and a delete at the same instant
+ * would deadlock with it. So the waiting vouchers' starters are locked before
+ * the `UPDATE`, in id order, and a starter that was not among them — a voucher
+ * readdressed to this reader between the two statements — is left where it is
+ * rather than locked late. Nothing else holds a voucher's row and then asks for
+ * its article: a new voucher's insert (`createVoucher`, an author gift's
+ * *Send*) takes the article's key-share lock for its foreign key holding only
+ * its own new row and its gift, which the claim never touches; the share-link
+ * and visibility switches lock the article and then the gift or nothing the
+ * claim holds; a voucher's edit (`updateOnce`) resolves its starter before its
+ * transaction and locks no article inside it.
  *
  * **Throws only on a database error**; the route catches that and serves the
  * plan anyway, because a failed claim is retried on the next visit.
@@ -178,6 +212,33 @@ export async function claimVouchersFor(
       await tx.insert(billingAccounts).values({ ownerId: user.id }).onConflictDoNothing({
         target: billingAccounts.ownerId,
       });
+      /* Step 5's articles, before the vouchers: see "The lock order with a
+         starter" above. Read committed, so the `UPDATE` below may still claim
+         a voucher this read did not see; its starter is then not moved. */
+      const waitingStarters = await tx
+        .selectDistinct({ id: billingVouchers.starterArticleId })
+        .from(billingVouchers)
+        .where(
+          and(
+            isNull(billingVouchers.claimedBy),
+            isNull(billingVouchers.revokedAt),
+            eq(billingVouchers.email, email),
+            isNotNull(billingVouchers.starterArticleId),
+          ),
+        );
+      const starterIds = waitingStarters.flatMap((r) => (r.id === null ? [] : [r.id]));
+      const lockedStarters = new Set(
+        starterIds.length === 0
+          ? []
+          : (
+              await tx
+                .select({ id: articles.id })
+                .from(articles)
+                .where(inArray(articles.id, starterIds))
+                .orderBy(asc(articles.id))
+                .for("update")
+            ).map((r) => r.id),
+      );
       const claimed = await tx
         .update(billingVouchers)
         .set({ claimedBy: user.id, claimedAt: sql`now()`, updatedAt: sql`now()` })
@@ -194,6 +255,8 @@ export async function claimVouchersFor(
           articles: billingVouchers.articles,
           createdAt: billingVouchers.createdAt,
           claimedAt: billingVouchers.claimedAt,
+          createdBy: billingVouchers.createdBy,
+          starterArticleId: billingVouchers.starterArticleId,
         });
       const deliveries: string[] = [];
       for (const voucher of claimed) {
@@ -207,7 +270,19 @@ export async function claimVouchersFor(
         });
         if (delivery) deliveries.push(delivery);
       }
-      return { claimed: claimed.length, deliveries };
+      const moved: string[] = [];
+      for (const voucher of claimed) {
+        if (voucher.starterArticleId === null) continue;
+        const slug = await claimStarter(tx, {
+          ownerId: user.id,
+          voucherId: voucher.id,
+          articleId: voucher.starterArticleId,
+          createdBy: voucher.createdBy,
+          locked: lockedStarters.has(voucher.starterArticleId),
+        });
+        if (slug !== null) moved.push(slug);
+      }
+      return { claimed: claimed.length, deliveries, articles: moved };
     },
     /* Pinned, for the reason `reserveIngest` gives: `on conflict do nothing` is
        only an escape from a concurrent writer at read committed. */
@@ -217,6 +292,62 @@ export async function claimVouchersFor(
     logger.info({ ownerId: user.id, vouchers: answer.claimed }, "gift vouchers claimed");
   }
   return answer;
+}
+
+/**
+ * **Step 5 for one voucher**: its starter moved to the claimant in a savepoint,
+ * or left where it is. Answers the slug when it moved, and null otherwise —
+ * never throws, because nothing about the article may cost the reader the
+ * claim. `locked`: the claim took the article's lock before the vouchers', and
+ * nothing is moved whose lock would have to be taken late.
+ */
+async function claimStarter(
+  tx: TransferTx,
+  v: {
+    readonly ownerId: string;
+    readonly voucherId: string;
+    readonly articleId: string;
+    readonly createdBy: string;
+    readonly locked: boolean;
+  },
+): Promise<string | null> {
+  /* The outcome and opaque ids only: never the slug, the title or an address. */
+  const stays = (outcome: string) =>
+    logger.info(
+      { ownerId: v.ownerId, voucherId: v.voucherId, outcome },
+      "a claimed gift's starter article stays with its creator",
+    );
+  if (!v.locked) {
+    stays("not-locked");
+    return null;
+  }
+  try {
+    const answer = await tx.transaction((sp) =>
+      transferStarterOnClaim(sp, {
+        articleId: v.articleId,
+        from: v.createdBy,
+        to: v.ownerId,
+        actor: v.ownerId,
+        voucherId: v.voucherId,
+      }),
+    );
+    if (answer.kind === "transferred") {
+      logger.info(
+        { ownerId: v.ownerId, voucherId: v.voucherId, articleId: v.articleId, deleted: answer.deleted },
+        "a claimed gift's starter article moved to its claimant",
+      );
+      return answer.slug;
+    }
+    stays(answer.kind === "refused" ? answer.reason : answer.kind);
+    return null;
+  } catch (err) {
+    /* Rolled back to the savepoint by the nested transaction; the claim goes on. */
+    logger.warn(
+      { ownerId: v.ownerId, voucherId: v.voucherId, err: err instanceof Error ? err.name : "unknown" },
+      "moving a claimed gift's starter article failed — the voucher is claimed, the article stays",
+    );
+    return null;
+  }
 }
 
 /* ------------------------------------------------- what the reader sees -- */
@@ -260,13 +391,15 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
      column: the voucher keeps which article, and the article row is never
      read whole here, because the key is on it. */
   const joined = await getDb()
-    .select({ voucher: billingVouchers, starterTitle: articleRevisions.title })
+    .select({ voucher: billingVouchers, starterTitle: articleRevisions.title, starterOwner: articles.ownerId })
     .from(billingVouchers)
     .leftJoin(articles, eq(articles.id, billingVouchers.starterArticleId))
     .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
     .orderBy(desc(billingVouchers.createdAt));
   const rows = joined.map((j) => j.voucher);
   const titles = new Map(joined.map((j) => [j.voucher.id, j.starterTitle] as const));
+  /* Whose the starter is now, for *Now theirs* (plan 261011n § D3). */
+  const starterOwners = new Map(joined.map((j) => [j.voucher.id, j.starterOwner] as const));
   const emails = await latestVoucherEmails(rows.map((r) => r.id));
   const claimants = [...new Set(rows.flatMap((r) => (r.claimedBy ? [r.claimedBy] : [])))];
   const tiers = claimants.length > 0 ? await allTiers() : [];
@@ -288,7 +421,7 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
       note: row.note,
       recipientNote: row.recipientNote,
       recipientName: row.recipientName,
-      starter: starterOf(row, titles.get(row.id) ?? null),
+      starter: starterOf(row, titles.get(row.id) ?? null, starterOwners.get(row.id) ?? null),
       createdAt: row.createdAt.toISOString(),
       createdBy: row.createdBy,
       updatedAt: row.updatedAt.toISOString(),
@@ -305,14 +438,26 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
 /**
  * The list's starter: the slug the create named, and the title while the
  * article is there. A deleted article leaves the slug and a null title; one
- * with no stored title shows its slug.
+ * with no stored title shows its slug. `owner`: whose it is now, once the
+ * voucher is claimed (`starterOwnerOf`, src/admin-vouchers.ts).
  */
 function starterOf(
-  row: { readonly starterSlug: string | null; readonly starterArticleId: string | null },
+  row: {
+    readonly starterSlug: string | null;
+    readonly starterArticleId: string | null;
+    readonly createdBy: string;
+    readonly claimedBy: string | null;
+  },
   title: string | null,
+  articleOwner: string | null,
 ): AdminVoucher["starter"] {
   if (row.starterSlug === null) return null;
-  return { slug: row.starterSlug, title: row.starterArticleId === null ? null : (title ?? row.starterSlug) };
+  const there = row.starterArticleId !== null;
+  return {
+    slug: row.starterSlug,
+    title: there ? (title ?? row.starterSlug) : null,
+    owner: starterOwnerOf(there ? articleOwner : null, row),
+  };
 }
 
 /** One account's standing, decided by `entitlementFromRow` like every other surface. */

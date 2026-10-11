@@ -356,6 +356,7 @@ import {
   startCheckout,
 } from "./billing/checkout.js";
 import { readBillingSummary } from "./billing/summary.js";
+import type { BillingUsage } from "./billing-plan.js";
 import {
   claimVouchersFor,
   parseNewVoucher,
@@ -13651,6 +13652,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    * a second call finds nothing waiting — and a failure is logged and the plan
    * served anyway, because the next visit tries again. Hence `no-store`.
    * docs/plans/261001m-gift-vouchers-for-free-articles.md (F5).
+   *
+   * **The claim may also move a gift's starter article to the reader**
+   * (261011n § D3), and `claimedArticles` names the slugs it moved, so the
+   * reading view on a private link can re-read the article as its owner.
    */
   {
     kind: "exact",
@@ -13662,8 +13667,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          (`claimVouchersFor`, step 4); the notices go after the response, one
          task each, so one that fails does not stop the next (Sol F8). */
       let deliveries: readonly string[] = [];
+      /* The gift starters this claim made the reader's (261011n § D3): the
+         reading view on one re-reads it as its owner. Empty when it failed. */
+      let claimedArticles: readonly string[] = [];
       try {
-        deliveries = (await claimVouchersFor(user)).deliveries;
+        ({ deliveries, articles: claimedArticles } = await claimVouchersFor(user));
       } catch (err) {
         log("store").warn(
           { err: err instanceof Error ? err.name : "unknown" },
@@ -13674,7 +13682,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         await afterResponse("voucher email: claimed", () => sendQueuedVoucherEmail(delivery));
       }
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, await readBillingSummary(currentOwnerId()));
+      const body: BillingUsage = { ...(await readBillingSummary(currentOwnerId())), claimedArticles };
+      send(res, 200, body);
     },
   },
 ];

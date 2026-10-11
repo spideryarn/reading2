@@ -196,5 +196,5 @@ GPT Sol on the code before pushing (write-capable).
 
 ## Deferred, each to get a queue entry
 
-1. Fence owner-scoped writes against a concurrent transfer (Sol F1/F7; D2 residual).
+1. Fence owner-scoped writes against a concurrent transfer (Sol F1/F7; D2 residual): `qi-3recafqm`.
 2. Showing every reader's titles on `/admin/articles`: only if Greg says so (no entry).

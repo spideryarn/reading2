@@ -2883,6 +2883,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      own stem, owners and articles minted per run, the Auth lookup and listing
      replaced — plus the `information_schema` scan, which reads only the schema. */
   "tests/article-transfer.test.ts": "private-postgres",
+  /* 261011n § D3: a voucher's claim moving its starter. The same shape — its
+     own stem, owners, articles and vouchers minted per run, the Auth lookup
+     replaced, the creator's notice not queued. */
+  "tests/claim-starter-article.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",

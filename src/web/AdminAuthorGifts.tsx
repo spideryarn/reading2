@@ -38,6 +38,7 @@ import {
   BUTTON,
   INPUT,
   Refusal,
+  StarterOwnerLine,
   StarterSelect,
   type StarterShelf,
   TEXTAREA,
@@ -553,10 +554,20 @@ function GiftFields({ gift }: { gift: AdminAuthorGift }) {
         <span className="tw:text-sm tw:text-foreground">
           {title === null ? (
             `${gift.starter.slug} (deleted)`
+          ) : gift.starter.owner === "claimant" || gift.starter.owner === "other" ? (
+            /* Somebody else's now: its address would be a 404 for the
+               administrator, so the title stands without a link (261011n § D3). */
+            <span className={voiceClass("author")}>{title}</span>
           ) : (
             <a href={readHref(gift.starter.slug)} className={`${voiceClass("author")} tw:underline`}>
               {title}
             </a>
+          )}
+          {gift.starter.owner != null && (
+            <>
+              {" · "}
+              <StarterOwnerLine owner={gift.starter.owner} />
+            </>
           )}
         </span>
         <span data-gift-status={gift.status} className="tw:font-medium tw:text-foreground">
@@ -771,6 +782,12 @@ function GiftCard({
             {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
             real email and cannot be taken back.
           </p>
+          {confirming.starter.title !== null && (
+            /* What the claim does when they sign in (plan 261011n § D3). */
+            <p className="tw:m-0 tw:mb-2 tw:text-foreground">
+              When they sign in, a private article with none of your notes on it becomes theirs.
+            </p>
+          )}
           {needsRights && (
             <>
               <p className="tw:m-0 tw:mb-2 tw:text-foreground">

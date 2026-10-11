@@ -94,6 +94,34 @@ export interface VoucherUpdated {
 export interface AdminVoucherStarter {
   readonly slug: string;
   readonly title: string | null;
+  /** Whose it is now, once the voucher is claimed: `StarterOwner`. */
+  readonly owner: StarterOwner | null;
+}
+
+/**
+ * **Whose a claimed voucher's starter article is now** (plan 261011n § D3) —
+ * derived from the article's owner on each list, never stored. A claim moves a
+ * private starter to its claimant when nothing of the creator's is on it;
+ * otherwise it stays, and the administrator may move it on /admin/articles.
+ *
+ * - `claimant`: it moved — *Now theirs*.
+ * - `creator`: claimed, and still the creator's — *transfer it on /admin/articles*.
+ * - `other`: somebody else's (transferred elsewhere by hand). No line.
+ *
+ * Null on the wire when there is nothing to say: no starter, the article gone,
+ * or the voucher not claimed.
+ */
+export type StarterOwner = "claimant" | "creator" | "other";
+
+/** `StarterOwner` from the three ids; null when unclaimed or there is no article. */
+export function starterOwnerOf(
+  articleOwner: string | null,
+  voucher: { readonly createdBy: string; readonly claimedBy: string | null },
+): StarterOwner | null {
+  if (articleOwner === null || voucher.claimedBy === null) return null;
+  if (articleOwner === voucher.claimedBy) return "claimant";
+  if (articleOwner === voucher.createdBy) return "creator";
+  return "other";
 }
 
 /** One voucher as `/admin/vouchers` draws it. Admin-only: it carries the note. */

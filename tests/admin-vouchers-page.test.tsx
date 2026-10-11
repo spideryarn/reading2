@@ -1183,8 +1183,8 @@ describe("/admin/vouchers", () => {
     const STARTED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
     const GONE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
     const withStarters = () => [
-      { ...VOUCHERS[0], id: STARTED, email: "started@example.test", starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson" } },
-      { ...VOUCHERS[0], id: GONE, email: "gone@example.test", recipientName: null, starter: { slug: "old-essay", title: null } },
+      { ...VOUCHERS[0], id: STARTED, email: "started@example.test", starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson", owner: null } },
+      { ...VOUCHERS[0], id: GONE, email: "gone@example.test", recipientName: null, starter: { slug: "old-essay", title: null, owner: null } },
       { ...VOUCHERS[1], starter: null },
     ];
 
@@ -1199,6 +1199,26 @@ describe("/admin/vouchers", () => {
       ]);
       expect(rowFor("gone@example.test")?.querySelector("td")?.textContent).toContain("Starter: old-essay (deleted)");
       expect(rowFor("claimed@example.test")?.querySelector("td")?.textContent).toBe("claimed@example.test");
+    });
+
+    /* Plan 261011n § D3: whose the starter is once the voucher is claimed. */
+    it("says Now theirs when the claim moved it, and links /admin/articles when it stayed", async () => {
+      listAnswer = [
+        { ...VOUCHERS[0], id: STARTED, email: "moved@example.test", starter: { slug: "a", title: "Moved", owner: "claimant" } },
+        { ...VOUCHERS[0], id: GONE, email: "stayed@example.test", starter: { slug: "b", title: "Stayed", owner: "creator" } },
+        { ...VOUCHERS[1], starter: { slug: "c", title: "Waiting", owner: null } },
+      ];
+      await mount();
+      const moved = rowFor("moved@example.test")?.querySelector("td");
+      expect(moved?.textContent).toContain("Starter: Moved · Now theirs");
+      expect(moved?.querySelector("a")).toBeNull();
+      const stayed = rowFor("stayed@example.test")?.querySelector("td");
+      expect(stayed?.textContent).toContain("Claimed; the article is still yours — transfer it on /admin/articles");
+      expect(stayed?.querySelector("a")?.getAttribute("href")).toBe("/admin/articles");
+      const waiting = rowFor("claimed@example.test")?.querySelector("td")?.textContent ?? "";
+      expect(waiting).toContain("Starter: Waiting");
+      expect(waiting).not.toContain("Now theirs");
+      expect(waiting).not.toContain("still yours");
     });
 
     async function readdress(answer: unknown) {
