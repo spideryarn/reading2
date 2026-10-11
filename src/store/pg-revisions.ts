@@ -1186,6 +1186,22 @@ export const STEP_RUN_CARRIED_COLUMNS = [
   "started_at", "finished_at",
 ] as const;
 
+/**
+ * **An article's first draft, copied from nothing: three columns, by name.**
+ *
+ * Not `tx.insert(articleRevisions).values({…})`, because drizzle's insert lists
+ * every column `schema.ts` declares and writes `default` into the rest. A
+ * column that is declared and then dropped by a migration, as an expand and
+ * contract rename does, would make every new article fail in the minutes the
+ * code deployed before that migration is still serving
+ * (docs/plans/261011ae-sources-rename-contract.md). Every other write to this
+ * table already names only what it sets.
+ */
+export function firstDraftInsert(revisionId: string, articleId: string): SQL {
+  return sql`insert into ${articleRevisions} (${sql.identifier(articleRevisions.id.name)}, ${sql.identifier(articleRevisions.articleId.name)}, ${sql.identifier(articleRevisions.status.name)})
+    values (${revisionId}::uuid, ${articleId}::uuid, 'draft')`;
+}
+
 async function beginDraftIn(
   tx: Tx,
   opts: BeginRevisionOptions,
@@ -1226,9 +1242,7 @@ async function beginDraftIn(
     } else {
       /* No `basedOnRevisionId`: this is the article's first draft, copied from
          nothing, and null is the honest answer rather than a missing one. */
-      await tx
-        .insert(articleRevisions)
-        .values({ id: revisionId, articleId: article.id, status: "draft" });
+      await tx.execute(firstDraftInsert(revisionId, article.id));
     }
 
     /* **The blocks carry too, and the three-column reading of this design
