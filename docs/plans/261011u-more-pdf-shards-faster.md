@@ -49,9 +49,10 @@ bounds without editing constants; omitted, the plan is unchanged, and production
 An eval script, `scripts/eval-pdf-chunk-size.ts`, runs the real `runPdfExtract` with
 `nullCheckpointStore()` and **one fresh process per run**, so the shared `WidthGate` starts at 100
 every time (F4), and arms interleaved A B A B rather than A A B B (F7). It records, per run: the
-step's wall clock; each chunk's finish time (from `onProgress`) so the first wave can be told from
-the tail; chunks asked again and pages recovered; the front-matter and authors passes' time
-separately (F3); spend and cache tokens from the ledger by slug; recall and quality notes; peak RSS.
+step's wall clock; each model call's start and finish, so the first width of calls can be told from
+the tail; chunks asked again and identifiable multi-page recoveries (a one-page chunk's repeat is
+inherently ambiguous); the front-matter and authors passes' time separately (F3); spend and cache
+tokens from the ledger by slug; recall and quality notes; peak RSS.
 
 Arms, in order of cost:
 
@@ -96,13 +97,24 @@ and the `CHUNK_CONCURRENCY` comment's own history shows a confident sentence her
   say, fresh process per run and interleaved arms, a stricter quality gate, a figure-heavy PDF
   before any default changes, a >100-chunk test and RSS before stage 3. F8's cheaper isolated-call
   pilot is skipped: the end-to-end first arm is ~$6 and answers the real question directly.
-- 2026-10-11: stage 1 done (free): a call is ~5 s + 6.5 s per thousand output tokens; ~43% of an
-  extract is the tail after the first wave; predicted 0.55–0.65× at half size.
+- 2026-10-11: stage 1 done (free): a call is ~5 s + 6.5 s per thousand output tokens; ~43% of the
+  observed transcription-call span is after the first wave. A deliberately optimistic screening
+  model suggested a large win worth measuring, but did not enforce the width of 100 and could only
+  infer re-asks from non-unique input-token counts.
 - 2026-10-11: stage 2 done ($3.17, ten runs): half size **not** reliably faster — slower on Kuhn
   (median 205 s against 149 s; 138 chunks, two waves), mixed on Doctorow (173 s against 209 s,
-  inside the spread) — and ~15% dearer, because smaller chunks are re-asked far more often. The
-  stage-3 bar was not met, so **stage 3 is not built**; the arm-2 runs (a third, and the
-  figure-heavy PDF) were not needed to reach that and were not run. The write-up is
+  inside the spread) — and ~15% dearer, because twice as many chunks produced roughly twice as many
+  re-asks at a similar per-chunk rate. The stage-3 bar was not met, so **stage 3 is not built**; the
+  arm-2 runs (a third, and the figure-heavy PDF) were not needed to reach that and were not run. The
+  write-up is
   [261011c](../investigations/261011c-pdf-chunk-size-and-extract-speed.md). What lands: the
   `chunking` option (production never passes it), `scripts/eval-pdf-chunk-size.ts`, and the
   evidence added to `qi-astc8qqs` and `qi-az8tvrn4`, which hold the lever that would work.
+- 2026-10-11: GPT Sol code review
+  ([261011u-…-code-review-sol.md](261011u-more-pdf-shards-faster-code-review-sol.md)): land after
+  fixes, made by the reviewer and read here. C1 the eval's local-only guard now checks this repo's
+  stack, not just a loopback host; C2 the first wave counts only the first 100 asks; C3 a repeat on
+  a one-page chunk is reported as ambiguous between re-ask and recovery; C4 stage 1's prediction is
+  labelled an optimistic screen; C5 the cause is twice the re-asks from twice the chunks, not a
+  higher rate per chunk on the book; C6 the eval's bounds are validated; C7 the feedback note's
+  wording corrected the same way. The verdict did not change.

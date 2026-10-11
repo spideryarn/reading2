@@ -71,9 +71,14 @@ def chain(g):
     return path[::-1]
 
 def simulate(g, half, n_sims=400, rng=random.Random(1)):
-    """Monte Carlo of one extract. Chunks = first-wave calls (each split in two when half). Each call takes
-    (A + B*o) * ratio, ratio drawn from the empirical spread. A chunk is asked again with prob p_reask
-    (the extract's own observed later-call rate, per first-wave call), serially, same output size."""
+    """An optimistic screening simulation, not an end-to-end estimate.
+
+    Chunks = first-wave calls (each split in two when half). Each call takes
+    (A + B*o) * ratio, ratio drawn from the empirical spread. A chunk is asked again with the
+    extract's input-token-match rate, serially, at the same output size. Reported input-token counts
+    are not chunk ids, and this deliberately does not schedule a second wave when the split produces
+    more than 100 chunks. Stage 2 exists to measure both effects rather than infer them here.
+    """
     first = [r for r in g if r["s"] - g[0]["s"] < WAVE_S]
     later = len(g) - len(first)
     fin = {r["i"] for r in first}
@@ -99,7 +104,8 @@ for k, g in sorted(groups.items(), key=lambda kv: min(r["s"] for r in kv[1])):
     t0 = g[0]["s"]
     first = [r for r in g if r["s"] - t0 < WAVE_S]; later = [r for r in g if r["s"] - t0 >= WAVE_S]
     fin = {r["i"] for r in first}
-    small = [r for r in later if r["i"] not in fin]   # not a re-ask of a first-wave chunk => recover (one page)
+    # Heuristic only: a new input-token count is recover-like, not proof of recovery.
+    small = [r for r in later if r["i"] not in fin]
     wall = max(r["f"] for r in g) - t0; wave_end = max(r["f"] for r in first) - t0
     slow = max(r["d"] for r in first)
     path = chain(g)
@@ -115,5 +121,5 @@ for k, g in sorted(groups.items(), key=lambda kv: min(r["s"] for r in kv[1])):
 print(tot)
 
 print(f"actual/sim-now median {st.median(ratios_now):.2f} p10 {q(ratios_now,.1):.2f} p90 {q(ratios_now,.9):.2f}")
-print(f"MC half/now median {st.median(ratios_half):.2f} range {min(ratios_half):.2f}-{max(ratios_half):.2f}")
-print(f"critical-path halved/actual median {st.median(ratios_chain):.2f} p10 {q(ratios_chain,.1):.2f} p90 {q(ratios_chain,.9):.2f}")
+print(f"HEURISTIC, UNBOUNDED MC half/now median {st.median(ratios_half):.2f} range {min(ratios_half):.2f}-{max(ratios_half):.2f}")
+print(f"HEURISTIC critical-path halved/actual median {st.median(ratios_chain):.2f} p10 {q(ratios_chain,.1):.2f} p90 {q(ratios_chain,.9):.2f}")

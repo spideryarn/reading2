@@ -23,33 +23,69 @@
  * Both refuse unless DATABASE_URL is the local stack — the runs write ledger
  * rows, and the ledger read must not be quietly reading production.
  */
+import { execFileSync } from "node:child_process";
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
 import { closeDb, getDb } from "../src/db/client.js";
+import { isLocalDatabaseUrl, withoutPassword } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { modelFor } from "../src/models.js";
 import { environmentOwnerId } from "../src/owner.js";
 import { openRouterAuthorsReader, type AuthorsReader } from "../src/pdf-authors.js";
 import { openRouterFrontMatterReader, type FrontMatterReader } from "../src/pdf-frontmatter.js";
-import { openRouterReader, runPdfExtract, type PdfReader } from "../src/pdf-read.js";
+import {
+  CHUNK_CONCURRENCY,
+  openRouterReader,
+  runPdfExtract,
+  type PdfReader,
+} from "../src/pdf-read.js";
 import { costStore } from "../src/store/ai-calls.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { refuseUnlessOurDatabase } from "./db-reown-rules.js";
+import { parseStatusEnv } from "./seed-accounts.js";
 
 const flag = (name: string) => {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 
-/** Refuses anything but the local stack, and says which it is either way. */
+/** Refuses anything but this repo's local stack, and says which it is either way. */
 function requireLocalDb(): void {
   const url = process.env.DATABASE_URL;
-  const host = url ? new URL(url).hostname : "(none)";
+  let host = "(none)";
+  try {
+    if (url) host = new URL(url).hostname;
+  } catch {
+    // The refusal below owns malformed URLs too.
+  }
   console.log(`Target: ${host} (DATABASE_URL after .env.local)`);
-  if (host !== "127.0.0.1" && host !== "localhost") {
+  if (!url || !isLocalDatabaseUrl(url)) {
     console.error(`Refusing: ${host} is not the local database.`);
+    process.exit(1);
+  }
+
+  /* Loopback alone is not identity: an SSH tunnel to production, or another
+     project's stack, has the same host. Compare with the independent address
+     reported by this repo's Supabase containers, as the destructive local-only
+     DB commands do. No database connection has been opened at this point. */
+  let status: string;
+  try {
+    status = execFileSync("supabase", ["status", "-o", "env"], {
+      cwd: path.resolve(import.meta.dirname, ".."),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 120_000,
+    });
+  } catch {
+    console.error("Refusing: could not confirm this repo's local stack with `supabase status`.");
+    process.exit(1);
+  }
+  const refusal = refuseUnlessOurDatabase(url, parseStatusEnv(status), withoutPassword);
+  if (refusal) {
+    console.error(`Refusing: ${refusal}`);
     process.exit(1);
   }
 }
@@ -70,8 +106,16 @@ async function run(file: string, label: string): Promise<void> {
   if ((maxPages === undefined) !== (words === undefined)) {
     throw new Error("Give both --max-pages and --words, or neither (today's plan).");
   }
-  const chunking =
-    maxPages === undefined ? undefined : { maxPages: Number(maxPages), words: Number(words) };
+  const chunking = maxPages === undefined ? undefined : { maxPages: Number(maxPages), words: Number(words) };
+  if (
+    chunking &&
+    (!Number.isInteger(chunking.maxPages) ||
+      chunking.maxPages < 1 ||
+      !Number.isInteger(chunking.words) ||
+      chunking.words < 1)
+  ) {
+    throw new Error("--max-pages and --words must both be positive whole numbers.");
+  }
   const arm = chunking ? `p${chunking.maxPages}w${chunking.words}` : "today";
   const slug = `cs-${label}-${arm}-${Date.now()}`;
   const out = flag("--out") ?? "evals/results/pdf-chunk-size-2026-10-11/stage2.jsonl";
@@ -167,8 +211,20 @@ async function run(file: string, label: string): Promise<void> {
   const asksPerChunk = new Map<number, number>();
   for (const c of whole) asksPerChunk.set(c.first, (asksPerChunk.get(c.first) ?? 0) + 1);
   const firstAsks = [...asksPerChunk.keys()].map((k) => whole.find((c) => c.first === k)!);
-  const firstWaveDoneMs = Math.max(0, ...firstAsks.map((c) => c.end));
+  /* All chunk tasks enter the reader in plan order. When there are more than
+     CHUNK_CONCURRENCY of them, only the first width belong to the first wave;
+     taking every initial ask used to include the second wave in this number. */
+  const firstWaveAsks = firstAsks.slice(0, CHUNK_CONCURRENCY);
+  const firstWaveDoneMs = Math.max(0, ...firstWaveAsks.map((c) => c.end));
   const lastChunkMs = Math.max(0, ...progress.map((p) => p.at));
+  /* On a planned one-page chunk, an ordinary second ask and the one-page
+     recovery path have the same instruction. The wrapper cannot distinguish
+     them, so retain that ambiguity instead of reporting every repeat as one or
+     every repeat as the other. */
+  const ambiguousSinglePageRepeats = [...asksPerChunk].reduce(
+    (sum, [first, count]) => sum + (chunkSize.get(first) === 1 ? count - 1 : 0),
+    0,
+  );
   /* `totalSpend`, not `cost.costNanos`: a BYOK call is billed upstream and reports 0 there. */
   const costNanos = Number(totalSpend(report.calls).nanos);
   const line = {
@@ -180,7 +236,7 @@ async function run(file: string, label: string): Promise<void> {
     pages: result.pages,
     plannedChunks: planned,
     wallMs,
-    /** Every first ask has come back — the end of the first wave. */
+    /** Every ask admitted in the first width has come back. */
     firstWaveDoneMs,
     /** The last chunk's `onProgress`; the gap to `wallMs` is the fold, phase-2 recovery and the two passes. */
     lastChunkMs,
@@ -190,6 +246,8 @@ async function run(file: string, label: string): Promise<void> {
     readerCallsFailed: calls.filter((c) => !c.ok).length,
     chunksReAsked: [...asksPerChunk.values()].filter((n) => n > 1).length,
     reAsks: [...asksPerChunk.values()].reduce((s, n) => s + n - 1, 0),
+    ambiguousSinglePageRepeats,
+    /** Identifiable recoveries: one-page calls made from a planned multi-page chunk. */
     recoveredPages: new Set(recoveries.map((c) => c.first)).size,
     recoveryCalls: recoveries.length,
     /** Recovery calls that started after the last chunk reported — phase 2, in the fold. */
@@ -210,7 +268,8 @@ async function run(file: string, label: string): Promise<void> {
   await appendFile(out, `${JSON.stringify(line)}\n`, "utf-8");
   console.log(
     `${arm} ${line.file}: ${(wallMs / 1000).toFixed(1)}s, ${planned} chunks, first wave ${(firstWaveDoneMs / 1000).toFixed(1)}s, ` +
-      `${line.reAsks} re-asks, ${line.recoveredPages} pages recovered, $${line.spendUsd.toFixed(3)} → ${out}`,
+      `${line.reAsks} repeated chunk-shaped asks (${line.ambiguousSinglePageRepeats} one-page ambiguous), ` +
+      `${line.recoveredPages} identifiable pages recovered, $${line.spendUsd.toFixed(3)} → ${out}`,
   );
 }
 
