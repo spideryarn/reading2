@@ -20,8 +20,8 @@ because the two pads only swapped sides.
 
 ## What it shows
 
-**It generates one thing, its own relation words** ([below](#relation-words)), and since
-2026-10-11 the same call may add **a few notes of its own** ([§ Notes the model
+**It has one call of its own**, which generates relation words ([below](#relation-words)) and,
+since 2026-10-11, may add **a few notes of its own** ([§ Notes the model
 writes](#notes-the-model-writes)). Every other note
 comes from something another mode has already stored, and opening the column never runs another
 mode. The owner's lists are read through each mode's *read half*
@@ -157,9 +157,10 @@ options passed over and GPT Sol's review are in
 
 - **The `relations` step** ([`src/relations.ts`](../../src/relations.ts)): one model call per
   article. Every body paragraph of at least a sentence, bar the first, gets one of ten relations
-  from a closed list (`RELATIONS` in src/types.ts). The model writes no prose. It must answer every
-  listed paragraph; a run that answers fewer than half fails rather than storing a sparse list
-  that would look like an article with few turns. Stored in `article_revisions.relations`.
+  from a closed list (`RELATIONS` in src/types.ts). It must answer every listed paragraph; a run
+  that answers fewer than half fails rather than storing a sparse list that would look like an
+  article with few turns. The same call may write the prose notes below. Stored in
+  `article_revisions.relations`.
 - **Ten are stored, three are drawn.** `DRAWN_RELATIONS` in `notes.ts` is the one place that says
   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
@@ -179,7 +180,8 @@ options passed over and GPT Sol's review are in
   [url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default).)
   - **One attempt per article per page load**, and unforced, so the step's own stamp check has the
     last word. Turning the column off and on again buys nothing, and a failed run does not loop.
-  - **A stale or outdated list counts as none**, so the next showing rewrites it.
+  - **A stale list is hidden; an outdated one stays on screen.** Either starts one rewrite, and the
+    old words and notes remain visible in the outdated case until their replacements arrive.
   - **Nothing is shown, nothing is spent.** On a window too narrow for the notes the owner's feed
     still reads, but waits to generate until the notes fit on screen. A visitor's column never reaches the hook.
   - **The press arms nothing.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
@@ -189,8 +191,10 @@ options passed over and GPT Sol's review are in
     ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)). That cost a call
     for every article, opened or not. **No backfill**: an article from before gets its words the
     next time its owner has the column open (Greg: *"yes leave that for now"*).
-- **Nothing in the column says it is running.** The notes are drawn without the words, and the
-  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Marginalia notes* row (called *Relation words* until 2026-10-11) to run it again.
+- **Nothing in the column says it is running.** Notes already supplied by other modes are drawn
+  without the words, and the words and Marginalia's own notes appear when the job finishes, with no
+  reload; the job is in the jobs tray like any other. Metadata has a *Marginalia notes* row (called
+  *Relation words* until 2026-10-11) to run it again.
 - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
   unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
   rewritten one.
@@ -231,7 +235,7 @@ owner-only rule as the words, so they ride on the call that was already there, s
   per eighteen paragraphs (the plan's § Measurement).
 - **Open, not shut**, unlike other modes' items: at most a handful, and a shut line would hide the
   only thing a note has to say. A link to the other passage is the one block link (`BlockRef`), so
-  it has the passage's card and the jump.
+  it has the passage's card and the jump flashes the checked target words.
 - **Owner only**, as the words are.
 
 **Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase

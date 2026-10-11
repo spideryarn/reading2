@@ -9,7 +9,8 @@
  *
  * **Sparse on purpose.** The risk this mode runs against vision.md is a second
  * article down the margin, so it never draws a gist or a label per paragraph:
- * one question per part, a stamp where an idea occurs, and nothing else.
+ * one question per part, a stamp where an idea occurs, and a few model-written
+ * notes across the whole article.
  * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
  *
  * Ranges are resolved by block position, never by comparing id strings

@@ -5979,7 +5979,7 @@ export interface MarginNotesDropped {
   unknown: number;
   /** A kind outside `MARGIN_NOTE_KINDS`. */
   offList: number;
-  /** `to` is the note's own passage, absent on a kind that needs one, or present on `explain`. */
+  /** `to`/`toQuote` disagree on null, or `to` is self, absent when required, or present on `explain`. */
   badTarget: number;
   /** A quote that is not in its passage, spacing and all, or is too long to be one. */
   unquoted: number;

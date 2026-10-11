@@ -2553,7 +2553,13 @@ export function Reader({
         blockId,
         <>
           {blockId === chatCardBlock ? cardHost : null}
-          <MarginNotesSlot blockId={blockId} notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />
+          <MarginNotesSlot
+            blockId={blockId}
+            notes={notes}
+            viewer={marginViewer}
+            onOpenAsked={openAskedFromMargin}
+            onJump={jumpTo}
+          />
         </>,
       );
     /* **The card's host: first in its block's cell, above the block's own
@@ -2591,6 +2597,7 @@ export function Reader({
     askedList,
     marginViewer,
     openAskedFromMargin,
+    jumpTo,
     chatCardBlock,
     chatCardThread,
   ]);

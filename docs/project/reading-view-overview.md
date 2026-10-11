@@ -215,7 +215,7 @@ asked for less motion gets the bar at once. Which mount plays it is
   column of notes, each level with the block it is about and scrolling with the text — each
   part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
   a head pinned at the top saying which part and section you are in and, from the arc, where the
-  argument has got to. It opens no band, generates only its own relation words ([marginalia.md](marginalia.md#relation-words)), and hides its notes on a window too
+  argument has got to. It opens no band, generates only its own relation words and a few notes, in one call ([marginalia.md](marginalia.md#notes-the-model-writes)), and hides its notes on a window too
   narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
   at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
   band you choose; where there is no room for both (under 900px) but room for the column alone

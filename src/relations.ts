@@ -1,10 +1,10 @@
 /**
  * Pipeline stage 5q — **relations**: how each paragraph bears on the one
- * before it, as one word from a closed list of ten. Marginalia draws a few of
- * them as a small word beside the paragraph (so, but, vs); the rest are stored
+ * before it, as one word from a closed list of ten, and a few optional prose
+ * notes about connections elsewhere in the article. Marginalia draws a few
+ * relation words beside their paragraphs (so, but, vs); the rest are stored
  * and not drawn. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md
- * § Stage 2 is the design, and GPT Sol's review of it is where the validation
- * rules below come from.
+ * § Stage 2 is the original relation-word design; plan 261011o adds notes.
  *
  * **There is no command line here.** Running it against one article is a job:
  *
@@ -20,9 +20,10 @@
  *
  * What it does not share:
  *
- * 1. **The model writes no prose.** It answers a block id and one of ten
- *    words, so there is no quote to verify and no plain-words rule to apply
- *    (`PLAIN_WORDS_EXEMPT`, src/plain-words.ts).
+ * 1. **The required answer is still mechanical.** Every paragraph gets a
+ *    block id and one of ten words. Optional notes are checked separately:
+ *    their quotes must occur in the blocks they name, and the prompt carries
+ *    the plain-words rule for their prose (nothing checks it afterwards).
  * 2. **The model is told which paragraphs to answer**, in the user message,
  *    and must answer every one once. FAQ chooses its own passages.
  * 3. **A sparse answer fails.** FAQ's empty list is a real answer; here fewer
@@ -31,9 +32,8 @@
  *    P1-5).
  * 4. **An article with nothing to label spends nothing**: fewer than two body
  *    paragraphs stores an empty artefact without a model call.
- * 5. **Owner only.** Nothing here reaches a visitor — a relation word has no
- *    quote to check against its block, and a visitor's payload carries no
- *    staleness verdict (Sol P1-4). src/sharing-steps.ts.
+ * 5. **Owner only.** Nothing here reaches a visitor — their payload carries no
+ *    staleness verdict for this artefact (Sol P1-4). src/sharing-steps.ts.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -338,6 +338,10 @@ export function toNotes(
     }
     const r = row as Record<string, unknown>;
     const blockId = str(r.blockId);
+    const targetShapeOk =
+      (r.to === null || (typeof r.to === "string" && r.to.trim() !== "")) &&
+      (r.toQuote === null || typeof r.toQuote === "string") &&
+      (r.to === null) === (r.toQuote === null);
     const to = str(r.to) || null;
     const block = byId.get(blockId);
     const target = to === null ? null : byId.get(to);
@@ -351,7 +355,12 @@ export function toNotes(
       continue;
     }
     const k = kind as MarginNoteKind;
-    if (to === blockId || (to === null && NEEDS_TARGET.has(k)) || (to !== null && NO_TARGET.has(k))) {
+    if (
+      !targetShapeOk ||
+      to === blockId ||
+      (to === null && NEEDS_TARGET.has(k)) ||
+      (to !== null && NO_TARGET.has(k))
+    ) {
       dropped.badTarget++;
       continue;
     }

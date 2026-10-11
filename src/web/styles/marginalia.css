@@ -158,6 +158,20 @@
   text-transform: uppercase;
   color: var(--ink-soft);
 }
+/* The link to the other passage is a `BlockRef` phrase, and `.block-ref` is
+   drawn for a bare id: 0.58rem, half opacity. Here it is words the reader
+   should find and press, so it takes the note's size and the link colour
+   (the browser check measured it at 8–9px against 11px of note). */
+.marg-aside .marg-aside-to {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: normal;
+  opacity: 1;
+  color: var(--highlight-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .marg-aside-stamp:focus-visible {
   outline: 2px solid var(--highlight-text);
   outline-offset: 2px;

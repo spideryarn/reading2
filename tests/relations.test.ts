@@ -442,6 +442,19 @@ describe("toNotes", () => {
     expect(dropped.badTarget).toBe(3);
   });
 
+  it("drops a target and target quote that are not null together", () => {
+    const { notes, dropped } = toNotes(
+      [
+        { ...explain, toQuote: "cut errors by 12%" },
+        { ...tension, toQuote: null },
+      ],
+      body,
+      8,
+    );
+    expect(notes).toEqual([]);
+    expect(dropped.badTarget).toBe(2);
+  });
+
   it("counts each other kind of bad row under its own name", () => {
     const { dropped } = toNotes(
       [

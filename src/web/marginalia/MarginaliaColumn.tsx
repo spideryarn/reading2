@@ -52,6 +52,7 @@ import { type MarginNotesList, type RelationsByBlock, useRelations } from "../us
 import { MARK_KIND_LABEL } from "../comment-nav.js";
 import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, NOTE_TIPS, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
 import { BlockRef } from "../BlockRef.js";
+import type { JumpAim } from "../flash.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 import { ownLabel, plainWords } from "../lib/own-label.js";
 import { Excerpt } from "../Excerpt.js";
@@ -83,6 +84,7 @@ export function MarginNotesSlot({
   notes,
   viewer,
   onOpenAsked,
+  onJump,
 }: {
   /** The block these notes sit beside — whose markup a note's quote is drawn from (plan 261009k). */
   blockId: BlockId;
@@ -91,10 +93,12 @@ export function MarginNotesSlot({
   viewer: "owner" | "visitor";
   /** Open a question's conversation — the Comments drawer's own press. Owner only. */
   onOpenAsked?: ((id: string) => void) | undefined;
+  /** Follow a generated note to the exact checked words in its other passage. */
+  onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
 }) {
   return (
     <NoteBoundary>
-      <MarginNotes blockId={blockId} notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} />
+      <MarginNotes blockId={blockId} notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} onJump={onJump} />
     </NoteBoundary>
   );
 }
@@ -198,7 +202,13 @@ function RelationWord({ relation }: { relation: DrawnRelation }) {
  * AI's face. A note about another passage links to it with the one block
  * link (`BlockRef`), so it has the block-link card and the jump.
  */
-function AsideNote({ note }: { note: MarginNote }) {
+function AsideNote({
+  note,
+  onJump,
+}: {
+  note: MarginNote;
+  onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
+}) {
   const [open, setOpen] = useState(false);
   const tip = NOTE_TIPS[note.kind];
   return (
@@ -224,7 +234,12 @@ function AsideNote({ note }: { note: MarginNote }) {
       {note.to !== null && (
         <>
           {" "}
-          <BlockRef id={note.to} className="marg-aside-to">
+          <BlockRef
+            id={note.to}
+            className="marg-aside-to"
+            {...(onJump === undefined ? {} : { onJump })}
+            {...(note.toQuote === null ? {} : { quotes: [note.toQuote] })}
+          >
             {note.kind === "tension" ? "the other passage" : "read it"}
           </BlockRef>
         </>
@@ -240,11 +255,13 @@ function MarginNotes({
   notes,
   viewer,
   onOpenAsked,
+  onJump,
 }: {
   blockId: BlockId;
   notes: readonly MarginaliaNote[];
   viewer: "owner" | "visitor";
   onOpenAsked?: ((id: string) => void) | undefined;
+  onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
 }) {
   useRenderCount("MarginNotes");
   return (
@@ -254,7 +271,7 @@ function MarginNotes({
           case "relation":
             return <RelationWord key="relation" relation={note.relation} />;
           case "aside":
-            return <AsideNote key="aside" note={note.note} />;
+            return <AsideNote key="aside" note={note.note} onJump={onJump} />;
           case "question":
             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
           case "idea":
@@ -852,7 +869,7 @@ export const NO_OWNER_FEED: MarginFeed = {
 
 /**
  * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
- * the relation words, which are made here. A component of
+ * Marginalia's own relation words and notes, which are made here. A component of
  * its own so the reads happen only while Marginalia is open — the read halves
  * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full hooks, which
  * arm the automatic run and could spend (Debate is the dearest step in the
@@ -882,8 +899,8 @@ export function OwnerMarginFeed({
   const faqRead = useFaqRead(slug);
   const timelineRead = useTimelineRead(slug);
   const receptionRead = useReceptionRead(slug);
-  /* **The one thing here that can spend**: the relation words are Marginalia's
-     own, and this mount is what asks for them where none is stored — once per
+  /* **The one thing here that can spend**: the relations call writes
+     Marginalia's words and notes, and this mount asks for them where none is stored — once per
      article per page load, whatever opened the column, and only while the
      notes are on screen (useRelations.ts). */
   const { relations, notes } = useRelations(slug, shown && !awaitingStructure);

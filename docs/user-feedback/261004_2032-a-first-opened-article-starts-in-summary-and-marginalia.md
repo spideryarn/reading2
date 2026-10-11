@@ -13,6 +13,11 @@ did not write the Sentry status; the next feedback sweep does.
 
 **Ending: Shipped.** It is on `dev` and not deployed.
 
+**Since 2026-10-11 the Marginalia half is undone**, at Greg's request (`spya-mw08mv`: *"the UI
+complexity is overwhelming for new users"*): a first open is the guide alone —
+[261011_0134](261011_0134-marginalia-off-the-first-open-and-notes-of-its-own.md). (Summary had
+already given way to the guide on 2026-10-07.)
+
 What we did. When a signed-in reader opens an article this browser has not opened before, at an
 address that says nothing about how to look at it:
 
