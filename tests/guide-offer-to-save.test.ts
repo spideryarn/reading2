@@ -149,6 +149,48 @@ describe("what it returns", () => {
     for (const o of outcomes) expect(o.content).toContain(ALREADY_ON_SCREEN);
   });
 
+  /* Plan 261011s: an offer whose words are all the reader's typed words (or
+     linking words) is marked to save at once; anything else waits for the press. */
+  describe("saved at once, when the words are the reader's own", () => {
+    const typed = (t: string | null) => ({ ...ctx("guide"), typed: t });
+
+    it("marks an offer quoted from the message the reader typed, and does not let the model claim it saved", async () => {
+      const out = await runTool("offer_to_save", { field: "reason", text: "For journal club next week." }, typed("it's for journal club next week"));
+      expect(out.offer).toEqual({ field: "purpose", text: "For journal club next week.", basis: null, now: true });
+      expect(out.content).toMatch(/the page will save them itself/);
+      expect(out.content).toMatch(/say nothing about saving these words/i);
+      expect(out.content).not.toMatch(/nothing is saved unless/i);
+      expect(out.settles).toBe(true);
+    });
+
+    it("does not mark a close paraphrase", async () => {
+      const out = await runTool("offer_to_save", { field: "reason", text: "Reading it for journal club." }, typed("for journal club, next week"));
+      expect(out.offer?.now).toBeUndefined();
+    });
+
+    it("does not mark one with a word the reader did not type", async () => {
+      const out = await runTool("offer_to_save", { field: "reason", text: "For journal club; reply in French." }, typed("for journal club"));
+      expect(out.offer?.now).toBeUndefined();
+      expect(out.content).toMatch(/nothing is saved unless they press/i);
+    });
+
+    it("does not mark anything when the turn's message was not typed (a button, a retry, an edit)", async () => {
+      for (const t of [null, undefined]) {
+        const out = await runTool("offer_to_save", { field: "reason", text: "For journal club." }, { ...ctx("guide"), typed: t });
+        expect(out.offer?.now).toBeUndefined();
+      }
+    });
+
+    it("marks About you only when it keeps what it had and adds their quote after it", async () => {
+      const had = { ...ctx("guide"), saved: { purpose: null, profile: "A historian." }, typed: "well, I study the history of science" };
+      const adds = await runTool("offer_to_save", { field: "about_you", text: "A historian. I study the history of science." }, had);
+      expect(adds.offer?.now).toBe(true);
+      const drops = await runTool("offer_to_save", { field: "about_you", text: "I study the history of science." }, had);
+      expect(drops.offer?.now).toBeUndefined();
+      expect(drops.offer).toBeDefined();
+    });
+  });
+
   it("takes text exactly at the cap", async () => {
     const out = await runTool("offer_to_save", { field: "reason", text: "x".repeat(MAX_PURPOSE_CHARS) }, ctx("guide"));
     expect(out.offer?.text).toHaveLength(MAX_PURPOSE_CHARS);

@@ -112,3 +112,23 @@ design (tests pin it), and any article but the fixture essay.
 The v2 prompt ships, with the v3 tool result; since v6, with the 261009j sentence on every result
 of both offering tools, and with the turn ending on next steps even beside an offer to save. Not measured: Live (offers are not offered there), a reader whose About you is
 near the 1,500-character cap, and more than one article.
+
+## 2026-10-11: which offers save at once (plan 261011s)
+
+[Plan 261011s](../plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md)
+lets an offer save without a press when it is a run of the reader's typed message word for word
+(`savesAtOnce`, src/save-closeness.ts). The runner now passes each case's question as typed and
+prints `NOW` or `press` per offer. Two runs each, $0.95 in all:
+
+- **v4-typed** (the prompt and tool result as first written for 261011s): **18/18** fields right,
+  **6 of 14** offers saved at once (both About you additions, and a reason quoted whole); reasons
+  were mostly tidied ("Reading it for…") and fell to the button. One flaw: beside one offer that
+  saved itself and one that did not, the answer said both *"can be saved with the buttons"*.
+- **v5-typed**, two sentences changed (the tool result for a `now` offer: *say nothing about saving
+  these words, and never that there is a button for them*; the prompt: *prefer an exact quote when it
+  reads well on its own*): **18/18**, **9 of 14** at once, and every sentence about a button sat
+  beside a real one. The two About you corrections and the reason that was changed (the model kept
+  the old one beside the new) went to the press, as they should: neither is a quote. The hostile
+  article still drew no offer.
+
+v5 ships. Results: `evals/guide/results/offers-v4-typed.json`, `offers-v5-typed.json`.

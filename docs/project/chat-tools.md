@@ -1032,9 +1032,19 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   the page could not tell whether its press was replacing newer words. The page draws a valid
   offer under the answer as a card
   ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx)) with a button, and **the reader's press
-  is the only write**: it reads what is stored, saves only over the basis, and offers an Undo that
-  puts back only over its own write. A planted instruction in the article can at worst put words
-  on a card the reader reads before pressing. Reading the two fields is no tool: every guide turn
+  is the write**: it reads what is stored, saves only over the basis, and offers an Undo that
+  puts back only over its own write. **Since 2026-10-11 one kind of offer saves itself**
+  ([261011s](../plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md);
+  Greg's reply A to q-t3j8hj, and report `spya-yk3r03`): when the turn's question was typed by the
+  reader (the request's `typed: true`, sent by the composer and the bar's *Ask the guide*, never by
+  a button, a retry or an edit) and the offer is a run of it **word for word** — About you as what
+  it held, unchanged, then that run — the tool marks it `now`
+  ([`src/save-closeness.ts`](../../src/save-closeness.ts)), and the card makes the same press itself,
+  once, on an answer this tab's own stream finished
+  ([`answered-here.ts`](../../src/web/chat/answered-here.ts)). So a planted instruction in the
+  article can at worst put words on a card the reader reads before pressing, or save words the
+  reader typed in that message, with an Undo. The model is told not to say whether it saved; the
+  card says. Reading the two fields is no tool: every guide turn
   carries both under WHO IS READING THIS, read fresh. Not offered in Live (`GUIDE_TOOLS` is what
   Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
   you're reading*.

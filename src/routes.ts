@@ -3212,6 +3212,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     kind,
     stance,
     help,
+    typed,
     sourceCommentId,
     visible,
   } = (body ?? {}) as Record<string, unknown>;
@@ -3303,6 +3304,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      A separate check from the one above so the sentence can say which field. */
   if ((wantsRetry || wantsEdit) && help !== undefined) {
     throw httpError(400, "A retry or an edit takes its help flag from the stored question");
+  }
+  /* **`typed: true`: the reader typed this question into the composer**, so
+     the guide's `offer_to_save` may save words drawn from it without a press
+     (src/save-closeness.ts, plan 261011s). Absent or literally `true`, like
+     `help`; and only on a new question, since a retry re-asks a stored row and
+     an edit's box starts from words that may have been a button's. Neither is
+     stored: it decides one turn's offers and nothing else. The client's claim,
+     and the client is ours: what this guards against is an article's text
+     steering a model, not the reader. */
+  if (typed !== undefined && typed !== true) {
+    throw httpError(400, "typed must be true, or left out entirely");
+  }
+  if ((wantsRetry || wantsEdit) && typed !== undefined) {
+    throw httpError(400, "Only a new question can be marked as typed");
   }
   /* **What was on the reader's screen** — context for "this" and "here",
      hedged in the prompt (`visibleBlocksLine`). A list of block ids, at most
@@ -3831,6 +3846,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
               ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
             }
           : null,
+      /* The question, when the reader typed it and this is the guide: what an
+         offer is checked against before it saves without a press (above). */
+      typed: thread.kind === "guide" && typed === true ? asked : null,
       /* **What the reader has marked and discussed, on every Explore turn** —
          send, retry and edit alike, because all three reach this one call. From
          the stored thread's kind and id, like `kind` below. `null` for every

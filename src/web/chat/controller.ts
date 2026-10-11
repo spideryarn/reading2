@@ -39,6 +39,7 @@ import { asOpId, initialState, recoveringIds } from "./model.js";
 import type { SpokenOutcome, TurnSink } from "./effects.js";
 import { project, storedSpoken } from "./project.js";
 import { reduce } from "./reduce.js";
+import { markAnsweredHere } from "./answered-here.js";
 /* Every catch below hands its error to the one rule for what a reader may be
    shown — an effect that throws is a bug, and a bug's text is not a sentence
    for a reader (plan 260924a § Stage 2b). */
@@ -774,7 +775,12 @@ export class ChatController {
         this.dispatch({ type: "turn.tool", opId, index, run });
       },
       done: (done) => {
+        /* The reply's id as `begin` left it, read before the event retires the
+           operation: this tab watched this answer being written
+           (answered-here.ts). */
+        const op = this.state.operations.get(opId);
         this.dispatch({ type: "turn.done", opId, done });
+        if (op?.kind === "turn") markAnsweredHere(op.replyId);
       },
       failed: (error, text) => {
         this.dispatch({

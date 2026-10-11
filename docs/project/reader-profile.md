@@ -61,7 +61,9 @@ no box: the reader answers below,
 [261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md), and since
 [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) the
 guide offers their reason, and anything new for *About you*, in close to their own words, as a card
-they press to save, with an Undo), and there is no dialog; on a phone
+they press to save, with an Undo; since
+[261011s](../plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md)
+an offer that is word for word what they typed saves itself, with the same Undo), and there is no dialog; on a phone
 the dialog stays ([url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default),
 [plan 261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4).
 

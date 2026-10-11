@@ -28,10 +28,20 @@
  *   failure (`savePurpose`'s contract: the reply can be lost after the write).
  * - One write in flight per card.
  *
+ * **An offer marked `now` saves itself**, once, on an answer this tab watched
+ * being written (src/web/chat/answered-here.ts): it is the reader's own typed
+ * words, word for word (src/save-closeness.ts decided, in the tool), so the
+ * press would only have confirmed their own words. The same `save` as the
+ * button, so the same fresh read, basis check, verification and Undo. Seen
+ * any other way (a reload, coming back to the conversation) it does not save:
+ * it reads, and shows *Saved* with its Undo if the words are what is stored,
+ * or the button if not, so an Undo and a reload never save it again. Greg's reply A to q-t3j8hj and report `spya-yk3r03`, plan
+ * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md.
+ *
  * The words are the model's, however close to the reader's, so they are set in
  * the model's face (docs/project/fonts.md); the heading and buttons are ours.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type ChatMessage,
   MAX_PROFILE_CHARS,
@@ -42,6 +52,7 @@ import {
 } from "../types.js";
 import { Link } from "./Link.js";
 import { useMadeFor } from "./lib/made-for.js";
+import { takeAnsweredHere } from "./chat/answered-here.js";
 import { savePurpose, storedReader } from "./purpose.js";
 import { PROFILE_HREF, readHref } from "./router.js";
 import { saveProfile } from "./useProfile.js";
@@ -52,13 +63,15 @@ export const OFFER_WORDS = {
     heading: "Why you're reading this one",
     save: "Save as why you're reading",
     saved: "Saved as why you're reading this one.",
+    savedNow: "Saved as why you're reading this one, from what you wrote.",
   },
   profile: {
     heading: "About you",
     save: "Save to About you",
     saved: "Saved to About you.",
+    savedNow: "Saved to About you, from what you wrote.",
   },
-} as const satisfies Record<SaveOffer["field"], { heading: string; save: string; saved: string }>;
+} as const satisfies Record<SaveOffer["field"], { heading: string; save: string; saved: string; savedNow: string }>;
 
 export const UNDO_LABEL = "Undo";
 
@@ -81,7 +94,8 @@ export function offerOf(run: ToolRun): SaveOffer | null {
   if (basis !== null && (typeof basis !== "string" || normaliseProfileText(basis) !== basis || basis.length > max)) {
     return null;
   }
-  return { field, text, basis };
+  /* Saved without a press only when the stored run says so literally. */
+  return { field, text, basis, ...((run.offer as { now?: unknown }).now === true ? { now: true as const } : {}) };
 }
 
 /**
@@ -106,7 +120,7 @@ export function GuideSaveOffers({ slug, message }: { slug: string; message: Chat
   return (
     <>
       {offers.map((offer) => (
-        <GuideSaveOffer key={offer.field} slug={slug} offer={offer} />
+        <GuideSaveOffer key={offer.field} slug={slug} offer={offer} answer={message.id} />
       ))}
     </>
   );
@@ -115,8 +129,8 @@ export function GuideSaveOffers({ slug, message }: { slug: string; message: Chat
 type OfferState =
   | { kind: "offer"; note?: keyof typeof NOTES }
   | { kind: "busy"; was: "offer" | "saved" }
-  /** Saved by this press; `before` is what it replaced, for Undo. */
-  | { kind: "saved"; before: string | null; note?: "changed" | "failed" }
+  /** Saved by this press, or by the card itself (`now`); `before` is what it replaced, for Undo. */
+  | { kind: "saved"; before: string | null; now?: true; note?: "changed" | "failed" }
   | { kind: "already" };
 
 /** What the card says after a press that did not save, or an Undo that worked. */
@@ -127,7 +141,7 @@ const NOTES = {
   changed: "It has changed since I offered this, so I left it as it is. Ask me again if you want this saved.",
 } as const;
 
-export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer }) {
+export function GuideSaveOffer({ slug, offer, answer }: { slug: string; offer: SaveOffer; answer: string }) {
   const madeFor = useMadeFor();
   const [state, setState] = useState<OfferState>({ kind: "offer" });
   const busy = useRef(false);
@@ -167,7 +181,7 @@ export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer
     }
   };
 
-  const save = () =>
+  const save = (now: boolean) =>
     once(
       "offer",
       async () => {
@@ -178,10 +192,31 @@ export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer
            card pressed after the words changed (a later offer saved, another
            tab, Metadata) would otherwise put back words the reader replaced. */
         if (before !== offer.basis) return { kind: "offer", note: "changed" };
-        return (await landed(offer.text)) ? { kind: "saved", before } : { kind: "offer", note: "failed" };
+        return (await landed(offer.text))
+          ? { kind: "saved", before, ...(now ? { now: true as const } : {}) }
+          : { kind: "offer", note: "failed" };
       },
       { kind: "offer", note: "failed" },
     );
+
+  /* A `now` offer: saved by the card on the one sight of an answer this tab
+     watched being written; on any other, shown saved, with its Undo, when
+     the words are what is stored (a reload, coming back to it). */
+  const tried = useRef(false);
+  useEffect(() => {
+    if (offer.now !== true || tried.current) return;
+    tried.current = true;
+    if (takeAnsweredHere(answer, offer.field)) {
+      void save(true);
+      return;
+    }
+    void once(
+      "offer",
+      async () => ((await current()) === offer.text ? { kind: "saved", before: offer.basis, now: true } : { kind: "offer" }),
+      { kind: "offer" },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
 
   const undo = (before: string | null) =>
     once(
@@ -202,7 +237,7 @@ export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer
       <p className="guide-offer-text voice-ai">{offer.text}</p>
       {shows === "saved" ? (
         <p className="chat-empty-hint guide-offer-status" role="status">
-          {words.saved} You can change it on <Link href={where}>{whereName}</Link>.{" "}
+          {state.kind === "saved" && state.now ? words.savedNow : words.saved} You can change it on <Link href={where}>{whereName}</Link>.{" "}
           <button
             type="button"
             className="chat-suggest-btn"
@@ -225,7 +260,7 @@ export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer
           {offer.field === "profile" && (
             <p className="chat-empty-hint guide-offer-note">Saving this replaces what About you says now.</p>
           )}
-          <button type="button" className="chat-suggest-btn" disabled={state.kind === "busy"} onClick={() => void save()}>
+          <button type="button" className="chat-suggest-btn" disabled={state.kind === "busy"} onClick={() => void save(false)}>
             {words.save}
           </button>
           {state.kind === "offer" && state.note !== undefined && (

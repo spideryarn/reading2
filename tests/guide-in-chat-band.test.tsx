@@ -332,24 +332,26 @@ describe("handoffs and the guide", () => {
   it("sends to the guide a handoff that targets it, with a chat open", async () => {
     stored = [GUIDE, CHAT];
     await mount(`?mode=chat&thread=${CHAT.id}`);
-    await show({ slug: SLUG, target: "guide", question: "Where should I start?", send: true });
+    await show({ slug: SLUG, target: "guide", question: "Where should I start?", send: true, typed: true });
     expect(posts, "one press, one model call").toHaveLength(1);
-    expect(posts[0]?.body).toMatchObject({ threadId: GUIDE.id, kind: "guide", question: "Where should I start?" });
+    /* The bar's sentence is the reader's own, so it goes as typed (plan 261011s). */
+    expect(posts[0]?.body).toMatchObject({ threadId: GUIDE.id, kind: "guide", question: "Where should I start?", typed: true });
     expect(posts[0]?.body).not.toHaveProperty("visible");
     expect(panel?.threadId).toBe(GUIDE.id);
   });
 
   it("begins the guide for a handoff that targets it when there is none, and sends once", async () => {
     stored = [CHAT];
-    await mount("?mode=chat", { slug: SLUG, target: "guide", question: "Where should I start?", send: true });
+    await mount("?mode=chat", { slug: SLUG, target: "guide", question: "Where should I start?", send: true, typed: false });
     expect(posts).toHaveLength(1);
     expect(posts[0]?.body).toMatchObject({ kind: "guide", question: "Where should I start?" });
+    expect(posts[0]?.body, "words the reader did not type are not sent as typed").not.toHaveProperty("typed");
     expect(guides()).toHaveLength(1);
   });
 
   it("leaves a waiting guide handoff in the guide's box, and sends nothing", async () => {
     stored = [GUIDE, CHAT];
-    await mount("?mode=chat", { slug: SLUG, target: "guide", question: "Where should I start?", send: false });
+    await mount("?mode=chat", { slug: SLUG, target: "guide", question: "Where should I start?", send: false, typed: true });
     expect(posts).toHaveLength(0);
     expect(panel?.threadId).toBe(GUIDE.id);
     expect(chatDraftsFor(SLUG).thread(GUIDE.id)).toBe("Where should I start?");

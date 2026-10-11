@@ -41,7 +41,7 @@ import { useChat } from "../../useChat.js";
 import { useExperimental } from "../../useExperimental.js";
 import { softKeyboardIsUp } from "../../useVisualViewport.js";
 import { useLive } from "../../live/useLive.js";
-import { ChatPanel } from "../../ChatPanel.js";
+import { ChatPanel, type SendHow } from "../../ChatPanel.js";
 import { chatDraftsFor } from "../../chat-draft.js";
 
 /**
@@ -350,6 +350,17 @@ interface ChatHandoffBase {
 /** To the guide: open it (or begin it) and send, or wait in its box. Nothing else rides along. */
 export interface ChatHandoffToGuide extends ChatHandoffBase {
   readonly target: "guide";
+  /**
+   * **The reader typed `question` themselves** (the bar's *Ask the guide*
+   * row), so it is sent as typed (`SendHow`) and the guide may save words
+   * quoted from it without a press (src/save-closeness.ts, plan 261011s).
+   * `false` for words anything else wrote. Required, so a new sender has to
+   * say. A question that waits in the box is marked typed by the composer
+   * when the reader sends it, whatever this says: so a sender of words that
+   * are not the reader's must send them (`send: true`, `typed: false`), not
+   * leave them in the box.
+   */
+  readonly typed: boolean;
 }
 
 /** A fresh chat — every *Ask in chat* sender in `Reader` § `handToChat`. */
@@ -989,7 +1000,7 @@ export function ConversationBand({
    */
   const taken = useRef<ChatHandoff | null>(null);
   const sendToRef = useRef<
-    (id: string | null, question: string, first?: ChatHandoffToChat, as?: ThreadKind) => void
+    (id: string | null, question: string, first?: ChatHandoffToChat, as?: ThreadKind, how?: SendHow) => void
   >(() => {});
   useEffect(() => {
     if (!handoff) return;
@@ -1004,7 +1015,9 @@ export function ConversationBand({
         /* The one guide, not a fresh conversation: the bar's *Ask the guide*
            (plan 261007j). Sent as a guide turn, whatever the band had open. */
         const id = openGuide(!handoff.send);
-        if (handoff.send) sendToRef.current(id, handoff.question, undefined, "guide");
+        if (handoff.send) {
+          sendToRef.current(id, handoff.question, undefined, "guide", handoff.typed ? { typed: true } : undefined);
+        }
         else drafts.setThread(id, handoff.question);
       } else if (ours && handoff.target === "chat") {
         /* A fresh chat, even with the guide open: `beginHere` mints the
@@ -1271,6 +1284,8 @@ export function ConversationBand({
     /* The kind of conversation `to` is, when this render cannot see it yet —
        a guide a handoff has just begun. Otherwise the open thread's own. */
     as?: ThreadKind,
+    /* Whether the reader typed it (`SendHow`): the composer's sends only. */
+    how?: SendHow,
   ): void => {
     if (resettingNow.current) return;
     // `send` returns the thread it went to, minted here when this is a new
@@ -1315,6 +1330,7 @@ export function ConversationBand({
       ...(origin ? { origin } : {}),
       ...(first?.anchor ? { anchor: first.anchor } : {}),
       ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
+      ...(how?.typed ? { typed: true as const } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box
@@ -1404,7 +1420,7 @@ export function ConversationBand({
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
-      onSend={(question) => sendTo(current, question)}
+      onSend={(question, how) => sendTo(current, question, undefined, undefined, how)}
       /* The box under the list. `null` rather than `thread` is the whole
          difference: it mints whatever `?thread=` still says, which on the list
          is either nothing, a conversation the fetch has not brought yet, or one

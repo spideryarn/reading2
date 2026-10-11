@@ -111,6 +111,7 @@ import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
 import { hostOf, isWebUrl, sameTarget } from "./urls.js";
 import { untrusted } from "./untrusted-fence.js";
+import { savesAtOnce } from "./save-closeness.js";
 
 /* --------------------------------------------------------------- the caps --
    All in characters, all small, and each one is the answer to "how much of this
@@ -265,6 +266,14 @@ export interface ToolContext {
    * route could not read is absent, and cannot be offered safely.
    */
   saved?: SavedNow | undefined;
+  /**
+   * **The message the reader typed this turn**, on a guide turn whose
+   * question came from the composer (the request's `typed: true`); `null` or
+   * absent for anything else — a button's words, a retry, an edit. What
+   * `offer_to_save` checks an offer against before it may save without a
+   * press (src/save-closeness.ts).
+   */
+  typed?: string | null | undefined;
 }
 
 /** A turn's read of the reader's two profile fields, each normalised; a field that could not be read is absent. */
@@ -595,11 +604,16 @@ export const GUIDE_TOOLS: FunctionTool[] = (() => {
  * user's wording"*.
  *
  * **It saves nothing.** It checks the words and hands them back as an offer on
- * the run, which the page draws as a card under the answer with a button the
- * reader presses (src/web/GuideSaveOffer.tsx). A press is the only write, so a
- * planted instruction in the article can at worst put words on a card the
- * reader reads before pressing (docs/project/security-map.md: anything a model
- * proposes that writes is a press).
+ * the run, which the page draws as a card under the answer (src/web/GuideSaveOffer.tsx).
+ * Usually the reader presses its button. **An offer that is the reader's own
+ * words, word for word** — a run of what they typed this turn, after what About
+ * you already held (`savesAtOnce`, src/save-closeness.ts) — is marked `now`,
+ * and the card saves it at once with an Undo: Greg's reply A to q-t3j8hj and his report
+ * `spya-yk3r03`, plan
+ * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md.
+ * So a planted instruction in the article can at worst put words on a card the
+ * reader reads before pressing, or save words the reader wrote themselves,
+ * with an Undo beside them (docs/project/security-map.md).
  *
  * Reading is not a tool: every guide turn already carries both fields, read
  * fresh, under WHO IS READING THIS — the header's `summarise_article` point.
@@ -613,10 +627,10 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
     name: "offer_to_save",
     description:
       "Offer to save something the reader told you, as why they are reading this piece (field " +
-      "\"reason\") or as their About you (field \"about_you\"). This saves nothing: the reader " +
-      "sees your words under your answer with a button, and only their press saves them. Keep " +
-      "to their own words: an exact quote, or a very close paraphrase that only tidies it into " +
-      "a sentence. For about_you, give the whole new text, starting from their current About " +
+      "\"reason\") or as their About you (field \"about_you\"). The reader sees your words under " +
+      "your answer. Keep quite close to their own wording: it need not be an exact quote, but an " +
+      "exact quote of what they typed is saved at once with an Undo; anything else gets a button " +
+      "they press to save it. For about_you, give the whole new text, starting from their current About " +
       "the reader exactly as written and changing only what they told you.",
     parameters: {
       type: "object",
@@ -2277,16 +2291,25 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   /* The one refusal that asks nothing of the model: there is nothing to
      offer, and nothing to do instead. The case that wrote answers twice. */
   if (basis === text) return refuse("those are already their saved words, exactly.", true);
+  /* Their typed words, word for word: the page saves it at once, with an
+     Undo (src/save-closeness.ts, plan 261011s). Anything else waits for the press. */
+  const now = savesAtOnce({ field, text, basis }, ctx.typed ?? null);
   return {
     label,
     detail: "",
     settles: true,
-    content:
-      "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
-      "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
-      "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
-      ALREADY_ON_SCREEN,
-    offer: { field, text, basis },
+    content: now
+      ? /* Not "say it is saved": the page writes it, after this, and may not
+           (GPT Sol's plan review of 261011s). The card says which. */
+        "These are the reader's own words, word for word, so the page will save them itself, with an " +
+        "Undo, and say under your answer whether it did. Say nothing about saving these words, and " +
+        "never that there is a button for them. On a later turn, WHO IS READING THIS shows what is " +
+        "saved. " + ALREADY_ON_SCREEN
+      : "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
+        "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
+        "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
+        ALREADY_ON_SCREEN,
+    offer: { field, text, basis, ...(now ? { now: true as const } : {}) },
   };
 }
 

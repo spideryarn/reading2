@@ -306,6 +306,65 @@ describe("a guide turn", () => {
     expect(answer?.tools?.[0]?.offer).toBeUndefined();
   });
 
+  /* Plan 261011s: the request's `typed: true` is what lets an offer save
+     without a press, so it reaches the tool only on a new guide question. */
+  describe("typed", () => {
+    const offering = (text: string): Response[] => {
+      const call = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+      return [
+        new Response(
+          call({
+            model: "test/model",
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: "toolu_0",
+                      type: "function",
+                      function: { name: "offer_to_save", arguments: JSON.stringify({ field: "reason", text }) },
+                    },
+                  ],
+                },
+              },
+            ],
+          }) +
+            call({ model: "test/model", choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+            "data: [DONE]\n\n",
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        ),
+        finishedBody("Saved; start with the abstract."),
+      ];
+    };
+    const offerOn = async (threadId: string) =>
+      (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === threadId)?.messages.at(-1)?.tools?.[0]?.offer;
+
+    it("marks an offer from a typed question to save at once", async () => {
+      vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
+      replies = offering("For my journal club.");
+      expect(await post({ threadId: "spya-gdrtt2", question: "it is for my journal club", kind: "guide", typed: true })).toBe(200);
+      expect(await offerOn("spya-gdrtt2")).toEqual({ field: "purpose", text: "For my journal club.", basis: null, now: true });
+    });
+
+    it("leaves the same offer to the press when the question was not typed", async () => {
+      vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
+      replies = offering("For my journal club.");
+      expect(await post({ threadId: "spya-gdrtu2", question: "it is for my journal club", kind: "guide" })).toBe(200);
+      expect(await offerOn("spya-gdrtu2")).toEqual({ field: "purpose", text: "For my journal club.", basis: null });
+    });
+
+    it.each([
+      ["a value other than true", { typed: "yes" }],
+      ["false", { typed: false }],
+      ["a retry", { typed: true, retry: "spya-gdrtq9" }],
+      ["an edit", { typed: true, edit: "spya-gdrtq9" }],
+    ])("is refused on %s, before any model call", async (_what, extra) => {
+      expect(await post({ threadId: "spya-gdrtv2", question: "for my journal club", kind: "guide", ...extra })).toBe(400);
+      expect(sent).toHaveLength(0);
+    });
+  });
+
   it("refuses visible blocks before any model call", async () => {
     const id = article?.blocks[0]?.id;
     expect(await post({ threadId: "spya-gdrtd2", question: "this bit", kind: "guide", visible: [id] })).toBe(400);

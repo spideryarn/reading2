@@ -3303,6 +3303,15 @@ export interface SaveOffer {
    * Metadata — saves nothing and says so.
    */
   basis: string | null;
+  /**
+   * **Saved at once, with no press**: every word is the reader's own, typed
+   * this turn or already in the field, or a linking word (`savesAtOnce`,
+   * src/save-closeness.ts). Absent on every other offer, which waits for the
+   * press. The card saves it itself only on an answer that tab watched being
+   * written. Plan
+   * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md.
+   */
+  now?: true;
 }
 
 

@@ -150,6 +150,16 @@ import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
 
+/**
+ * **How a question was sent.** `typed` only from the composer, where the
+ * reader wrote it: a button's words (a greeting start, the guide's next steps,
+ * a suggestion) are sent without it. The guide may save words from a typed
+ * question without a press (src/save-closeness.ts, plan 261011s).
+ */
+export interface SendHow {
+  typed?: true;
+}
+
 interface Props {
   /**
    * **The conversations this panel may open.** `threadId` is resolved among
@@ -231,7 +241,7 @@ interface Props {
    * the same wrong claim the spinner was added to stop. GPT Sol, 2026-08-27.
    */
   loadFailed: boolean;
-  onSend(question: string): void;
+  onSend(question: string, how?: SendHow): void;
   onNew(): void;
   /**
    * The first question of a conversation that does not exist yet — the box
@@ -1516,7 +1526,7 @@ export function Conversation({
   /** See `recovering` in Props. */
   recovering: Set<string>;
   blocks: Map<string, string>;
-  onSend(question: string): void;
+  onSend(question: string, how?: SendHow): void;
   /** See Composer: submission begins before the awaited Live hang-up. */
   onSubmitStarted?: (() => void) | undefined;
   onRetry(messageId: string): void;
@@ -3088,7 +3098,7 @@ export function Composer({
    * (Overseer, 2026-10-09; plan 261009g).
    */
   keepAs: string;
-  onSend(question: string): void;
+  onSend(question: string, how?: SendHow): void;
   /** The reader has submitted, even if Live must finish before `onSend`. */
   onSubmitStarted?: (() => void) | undefined;
   busy: boolean;
@@ -3275,7 +3285,8 @@ export function Composer({
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
-    onSend(question);
+    /* Typed here, by the reader: the one send that says so (`SendHow`). */
+    onSend(question, { typed: true });
     /* The question has gone and the answer arrives under the keys: let go of
        a soft keyboard, and only a soft one (useVisualViewport.ts §
        `putKeyboardAway`; Greg, spya-gmtt4b). A live handoff can wait long

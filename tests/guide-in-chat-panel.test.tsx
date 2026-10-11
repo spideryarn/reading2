@@ -69,8 +69,10 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
+type SendHow = import("../src/web/ChatPanel.js").SendHow;
 const { GUIDE_STARTS } = await import("../src/web/GuideGreeting.js");
 const { OFFER_WORDS, UNDO_LABEL } = await import("../src/web/GuideSaveOffer.js");
+const { forgetAnsweredHere, markAnsweredHere } = await import("../src/web/chat/answered-here.js");
 
 const AT = "2026-10-07T09:00:00.000Z";
 
@@ -99,6 +101,8 @@ const EMPTY_GUIDE = thread("spya-gdeaab", "guide", { messages: [] });
 let host: HTMLDivElement;
 let root: Root;
 const sent: string[] = [];
+/** How each send was made (`SendHow`), beside `sent`. */
+const sentHow: (SendHow | undefined)[] = [];
 let guideOpened = 0;
 
 function paint(
@@ -127,8 +131,9 @@ function paint(
         onFrom: () => {},
         onOpenLearn: () => {},
         onThread: () => {},
-        onSend: (q: string) => {
+        onSend: (q: string, how?: SendHow) => {
           sent.push(q);
+          sentHow.push(how);
         },
         onNew: () => {},
         onSendNew: () => {},
@@ -167,6 +172,8 @@ beforeEach(() => {
   beforeRead = null;
   delayedRead = null;
   sent.length = 0;
+  sentHow.length = 0;
+  forgetAnsweredHere();
   guideOpened = 0;
   forgetChatDrafts();
   host = document.createElement("div");
@@ -260,6 +267,23 @@ describe("the guide's greeting", () => {
     expect(start).toBeDefined();
     act(() => start?.click());
     expect(sent).toEqual([GUIDE_STARTS[0]]);
+    expect(sentHow, "a start's words are ours, not typed (plan 261011s)").toEqual([undefined]);
+  });
+
+  it("marks only what is typed into the box as typed (plan 261011s)", async () => {
+    await greeting();
+    const box = host.querySelector<HTMLTextAreaElement>(".chat-input");
+    expect(box).not.toBeNull();
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, "For my journal club");
+      box?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      box?.form?.requestSubmit();
+    });
+    await settle();
+    expect(sent).toEqual(["For my journal club"]);
+    expect(sentHow).toEqual([{ typed: true }]);
   });
 
   it("points at the profile only when a reason is stored and About you is empty", async () => {
@@ -490,6 +514,87 @@ describe("the guide's offer to save", () => {
   ])("draws no card for %s", async (_what, guide) => {
     await draw(guide);
     expect(host.querySelector(".guide-offer")).toBeNull();
+  });
+
+  /* Plan 261011s: an offer that is the reader's typed words, word for word,
+     saves itself, once, on an answer this tab watched being written. */
+  describe("saved at once, when the words are the reader's own", () => {
+    const NOW: Offer & { now: true } = { ...REASON, now: true };
+    /** The answer as this tab's own stream finished it (the controller marks it). */
+    const watch = async (offers: Offer[]) => {
+      await draw(guideWith(offers, { status: "pending" }));
+      expect(patches, "nothing saves while the answer is arriving").toEqual([]);
+      markAnsweredHere("spya-gdea02");
+      await draw(guideWith(offers));
+    };
+
+    it("saves on an answer this tab watched, says so, and Undo puts it back", async () => {
+      reader = { ...reader, purpose: "Older reason" };
+      await watch([{ ...NOW, basis: "Older reason" }]);
+      expect(patches).toEqual([{ purpose: "For my journal club." }]);
+      expect(host.textContent).toContain(OFFER_WORDS.purpose.savedNow);
+      await press(UNDO_LABEL);
+      expect(patches.at(-1)).toEqual({ purpose: "Older reason" });
+      expect(host.textContent).toContain("Undone");
+      expect(patches, "the Undo is not followed by a second save").toHaveLength(2);
+    });
+
+    it("draws the button, and saves nothing, on an answer that arrived settled (a reload)", async () => {
+      await draw(guideWith([NOW]));
+      expect(patches).toEqual([]);
+      expect(button(SAVE)).toBeDefined();
+    });
+
+    it("saves nothing on an answer seen pending but not finished by this tab's stream", async () => {
+      await draw(guideWith([NOW], { status: "pending" }));
+      await draw(guideWith([NOW]));
+      expect(patches).toEqual([]);
+    });
+
+    it("after a reload, shows it saved, with its Undo, when the words are what is stored", async () => {
+      reader = { ...reader, purpose: "For my journal club." };
+      await draw(guideWith([{ ...NOW, basis: "Older reason" }]));
+      expect(patches).toEqual([]);
+      expect(host.textContent).toContain(OFFER_WORDS.purpose.savedNow);
+      await press(UNDO_LABEL);
+      expect(patches).toEqual([{ purpose: "Older reason" }]);
+    });
+
+    it("saves once, not again when the same answer is drawn a second time", async () => {
+      await watch([NOW]);
+      expect(patches).toHaveLength(1);
+      await press(UNDO_LABEL);
+      act(() => root.unmount());
+      root = createRoot(host);
+      await draw(guideWith([NOW]));
+      expect(patches, "the save and its Undo, and nothing after").toHaveLength(2);
+      expect(button(SAVE)).toBeDefined();
+    });
+
+    it("waits for the press on a watched answer whose offer is not marked", async () => {
+      await watch([REASON]);
+      expect(patches).toEqual([]);
+      expect(button(SAVE)).toBeDefined();
+    });
+
+    it("keeps the basis rule: words changed since are left alone", async () => {
+      reader = { ...reader, purpose: "Written on Metadata since" };
+      await watch([NOW]);
+      expect(patches).toEqual([]);
+      expect(host.textContent).toContain("It has changed since I offered this");
+    });
+
+    it("saves About you only as offered, and only once", async () => {
+      reader = { ...reader, profile: "A historian" };
+      await watch([{ field: "profile", text: "A historian. For my journal club.", basis: "A historian", now: true } as Offer]);
+      expect(patches).toEqual([{ profile: "A historian. For my journal club." }]);
+      expect(host.textContent).toContain(OFFER_WORDS.profile.savedNow);
+    });
+
+    it("ignores a `now` that is not literally true", async () => {
+      await watch([{ ...REASON, now: "yes" } as unknown as Offer]);
+      expect(patches).toEqual([]);
+    });
   });
 
   it("draws no card in a chat, whatever its runs say", async () => {
