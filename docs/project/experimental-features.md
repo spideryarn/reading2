@@ -460,11 +460,11 @@ new Learn part would be gated.
 
 It had been behind the switch since the first four went in on 2026-09-03; its row said the name
 suggests saved notes and spaced repetition, neither of which exists. That is still so. Recall,
-Tutorial and Quiz are now in every reader's bar, and Explore is gated one level down:
-[§ Gated below mode level](#gated-below-mode-level) — until 2026-10-11, below. Learn is
-owners-only as before, so a visitor's bar gains a Learn button that opens the sentence saying
-so, as Skim's does. Nothing new is generated when an article is added, because a press on Learn
-generates nothing: the Quiz is still written on the first press of its chip.
+Tutorial and Quiz entered every reader's bar then, while Explore remained gated one level down
+until 2026-10-11 ([§ Gated below mode level](#gated-below-mode-level)). Learn remained owners-only,
+so a visitor's bar gained a Learn button that opens the sentence saying so, as Skim's does. Nothing
+new was generated when an article was added, because a press on Learn generates nothing: the Quiz
+is still written on the first press of its chip.
 [261005b](../plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md).
 
 **Skim (then called Trajectory) left the table on 2026-09-28, the day it arrived.** Greg:

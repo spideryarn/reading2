@@ -9,6 +9,8 @@
  * is drawn by SiteBits.tsx from `MODE_CATALOG[mode].experimental`, so a mode
  * that leaves the switch loses its tag without anyone editing a caption — which
  * captions had already got wrong three times (Structure, Skim, Tweets).
+ * Learn's typed caption is checked separately for a stale Experimental claim:
+ * its generated Learn tag cannot catch a wrong claim about one sub-mode.
  *
  * `TITLES` is the explicit visible-title → mode map, so a tile carrying the
  * wrong `mode` (a Quiz tile saying `quotes`, say) is caught rather than
@@ -134,5 +136,13 @@ describe("/features", () => {
     const page = await mount(<FeaturesPage signedIn={false} />, "/features");
     const text = page.textContent ?? "";
     expect(text.match(/turn these on from the bar or their profile/g)?.length).toBe(1);
+  });
+
+  it("does not describe Learn's Explore as experimental", async () => {
+    const page = await mount(<FeaturesPage signedIn={false} />, "/features");
+    const learn = [...page.querySelectorAll<HTMLElement>("[data-mode=learn]")]
+      .find((mention) => mention.textContent?.includes("Explore"));
+    expect(learn).toBeDefined();
+    expect(learn?.textContent).not.toMatch(/\bexperimental\b/i);
   });
 });
