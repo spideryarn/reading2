@@ -80,7 +80,19 @@ import {
   sessionState,
   setRoleCommand,
 } from "./gjd-remote-tmux.js";
-import { DEFAULT_FLEET_PORT, overseerTarget, readTellAnswer, sessionTarget, splitStatus, tellPostCommand } from "./gjd-remote-tell.js";
+import {
+  DEFAULT_FLEET_PORT,
+  describeVoice,
+  overseerTarget,
+  ownSessionQuery,
+  parseOwnSession,
+  readTellAnswer,
+  runByAgent,
+  sessionTarget,
+  splitStatus,
+  tellPostCommand,
+  voiceFor,
+} from "./gjd-remote-tell.js";
 import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import {
@@ -2243,7 +2255,13 @@ function cmdTell(who: TellWho, text: string, port: number): void {
   } catch {
     die(`the dashboard at ${base} answered something that is not JSON`);
   }
-  const target = who.kind === "overseer" ? overseerTarget(snapshot, text) : sessionTarget(snapshot, who.name, text);
+  // Who is speaking: Greg, or the agent running this (plan 261011e). The tmux
+  // question is asked of THIS machine, and only by an agent inside tmux.
+  const query = runByAgent(process.env) ? ownSessionQuery(process.env) : null;
+  const ownAnswer = query === null ? null : spawnSync("tmux", query, { encoding: "utf8", timeout: 5_000 });
+  const own = ownAnswer !== null && ownAnswer.status === 0 ? parseOwnSession(ownAnswer.stdout) : null;
+  const voice = voiceFor(snapshot, process.env, own);
+  const target = who.kind === "overseer" ? overseerTarget(snapshot, text, undefined, voice) : sessionTarget(snapshot, who.name, text, voice);
   const pane = who.kind === "overseer" ? "the Overseer's pane" : "its pane";
   if (!target.ok) die(`not sent — ${target.why}`);
 
@@ -2277,7 +2295,9 @@ function cmdTell(who: TellWho, text: string, port: number): void {
   const answer = readTellAnswer(httpStatus, body);
   appendLog({ cmd: who.kind === "overseer" ? "tell-overseer" : "tell", name: target.name });
   if (answer.ok) {
-    console.log(green(`✓ sent to ${printableName(target.name)}${who.kind === "overseer" ? ", the Overseer" : ""}`));
+    // The voice is printed so the sender sees how it went out: an agent that
+    // expected to speak as Greg finds out here, not from the recipient.
+    console.log(green(`✓ sent to ${printableName(target.name)}${who.kind === "overseer" ? ", the Overseer," : ""} ${describeVoice(voice)}`));
     return;
   }
   if (!answer.textMayBeInTheBox) die(`not sent to ${printableName(target.name)} — ${answer.why}`);
@@ -5548,6 +5568,9 @@ ${bold("SESSIONS")}
                           Exits 0 sent, 1 refused (nothing typed), 2 uncertain —
                           look at the pane, and do not send it again. "Sent" means
                           the keys were typed and Enter pressed, not that it was read.
+                          Run by Claude Code or Codex (CLAUDECODE / CODEX_THREAD_ID
+                          set), it is labelled as that agent, never as Greg; the
+                          success line says which.
       -p, --prompt TEXT     the text, instead of after the command (-p - reads stdin,
                             so backticks and $() need no quoting)
           --port N          the dashboard's port on the box (default 8787)
