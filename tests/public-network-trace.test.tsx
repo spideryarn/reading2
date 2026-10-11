@@ -1572,14 +1572,14 @@ describe("a signed-out browser on a shared document", () => {
        Claims, a press away — and the press asks the server nothing. */
     expect(text).not.toContain("Somebody else answers what it claims.");
     expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
-    /* The old `?mode=debate` link landed on Reception, Sources' second
-       chip since 2026-10-09 (router.ts § `liftLegacySources`). */
+    /* The old `?mode=debate` link lands on Reception
+       (router.ts § `liftLegacySources`). */
     expect(new URLSearchParams(location.search).get("mode")).toBe("sources");
     expect(new URLSearchParams(location.search).get("sources")).toBe("reception");
     const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".rcp-views [role='radio']") ?? [])];
     /* No bibliography on this payload, so Bibliography's chip has no count. */
     expect(chips[0]?.textContent, "the Bibliography chip, with no count").toBe("Bibliography");
-    const claims = chips[2];
+    const claims = chips.find((chip) => chip.textContent?.startsWith("Claims"));
     expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
     await act(async () => claims?.click());
     await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
@@ -2200,8 +2200,10 @@ describe("a signed-out browser on a shared document", () => {
       "timeline",
       "skim",
       "faq",
-      /* Sources in each of its three sub-modes, and the two old words. */
+      /* Sources in each of its four sub-modes, and the two old words. Links
+         (plan 261011d) is read off the blocks and must ask nothing at all. */
       "sources",
+      "sources&sources=links",
       "sources&sources=reception",
       "sources&sources=claims",
       "citations",

@@ -1,8 +1,8 @@
 /**
- * **The numbers on Sources' three chips, and the rows behind them** —
+ * **The numbers on Sources' four chips, and the rows behind them** —
  * pure selectors, used by the chip row (SourcesMode.tsx §
  * `SourcesViews`) and by the panels that draw the lists (BibliographyPanel,
- * ReceptionAndClaimsPanel), so a chip's number and the list under it are one derivation
+ * LinksPanel, ReceptionAndClaimsPanel), so a chip's number and the list under it are one derivation
  * and cannot disagree. GPT Sol's F4 on
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md: the
  * counts used to be worked out inside each panel, where the wrapper drawing
@@ -13,6 +13,7 @@
  *
  * - **Bibliography**: the works cited, every one — the number Bibliography's (i)
  *   gave ("12 works cited"), not the rows its threshold leaves.
+ * - **Links**: distinct external addresses in the article's own markup.
  * - **Reception**: the rows about the piece, through the thread the reader
  *   picked (`?receptionthread=`), as Reception's segment counted them.
  * - **Claims**: the listed claims, until the reader's checks have put
@@ -117,6 +118,8 @@ export function claimsCount(
 /** **The three chips' numbers.** Bibliography's is `null` while there is no list to count. */
 export interface SourcesCounts {
   bibliography: number | null;
+  /** The distinct web addresses the article links to (outbound-links.ts). */
+  links: number;
   reception: number;
   claims: ClaimsCount;
 }
@@ -124,6 +127,8 @@ export interface SourcesCounts {
 export interface SourcesCountsInput {
   /** The works cited, or `null` while there is no list (not made, or still loading). */
   works: readonly unknown[] | null;
+  /** Links' rows, `outboundLinks` over the blocks — always there, since nothing makes them. */
+  links: readonly unknown[];
   reception: AnyReception | null;
   /** Claims' list of the article's claims, or `null` when none is read. */
   listed: readonly ListedClaim[] | null;
@@ -141,6 +146,7 @@ export function sourcesCounts(input: SourcesCountsInput): SourcesCounts {
   const claims = claimsSelection(input.reception, threads, input.relevance, input.thread);
   return {
     bibliography: input.works === null ? null : input.works.length,
+    links: input.links.length,
     reception: reception.shown.length,
     claims: claimsCount(input.listed, input.checked, claims.shown.length),
   };
