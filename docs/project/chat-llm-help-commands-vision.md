@@ -292,10 +292,12 @@ the interface model.
   lands where a band fits (since 2026-10-07), and stands in there for the "Why are you reading
   this?" modal. [chat-tools.md § The guide](chat-tools.md#the-guide).
   Unlike the pick, **the guide sees the article**, so it holds the line by pressing alone: nothing
-  it proposes that writes or spends runs without the reader. Since 2026-10-07 it may *move* the
-  reader itself — one jump, or one mode that makes and writes nothing, per answer — which Greg
-  answered on q-tyvutf: *"yes. err on the side of capability for the guide, unless there's high
-  risk/stakes"* ([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md),
+  it proposes runs without the reader. From 2026-10-07 it could *move* the reader itself, one jump
+  or one mode that makes and writes nothing per answer
+  ([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)); on
+  2026-10-11 that was removed, because a new reader who asked for suggestions was surprised to find
+  a different mode open (Greg, `spya-gae0zv`;
+  [261011m](../plans/261011m-guide-suggests-a-mode-with-a-button-a-bigger-chat-box-suggestions-centred.md),
   [chat-tools.md § The guide](chat-tools.md#the-guide)).
 - **Not built**: questions about the app answered from the Help; two commands from one sentence;
   the capable model when Jev is unsure (§ Jev first says what replaced it); the interface model

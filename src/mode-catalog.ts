@@ -687,16 +687,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
  * mode for anyone (src/web/experimental-visibility.ts). A button the guide
  * offers to the one reader who said they need the mode is not clutter. So a
  * mode here keeps its place behind the switch in the bar, the command bar and
- * ordinary Chat, and gains, with its sub-modes, three things, each read from
+ * ordinary Chat, and gains, with its sub-modes, two things, each read from
  * here through `offeredBehindTheSwitch`:
  *
  *  - a button in the written guide's list of modes, with `audience` and
  *    `guidance` beside it (src/guide.ts § `modeWordsSection`);
- *  - a place in the **guide's** chip door only (src/web/chip-door.ts §
- *    `guideDoorRows`);
- *  - and it is always a press, never opened by the guide itself
- *    (src/acts-alone.ts § `modeActsAlone`): the offer rests on the model's
- *    reading of who the reader is, which the reader confirms.
+ *  - and a place in the **guide's** chip door only (src/web/chip-door.ts §
+ *    `guideDoorRows`), so that button can be pressed.
+ *
+ * Like every guide button it is the reader's to press (the guide opens nothing
+ * itself since plan 261011m), which matters doubly here: the offer rests on the
+ * model's reading of who the reader is, and the press is the reader confirming it.
  *
  * An allowlist of its own, deny by default, so the exceptions to the switch
  * can be read in one place rather than found scattered across the rows above.

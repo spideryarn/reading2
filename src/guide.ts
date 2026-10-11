@@ -1,7 +1,6 @@
 /**
  * **The guide's pieces of context that no other conversation gets**: our
- * words for the modes, how much the reader has used Spideryarn before, and
- * (since plan 261008a) which of its *Button* modes are already made.
+ * words for the modes, and how much the reader has used Spideryarn before.
  *
  * The guide is the conversation about how to read this piece with Spideryarn
  * (`GUIDE_SYSTEM` in src/converse.ts,
@@ -17,10 +16,8 @@
  *   (docs/project/prompt-caching.md).
  * - **The experience line changes per reader and over time**, so it rides in
  *   the final user message beside the profile, below the breakpoint, and never
- *   in the system prompt (GPT Sol's F7 on the plan above). So does the
- *   already-made line, which changes per article and over time.
+ *   in the system prompt (GPT Sol's F7 on the plan above).
  */
-import { keysOpenFree, type MadeArtefact, modeActsAlone } from "./acts-alone.js";
 import catalogue from "./command-pick-catalogue.generated.json" with { type: "json" };
 import { offeredBehindTheSwitch } from "./mode-catalog.js";
 
@@ -31,7 +28,6 @@ interface CatalogueRow {
   readonly label: string;
   readonly description: string;
   readonly kind: string;
-  readonly generates: boolean;
   readonly contexts: readonly string[];
 }
 
@@ -100,20 +96,11 @@ topic, a method or a term they will want to find all of in the piece, offer it
 as a search step under NEXT STEPS, where they can change the words first, not
 as a button in your answer.
 
-In this conversation, unlike the rule above, some actions you may take
-yourself: the ones that only move the reader. They are a mode marked "Opens at
-once:" and a jump-first. When your answer ends, the page does the first of
-those in it for the reader, and any others stay buttons. So when one is the
-right next step, write it on a line of its own as the last thing in your
-answer, write at most one, and say you have done it ("I've opened Structure for
-you, so you can see how the parts fit"; "I've taken you to where the method
-starts"). Everything else stays an offer the reader presses — a mode marked
-"Button:", which makes something new or changes their saved searches, a quick
-search, a find, and the rest above — so for those, do not ask "Want me to open
-it?" and do not say you have done it. The one exception: a mode marked
-"Button:" that the line ALREADY MADE FOR THIS ARTICLE, beside their message,
-names is already made, so opening it makes nothing, and in that answer it opens
-at once like a mode marked "Opens at once:".
+You never open a mode, move the reader or run anything yourself. The reader
+does it, by pressing the button. So when a mode is the right next step, offer
+it with its button and say what pressing it will do ("Press Structure to see
+how the parts fit"). Never say you have opened it or done it, and do not ask
+"Want me to open it?": the button is the offer.
 
 ${lines.join("\n")}`;
 }
@@ -182,18 +169,15 @@ export function modeToken(key: string): string {
 }
 
 /**
- * ` Opens at once: [cmd:mode:…]` for an ordinary row the guide may open
- * without a press, ` Button: [cmd:mode:…]` for one it may not, nothing for an
- * experimental one unless the guide may offer it from behind the switch. The
- * split is `modeActsAlone` (src/acts-alone.ts), the rule the page applies when
- * it does the opening (plan 261007p), and it makes every row offered from
- * behind the switch a *Button* (plan 261009x).
+ * ` Button: [cmd:mode:…]` for every ordinary row, and for an experimental one
+ * the guide may offer from behind the switch (plan 261009x); nothing for any
+ * other experimental row. Every one is a button the reader presses: the guide
+ * opens nothing itself (plan 261011m, which removed the *Opens at once* rows
+ * plan 261007p had added).
  */
 function button(row: CatalogueRow): string {
   if (experimental(row) !== "" && offeredBehindTheSwitch(row.id) === undefined) return "";
-  return modeActsAlone(row.id, row.generates)
-    ? ` Opens at once: ${modeToken(row.id)}`
-    : ` Button: ${modeToken(row.id)}`;
+  return ` Button: ${modeToken(row.id)}`;
 }
 
 function experimental(row: CatalogueRow): string {
@@ -216,35 +200,6 @@ function writtenMark(row: CatalogueRow): string {
   return row.kind === "submode"
     ? " (experimental; offer it only when its mode's line says)"
     : ` (experimental; offer it only when ${offered.audience}. When you offer it: ${offered.guidance}.)`;
-}
-
-/* ----------------------------------------------------- the already-made line -- */
-
-/**
- * **Which of the *Button* modes are already made for this article**, as the
- * line beside the reader's message, or `""` when none is (or the read failed:
- * the model then treats them as buttons, the safe direction). Plan
- * docs/plans/261008a-guide-opens-glossary-and-summary-when-already-made.md.
- *
- * Below the cache breakpoint like `experienceLine`, because it changes per
- * article and over time; the system prompt's sentence about it is static.
- * Each key is named as `modeWordsSection` names its row, so the model can find
- * the token printed beside it. The route sends the same snapshot to the page
- * on the `done` frame (`opensFree`, src/web/guide-acts.ts), so its act and the
- * model's sentence use one decision.
- */
-export function madeLine(made: readonly MadeArtefact[] | null | undefined, rows: readonly CatalogueRow[] = catalogue): string {
-  if (made === null || made === undefined) return "";
-  const names: string[] = [];
-  for (const key of keysOpenFree(made)) {
-    const row = rows.find((r) => r.id === key && r.contexts.includes(OWNER_ARTICLE));
-    if (row === undefined) continue;
-    if (row.kind === "submode") {
-      const parent = rows.find((r) => r.kind === "mode" && key.startsWith(`submode:${r.id.slice("mode:".length)}:`));
-      names.push(parent === undefined ? row.label : `${parent.label} › ${row.label}`);
-    } else names.push(row.label);
-  }
-  return names.length === 0 ? "" : `ALREADY MADE FOR THIS ARTICLE: ${names.join("; ")}.`;
 }
 
 /* --------------------------------------------------- the experience line -- */

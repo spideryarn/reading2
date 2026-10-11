@@ -355,9 +355,11 @@ in practice never did. Now Referee is the one mode in `OFFERED_BEHIND_THE_SWITCH
 they are refereeing or assessing the piece is offered Referee and its sub-modes as buttons, whatever
 their switch says.
 
-- **Always a press.** The guide never opens it by itself (`modeActsAlone`,
-  [`src/acts-alone.ts`](../../src/acts-alone.ts)), because the offer rests on the model's reading of
-  who the reader is. An article saying the reader is a referee is not the reader saying so.
+- **Always a press**, as every guide button is (it opens nothing itself since
+  [261011m](../plans/261011m-guide-suggests-a-mode-with-a-button-a-bigger-chat-box-suggestions-centred.md)).
+  Here that matters twice over, because the offer rests on the model's reading of who the reader is.
+  An article saying the reader is a referee is not the reader saying so; the press is the reader
+  confirming it.
 - **The guide only.** Ordinary Chat, the bar and the command bar still hide it with the switch off
   ([`src/web/chip-door.ts`](../../src/web/chip-door.ts)).
 - **With the confidentiality fact, in the past tense.** The offer says the article's text was
