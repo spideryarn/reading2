@@ -103,9 +103,10 @@ describe("the Learn composer is chat's, with two differences", () => {
     expect(box?.rows).toBe(6);
   });
 
-  it("leaves chat's box exactly as it was", () => {
+  it("gives chat's box two rows, not Learn's six", () => {
+    /* Two since 2026-10-11: a one-row box went unnoticed (spya-srg5fa, plan 261011m). */
     paint({ ...learnThread(), kind: "chat" }, "chat");
-    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(2);
   });
 
   it("offers no stance picker, in Learn or in chat", () => {

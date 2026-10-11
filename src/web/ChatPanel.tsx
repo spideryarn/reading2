@@ -997,7 +997,12 @@ const SHORT_VIEWPORT = "(max-height: 500px)";
  * **The composer's floor and roof**: the rows it rests at, and the height in
  * px it may grow to with what is typed or dictated.
  *
- * Chat is one row growing to 160px — a question is a sentence. Learn is six
+ * Chat is two rows growing to 200px: a question is a sentence or two, and a
+ * one-row box went unnoticed under the guide's suggestion buttons (Greg,
+ * spya-srg5fa, 2026-10-11: *"can you make the input box larger and a tiny bit
+ * more prominent? I don't think people initially noticed it"*; plan 261011m).
+ * On a short viewport it rests at one row, so the transcript keeps the
+ * room. Learn is six
  * rows growing to 360px: a spoken Learn turn is a paragraph or three, and a
  * box that stops at 160px turns the reader's own words into a four-line
  * scrolling window they cannot read back before sending. On a short viewport
@@ -1007,7 +1012,7 @@ const SHORT_VIEWPORT = "(max-height: 500px)";
  * check, 2026-10-01). Plan 261001m § 5.
  */
 function boxSize(learn: boolean, short: boolean): { rows: number; roof: () => number } {
-  if (!learn) return { rows: 1, roof: () => 160 };
+  if (!learn) return short ? { rows: 1, roof: () => 160 } : { rows: 2, roof: () => 200 };
   if (!short) return { rows: 6, roof: () => 360 };
   return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
@@ -3177,7 +3182,7 @@ export function Composer({
    * is answering had 58px. So below 500px of viewport height (a landscape
    * phone; no laptop window is that short) Learn's box rests at two rows and
    * grows to 30% of the viewport, still following what is typed or dictated.
-   * Plan 261001m § 5. Chat's one-row box is unchanged.
+   * Plan 261001m § 5. Chat's box drops from two rows to one there too.
    */
   const short = useMedia(SHORT_VIEWPORT);
   const size = useMemo(() => boxSize(learn, short), [learn, short]);
