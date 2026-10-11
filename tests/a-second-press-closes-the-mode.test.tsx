@@ -476,11 +476,12 @@ describe("Plain closes both columns", () => {
 });
 
 /* Three since 2026-10-08 (plan 261008d): More stands inside the bands' frame,
-   straight after Skim, and Comments in Marginalia's, after it — Greg,
+   straight after Summary since 2026-10-11 (spya-hdde62, plan 261011x; after
+   Skim before that), and Comments in Marginalia's, after it — Greg,
    spya-mcs4gb. From 2026-10-07 More had a frame of its own (plan 261007c, D6),
    and from 2026-10-02 there were three. */
 describe("the bar is three frames: Plain, the bands with More, Marginalia with Comments", () => {
-  it("draws Plain alone in the first frame, More after Skim in the second and Comments after Marginalia in the last", async () => {
+  it("draws Plain alone in the first frame, More after Summary in the second and Comments after Marginalia in the last", async () => {
     await open("?margin=1");
     const frames = [...host.querySelectorAll(".dock-modes .dock-frame")];
     expect(frames).toHaveLength(3);
@@ -490,8 +491,8 @@ describe("the bar is three frames: Plain, the bands with More, Marginalia with C
     expect(labels(frames[1])).toEqual([
       MODE_LABEL.structure,
       MODE_LABEL.summary,
-      MODE_LABEL.skim,
       "More",
+      MODE_LABEL.skim,
       /* In every reader's bar since 2026-10-09 (plan 261009l). */
       MODE_LABEL.sources,
       MODE_LABEL.search,

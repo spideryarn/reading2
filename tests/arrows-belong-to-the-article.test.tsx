@@ -213,8 +213,8 @@ describe("the bottom bar's mode segment", () => {
     paintDock();
     const group = host.querySelector<HTMLElement>(".dock-modes-radios");
     expect(group).not.toBeNull();
-    /* The radios, and since 2026-10-08 the More button between Skim and
-       Search (plan 261008d § D2). */
+    /* The radios, and since 2026-10-08 the More button among them (plan
+       261008d § D2), between Summary and Skim since 2026-10-11 (plan 261011x). */
     expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(
       String(group?.querySelectorAll(".dock-btn").length),
     );
