@@ -3913,7 +3913,7 @@ export function Reader({
               owner.comments.loadFailed
                 ? { state: "failed" }
                 : owner.comments.loaded
-                  ? { state: "ready", comments }
+                  ? { state: "ready", comments, sorting: owner.comments.sorting }
                   : { state: "loading" }
             }
             onSort={owner.comments.sort}
@@ -4518,7 +4518,7 @@ export function Reader({
              `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
           key={annotateKey(annotating)}
           anchor={annotating}
-          /* **Referee mode only**, and all five of its sub-modes: the criteria
+          /* **Referee mode only**, and all six of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}

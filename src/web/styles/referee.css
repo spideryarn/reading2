@@ -1,5 +1,5 @@
-/* referee.css — Referee mode's band and its five sub-modes: Criteria, Claims,
-   Mirror, Candidates and Hidden text, plus PlaceOnCriterion's colours where
+/* referee.css — Referee mode's band and its six sub-modes: Criteria, Claims,
+   Mirror, Notes, Candidates and Hidden text, plus PlaceOnCriterion's colours where
    they are the panel's rather than the dialog's.
 
    The shell is mode-band.css and the placeholder lines are glossary.css's
@@ -936,8 +936,8 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 .ref-notes-said { font-size: 0.84rem; color: var(--ink-faint); }
 .ref-notes-note { margin: 0; font-size: 0.88rem; color: var(--ink-faint); }
 
-.ref-notes-heading { margin: 0; font-size: 0.88rem; font-weight: 600; color: var(--ink); }
-.ref-notes-count { font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.ref-notes-heading { margin: 0; font-size: var(--type-label); font-weight: 600; color: var(--ink); }
+.ref-notes-count { font-size: var(--type-count); font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .ref-notes-list { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
 .ref-notes-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
 .ref-notes-row[aria-busy="true"] .ref-notes-sort { opacity: 0.6; }
@@ -956,9 +956,9 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 }
 .ref-notes-jump:hover .ref-notes-passage { text-decoration: underline; }
 .ref-notes-jump:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.ref-notes-passage { font-size: var(--type-quote); color: var(--ink-faint); }
+.ref-notes-passage { font-size: var(--type-quote); color: var(--ink-faint); overflow-wrap: anywhere; }
 .ref-notes-gone { margin: 0; font-size: 0.84rem; font-style: italic; color: var(--ink-faint); }
 
 /* The reviewer's own words: the thing this panel is for, so at full ink. */
-.ref-notes-words { margin: 0.2rem 0 0; font-size: 0.92rem; line-height: 1.45; color: var(--ink); white-space: pre-wrap; }
+.ref-notes-words { margin: 0.2rem 0 0; font-size: var(--type-item); line-height: 1.45; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ref-notes-sort { margin-top: 0.3rem; }

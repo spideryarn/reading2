@@ -63,8 +63,9 @@
     .crit-quote,
     .mir-quote:not(.mir-block-id),
     .mir-passage,
-    /* Referee › Notes: the passage a note is on */
-    .ref-notes-passage,
+    /* Referee › Notes: the passage a note is on; its "Whole paragraph"
+       prefix stays in the interface voice outside this span. */
+    .ref-notes-source,
     .skim-words,
     .skim-words-tip,
     .tip-cite-text,

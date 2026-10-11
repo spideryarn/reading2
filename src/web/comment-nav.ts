@@ -127,9 +127,9 @@ export function passageOf(
  *
  * **Generic over anything with an `id`**, since 2026-08-27, because the ideas
  * mode needed exactly this and a second copy of a stepper is a second set of
- * end conditions to get wrong. Only `orderComments` above stayed
- * comment-specific — ordering really is about a comment's blockId, start and
- * clock, where stepping is about a list.
+ * end conditions to get wrong. `orderComments` is generic over anything with
+ * the passage fields too — ordering is about blockId, start and clock, where
+ * stepping is about an already ordered list.
  *
  * Stops at the ends rather than wrapping. Wrapping would make the two arrows
  * always live, which reads as "there is more this way" when there isn't — and

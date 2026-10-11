@@ -48,7 +48,7 @@ answer from the model only if you ask for one. Saving costs nothing.
 
 ## What a comment is now
 
-Three independent properties, and a comment may have any combination of them:
+Five independent properties, and a comment may have any combination of them:
 
 ```
    the mark      always. blockId + quote + start, onto the permanent id spine.
@@ -63,7 +63,7 @@ Three independent properties, and a comment may have any combination of them:
 never by a Save, and stamped in `severity_at`, not `updated_at`. Referee › Notes lists notes under it
 and copies them out in the reviewer's words
 ([referee-mode.md § 4. Notes](referee-mode.md#4-notes-the-reviewers-own-notes-sorted-by-them-copied-out-in-their-words)).
-A shared link does not carry it: `publicCommentsQuery` names its columns.
+A shared link does not carry the sort value: `publicCommentsQuery` names its columns.
 
 ### The box a selection opens <a id="the-selection-box"></a>
 
@@ -382,7 +382,7 @@ judgement destroyed by a request that never mentioned it, with a 200 in the answ
 the log. A named path cannot express the ambiguity. It goes through the **same `tidyMark`** the
 create path uses, so there is one definition of what a placement is and not a second that can drift.
 
-### The five operations, and why there are five
+### Named operations, because fields have different lifetimes <a id="the-five-operations-and-why-there-are-five"></a>
 
 **Once a comment is free, a collision is an ordinary event** — and a reset would silently overwrite the
 anchor and blank the answer of a comment made in another tab. GPT Sol found this reviewing the
@@ -1210,7 +1210,7 @@ bare bookmark.
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
 | [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) | **moving** to one: the drawer pushes, the arrows do not — [§ Opening a question is a jump](#opening-is-a-jump) |
-| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same five operations against Postgres |
+| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the named comment operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
 | [`src/comments.ts`](../../src/comments.ts) | the shared types and rules (`NewComment`, `MarkPatch`, `AnswerPatch`), and `loadComments` for fixtures |
 | [`src/routes.ts`](../../src/routes.ts) | the endpoints, mounted by [`vite.config.ts`](../../vite.config.ts) |

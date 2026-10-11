@@ -188,3 +188,24 @@ under an empty Summary.
 Also found while building: I overwrote the existing `src/web/OutlinePanel.tsx` (Structure's list)
 with the first draft of this panel; restored byte-for-byte from `HEAD` before anything was committed,
 which is the other reason for the rename.
+
+## Code review (GPT Sol, write-capable): DO NOT LAND on C1 alone; C2–C9 fixed by Sol
+
+[261011f-referee-notes-code-review-sol.md](261011f-referee-notes-code-review-sol.md). Sol fixed
+eight findings in the tree, red-first: pending sorts moved from the panel into `useComments`, so
+switching chips mid-sort cannot re-enable Copy over a stale grouping (C2, postmortem
+[261011b](../postmortems/261011b-a-transient-consumer-cannot-own-an-asynchronous-write-s-pending-state.md));
+a sorted wordless highlight is no longer "pristine" and auto-removed (C3); the command-bar catalogue
+regenerated (C4); `/severity` in the authenticated-route contract (C5); focus kept on the pressed
+toggle (C6); `BandWaiting`, voices, type roles and wrapping (C7); a cross-owner 404 (C8);
+`severity_at` in the event-time contract and stale "five sub-modes" wording (C9). It withdrew its
+objection to the bare Summary heading.
+
+**C1 (P0, the shared-link question) — overruled for landing on `dev`, after Opus arbitrated.**
+Opus's verdict: *land with the question open*. `patchSeverity` writes only `severity` and
+`severity_at`, so it cannot change whether a row matches `PUBLIC_COMMENTS_WHERE`, and
+`publicCommentsQuery` never selects `severity`: nothing becomes public that was not public before.
+Withholding a sorted note is a tightening of a defence and a product call, and it is Greg's
+([q-dkz7au](../user-feedback/questions/q-dkz7au.md), recommending Sol's fix). **Condition: q-dkz7au
+is answered before a deploy carries this change.** `dev` deploys nothing, and Referee is behind
+the experimental switch.

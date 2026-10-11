@@ -496,7 +496,7 @@ export function RefereeViews({
               onClick={() => {
                 /* **The gesture seam for Claims.** Pressing its chip with
                    nothing there starts it — Greg's rule about opening a mode,
-                   one level down. The other four chips arm nothing; Candidates
+                   one level down. The other five chips arm nothing; Candidates
                    waits for Build the reviewer brief and Hidden text's scan has
                    already run. The table is
                    src/web/activation.ts § REFEREE_TARGET, which is also where
@@ -504,7 +504,7 @@ export function RefereeViews({
 
                    Here, in the `onClick`, and deliberately **not** in `onView`'s
                    `setView` one level up: `?referee=` is query state, so Back and
-                   Forward move it too, and retracing your steps through the five
+                   Forward move it too, and retracing your steps through the six
                    chips must not buy a claims run or a web search. */
                 armActivationForRefereeView(slug, v);
                 onView(v);
@@ -536,7 +536,7 @@ export function RefereeViews({
  * `ControlTip`'s rule, which is the whole reason the second sentence is worth a
  * hover: `what` is what the reader could have worked out by pressing the chip
  * and looking; `how` is what they could not — where the answer comes from, what
- * it costs, or what the sub-mode does *not* promise. Each of these five `how`s
+ * it costs, or what the sub-mode does *not* promise. Each of these six `how`s
  * is a refusal:
  *
  * - **Criteria** never scores the paper, and the run is a model call over the

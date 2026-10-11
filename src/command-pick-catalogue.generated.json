@@ -635,6 +635,25 @@
   ]
  },
  {
+  "id": "submode:referee:notes",
+  "label": "Notes",
+  "description": "Your own notes, sorted major and minor by you, copied out in your words",
+  "aliases": [
+   "Referee",
+   "Notes Referee",
+   "Referee Notes",
+   "Notes mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:referee:candidates",
   "label": "Candidates",
   "description": "Who could review this piece, and what expertise it would take",

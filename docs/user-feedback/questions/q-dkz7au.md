@@ -4,7 +4,7 @@ report: none
 status: open
 asked: 2026-10-11
 title: Should a note you sorted major or minor be left off a shared link?
-refs: qi-5fn7stsv · docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md (Plan review, F1) · docs/user-feedback/261011_0400-referee-notes-sorted-major-and-minor.md · src/store/public-reader.ts PUBLIC_COMMENTS_WHERE
+refs: qi-5fn7stsv · docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md (Plan review, F1) · docs/user-feedback/261011_0253-referee-notes-sorted-major-and-minor.md · src/store/public-reader.ts PUBLIC_COMMENTS_WHERE
 ---
 When you share an article by link, should a note you have sorted Major or Minor in Referee's new Notes be kept off the link, the way a note placed on a criterion already is?
 

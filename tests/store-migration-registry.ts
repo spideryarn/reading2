@@ -723,17 +723,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "already, because `comments.criterion_id` and `comments.valence` are columns; the seeder is " +
       "its only filesystem reach.",
   },
-  "tests/comment-severity.test.ts": {
-    category: "shared-mechanism-collateral",
-    mechanisms: ["fixture-loader"],
-    /* Written after the instrumented witness run, so nothing watched it. */
-    evidence: "static-only",
-    reason:
-      "A reviewer's major/minor sort must cross `handleApi` → `pgCommentStore` → `commentStore.load` " +
-      "and the rollback exporter, and be refused outside the two by the route and by SQL (plan " +
-      "261011f). Postgres-only, because `comments.severity` is a column; the seeder is its only " +
-      "filesystem reach, and the export writes to its own temp directory.",
-  },
   "tests/comment-colour.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],

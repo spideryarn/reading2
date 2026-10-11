@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_HIGHLIGHT, isPristineHighlight } from "../src/web/fresh-highlight.js";
 import { notesOf, notesText } from "../src/web/referee-notes.js";
 import type { BlockId, Comment, Severity } from "../src/types.js";
 
@@ -79,6 +80,22 @@ describe("notesOf", () => {
       blocks,
     );
     expect(o.unsorted).toHaveLength(2);
+  });
+});
+
+describe("a stored sort is reader work", () => {
+  it("keeps a sorted wordless highlight out of pristine auto-removal", () => {
+    const highlight = {
+      id: "sorted-highlight",
+      blockId: B(1),
+      quote: "six benchmarks",
+      start: 26,
+      createdAt: "2026-10-11T00:00:00.000Z",
+      status: "none",
+      colour: DEFAULT_HIGHLIGHT,
+      severity: "major",
+    } as Comment;
+    expect(isPristineHighlight(highlight)).toBe(false);
   });
 });
 

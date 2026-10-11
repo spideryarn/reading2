@@ -1295,16 +1295,17 @@ export const structureParam = createParser<StructureView>({
 
 /* ------------------------------------------------------------ referee mode --
    The mode for somebody who has been asked to peer-review the piece. One
-   parameter, and it names which of the five sub-modes is open.
+   parameter, and it names which of the six sub-modes is open.
    docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
 
 /**
- * Which of Referee's five sub-modes is open.
+ * Which of Referee's six sub-modes is open.
  *
  * `criteria` is the referee's own criteria run over the piece, `claims` is what
  * it promises against where it delivers, `mirror` is the model reading the
- * referee's own comments rather than the paper, `candidates` is the editor's
- * question of who should review it, and `hidden` is the check of the
+ * referee's own comments rather than the paper, `notes` sorts the referee's
+ * own words for their report, `candidates` is the editor's question of who
+ * should review it, and `hidden` is the check of the
  * document's own source for text hidden from the reader. Genuinely different things to be
  * looking at rather than skins on one, so it belongs in the URL like every
  * other bit of view state (docs/project/url-state.md).

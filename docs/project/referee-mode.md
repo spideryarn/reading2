@@ -176,7 +176,7 @@ operator arXiv's LaTeX-to-HTML converter writes into MathML, and two `navigation
 arXiv's own page. Notices opened itself for any finding, so the first thing above Criteria was 39
 rows of CSS path. Now:
 
-- **The scan is the fifth chip, *Hidden text*** (`?referee=hidden`), last in the row. Pressing it
+- **The scan is the *Hidden text* chip** (`?referee=hidden`), last in the row. Pressing it
   runs nothing; the band has already fetched the scan. **Notices holds only the confidentiality
   sentences and never opens itself.**
 - **The chip carries a mark when something was found** (`sourceScanMark` in

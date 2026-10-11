@@ -11,6 +11,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,14 +23,18 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
+import { type OwnerId, runAsOwner } from "../src/owner.js";
 import type { Comment } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
 const SLUG = "test-comment-severity";
+const OTHER_SLUG = "test-comment-severity-other";
+const OTHER_OWNER = randomUUID() as OwnerId;
 
 await pgReady({
   suite: "tests/comment-severity.test.ts",
@@ -41,12 +46,18 @@ const { commentStore } = await import("../src/store/index.js");
 const { exportArticle } = await import("../src/store/export.js");
 
 let article: ScratchArticle | undefined;
+let otherArticle: ScratchArticle | undefined;
 let BLOCK = "";
 let QUOTE = "";
 const AT = 0;
 
 beforeAll(async () => {
+  await seedAuthUser(getDb(), {
+    id: OTHER_OWNER,
+    email: `comment-severity-${OTHER_OWNER}@example.invalid`,
+  });
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  otherArticle = await scratchArticleInPg(OTHER_SLUG, { ownerId: OTHER_OWNER });
   const block = article.blocks.find((b) => b.text.length > 40);
   if (!block) throw new Error("the fixture has no block long enough to quote");
   BLOCK = block.id;
@@ -55,6 +66,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await article?.remove();
+  await otherArticle?.remove();
   await closeDb();
 });
 
@@ -192,6 +204,23 @@ describe("PATCH /api/comments/:slug/:id/severity", () => {
 
   it("answers 404 for a comment that does not exist", async () => {
     const r = await call("PATCH", sortUrl(mintId()), { severity: "major" });
+    expect(r.status).toBe(404);
+  });
+
+  it("answers the same 404 for another owner's comment id", async () => {
+    const block = otherArticle?.blocks.find((candidate) => candidate.text.length > 40);
+    if (!block) throw new Error("the other owner's fixture has no block long enough to quote");
+    const id = mintId();
+    await runAsOwner(OTHER_OWNER, () =>
+      commentStore.create(OTHER_SLUG, {
+        id,
+        blockId: block.id,
+        quote: block.text.slice(0, 20),
+        start: 0,
+        body: "the other reviewer's note",
+      }),
+    );
+    const r = await call("PATCH", sortUrl(id), { severity: "major" });
     expect(r.status).toBe(404);
   });
 });
