@@ -1,0 +1,172 @@
+{
+  "arm": "old-b",
+  "at": "2026-10-11T15:02:58.190Z",
+  "sources": {
+    "src/web/chat-handoff.ts": "9b06a681a739",
+    "src/converse.ts": "4727c17bfa2d"
+  },
+  "usd": 0.3318622,
+  "outcomes": [
+    {
+      "arm": "old-b",
+      "slug": "fd-src-nagel-bat-spya-f5aw85",
+      "workId": "spya-q2ywmu",
+      "title": "Naming and Necessity",
+      "citing": 2,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nNaming and Necessity — Kripke, 1972\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "a2897c9d090e",
+      "text": "The article uses Kripke fairly: it claims only a close relation to his view, and it differs from him in two places. I'm sketching Kripke from memory and from the web, and I haven't checked Nagel's page reference.\n\n**What Kripke says.** In the last part of *Naming and Necessity*, Kripke argues against identity materialism, the view that every mental fact is identical with some physical fact. His claim is that an identity like \"pain is C-fibers firing\" could only be defended as necessary, but pain without C-fibers firing seems possible, so it can't be. Teaching notes on his argument put it this way: we should expect the opposite of a theoretical identity to seem possible without really being possible. The materialist's reply is that the identity only looks contingent. The article's note, [spya-h0hyn9], gives Nagel's own summary.\n\n**How the article uses him.** Nagel cites Kripke as an ally in a footnote and says his own view is \"closely related\" to Kripke's. He says the subjective character of an experience is what causal-behaviorist analyses leave out [spya-h0hyn9]. He also finds the idea that a brain state necessarily has a given subjective character \"incomprehensible without further explanation\" [spya-h0hyn9]. That matches Kripke's target and spirit.\n\n**Where Nagel departs from Kripke.**\n- Kripke's argument is meant to refute the identity theory. The article says it would be a mistake to conclude physicalism is false. Nagel says only that we can't understand how it could be true [spya-zv889j].\n- Nagel tries to remove the appearance of contingency, which he calls \"Kripke's problem\". His explanation is that sympathetic imagination (imagining a mental state from the inside) and perceptual imagination (imagining a physical state as an observer) work independently, so the relation looks contingent even if it is necessary [spya-qx90p6]. The article doesn't say so, but my understanding is that Kripke held this kind of explanation works for water and heat and fails for pain. If that's right, Nagel is taking a step Kripke would not.\n\nMy inference is that the citation is fair, but it shouldn't be read as saying Kripke and Nagel agree on the conclusion. They share the diagnosis and disagree on what follows from it.\n\nFor a clear account of Kripke's argument, see [Soames's paper on Kripke and mind-body identity](https://dornsife.usc.edu/scottsoames/wp-content/uploads/sites/191/2023/11/Kripke_on_Mind-Body_Identity_12-2015.pdf).",
+      "searches": 1,
+      "tools": [],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0492889,
+      "seconds": 15.5
+    },
+    {
+      "arm": "old-b",
+      "slug": "fd-src-nagel-bat-spya-f5aw85",
+      "workId": "spya-x4euyb",
+      "title": "Mental Events",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nMental Events — Davidson, 1970\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "dc2fd329d278",
+      "text": "Davidson's \"Mental Events\" (1970) argues that every mental event is a physical event, yet mental descriptions can't be tied to physical ones by strict laws. The article uses it fairly. It says openly that it is stretching the argument.\n\n**What the paper says (not from the article).** Davidson starts from three premises. These are that mental and physical events cause each other, that events related as cause and effect fall under strict laws, and that there are no strict psychophysical or psychological laws linking mental events to physical ones. [The Stanford Encyclopedia of Philosophy](https://plato.stanford.edu/entries/anomalous-monism/) puts the result this way: each causally interacting mental event is the very same event as some physical event, but mental properties can't be reduced to physical ones. This view is called anomalous monism. \"Anomalous\" means \"not law-governed\". \"Monism\" means that everything is one kind of thing.\n\n**How the article uses it.** Nagel cites Davidson as a case where we may have good reason to believe something we can't yet understand. He compares it to the caterpillar in the safe [spya-a5hz7t]. He says Davidson holds that mental events with physical causes and effects must have physical descriptions, and that we have reason to believe this even though there could be no general psychophysical theory [spya-x9nmge]. That matches the paper. Nagel also describes Davidson's view as physical events with \"irreducibly mental properties\" [spya-x9nmge]. That is a fair gloss on anomalism.\n\n**Where it stretches.** Nagel admits that Davidson's argument is about intentional events, and that his own extension to sensations is a further step: \"I think we also have some reason\" [spya-x9nmge]. According to the [Stanford entry](https://plato.stanford.edu/entries/anomalous-monism/), Davidson limits the theory to propositional attitudes, such as beliefs and desires. It does not address pains, tickles and other sentient mental events. The subjective character of experience is Nagel's whole concern, so the borrowing carries a lot of weight and rests on his own inference.\n\nNagel also hedges. He says nothing we can now conceive corresponds to Davidson's view [spya-x9nmge]. In the footnote he says he doesn't understand Davidson's argument against psychophysical laws [spya-qg0fhb]. That is a mild reservation, not an endorsement of the full argument.",
+      "searches": 1,
+      "tools": [],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0458654,
+      "seconds": 13
+    },
+    {
+      "arm": "old-b",
+      "slug": "fd-src-nagel-bat-spya-f5aw85",
+      "workId": "spya-yv78am",
+      "title": "Philosophy and Scientific Realism",
+      "citing": 0,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nPhilosophy and Scientific Realism — Smart, 1963\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "964fa9115d38",
+      "text": "Smart's book is a defence of the \"identity theory\", the view that sensations are brain processes. Nagel cites it as one of several examples of recent reductionist work he thinks avoids the real problem [spya-c4shay].\n\n**What the book says.** The article doesn't describe it. The sources I found say the following:\n- [Smart's central claim](https://grokipedia.com/page/J._J._C._Smart) is that mental states such as sensations are identical to specific brain processes. He first argued this in his 1959 paper \"Sensations and Brain Processes\". The book restates and extends that case, and other writers cite its chapter 5 for his version of the thesis ([Maxwell, 1968](https://discovery-pp.ucl.ac.uk/id/eprint/1348842/1/1348842.pdf)).\n- [Smart held that sensation reports are \"topic-neutral\"](https://www.cambridge.org/core/journals/philosophy/article/abs/sensations-experiences-and-brain-processes/B439749544C2BD6F668B4AF37B9A2D1A). That means a report like \"I am having a red after-image\" says something about an inner state without saying what kind of state it is, so it can turn out to be a brain process.\n- [On the Smart–Feigl view](https://en.wikipedia.org/wiki/Ullin_Place), \"sensation\" and \"brain process\" differ in meaning but refer to the same thing, as \"morning star\" and \"evening star\" both refer to Venus. The identity is contingent, not necessary.\n\n**Is the use fair?** It is a fair use, though a thin one. Nagel only lists the book as an example of analyses \"designed to explain the possibility of some variety of materialism\" [spya-c4shay]. He doesn't quote it or argue with a specific passage. His charge is that such analyses are \"logically compatible\" with the absence of subjective character [spya-aczb7j].\n\nMy inference is that the charge fits Smart's topic-neutral move well. That move deliberately describes sensations without saying what they are like, which is the part Nagel says gets left out. Nagel's own objection to the \"usual analogies\" with other cases of reduction [spya-p8ecxj] also bears on Smart. As far as I know, Smart often used the lightning and electrical-discharge example. That is from memory and I haven't checked it.\n\nOne caveat: Nagel lumps Smart together with Lewis, Putnam, Armstrong and Dennett. Smart's view is not the same as the functionalist views of some of them. Nagel's footnote [spya-bw3tug] says only that these are the examples, so the book's own arguments aren't tested in the piece.",
+      "searches": 1,
+      "tools": [
+        "article_citations"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0509106,
+      "seconds": 15.1
+    },
+    {
+      "arm": "old-b",
+      "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+      "workId": "spya-mrkaqa",
+      "title": "Neural machine translation by jointly learning to align and translate",
+      "citing": 2,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nNeural machine translation by jointly learning to align and translate — Bahdanau, Cho, Bengio, 2014\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "575bce5495e2",
+      "text": "The Bahdanau, Cho and Bengio paper (2014) proposed letting a translation model look back over the source sentence and pick out the parts relevant to each word it is about to produce. [Its abstract](https://arxiv.org/abs/1409.0473) says the problem it targets is that earlier encoder-decoder models squeezed a whole sentence into one fixed-length vector. It conjectures that this vector is a bottleneck. Its fix is to let the model \"soft-search\" the source sentence for relevant parts as it translates. It reports French translation quality comparable to the best phrase-based system of the time.\n\nThe Transformer paper uses it in four places, and I think each use is fair:\n\n- **Encoder-decoder models.** It is listed among the encoder-decoder models, alongside the 2014 work on encoder-decoder machine translation and the 2014 sequence-to-sequence paper [spya-a9gx0t]. It is also listed among the works that made recurrent networks the standard for translation [spya-dew452].\n- **Attention as a building block.** It is cited for attention letting a model relate positions \"without regard to their distance\" [spya-mjbtbe].\n- **Additive attention.** It is credited as the source of \"additive attention\", the rival to the dot-product attention the Transformer uses [spya-huyx5u].\n- **Encoder-decoder attention.** The Transformer's encoder-decoder attention layers are said to mimic those in this line of work [spya-wweup3].\n\nThe paper isn't described as doing anything beyond what the abstract claims. The Transformer paper also doesn't hide what it takes from this work. It says outright that attention was \"in conjunction with a recurrent network\" in nearly all prior cases [spya-mjbtbe], and its stated novelty is dropping the recurrence [spya-q59ey3].\n\nMy inference is that the Transformer paper compresses the debt. Its Bahdanau-style attention layer survives almost intact as the encoder-decoder attention [spya-wweup3]. What it adds is self-attention and the removal of recurrence. The article doesn't say so, but my own background knowledge is that the 2014 paper's scoring step is a small feed-forward network. That matches the description of additive attention [spya-huyx5u]. I haven't checked this against the paper's text.",
+      "searches": 0,
+      "tools": [
+        "article_citations",
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0232336,
+      "seconds": 13.8
+    },
+    {
+      "arm": "old-b",
+      "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+      "workId": "spya-ddg9h8",
+      "title": "Convolutional sequence to sequence learning",
+      "citing": 2,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nConvolutional sequence to sequence learning — Gehring, Auli, Grangier, Yarats, Dauphin, 2017\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "97ae5122de79",
+      "text": "ConvS2S is a translation model built entirely from convolutional networks. [Its arXiv abstract](https://arxiv.org/abs/1705.03122) says all positions can be computed in parallel during training, and that each decoder layer has its own attention module. It also says the model beat the deep LSTM system of Wu et al. (2016) on WMT'14 English-German and English-French, at about ten times the speed. I read only the abstract, not the full paper.\n\nThe article uses it in three places:\n- **Shared goal.** It groups ConvS2S with ByteNet and the Extended Neural GPU as models that also try to cut sequential computation by using convolutions [spya-dyxt29].\n- **Distance cost.** It says the work needed to link two distant positions grows linearly with distance in ConvS2S, against a constant amount in the Transformer [spya-dyxt29]. I did not check this against the full paper.\n- **Positional embeddings.** It credits ConvS2S for the \"learned\" kind of positional embedding, which it tests in Table 3 row (E) [spya-n0acqb spya-a9hsvs].\n\nThe article lists ConvS2S as a baseline in Table 2, with 25.16 BLEU on English-German and 40.46 on English-French. Its ensemble scores are 26.36 and 41.29 [spya-p9uqvv].\n\nMy inference is that the use looks fair. The article describes ConvS2S's design accurately and credits it for the embedding idea. The comparison sets single Transformers against ConvS2S ensembles on English-German. For English-French the article claims only a single-model lead [spya-x6ys73].\n\nOne thing to check yourself is that English-French BLEU appears as 41.8 in the abstract and Table 2 but as 41.0 in the results text [spya-r4309p spya-x6ys73]. At 41.0 the big model would fall below ConvS2S's ensemble score of 41.29. At 41.8 it would beat it.",
+      "searches": 0,
+      "tools": [
+        "article_citations",
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0214216,
+      "seconds": 11.9
+    },
+    {
+      "arm": "old-b",
+      "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+      "workId": "spya-yqvkjb",
+      "title": "A decomposable attention model",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nA decomposable attention model — Parikh, Täckström, Das, Uszkoreit, 2016\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "9d60bfbeb6b8",
+      "text": "The article cites it twice, and both uses look fair on the paper's abstract. I only read the abstract and catalogue pages, not the full paper.\n\n**What the paper says.** [Parikh et al.](https://arxiv.org/abs/1606.01933) propose a simple neural architecture for natural language inference, which means judging whether one sentence follows from another. It uses attention to break the problem into subproblems that can be solved separately, so it is trivially parallelizable. It reached state-of-the-art results on the SNLI dataset with almost an order of magnitude fewer parameters than earlier work, without using any word-order information. Adding intra-sentence attention, which takes a minimum amount of order into account, improved results further.\n\n**How the article uses it.**\n- In the introduction, it is the \"few cases\" where attention is not paired with a recurrent network [spya-mjbtbe]. That fits, since the model is built from attention and feed-forward pieces.\n- In the background section, it is one of the works showing self-attention succeeding in tasks such as textual entailment [spya-vvwv4r]. Textual entailment is the same task as natural language inference, and the paper's intra-sentence attention is a form of self-attention.\n\n**Is the framing fair?** The article's novelty claim is carefully worded. It says the Transformer is the first *transduction* model relying entirely on self-attention [spya-vr7tsj]. My inference is that this wording is what keeps the Parikh paper from being a counterexample: it classifies sentence pairs and does not generate an output sequence. The article does not spell this out, though.\n\nThe paper's authorship also matters. The article's own footnote credits Jakob Uszkoreit, a co-author of the Parikh paper, with proposing the replacement of RNNs by self-attention [spya-jf2h4q]. So this is partly the authors building on their own earlier work. That is a natural line of descent, not a problem.\n\nThe article never says how much the Transformer owes to this model. It cites the paper only in passing, and you would have to read the Parikh paper to judge that.",
+      "searches": 1,
+      "tools": [],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0519941,
+      "seconds": 12
+    },
+    {
+      "arm": "old-b",
+      "slug": "scaling-hypothesis",
+      "workId": "spya-mpscd5",
+      "title": "The Bitter Lesson",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nThe Bitter Lesson — Sutton\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "cd79e8f2ac08",
+      "text": "Sutskever's essay-length claim is short, so here is what it says and how the article uses it.\n\n**What Sutton says.** In [The Bitter Lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html) (March 2019), Rich Sutton argues that over 70 years of AI research, general methods that use more computation have beaten methods built on human knowledge of a domain. His examples are chess, Go, speech recognition and vision. He says human-knowledge approaches help in the short term but plateau later. He names search and learning as the two methods that keep scaling. He also says we should build in only \"meta-methods\" that discover structure, not our own ideas about how minds work.\n\n**How the article uses it.** There are two uses.\n\n- The article restates it as \"the harder and bigger, the better\" [spya-sfkxh8]. That is a loose compression. Sutton's claim is about general methods beating hand-built knowledge as computation gets cheaper. The article's phrase is about neural nets improving with size, data and problem difficulty. The two are related, but they are not the same claim.\n- The article treats the Bitter Lesson and the scaling hypothesis as a pair that deserves serious research investment [spya-eexw9k]. It also says critics would rather dismiss scaling than \"swallow the bitter lesson\" [spya-jgq9gz]. Sutton does say researchers resist the lesson because it is \"success over a favored, human-centric approach\", so the article's account of resistance is close to his.\n\n**Is it fair?** My inference is that the use is mostly fair but stretches the source. Sutton's essay concerns search and learning. It says nothing specific about GPT-style next-word prediction, and it does not claim that simply making a model bigger will produce meta-learning or AGI. The article's \"strong scaling hypothesis\" [spya-m3gtj6] goes beyond what Sutton says. Sutton also warns against building in simple ideas about how minds work. The article's own account of why scale works relies on mechanisms like sub-model ensembles and Occam's razor [spya-grkhs8], which Sutton doesn't discuss. So the Bitter Lesson is best read as supporting the article's direction, not its specific claims.",
+      "searches": 0,
+      "tools": [
+        "read_web_page",
+        "search_article_words"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.026837,
+      "seconds": 11.4
+    },
+    {
+      "arm": "old-b",
+      "slug": "scaling-hypothesis",
+      "workId": "spya-ujg0my",
+      "title": "Language Models are Few-Shot Learners (GPT-3 paper)",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nLanguage Models are Few-Shot Learners (GPT-3 paper) — Brown et al, 2020\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "d341b558bdfa",
+      "text": "**What it says.** According to its [arXiv abstract](https://arxiv.org/abs/2005.14165), the paper trains GPT-3, a 175-billion-parameter model. The abstract calls it ten times larger than any earlier non-sparse language model. It is tested \"without any gradient updates or fine-tuning\", with tasks and examples given purely as text. The abstract reports strong results on many tasks and some that need on-the-fly reasoning, such as unscrambling words and 3-digit arithmetic. It also says GPT-3 struggles on some datasets and has problems from training on web data. Finally, it reports that human judges had difficulty telling GPT-3's news articles from human-written ones.\n\n**How the article uses it.** The article cites the paper for the scaling curve: GPT-3's loss keeps falling along the predicted line, with no \"bounce\" [spya-vn0xpd spya-yq9zuc]. It also uses the paper for the loss figure in the GPT-4 projection [spya-edr6mj]. The abstract doesn't mention scaling curves or validation loss, so I can't check those claims from it. The paper's body would settle that.\n\nOn the points I can check, the use looks broadly fair. The article's 175b size and its \"no specialized training or finetuning\" description match the abstract [spya-aqts9c]. It also says the 117× jump over GPT-2 [spya-aqts9c], which the abstract doesn't cover.\n\nThe article is more forceful than the paper, though. The paper reports mixed results and flags weaknesses. The article treats the paper as evidence for a much bigger claim, the scaling hypothesis [spya-ewxv9q]. It also does cite the paper's contamination caveat, in a footnote [spya-c43ayy], and it acknowledges that the arithmetic benchmark understates GPT-3 [spya-cbz06n].\n\nMy inference is that the article reads the paper's data accurately but supplies the interpretation itself. The abstract frames the result as few-shot learning improving with scale. It doesn't say that this shows the route to AGI.",
+      "searches": 0,
+      "tools": [
+        "article_citations",
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0319695,
+      "seconds": 13.9
+    },
+    {
+      "arm": "old-b",
+      "slug": "scaling-hypothesis",
+      "workId": "spya-bk2pza",
+      "title": "Scaling Laws for Neural Language Models",
+      "citing": 0,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nScaling Laws for Neural Language Models — Kaplan et al, 2020\n\"\"\"\n\nWhat does it say, and does the article use it fairly?",
+      "seedHash": "7b45eecddbd1",
+      "text": "The paper reports that language-model loss follows clean power laws. [Its abstract](https://arxiv.org/abs/2001.08361) says loss falls as a power law in model size, dataset size and training compute, with some trends spanning more than seven orders of magnitude. It also says width and depth matter little within a wide range. Larger models are more sample-efficient, so the compute-optimal recipe is a very large model trained on modest data and stopped well before convergence.\n\nThe article uses it for the claim that the scaling curves are \"clean\" and that GPT-3 sits at roughly 10³ on the chart, leaving \"plenty of room\" for further loss decreases [spya-sctj6d spya-hqpffq]. That matches the paper's central finding. The article then says GPT-3 continued the laws \"for several orders past\" Kaplan et al, citing Brown et al 2020 [spya-vn0xpd]. That is a separate claim resting on a different paper.\n\nThree places stretch what the paper shows:\n\n- **Loss versus ability.** Kaplan et al measure cross-entropy loss, which is how well the model predicts the next piece of text. The article's own wording is careful here, saying the leaps are \"not even half way there in terms of absolute likelihood loss, never mind\" real-world capabilities [spya-sctj6d]. But elsewhere it leans on these curves for claims about meta-learning, and asks what a loss near 1 would \"gain\" [spya-edr6mj]. The article admits it can't say what would emerge [spya-f6zupy]. My inference is that the paper cannot support those capability claims.\n- **Extrapolation.** The article says it is \"irresponsibly\" extrapolating [spya-c43ayy]. It also notes \"uncertainty in extrapolation\" [spya-hqpffq]. So it flags the risk itself.\n- **The paper's own advice.** The article stresses bigger models. The abstract's \"stopping significantly before convergence\" point fits this, since GPT-3 trained for roughly half an epoch [spya-yq9zuc]. I haven't read the full paper, so I can't say whether it makes any caveats the article leaves out.\n\nOn balance, the article uses the paper fairly for the shape of the curves. It goes beyond the paper when it turns those curves into predictions about intelligence. It does flag that step as speculation.",
+      "searches": 0,
+      "tools": [
+        "article_citations",
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0303415,
+      "seconds": 13.7
+    }
+  ]
+}

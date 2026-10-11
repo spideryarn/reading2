@@ -1,0 +1,18 @@
+1: use=Y; justified=Y; false=none
+2: use=Y; justified=Y; false=none
+3: use=X; justified=X; false=Y: says the Moravec passage doesn't visibly cite the paper, but it says "2020 saw GPT-3 arrive"
+4: use=same; justified=X; false=none
+5: use=Y; justified=Y; false=none
+6: use=Y; justified=X; false=none
+7: use=X; justified=same; false=X: says the Moravec passage doesn't visibly cite the paper, but it says "2020 saw GPT-3 arrive"
+8: use=Y; justified=X; false=none
+9: use=X; justified=same; false=none
+10: use=Y; justified=X; false=none
+11: use=same; justified=Y; false=none
+12: use=same; justified=Y; false=none
+13: use=same; justified=Y; false=none
+14: use=X; justified=same; false=none
+15: use=same; justified=Y; false=none
+16: use=X; justified=Y; false=none
+17: use=same; justified=X; false=none
+18: use=X; justified=X; false=none

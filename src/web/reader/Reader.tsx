@@ -91,6 +91,7 @@ import {
 import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
+  citingSentences,
   askAboutGlossaryEntry,
   askAboutIdea,
   askAboutBlock,
@@ -1123,8 +1124,8 @@ export function Reader({
     [handToChat],
   );
   const askCitedWorkInChat = useCallback(
-    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
-      handToChat(askAboutCitedWork(work), "send", itemOrigin("bibliography", work.id, work.title)),
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">, citing: readonly string[]) =>
+      handToChat(askAboutCitedWork(work, citing), "send", itemOrigin("bibliography", work.id, work.title)),
     [handToChat],
   );
   /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009k,
@@ -2754,10 +2755,13 @@ export function Reader({
     [reopenItemChat, askGlossaryEntryInChat],
   );
   const askWork = useCallback(
-    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) => {
-      if (!reopenItemChat(itemOrigin("bibliography", work.id, work.title))) askCitedWorkInChat(work);
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year" | "mentions">) => {
+      if (reopenItemChat(itemOrigin("bibliography", work.id, work.title))) return;
+      /* The sentences that cite it go with the question, so the answer can
+         start from what the article says with the work (plan 261011ab). */
+      askCitedWorkInChat(work, citingSentences(work.mentions, (id) => blockText.get(id)));
     },
-    [reopenItemChat, askCitedWorkInChat],
+    [reopenItemChat, askCitedWorkInChat, blockText],
   );
   const askIdea = useCallback(
     (idea: Pick<Idea, "id" | "name" | "statement">) => {

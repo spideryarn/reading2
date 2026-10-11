@@ -851,7 +851,23 @@ Since 2026-10-06 every owner row has **Ask in chat**; it sat beside Dig deeper u
 and stands in its place since (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). It
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
 the article gives them) and a question after it, and sends that as the first question: the press
-is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
+is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)).
+
+**The question starts from the article, not the work** (since 2026-10-11, plan
+[261011ab](../plans/261011ab-ask-in-chat-about-a-citation-leads-with-how-the-article-uses-it.md)):
+
+> When we ask in chat, for example, for this citation, I think I was hoping for a bit more about how
+> it relates to the article, what the article is trying to say with it, and then whether it's
+> justified, as well as all of this external stuff.
+>
+> — Greg, 2026-10-11 (spya-xv3q97)
+
+So the seed also quotes the sentence around each mention (`citingSentences` in
+[`chat-handoff.ts`](../../src/web/chat-handoff.ts); a mention's own quote is only a locator such as
+"Tulving (1983)"), and asks what point the article uses the work to make, whether the work supports
+that, to say so when it cannot check the work itself, and only then for anything else worth knowing
+about it (`CITED_WORK_QUESTION`). A work cited only in a footnote or the references gets the
+question without sentences. Older chats keep the question they were asked. Once a chat exists,
 a line in the button's place shows how many questions were asked and the chat's gist (or how the
 latest answer begins, until there is one), and pressing it opens that conversation beside Sources'
 Bibliography; the hover card's button reopens it too
