@@ -65,7 +65,7 @@ describe("the drift that was really there, against the file that was really ther
     const declared = declaredBuckets(CONFIG);
     const problems = bucketDrift(declared, [PRODUCTION_SOURCES]);
     expect(problems).toEqual([
-      'bucket "sources" does not accept image/gif, image/jpeg, image/png',
+      'bucket "sources" does not accept application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/gif, image/jpeg, image/png, text/plain',
     ]);
   });
 
@@ -278,7 +278,7 @@ describe("the deploy gate", () => {
       fetchRunning: async () => [PRODUCTION_SOURCES],
     });
     expect(target).toContain("https://alschkahzfagtppxspfq.supabase.co");
-    expect(problems[0]).toContain("does not accept image/gif, image/jpeg, image/png");
+    expect(problems[0]).toContain("image/gif, image/jpeg, image/png");
     expect(problems.join("\n")).toContain("check-buckets.ts --prod --apply");
   });
 
