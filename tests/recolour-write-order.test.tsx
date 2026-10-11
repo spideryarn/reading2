@@ -19,7 +19,7 @@ import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Comment, HighlightColour } from "../src/types.js";
+import type { Comment, HighlightColour, Severity } from "../src/types.js";
 
 /* `apiFetch` and `fetchOk` both, for the reason tests/referee-placement.test.tsx
    gives: `fetchOk` calls `apiFetch` through the module's own binding. */
@@ -59,7 +59,7 @@ function json(body: unknown, status = 200): Response {
 
 /** One write, applied the way its route applies it — to its own columns only. */
 function process(url: string, body: Record<string, unknown>): Response {
-  const { body: _b, colour: _c, criterionId: _k, valence: _v, ...rest } = stored;
+  const { body: _b, colour: _c, criterionId: _k, valence: _v, severity: _s, ...rest } = stored;
   if (url.endsWith("/colour")) {
     const colour = body["colour"];
     stored = {
@@ -78,6 +78,16 @@ function process(url: string, body: Record<string, unknown>): Response {
       ...(stored.colour !== undefined ? { colour: stored.colour } : {}),
       ...(typeof k === "string" ? { criterionId: k } : {}),
       ...(typeof v === "number" ? { valence: v } : {}),
+    };
+  } else if (url.endsWith("/severity")) {
+    const severity = body.severity;
+    stored = {
+      ...rest,
+      ...(stored.body !== undefined ? { body: stored.body } : {}),
+      ...(stored.colour !== undefined ? { colour: stored.colour } : {}),
+      ...(stored.criterionId !== undefined ? { criterionId: stored.criterionId } : {}),
+      ...(stored.valence !== undefined ? { valence: stored.valence } : {}),
+      ...(typeof severity === "string" ? { severity: severity as Severity } : {}),
     };
   } else {
     const next = body["body"];
@@ -223,5 +233,30 @@ describe("recolour shares the per-comment queue with edit and place", () => {
     expect(shown()?.colour).toBe("yellow");
     await landAnswersInReverse();
     expect(shown()?.colour).toBe("green");
+  });
+});
+
+describe("a sort's pending state belongs to the comments hook", () => {
+  it("counts two queued presses until both writes have landed", async () => {
+    await act(async () => {
+      void api?.sort(ID, "major");
+      void api?.sort(ID, "minor");
+    });
+    await settle();
+    expect(api?.sorting.has(ID)).toBe(true);
+    expect(held).toHaveLength(1);
+
+    const first = held.shift();
+    await act(async () => {
+      first?.process();
+      first?.deliver();
+    });
+    await settle();
+    expect(api?.sorting.has(ID)).toBe(true);
+    expect(held).toHaveLength(1);
+
+    await landAnswersInReverse();
+    expect(api?.sorting.has(ID)).toBe(false);
+    expect(shown()?.severity).toBe("minor");
   });
 });

@@ -51,7 +51,7 @@ import {
   CRITERION_NOT_ON_ARTICLE,
   criterionRefusal,
 } from "../referee-criteria-store.js";
-import type { Comment, HighlightColour } from "../types.js";
+import type { Comment, HighlightColour, Severity } from "../types.js";
 import { MissingAttempt, type CommentStore } from "./contracts.js";
 import { guardDbStore, violatesForeignKey } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -117,6 +117,8 @@ function toComment(row: typeof commentsTable.$inferSelect): Comment {
     /* `comments_colour` keeps the column to the four names, so the cast is a
        statement of what the database already refuses. */
     ...(row.colour === null ? {} : { colour: row.colour as HighlightColour }),
+    /* `comments_severity` keeps the column to the two, as above. */
+    ...(row.severity === null ? {} : { severity: row.severity as Severity }),
     status: row.status as Comment["status"],
     ...(row.answer === null ? {} : { answer: row.answer }),
     ...(row.citations === null ? {} : { citations: row.citations }),
@@ -568,6 +570,27 @@ const rawPgCommentStore: CommentStore = {
     }
     /* The colour name is a fact about the app, not the reader's prose. */
     logger.info({ slug, id, colour }, "comment colour edited");
+    return toComment(row);
+  },
+
+  /**
+   * The reviewer sorted a note major or minor, or un-sorted it (`null`).
+   * `severity` and `severity_at`, nothing else — not `updated_at`, which means
+   * "the words were edited". Any comment of this owner's on this article may
+   * be sorted, whole-paragraph notes included. Referee › Notes,
+   * docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md.
+   */
+  async patchSeverity(slug: string, id: string, severity: Severity | null): Promise<Comment> {
+    const db = getDb();
+    const articleId = await articleIdForOwned(slug);
+    const [row] = await db
+      .update(commentsTable)
+      .set({ severity, severityAt: sql`clock_timestamp()` })
+      .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)))
+      .returning();
+    if (!row) throw new NotAnExplanation(id, "missing");
+    /* The word is a fact about the app, not the reader's prose. */
+    logger.info({ slug, id, severity }, "comment severity edited");
     return toComment(row);
   },
 

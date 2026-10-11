@@ -2632,9 +2632,26 @@ export const comments = spideryarn.table(
      * a stale attempt's late write cannot move it. Stored, not shown.
      */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /**
+     * **Major or minor — the reviewer's own sort of their own note**, or null,
+     * which is every note nobody has sorted. Written only by `patchSeverity`,
+     * never by `create`, and never by a model: Referee › Notes lists the
+     * reviewer's notes under these two headings and copies them out in their
+     * words (docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md).
+     * `SEVERITIES` in src/types.ts names the same two.
+     */
+    severity: text("severity"),
+    /**
+     * When the reviewer last sorted or un-sorted this note. Null means never.
+     * **Not `updated_at`**, which means "the words were edited". Stored, not
+     * shown.
+     */
+    severityAt: timestamp("severity_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
+    /** The closed vocabulary, written out by hand like `comments_colour`. */
+    check("comments_severity", sql`${t.severity} is null or ${t.severity} in ('major','minor')`),
     /**
      * `none` is every comment made from 2026-08-28: the reader marked a passage
      * and no model call was ever attempted. The other three keep their meaning,

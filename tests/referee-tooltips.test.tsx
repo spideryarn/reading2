@@ -47,7 +47,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Claim } from "../src/referee-claims.js";
 import type { MirrorInput, MirrorRemark, MirrorResult } from "../src/referee-mirror-types.js";
-import type { RefereeView } from "../src/web/referee-views.js";
+import { REFEREE_VIEWS, type RefereeView } from "../src/web/referee-views.js";
 import type { Block, BlockId } from "../src/types.js";
 import { DELAY } from "../src/web/Tooltip.js";
 
@@ -356,7 +356,7 @@ describe("the five sub-mode chips say what their sub-mode is", () => {
   it("puts a card on every chip, and each card is that chip's", { timeout: 20000 }, async () => {
     paint();
     const chips = [...host.querySelectorAll('.ref-views [role="radio"]')];
-    expect(chips.length, "the chip row is not drawn").toBe(5);
+    expect(chips.length, "the chip row is not drawn").toBe(REFEREE_VIEWS.length);
 
     /* Collected, so the last assertion can prove the five are five different
        cards. One shared card wired onto all of them would satisfy every
@@ -371,7 +371,7 @@ describe("the five sub-mode chips say what their sub-mode is", () => {
       expect(chip.hasAttribute("title"), `${label} fell back to a title attribute`).toBe(false);
       bodies.push(card.body);
     }
-    expect(new Set(bodies).size, "two chips are showing the same card").toBe(5);
+    expect(new Set(bodies).size, "two chips are showing the same card").toBe(REFEREE_VIEWS.length);
   });
 });
 

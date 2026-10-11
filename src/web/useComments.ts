@@ -20,6 +20,7 @@ import {
   type Comment,
   type CommentAnchor,
   type HighlightColour,
+  type Severity,
 } from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk, leavingFetch, readJson, statusOf } from "./lib/api.js";
@@ -148,6 +149,8 @@ interface NewCommentInputFields {
 
 export interface CommentsApi {
   comments: ClientComment[];
+  /** Comment ids whose major/minor sort has not finished saving yet. */
+  sorting: ReadonlySet<string>;
   /**
    * Has the first fetch come back?
    *
@@ -228,7 +231,7 @@ export interface CommentsApi {
    * clear it with both fields `null`.
    *
    * Its own operation and its own route, for the reason
-   * docs/project/comments.md gives about all five: `PATCH …/:id` takes
+   * docs/project/comments.md gives for named operations: `PATCH …/:id` takes
    * `{ body }`, and folding the placement into it would put partial-update
    * semantics on the wire — absent means *leave alone*, `null` means *clear* —
    * one missing branch away from a plain body edit silently deleting a
@@ -242,6 +245,13 @@ export interface CommentsApi {
    * whole row (plan 261003e, review S3).
    */
   recolour(id: string, colour: HighlightColour | null): Promise<void>;
+  /**
+   * **Sort a note major or minor, or un-sort it** (`null`). Its own route,
+   * `PATCH …/:id/severity`, for the reason `place` has one, and queued behind
+   * the others on the same comment for the reason `recolour` is. Referee ›
+   * Notes (plan 261011f).
+   */
+  sort(id: string, severity: Severity | null): Promise<void>;
   /**
    * Remember locally that this comment started that conversation.
    *
@@ -381,6 +391,30 @@ export function useComments(slug: string): CommentsApi {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* Pending sort state lives with the write, not with Referee's Notes panel:
+     changing sub-mode unmounts that panel while this hook and its queued PATCH
+     remain alive. A count, because two quick presses are two queued writes. */
+  const [pendingSorts, setPendingSorts] = useState<{
+    slug: string;
+    counts: ReadonlyMap<string, number>;
+  }>(() => ({ slug, counts: new Map() }));
+  const bumpSort = useCallback(
+    (id: string, by: 1 | -1) => {
+      setPendingSorts((prev) => {
+        /* A late write from the article just left must not clear a same-named
+           comment's pending mark in the article now open. */
+        if (by < 0 && prev.slug !== slug) return prev;
+        const next = new Map(prev.slug === slug ? prev.counts : []);
+        const count = (next.get(id) ?? 0) + by;
+        if (count <= 0) next.delete(id);
+        else next.set(id, count);
+        return { slug, counts: next };
+      });
+    },
+    [slug],
+  );
+  const sorting: ReadonlySet<string> =
+    pendingSorts.slug === slug ? new Set(pendingSorts.counts.keys()) : new Set();
   /* **Whose comments these are** (lib/made-for.ts), for creates and queued
      edits that can send late: `AnnotateDialog` stores an unsaved draft from its
      unmount cleanup and from `pagehide`, and a change of reader is what
@@ -1160,6 +1194,37 @@ export function useComments(slug: string): CommentsApi {
   );
 
   /**
+   * Sort a note major or minor, or un-sort it. **Not optimistic, and queued
+   * per comment**, for the reasons `recolour` gives: the Notes sub-mode's buttons are
+   * controlled by the stored comment, so a sort shows once the server has it.
+   */
+  const sort = useCallback(
+    (id: string, severity: Severity | null): Promise<void> => {
+      bumpSort(id, 1);
+      return queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
+        try {
+          const r = await fetchOk(
+            `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/severity`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ severity }),
+            },
+            madeFor,
+          );
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          if (isCurrent()) landPatch(id, comment, sentAt);
+        } catch (e) {
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
+        }
+      }).finally(() => bumpSort(id, -1));
+    },
+    [slug, queue, madeFor, answerMark, landPatch, bumpSort],
+  );
+
+  /**
    * Remember, **locally**, that this comment started that conversation.
    *
    * There is no request here and there must not be: the link is written by the
@@ -1235,6 +1300,7 @@ export function useComments(slug: string): CommentsApi {
 
   return {
     comments,
+    sorting,
     loaded,
     loadFailed: loadError !== null,
     loadError,
@@ -1243,6 +1309,7 @@ export function useComments(slug: string): CommentsApi {
     edit,
     place,
     recolour,
+    sort,
     noteThread,
     retry,
     deepen,

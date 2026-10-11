@@ -95,14 +95,16 @@ describe("which sub-mode a link asks for", () => {
     expect(REFEREE_VIEWS).toContain(fallback);
   });
 
-  it("carries the editor's question after the referee's three, and it is not the default", () => {
+  it("carries the editor's question after the referee's own four, and it is not the default", () => {
     /* `candidates` is the one sub-mode that is not the referee's own question —
        it is an editor asking who should review this — and Greg added it on
        2026-08-31 over the cut the plan's appendix argues for. After the
        referee's own three and never the landing view: somebody who opened
        Referee mode is almost always the referee. It was last until
-       2026-10-07, when the source scan became the fifth (plan 261007h). */
-    expect(REFEREE_VIEWS.slice(0, 4)).toEqual(["criteria", "claims", "mirror", "candidates"]);
+       2026-10-07, when the source scan became the fifth (plan 261007h). The
+       reviewer's own Notes joined the referee's steps, after Mirror, on
+       2026-10-11 (plan 261011f). */
+    expect(REFEREE_VIEWS.slice(0, 5)).toEqual(["criteria", "claims", "mirror", "notes", "candidates"]);
     expect(DEFAULT_REFEREE_VIEW).not.toBe("candidates");
   });
 
