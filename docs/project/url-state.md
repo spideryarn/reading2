@@ -770,10 +770,18 @@ omission.
 >
 > — Greg, 2026-10-07, asked whether the guide should replace Summary as that band (q-kgrhm4)
 
+> Actually I think the UI complexity is overwhelming for new users so let's not open Marginalia
+> mode by default.
+>
+> — Greg, 2026-10-11 (spya-mw08mv)
+
 One more case in the same decision, since 2026-10-05
 ([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)),
-and the guide rather than Summary since 2026-10-07
-([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)).
+the guide rather than Summary since 2026-10-07
+([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)), and
+without Marginalia's column since 2026-10-11
+([261011o](../plans/261011o-marginalia-off-the-first-open-and-notes-of-its-own.md)); from 900px it
+had arrived at `?mode=chat&guide=1&margin=1`.
 A signed-in reader who opens an article at a bare address, in a browser that holds **no key** for
 it, arrives at:
 
@@ -781,18 +789,15 @@ it, arrives at:
 |---|---|
 | below 700px | the article alone — a band would cover the prose |
 | 700px and up | `?mode=chat&guide=1` — the guide, with its fixed greeting |
-| 900px and up | `?mode=chat&guide=1&margin=1` |
 
 Chat turns `guide=1` into the article's guide, stored or empty, and then drops it, so neither it
 nor `mode=chat` is remembered (§ `NEVER_REMEMBERED`, `NEEDS_AN_EXPLICIT_PRESS`): the next bare
-open puts back only `?margin=1`.
+open puts back nothing: the article alone.
 
-The widths are not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
-([`layout.ts`](../../src/web/layout.ts)) and `notesFit`
-([`marginalia/press.ts`](../../src/web/marginalia/press.ts)), which are what the reading view and
-the Marginalia button use, with the reader's own two measurements
-([`reader/measure.ts`](../../src/web/reader/measure.ts)). So the default cannot name a column the
-layout would decline to draw. It is measured once, on arrival; resizing afterwards never reapplies
+The width is not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
+([`layout.ts`](../../src/web/layout.ts)), which is what the reading view uses, with the reader's
+usable width ([`reader/measure.ts`](../../src/web/reader/measure.ts)). So the default cannot name a
+band the layout would decline to draw. It is measured once, on arrival; resizing afterwards never reapplies
 it.
 
 - **The link always wins**, as for a restore, and so does anything the reader has done: the default
@@ -808,9 +813,7 @@ it.
   recorded for nobody and the reader's first open is still to come. An article already in this
   browser that was last left in Plain at the top had no key before this shipped, so it gets the
   default once.
-- **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
-  experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
-  switch on. **No first open waits for the settings store** since 2026-10-08: "signed in" comes
+- **No first open waits for the settings store** since 2026-10-08: "signed in" comes
   from the reader id `App` hands the hook once the session is known, so the address is settled
   before paint whether settings have answered or not. Until then the ordinary default waited for
   that store, and a read that failed or served an offline copy left the arrival in Plain (CR3 of
@@ -818,10 +821,9 @@ it.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.
-- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in the guide
-  spends nothing: its greeting is ours, and the reader's first message is its first model call.
-  Arriving with the notes on makes their *so / but / vs* words if the article has none, once,
-  which is what Greg asked for ([marginalia.md § Relation words](marginalia.md#relation-words)).
+- **It starts nothing.** The guide's greeting is ours, and the reader's first message is its first
+  model call. From 2026-10-05 to 2026-10-11, while the notes came too, it made their relation words
+  ([marginalia.md § Relation words](marginalia.md#relation-words)).
 - **And the add page's "Why are you reading this?" is asked by the guide where it can be**
   ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4, simplified by
   [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)). While

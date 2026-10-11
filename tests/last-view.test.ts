@@ -419,21 +419,15 @@ describe("the first-open default", () => {
   }
 
   describe("firstOpenSearch: what the window has room for", () => {
-    it("is the article alone just below 700 usable px, and Summary from 700", () => {
-      expect(firstOpenSearch(699, 16)).toBe("");
-      expect(firstOpenSearch(700, 16)).toBe("?mode=chat&guide=1");
+    it("is the article alone just below 700 usable px, and the guide from 700", () => {
+      expect(firstOpenSearch(699)).toBe("");
+      expect(firstOpenSearch(700)).toBe("?mode=chat&guide=1");
     });
 
-    it("adds the notes from 900, and not at 899", () => {
-      expect(firstOpenSearch(899, 16)).toBe("?mode=chat&guide=1");
-      expect(firstOpenSearch(900, 16)).toBe("?mode=chat&guide=1&margin=1");
-    });
-
-    it("does not ask about the experimental switch: Marginalia left it on 2026-10-05", () => {
-      /* It took a third argument, the reader's switch, and left the notes out
-         when that was off (spya-vv54j2, plan 261005d). */
-      expect(firstOpenSearch.length).toBe(2);
-      expect(firstOpenSearch(2400, 16)).toBe("?mode=chat&guide=1&margin=1");
+    it("never opens Marginalia, however wide the window (spya-mw08mv, 2026-10-11)", () => {
+      /* From 2026-10-05 it added `&margin=1` from 900px; Greg took that back
+         because the column is too much for a new reader. */
+      for (const width of [900, 1440, 2400]) expect(firstOpenSearch(width)).toBe("?mode=chat&guide=1");
     });
   });
 

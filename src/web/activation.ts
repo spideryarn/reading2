@@ -312,8 +312,8 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      words are its own, and **the column asks for them when it is shown**, not
      when it is pressed (src/web/useRelations.ts § `useAutoRunOnArrival`). Greg,
      2026-10-05: *"generate linking words when Marginalia mode is opened"*. A
-     press could not carry it: the first-open default turns the column on with
-     nobody pressing anything. So the press arms nothing, as a Summary press
+     press could not carry it: a pasted link, a reload or a restored view turns
+     the column on with nobody pressing anything. So the press arms nothing, as a Summary press
      that lands on the thread arms nothing, and the row is `delegated` rather
      than `none` so the command bar still says the row may start work. Not
      `fixed`: that would mint a `relations` token no hook is mounted to claim,
