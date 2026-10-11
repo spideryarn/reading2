@@ -321,16 +321,21 @@ async function claimStarter(
     stays("not-locked");
     return null;
   }
+  /* **A savepoint written out, not `tx.transaction(…)`**, as in pg-revisions.ts
+     § sweepOnStepStart: Drizzle's nested transaction takes no options, and
+     tests/store-transaction-isolation.test.ts requires every `.transaction(…)`
+     in src/store to name an isolation level. A refusal changed nothing, so it
+     is released like a move. */
+  await tx.execute(sql`savepoint claim_starter`);
   try {
-    const answer = await tx.transaction((sp) =>
-      transferStarterOnClaim(sp, {
-        articleId: v.articleId,
-        from: v.createdBy,
-        to: v.ownerId,
-        actor: v.ownerId,
-        voucherId: v.voucherId,
-      }),
-    );
+    const answer = await transferStarterOnClaim(tx, {
+      articleId: v.articleId,
+      from: v.createdBy,
+      to: v.ownerId,
+      actor: v.ownerId,
+      voucherId: v.voucherId,
+    });
+    await tx.execute(sql`release savepoint claim_starter`);
     if (answer.kind === "transferred") {
       logger.info(
         { ownerId: v.ownerId, voucherId: v.voucherId, articleId: v.articleId, deleted: answer.deleted },
@@ -341,7 +346,8 @@ async function claimStarter(
     stays(answer.kind === "refused" ? answer.reason : answer.kind);
     return null;
   } catch (err) {
-    /* Rolled back to the savepoint by the nested transaction; the claim goes on. */
+    /* Undo whatever the move did; the claim goes on. */
+    await tx.execute(sql`rollback to savepoint claim_starter`);
     logger.warn(
       { ownerId: v.ownerId, voucherId: v.voucherId, err: err instanceof Error ? err.name : "unknown" },
       "moving a claimed gift's starter article failed — the voucher is claimed, the article stays",

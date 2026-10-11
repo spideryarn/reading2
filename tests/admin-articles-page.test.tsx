@@ -34,11 +34,11 @@ const { READER_STATE } = await import("../src/admin-articles.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const ALICE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
-const BOB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
-const UNCONFIRMED = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
-const THEIRS = "11111111-1111-4111-8111-111111111111";
-const MINE = "22222222-2222-4222-8222-222222222222";
+const ALICE = "a1a1a1a1-0b11-4c5e-8a01-261011000001";
+const BOB = "a1a1a1a1-0b11-4c5e-8a01-261011000002";
+const UNCONFIRMED = "a1a1a1a1-0b11-4c5e-8a01-261011000003";
+const THEIRS = "a1a1a1a1-0b11-4c5e-8a01-261011000004";
+const MINE = "a1a1a1a1-0b11-4c5e-8a01-261011000005";
 
 const ARTICLES = [
   {
@@ -182,7 +182,8 @@ describe("/admin/articles", () => {
     const [theirs, mine] = ARTICLES as unknown as Parameters<typeof matchesFilter>[0][];
     expect(matchesFilter(theirs!, "ALICE@")).toBe(true);
     expect(matchesFilter(theirs!, "k3m9")).toBe(true);
-    expect(matchesFilter(mine!, "2222")).toBe(true);
+    expect(matchesFilter(mine!, "000005")).toBe(true);
+    expect(matchesFilter(theirs!, "000005")).toBe(false);
     expect(matchesFilter(mine!, "alice")).toBe(false);
     expect(matchesFilter(mine!, "  ")).toBe(true);
   });

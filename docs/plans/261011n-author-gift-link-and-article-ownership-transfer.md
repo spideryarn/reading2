@@ -1,6 +1,6 @@
 # Author gifts: a link to the draft, the article passing to its recipient, and `/admin/articles`
 
-**Status as of 2026-10-11: revision 2; stage 1 (D1) built, stages 2–4 building.** Up: [admin.md](../project/admin.md). Report
+**Status as of 2026-10-11: built (stages 1–4), on `dev` once pushed; not deployed. No migration.** Up: [admin.md](../project/admin.md). Report
 `spya-wqvxjv` (#550, SPIDERYARN-READING2-GZ, queue item `qi-nv3v2p2n`), an administrator's (provenance
 proved, `feedback-reporter.ts` exit 0). Builds on
 [261010r](261010r-mcp-gift-any-article-and-send-makes-the-link.md) (an agent drafts, *Send* makes the
@@ -170,6 +170,79 @@ and re-reads the preview just before the press (Opus).
 - **F10 (P1) routes.ts is a defence** — overruled (Bounds).
 - **F11 (P2) Auth lookup inside the lock** — adopted.
 - **F12 (P2) D1 already built** — yes, stage 1 landed while the review ran.
+
+## Built
+
+- Stage 1 (D1) `0bec3ac7c`; stage 2 (D2, D4) `fcd64d042`; stage 3 (D3, docs) `af5c6d365`; GPT Sol's
+  code-review fixes `c3a802a22`. Stages 2 and 3 were built by Opus subagents.
+- **What the plan missed, found while building:** "busy" also means an unsettled `ingest_events`
+  reservation on the article, not only a live job; unsharing writes the same audit rows the owner's
+  own switches write (a visibility change, a link `turned-off`), with the admin or the claimant as
+  actor; `debate_claim_checks` is a view, so the classification scan reads base tables only; and
+  **the claim had a lock-order inversion with deleting an article** (delete: article, then its
+  vouchers through `on delete set null`; claim: vouchers, then the article), so the claim now locks
+  the waiting vouchers' starter articles, in id order, before its voucher `UPDATE`. No
+  `billing_accounts` lock is taken by a transfer: neither owner's usage moves, because the ledger is
+  frozen and unlinked in the same transaction.
+
+## Code review (GPT Sol, write-capable): LAND AFTER FIXES, fixes applied by the reviewer
+
+[261011n-code-review-sol.md](261011n-code-review-sol.md), over the paths in
+[261011n-code-review-paths.txt](261011n-code-review-paths.txt). Each fix was read and the database
+suites re-run (108 passed) before committing:
+
+- **C1 (P0)**: `article_revisions.illustrated.note`, the reader's own steering words for the
+  painting, moved with the article. A transfer now drops an illustration with a note; the claim
+  refuses such an article as `own-words`; the admin's confirmation says so.
+- **C2 (P0)**: the upload's original filename moved. Replaced by `document.pdf` / `.html` /
+  `document`.
+- **C3 (P0)**: the revision's requested and final URLs could carry a credential. Kept only when
+  `publicSourceUrl` accepts them.
+- **C4 (P0)**: the confirmation could name a stale owner; it now shows the freshly previewed one.
+- **C5, C6 (P2)**: the reading view rereads once whichever usage request won, and asks once per
+  article per mount.
+- **C7 (P2, reported, pre-existing)**: author-gift *Send* and deleting its article for good lock
+  in opposite orders. Queued as `qi-4vfh7aqy`.
+
+**Round 2** (read-only, scoped to those fixes):
+[261011n-code-review-2-sol.md](261011n-code-review-2-sol.md), LAND AFTER FIXES. C1–C6 confirmed
+correct. **R1 (P2)**: the `illustrated-brief` checkpoint, the model's brief written from the steering
+note, still moved; now deleted on a transfer (test seen red first). Discovery closed there.
+
+## Browser check (Sonnet, Playwright on the box, local)
+
+All three passed: `/admin/articles` hid another reader's title and showed the admin's own; a
+transfer moved an article to a second reader, who then had it on their shelf with chat
+([shot 1](261011n-shot-1-transfer-dialog.png), [shot 2](261011n-shot-2-recipient-reads-own.png));
+`/admin/vouchers?gift=<id>` opened on that card ([shot 3](261011n-shot-3-gift-highlight.png)); a
+voucher with a private starter, claimed by the second reader, moved the article and the voucher
+row said *Now theirs* ([shot 4](261011n-shot-4-claimed-starter.png)). There the claim ran from the
+shelf at sign-in rather than from the reading view, so the view's own re-read is covered by
+`tests/use-claim-shared-article.test.tsx`, not by the browser.
+
+## Full suite
+
+The first full run (45,071 tests) had five reds, all from this change and all whole-tree guards
+doing their job. Each was fixed:
+
+- **`tests/store-transaction-isolation.test.ts`:** the claim's savepoint was a
+  `tx.transaction(…)`, which can name no isolation level. It is now written out (`savepoint
+  claim_starter`), as `pg-revisions.ts` § `sweepOnStepStart` does it.
+- **`tests/fixture-ids.test.ts`:** `tests/admin-articles-page.test.tsx` reused other files' uuids;
+  it now has its own.
+- **`tests/share-link-token-stays-home.test.ts`:** the transfer named `share_token` to ask
+  whether a link was on. It now asks through `shareTokenAt`, as the shelf does. The only place it
+  still names the key is where it clears it, so the guard pins it there with a new case: this file
+  only ever writes `shareToken: null`. That case was seen red on a mutation.
+- **`tests/public-network-trace.test.tsx`:** a signed-in non-owner holding a link now makes the
+  owner-first and keyed reads twice, because the claim check reads the article again (C5). The pin
+  now says so; it also checks that every keyed read carries no token and that the usage check
+  happens once.
+- **`tests/what-the-enter-key-promises.test.tsx`:** the `/admin/articles` filter box now has
+  `enterKeyHint="search"`, like the other search-as-you-type boxes.
+
+A rejection logged from `tests/article-delete-pg.test.ts` (an enqueue racing a delete in
+`pg-jobs.ts`) touches no file of this change, and that file passes alone (17/17).
 
 ## Tests (failing first)
 

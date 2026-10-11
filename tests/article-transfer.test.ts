@@ -341,6 +341,11 @@ describe("transferArticle — the move", () => {
       "insert into spideryarn.checkpoints (article_id, namespace, key, value) values ($1, 'pdf-chunk', 'k', '{}')",
       [a.id],
     );
+    /* An Illustrated brief may repeat the old reader's steering note (round-2 R1): it goes. */
+    await pool.query(
+      "insert into spideryarn.checkpoints (article_id, namespace, key, value) values ($1, 'illustrated-brief', 'k', '{}')",
+      [a.id],
+    );
     await pool.query(
       `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key) values ($1, $2, $3, '[]', 'done', 'w')`,
       [mintId(), ALICE, a.slug],

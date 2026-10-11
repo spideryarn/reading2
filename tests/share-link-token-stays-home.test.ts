@@ -56,7 +56,7 @@ const SOURCES = [...filesUnder("src"), ...filesUnder("scripts")].sort();
 const code = new Map(SOURCES.map((file) => [file, codeOf(readFileSync(path.join(ROOT, file), "utf8"))]));
 
 describe("the private link's key", () => {
-  it("is named by five files, and each has one job with it", () => {
+  it("is named by six files, and each has one job with it", () => {
     const naming = SOURCES.filter((file) => /shareToken\b|share_token\b/.test(code.get(file) ?? ""));
     expect(naming).toEqual([
       /* The one-off never-published tidy (261007f): asks only whether a key exists
@@ -69,6 +69,10 @@ describe("the private link's key", () => {
       "src/store/export-bundle.ts",
       /* Compares it, in a `where`, with the key a request carried. */
       "src/store/link-shared-slug.ts",
+      /* Moving an article to another owner (261011n) turns its link off: writes
+         null, never reads the key. It asks whether a link is on through
+         `shareTokenAt`, as the shelf does. Held by the case below. */
+      "src/store/pg-article-transfer.ts",
       /* The owner's store: the one place that selects it and writes it. */
       "src/store/pg-share-link.ts",
     ]);
@@ -107,6 +111,12 @@ describe("the private link's key", () => {
         file !== "src/routes.ts" && !file.startsWith("src/web/") && /\/share-link\b/.test(code.get(file) ?? ""),
     );
     expect(clients).toEqual(["src/mcp/tools.ts"]);
+  });
+
+  it("is only ever cleared by an article's move to another owner", () => {
+    const move = code.get("src/store/pg-article-transfer.ts") ?? "";
+    const named = move.match(/shareToken\b[^,\n]*/g) ?? [];
+    expect(named).toEqual(["shareToken: null"]);
   });
 
   it("is compared and never selected by the public predicate", () => {

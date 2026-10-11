@@ -311,6 +311,7 @@ export function AdminArticlesPage() {
       <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
         <input
           type="search"
+          enterKeyHint="search"
           className={INPUT}
           placeholder="Filter by address or id"
           aria-label="Filter by owner address or article id"

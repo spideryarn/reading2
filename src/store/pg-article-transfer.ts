@@ -74,6 +74,7 @@ import {
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
+  checkpoints,
   articleShareLinkEvents,
   articleTags,
   articleVisibilityChanges,
@@ -107,7 +108,7 @@ import { READ_COMMITTED } from "./isolation.js";
 
 const logger = log("store");
 
-/** A transaction, or a savepoint inside one — the claim's (D3) is the second. */
+/** A transaction; the claim (D3) passes its own, inside a savepoint it writes out. */
 export type TransferTx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 
 /* ------------------------------------------------------ the classification -- */
@@ -299,7 +300,7 @@ export async function previewTransfer(articleId: string): Promise<TransferPrevie
       slug: articles.slug,
       visibility: articles.visibility,
       processing: articles.processing,
-      privateLink: sql<boolean>`${articles.shareToken} is not null`,
+      privateLink: sql<boolean>`${articles.shareTokenAt} is not null`,
     })
     .from(articles)
     .where(eq(articles.id, articleId))
@@ -407,6 +408,12 @@ function neutralUploadFilename(filename: string | null, kind: string | null, sou
  * their exact steering note.
  */
 async function resetRevisionReaderState(tx: TransferTx, articleId: string): Promise<void> {
+  /* The Illustrated brief the model wrote from that note can repeat it, and its
+     key holds the old job's id, so nothing can reuse it after the move anyway
+     (code review round 2, R1). */
+  await tx
+    .delete(checkpoints)
+    .where(and(eq(checkpoints.articleId, articleId), eq(checkpoints.namespace, "illustrated-brief")));
   const revisions = await tx
     .select({
       id: articleRevisions.id,
@@ -495,7 +502,7 @@ async function transferLocked<R extends string>(
       slug: articles.slug,
       visibility: articles.visibility,
       processing: articles.processing,
-      privateLink: sql<boolean>`${articles.shareToken} is not null`,
+      privateLink: sql<boolean>`${articles.shareTokenAt} is not null`,
     })
     .from(articles)
     .where(eq(articles.id, articleId))
