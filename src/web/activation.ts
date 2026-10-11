@@ -312,8 +312,8 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      words are its own, and **the column asks for them when it is shown**, not
      when it is pressed (src/web/useRelations.ts § `useAutoRunOnArrival`). Greg,
      2026-10-05: *"generate linking words when Marginalia mode is opened"*. A
-     press could not carry it: the first-open default turns the column on with
-     nobody pressing anything. So the press arms nothing, as a Summary press
+     press could not carry it: a pasted link, a reload or a restored view turns
+     the column on with nobody pressing anything. So the press arms nothing, as a Summary press
      that lands on the thread arms nothing, and the row is `delegated` rather
      than `none` so the command bar still says the row may start work. Not
      `fixed`: that would mint a `relations` token no hook is mounted to claim,
@@ -342,7 +342,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   referee: {
     kind: "none",
     reason:
-      "opens a panel without starting a model call; only the Claims chip can arm a run",
+      "opens a panel without starting a model call; only the Promises chip can arm a run",
   },
   learn: {
     kind: "none",
@@ -418,7 +418,7 @@ export function modeGenerates(mode: Mode): boolean {
 export function modeStep(mode: Mode): StepName | null {
   const row = MODE_TARGET[mode];
   if (row.kind !== "fixed") return null;
-  return row.target === "claims" || row.target === "candidates" ? null : row.target;
+  return row.target === "promises" || row.target === "candidates" ? null : row.target;
 }
 
 /**
@@ -454,7 +454,7 @@ export function modeStep(mode: Mode): StepName | null {
  */
 const REFEREE_TARGET: Record<RefereeView, AutoRunTarget | null> = {
   criteria: null,
-  claims: "claims",
+  promises: "promises",
   mirror: null,
   /* Nothing to run: the reviewer's own notes, and no model. */
   notes: null,
@@ -696,13 +696,13 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 }
 
 /**
- * The same, for a press on one of Referee's sub-mode chips. All but Claims
+ * The same, for a press on one of Referee's sub-mode chips. All but Promises
  * arm nothing — `REFEREE_TARGET` says which and why.
  *
  * Called from the chip's own `onClick` in `RefereeViews`, and from nowhere
  * else. **Not from the `?referee=` setter beside it**, which is what
  * Back and Forward move: retracing your steps through the chips must not buy a
- * claims run. Same rule, same reason, as `armActivationForMode`.
+ * promises run. Same rule, same reason, as `armActivationForMode`.
  */
 export function armActivationForRefereeView(slug: string, view: RefereeView): void {
   const target = REFEREE_TARGET[view];

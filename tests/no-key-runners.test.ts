@@ -41,7 +41,7 @@ import { converse } from "../src/converse.js";
 import { explainStream } from "../src/explain.js";
 import { NOT_CONFIGURED } from "../src/messages.js";
 import { markAnswerStream } from "../src/quiz-mark.js";
-import { runClaimsStream } from "../src/referee-claims-run.js";
+import { runPromisesStream } from "../src/referee-promises-run.js";
 import { runCriterionStream } from "../src/referee-criteria-run.js";
 import { mirrorStream } from "../src/referee-mirror.js";
 import { hiddenCheckStream } from "../src/referee-hidden-check.js";
@@ -92,7 +92,7 @@ const RUNNERS: Record<string, () => AsyncIterable<unknown>> = {
       power: "standard",
     }),
   "src/search.ts": () => findPassagesStream({ power: "standard", meta, blocks, criterion: "randomisation" }),
-  "src/referee-claims-run.ts": () => runClaimsStream({ power: "standard", meta, blocks }),
+  "src/referee-promises-run.ts": () => runPromisesStream({ power: "standard", meta, blocks }),
   "src/referee-criteria-run.ts": () =>
     runCriterionStream({
       power: "standard",

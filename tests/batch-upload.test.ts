@@ -472,9 +472,9 @@ describe("the batch", () => {
   });
 
   it("refuses a file a single upload would refuse, and takes the rest", async () => {
-    batch.add([new File(["x"], "notes.txt", { type: "text/plain" }), pdf("a.pdf")]);
+    batch.add([new File(["x"], "song.mp3", { type: "audio/mpeg" }), pdf("a.pdf")]);
     await settle();
-    expect(stateOf("notes.txt").kind).toBe("refused");
+    expect(stateOf("song.mp3").kind).toBe("refused");
     expect(stateOf("a.pdf").kind).toBe("reading");
   });
 

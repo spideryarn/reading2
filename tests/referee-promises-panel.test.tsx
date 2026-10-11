@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Claims' panel, and the three things about it that are not cosmetic.**
+ * **Promises' panel, and the three things about it that are not cosmetic.**
  *
  * Every one of them is a rule the cross-family review made the condition of this
  * sub-mode surviving at all
@@ -11,7 +11,7 @@
  * 1. **Document order, never thinness order**, and **nothing on a row that could
  *    become a ranking.** The rejected design put the claims with the fewest
  *    passages at the top and called the empty row a finding. The failure it
- *    invites is named in the plan: *a tired referee opens Claims first, reads the
+ *    invites is named in the plan: *a tired referee opens Promises first, reads the
  *    top "thin" rows, and treats everything unlisted as clean.* So the fixture
  *    below is arranged so that document order and thinness order disagree, and
  *    there is a test that no number appears beside a claim at all — because a
@@ -21,10 +21,10 @@
  *    the middle sentence is false about the third. That distinction is exactly
  *    the one that went wrong in Criteria and needed GPT Sol's finding 4 to catch.
  * 3. **The null result is about the model.** The sentences come from
- *    src/referee-claims.ts as values; this file checks they reach the screen, and
+ *    src/referee-promises.ts as values; this file checks they reach the screen, and
  *    tests/referee-copy-is-about-the-model.test.ts checks what they may say.
  *
- * No router and no hook: `ClaimsView` is a pure function of its props, which is
+ * No router and no hook: `PromisesView` is a pure function of its props, which is
  * the band-owns-the-state, panel-is-pure split every mode in this app makes.
  * Harness copied from tests/referee-mirror-panel.test.tsx.
  */
@@ -32,21 +32,21 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Claim, ClaimsRun, OtherText } from "../src/referee-claims.js";
+import type { PaperPromise, PromisesRun, OtherText } from "../src/referee-promises.js";
 import {
-  CLAIM_WITHHELD,
-  CLAIMS_AT_CAP,
-  claimsOmittedNote,
-  MAX_CLAIMS,
+  PROMISE_WITHHELD,
+  PROMISES_AT_CAP,
+  promisesOmittedNote,
+  MAX_PROMISES,
   NO_PASSAGE_FOUND,
   OTHER_TEXT_NOTE,
   PASSAGES_CAPPED,
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
   withheldNote,
-} from "../src/referee-claims.js";
-import { ClaimsView, inDocumentOrder } from "../src/web/ClaimsPanel.js";
-import type { ClaimsApi } from "../src/web/useClaims.js";
+} from "../src/referee-promises.js";
+import { PromisesView, inDocumentOrder } from "../src/web/PromisesPanel.js";
+import type { PromisesApi } from "../src/web/usePromises.js";
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, so a plausible-looking
    `spya-aaa111` is not one of ours. docs/project/block-ids.md § the alphabet. */
@@ -54,7 +54,7 @@ const FIRST = "spya-anc234";
 const SECOND = "spya-bqd345";
 
 /** The claim the paper states **first**, with two passages under it. */
-const THICK: Claim = {
+const THICK: PaperPromise = {
   id: `${FIRST}:8`,
   blockId: FIRST,
   quote: "the method halves annotation time",
@@ -68,7 +68,7 @@ const THICK: Claim = {
 };
 
 /** The claim the paper states **second**, with one. */
-const THIN: Claim = {
+const THIN: PaperPromise = {
   id: `${SECOND}:9`,
   blockId: SECOND,
   quote: "it generalises to three unseen domains",
@@ -80,7 +80,7 @@ const THIN: Claim = {
   discarded: 0,
 };
 
-function api(run: ClaimsRun | null, over: Partial<ClaimsApi> = {}): ClaimsApi {
+function api(run: PromisesRun | null, over: Partial<PromisesApi> = {}): PromisesApi {
   return {
     run,
     stale: false,
@@ -92,10 +92,10 @@ function api(run: ClaimsRun | null, over: Partial<ClaimsApi> = {}): ClaimsApi {
   };
 }
 
-const done = (claims: Claim[]): ClaimsRun => ({
+const done = (claims: PaperPromise[]): PromisesRun => ({
   status: "done",
   createdAt: "2026-09-01T00:00:00.000Z",
-  claims,
+  promises: claims,
 });
 
 let host: HTMLDivElement;
@@ -111,17 +111,17 @@ afterEach(() => {
 });
 
 function render(
-  claims: Claim[],
-  run?: ClaimsRun | null,
-  over: Partial<ClaimsApi> = {},
+  claims: PaperPromise[],
+  run?: PromisesRun | null,
+  over: Partial<PromisesApi> = {},
   otherText: OtherText[] = [],
 ) {
   const r = run === undefined ? done(claims) : run;
   act(() => {
     root.render(
-      createElement(ClaimsView, {
+      createElement(PromisesView, {
         api: api(r, over),
-        claims,
+        promises: claims,
         otherText,
         slots: new Map(claims.map((c, i) => [c.id, i])),
         showing: [],
@@ -145,10 +145,10 @@ const OTHER_TEXT: OtherText[] = [
 
 /* ------------------------------------------------- rule 1, on the screen -- */
 
-it("acknowledges a Claims run immediately, before any wait timer runs", () => {
+it("acknowledges a Promises run immediately, before any wait timer runs", () => {
   vi.useFakeTimers();
   try {
-    render([], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", claims: [] });
+    render([], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", promises: [] });
     expect(host.querySelector('.band-waiting[role="status"]')?.textContent).toBe("Reading the paper…");
     expect(host.querySelector('svg.cmt-spinner[aria-hidden="true"]')).not.toBeNull();
   } finally {
@@ -158,12 +158,12 @@ it("acknowledges a Claims run immediately, before any wait timer runs", () => {
 
 describe("the order, and the absence of any way to rank", () => {
   it("draws the claims in the order it is given, thinnest last", () => {
-    /* The band hands `ClaimsView` an already-sorted list, so this is the half
+    /* The band hands `PromisesView` an already-sorted list, so this is the half
        that says the panel does not re-sort. The list is fed document-first and
        has to come out document-first — and the fixture is built so that a
        thinness sort would swap them, which is what makes the assertion mean
        something. */
-    const rows = [...render([THICK, THIN]).querySelectorAll(".clm-claim")].map(
+    const rows = [...render([THICK, THIN]).querySelectorAll(".prm-promise")].map(
       (n) => n.textContent,
     );
     expect(rows).toEqual([THICK.claim, THIN.claim]);
@@ -180,19 +180,19 @@ describe("the order, and the absence of any way to rank", () => {
        digits**, deliberately, because the paper's own words may. The first
        version of this assertion failed on "fell from 40 to 19 minutes", which is
        the test being wrong rather than the panel. */
-    const list = render([THICK, THIN]).querySelector(".clm-list");
+    const list = render([THICK, THIN]).querySelector(".prm-list");
     expect(list).not.toBeNull();
     expect(list?.textContent ?? "").not.toMatch(/\d/);
   });
 
   it("sorts what the band is holding by position, even mid-stream", () => {
-    /* The band's half of rule 1, and it needs its own test: `ClaimsView` is
+    /* The band's half of rule 1, and it needs its own test: `PromisesView` is
        handed an already-sorted list, so a mutation making `inDocumentOrder` sort
        by `passages.length` left every assertion above green. That mutation is
        the whole reason this test and its export exist.
 
        It matters during the stream rather than after it: the authoritative
-       answer is sorted by `validateClaims` on the server, but a claim previewed
+       answer is sorted by `validatePromises` on the server, but a claim previewed
        mid-stream cannot be placed there, because the claims after it have not
        arrived. */
     const at = new Map([
@@ -240,12 +240,12 @@ describe("the three things an empty claim can mean", () => {
   });
 
   it("draws a claim with no passages at the same weight as one with them", () => {
-    /* Not an error colour and not an error shape: `.clm-none` is a quiet line,
+    /* Not an error colour and not an error shape: `.prm-none` is a quiet line,
        and dressing it as a warning is how it comes to be read as a finding about
        the paper rather than about the run. */
     const panel = render([{ ...THIN, passages: [], discarded: 0 }]);
-    expect(panel.querySelector(".clm-none")).not.toBeNull();
-    expect(panel.querySelector(".clm-error")).toBeNull();
+    expect(panel.querySelector(".prm-none")).not.toBeNull();
+    expect(panel.querySelector(".prm-error")).toBeNull();
   });
 });
 
@@ -263,7 +263,7 @@ describe("what the panel says a row is", () => {
   });
 
   it("says the order is the paper's and is not a ranking", () => {
-    expect(render([THICK]).querySelector(".clm-order")?.textContent ?? "").toMatch(/not ranked|nothing here is ranked/i);
+    expect(render([THICK]).querySelector(".prm-order")?.textContent ?? "").toMatch(/not ranked|nothing here is ranked/i);
   });
 
   it("makes every claim and every passage a link into the prose", () => {
@@ -271,7 +271,7 @@ describe("what the panel says a row is", () => {
        for the claim's own sentence and one per passage — block links since plan
        260928b, tests/block-link-migration.test.tsx. */
     const panel = render([THICK]);
-    expect(panel.querySelectorAll(".clm-jump")).toHaveLength(3);
+    expect(panel.querySelectorAll(".prm-jump")).toHaveLength(3);
   });
 
   it("offers no way to copy the rows out", () => {
@@ -286,14 +286,14 @@ describe("what the panel says a row is", () => {
 describe("the run's own states", () => {
   it("says nothing about the paper when the model found no claims at all", () => {
     const panel = render([], done([]));
-    expect(panel.textContent).toMatch(/The model did not find any claims/);
+    expect(panel.textContent).toMatch(/The model did not find any promises/);
   });
 
   it("shows a failure and offers the button again", () => {
     const panel = render([], {
       status: "error",
       createdAt: "2026-09-01T00:00:00.000Z",
-      claims: [],
+      promises: [],
       error: "The model stopped answering.",
     });
     expect(panel.textContent).toContain("The model stopped answering.");
@@ -341,7 +341,7 @@ describe("the rest of the text inside the passages the claims quote", () => {
        paper's own words — full of numbers. Outside the list they are prose;
        inside it they would be a second column the eye reads as thinness. */
     const panel = render([THICK], undefined, {}, OTHER_TEXT);
-    const list = panel.querySelector(".clm-list");
+    const list = panel.querySelector(".prm-list");
     expect(list?.textContent ?? "").not.toContain(OTHER_TEXT[0]?.text ?? "");
     expect(list?.textContent ?? "").not.toMatch(/\d/);
   });
@@ -350,7 +350,7 @@ describe("the rest of the text inside the passages the claims quote", () => {
     /* Six of these is not a worse answer than two. A count is one glance from a
        ranking, which is the whole reason this sub-mode survived its review. */
     const panel = render([THICK], undefined, {}, OTHER_TEXT);
-    const section = [...panel.querySelectorAll("section.clm-row")].at(-1);
+    const section = [...panel.querySelectorAll("section.prm-row")].at(-1);
     expect(section).not.toBeNull();
     expect(section?.textContent ?? "").not.toMatch(/\b(two|2|6|six)\b/i);
   });
@@ -361,14 +361,14 @@ describe("the rest of the text inside the passages the claims quote", () => {
        screen — the band withholds the list until `done`, and this is the panel
        half of the same thought: it never draws a section it was handed nothing
        for. */
-    const panel = render([THICK], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", claims: [THICK] }, {}, []);
+    const panel = render([THICK], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", promises: [THICK] }, {}, []);
     expect(panel.textContent).not.toContain(OTHER_TEXT_NOTE);
   });
 
   it("makes each one a door into the prose, like every other row", () => {
     const panel = render([THICK], undefined, {}, OTHER_TEXT);
-    const section = [...panel.querySelectorAll("section.clm-row")].at(-1);
-    expect(section?.querySelectorAll(".clm-jump")).toHaveLength(OTHER_TEXT.length);
+    const section = [...panel.querySelectorAll("section.prm-row")].at(-1);
+    expect(section?.querySelectorAll(".prm-jump")).toHaveLength(OTHER_TEXT.length);
   });
 });
 
@@ -377,14 +377,14 @@ describe("the rest of the text inside the passages the claims quote", () => {
 /**
  * **A fail-safe nobody can see is a fail-safe nobody can check.**
  *
- * `validateClaims` blanks a `reasoning` line that reads as a verdict on whether
+ * `validatePromises` blanks a `reasoning` line that reads as a verdict on whether
  * a passage carries its claim. If those frames ever start firing on ordinary
  * linkage sentences, the referee is the only one in a position to notice — and
  * they cannot notice a thing that only ever reached a log line.
  * docs/reusable/silent-success.md.
  */
 describe("what the panel says when a line was withheld", () => {
-  const withheldPassage: Claim = {
+  const withheldPassage: PaperPromise = {
     ...THIN,
     passages: [
       { blockId: "spya-ekn678", quote: "law, medicine and finance", start: 0, reasoning: "", withheld: true },
@@ -421,14 +421,14 @@ describe("what the panel says when a line was withheld", () => {
  * judgement, so the row keeps a true label instead of losing the claim.
  */
 describe("what the panel draws when a claim's own line was withheld", () => {
-  const headlineWithheld: Claim = { ...THIN, claim: "", claimWithheld: true };
+  const headlineWithheld: PaperPromise = { ...THIN, claim: "", claimWithheld: true };
 
   it("says so, and lets the paper's own words be the label", () => {
     const panel = render([headlineWithheld]);
-    expect(panel.textContent).toContain(CLAIM_WITHHELD);
+    expect(panel.textContent).toContain(PROMISE_WITHHELD);
     // The paper's sentence is still there, and still a door into the prose.
     expect(panel.textContent).toContain(THIN.quote);
-    expect(panel.querySelectorAll(".clm-jump").length).toBeGreaterThan(0);
+    expect(panel.querySelectorAll(".prm-jump").length).toBeGreaterThan(0);
   });
 
   it("counts it in the same sentence as a withheld passage line", () => {
@@ -440,7 +440,7 @@ describe("what the panel draws when a claim's own line was withheld", () => {
 
   it("prints no empty headline where the line used to be", () => {
     const panel = render([headlineWithheld]);
-    expect(panel.querySelectorAll(".clm-claim")).toHaveLength(0);
+    expect(panel.querySelectorAll(".prm-promise")).toHaveLength(0);
   });
 });
 
@@ -449,7 +449,7 @@ describe("what the panel draws when a claim's own line was withheld", () => {
 /**
  * **A cap nobody is told about is a ranking.**
  *
- * GPT Sol's second review, finding 5: Claims sorts into document order and then
+ * GPT Sol's second review, finding 5: Promises sorts into document order and then
  * deletes everything past claim twenty and passage eight. The counts reached the
  * outcome and the server log and nothing reached the referee — so the panel
  * showed an apparently complete list in which the claims the paper makes last
@@ -461,10 +461,10 @@ describe("what the panel says when a cap cut something", () => {
   it("says a claim's passage list is incomplete, without a number", () => {
     /* Numberless on the row, because a count of passages is one glance from a
        ranking and *how many were cut* is that count by another route. The
-       number is on `Claim.passagesOmitted` for a log to read. */
+       number is on `PaperPromise.passagesOmitted` for a log to read. */
     const panel = render([{ ...THIN, passagesOmitted: 4 }]);
     expect(panel.textContent).toContain(PASSAGES_CAPPED);
-    expect(panel.querySelector(".clm-list")?.textContent ?? "").not.toMatch(/\d/);
+    expect(panel.querySelector(".prm-list")?.textContent ?? "").not.toMatch(/\d/);
   });
 
   it("says nothing on a row the cap did not touch", () => {
@@ -472,26 +472,26 @@ describe("what the panel says when a cap cut something", () => {
   });
 
   it("says how many claims were cut, when the run carries the count", () => {
-    const run: ClaimsRun = { ...done([THICK, THIN]), claimsOmitted: 3 };
-    expect(render([THICK, THIN], run).textContent).toContain(claimsOmittedNote(3));
+    const run: PromisesRun = { ...done([THICK, THIN]), promisesOmitted: 3 };
+    expect(render([THICK, THIN], run).textContent).toContain(promisesOmittedNote(3));
   });
 
   it("still says the cap was reached when the count did not survive the store", () => {
-    /* Every run stored so far is this case: `validateClaims` counts the
-       truncation and the route writes `claims` and `model` only. A full list is
+    /* Every run stored so far is this case: `validatePromises` counts the
+       truncation and older rows have no `promisesOmitted`. A full list is
        still proof the cap fired, and saying that beats saying nothing. */
-    const full = Array.from({ length: MAX_CLAIMS }, (_, i) => ({
+    const full = Array.from({ length: MAX_PROMISES }, (_, i) => ({
       ...THIN,
       id: `${SECOND}:${i}`,
       start: i,
     }));
     const panel = render(full);
-    expect(panel.textContent).toContain(CLAIMS_AT_CAP);
-    expect(panel.textContent).not.toContain(claimsOmittedNote(1));
+    expect(panel.textContent).toContain(PROMISES_AT_CAP);
+    expect(panel.textContent).not.toContain(promisesOmittedNote(1));
   });
 
   it("says neither when the list is short of the cap", () => {
     const panel = render([THICK, THIN]);
-    expect(panel.textContent).not.toContain(CLAIMS_AT_CAP);
+    expect(panel.textContent).not.toContain(PROMISES_AT_CAP);
   });
 });

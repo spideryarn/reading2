@@ -71,8 +71,8 @@ import type { Assets } from "../assets.js";
 import type { RefereeResult } from "../referee-criteria.js";
 /* Referee mode's second sub-mode, and the same reasoning as the line above: the
    shape and the validator that guarantees it live together in
-   src/referee-claims.ts. */
-import type { Claim } from "../referee-claims.js";
+   src/referee-promises.ts. */
+import type { PaperPromise } from "../referee-promises.js";
 import type { HiddenJudgment } from "../referee-hidden-check-types.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { Illustrated } from "../illustrated-plate.js";
@@ -2186,12 +2186,14 @@ export const refereeCriteria = spideryarn.table(
   ],
 );
 
-/* -------------------------------------------------------- referee claims -- */
+/* ------------------------------------------------------ referee promises -- */
 
 /**
- * **The claims a paper makes about itself, and where it takes each one up** —
- * Referee mode's second sub-mode. `ClaimsRun` in src/referee-claims.ts is the
- * shape; src/store/pg-referee-claims.ts is the store.
+ * **The promises a paper makes about itself, and where it takes each one up** —
+ * Referee mode's second sub-mode, Promises (called Claims until 2026-10-11; the
+ * table was `referee_claims`, and a view of that name stands over this one
+ * until plan 261011g's contract drops it). `PromisesRun` in src/referee-promises.ts is the
+ * shape; src/store/pg-referee-promises.ts is the store.
  *
  * ## One row per article, and the primary key says so
  *
@@ -2209,7 +2211,7 @@ export const refereeCriteria = spideryarn.table(
  * ## Why this table exists at all, having been argued against
  *
  * It was deliberately *not* built on 2026-08-31, and the reasoning is worth the
- * two sentences: a claims run is an article-derived reusable artefact, so its
+ * two sentences: a promises run is an article-derived reusable artefact, so its
  * right long-term home is a **pipeline artefact** — a `StepName`, an
  * `ArtifactKind` and an `article_revisions` column — rather than a bespoke table
  * beside the criteria. That is still true, and this table is still an interim.
@@ -2223,15 +2225,15 @@ export const refereeCriteria = spideryarn.table(
  * fixture. Against it stood a sub-mode that returned 501 for every operation in
  * the only configuration that deploys.
  *
- * ## `claims` is JSONB for the reason `referee_criteria.results` is
+ * ## `promises` is JSONB for the reason `referee_criteria.results` is
  *
  * One model call's wholesale output, written together and never edited a row at
  * a time. docs/project/sql.md's default is a column, and this is the case that
  * argues itself out: the passages under a claim are read as a unit, replaced as
  * a unit, and nothing ever queries across them.
  */
-export const refereeClaims = spideryarn.table(
-  "referee_claims",
+export const refereePromises = spideryarn.table(
+  "referee_promises",
   {
     /** The key, on its own. See the header: one run per article. */
     articleId: uuid("article_id")
@@ -2242,26 +2244,26 @@ export const refereeClaims = spideryarn.table(
     /** Written before the model is called, so a crash leaves a visible unfinished run. */
     status: text("status").notNull(),
     /**
-     * The claims and their passages — a `Claim[]`, validated by `validateClaims`
-     * in src/referee-claims.ts. Every claim and every passage under it is
+     * The promises and their passages — a `PaperPromise[]`, validated by `validatePromises`
+     * in src/referee-promises.ts. Every claim and every passage under it is
      * anchored by `blockId` + `quote` (+ `start` as a disambiguator only), which
      * is the contract in docs/project/block-ids.md.
      */
-    claims: jsonb("claims").$type<Claim[]>().notNull().default([]),
+    promises: jsonb("promises").$type<PaperPromise[]>().notNull().default([]),
     model: text("model"),
     /**
-     * **How many claims `MAX_CLAIMS` cut off the end of this run** — `ClaimsRun.
-     * claimsOmitted`, and a column rather than a field inside `claims` because
-     * it is a fact about the run and not about any claim in it.
+     * **How many promises `MAX_PROMISES` cut off the end of this run** — `PromisesRun.
+     * promisesOmitted`, and a column rather than a field inside `promises` because
+     * it is a fact about the run and not about any promise in it.
      *
      * Nullable, and null means *not recorded* rather than *none omitted*. Those
      * are genuinely different, and the panel's fallback copy depends on telling
      * one from a truthful zero. The route writes it on every successful run
-     * (src/routes.ts § `runRefereeClaims`, from `outcome.dropped.truncated`), so
+     * (src/routes.ts § `runRefereePromises`, from `outcome.dropped.truncated`), so
      * null now means a run stored before it did, a run that failed, or one
      * still pending; `begin` nulls it.
      */
-    claimsOmitted: integer("claims_omitted"),
+    promisesOmitted: integer("promises_omitted"),
     /**
      * Whatever the call threw. **Never logged** — a provider that echoes the
      * request back would put the paper's own prose in here, which is the trap
@@ -2277,7 +2279,7 @@ export const refereeClaims = spideryarn.table(
      * a separate `attempt_started_at` because a criterion outlives its attempts;
      * here a second run **is** a new row's worth of state written over the old
      * one, so there is exactly one clock and no way for the two to disagree.
-     * src/store/pg-referee-claims.ts § `sweep`.
+     * src/store/pg-referee-promises.ts § `sweep`.
      */
     createdAt: createdAt(),
     /**
@@ -2290,7 +2292,7 @@ export const refereeClaims = spideryarn.table(
     /**
      * **Which run is in flight, so an older run's answer cannot land on a newer
      * one.** `begin` writes a fresh token, `finish` must present it and clears
-     * it, and the sweep clears it. Two tabs running Claims at once used to have
+     * it, and the sweep clears it. Two tabs running Promises at once used to have
      * the slower answer overwrite the faster — sweep 5, X4,
      * docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md.
      *
@@ -2300,7 +2302,7 @@ export const refereeClaims = spideryarn.table(
      */
     attemptId: text("attempt_id"),
     /**
-     * **When this run ended**: the claims landed, the call failed, or the sweep
+     * **When this run ended**: the promises landed, the call failed, or the sweep
      * declared it abandoned. Null while `pending` — `begin` nulls it, on a first
      * run and a re-run alike — and on a row finished before 2026-10-03.
      *
@@ -2311,17 +2313,17 @@ export const refereeClaims = spideryarn.table(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
-    check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
-    /* **Claims are empty unless the run is done.** A `pending` or `error` row
-       carrying claims is yesterday's answer under today's spinner, or under a
+    check("referee_promises_status", sql`${t.status} in ('pending','done','error')`),
+    /* **Promises are empty unless the run is done.** A `pending` or `error` row
+       carrying promises is yesterday's answer under today's spinner, or under a
        failure.
 
        Three things keep an ordinary write clear of it, and
-       tests/store-pg-referee-claims.test.ts holds each: `begin` writes `[]` on
+       tests/store-pg-referee-promises.test.ts holds each: `begin` writes `[]` on
        the insert and in the upsert, in the same statement that moves the
        status; `finish` and the sweep match only a `pending` row, which is
-       therefore empty; and an `error` finish cannot carry claims, because
-       `ClaimsFinish` (src/store/contracts.ts) types them as the empty tuple.
+       therefore empty; and an `error` finish cannot carry promises, because
+       `PromisesFinish` (src/store/contracts.ts) types them as the empty tuple.
 
        **This was written in 2026-09 and taken out again**, because the
        filesystem store could not refuse the same row and a constraint only one
@@ -2333,8 +2335,8 @@ export const refereeClaims = spideryarn.table(
        refusal too, with a less helpful name. The column is `not null default
        '[]'` and every writer hands it an array. */
     check(
-      "referee_claims_empty_unless_done",
-      sql`${t.status} = 'done' or jsonb_array_length(${t.claims}) = 0`,
+      "referee_promises_empty_unless_done",
+      sql`${t.status} = 'done' or jsonb_array_length(${t.promises}) = 0`,
     ),
   ],
 );
@@ -2350,7 +2352,7 @@ export const refereeClaims = spideryarn.table(
  *
  * ## Keyed `(article_id, id)`: a check is an event, not a slot
  *
- * Unlike `referee_claims`, a second check does not replace the first. Each
+ * Unlike `referee_promises`, a second check does not replace the first. Each
  * press is one row, and the panel draws every finished check's rows under the
  * claims they answered, so Dig further adds to a claim rather than overwriting
  * it.
@@ -2372,11 +2374,11 @@ export const refereeClaims = spideryarn.table(
  * cannot hold the index for ever (src/store/pg-sources-claim-checks.ts §
  * `CHECK_ORPHAN_GRACE_MS`).
  *
- * ## `targets`, `results` and `counts` are JSONB, for `referee_claims`' reason
+ * ## `targets`, `results` and `counts` are JSONB, for `referee_promises`' reason
  *
  * One call's wholesale output, written together, read as a unit, never edited
  * a row at a time, and never queried across: docs/project/sql.md's exception,
- * argued the way `referee_claims.claims` argues it.
+ * argued the way `referee_promises.promises` argues it.
  *
  * ## Renamed from `debate_claim_checks`, and why its constraints were not
  *
@@ -2419,7 +2421,7 @@ export const sourcesClaimChecks = spideryarn.table(
     /** The provider's own search count — the spend alarm. Null until `done`. */
     webSearches: integer("web_searches"),
     model: text("model"),
-    /** The reader's sentence for a failed check. **Never logged** — referee_claims' reason. */
+    /** The reader's sentence for a failed check. **Never logged** — referee_promises' reason. */
     error: text("error"),
     /** When it was pressed, and the lease's clock. */
     createdAt: createdAt(),
@@ -2442,7 +2444,7 @@ export const sourcesClaimChecks = spideryarn.table(
       "debate_claim_checks_attempt_while_pending",
       sql`(${t.status} = 'pending') = (${t.attemptId} is not null)`,
     ),
-    /* Results only on a finished answer, as `referee_claims_empty_unless_done`. */
+    /* Results only on a finished answer, as `referee_promises_empty_unless_done`. */
     check(
       "debate_claim_checks_results_only_done",
       sql`${t.status} = 'done' or jsonb_array_length(${t.results}) = 0`,
@@ -2460,7 +2462,7 @@ export const sourcesClaimChecks = spideryarn.table(
  * kept (report spya-gqq38u, and docs/project/database.md § AI output we paid
  * for is kept).
  *
- * `referee_claims`' shape with less in it: **no status, no attempt, no error**,
+ * `referee_promises`' shape with less in it: **no status, no attempt, no error**,
  * because only a finished, validated answer is ever written, as one upsert. A
  * failed or abandoned run leaves the last good answer where it was.
  *
@@ -2481,7 +2483,7 @@ export const refereeHiddenChecks = spideryarn.table(
     /**
      * The accepted judgments, validated by `validateJudgments`
      * (src/referee-hidden-check.ts) before they get here. JSONB for the reason
-     * `referee_claims.claims` is: one call's output, written and replaced whole,
+     * `referee_promises.promises` is: one call's output, written and replaced whole,
      * never queried across. **The reasons are model text that may quote a
      * manuscript's hidden words: never logged.**
      */
@@ -5663,7 +5665,7 @@ export const STALE_NOTICE_TABLE = {
     "search",
     "sketch",
     "illustrated",
-    "claims",
+    "promises",
   ],
   /**
    * Words the check still admits and nothing writes: src/stale-notice.ts §
@@ -5671,10 +5673,11 @@ export const STALE_NOTICE_TABLE = {
    * 261009w, whose migration `…_stale_notice_bibliography.sql` widened the
    * check to both, because the code deployed before it writes the old word;
    * `debate` and `debate-claims` were Reception's and Claims' until the same
-   * plan's `…_reception_expand.sql` did the same for them. The plan's contract
-   * drops this list.
+   * plan's `…_reception_expand.sql` did the same for them; `claims` was
+   * Referee's Promises' until plan 261011g, whose `…_referee_promises.sql` did
+   * the same. Each plan's contract drops its words from this list.
    */
-  retiredModes: ["citations", "debate", "debate-claims"],
+  retiredModes: ["citations", "debate", "debate-claims", "claims"],
   maxIdentities: 50,
   maxIdentityLength: 120,
 } as const;

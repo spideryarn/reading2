@@ -94,7 +94,8 @@ What the add box did before there was a queue is in [261007g-ingest-queue-histor
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
 | [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |
-| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a file worth uploading — PDF or web page — and how big is too big |
+| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a file worth uploading — PDF, web page, Word, Markdown or text — and how big is too big |
+| [`src/upload-convert.ts`](../../src/upload-convert.ts) | a Word, Markdown or text upload turned into a web page at stage 1, the original kept beside it, and the zip-bomb guard ([261011j](../plans/261011j-upload-text-markdown-and-word-files.md)) |
 
 ## Uploading a PDF
 

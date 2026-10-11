@@ -1,5 +1,5 @@
 /**
- * **A claims run survives a round trip through the real Postgres store, and a
+ * **A promises run survives a round trip through the real Postgres store, and a
  * second owner cannot reach it.**
  *
  * Claims shipped on 2026-08-31 with a filesystem store only, so under
@@ -7,14 +7,14 @@
  * returned a 501. A cross-family review put it plainly
  * (docs/plans/260831an-referee-mode-submodes-review-sol.md, finding 4): *"in the
  * deployed application, 'Pull the paper's claims' cannot load, start or persist
- * a run."* src/store/pg-referee-claims.ts is the answer and this file is what
+ * a run."* src/store/pg-referee-promises.ts is the answer and this file is what
  * says it works, against a real database rather than a mock.
  *
  * ## What each half is for
  *
  * **The round trip** stores a run and reads it back through the store's own
  * methods, not through SQL: the claims arrive as JSONB and come back as
- * `Claim[]`, and the fields most easily lost on the way are the ones asserted —
+ * `PaperPromise[]`, and the fields most easily lost on the way are the ones asserted —
  * a `start` of 0, a `discarded` of 0, an absent `withheld`, and the conditional
  * spreads that keep an absent `model` absent rather than `null`. A wire form
  * that gains a `"model": null` is the commonest near-miss in this store and no
@@ -30,7 +30,7 @@
  *
  * ## The sweep's grace window
  *
- * `RefereeClaimsStore.sweep` takes one boolean where `SweepOptions` takes a set
+ * `RefereePromisesStore.sweep` takes one boolean where `SweepOptions` takes a set
  * and a window, and contracts.ts says why a window is needed: on Vercel a second
  * process seeing the first one's live row in nobody's set would error an answer
  * that is still arriving. So the Postgres store applies its own against
@@ -51,23 +51,23 @@ import {
   articleRevisions,
   articles,
   blockIdentities,
-  refereeClaims,
+  refereePromises,
   revisionBlocks,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
-import type { Claim, ClaimsRun } from "../src/referee-claims.js";
-import type { ClaimsFinish } from "../src/store/contracts.js";
-import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
+import type { PaperPromise, PromisesRun } from "../src/referee-promises.js";
+import type { PromisesFinish } from "../src/store/contracts.js";
+import { PROMISES_SWEPT } from "../src/store/pg-referee-promises.js";
 import {
-  CLAIMS_ORPHAN_GRACE_MS,
-  pgRefereeClaimsStore as store,
-} from "../src/store/pg-referee-claims.js";
+  PROMISES_ORPHAN_GRACE_MS,
+  pgRefereePromisesStore as store,
+} from "../src/store/pg-referee-promises.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-const SLUG = "test-pg-referee-claims";
+const SLUG = "test-pg-referee-promises";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000f2";
 const REVISION_ID = "00000000-0000-4000-8000-0000000000f3";
 const BLOCK_ID = "spya-qwm234";
@@ -86,39 +86,39 @@ const OUTSIDER = "00000000-0000-4000-8000-0000000000f4" as OwnerId;
 const HASH = "feedfacefeedface";
 
 await pgReady({
-  suite: "tests/store-pg-referee-claims.test.ts",
-  tables: ["spideryarn.referee_claims"],
+  suite: "tests/store-pg-referee-promises.test.ts",
+  tables: ["spideryarn.referee_promises"],
 });
 
 /**
- * **A census of `ClaimsRun`, so a new field cannot arrive unnoticed.**
+ * **A census of `PromisesRun`, so a new field cannot arrive unnoticed.**
  *
  * The Postgres store maps the run **field by field** onto columns, which is what
  * a table is — and a field it has not been told about is dropped silently while
- * `finish` reports success. That is not hypothetical: `claimsOmitted` was added
- * to `ClaimsRun` on 2026-09-01 while this store was being written, and the first
+ * `finish` reports success. That is not hypothetical: `promisesOmitted` was added
+ * to `PromisesRun` on 2026-09-01 while this store was being written, and the first
  * version of `toRun` and `finish` simply did not carry it. The filesystem store
  * has no such failure, because it spreads the patch over the row.
  *
- * So this object must name every key, and `Record<keyof ClaimsRun, true>` makes
+ * So this object must name every key, and `Record<keyof PromisesRun, true>` makes
  * the compiler insist. **If this line stops compiling**, a field was added:
- * carry it through `toRun` and `finish` in src/store/pg-referee-claims.ts, give
+ * carry it through `toRun` and `finish` in src/store/pg-referee-promises.ts, give
  * it a column, teach src/store/export.ts about it, and assert it survives the
  * round trip below. `npm test` does not typecheck, so `npm run typecheck` is
  * where this speaks.
  */
-const EVERY_RUN_FIELD: Record<keyof ClaimsRun, true> = {
+const EVERY_RUN_FIELD: Record<keyof PromisesRun, true> = {
   status: true,
   createdAt: true,
-  claims: true,
+  promises: true,
   model: true,
   error: true,
-  claimsOmitted: true,
+  promisesOmitted: true,
   sourceHash: true,
 };
 
 /** One claim with one passage, carrying the fields most easily lost in JSONB. */
-function aClaim(): Claim {
+function aPromise(): PaperPromise {
   return {
     id: `${BLOCK_ID}:0`,
     claim: "The method improves accuracy by 40%.",
@@ -142,7 +142,7 @@ function aClaim(): Claim {
 
 async function clean(): Promise<void> {
   const db = getDb();
-  await db.delete(refereeClaims).where(eq(refereeClaims.articleId, ARTICLE_ID));
+  await db.delete(refereePromises).where(eq(refereePromises.articleId, ARTICLE_ID));
   await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, ARTICLE_ID));
   await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, ARTICLE_ID));
   await db.delete(articleRevisions).where(eq(articleRevisions.id, REVISION_ID));
@@ -153,12 +153,12 @@ async function clean(): Promise<void> {
 /** Push the stored run's clock back, so the sweep's window can be exercised. */
 async function ageRunBy(ms: number): Promise<void> {
   await getDb()
-    .update(refereeClaims)
+    .update(refereePromises)
     .set({ createdAt: new Date(Date.now() - ms) })
-    .where(eq(refereeClaims.articleId, ARTICLE_ID));
+    .where(eq(refereePromises.articleId, ARTICLE_ID));
 }
 
-describe("the Postgres claims store", { timeout: 20_000 }, () => {
+describe("the Postgres promises store", { timeout: 20_000 }, () => {
   /** The token of the run the previous case began, for the case that ends it. */
   let lastAttempt = "no run has begun yet";
 
@@ -201,7 +201,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
        runtime line exists so the constant is used rather than stripped, and so
        a reader running the suite sees the claim stated. */
     expect(Object.keys(EVERY_RUN_FIELD).sort()).toEqual(
-      ["claims", "claimsOmitted", "createdAt", "error", "model", "sourceHash", "status"].sort(),
+      ["promises", "promisesOmitted", "createdAt", "error", "model", "sourceHash", "status"].sort(),
     );
   });
 
@@ -212,33 +212,33 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
   it("stores a run and reads the same one back", async () => {
     const { run: begun, attempt } = await store.begin(SLUG, HASH);
     expect(begun.status).toBe("pending");
-    expect(begun.claims).toEqual([]);
+    expect(begun.promises).toEqual([]);
     /* The fingerprint is the one `begin` was told — the blocks the caller is
        sending — and not one the store read for itself. That the caller's hash
        of loaded blocks equals `store.sourceHash` for an unchanged article is
-       tests/referee-claims-routes.test.ts's to hold. */
+       tests/referee-promises-routes.test.ts's to hold. */
     expect(begun.sourceHash).toBe(HASH);
 
     const finished = await store.finish(SLUG, {
       status: "done",
-      claims: [aClaim()],
+      promises: [aPromise()],
       model: "test-model",
-      /* **Every field of `ClaimsRun` has to survive, not just the ones the route
-         happens to send today.** `claimsOmitted` arrived while this store was
+      /* **Every field of `PromisesRun` has to survive, not just the ones the route
+         happens to send today.** `promisesOmitted` arrived while this store was
          being written and a column-per-field store drops what it was not told
          about, silently, while `finish` reports success. Written here as a
          zero rather than a number, because zero is the value most easily lost:
          `?? null` and a falsy check both turn a truthful "none were cut off"
          into "we did not record it", which is the distinction the column is
          nullable for. */
-      claimsOmitted: 0,
+      promisesOmitted: 0,
     }, attempt);
     expect(finished?.status).toBe("done");
 
     const back = await store.load(SLUG);
-    expect(back?.claims).toEqual([aClaim()]);
+    expect(back?.promises).toEqual([aPromise()]);
     expect(back?.model).toBe("test-model");
-    expect(back?.claimsOmitted).toBe(0);
+    expect(back?.promisesOmitted).toBe(0);
     /* `finish` takes `createdAt` and `sourceHash` from the row, never from the
        patch: a finish that re-dated a run, or moved it onto a different
        fingerprint, would make the panel's staleness answer a fiction. */
@@ -251,36 +251,36 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
        the file simply had no key. A wire form carrying `"error": null` is a
        different shape from the filesystem store's, and no assertion about the
        happy path would ever see it. */
-    const back = (await store.load(SLUG)) as ClaimsRun;
+    const back = (await store.load(SLUG)) as PromisesRun;
     expect("error" in back).toBe(false);
     expect(Object.keys(back).sort()).toEqual(
-      ["claims", "claimsOmitted", "createdAt", "model", "sourceHash", "status"].sort(),
+      ["promises", "promisesOmitted", "createdAt", "model", "sourceHash", "status"].sort(),
     );
   });
 
   it("replaces the run rather than adding one, and clears the last answer", async () => {
     const before = await store.load(SLUG);
-    expect(before?.claims).toHaveLength(1);
+    expect(before?.promises).toHaveLength(1);
 
     const { run: again, attempt } = await store.begin(SLUG, HASH);
     /* Kept for the next case, which fails this run: the cases in this file
        share one row and run in order. */
     lastAttempt = attempt;
     expect(again.status).toBe("pending");
-    /* The corollary src/store/pg-referee-claims.ts writes down: starting a run
+    /* The corollary src/store/pg-referee-promises.ts writes down: starting a run
        throws away the last answer before the new one exists, deliberately,
        because yesterday's claims under today's spinner is the one state a
        referee cannot interpret. */
-    expect(again.claims).toEqual([]);
+    expect(again.promises).toEqual([]);
     expect(again.model).toBeUndefined();
     /* Cleared too, and absent rather than 0: a stale count under a run that has
        not happened yet would be a sentence about a list nobody has. */
-    expect(again.claimsOmitted).toBeUndefined();
+    expect(again.promisesOmitted).toBeUndefined();
 
     const counted = await getDb()
       .select({ count: sql<number>`count(*)::int` })
-      .from(refereeClaims)
-      .where(eq(refereeClaims.articleId, ARTICLE_ID));
+      .from(refereePromises)
+      .where(eq(refereePromises.articleId, ARTICLE_ID));
     expect(counted[0]?.count).toBe(1);
   });
 
@@ -296,7 +296,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
   it("leaves a run this process is running alone", async () => {
     await store.begin(SLUG, HASH);
-    await ageRunBy(CLAIMS_ORPHAN_GRACE_MS * 2);
+    await ageRunBy(PROMISES_ORPHAN_GRACE_MS * 2);
     const swept = await store.sweep(SLUG, true);
     expect(swept?.status).toBe("pending");
   });
@@ -313,10 +313,10 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
   it("sweeps an abandoned run once it is past the window", async () => {
     await store.begin(SLUG, HASH);
-    await ageRunBy(CLAIMS_ORPHAN_GRACE_MS + 60_000);
+    await ageRunBy(PROMISES_ORPHAN_GRACE_MS + 60_000);
     const swept = await store.sweep(SLUG, false);
     expect(swept?.status).toBe("error");
-    expect(swept?.error).toBe(CLAIMS_SWEPT);
+    expect(swept?.error).toBe(PROMISES_SWEPT);
     // And it stays swept — a second sweep is not a second write.
     expect((await store.sweep(SLUG, false))?.status).toBe("error");
   });
@@ -331,13 +331,13 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
     expect(a.attempt).not.toBe(b.attempt);
 
     expect(
-      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "tab-a" }, a.attempt),
+      await store.finish(SLUG, { status: "done", promises: [aPromise()], model: "tab-a" }, a.attempt),
     ).toBeNull();
     const waiting = await store.load(SLUG);
     expect(waiting?.status).toBe("pending");
-    expect(waiting?.claims).toEqual([]);
+    expect(waiting?.promises).toEqual([]);
 
-    const landed = await store.finish(SLUG, { status: "done", claims: [], model: "tab-b" }, b.attempt);
+    const landed = await store.finish(SLUG, { status: "done", promises: [], model: "tab-b" }, b.attempt);
     expect(landed?.model).toBe("tab-b");
 
     /* And an attempt is spent once it has landed: the same token again writes
@@ -348,10 +348,10 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
   it("refuses the answer of a run the sweep has already failed", async () => {
     const { attempt } = await store.begin(SLUG, HASH);
-    await ageRunBy(CLAIMS_ORPHAN_GRACE_MS + 60_000);
+    await ageRunBy(PROMISES_ORPHAN_GRACE_MS + 60_000);
     await store.sweep(SLUG, false);
-    expect(await store.finish(SLUG, { status: "done", claims: [aClaim()] }, attempt)).toBeNull();
-    expect((await store.load(SLUG))?.error).toBe(CLAIMS_SWEPT);
+    expect(await store.finish(SLUG, { status: "done", promises: [aPromise()] }, attempt)).toBeNull();
+    expect((await store.load(SLUG))?.error).toBe(PROMISES_SWEPT);
   });
 
   it("fingerprints the blocks the caller sent, not whatever the article is by now", async () => {
@@ -365,15 +365,15 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
   });
 
   it("answers null rather than resurrecting a run that went away", async () => {
-    await getDb().delete(refereeClaims).where(eq(refereeClaims.articleId, ARTICLE_ID));
-    expect(await store.finish(SLUG, { status: "done", claims: [aClaim()] }, lastAttempt)).toBeNull();
+    await getDb().delete(refereePromises).where(eq(refereePromises.articleId, ARTICLE_ID));
+    expect(await store.finish(SLUG, { status: "done", promises: [aPromise()] }, lastAttempt)).toBeNull();
     expect(await store.load(SLUG)).toBeNull();
   });
 
-  /* ------------------------------------- claims are empty unless the run is done -- */
+  /* ----------------------------------- promises are empty unless the run is done -- */
 
   /**
-   * **`referee_claims_empty_unless_done`: `status = 'done' or
+   * **`referee_promises_empty_unless_done`: `status = 'done' or
    * jsonb_array_length(claims) = 0`.** Written in 2026-09 and taken out again
    * because the filesystem store could not refuse the same row; that store went
    * on 2026-09-05 and the CHECK came back on 2026-10-07
@@ -383,10 +383,10 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
    * What it rests on, and each link is a case below: `begin` writes `[]` on the
    * insert and on the upsert; `finish` and the sweep only ever match a
    * `pending` row, which is therefore empty; and an `error` finish cannot carry
-   * claims, because `ClaimsFinish` is a union whose `error` arm types them as
+   * claims, because `PromisesFinish` is a union whose `error` arm types them as
    * the empty tuple.
    */
-  describe("claims are empty unless the run is done", () => {
+  describe("promises are empty unless the run is done", () => {
     /** The name of the constraint a write tripped, wherever drizzle put it. */
     async function refusedBy(write: () => Promise<unknown>): Promise<string | undefined> {
       try {
@@ -400,35 +400,35 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
     const stored = async () => {
       const [row] = await getDb()
-        .select({ status: refereeClaims.status, claims: refereeClaims.claims })
-        .from(refereeClaims)
-        .where(eq(refereeClaims.articleId, ARTICLE_ID));
+        .select({ status: refereePromises.status, promises: refereePromises.promises })
+        .from(refereePromises)
+        .where(eq(refereePromises.articleId, ARTICLE_ID));
       return row;
     };
 
-    it("the database refuses claims on a pending run and on a failed one", async () => {
+    it("the database refuses promises on a pending run and on a failed one", async () => {
       const db = getDb();
       const { attempt } = await store.begin(SLUG, HASH);
 
       // Claims under a spinner: the half-applied write the comment used to shrug at.
       expect(
         await refusedBy(() =>
-          db.update(refereeClaims).set({ claims: [aClaim()] }).where(eq(refereeClaims.articleId, ARTICLE_ID)),
+          db.update(refereePromises).set({ promises: [aPromise()] }).where(eq(refereePromises.articleId, ARTICLE_ID)),
         ),
-      ).toBe("referee_claims_empty_unless_done");
+      ).toBe("referee_promises_empty_unless_done");
 
-      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "m" }, attempt);
-      expect((await stored())?.claims).toHaveLength(1);
+      await store.finish(SLUG, { status: "done", promises: [aPromise()], model: "m" }, attempt);
+      expect((await stored())?.promises).toHaveLength(1);
 
       /* A finished answer cannot be relabelled with its claims still on it, in
          either direction. Each is a partial UPDATE of `status` alone. */
       for (const status of ["error", "pending"]) {
         expect(
           await refusedBy(() =>
-            db.update(refereeClaims).set({ status }).where(eq(refereeClaims.articleId, ARTICLE_ID)),
+            db.update(refereePromises).set({ status }).where(eq(refereePromises.articleId, ARTICLE_ID)),
           ),
           status,
-        ).toBe("referee_claims_empty_unless_done");
+        ).toBe("referee_promises_empty_unless_done");
       }
       expect((await stored())?.status).toBe("done");
     });
@@ -438,44 +438,44 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
          upsert in `begin` moves the status and empties the claims in ONE
          statement, so there is no instant at which the row is illegal. */
       const again = await store.begin(SLUG, HASH);
-      expect(await stored()).toEqual({ status: "pending", claims: [] });
+      expect(await stored()).toEqual({ status: "pending", promises: [] });
 
-      // An error, written as the route writes it (`claims: []`) and without.
-      await store.finish(SLUG, { status: "error", error: "the provider refused", claims: [] }, again.attempt);
-      expect(await stored()).toEqual({ status: "error", claims: [] });
+      // An error, written as the route writes it (`promises: []`) and without.
+      await store.finish(SLUG, { status: "error", error: "the provider refused", promises: [] }, again.attempt);
+      expect(await stored()).toEqual({ status: "error", promises: [] });
       const third = await store.begin(SLUG, HASH);
       await store.finish(SLUG, { status: "error", error: "again" }, third.attempt);
-      expect(await stored()).toEqual({ status: "error", claims: [] });
+      expect(await stored()).toEqual({ status: "error", promises: [] });
 
       // The sweep.
       await store.begin(SLUG, HASH);
-      await ageRunBy(CLAIMS_ORPHAN_GRACE_MS + 60_000);
+      await ageRunBy(PROMISES_ORPHAN_GRACE_MS + 60_000);
       await store.sweep(SLUG, false);
-      expect(await stored()).toEqual({ status: "error", claims: [] });
+      expect(await stored()).toEqual({ status: "error", promises: [] });
 
       // A done run with nothing in it, and one with something.
       const fifth = await store.begin(SLUG, HASH);
-      await store.finish(SLUG, { status: "done", claims: [] }, fifth.attempt);
-      expect(await stored()).toEqual({ status: "done", claims: [] });
+      await store.finish(SLUG, { status: "done", promises: [] }, fifth.attempt);
+      expect(await stored()).toEqual({ status: "done", promises: [] });
       const sixth = await store.begin(SLUG, HASH);
-      await store.finish(SLUG, { status: "done", claims: [aClaim()] }, sixth.attempt);
-      expect((await stored())?.claims).toHaveLength(1);
+      await store.finish(SLUG, { status: "done", promises: [aPromise()] }, sixth.attempt);
+      expect((await stored())?.promises).toHaveLength(1);
     });
 
-    it("an error finish cannot carry claims: the compiler refuses it, and so does the database", async () => {
+    it("an error finish cannot carry promises: the compiler refuses it, and so does the database", async () => {
       const { attempt } = await store.begin(SLUG, HASH);
 
       /* **The compiler's half.** `npm run typecheck` reads this file; if the
-         `error` arm of `ClaimsFinish` is ever widened back to `Claim[]`, the
+         `error` arm of `PromisesFinish` is ever widened back to `PaperPromise[]`, the
          directive below is unused and the typecheck fails on this line. */
-      // @ts-expect-error an error finish may carry `claims: []` and nothing else
-      const smuggled: ClaimsFinish = { status: "error", error: "x", claims: [aClaim()] };
+      // @ts-expect-error an error finish may carry `promises: []` and nothing else
+      const smuggled: PromisesFinish = { status: "error", error: "x", promises: [aPromise()] };
 
       /* **The database's half**, for a caller that got past the compiler (a
          cast, a `.js` script). The write is refused whole: no half-finished
          row, and the attempt is still this run's to finish properly. */
       await expect(store.finish(SLUG, smuggled, attempt)).rejects.toThrow();
-      expect(await stored()).toEqual({ status: "pending", claims: [] });
+      expect(await stored()).toEqual({ status: "pending", promises: [] });
       expect((await store.finish(SLUG, { status: "error", error: "x" }, attempt))?.status).toBe("error");
     });
   });
@@ -486,7 +486,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
     beforeAll(async () => {
       const { attempt } = await store.begin(SLUG, HASH);
       lastAttempt = attempt;
-      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "test-model" }, attempt);
+      await store.finish(SLUG, { status: "done", promises: [aPromise()], model: "test-model" }, attempt);
     });
 
     const asOutsider = <T>(fn: () => Promise<T>) =>
@@ -509,7 +509,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
     it("cannot write an answer onto it", async () => {
       await expect(
-        asOutsider(() => store.finish(SLUG, { status: "done", claims: [] }, lastAttempt)),
+        asOutsider(() => store.finish(SLUG, { status: "done", promises: [] }, lastAttempt)),
       ).rejects.toMatchObject({ status: 404 });
     });
 
@@ -525,7 +525,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
          that says the row is untouched. */
       const mine = await store.load(SLUG);
       expect(mine?.status).toBe("done");
-      expect(mine?.claims).toEqual([aClaim()]);
+      expect(mine?.promises).toEqual([aPromise()]);
       expect(mine?.model).toBe("test-model");
     });
 
@@ -538,7 +538,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
      */
     it("while the owner can still read their own", async () => {
       const mine = await store.load(SLUG);
-      expect(mine?.claims).toEqual([aClaim()]);
+      expect(mine?.promises).toEqual([aPromise()]);
     });
   });
 });

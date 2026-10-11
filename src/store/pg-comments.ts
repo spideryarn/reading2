@@ -74,8 +74,8 @@ const logger = log("store");
  * up: `explain` aborts at `EXPLAIN_TIMEOUT_MS` and then writes `error` itself,
  * so anything still `pending` half a minute after that has no writer left. The
  * arithmetic makes the relationship unfalsifiable where
- * `CHAT_ORPHAN_GRACE_MS`'s needs an assertion; `CLAIMS_ORPHAN_GRACE_MS` in
- * pg-referee-claims.ts is the same expression for the same reason.
+ * `CHAT_ORPHAN_GRACE_MS`'s needs an assertion; `PROMISES_ORPHAN_GRACE_MS` in
+ * pg-referee-promises.ts is the same expression for the same reason.
  *
  * Thirty seconds of margin, matching that one, because the gap has to cover the
  * store write that follows the model call, not just the call.

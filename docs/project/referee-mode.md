@@ -11,7 +11,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Referee and Sources](#referee-and-sources-since-2026-10-09) — which mode is for what, and the line between them
 - [§ Who the guide offers it to](#who-the-guide-offers-it-to-since-2026-10-09) — a referee gets its button with the switch off
 - [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
-- [§ The six sub-modes](#the-six-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Notes (§ 4), Candidates (§ 5), Hidden text (§ 6)
+- [§ The six sub-modes](#the-six-sub-modes) — URL shape; then Criteria (§ 1), Promises (§ 2), Mirror (§ 3), Notes (§ 4), Candidates (§ 5), Hidden text (§ 6)
 - [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
 - [§ Where each of Candidates' four rules lives](#where-each-of-the-four-rules-actually-lives) — what code enforces and what is only a prompt
 - [§ Every control says what it does](#every-control-says-what-it-does) — the hover cards, and which labels changed
@@ -39,43 +39,43 @@ shape** — see § *What the evidence says* below, and
 [`tests/referee-mirror-panel.test.tsx`](../../tests/referee-mirror-panel.test.tsx), which counts
 both halves so "the two are distinguishable" is a claim rather than a hope.
 
-**Claims works end to end** as of 2026-09-01 — press Pull, the paper's claims stream in, each one
-carrying the passages where the paper takes it up, and ticking a claim marks those passages in the
-prose. `GET`/`POST /api/referee/claims/:slug`,
-[`src/referee-claims.ts`](../../src/referee-claims.ts) for what a claim is,
-[`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) for what a referee sees.
+**Promises works end to end** as of 2026-09-01 — press Pull, the paper's promises stream in, each one
+carrying the passages where the paper takes it up, and ticking a promise marks those passages in the
+prose. `GET`/`POST /api/referee/promises/:slug`,
+[`src/referee-promises.ts`](../../src/referee-promises.ts) for what a promise is,
+[`src/web/PromisesPanel.tsx`](../../src/web/PromisesPanel.tsx) for what a referee sees.
 
-**Claims runs in the store that deploys, as of 2026-09-01.** It was files-only for a day: under
-Postgres — which is what deploys — every method refused with a 501, so on a deployed server *"Pull the
-paper's claims"* could not load, start or persist a run — which is how the cross-family review found
+**Promises runs in the store that deploys, as of 2026-09-01** (it was called Claims then). It was
+files-only for a day: under Postgres — which is what deploys — every method refused with a 501, so on
+a deployed server *"Pull the paper's claims"* could not load, start or persist a run — which is how the cross-family review found
 it ([260831an-referee-mode-submodes-review-sol.md](../plans/260831an-referee-mode-submodes-review-sol.md),
 finding 4). Both adapters are real now and [`src/store/index.ts`](../../src/store/index.ts) picks
 between them like every other pair.
 
-**Claims works on long papers as of 2026-09-28**, and did not before: on an 8,000-word essay the
+**Promises works on long papers as of 2026-09-28**, and did not before: on an 8,000-word essay the
 model spent its whole 12,000-token allowance thinking and wrote nothing. It now asks for `medium`
 effort and a ceiling of answer plus thinking; Criteria had the same exposure and got the same fix
 ([260928c-referee-claims-fail-on-long-pieces.md](../plans/260928c-referee-claims-fail-on-long-pieces.md),
 [the postmortem](../postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md)).
 
-**The table is an interim and says so.** A claims run is an article-derived reusable artefact whose
+**The table is an interim and says so.** A promises run is an article-derived reusable artefact whose
 right home is a **pipeline artefact** — a `StepName`, an `ArtifactKind`, an `article_revisions`
 column — which the plan says out loud, and that has not changed;
-[`drizzle/0051_referee_claims.sql`](../../drizzle/0051_referee_claims.sql) records it in its own
+[`drizzle/0051_referee_claims.sql`](../../drizzle/0051_referee_claims.sql) (the table's name until 2026-10-11) records it in its own
 header so the day it is replaced is a decision rather than a discovery. What *had* also been true was
 that [`src/store/export.ts`](../../src/store/export.ts) was being rewritten in another session, so a
 table could only have landed without an `ARTICLE_TABLE_COVERAGE` entry — the accident of the day
 before, when `db:export` silently dropped every criterion for a day. That file is settled, so the
 table landed with its entry and with a fixture that inserts a row and requires it back out of
-`referee-claims.json`.
+`referee-promises.json`.
 
 **One run per article, and no id.** A referee writes several criteria and asks the paper what *it*
 claims exactly once, so the primary key is `article_id` alone and starting a run **replaces** what is
 there. `created_at` is the run's start (`finished_at`, stored and not shown, is its end) and doubles
 as the sweep's clock, which is how the Postgres store gets the grace
-window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a second Vercel process
+window `RefereePromisesStore.sweep`'s one boolean cannot express — without it a second Vercel process
 loading the panel would error a run the first one is still streaming
-([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
+([`src/store/pg-referee-promises.ts`](../../src/store/pg-referee-promises.ts)).
 
 **Candidates works end to end** — open the sub-mode, then press *Build the reviewer brief* to
 create its thread; scope the search in the composer and names arrive with the shortlist above the
@@ -139,7 +139,7 @@ bottom, the band is now:
    on every visit, remembers nothing and never opens itself. The document-specific source scan is
    the Hidden text chip below.
 3. **The panel**, which starts with one line saying what to do in this sub-mode: the first
-   sentence of the chip's own hover card, from the same constant. In Criteria, Claims and Mirror
+   sentence of the chip's own hover card, from the same constant. In Criteria, Promises and Mirror
    that line ends in a small button, ***How to read this*** (§ How to read a panel, below).
 
 ***How Referee mode works* is the (i)**, in the corner where every other mode keeps its own
@@ -283,7 +283,7 @@ button at the end of the lead line (`HowToRead` and `REFEREE_HOW_TO_READ` in
 | Panel | Behind the button |
 |---|---|
 | Criteria | `WHAT_THE_TICK_DOES` and `WHAT_THE_RANK_IS` (*the number is the model's ordering, not a score*) |
-| Claims | `LINKAGE_NOT_ADEQUACY` (*where the paper takes each claim up; whether the passage carries it is yours*) |
+| Promises | `LINKAGE_NOT_ADEQUACY` (*where the paper takes each claim up; whether the passage carries it is yours*) |
 | Mirror | `MIRROR_IS_NOT_GIVEN_THE_PAPER` |
 | Candidates | nothing moved, so no button |
 
@@ -298,7 +298,7 @@ sections of this page argue for each (*"a tooltip is not read by anybody in a hu
 number's *"visible line above the list"*). Those sections describe the arrangement before this one.
 What still holds from the rank argument is reach: the old card on the numeral could not be opened by
 keyboard or touch, and this button can. Not moved, because each sits beside results already on
-screen: Claims' `DOCUMENT_ORDER_NOTE`, Mirror's `EVIDENCE_NOTE`, Criteria's key, and Candidates'
+screen: Promises' `DOCUMENT_ORDER_NOTE`, Mirror's `EVIDENCE_NOTE`, Criteria's key, and Candidates'
 `COI_NOT_CHECKED`. Plan:
 [261003m](../plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md);
 [`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) § one press away holds the
@@ -338,8 +338,8 @@ looked at it?"** It is inward-facing and only for someone who owes a verdict, wh
 The rule of thumb for a new feature: if it would help a reader with no decision to make, it is
 Sources' (or another ordinary mode's); if it only makes sense because you must decide, it is
 Referee's. Referee may point into Sources, and Sources never points back. The reviewer's job, step
-by step, against both modes, the two Claims sub-modes that share a word, and the ideas not yet built
-are in
+by step, against both modes, the two Claims sub-modes that shared a word (Referee's is Promises since 2026-10-11, § 2), and the
+ideas not yet built are in
 [261009b](../research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md).
 
 ## Who the guide offers it to, since 2026-10-09
@@ -385,7 +385,7 @@ copy — and now everything that names a mode reads that record.
 
 ## The six sub-modes
 
-`?mode=referee` with `?referee=criteria|claims|mirror|notes|candidates|hidden`
+`?mode=referee` with `?referee=criteria|promises|mirror|notes|candidates|hidden`
 ([`src/web/referee-views.ts`](../../src/web/referee-views.ts)), following Diagram's `?diagram=`
 precedent — a `role="radiogroup"` of buttons, each its own tab stop, arrow-key *selection*
 deliberately withheld so the article's own arrow keys still reach the article
@@ -404,6 +404,14 @@ valence are two separate numbers that are never the same field —
 [`src/referee-criteria.ts`](../../src/referee-criteria.ts) is where that rule is written down and
 tested, and `referee_criteria` is its own table
 ([`src/db/schema.ts`](../../src/db/schema.ts) § *referee criteria*).
+
+Starter criteria are held back until the referee presses **Run this criterion**
+on a question they wrote themselves, so the suggestions cannot anchor the first
+question. That unlock is a per-tab latch for this reader and article: it stays
+open if the run fails or is refused, the last criterion is deleted, or the
+referee changes sub-mode and comes back. The starters are grouped into checks
+worth a second look and questions adapted from referee forms; pressing one only
+fills the editable form and never runs it.
 
 **The prose stripe carries the valence, and until 2026-09-02 it carried criterion identity
 instead.** Greg read a paper with the old rule and found the two halves of the screen contradicting
@@ -636,7 +644,21 @@ ordinary now.
 The plans: [refused, not failed](../plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md)
 and [never dropped, a ceiling of 200](../plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
 
-### 2. Claims — where the paper addresses its own claims
+### 2. Promises — where the paper takes up what it promised
+
+**Called Claims until 2026-10-11.** Sources has had a Claims sub-mode of its own since 2026-10-09,
+and the two are different things: Sources' checks the piece's claims against the web, this one sets
+what the paper promises up front against the passages meant to deliver it. Greg chose *Promises*
+(reply `spya-dbfeqh` to [q-fkq30v](../user-feedback/questions/q-fkq30v.md)), and the rename went all the
+way down — files, types, the route `/api/referee/promises/:slug`, the job `referee-promises`, the table
+`referee_promises` with a `referee_claims` view for the deploy's minutes, the stale-notice word, the
+export file and the `prm-` CSS prefix — while `?referee=claims` from an old link lifts to `promises`
+(src/web/router.ts § `liftLegacyRefereeClaims`).
+[261011g](../plans/261011g-referee-claims-become-promises-and-starter-criteria-wait-for-the-referee-own.md).
+**What kept its word:** the prompt still asks the model for *the claims the paper makes up front*,
+which is the precise English for what it should find, so the model's JSON (`{"claims": [{"claim":
+…}]}`) and the stored item's inner `claim` and `claimWithheld` keys are unchanged; a promise is a
+claim the paper makes about itself.
 
 Pulls the claims the paper makes up front and, for each, lists the passages that address it, by
 block id — a door into the prose, not a verdict on it. The first draft ranked claims by how few
@@ -644,7 +666,7 @@ supporting passages they had and called an empty row "a finding made of structur
 judgement". The review's second finding said that was wrong on both counts: deciding what the
 claims are, which passages count, and that nothing supports one are all judgements, and a
 zero-result row may just mean the extractor missed a table, a figure, or a differently-worded
-sentence. So Claims keeps document order rather than ranking by thinness, says "the model did not
+sentence. So Promises keeps document order rather than ranking by thinness, says "the model did not
 find a passage for this" rather than "none" or "unsupported", and asserts *linkage* only, never
 adequacy.
 
@@ -652,12 +674,12 @@ adequacy.
 of them are properties of the code and the third is only a prompt rule, and the difference matters:
 
 - **Document order** is enforced twice, and neither comparator can see how many passages a claim has.
-  `validateClaims` ([`src/referee-claims.ts`](../../src/referee-claims.ts)) sorts the authoritative
-  answer by block position; `inDocumentOrder` ([`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx))
+  `validatePromises` ([`src/referee-promises.ts`](../../src/referee-promises.ts)) sorts the authoritative
+  answer by block position; `inDocumentOrder` ([`src/web/PromisesPanel.tsx`](../../src/web/PromisesPanel.tsx))
   sorts what the panel is *holding*, which is what keeps the order right during the stream — a
   streamed claim cannot be placed by the server, because the claims after it have not arrived. There
   is no sort control and no number anywhere on a claim row, which
-  [`tests/referee-claims-panel.test.tsx`](../../tests/referee-claims-panel.test.tsx) asserts: a count
+  [`tests/referee-promises-panel.test.tsx`](../../tests/referee-promises-panel.test.tsx) asserts: a count
   is one glance from a ranking.
 - **"The model did not find a passage for this"** is a constant the model never sees, and there are
   **three** empty states rather than two. A claim carries `discarded`, a count of the passages named
@@ -670,14 +692,14 @@ of them are properties of the code and the third is only a prompt rule, and the 
 - **Linkage, never adequacy** is asked for in the prompt, said in words behind the panel's *How to
   read this* button (at the top of the panel until 2026-10-03), and
   since 2026-09-01 also **backed by a fail-safe in code**. The eval is
-  [`evals/referee-claims.ts`](../../evals/referee-claims.ts) — five papers written to pull the model
+  [`evals/referee-promises.ts`](../../evals/referee-promises.ts) — five papers written to pull the model
   over the line, a red-first control that runs one of them again with the refusals cut out of the
   prompt, and a committed transcript
   ([`evals/results/referee-claims.md`](../../evals/results/referee-claims.md)). The line held on
   every guarded paper; the ablated control produced six adequacy verdicts in eleven passages, so it
   is the refusals doing the work. The frames the eval built to detect those verdicts — a degree, a
   negation or a comparison bolted to a support verb, with the paper's own four-word runs subtracted
-  first — now live in `ADEQUACY_FRAMES` and are applied by `validateClaims`, which **blanks the
+  first — now live in `ADEQUACY_FRAMES` and are applied by `validatePromises`, which **blanks the
   line and keeps the passage** and reports how many it blanked. There is one copy and the eval
   imports it. It is a fail-safe rather than a guarantee: a verdict in ordinary English that avoids
   every frame still reaches the referee.
@@ -692,7 +714,7 @@ is invisible: the zero-passage row and its honest sentence cannot fire when ther
 
 So the panel now prints, under the list, **the other text inside the quoted passages** (heading
 `OTHER_TEXT_HEADING`): the sentences and clauses of the passages the claims quote that no claim above
-begins in (`otherTextInQuotes`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim
+begins in (`otherTextInQuotes`, [`src/referee-promises.ts`](../../src/referee-promises.ts)). A claim
 accounts for the clause its quote *begins* in rather than every clause it covers, which is what makes
 a three-claim sentence quoted whole under one claim show its other two. (It listed every clause of
 every block a claim came from, under the heading "Not accounted for", until GPT Sol's review on
@@ -874,7 +896,7 @@ finds it and asks nothing.
 mount rule; [`tests/pressing-a-chip-arms-it.test.tsx`](../../tests/pressing-a-chip-arms-it.test.tsx)
 holds which gesture mints the press.
 
-**Claims runs itself on the same rule, and Mirror does not.** Claims is one stream per paper and it
+**Promises runs itself on the same rule, and Mirror does not.** Promises is one stream per paper and it
 is stored, so *"what's already generated, or generate it if needed"* means something — the press is
 retired unspent when a run exists. Mirror stores nothing
 ([`useMirror.ts`](../../src/web/useMirror.ts): *"One button, one run, nothing stored"*), so there is
@@ -981,7 +1003,7 @@ left for Candidates is the thread store and the match itself. That is the first 
 
 **What was dropped is counted on screen, and so is what the cap never read.** *The model named
 nobody* and *the model named eleven people and none of them could be shown* are different sentences
-and the panel prints different ones — Claims' lesson rather than Criteria's, built in from the start.
+and the panel prints different ones — Promises' lesson rather than Criteria's, built in from the start.
 Past forty rows the panel says how many more were listed and not read, the way Mirror surfaces
 `placementsOmitted`: a list that silently truncates has made *position* a ranking, in the one panel
 built to have none. **And the bias is labelled rather
@@ -1025,13 +1047,13 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the six sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Notes copies out only your words and calls no model; Candidates reaches a search engine and checks no conflicts; Hidden text's check uses no model and does not check PDFs, and Opus is asked about its rows only from inside it |
+| the six sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Promises asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Notes copies out only your words and calls no model; Candidates reaches a search engine and checks no conflicts; Hidden text's check uses no model and does not check PDFs, and Opus is asked about its rows only from inside it |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
-| *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
+| *Run this criterion*, *Pull the paper's promises*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
 | the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
 | Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine. The chip opens the panel; the button starts the turn, with `REFEREE_CANDIDATES_REACHES_SEARCH` beside it |
-| Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
+| Promises' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
 | Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
 | Mirror's jump button | the passage is where **you** anchored the comment — Mirror chose the remark and never the passage, and is not given the paper to pick one from |
 | Candidates' shortlist heading and tool strip | each turn **replaces** the shortlist; the strip is the check on *"never claim a tool you did not run"* rather than decoration |
@@ -1074,10 +1096,10 @@ than no card** — a cross-family review's finding, 2026-09-02:
   removal is the label change above: *"A kind tested in a trial"* is where the misreading actually
   lived.
 
-**And one message stopped offering an action Claims does not have.** `ANSWER_OVERFLOWED` in
+**And one message stopped offering an action Promises does not have.** `ANSWER_OVERFLOWED` in
 [`src/messages.ts`](../../src/messages.ts) said *"Asking for something narrower usually fits"*, flat.
 `parseHits` in [`src/search.ts`](../../src/search.ts) is Search's parser *and* this mode's, so a
-criterion run, a claims pull and a Mirror run all end there — and none of those three has a scoping
+criterion run, a promises pull and a Mirror run all end there — and none of those three has a scoping
 control of any kind. [copy.md](copy.md) rule 3.
 
 The first fix **conditioned** the clause — *"where you asked a question of your own"* — and a
@@ -1098,7 +1120,7 @@ added later cannot inherit advice about a control it does not have.
 
 **Which caller gets which sentence is proved at the four public entry points**, not at the parser:
 [`tests/overflow-message-reaches-its-caller.test.ts`](../../tests/overflow-message-reaches-its-caller.test.ts)
-drives `findPassagesStream`, `runCriterionStream`, `runClaimsStream` and `mirrorStream` over a
+drives `findPassagesStream`, `runCriterionStream`, `runPromisesStream` and `mirrorStream` over a
 cut-off answer and asserts the exact sentence and code each one ends with. Testing the parser alone
 proved only that it branches: removing `"editable"` from Search's one call site, or adding it to a
 Referee caller, left the whole suite green until 2026-09-02.
@@ -1113,7 +1135,7 @@ back, and the changed labels as literals.
 
 **And that a card is worth its hover.** Its generic check was `body.length > 80`, which passed long
 repetition — the exact failure the review found in four cards — so it now compares the two paragraphs
-against each other and against the label. It also reaches Claims, Candidates and `PlaceOnCriterion`,
+against each other and against the label. It also reaches Promises, Candidates and `PlaceOnCriterion`,
 which it did not import at all until 2026-09-02: deleting any of their cards left the whole suite
 green.
 
@@ -1268,7 +1290,7 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    fingerprint somebody has to remember to bump, which is the bug
    [`src/pdf-read.ts`](../../src/pdf-read.ts) shipped and wrote up; and a result that cannot outlive
    the code that made it cannot go stale. If a cold scan ever proves too slow in production the next
-   step is a **pipeline artefact produced at ingest**, not a bespoke table. Unlike Claims, nothing
+   step is a **pipeline artefact produced at ingest**, not a bespoke table. Unlike Promises, nothing
    here is store-shaped, so a Postgres deployment gets a real scan rather than a `notMigrated`
    refusal.
 6. **Confidentiality**, below.
@@ -1335,7 +1357,7 @@ What nobody had checked is what they cost. Measured in Chrome on
 the head 41px + the notice 214 + the scan 386 + the chips 46 = **687px inside a 636px band**. The
 chips started below the fold, `.ref-panel` was **0px tall with 321px of content in it**, and
 `.mode-band` is `position: fixed` with `overflow: visible`, so there was nothing to scroll and
-nothing clipped — Criteria, Claims, Mirror and Candidates were all simply unreachable, on any window
+nothing clipped — Criteria, Promises (then Claims), Mirror and Candidates were all simply unreachable, on any window
 shorter than about 1400px. Every test was green throughout, because jsdom has no layout engine.
 
 The original fix was a `.ref-brief` wrapper around the notice and scan, capped at 40% of the band
@@ -1459,7 +1481,7 @@ for you.
   [`src/web/RefereeNotesPanel.tsx`](../../src/web/RefereeNotesPanel.tsx) — Notes, which calls no
   model: what may be copied out, and the panel.
 - [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
-  [`src/referee-claims.ts`](../../src/referee-claims.ts),
+  [`src/referee-promises.ts`](../../src/referee-promises.ts),
   [`src/referee-candidates.ts`](../../src/referee-candidates.ts) — the four model-facing modules.
 - [`src/injection-scan.ts`](../../src/injection-scan.ts) — the deterministic scan, and
   [`src/injection-scan-types.ts`](../../src/injection-scan-types.ts), the one declaration of its

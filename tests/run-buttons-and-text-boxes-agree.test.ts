@@ -30,7 +30,7 @@ import { readerCssNoComments } from "./helpers/stylesheets.js";
 /** Each run button: the file that draws it, the hook it keeps, and its size. */
 const RUN_BUTTONS = [
   { file: "src/web/CriteriaPanel.tsx", hook: "crit-run", size: "sm" },
-  { file: "src/web/ClaimsPanel.tsx", hook: "clm-run", size: "sm" },
+  { file: "src/web/PromisesPanel.tsx", hook: "prm-run", size: "sm" },
   { file: "src/web/MirrorPanel.tsx", hook: "mir-run", size: "sm" },
   { file: "src/web/CandidatesPanel.tsx", hook: "cnd-start-btn", size: "sm" },
   { file: "src/web/CandidatesPanel.tsx", hook: "cnd-send", size: "sm" },

@@ -17,7 +17,7 @@
  *
  * src/log.ts is `silent` under `NODE_ENV=test`, so an in-process assertion
  * would pass against a logger that emits nothing. Same harness and reasoning as
- * tests/referee-claims-no-room-log.test.ts.
+ * tests/referee-promises-no-room-log.test.ts.
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";

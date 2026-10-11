@@ -1,13 +1,13 @@
 /**
- * **The article a bug report may carry: the file it was made from, and the
- * payload the reading page loaded.**
+ * **The article a bug report may carry: the canonical source Spideryarn read,
+ * and the payload the reading page loaded.**
  *
  * docs/plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md.
  * Reports are worked by agents that read Sentry and hold no production
  * database or bucket credentials, so a report that names an article and
  * carries nothing of it ends at a wall — every "this PDF extracted badly"
- * report so far did. With the original and the page's own payload attached,
- * the problem can be reproduced from Sentry alone.
+ * report so far did. With the PDF or web page the pipeline read and the reading
+ * page's own payload attached, the problem can be reproduced from Sentry alone.
  *
  * ## Who decides that this runs
  *

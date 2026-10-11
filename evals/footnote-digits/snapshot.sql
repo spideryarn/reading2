@@ -41,10 +41,10 @@ from spideryarn.search_runs
 select article_id, owner_id, status,
        (select array_agg(distinct m[1]) from regexp_matches(results::text, '(spya-[a-z0-9]{6})', 'g') m) as ids
 from spideryarn.referee_criteria
--- name: referee_claims
+-- name: referee_promises
 select article_id, owner_id, status,
-       (select array_agg(distinct m[1]) from regexp_matches(claims::text, '(spya-[a-z0-9]{6})', 'g') m) as ids
-from spideryarn.referee_claims
+       (select array_agg(distinct m[1]) from regexp_matches(promises::text, '(spya-[a-z0-9]{6})', 'g') m) as ids
+from spideryarn.referee_promises
 -- name: chat_messages
 select article_id, thread_id, role,
        (select array_agg(distinct m[1]) from regexp_matches(text || ' ' || coalesce(passages::text, '') || ' ' || coalesce(citations::text, ''), '(spya-[a-z0-9]{6})', 'g') m) as ids

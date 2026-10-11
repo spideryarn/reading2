@@ -286,7 +286,7 @@ const BUDGET_CALLERS = [
   { file: "src/sketch.ts", exercised: "no: a constant answer (12,000)" },
   { file: "src/illustrated.ts", exercised: "no: a constant answer (32,000)" },
   { file: "src/quiz.ts", exercised: "no: a module constant, QUIZ_MAX_TOKENS" },
-  { file: "src/referee-claims-run.ts", exercised: "no: a module constant" },
+  { file: "src/referee-promises-run.ts", exercised: "no: a module constant" },
   { file: "src/referee-criteria-run.ts", exercised: "no: two module constants" },
 ] as const;
 

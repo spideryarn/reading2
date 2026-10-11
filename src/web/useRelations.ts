@@ -11,11 +11,12 @@
  * >
  * > — Greg, 2026-10-05
  *
- * Shown, not pressed. The first-open default turns the column on with nobody
- * pressing anything (last-view.ts § `firstOpenSearch`), and while this hook
- * waited for a press (`useAutoRun`, until 2026-10-05) a new article arrived
- * with a margin that had no words until the column was turned off and on. So
- * it is `useAutoRunOnArrival`, the rule Summary's thread already had: one
+ * Shown, not pressed. The first-open default turned the column on with nobody
+ * pressing anything from 2026-10-05 to 2026-10-11 (last-view.ts §
+ * `firstOpenSearch`), and a pasted link, a reload and a restored view still
+ * do; while this hook waited for a press (`useAutoRun`, until 2026-10-05) such
+ * an article arrived with a margin that had no words until the column was
+ * turned off and on. So it is `useAutoRunOnArrival`, the rule Summary's thread already had: one
  * unforced attempt per article per page load, whatever put the column there —
  * a press, the default, a pasted `?margin=1`, a reload, a restored view. That
  * last one is how an article from before this gets its words; there is no

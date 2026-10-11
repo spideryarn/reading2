@@ -258,6 +258,7 @@ import type {
   Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
+import { convertedFormatFromName } from "../uploads.js";
 /* The steps this page will re-run, from a leaf rather than from
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
@@ -2251,10 +2252,10 @@ function ExportSection({
         </button>
 
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
-          A zip of everything we hold for this article: the text as we read it, and every
-          augmentation on top of it — structure, glossary, ideas, quotes, timeline, quiz, comments,
-          chats. Plain files, readable without Spideryarn. Not the original page or PDF, which you
-          already have, and not the image files themselves — those are listed rather than included.
+          A zip of the article as Spideryarn reads it, and every augmentation on top of it —
+          structure, glossary, ideas, quotes, timeline, quiz, comments, chats. Plain files, readable
+          without Spideryarn. It does not include the original file or web page, or the image files
+          themselves — those are listed rather than included.
         </p>
 
         {/* `role="alert"`, because the rest of a failed export is invisible: no
@@ -2471,16 +2472,20 @@ function Origin({
               ? "The address recorded for this article is not one a browser can follow."
               : "No web address was recorded for this article."}
         </span>
-        {/* Only for a PDF: `GET /api/source/:slug` serves what stage 1 stored,
-            and an uploaded HTML document has nothing a reader would want opened
-            as a document. `slug` is the route's, never `meta.slug` — an address
-            with no article of its own is answered with the fixture's meta, and
-            this link must be about the address the reader is standing on. */}
-        {uploaded && owner && (
-          <span className="tw:text-highlight-text">
-            <SourceLink slug={slug}>View the original</SourceLink>
-          </span>
-        )}
+        {/* `GET /api/source/:slug` serves stage 1's canonical document. For a
+            text, Markdown or Word upload that is the HTML page we made, not the
+            original file kept beside it, so calling this control *View the
+            original* would be false. Withhold it until that original has its own
+            route. `slug` is the route's, never `meta.slug` — an address with no
+            article of its own is answered with the fixture's meta, and this link
+            must be about the address the reader is standing on. */}
+        {uploaded &&
+          owner &&
+          (meta.source === "pdf" || convertedFormatFromName(meta.filename ?? "") === null) && (
+            <span className="tw:text-highlight-text">
+              <SourceLink slug={slug}>View the original</SourceLink>
+            </span>
+          )}
       </p>
       {uploaded && <GuessedLine guess={guess} />}
     </>

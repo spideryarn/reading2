@@ -319,10 +319,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   referee: {
     description:
-      "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
+      "Refereeing it? What to weigh before you decide: your criteria, its promises, and a second look at your notes",
     /* **"No model call" and not "nothing"**, which was the draft: the mode does
        start a source scan on mount, so the flat claim was false — GPT Sol,
-       2026-09-07. "Can start" because an existing Claims list is reused
+       2026-09-07. "Can start" because an existing Promises list is reused
        (`useAutoRun` retires the activation when the artefact is ready).
        `?referee=` survives leaving the mode, so its opening panel need not
        be Criteria and cannot be described as waiting for a criterion. */
@@ -331,7 +331,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        decision on the paper itself". It names the other mode by what it holds,
        not by its label, which is mid-rename (queue item qi-m9tmnpy3).
        docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md. */
-    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you. For where the piece sits among other work, what it cites and what others have said about it, there is a mode of its own in the bar.",
+    how: "This button starts no model call. Of the chips inside, only Promises can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you. For where the piece sits among other work, what it cites and what others have said about it, there is a mode of its own in the bar.",
     /* The three words this mode was deliberately *not* named, and they are free
        to point here: `review` was vacated by the `review` → `remember` rename,
        and `reviewer` was passed over only because it would have sat beside it.
@@ -419,7 +419,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
       "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
     how: "One model call over the article, written once and then stored. The split between what you have to bring and what the piece adds is the model's reading rather than something the article marks, and each idea carries the passages it was drawn from, where they can still be found.",
     /* **Not `claims`**, which was the first draft and which GPT Sol caught on
-       2026-09-07: Referee has a built sub-mode labelled exactly "Claims", so
+       2026-09-07: Referee had a built sub-mode labelled exactly "Claims" (Promises
+       since 2026-10-11), and Sources has one now, so
        the commonest word for a proposition is already spoken for by a different
        mode's control. A textual uniqueness test cannot see that — the collision
        is with a label inside another mode, not with an alias — so it is a thing

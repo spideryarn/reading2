@@ -1,0 +1,11 @@
+1. **Medium — stale “already has gifts” hint during/after refresh.** [AdminVouchersPage.tsx:1117](/var/tmp/spideryarn-worktrees/fbcfbp0q-vouchers-paste-and-additive/src/web/AdminVouchersPage.tsx:1117). The form used the previous list while Refresh was pending or had failed, so its additive claim could be wrong. **Fixed:** the hint now appears only for a settled, successful list; regression test added and mutation-tested red.
+
+2. **Low — documentation overclaimed which vouchers the hint counts.** [admin.md:863](/var/tmp/spideryarn-worktrees/fbcfbp0q-vouchers-paste-and-additive/docs/project/admin.md:863), [billing.md:1119](/var/tmp/spideryarn-worktrees/fbcfbp0q-vouchers-paste-and-additive/docs/project/billing.md:1119). Claimed vouchers with a moved or unreadable claimant address are deliberately excluded, and “for good” was imprecise given revocation. **Fixed:** both documents now match the implemented states and arithmetic.
+
+3. **Low — important state transitions lacked direct regression coverage.** [admin-vouchers-page.test.tsx:674](/var/tmp/spideryarn-worktrees/fbcfbp0q-vouchers-paste-and-additive/tests/admin-vouchers-page.test.tsx:674), [admin-author-gifts.test.tsx:627](/var/tmp/spideryarn-worktrees/fbcfbp0q-vouchers-paste-and-additive/tests/admin-author-gifts.test.tsx:627). The tests did not prove that VoucherRow fills its own empty name and saves both fields, that an author gift replacing an existing email sends both diffs, or that a null claimant address is excluded. **Fixed:** coverage added. The implementations were correct.
+
+No parser, controlled-input, additive arithmetic, revoked-voucher, or vacuous-test defect was found.
+
+Wider issue: none requiring a product decision. Verification limitation: `tests/billing-vouchers.test.ts` could not collect because this sandbox cannot reach local Postgres. The three unit/UI suites passed **106 tests**. Typechecking passed all **3,691 source files** via `node --import tsx scripts/typecheck.ts`; the npm wrapper itself was blocked from creating tsx’s IPC socket. Lint reported two advisory complexity notices.
+
+VERDICT: approve with changes

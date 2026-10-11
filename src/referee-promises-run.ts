@@ -3,7 +3,7 @@
  * one up** — the model call, and the prompt that is most of the design.
  *
  * The fifth LLM call that happens in a request handler rather than in the
- * pipeline, and it is the one that least deserves to be. A claims run is an
+ * pipeline, and it is the one that least deserves to be. A promises run is an
  * article-derived, reusable, expensive artefact and its right home is a pipeline
  * stage; the plan says so and lists the surface it should become
  * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2, *"It is a route,
@@ -15,7 +15,7 @@
  *
  * The rules about what a claim *is* — the anchors, the document sort, the
  * per-claim `discarded` count, the copy — live in
- * [src/referee-claims.ts](referee-claims.ts) and are not repeated. What is here
+ * [src/referee-promises.ts](referee-promises.ts) and are not repeated. What is here
  * is the request, the clocks and the prompt.
  *
  * ## It is src/referee-criteria-run.ts with three differences
@@ -34,17 +34,17 @@
  * ## The three rules this prompt is under, and what each is really worth
  *
  * 1. **Document order, never thinness order.** Asked for here *and* enforced in
- *    `validateClaims`, which sorts by block position and cannot see how many
+ *    `validatePromises`, which sorts by block position and cannot see how many
  *    passages a claim has. The prompt is the polite half; the sort is the half
  *    that is true whatever the model does.
  * 2. **Never say a claim is unsupported.** Asked for here, and the sentence a
- *    referee actually reads is a constant in src/referee-claims.ts that the
+ *    referee actually reads is a constant in src/referee-promises.ts that the
  *    model never sees and cannot influence. A claim with no passages under it
  *    gets `NO_PASSAGE_FOUND`, written by us.
  * 3. **Linkage, never adequacy.** This was the one held by nothing but the
  *    prompt, and the eval below is what measured it. It now also has a
- *    **fail-safe in code**: `validateClaims` blanks a line that matches one of
- *    `ADEQUACY_FRAMES` (src/referee-claims.ts) with the paper's own phrases
+ *    **fail-safe in code**: `validatePromises` blanks a line that matches one of
+ *    `ADEQUACY_FRAMES` (src/referee-promises.ts) with the paper's own phrases
  *    subtracted first, keeps what it was attached to, and reports what it
  *    blanked. **Both surfaces**, since 2026-09-01: a passage's `reasoning` and a
  *    claim's own one-line headline, which is the bigger target and was the
@@ -84,7 +84,7 @@
  *
  * ## The eval
  *
- * `evals/referee-claims.ts`, and its committed transcript is
+ * `evals/referee-promises.ts`, and its committed transcript is
  * `evals/results/referee-claims.md`. Five short synthetic papers, one paid call
  * each, plus a red-first control that runs the same paper with this prompt's
  * refusals cut out — because a detector nobody has watched go red is not
@@ -110,33 +110,33 @@ import {
   type Usage,
 } from "./openrouter-stream.js";
 import {
-  type Claim,
-  discardedClaims,
-  type DroppedClaims,
-  MAX_CLAIMS,
+  type PaperPromise,
+  discardedPromises,
+  type DroppedPromises,
+  MAX_PROMISES,
   MAX_PASSAGES,
-  UnreadableClaims,
-  validateClaims,
-} from "./referee-claims.js";
+  UnreadablePromises,
+  validatePromises,
+} from "./referee-promises.js";
 import { parseHits } from "./search.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import { plainWords } from "./plain-words.js";
 import { budgetFor, deadlineFor } from "./token-budget.js";
 import type { Block, Meta } from "./types.js";
 
-/** The job this bills under. Not `referee-criteria`'s — src/models.ts § `referee-claims`. */
-const CLAIMS_JOB = "referee-claims" as const;
+/** The job this bills under. Not `referee-criteria`'s — src/models.ts § `referee-promises`. */
+const PROMISES_JOB = "referee-promises" as const;
 
 /**
- * What this call sends: the tier src/models.ts puts `referee-claims` on, or
- * `SPIDERYARN_REFEREE_CLAIMS_MODEL` if that is set.
+ * What this call sends: the tier src/models.ts puts `referee-promises` on, or
+ * `SPIDERYARN_REFEREE_PROMISES_MODEL` if that is set.
  *
- * **`modelFor(CLAIMS_JOB)`, and the constant is why this line is worth looking
+ * **`modelFor(PROMISES_JOB)`, and the constant is why this line is worth looking
  * at.** `referee-mirror` shipped with a `defaultModel()` that still read
  * `modelFor("search")`, so its new environment variable was an override that
  * silently did nothing. Same shape, same directory, two jobs later.
  */
-export const defaultModel = (power: ModelPower): string => modelFor(CLAIMS_JOB, power);
+export const defaultModel = (power: ModelPower): string => modelFor(PROMISES_JOB, power);
 
 /**
  * **How hard the model thinks before it answers — and the reason this call
@@ -159,12 +159,12 @@ export const defaultModel = (power: ModelPower): string => modelFor(CLAIMS_JOB, 
  * `reasoningTokens` and that is where an ignored effort would show.
  * docs/plans/260928c-referee-claims-fail-on-long-pieces.md.
  */
-export const CLAIMS_EFFORT = effortOf(CLAIMS_JOB);
+export const PROMISES_EFFORT = effortOf(PROMISES_JOB);
 
 /**
  * Room for a large answer — the first of the two terms `max_tokens` is made of.
  *
- * **An estimate, not a bound.** `MAX_CLAIMS` and `MAX_PASSAGES` cap how many
+ * **An estimate, not a bound.** `MAX_PROMISES` and `MAX_PASSAGES` cap how many
  * rows come back, not how long each is: a quote or a claim line has no length
  * limit. ~80 tokens a claim and ~107 a passage, measured on a 15-claim,
  * 41-passage answer, filled to both caps and a quarter again on top. Written
@@ -172,10 +172,10 @@ export const CLAIMS_EFFORT = effortOf(CLAIMS_JOB);
  * quarter of it — `max_tokens` is a ceiling, not a purchase, and unused room is
  * not billed.
  */
-export const CLAIMS_ANSWER_ROOM = Math.ceil(MAX_CLAIMS * (80 + MAX_PASSAGES * 107) * 1.25);
+export const PROMISES_ANSWER_ROOM = Math.ceil(MAX_PROMISES * (80 + MAX_PASSAGES * 107) * 1.25);
 
 /**
- * Room for whatever thinking `CLAIMS_EFFORT` still does on a harder paper — the
+ * Room for whatever thinking `PROMISES_EFFORT` still does on a harder paper — the
  * second term. A reservation, not a prediction: it is a little over what an
  * *unleashed* run spent on the 8,000-word essay (7,963, then 12,000 and still
  * going), so that a paper which does make `medium` think still has its whole
@@ -186,18 +186,18 @@ export const CLAIMS_ANSWER_ROOM = Math.ceil(MAX_CLAIMS * (80 + MAX_PASSAGES * 10
  * a bigger number — a model that thinks adaptively expands into the room it is
  * given.
  */
-export const CLAIMS_THINKING_ROOM = 16_000;
+export const PROMISES_THINKING_ROOM = 16_000;
 
 /**
  * The `max_tokens` this call sends: answer plus thinking, through `budgetFor`
  * so the model's own ceiling is checked rather than assumed.
  */
-export const CLAIMS_MAX_TOKENS = budgetFor(CLAIMS_JOB, CLAIMS_ANSWER_ROOM, CLAIMS_THINKING_ROOM);
+export const PROMISES_MAX_TOKENS = budgetFor(PROMISES_JOB, PROMISES_ANSWER_ROOM, PROMISES_THINKING_ROOM);
 
 /**
  * How long to wait, and how long a silent stream may stay silent.
  *
- * **`deadlineFor(CLAIMS_MAX_TOKENS)` since 2026-09-28** — long enough for a run
+ * **`deadlineFor(PROMISES_MAX_TOKENS)` since 2026-09-28** — long enough for a run
  * to use every token it was allowed, a little under nine minutes. It was a flat
  * 180s, which a run that thought unleashed on an 8,000-word essay came within
  * 20s of, and which a run filling the new ceiling would overshoot twice over;
@@ -205,13 +205,13 @@ export const CLAIMS_MAX_TOKENS = budgetFor(CLAIMS_JOB, CLAIMS_ANSWER_ROOM, CLAIM
  * together. The stall clock below is what catches a hung stream, and it does
  * not move. `api/**` allows 800s (vercel.json).
  */
-export const CLAIMS_TIMEOUT_MS = deadlineFor(CLAIMS_MAX_TOKENS);
-export const CLAIMS_STALL_MS = 45_000;
+export const PROMISES_TIMEOUT_MS = deadlineFor(PROMISES_MAX_TOKENS);
+export const PROMISES_STALL_MS = 45_000;
 
 /**
  * The instructions, in full.
  *
- * One string rather than assembled, because there is one kind of claims run and
+ * One string rather than assembled, because there is one kind of promises run and
  * because the rules a referee is relying on should be readable in one place.
  *
  * The order is deliberate: what the job is, then what it must never do, then the
@@ -219,7 +219,7 @@ export const CLAIMS_STALL_MS = 45_000;
  * the mechanics because a model that gets the mechanics right and the refusals
  * wrong has produced exactly the artefact the plan spent a review getting rid of.
  */
-export const CLAIMS_SYSTEM = `You are helping a peer reviewer read a paper they have been asked to referee.
+export const PROMISES_SYSTEM = `You are helping a peer reviewer read a paper they have been asked to referee.
 
 Pull out the claims the paper makes about itself UP FRONT — in its title, its
 abstract, its introduction, and any list of contributions — and for each one,
@@ -289,7 +289,7 @@ THE RULES THAT MATTER
   reading order, not a ranking, and there is no ranking anywhere in this answer.
 - Only claims the paper makes about ITS OWN work and findings. Not background,
   not what other people have shown, not what future work might show.
-- At most ${MAX_CLAIMS} claims, and at most ${MAX_PASSAGES} passages under each.
+- At most ${MAX_PROMISES} claims, and at most ${MAX_PASSAGES} passages under each.
 
 ${plainWords("explain", "landmark")}
 
@@ -315,14 +315,14 @@ A JSON object, and nothing else — no prose before it, no code fence around it:
  * **The split into two content parts is the caching contract**, not formatting,
  * and it is `buildCriterionMessages`'s exactly: the first part is the article
  * and nothing else and is byte-identical for every referee call over the same
- * paper, so a claims run and a criterion run land on the same cached prefix; the
+ * paper, so a promises run and a criterion run land on the same cached prefix; the
  * second is the short instruction that differs. Put anything article-specific in
  * the second part and the whole thing stops working while continuing to look
  * right.
  */
-export function buildClaimsMessages(meta: Meta, blocks: Block[]): OpenRouterMessage[] {
+export function buildPromisesMessages(meta: Meta, blocks: Block[]): OpenRouterMessage[] {
   return [
-    { role: "system", content: CLAIMS_SYSTEM },
+    { role: "system", content: PROMISES_SYSTEM },
     {
       role: "user",
       content: [
@@ -340,7 +340,7 @@ export function buildClaimsMessages(meta: Meta, blocks: Block[]): OpenRouterMess
   ];
 }
 
-export interface ClaimsRequest {
+export interface PromisesRequest {
   meta: Meta;
   blocks: Block[];
   /**
@@ -357,18 +357,18 @@ export interface ClaimsRequest {
   stallMs?: number;
 }
 
-export interface ClaimsOutcome {
-  claims: Claim[];
+export interface PromisesOutcome {
+  promises: PaperPromise[];
   model: string;
   /** What validation threw away — the whole point of the log line below. */
-  dropped: DroppedClaims;
+  dropped: DroppedPromises;
   /**
    * The `reasoning` lines the validator blanked for reading as a verdict on
-   * whether a passage carries its claim — src/referee-claims.ts § `ADEQUACY_FRAMES`.
+   * whether a passage carries its claim — src/referee-promises.ts § `ADEQUACY_FRAMES`.
    *
    * **The strings, not the count**, and they go no further than a caller that
-   * asks: the route stores `claims` and nothing else, so nothing on this list
-   * reaches a referee or a log. `evals/referee-claims.ts` is the caller that
+   * asks: the route stores `promises` and nothing else, so nothing on this list
+   * reaches a referee or a log. `evals/referee-promises.ts` is the caller that
    * reads them, which is what keeps the eval able to see what the fail-safe
    * caught rather than reporting a green it manufactured.
    */
@@ -383,21 +383,21 @@ export interface ClaimsOutcome {
 
 /**
  * A claim that arrived mid-stream. Provisional: already through the same
- * `validateClaims` as the final pass, but `done` is authoritative and may differ
+ * `validatePromises` as the final pass, but `done` is authoritative and may differ
  * — in particular the final pass **re-sorts into document order**, and a preview
  * cannot, because the claims after it have not arrived. The panel sorts what it
- * is holding for exactly that reason (src/web/ClaimsPanel.tsx).
+ * is holding for exactly that reason (src/web/PromisesPanel.tsx).
  */
-export type ClaimEvent =
-  | { type: "claim"; claim: Claim }
-  | { type: "done"; outcome: ClaimsOutcome };
+export type PromisesEvent =
+  | { type: "promise"; promise: PaperPromise }
+  | { type: "done"; outcome: PromisesOutcome };
 
 /**
  * Thrown when the referee has disconnected and there is nothing left to say to
  * them. Deliberately not one of the `[ai-*]` reader-facing sentences — those
  * exist for somebody still there to read one. src/search.ts § `READER_LEFT`.
  */
-const READER_LEFT = "The referee disconnected before the claims run finished.";
+const READER_LEFT = "The referee disconnected before the promises run finished.";
 
 /**
  * Pull the paper's claims, streaming each one as it arrives.
@@ -408,18 +408,18 @@ const READER_LEFT = "The referee disconnected before the claims run finished.";
  * those for why each check is there and what broke before it was. Only the
  * differences are commented here.
  */
-export async function* runClaimsStream({
+export async function* runPromisesStream({
   meta,
   blocks,
   power,
   model = defaultModel(power),
   signal,
-  timeoutMs = CLAIMS_TIMEOUT_MS,
-  stallMs = CLAIMS_STALL_MS,
-}: ClaimsRequest): AsyncGenerator<ClaimEvent> {
+  timeoutMs = PROMISES_TIMEOUT_MS,
+  stallMs = PROMISES_STALL_MS,
+}: PromisesRequest): AsyncGenerator<PromisesEvent> {
   const line = log("model");
 
-  const messages = buildClaimsMessages(meta, blocks);
+  const messages = buildPromisesMessages(meta, blocks);
   const tooShortToCache = underCacheFloor(cachedText(messages), model);
 
   const deadline = AbortSignal.timeout(timeoutMs);
@@ -448,9 +448,9 @@ export async function* runClaimsStream({
        short list, it is a parse error. **No tools** — every answer is inside
        the paper, and a web search here would be spending a referee's money to
        confirm background. */
-    max_tokens: CLAIMS_MAX_TOKENS,
+    max_tokens: PROMISES_MAX_TOKENS,
     /* No `reasoning` here: the gateway sends `CHAT_REASONING`'s row for this
-       job, and `CLAIMS_EFFORT` above is that row read back. */
+       job, and `PROMISES_EFFORT` above is that row read back. */
     messages,
   };
 
@@ -469,7 +469,7 @@ export async function* runClaimsStream({
     /* malformedFrames: "throw", like search and criteria and unlike chat: the
        payload is a single JSON object, where a dropped frame can lose a whole
        claim and leave text either side that still parses. */
-    for await (const chunk of openRouterStream(CLAIMS_JOB, request, {
+    for await (const chunk of openRouterStream(PROMISES_JOB, request, {
       signal: composite,
       onActivity: touch,
       end,
@@ -488,15 +488,15 @@ export async function* runClaimsStream({
         // Fed unconditionally, cap or no cap — `text()` has to stay complete for
         // the final strict parse regardless of what has been shown.
         for (const raw of extractor.push(piece)) {
-          if (emitted >= MAX_CLAIMS) break;
-          /* The same `validateClaims` the final pass runs, on a single
+          if (emitted >= MAX_PROMISES) break;
+          /* The same `validatePromises` the final pass runs, on a single
              candidate — not a copy of it. A claim previewed mid-stream has
              therefore already had its own quote and every one of its passages
              re-found in the article. */
-          const survivor = validateClaims({ claims: [raw] }, blocks).claims[0];
+          const survivor = validatePromises({ claims: [raw] }, blocks).promises[0];
           if (!survivor) continue;
           emitted++;
-          yield { type: "claim", claim: survivor };
+          yield { type: "promise", promise: survivor };
         }
       }
       if (chunk.usage) usage = chunk.usage;
@@ -564,8 +564,8 @@ export async function* runClaimsStream({
       line.info(
         { model: used, ms: since(started), chars: extractor.text().length },
         answered
-          ? `referee claims run from ${used} was abandoned`
-          : `referee claims run was abandoned before ${model} replied`,
+          ? `referee promises run from ${used} was abandoned`
+          : `referee promises run was abandoned before ${model} replied`,
       );
       break;
 
@@ -592,7 +592,7 @@ export async function* runClaimsStream({
          `parseHits` and reported, if it happened to parse, as a finished run. */
       line.error(
         { model: used, ms: since(started), chars: extractor.text().length, finishReason },
-        `the provider gave up mid-claims-run from ${used}`,
+        `the provider gave up mid-promises-run from ${used}`,
       );
       throw providerFailedMidAnswer();
 
@@ -617,7 +617,7 @@ export async function* runClaimsStream({
     case "unknown-finish-reason":
       /* Accepted as a clean stop, on the deny-list reasoning quiz-mark spells
          out: a gateway spelling `stop` as `end_turn` would otherwise fail every
-         claims run for that model. The reason is on the success log line. */
+         promises run for that model. The reason is on the success log line. */
       break;
 
     case "wants-tools":
@@ -655,7 +655,7 @@ export async function* runClaimsStream({
     if (stopped) throw new Error(READER_LEFT);
     /* `reasoningTokens` is the number that would have said what went wrong
        when every long paper failed here: `length` with no text is the model
-       having thought through the whole allowance. `CLAIMS_EFFORT`. */
+       having thought through the whole allowance. `PROMISES_EFFORT`. */
     line.error(
       {
         model: used,
@@ -672,18 +672,18 @@ export async function* runClaimsStream({
   // The authoritative pass — a strict whole-text parse, not the extractor's
   // best-effort one, then the same validation the previews ran per item, which
   // is also where the document sort happens.
-  let claims: Claim[];
-  let dropped: DroppedClaims;
+  let promises: PaperPromise[];
+  let dropped: DroppedPromises;
   let withheld: string[];
   try {
-    ({ claims, dropped, withheld } = validateClaims(parseHits(rawText), blocks));
+    ({ promises, dropped, withheld } = validatePromises(parseHits(rawText), blocks));
   } catch (err) {
     if (stopped) throw new Error(READER_LEFT);
     line.error(
       { model: used, ms: since(started), reason: (err as Error).cause ?? "?" },
       `${used}'s answer could not be parsed`,
     );
-    throw err instanceof UnreadableClaims
+    throw err instanceof UnreadablePromises
       ? new Error(PROVIDER_UNREADABLE.message, { cause: err.cause })
       : err;
   }
@@ -708,13 +708,13 @@ export async function* runClaimsStream({
         cacheWriteTokens:
           usage?.prompt_tokens_details?.cache_write_tokens ?? usage?.cache_write_tokens ?? null,
         tooShortToCache,
-        claims: claims.length,
-        streamedClaims: emitted,
-        passages: claims.reduce((n, c) => n + c.passages.length, 0),
+        promises: promises.length,
+        streamedPromises: emitted,
+        passages: promises.reduce((n, c) => n + c.passages.length, 0),
         /* How many claims came back with nothing under them. A log line, never a
            finding: it is as much a fact about this run's extraction as about the
            paper, which is the whole reason the panel refuses to rank on it. */
-        claimsWithNoPassage: claims.filter((c) => c.passages.length === 0).length,
+        promisesWithNoPassage: promises.filter((c) => c.passages.length === 0).length,
         /* **The count, never the sentences.** A withheld line is still
            somebody's unpublished paper being written about — a passage's
            reasoning or a claim's headline — and this file's rule about what may
@@ -726,7 +726,7 @@ export async function* runClaimsStream({
         ...dropped,
         finishReason,
       },
-      `pulled a paper's claims with ${used} (${claims.length} claim${claims.length === 1 ? "" : "s"})`,
+      `pulled a paper's promises with ${used} (${promises.length} promise${promises.length === 1 ? "" : "s"})`,
     );
   } catch {
     // Nothing worth failing a referee's run over.
@@ -739,14 +739,14 @@ export async function* runClaimsStream({
      do not make on the panel. The sentence is `ANSWER_UNUSABLE` in
      src/messages.ts, the same one Criteria throws; this file had its own
      wording, `CLAIMS_UNUSABLE`, until 2026-10-04. */
-  if (claims.length === 0 && discardedClaims(dropped) > 0) {
+  if (promises.length === 0 && discardedPromises(dropped) > 0) {
     throw new Error(ANSWER_UNUSABLE.message, { cause: "every-claim-discarded" });
   }
 
   yield {
     type: "done",
     outcome: {
-      claims,
+      promises,
       model: used,
       dropped,
       withheld,
@@ -764,15 +764,15 @@ export async function* runClaimsStream({
 /**
  * The same run, waited for rather than watched.
  *
- * A thin drain of `runClaimsStream`, so there is one implementation of the
+ * A thin drain of `runPromisesStream`, so there is one implementation of the
  * request, the clocks and the end-of-stream invariants rather than two.
  */
-export async function runClaims(req: ClaimsRequest): Promise<ClaimsOutcome> {
-  for await (const event of runClaimsStream(req)) {
+export async function runPromises(req: PromisesRequest): Promise<PromisesOutcome> {
+  for await (const event of runPromisesStream(req)) {
     if (event.type === "done") return event.outcome;
   }
   /* Unreachable by the generator's own contract — it yields `done` or throws —
      and here so a future edit that breaks the contract fails loudly instead of
      returning `undefined`. */
-  throw new Error("The claims run ended without a result.");
+  throw new Error("The promises run ended without a result.");
 }

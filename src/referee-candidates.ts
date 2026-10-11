@@ -71,7 +71,7 @@
  *
  * This module imports `types.js` and `urls.js` and nothing else, so the browser
  * can run the same validation the transcript was written under — the arrangement
- * `referee-criteria.js` and `referee-claims.js` are already on the client-import
+ * `referee-criteria.js` and `referee-promises.js` are already on the client-import
  * allowlist for.
  *
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
@@ -124,8 +124,8 @@ export interface Candidate {
  * Every field exists so a panel can say which of two very different things
  * happened: *the model named nobody* and *the model named eleven people and none
  * of them survived the rules*. Criteria shipped without that distinction and a
- * second cross-family review reopened it; Claims built it in from the start
- * (docs/project/referee-mode.md § 2). This is Claims' lesson, not Criteria's.
+ * second cross-family review reopened it; Promises built it in from the start
+ * (docs/project/referee-mode.md § 2). This is Promises' lesson, not Criteria's.
  */
 export interface DroppedCandidates {
   /** No source link that the web search returned in this conversation. Rule 1. */
@@ -707,7 +707,7 @@ export const CANDIDATES_OPENING =
  *
  * A value rather than a string in the panel so that
  * tests/referee-copy-is-about-the-model.test.ts can be right about the words —
- * the arrangement `NO_PASSAGE_FOUND` in src/referee-claims.ts already uses.
+ * the arrangement `NO_PASSAGE_FOUND` in src/referee-promises.ts already uses.
  *
  * The wording is the research's own division and it matters that the two halves
  * stay in one sentence each: presenting an algorithmic pass as though it caught
@@ -740,7 +740,7 @@ export const NO_BYLINE_TO_EXCLUDE =
  * The model has not put any names forward yet.
  *
  * A different sentence from `ALL_DROPPED` above, and the pair is the same
- * three-states discipline Claims built in from the start: *nobody was named* and
+ * three-states discipline Promises built in from the start: *nobody was named* and
  * *people were named and none could be shown* call for different actions from
  * the editor, so they must not be one sentence.
  */

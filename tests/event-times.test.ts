@@ -44,7 +44,7 @@ import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgHighPowerStore } from "../src/store/pg-high-power.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgLinkSummaryStore } from "../src/store/pg-link-summaries.js";
-import { pgRefereeClaimsStore } from "../src/store/pg-referee-claims.js";
+import { pgRefereePromisesStore } from "../src/store/pg-referee-promises.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { pgRefereeHiddenCheckStore } from "../src/store/pg-referee-hidden-checks.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
@@ -82,7 +82,7 @@ await pgReady({
     { table: "spideryarn.search_runs", column: "colour_at" },
     { table: "spideryarn.referee_criteria", column: "finished_at" },
     { table: "spideryarn.referee_criteria", column: "colour_at" },
-    { table: "spideryarn.referee_claims", column: "finished_at" },
+    { table: "spideryarn.referee_promises", column: "finished_at" },
     { table: "spideryarn.referee_hidden_checks", column: "finished_at" },
     { table: "spideryarn.jobs", column: "cancel_requested_at" },
     { table: "spideryarn.link_summaries", column: "finished_at" },
@@ -894,33 +894,33 @@ describe("referee_criteria.finished_at and referee_criteria.colour_at", () => {
   });
 });
 
-/* -------------------------------------------------------- referee claims -- */
+/* -------------------------------------------------------- referee promises -- */
 
-describe("referee_claims.finished_at", () => {
+describe("referee_promises.finished_at", () => {
   const where = sql`article_id = ${ARTICLE_ID}`;
-  const read = () => cells("referee_claims", where, ["finished_at", "created_at"]);
+  const read = () => cells("referee_promises", where, ["finished_at", "created_at"]);
   const HASH = "event-times-source-hash";
 
   it("is stamped when the claims land, and nulled by the next run", async () => {
-    const first = await mine(() => pgRefereeClaimsStore.begin(SLUG, HASH));
+    const first = await mine(() => pgRefereePromisesStore.begin(SLUG, HASH));
     expect((await read()).finished_at).toBeNull();
 
-    await mine(() => pgRefereeClaimsStore.finish(SLUG, { status: "done", claims: [] }, first.attempt));
+    await mine(() => pgRefereePromisesStore.finish(SLUG, { status: "done", promises: [] }, first.attempt));
     expectRecent((await read()).finished_at, "finished_at after the claims landed");
 
-    await mine(() => pgRefereeClaimsStore.begin(SLUG, HASH));
+    await mine(() => pgRefereePromisesStore.begin(SLUG, HASH));
     expect((await read()).finished_at, "a re-run kept the last run's finish").toBeNull();
   });
 
   it("is left alone, with the whole run, by a stale attempt's late answer", async () => {
-    await mine(() => pgRefereeClaimsStore.begin(SLUG, HASH));
-    const before = await rowOf("referee_claims", where);
+    await mine(() => pgRefereePromisesStore.begin(SLUG, HASH));
+    const before = await rowOf("referee_promises", where);
 
     const stale = await mine(() =>
-      pgRefereeClaimsStore.finish(SLUG, { status: "done", claims: [] }, randomUUID()),
+      pgRefereePromisesStore.finish(SLUG, { status: "done", promises: [] }, randomUUID()),
     );
     expect(stale).toBeNull();
-    const after = await rowOf("referee_claims", where);
+    const after = await rowOf("referee_promises", where);
     expect(after).toEqual(before);
     expect(after.finished_at).toBeNull();
   });
@@ -928,10 +928,10 @@ describe("referee_claims.finished_at", () => {
   it("is stamped by the sweep that declares a run abandoned", async () => {
     /* The sweep's clock is `created_at`, so the run is begun an hour ago. */
     const anHourAgo = new Date(Date.now() - 3_600_000).toISOString();
-    await mine(() => pgRefereeClaimsStore.begin(SLUG, HASH, () => anHourAgo));
+    await mine(() => pgRefereePromisesStore.begin(SLUG, HASH, () => anHourAgo));
     expect((await read()).finished_at).toBeNull();
 
-    const swept = await mine(() => pgRefereeClaimsStore.sweep(SLUG, false));
+    const swept = await mine(() => pgRefereePromisesStore.sweep(SLUG, false));
     expect(swept?.status).toBe("error");
     const after = await read();
     expectRecent(after.finished_at, "finished_at after the sweep");

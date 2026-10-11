@@ -12,11 +12,15 @@
  * Where a message is checked it is for one number in it, because that number
  * is the thing a reader acts on.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  DOCX_CONTENT_TYPE,
   formatBytes,
   MAX_PAGES,
   MAX_UPLOAD_BYTES,
+  UPLOAD_ACCEPT,
   uploadContentType,
   uploadKind,
   uploadLimits,
@@ -48,7 +52,7 @@ describe("uploadProblem", () => {
   });
 
   it("refuses something that is plainly not a PDF", () => {
-    expect(uploadProblem(pdf({ name: "notes.txt", type: "text/plain" }))).not.toBeNull();
+    expect(uploadProblem(pdf({ name: "holiday.mp4", type: "video/mp4" }))).not.toBeNull();
     expect(uploadProblem(pdf({ name: "scan.png", type: "image/png" }))).not.toBeNull();
   });
 
@@ -103,7 +107,7 @@ describe("the pick- codes", () => {
    * stays distinguishable from `up-`, which means the server did.
    */
   const refusals = [
-    uploadProblem(pdf({ name: "notes.txt", type: "text/plain" })),
+    uploadProblem(pdf({ name: "holiday.mp4", type: "video/mp4" })),
     uploadProblem(pdf({ size: 0 })),
     uploadProblem(pdf({ size: MAX_UPLOAD_BYTES + 1 })),
   ];
@@ -190,10 +194,48 @@ describe("uploadKind", () => {
     expect(uploadKind(file("saved.html", "image/png"))).toBeNull();
   });
 
-  it("refuses what is neither", () => {
-    expect(uploadKind(file("notes.txt", "text/plain"))).toBeNull();
+  it("refuses what is none of them", () => {
     expect(uploadKind(file("holiday.mp4", "video/mp4"))).toBeNull();
     expect(uploadKind(file("no-extension", ""))).toBeNull();
+    /* The neighbours deliberately left out (plan 261011j § Deferred). */
+    expect(uploadKind(file("thesis.doc", "application/msword"))).toBeNull();
+    expect(uploadKind(file("notes.odt", ""))).toBeNull();
+    expect(uploadKind(file("paper.tex", "text/x-tex"))).toBeNull();
+  });
+
+  /**
+   * **Text, Markdown and Word since 2026-10-11, decided by the name alone** —
+   * plan 261011j. The server route asks with `type: ""`, so a picker that let
+   * the browser's type widen or narrow this would disagree with it; and an OS's
+   * guess at `.md` or `.org` is anything from `""` to Lotus Organizer.
+   */
+  it("takes text, Markdown and Word by extension, whatever the browser guessed", () => {
+    expect(uploadKind(file("notes.txt", "text/plain"))).toBe("text");
+    expect(uploadKind(file("NOTES.TXT", ""))).toBe("text");
+    expect(uploadKind(file("intro.rst", ""))).toBe("text");
+    expect(uploadKind(file("plan.org", "application/vnd.lotus-organizer"))).toBe("text");
+    expect(uploadKind(file("README.md", ""))).toBe("markdown");
+    expect(uploadKind(file("essay.markdown", "text/markdown"))).toBe("markdown");
+    expect(uploadKind(file("draft.docx", DOCX_CONTENT_TYPE))).toBe("docx");
+    expect(uploadKind(file("draft.docx", ""))).toBe("docx");
+  });
+
+  /* The server's view is a name and `type: ""`, so the picker's answer for the
+     same name must not be stricter or looser than that. */
+  it("agrees with the server's name-only view for every converted extension", () => {
+    for (const name of ["a.txt", "a.text", "a.rst", "a.org", "a.md", "a.markdown", "a.mdown", "a.mkd", "a.docx"]) {
+      expect(uploadKind(file(name, "application/x-anything"))).toBe(uploadKind(file(name, "")));
+      expect(uploadProblem(file(name, ""))).toBeNull();
+    }
+  });
+
+  it("offers in the picker exactly the extensions it takes", () => {
+    for (const ext of [".pdf", ".html", ".htm", ".docx", ".md", ".markdown", ".txt", ".rst", ".org"]) {
+      expect(UPLOAD_ACCEPT.split(",")).toContain(ext);
+    }
+    for (const accepted of UPLOAD_ACCEPT.split(",").filter((a) => a.startsWith("."))) {
+      expect(uploadKind(file(`x${accepted}`, ""))).not.toBeNull();
+    }
   });
 });
 
@@ -210,6 +252,21 @@ describe("uploadContentType", () => {
   it("labels each kind as the bucket's allowlist spells it", () => {
     expect(uploadContentType(file("saved.html", ""))).toBe("text/html");
     expect(uploadContentType(file("paper.pdf", ""))).toBe("application/pdf");
+    expect(uploadContentType(file("notes.txt", ""))).toBe("text/plain");
+    expect(uploadContentType(file("README.md", ""))).toBe("text/plain");
+    expect(uploadContentType(file("draft.docx", ""))).toBe(DOCX_CONTENT_TYPE);
+  });
+
+  /* Red by removing `text/plain` from the bucket's list in supabase/config.toml:
+     the label the browser puts on a PUT is one the bucket must accept, or the
+     upload dies at Storage with a 415 (docs/postmortems/260828a). */
+  it("only ever labels a PUT with a type the sources bucket declares", async () => {
+    const { declaredBuckets } = await import("../scripts/deploy-checks.js");
+    const toml = readFileSync(path.join(import.meta.dirname, "..", "supabase", "config.toml"), "utf8");
+    const sources = declaredBuckets(toml).find((b) => b.name === "sources");
+    for (const name of ["a.pdf", "a.html", "a.txt", "a.md", "a.docx", "a.mp4"]) {
+      expect(sources?.allowedMimeTypes).toContain(uploadContentType(file(name, "")));
+    }
   });
 
   /* A file `uploadProblem` has already stopped, so there is no PUT to label and

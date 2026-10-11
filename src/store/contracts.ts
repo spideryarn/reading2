@@ -56,7 +56,7 @@ import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { AnswerFinish, MarkPatch, NewComment } from "../comments.js";
-import type { ClaimsRun } from "../referee-claims.js";
+import type { PromisesRun } from "../referee-promises.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import type { ChooseArticle } from "../shelf-terms/choose.js";
@@ -696,7 +696,7 @@ export interface CommentStore {
    * use, and a parameter that is silently ignored is the failure this codebase
    * keeps finding — docs/reusable/silent-success.md. The window is
    * `COMMENT_ANSWER_LEASE_MS` in src/store/pg-comments.ts, next to the write
-   * that stamps it, exactly as `CLAIMS_ORPHAN_GRACE_MS` lives beside its own.
+   * that stamps it, exactly as `PROMISES_ORPHAN_GRACE_MS` lives beside its own.
    *
    * @param keep bare comment ids — *not* `slug/id`. The key src/routes.ts uses
    * has to stay unique across articles; a store must not be handed a composite
@@ -1365,7 +1365,7 @@ export interface SearchStore {
    * **A method rather than a field on what `load` returns**, so a caller that
    * only wants the list does not pay for a scan of every block. The routes that
    * need both ask for both in one response, and say why where they do it
-   * (`refereeCriteria` and `refereeClaims` in src/routes.ts).
+   * (`refereeCriteria` and `refereePromises` in src/routes.ts).
    *
    * `undefined` when the article has no readable blocks. That is not "current"
    * — `isStale` counts it as stale, because not knowing and knowing it is fine
@@ -1528,14 +1528,14 @@ export interface RefereeCriteriaStore {
  *
  * Referee mode's second sub-mode
  * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2), and the one
- * contract in this file with **no id in it**: there is one claims run per
+ * contract in this file with **no id in it**: there is one promises run per
  * article, because a referee writes several criteria and asks the paper what
  * *it* claims exactly once. Running it again replaces what is there.
  *
- * **A claims run's real home is a pipeline artefact, and this is not it.** The
+ * **A promises run's real home is a pipeline artefact, and this is not it.** The
  * plan says so and lists the surface: a `StepName`, an `ArtifactKind` and an
- * `article_revisions` column, because a claims run is article-derived and
- * reusable rather than reader state. That is unchanged, and `referee_claims`
+ * `article_revisions` column, because a promises run is article-derived and
+ * reusable rather than reader state. That is unchanged, and `referee_promises`
  * (drizzle/0051) is an **interim** table, named as one in its own migration.
  *
  * **What changed, and when, because a recorded reason outlives the decision it
@@ -1557,7 +1557,7 @@ export interface RefereeCriteriaStore {
  * `guarded(...)` like every other seam.
  */
 /**
- * What a claims run can end as. **Never `pending`**: `finish` releases the
+ * What a promises run can end as. **Never `pending`**: `finish` releases the
  * attempt token whatever the patch says, so a patch leaving the row `pending`
  * would strip the fence off a row still waiting for an answer.
  * `SearchFinish` and `CriterionFinish` say the same of their stores.
@@ -1567,20 +1567,20 @@ export interface RefereeCriteriaStore {
  * refuses them.
  *
  * **Two arms, like its siblings, since 2026-10-07.** It was one `Partial<Pick>`
- * with a `status` beside it, which let an `error` finish carry claims. Nothing
- * did, and the database now refuses the row (`referee_claims_empty_unless_done`
+ * with a `status` beside it, which let an `error` finish carry promises. Nothing
+ * did, and the database now refuses the row (`referee_promises_empty_unless_done`
  * in src/db/schema.ts), so the type refuses it first. The `error` arm may still
- * say `claims: []`, as the route does: typed as the **empty tuple**, so `[]`
+ * say `promises: []`, as the route does: typed as the **empty tuple**, so `[]`
  * compiles and anything with a claim in it does not.
- * tests/store-pg-referee-claims.test.ts holds both halves.
+ * tests/store-pg-referee-promises.test.ts holds both halves.
  */
-export type ClaimsFinish =
-  | { status: "done"; claims: ClaimsRun["claims"]; model?: string; claimsOmitted?: number }
-  | { status: "error"; error: string; claims?: [] };
+export type PromisesFinish =
+  | { status: "done"; promises: PromisesRun["promises"]; model?: string; promisesOmitted?: number }
+  | { status: "error"; error: string; promises?: [] };
 
-export interface RefereeClaimsStore {
+export interface RefereePromisesStore {
   /** The stored run, or `null` when this paper has never been asked. */
-  load(slug: string): Promise<ClaimsRun | null>;
+  load(slug: string): Promise<PromisesRun | null>;
 
   /** The article's fingerprint right now — see `SearchStore.sourceHash`. */
   sourceHash(slug: string): Promise<string | undefined>;
@@ -1591,7 +1591,7 @@ export interface RefereeClaimsStore {
    *
    * There is no `wantedId` and no retry rule, because there is nothing to
    * collide with: a second run is a run, and the answer it overwrites was about
-   * the same paper. src/store/pg-referee-claims.ts § One run per article.
+   * the same paper. src/store/pg-referee-promises.ts § One run per article.
    *
    * `sourceHash` is `hashBlocks` of **the blocks the caller is about to send**,
    * not something the store reads: the caller loaded them before this call, and
@@ -1606,7 +1606,7 @@ export interface RefereeClaimsStore {
     slug: string,
     sourceHash: string,
     now?: () => string,
-  ): Promise<{ run: ClaimsRun; attempt: string }>;
+  ): Promise<{ run: PromisesRun; attempt: string }>;
 
   /**
    * Write the answer over the `pending` run **this attempt began**.
@@ -1615,7 +1615,7 @@ export interface RefereeClaimsStore {
    * `begin` took it, or the sweep already failed it. Never a resurrection, and
    * never a write over somebody else's run.
    */
-  finish(slug: string, patch: ClaimsFinish, attempt: string): Promise<ClaimsRun | null>;
+  finish(slug: string, patch: PromisesFinish, attempt: string): Promise<PromisesRun | null>;
 
   /**
    * Turn an abandoned `pending` run into an `error`, so it can be run again.
@@ -1629,11 +1629,11 @@ export interface RefereeClaimsStore {
    * cross-process bug, and process B seeing process A's live row in nobody's set
    * errors an answer that is still arriving. That is as true here as anywhere,
    * and on Vercel it is the ordinary shape. So the Postgres store applies its
-   * own window against `referee_claims.created_at`, which `begin` stamps and
-   * `finish` never touches (`CLAIMS_ORPHAN_GRACE_MS`,
-   * src/store/pg-referee-claims.ts).
+   * own window against `referee_promises.created_at`, which `begin` stamps and
+   * `finish` never touches (`PROMISES_ORPHAN_GRACE_MS`,
+   * src/store/pg-referee-promises.ts).
    */
-  sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
+  sweep(slug: string, live: boolean): Promise<PromisesRun | null>;
 }
 
 /**

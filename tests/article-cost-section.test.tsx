@@ -273,7 +273,7 @@ describe("lineName", () => {
 
   it("names step work by its step and request work by its job", () => {
     expect(lineName(line({}))).toBe("structure");
-    expect(lineName(line({ job: "referee_claims", stepName: null }))).toBe("referee claims");
+    expect(lineName(line({ job: "referee_promises", stepName: null }))).toBe("referee promises");
     expect(lineName(line({ job: "labels" }))).toBe("structure · labels");
   });
 });

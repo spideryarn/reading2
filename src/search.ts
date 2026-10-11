@@ -401,7 +401,7 @@ export function validateHits(
  *
  * `parseHits` is Search's parser *and* Referee mode's: a criterion run, a claims
  * pull and a Mirror run all end in it. Only Search's reader typed the ask and
- * can make it smaller. Claims pulls the paper's own claims, Mirror reads the
+ * can make it smaller. Promises pulls the paper's own claims, Mirror reads the
  * referee's own comments, and a criterion is a saved row whose error state
  * offers *Try again* and nothing else — narrowing any of those three means
  * abandoning the thing and asking something different.

@@ -982,6 +982,8 @@ describe("reading the bucket blocks out of supabase/config.toml", () => {
         "image/png",
         "image/jpeg",
         "image/gif",
+        "text/plain",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ],
     });
   });

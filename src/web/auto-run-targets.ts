@@ -28,7 +28,7 @@
  *
  * The two that are written as plain string literals are Referee's streamed
  * sub-modes. Neither has a job row, a `StepName` or a place in `STEP_ORDER`:
- * `claims` is one SSE run per paper ([`useClaims.ts`](./useClaims.ts)) and
+ * `promises` is one SSE run per paper ([`usePromises.ts`](./usePromises.ts)) and
  * `candidates` is a chat thread of kind `candidates`
  * ([`CandidatesPanel.tsx`](./CandidatesPanel.tsx)). They are capped by
  * `beginAutoAttempt` exactly like the rest — it is only a `Set` key — but there
@@ -86,7 +86,7 @@ type StepAutoRunTarget = StepTarget<
 >;
 
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */
-type StreamAutoRunTarget = "claims" | "candidates";
+type StreamAutoRunTarget = "promises" | "candidates";
 
 /** Every target that may receive one automatic attempt in this tab session. */
 export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget;

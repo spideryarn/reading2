@@ -3,7 +3,7 @@
  *
  * Claims shipped on 2026-08-31 with a filesystem store and no Postgres one, so
  * under `SPIDERYARN_STORE=postgres` — which production has run since
- * 2026-08-27 — `GET` and `POST /api/referee/claims/:slug` both answered 501 and
+ * 2026-08-27 — `GET` and `POST /api/referee/promises/:slug` both answered 501 and
  * *"Pull the paper's claims"* could not load, start or persist a run for
  * anybody. **No route test noticed**, because `SPIDERYARN_STORE` unset meant
  * `files` and every route suite in this directory ran on the default.
@@ -17,7 +17,7 @@
  * 2026-09-04 and the filesystem store went on 2026-09-05, so the rest of this
  * section is history.
  *
- * **Pinning `tests/referee-claims-routes.test.ts` and
+ * **Pinning `tests/referee-promises-routes.test.ts` and
  * `tests/referee-criteria-routes.test.ts` to `postgres`** would have cost the
  * property the first of those states in its own header — *nothing here reaches a
  * model, and that is load-bearing rather than lucky* — because both files build
@@ -41,20 +41,20 @@
  *
  * ## Nothing here reaches a model either, and it is bought differently
  *
- * The two POSTs are the paying routes, so `runClaimsStream` and
+ * The two POSTs are the paying routes, so `runPromisesStream` and
  * `runCriterionStream` are mocked — the move
- * `tests/referee-claims-omitted.test.ts` makes, and for its reason: mocking them
+ * `tests/referee-promises-omitted.test.ts` makes, and for its reason: mocking them
  * *there* would have taken the no-model sentence away from the file that states
  * it, so the mock lives in the file whose header says it is there.
  *
- * `importActual` and spread, never a bare object: `src/store/pg-referee-claims.ts`
- * imports `CLAIMS_TIMEOUT_MS` from `referee-claims-run.js`, and replacing the
+ * `importActual` and spread, never a bare object: `src/store/pg-referee-promises.ts`
+ * imports `PROMISES_TIMEOUT_MS` from `referee-promises-run.js`, and replacing the
  * whole module leaves that store with an undefined constant and the import graph
  * falls over before a single test runs.
  *
  * ## What it covers
  *
- * Every `/api/referee/criteria/…` and `/api/referee/claims/…` method — the two
+ * Every `/api/referee/criteria/…` and `/api/referee/promises/…` method — the two
  * sub-modes with a store seam each. `/api/referee/mirror` and
  * `/api/referee/scan` are deliberately out: neither stores anything, so neither
  * has a store to be missing.
@@ -69,7 +69,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { closeDb, getDb } from "../src/db/client.js";
 import { refereeCriteria } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import type { Claim } from "../src/referee-claims.js";
+import type { PaperPromise } from "../src/referee-promises.js";
 import type { RefereeResult } from "../src/referee-criteria.js";
 import {
   CRITERIA_AT_CEILING,
@@ -88,7 +88,7 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 loadEnvLocal();
 
 /** The one claim the mocked run answers with, anchored to the fixture at setup. */
-let CLAIM: Claim;
+let CLAIM: PaperPromise;
 /** The one result the mocked criterion run answers with, likewise. */
 let RESULT: RefereeResult;
 
@@ -97,19 +97,19 @@ let RESULT: RefereeResult;
  * run begin — or begin and finish — while the first is still "at the model".
  * Null for every case that is not about two runs.
  */
-let duringClaimsRun: (() => Promise<void>) | null = null;
+let duringPromisesRun: (() => Promise<void>) | null = null;
 
-vi.mock("../src/referee-claims-run.js", async () => ({
-  ...(await vi.importActual<typeof import("../src/referee-claims-run.js")>(
-    "../src/referee-claims-run.js",
+vi.mock("../src/referee-promises-run.js", async () => ({
+  ...(await vi.importActual<typeof import("../src/referee-promises-run.js")>(
+    "../src/referee-promises-run.js",
   )),
-  runClaimsStream: async function* () {
+  runPromisesStream: async function* () {
     /* What another tab does while this run's model call is out. */
-    if (duringClaimsRun) await duringClaimsRun();
+    if (duringPromisesRun) await duringPromisesRun();
     yield {
       type: "done" as const,
       outcome: {
-        claims: [CLAIM],
+        promises: [CLAIM],
         model: "a-test-model",
         dropped: { malformed: 0, unknownIds: 0, unquoted: 0, truncated: 0 },
         withheld: [],
@@ -139,12 +139,12 @@ const ABSENT = "test-referee-routes-postgres-no-such-article";
 
 await pgReady({
   suite: "tests/referee-routes-postgres.test.ts",
-  tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims"],
+  tables: ["spideryarn.referee_criteria", "spideryarn.referee_promises"],
   max: 2,
 });
 
-const { CLAIMS_SUPERSEDED, handleApi } = await import("../src/routes.js");
-const { commentStore, refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
+const { PROMISES_SUPERSEDED, handleApi } = await import("../src/routes.js");
+const { commentStore, refereePromisesStore, refereeCriteriaStore } = await import("../src/store/index.js");
 
 
 interface Reply {
@@ -254,12 +254,12 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
 
   /* --------------------------------------------------------------- claims -- */
 
-  it("reads a claims run back, where it used to answer 501", async () => {
+  it("reads a promises run back, where it used to answer 501", async () => {
     /* The exact call that was broken in production: `GET` reaches
-       `refereeClaimsStore.sweep` and `.sourceHash`, both of which refused with
+       `refereePromisesStore.sweep` and `.sourceHash`, both of which refused with
        a 501. A paper nobody has asked is a 200 with `run: null`
        — the ordinary state, which the panel has a sentence for. */
-    const reply = await call("GET", `/api/referee/claims/${SLUG}`);
+    const reply = await call("GET", `/api/referee/promises/${SLUG}`);
     expect(reply.status, `GET answered ${reply.status}: ${reply.text.slice(0, 300)}`).toBe(200);
     expect(reply.body.run).toBeNull();
     expect(typeof reply.body.sourceHash).toBe("string");
@@ -269,7 +269,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
     /* `POST` reaches `begin` **and** `finish`, which is the write half of the
        seam and the half a read-only test cannot see. The model is mocked; see
        the header. */
-    const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+    const posted = await call("POST", `/api/referee/promises/${SLUG}`);
     expect(posted.streamed, `the POST never opened a stream: ${posted.text.slice(0, 300)}`).toBe(
       true,
     );
@@ -278,12 +278,12 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
     /* Out of the **Postgres** store, by name rather than through whatever the
        route happens to hold: a route that wrote a file and read it back would
        satisfy the round trip above and lose the data in production. */
-    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    const stored = await asTestOwner(() => refereePromisesStore.load(SLUG));
     expect(stored?.status).toBe("done");
-    expect(stored?.claims).toHaveLength(1);
+    expect(stored?.promises).toHaveLength(1);
     expect(stored?.model).toBe("a-test-model");
 
-    const reply = await call("GET", `/api/referee/claims/${SLUG}`);
+    const reply = await call("GET", `/api/referee/promises/${SLUG}`);
     expect((reply.body.run as { status: string }).status).toBe("done");
   });
 
@@ -293,70 +293,70 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
      refused by the store, and these two say what the older tab is told instead
      of its stream simply stopping. */
   it("tells an older run that a newer one is still out, and keeps the newer run's row", async () => {
-    duringClaimsRun = async () => {
-      await asTestOwner(() => refereeClaimsStore.begin(SLUG, "feedfacefeedface"));
+    duringPromisesRun = async () => {
+      await asTestOwner(() => refereePromisesStore.begin(SLUG, "feedfacefeedface"));
     };
     try {
-      const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+      const posted = await call("POST", `/api/referee/promises/${SLUG}`);
       const done = frame(posted.text, "done");
       expect(done?.status).toBe("error");
-      expect(done?.error).toBe(CLAIMS_SUPERSEDED);
+      expect(done?.error).toBe(PROMISES_SUPERSEDED);
     } finally {
-      duringClaimsRun = null;
+      duringPromisesRun = null;
     }
     /* The row is the newer run's, untouched: still waiting, no claims, and the
        sentence above was never stored. */
-    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    const stored = await asTestOwner(() => refereePromisesStore.load(SLUG));
     expect(stored?.status).toBe("pending");
-    expect(stored?.claims).toEqual([]);
+    expect(stored?.promises).toEqual([]);
     expect(stored?.error).toBeUndefined();
   });
 
   it("hands an older run the newer run's finished answer rather than its own", async () => {
-    duringClaimsRun = async () => {
-      const { attempt } = await asTestOwner(() => refereeClaimsStore.begin(SLUG, hashBlocks(article.blocks)));
+    duringPromisesRun = async () => {
+      const { attempt } = await asTestOwner(() => refereePromisesStore.begin(SLUG, hashBlocks(article.blocks)));
       await asTestOwner(() =>
-        refereeClaimsStore.finish(SLUG, { status: "done", claims: [], model: "the-newer-run" }, attempt),
+        refereePromisesStore.finish(SLUG, { status: "done", promises: [], model: "the-newer-run" }, attempt),
       );
     };
     try {
-      const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+      const posted = await call("POST", `/api/referee/promises/${SLUG}`);
       const done = frame(posted.text, "done");
       expect(done?.status).toBe("done");
       expect(done?.model).toBe("the-newer-run");
     } finally {
-      duringClaimsRun = null;
+      duringPromisesRun = null;
     }
-    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    const stored = await asTestOwner(() => refereePromisesStore.load(SLUG));
     expect(stored?.model).toBe("the-newer-run");
-    expect(stored?.claims).toEqual([]);
+    expect(stored?.promises).toEqual([]);
   });
 
   it("asks an older tab to reload instead of handing it an answer about different blocks", async () => {
     const newerHash = "feedfacefeedface";
     expect(hashBlocks(article.blocks)).not.toBe(newerHash);
-    duringClaimsRun = async () => {
+    duringPromisesRun = async () => {
       /* The new revision's fingerprint is enough to reproduce the handoff:
          this request still holds the original blocks, and the newer answer
          must stay in the store until the tab reloads its article too. */
-      const { attempt } = await asTestOwner(() => refereeClaimsStore.begin(SLUG, newerHash));
+      const { attempt } = await asTestOwner(() => refereePromisesStore.begin(SLUG, newerHash));
       await asTestOwner(() =>
-        refereeClaimsStore.finish(SLUG, { status: "done", claims: [CLAIM], model: "the-newer-revision" }, attempt),
+        refereePromisesStore.finish(SLUG, { status: "done", promises: [CLAIM], model: "the-newer-revision" }, attempt),
       );
     };
     try {
-      const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+      const posted = await call("POST", `/api/referee/promises/${SLUG}`);
       const done = frame(posted.text, "done");
       expect(done?.status).toBe("error");
-      expect(done?.error).toBe(CLAIMS_SUPERSEDED);
-      expect(done?.claims).toEqual([]);
+      expect(done?.error).toBe(PROMISES_SUPERSEDED);
+      expect(done?.promises).toEqual([]);
     } finally {
-      duringClaimsRun = null;
+      duringPromisesRun = null;
     }
-    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    const stored = await asTestOwner(() => refereePromisesStore.load(SLUG));
     expect(stored?.status).toBe("done");
     expect(stored?.sourceHash).toBe(newerHash);
-    expect(stored?.claims).toEqual([CLAIM]);
+    expect(stored?.promises).toEqual([CLAIM]);
     expect(stored?.model).toBe("the-newer-revision");
     expect(stored?.error).toBeUndefined();
   });
@@ -366,7 +366,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
        missing directory, which is a different code path answering the same way.
        `streamed` is the assertion that matters: after a header has gone out
        there is nowhere to put a 404. */
-    const reply = await call("POST", `/api/referee/claims/${ABSENT}`);
+    const reply = await call("POST", `/api/referee/promises/${ABSENT}`);
     expect(reply.status).toBe(404);
     expect(reply.streamed).toBe(false);
   });

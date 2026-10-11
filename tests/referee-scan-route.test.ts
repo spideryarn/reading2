@@ -16,7 +16,7 @@
  * holds the caching and the branch.
  *
  * No server and no network — `handleApi` is a plain function over a request and
- * a response. Harness copied from tests/referee-claims-routes.test.ts. **Nothing
+ * a response. Harness copied from tests/referee-promises-routes.test.ts. **Nothing
  * here reaches a model**, and that is a property of the route rather than of the
  * test: the scan is deterministic and free, which is why this is the one route
  * under `/api/referee/` with no `withSpendAttribution` around it.

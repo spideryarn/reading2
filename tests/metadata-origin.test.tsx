@@ -203,6 +203,19 @@ describe("the owner's metadata page", () => {
     expect(host.textContent).toContain("View the original");
   });
 
+  it("does not call the converted page the original Word file", async () => {
+    await owner({ filename: "draft.docx" });
+
+    expect(host.textContent).toContain(UPLOADED);
+    expect(host.textContent).not.toContain("View the original");
+  });
+
+  it("still offers the original when PDF evidence overruled a Word filename", async () => {
+    await owner({ source: "pdf", filename: "draft.docx" });
+
+    expect(host.textContent).toContain("View the original");
+  });
+
   /**
    * A web article with no address is a real state — a lost `meta.json`, or an
    * import that carried no URL — and telling the owner they uploaded it is a

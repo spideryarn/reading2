@@ -171,7 +171,7 @@ const FAILURES = [
   ".srch-error",
   ".srch-failed",
   ".crit-error",
-  ".clm-error",
+  ".prm-error",
   ".mir-error",
   ".cnd-error",
   ".dock-drawer-error",
