@@ -8,7 +8,8 @@
  * - `Refusal`, a server's sentence shown where the write was made;
  * - the administrator's own shelf, read once for both pickers
  *   (`useStarterShelf`), the articles a picker offers (`starterChoices`), and
- *   the picker's select with its Refresh (`StarterSelect`).
+ *   the picker's select with its Refresh (`StarterSelect`);
+ * - whose a claimed gift's starter is now (`StarterOwnerLine`).
  *
  * The voucher form wraps `StarterSelect` in its own status line and import
  * field (AdminVouchersPage.tsx § `StarterPicker`); the author gift's form wraps
@@ -17,7 +18,9 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
+import type { StarterOwner } from "../admin-vouchers.js";
 import type { LibraryEntry } from "../types.js";
+import { ADMIN_ARTICLES_HREF } from "./router.js";
 import { useJobs } from "./useJobs.js";
 import { useShelf } from "./useShelf.js";
 
@@ -119,4 +122,40 @@ export function StarterSelect({
       </button>
     </div>
   );
+}
+
+/**
+ * **Whose a claimed gift's starter article is now** (plan 261011n § D3), under
+ * the starter on the voucher's row and on its author gift's card — one wording
+ * for both. A claim moves a private starter with none of the administrator's
+ * words on it; anything else stays theirs, and is moved by hand on
+ * /admin/articles, which the line links. Nothing for an unclaimed voucher, or
+ * an article somebody else now has.
+ */
+export function StarterOwnerLine({ owner }: { owner: StarterOwner | null | undefined }) {
+  switch (owner) {
+    case "claimant":
+      return (
+        <span data-starter-owner="claimant" className="tw:text-foreground">
+          Now theirs
+        </span>
+      );
+    case "creator":
+      return (
+        <span data-starter-owner="creator">
+          Claimed; the article is still yours —{" "}
+          <a href={ADMIN_ARTICLES_HREF} className="tw:underline">
+            transfer it on /admin/articles
+          </a>
+        </span>
+      );
+    case "other":
+    case null:
+    case undefined:
+      return null;
+    default: {
+      const never: never = owner;
+      return never;
+    }
+  }
 }

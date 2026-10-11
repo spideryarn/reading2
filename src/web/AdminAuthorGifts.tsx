@@ -26,7 +26,12 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { RefreshCw } from "lucide-react";
 
 import { formatCostNanos } from "../admin.js";
-import type { AdminAuthorGift, AdminAuthorLookup, AuthorGiftStatus } from "../admin-author-gifts.js";
+import {
+  AUTHOR_GIFT_PARAM,
+  type AdminAuthorGift,
+  type AdminAuthorLookup,
+  type AuthorGiftStatus,
+} from "../admin-author-gifts.js";
 import { freeArticles, RECIPIENT_NAME_MAX, cleanRecipientName } from "../admin-vouchers.js";
 import { addressBoxChange } from "../email-address.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
@@ -34,6 +39,7 @@ import {
   BUTTON,
   INPUT,
   Refusal,
+  StarterOwnerLine,
   StarterSelect,
   type StarterShelf,
   TEXTAREA,
@@ -55,6 +61,12 @@ import { voiceClass } from "./voice.js";
 const SEARCHES_ASKED = 3;
 
 /** The element id a gift's card carries, so *Draft a gift* can scroll to one that already existed. */
+/** The gift `?gift=<id>` names, or null. A UUID or nothing, so the address cannot put text in an id. */
+export function giftFromAddress(search: string): string | null {
+  const id = new URLSearchParams(search).get(AUTHOR_GIFT_PARAM);
+  return id !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
+}
+
 export function authorGiftAnchor(id: string): string {
   return `author-gift-${id}`;
 }
@@ -548,10 +560,20 @@ function GiftFields({ gift }: { gift: AdminAuthorGift }) {
         <span className="tw:text-sm tw:text-foreground">
           {title === null ? (
             `${gift.starter.slug} (deleted)`
+          ) : gift.starter.owner === "claimant" || gift.starter.owner === "other" ? (
+            /* Somebody else's now: its address would be a 404 for the
+               administrator, so the title stands without a link (261011n § D3). */
+            <span className={voiceClass("author")}>{title}</span>
           ) : (
             <a href={readHref(gift.starter.slug)} className={`${voiceClass("author")} tw:underline`}>
               {title}
             </a>
+          )}
+          {gift.starter.owner != null && (
+            <>
+              {" · "}
+              <StarterOwnerLine owner={gift.starter.owner} />
+            </>
           )}
         </span>
         <span data-gift-status={gift.status} className="tw:font-medium tw:text-foreground">
@@ -766,6 +788,12 @@ function GiftCard({
             {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
             real email and cannot be taken back.
           </p>
+          {confirming.starter.title !== null && (
+            /* What the claim does when they sign in (plan 261011n § D3). */
+            <p className="tw:m-0 tw:mb-2 tw:text-foreground">
+              When they sign in, a private article with none of your notes on it becomes theirs.
+            </p>
+          )}
           {needsRights && (
             <>
               <p className="tw:m-0 tw:mb-2 tw:text-foreground">
@@ -840,7 +868,9 @@ export function AuthorGifts({ shelf, onVoucherMade }: { shelf: StarterShelf | nu
   const { gifts, error, loading, watching, reload, ensure, lookUpAgain, patch, send } = useAdminAuthorGifts();
   /* Re-render each minute, so a lookup past the stale limit says it did not finish. */
   const now = useNow();
-  const [highlight, setHighlight] = useState<string | null>(null);
+  /* `?gift=<id>` opens the page on that card (plan 261011n § D1): the address
+     MCP's `draft_author_gift` answers, for a harness to open. */
+  const [highlight, setHighlight] = useState<string | null>(() => giftFromAddress(location.search));
   const hooks = useMemo(() => ({ patch, send, lookUpAgain }), [patch, send, lookUpAgain]);
   const scrolled = useRef<string | null>(null);
 

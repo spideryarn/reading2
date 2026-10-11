@@ -8,10 +8,11 @@
  * > — Greg, 2026-10-05
  *
  * "Shown" is the owner's column mounting, whatever put it there: a press of
- * the toggle, the first-open default that turns it on with nobody pressing
- * anything, a `?margin=1` link, a reload. Until this, the run waited for a
- * press (`useAutoRun`), so an article that opened with Marginalia on by
- * default had no *so / but / vs* until the column was turned off and on.
+ * the toggle, a `?margin=1` link, a reload or a restored view. Until this, the
+ * run waited for a press (`useAutoRun`), so a view that arrived with
+ * Marginalia already on had no *so / but / vs* until the column was turned off
+ * and on. The first-open default was one such arrival from 2026-10-05 to
+ * 2026-10-11; it no longer opens the column (plan 261011o).
  *
  * `OwnerMarginFeed` is the mount: the Reader draws it only inside the open
  * column and only for the owner, so a visitor never reaches the hook
@@ -30,6 +31,7 @@ import type { Job } from "../src/types.js";
 
 const SLUG = "words-on-open";
 const BLOCK = "spya-rel2bc";
+const TARGET = "spya-rel3cd";
 const trace: string[] = [];
 const posted: unknown[] = [];
 /** What `GET /api/relations/:slug` answers: nothing stored, a list, or a list the article has moved under. */
@@ -67,7 +69,17 @@ vi.mock("../src/web/lib/api.js", async () => {
     if (url === `/api/relations/${SLUG}` && stored !== "none") {
       return new Response(
         JSON.stringify({
-          relations: { relations: { [BLOCK]: "but" } },
+          relations: {
+            relations: { [BLOCK]: "but" },
+            notes: [{
+              blockId: BLOCK,
+              kind: "recall",
+              text: "The later result uses the opening assumption.",
+              quote: "later result",
+              to: TARGET,
+              toQuote: "opening assumption",
+            }],
+          },
           stale: stored === "stale",
           outdated: stored === "outdated",
         }),
@@ -87,8 +99,10 @@ const { armActivationForMode, modeGenerates, pendingActivation, resetActivations
 let host: HTMLDivElement;
 let root: Root;
 let feed: MarginFeed | null = null;
+let feedCalls = 0;
 const onFeed = (next: MarginFeed) => {
   feed = next;
+  feedCalls += 1;
 };
 
 async function settle(): Promise<void> {
@@ -116,6 +130,7 @@ beforeEach(() => {
   refusePost = false;
   jobs = [];
   feed = null;
+  feedCalls = 0;
   jobEngine.reset();
   resetActivations();
   host = document.createElement("div");
@@ -265,14 +280,36 @@ describe("the column opening on an article that has them", () => {
     await act(async () => jobEngine.start("reader-1"));
     await openMargin();
     expect(feed?.relations).toEqual({ [BLOCK]: "but" });
+    expect(feed?.notes?.map((note) => note.blockId)).toEqual([BLOCK]);
     expect(starts()).toBe(0);
+  });
+
+  it("keeps both list identities across an unchanged render, so publishing the feed does not loop", async () => {
+    stored = "current";
+    await act(async () => jobEngine.start("reader-1"));
+    await openMargin();
+    const relations = feed?.relations;
+    const notes = feed?.notes;
+    const calls = feedCalls;
+
+    await openMargin();
+
+    expect(feed?.relations).toBe(relations);
+    expect(feed?.notes).toBe(notes);
+    expect(feedCalls).toBe(calls);
   });
 
   it.each(["stale", "outdated"] as const)("rewrites a %s list once across showings", async (state) => {
     stored = state;
     await act(async () => jobEngine.start("reader-1"));
     await openMargin();
-    if (state === "stale") expect(feed?.relations ?? null, "a stale word is not drawn").toBeNull();
+    if (state === "stale") {
+      expect(feed?.relations ?? null, "a stale word is not drawn").toBeNull();
+      expect(feed?.notes ?? null, "a stale note is not drawn").toBeNull();
+    } else {
+      expect(feed?.relations, "outdated words stay while their replacement is written").toEqual({ [BLOCK]: "but" });
+      expect(feed?.notes?.map((note) => note.blockId), "outdated notes stay too").toEqual([BLOCK]);
+    }
     await openMargin(false, false);
     await openMargin();
     await act(async () => root.render(null));

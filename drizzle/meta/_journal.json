@@ -1366,6 +1366,13 @@
       "when": 1791687478510,
       "tag": "20261011025758_referee_promises",
       "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1791708660004,
+      "tag": "20261011085059_citation_index_openalex_key",
+      "breakpoints": true
     }
   ]
 }

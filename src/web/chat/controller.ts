@@ -39,6 +39,7 @@ import { asOpId, initialState, recoveringIds } from "./model.js";
 import type { SpokenOutcome, TurnSink } from "./effects.js";
 import { project, storedSpoken } from "./project.js";
 import { reduce } from "./reduce.js";
+import { markAnsweredHere } from "./answered-here.js";
 /* Every catch below hands its error to the one rule for what a reader may be
    shown — an effect that throws is a bug, and a bug's text is not a sentence
    for a reader (plan 260924a § Stage 2b). */
@@ -763,6 +764,10 @@ export class ChatController {
 
   /** One turn's stream, every frame of it an event carrying this turn's id. */
   #stream(opId: OpId, slug: string, threadId: string, payload: Record<string, unknown>): void {
+    /* Only this request shape can carry a self-saving offer. Besides avoiding
+       an unbounded set of unrelated Chat/Learn answer ids, this keeps a later
+       stored `now` payload from borrowing completion from another turn shape. */
+    const canSaveHere = payload.kind === "guide" && payload.typed === true;
     const sink: TurnSink = {
       began: (begun) => {
         this.dispatch({ type: "turn.began", opId, begun });
@@ -774,7 +779,14 @@ export class ChatController {
         this.dispatch({ type: "turn.tool", opId, index, run });
       },
       done: (done) => {
+        /* The reply's id as `begin` left it, read before the event retires the
+           operation: this tab watched this answer being written
+           (answered-here.ts). */
+        const op = this.state.operations.get(opId);
         this.dispatch({ type: "turn.done", opId, done });
+        if (canSaveHere && op?.kind === "turn" && op.began && !op.superseded) {
+          markAnsweredHere(op.replyId);
+        }
       },
       failed: (error, text) => {
         this.dispatch({

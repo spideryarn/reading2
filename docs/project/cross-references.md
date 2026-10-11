@@ -121,6 +121,14 @@ Tests: [`crossrefs.test.ts`](../../tests/crossrefs.test.ts) (the validation rule
 The card itself is [tooltips.md](tooltips.md)'s block-link card; the fetch plumbing is `useCrossrefs`
 in [`src/web/useCrossrefs.ts`](../../src/web/useCrossrefs.ts).
 
+## And in the margin
+
+Marginalia's own notes include a *Recall* or a *Tension* that points at another passage, with a
+sentence saying why: the few cross-references the model judged worth one, inconsistencies above
+all, which these links cannot carry
+([marginalia.md § Notes the model writes](marginalia.md#notes-the-model-writes)). They are made by
+Marginalia's call, not this step.
+
 ## Deferred
 
 - Several targets per link.

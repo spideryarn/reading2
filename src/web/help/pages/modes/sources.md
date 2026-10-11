@@ -99,8 +99,10 @@ for that.
 - **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and
   is there before you search: it comes from OpenAlex, a public index of published work, which we
   ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of
-  those papers says about the piece. It needs the piece to have a DOI on record, and only whoever
-  added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s
+  those papers says about the piece. When the piece has no DOI on record, we look for it in
+  OpenAlex by its title instead, and list its citers only if the record's title and authors (or an
+  author and the year) match; the list then names the record it matched, so you can check it. Only
+  whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s
   title.
 - To look at the piece from an angle of your own, such as how it relates to another paper, type it
   in the box at the top and press **Ask in chat**. It does not change the results shown here: it

@@ -1,10 +1,11 @@
 ---
 id: q-dkz7au
 report: none
-status: open
+status: answered
 asked: 2026-10-11
 title: Should a note you sorted major or minor be left off a shared link?
 refs: qi-5fn7stsv · docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md (Plan review, F1) · docs/user-feedback/261011_0253-referee-notes-sorted-major-and-minor.md · src/store/public-reader.ts PUBLIC_COMMENTS_WHERE
+acted: spya-ewyfr9
 ---
 When you share an article by link, should a note you have sorted Major or Minor in Referee's new Notes be kept off the link, the way a note placed on a criterion already is?
 
@@ -21,3 +22,9 @@ Why ask. A shared link already shows the owner's reading notes to whoever opens 
 Why it was not just done. The query that decides what a visitor sees is one of the app's listed security defences, and the session that built Notes was told not to change a defence without asking you. GPT Sol, reviewing the plan, rated it the most important point (P0) and recommended B.
 
 What would decide it: whether you see a shared link as "my reading, for others" (A keeps every note there) or whether anything to do with reviewing should stay private by default (B).
+
+Greg's reply, 2026-10-11 (spya-ewyfr9, in the Feedback dialog):
+
+> A
+
+Acted on by the feedback sweep, 2026-10-11 (queue item qi-p3chbxw7): nothing changes. A note sorted Major or Minor with no criterion still goes out on a shared link, and the word Major or Minor never does.

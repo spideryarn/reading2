@@ -1094,7 +1094,7 @@ export function Reader({
     (sentence: string) => {
       const question = sentence.trim();
       if (question === "") return;
-      setChatHandoff({ slug, target: "guide", question, send: true });
+      setChatHandoff({ slug, target: "guide", question, send: true, typed: true });
       showBand("chat");
     },
     [slug, showBand],
@@ -2531,6 +2531,7 @@ export function Reader({
       timeline: marginaliaTimeline,
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
+      notes: isOwner ? ownerFeed.notes : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2552,7 +2553,13 @@ export function Reader({
         blockId,
         <>
           {blockId === chatCardBlock ? cardHost : null}
-          <MarginNotesSlot blockId={blockId} notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />
+          <MarginNotesSlot
+            blockId={blockId}
+            notes={notes}
+            viewer={marginViewer}
+            onOpenAsked={openAskedFromMargin}
+            onJump={jumpTo}
+          />
         </>,
       );
     /* **The card's host: first in its block's cell, above the block's own
@@ -2583,12 +2590,14 @@ export function Reader({
     marginaliaTimeline,
     isOwner,
     ownerFeed.relations,
+    ownerFeed.notes,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
     askedList,
     marginViewer,
     openAskedFromMargin,
+    jumpTo,
     chatCardBlock,
     chatCardThread,
   ]);

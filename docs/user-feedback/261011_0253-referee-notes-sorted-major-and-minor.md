@@ -1,7 +1,7 @@
 ---
 reports: none
 ending: shipped
-comment: Referee has a sixth chip, Notes: sort your own notes major or minor and copy them out in your words. One question for you, q-dkz7au.
+comment: Referee has a sixth chip, Notes: sort your own notes major or minor and copy them out in your words. Sorted notes stay on a shared link as before, as you chose (q-dkz7au, A).
 ---
 # Referee › Notes: your own notes, sorted major and minor by you, copied out in your words
 

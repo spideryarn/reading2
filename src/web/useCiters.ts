@@ -3,7 +3,9 @@
  * /api/citers/:slug`, and nothing else.
  *
  * **It can never start the paid search.** There is no job here, no `useAutoRun`
- * and no POST: the list comes from OpenAlex, costs nothing, and is fetched and
+ * and no POST: the list comes from OpenAlex, costs no money (only a share of
+ * OpenAlex's free daily allowance: a title search, plan 261011q, spends some on
+ * every ask), and is fetched and
  * cached apart from the stored Debate. That is why it is its own hook rather
  * than a field on `useReception`, whose automatic run is the dearest press in the
  * app to make by accident (src/web/useReception.ts).
@@ -20,6 +22,7 @@
  * reader, the same "we could not get it just now", with the same button.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { OPENALEX_WORK_ID } from "../citer-link.js";
 import type { Citer, CitersResult } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -47,27 +50,38 @@ function isCiter(value: unknown): value is Citer {
     (row.kind === undefined || typeof row.kind === "string");
 }
 
+/** The matched record the panel names and links after a title search. */
+function isTarget(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const target = value as Record<string, unknown>;
+  return typeof target.openalexId === "string" && OPENALEX_WORK_ID.test(target.openalexId) &&
+    typeof target.title === "string";
+}
+
 /**
  * **Is this one of the route's answers?** The panel switches exhaustively on
  * `kind` and maps over `citers`, so a 200 carrying anything else (an older
  * server, a proxy's page, a test stub's `{}`) would throw while drawing and
  * take the whole Debate band with it. Checked once here, as far as the panel
  * reads: the kind, and for a list its four numbers, its date and that the list
- * is one, including each row's rendered fields. String bounds and identifier
- * shapes remain the server parser's job.
+ * is one, including each row's rendered fields. String bounds and citer-row
+ * identifier shapes remain the server parser's job.
  */
 function asCitersResult(value: unknown): CitersResult | null {
   if (typeof value !== "object" || value === null) return null;
   const body = value as Record<string, unknown>;
   switch (body.kind) {
     case "no-doi":
+    case "no-match":
     case "not-indexed":
     case "unconfirmed":
     case "unavailable":
     case "too-large":
       return { kind: body.kind };
     case "found":
-      return typeof body.count === "number" &&
+      return (body.via === "doi" || body.via === "title") &&
+        isTarget(body.target) &&
+        typeof body.count === "number" &&
         typeof body.returned === "number" &&
         typeof body.dropped === "number" &&
         typeof body.capped === "boolean" &&

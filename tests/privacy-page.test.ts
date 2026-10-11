@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "10 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "11 October 2026"');
   });
 
   it("says the public shelf's topics are named from shared titles and summaries only", () => {
@@ -258,7 +258,9 @@ describe("the privacy page", () => {
     expect(prose).toContain("its DOI");
     expect(prose).toContain("when you look up the works it cites");
     expect(prose).toContain("when you open Sources' Reception");
-    expect(prose).toContain("never the article’s text, and nothing about who you are");
+    expect(prose).toContain("Never the rest of the article’s text, and nothing about who you are");
+    /* Plan 261011q: with no DOI, Cited by searches OpenAlex by title. */
+    expect(prose).toContain("When your article has no DOI, OpenAlex is sent the words of its title instead");
   });
 
   it("says quiz answers are kept, and no longer that they are not", () => {

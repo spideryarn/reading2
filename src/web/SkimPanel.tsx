@@ -57,7 +57,7 @@ import type { UseSkim } from "./useSkim.js";
 import { DismissibleNotice, StaleNotice } from "./StaleNotice.js";
 import { type StaleNoticeState, useStaleNotice } from "./useStaleNotices.js";
 import type { PublicSkim } from "../public-types.js";
-import type { BlockId, SkimDepth } from "../types.js";
+import type { BlockId, Skim, SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import type { SkimPart } from "./params.js";
 import type { DepthChoice } from "./skim-route.js";
@@ -297,6 +297,27 @@ export function skimPromise(profiled: boolean): string {
  */
 export const SKIM_CUE_EXPLAINED =
   "The line above a quote is a question to read it with, written by AI. It is there only where it helps: to say what the quote refers to, what it settles, or why it matters.";
+
+/**
+ * **What the line above the list is**, in the band's (i) — the same reason
+ * `SKIM_CUE_EXPLAINED` is there: a finger and a keyboard reach the (i).
+ */
+export const SKIM_INTRO_EXPLAINED =
+  "The line above the stops is a map of this pass, written by AI: what it goes through, and in what order.";
+
+/**
+ * **The intro of the pass being walked** (`skim/13`, plan 261011r), or `null`:
+ * a route from before it has no `intros`, and a pass's own may be `null`.
+ */
+export function passIntro(route: Pick<Skim, "intros"> | null, depth: SkimDepth | null): string | null {
+  if (route === null || depth === null) return null;
+  return route.intros?.[depth - 1] ?? null;
+}
+
+function PassIntro({ intro }: { intro: string | null }) {
+  if (intro === null) return null;
+  return <p className="skim-intro">{intro}</p>;
+}
 
 /**
  * At Most, how much of the Quotes offered to this route the three passes walk
@@ -868,6 +889,7 @@ export function SkimPanel({ access, view, away }: Props) {
     <>
       <p>{promise}</p>
       <p>{SKIM_CUE_EXPLAINED}</p>
+      {made?.intros?.some((i) => i !== null) && <p>{SKIM_INTRO_EXPLAINED}</p>}
       {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
@@ -954,6 +976,10 @@ export function SkimPanel({ access, view, away }: Props) {
               bannerUp={reason !== null}
             />
           )}
+
+          {/* The map of the pass being walked (`skim/13`, plan 261011r) —
+              owner only, as the visitor's route does not carry it. */}
+          {owner && routed && <PassIntro intro={passIntro(owner.skim, view.depth)} />}
 
           {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
 

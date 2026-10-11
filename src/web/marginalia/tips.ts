@@ -18,6 +18,7 @@
 
 import type { DrawnRelation } from "./notes.js";
 import type { Voice } from "../voice.js";
+import type { MarginNoteKind } from "../../types.js";
 
 export type MargTipKey =
   | "question-article"
@@ -105,6 +106,42 @@ export const RELATION_TIPS: Record<DrawnRelation, MargTip> = {
     head: "Versus",
     what: "This paragraph sets something against what came before, without denying it.",
     how: RELATION_ORIGIN,
+  },
+};
+
+/** Where a margin note came from: the same for all four kinds. */
+const NOTE_ORIGIN =
+  "Written by AI for Marginalia, in the same reading that marks the turns in the argument. It writes a note only where it thinks one would help, so most passages have none. It can be wrong: read the passage.";
+
+/**
+ * **What each kind of note is**, on its stamp (plan 261011o). `Record` over
+ * the kinds, so a fifth kind without a card is a type error. `stamp` is the
+ * word drawn in the margin.
+ */
+export const NOTE_TIPS: Record<MarginNoteKind, MargTip & { stamp: string }> = {
+  tension: {
+    stamp: "Tension",
+    head: "Tension",
+    what: "This passage seems not to fit with another part of the article. Follow the link to read the other passage and judge for yourself.",
+    how: NOTE_ORIGIN,
+  },
+  recall: {
+    stamp: "Recall",
+    head: "Recall",
+    what: "A reminder of what another part of the article said, which this passage leans on. Follow the link to read it.",
+    how: NOTE_ORIGIN,
+  },
+  explain: {
+    stamp: "Note",
+    head: "Note",
+    what: "A short explanation of something in this passage that is easy to stumble on.",
+    how: NOTE_ORIGIN,
+  },
+  aside: {
+    stamp: "Note",
+    head: "Note",
+    what: "A short note the AI thought would help at this point in the article.",
+    how: NOTE_ORIGIN,
   },
 };
 

@@ -1,7 +1,7 @@
 ---
 reports: spya-qtk3q2, spya-sbj3yk
 ending: shipped
-comment: Both sentences rewritten to say what happened, and arXiv papers now find their DOI, so Attention gets its Cited by list. Typing a DOI in, or searching by title without one, is a question to you (q-hbg65m).
+comment: Both sentences now say what happened, and arXiv papers find their DOI, so Attention gets its Cited by list. Since 11 October a piece with no DOI is also looked up at OpenAlex by title and authors, strictly checked.
 ---
 # Reception's empty sentence, and the arXiv paper with "no DOI"
 
@@ -36,3 +36,7 @@ reviews: [261010n](../plans/261010n-reception-says-plainly-why-it-is-empty-and-f
 
 What stays a question to Greg ([q-hbg65m](questions/q-hbg65m.md), question 2): a way to type a DOI in,
 or a title search when a piece has none.
+
+**Answered 2026-10-11** (`spya-qne5cs`, `2C`): the title search was built in
+[261011q](../plans/261011q-cited-by-finds-a-paper-with-no-doi-by-title-and-author-at-openalex.md).
+Typing a DOI in was not chosen.

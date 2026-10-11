@@ -74,6 +74,8 @@ const PROMISES: Record<string, string> = {
   "AdminVouchersPage.tsx › Private note": "done",
   /* An author gift's draft editor: Enter saves it, as a voucher row's does (plan 261010c). */
   "AdminAuthorGifts.tsx › Email address": "done",
+  /* Filters as you type; Enter has nothing further to do. */
+  "AdminArticlesPage.tsx › Filter by owner address or article id": "search",
   "AdminAuthorGifts.tsx › Articles": "done",
   "AdminAuthorGifts.tsx › Their name": "done",
   "ChatPanel.tsx › chat-rename": "done",

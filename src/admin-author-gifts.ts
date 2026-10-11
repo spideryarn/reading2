@@ -4,11 +4,14 @@
  * builds it) and the page that draws it.
  * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md.
  *
- * A flat module with no imports, for src/admin-vouchers.ts's reason: the
- * browser may not import from src/store/, even a type
- * (tests/client-imports.test.ts), and two hand-kept copies of one shape are two
- * places to disagree. Admin-only: it carries the notes and the addresses.
+ * A flat module, for src/admin-vouchers.ts's reason: the browser may not
+ * import from src/store/, even a type (tests/client-imports.test.ts), and two
+ * hand-kept copies of one shape are two places to disagree. Its one import is
+ * a type from that module, which is on the same list. Admin-only: it carries
+ * the notes and the addresses.
  */
+
+import type { StarterOwner } from "./admin-vouchers.js";
 
 /**
  * **Where a gift has got to — derived, never stored** (D1). `sending` is
@@ -73,8 +76,17 @@ export interface AdminAuthorGift {
    * deleted. `linkable`: public, or its private link on, so *Send* can link it
    * as it is. False on an agent's draft of a private article with no link,
    * whose *Send* makes the link behind the rights tick (plan 261010r § D2).
+   *
+   * `owner`: whose it is now, once the gift's voucher is claimed (plan
+   * 261011n § D3, `StarterOwner` in src/admin-vouchers.ts). The title stays
+   * when it has moved: it was the administrator's own article, and they gave it.
    */
-  readonly starter: { readonly slug: string; readonly title: string | null; readonly linkable: boolean };
+  readonly starter: {
+    readonly slug: string;
+    readonly title: string | null;
+    readonly linkable: boolean;
+    readonly owner: StarterOwner | null;
+  };
   readonly email: string | null;
   readonly recipientName: string | null;
   readonly recipientNote: string | null;
@@ -144,4 +156,17 @@ export interface AuthorGiftSendExpected {
 export interface AuthorGiftSent {
   readonly voucherId: string;
   readonly email: "queued" | "replayed";
+}
+
+/**
+ * **The address of one gift on `/admin/vouchers`** — the page opens with that
+ * card highlighted and scrolled to (plan 261011n § D1). What MCP's
+ * `draft_author_gift` answers, so a harness can open the draft for the admin.
+ * The id is an opaque UUID behind the admin gate, so the address grants
+ * nothing.
+ */
+export const AUTHOR_GIFT_PARAM = "gift";
+
+export function authorGiftPath(id: string): string {
+  return `/admin/vouchers?${AUTHOR_GIFT_PARAM}=${encodeURIComponent(id)}`;
 }

@@ -3,8 +3,9 @@
  * **Skim says what it was planned for, and asks when nobody has said** —
  * the purpose line in src/web/SkimPanel.tsx (`PurposeLine`).
  *
- * The owner sees *Reading for: …* with an Edit link to Metadata when the
- * article has a purpose; when it has none and a route is on screen, a box and
+ * The owner sees *Reading for: …* with an Edit button that opens the box in
+ * place, filled with the sentence (since 2026-10-11, plan 261011r — a link to
+ * Metadata before); when it has none and a route is on screen, a box and
  * *Plan the route for this*, which saves the purpose and only then asks for the
  * route, once. Never in the empty state — `useAutoRun` plans one there, and a
  * second, differently profiled request would not de-duplicate (Sol F6). Never
@@ -212,26 +213,84 @@ const patches = () => requested.filter((r) => r.method === "PATCH");
 /* ================================================================= tests == */
 
 describe("the purpose line in Skim", () => {
-  it("says what the route was planned for, whole in a tooltip, with an Edit link to Metadata", async () => {
+  const editButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".skim-purpose button")].find((b) => b.textContent === "Edit") ??
+    null;
+  const cancelButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".skim-purpose button")].find((b) => b.textContent === "Cancel") ??
+    null;
+
+  it("says what the route was planned for, whole in a tooltip, with an Edit button", async () => {
     readerBody = { purpose: "How they handled missing data in the second cohort" };
     await drawOwner(owner());
     expect(line()?.textContent).toContain("Reading for:");
     expect(line()?.textContent).toContain("How they handled missing data in the second cohort");
-    const edit = [...line()!.querySelectorAll("a")].find((a) => a.textContent === "Edit");
-    /* The view state travels, as the dock's and the masthead's Metadata links carry it. */
-    expect(edit?.getAttribute("href")).toBe("/read/a-route/metadata?mode=skim");
+    expect(editButton()).not.toBeNull();
     /* The whole sentence is in a tooltip, on a trigger a keyboard reaches. */
     expect(line()!.querySelector(".skim-purpose-said")?.getAttribute("tabindex")).toBe("0");
     expect(box()).toBeNull();
+  });
+
+  it("opens the box in place on Edit, filled with the sentence, and re-plans for a new one (spya-wu83xh)", async () => {
+    readerBody = { purpose: "the method" };
+    await drawOwner(owner());
+    await press(editButton()!);
+    expect(box()?.value).toBe("the method");
+    expect(line()?.textContent).toContain("What are you skimming for?");
+    /* The sentence already saved would re-plan nothing. */
+    expect(planButton()!.disabled).toBe(true);
+    await type("the limits they admit");
+    await press(planButton()!);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(patches()).toHaveLength(1);
+    expect(patches()[0]!.body).toEqual({ purpose: "the limits they admit" });
+    expect(ensured).toBe(1);
+    expect(box()).toBeNull();
+    expect(line()?.textContent).toContain("the limits they admit");
+  });
+
+  it("never saves an empty box over a purpose, and Cancel closes it without a save", async () => {
+    readerBody = { purpose: "the method" };
+    await drawOwner(owner());
+    await press(editButton()!);
+    await type("   ");
+    expect(planButton()!.disabled).toBe(true);
+    await press(cancelButton()!);
+    expect(box()).toBeNull();
+    expect(line()?.textContent).toContain("the method");
+    expect(patches()).toHaveLength(0);
+    expect(ensured).toBe(0);
+  });
+
+  it("offers no Edit under a banner, whose own button re-plans, and none while a route is being planned", async () => {
+    readerBody = { purpose: "the method" };
+    await drawOwner(owner({ profileChanged: true }));
+    expect(line()?.textContent).toContain("the method");
+    expect(editButton()).toBeNull();
+    await drawOwner(owner({ rewriting: true }));
+    expect(editButton()!.disabled).toBe(true);
+    await drawOwner(owner({ job: RUNNING }));
+    expect(editButton()!.disabled).toBe(true);
   });
 
   it("asks when there is no purpose and a route is on screen", async () => {
     await drawOwner(owner());
     expect(box()).not.toBeNull();
     expect(box()!.maxLength).toBe(600);
-    expect(line()?.textContent).toContain("What do you want from this piece?");
+    expect(line()?.textContent).toContain("What are you skimming for?");
+    expect(line()?.textContent).toContain("other modes use");
     expect(planButton()).not.toBeNull();
     expect(line()?.textContent).toMatch(/paid/i);
+  });
+
+  it("draws the intro of the pass being walked, and none on a route from before skim/13 (plan 261011r)", async () => {
+    readerBody = { purpose: "the method" };
+    await drawOwner(owner({ skim: { ...ROUTE, intros: ["Starts with the claim.", "Goes back for how.", null] } }));
+    expect(host.querySelector(".skim-intro")?.textContent).toBe("Starts with the claim.");
+    await drawOwner(owner());
+    expect(host.querySelector(".skim-intro")).toBeNull();
   });
 
   it("does not ask in the empty state, where the automatic run plans a route (Sol F6)", async () => {

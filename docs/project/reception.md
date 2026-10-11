@@ -387,7 +387,8 @@ honestly finds nothing.
   runs on a fresh answer, on a cache hit and on a stale fallback alike, so a second article carrying
   the same DOI by mistake gets nothing.
 - **Every outcome has its own sentence** (`CitersResult` in `src/types.ts`, the words in
-  `src/messages.ts`): no DOI to ask with, not in OpenAlex, could not be confirmed, could not be
+  `src/messages.ts`): no DOI to ask with, no record a title search could be sure of, not in
+  OpenAlex, could not be confirmed, could not be
   reached (with Try again), too large to read, no citers yet, and the list. A short list says why
   it is short: the page limit (100, most cited first) and records that could not be shown are two
   different sentences.
@@ -398,7 +399,8 @@ honestly finds nothing.
   built by us from the citing paper's DOI or OpenAlex id, never taken from the answer
   ([security-map.md](security-map.md)). A citer's title is drawn in the app's face, like a source's
   title in the rows above: [fonts.md](fonts.md) leaves third-party text there.
-- **What is sent**: the article's DOI and our contact address, from the server. No key.
+- **What is sent**: the article's DOI, or with none the words of its title (below), and our contact
+  address, from the server. No key.
   [privacy.md](privacy.md) has the page's sentence.
 
 - **An arXiv paper has a DOI**, arXiv's own at DataCite (`10.48550/arxiv.<id>`), since 2026-10-10
@@ -406,11 +408,24 @@ honestly finds nothing.
   an import whose arXiv record agrees puts it on the article, and an article with no DOI whose own
   address is an arXiv page is asked about by that DOI (`citersIdOf`), so arXiv papers imported
   before then get the list too. OpenAlex files the arXiv DOI under the paper's one record.
+- **With no DOI, a title search**, since 2026-10-11
+  ([261011q](../plans/261011q-cited-by-finds-a-paper-with-no-doi-by-title-and-author-at-openalex.md),
+  Greg's answer to [q-hbg65m](../user-feedback/questions/q-hbg65m.md)). An article with an author
+  and a distinctive title is searched for at OpenAlex by the words of its title, and a record is
+  taken only when its whole title agrees, **and** two of its authors are ours or one is and its year
+  is within one of ours, **and** no other record passes too (`titleMatchOf`). That is stricter than
+  a DOI's check, because a search carries no evidence of its own. The match's OpenAlex id goes
+  straight to the list, with no DOI asked (OpenAlex's DOI for a work is its own metadata, and may
+  not be the one the work is known by), and the list is cached under `openalex:w<digits>`. The
+  search itself is made on every open and never stored: a cache keyed on titles and authors would
+  be neither anonymous nor safe to share. The panel names and links the matched record, so a wrong
+  match can be seen to be one; a search that matched nothing has its own sentence (`no-match`),
+  which does not claim OpenAlex has no record.
 
-Not built, each named in the plan: a visitor's view of the list; a title search when there is no
-DOI, and a way to type one in (asked of Greg in
-[q-hbg65m](../user-feedback/questions/q-hbg65m.md)); more than one page; hiding self-citations; an
-API key. An article imported before 2026-10-04 with a DOI only a registry could supply still shows
+Not built, each named in its plan: a visitor's view of the list; a way to type a DOI in; more than
+one page; hiding self-citations; an API key, which would raise the anonymous allowance ($0.10 a
+day, measured 2026-10-11) tenfold, and a per-article cache of the title search, for when that
+allowance bites (both queued). An article imported before 2026-10-04 with a DOI only a registry could supply still shows
 the no-DOI sentence until its owner uses Read it again.
 
 ## What has changed, and where each change is written up

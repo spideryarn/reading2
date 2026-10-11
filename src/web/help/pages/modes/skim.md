@@ -17,8 +17,8 @@ Go round quickly with a few stops, then again in more detail, then again in more
 
 When you need the shape of a paper fast but do not want a summary in place of the text: every stop
 is a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a
-dozen, **Most** a larger share of the piece. The order is planned for you — the results first, say,
-then a quick look at the methods — not the article’s. Only whoever added the article can plan a
+dozen, **Most** a larger share of the piece; each walks more stops than the one before. The order is
+planned for you — the results first, say, then a quick look at the methods — not the article’s. Only whoever added the article can plan a
 route; visitors to a shared article can walk one already planned.
 
 ## Reading it
@@ -28,6 +28,9 @@ route; visitors to a shared article can walk one already planned.
 - <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop
   to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a
   pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.
+- On your own articles, a line above the stops, written by AI, maps the pass you are on: what it
+  goes through, and in what order, so the jumps between passages make sense. It never says what the
+  piece found.
 - Some stops have a short question above the quote, written by AI, to read it with: what the quote
   refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on
   its own has none.
@@ -39,4 +42,8 @@ route; visitors to a shared article can walk one already planned.
 - The dot beside each row shows how far through the article that stop is, so you can see the route
   jump about.
 - **Reading for:** at the top is what you said you want from this article; the route is planned
-  around it. **Edit** changes it.
+  around it. **Edit** opens it in place: say what you are skimming for and press **Plan the route
+  for this**, and the route is planned again around it. It is the same sentence as the article’s
+  purpose in Metadata, so other modes use it too. With nothing said yet, the box is already there.
+- The route prefers shorter passages, so a skim does not stall on a paragraph-long quote; a long
+  one is kept for the deeper passes unless it is the only one that makes its point.
