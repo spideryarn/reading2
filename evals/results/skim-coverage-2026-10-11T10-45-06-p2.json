@@ -1,0 +1,390 @@
+{
+  "oldVersion": null,
+  "newVersion": "skim/13",
+  "oldModuleSha": null,
+  "newModuleSha": "49e3833ebff21d00",
+  "arms": [
+    "new"
+  ],
+  "profile": "Why they are reading this piece: how to teach my students to check their own experiments",
+  "snapshot": {
+    "cargocult-spya-rz663q": {
+      "ideasVersion": "ideas/3",
+      "ideasOutdated": true,
+      "quotesVersion": "quotes/7",
+      "quotesStale": false,
+      "quotes": 11,
+      "ideas": [
+        {
+          "label": "I1",
+          "id": "spya-vmksjp",
+          "name": "A result only counts if it could have come out otherwise",
+          "statement": "An experiment or comparison only demonstrates something scientifically if it was genuinely capable of turning out differently, and if the same test can be repeated to check that it does turn out the same way again.",
+          "blocks": [
+            {
+              "blockId": "spya-rbpppq",
+              "at": 38
+            },
+            {
+              "blockId": "spya-m95kqm",
+              "at": 32
+            }
+          ]
+        },
+        {
+          "label": "I2",
+          "id": "spya-hgvfyx",
+          "name": "A shrinking effect under better controls was never real",
+          "statement": "If an experimental effect gets weaker and weaker as the methods used to detect it are tightened and its flaws are removed, that pattern itself shows the effect was an artifact rather than a real phenomenon that merely needed better proof.",
+          "blocks": [
+            {
+              "blockId": "spya-rbpppq",
+              "at": 38
+            },
+            {
+              "blockId": "spya-g203mu",
+              "at": 39
+            }
+          ]
+        },
+        {
+          "label": "I3",
+          "id": "spya-r0nmdt",
+          "name": "Cargo Cult Science copies form, not substance",
+          "statement": "A field can reproduce every outward step and ritual of scientific work — controls, formulas, publications — and still fail to produce real results, because it is missing the one ingredient that actually makes the method work.",
+          "blocks": [
+            {
+              "blockId": "spya-fd2muf",
+              "at": 14
+            },
+            {
+              "blockId": "spya-afgs74",
+              "at": 15
+            },
+            {
+              "blockId": "spya-rub3a2",
+              "at": 20
+            }
+          ]
+        },
+        {
+          "label": "I4",
+          "id": "spya-g4j62v",
+          "name": "Integrity means volunteering evidence against yourself",
+          "statement": "Being honest as a scientist is not just refusing to state falsehoods; it means actively disclosing facts, alternative explanations, and doubts that could weaken your own claim, even when no one is asking for them.",
+          "blocks": [
+            {
+              "blockId": "spya-afgs74",
+              "at": 15
+            },
+            {
+              "blockId": "spya-rxj5wa",
+              "at": 16
+            },
+            {
+              "blockId": "spya-jk7mj4",
+              "at": 27
+            }
+          ]
+        },
+        {
+          "label": "I5",
+          "id": "spya-n2bmvn",
+          "name": "You must catch your own self-deception first",
+          "statement": "The primary discipline in science is guarding against fooling yourself, since you are more easily deceived by your own hopes and expectations than any outside critic could deceive you; honesty toward others follows only after that.",
+          "blocks": [
+            {
+              "blockId": "spya-ed9mzv",
+              "at": 24
+            },
+            {
+              "blockId": "spya-bvx2u8",
+              "at": 23
+            },
+            {
+              "blockId": "spya-uj9v2h",
+              "at": 22
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "results": [
+    {
+      "abstractQuotes": 0,
+      "abstractStops": [
+        0,
+        0,
+        0
+      ],
+      "intros": [
+        "Starts with Cargo Cult Science, then the rule of not fooling yourself, and ends on the demand that an experiment can be repeated.",
+        "Adds what scientific integrity asks you to disclose, the problem of publishing by the answer, and the lesson for teaching students, plus a closing wish about integrity.",
+        "Adds the Millikan oil-drop story, Mr. Young's rat experiment and how it was ignored, and how scientific advice to government gets used."
+      ],
+      "profile": "Why they are reading this piece: how to teach my students to check their own experiments",
+      "slug": "cargocult-spya-rz663q",
+      "arm": "new",
+      "run": 1,
+      "dropped": {
+        "collapsed": 0,
+        "unknownQuote": 0,
+        "duplicate": 0,
+        "sameBlock": 0,
+        "malformed": 0,
+        "badRole": 0,
+        "badCue": 0,
+        "noCue": 5,
+        "badAgain": 0,
+        "overCarried": 0,
+        "overCap": 0,
+        "growCarried": 2
+      },
+      "walks": [
+        {
+          "depth": 1,
+          "length": 3,
+          "own": 3,
+          "carried": 0
+        },
+        {
+          "depth": 2,
+          "length": 5,
+          "own": 4,
+          "carried": 1
+        },
+        {
+          "depth": 3,
+          "length": 6,
+          "own": 4,
+          "carried": 2
+        }
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "reasoningTokens": 0,
+      "effortOverride": null,
+      "version": "skim/13",
+      "offered": 11,
+      "rows": [
+        {
+          "depth": 1,
+          "stops": 3,
+          "words": 328,
+          "wordsPct": 8.58189429618001,
+          "ideasIn": 4,
+          "ideasInOrBeside": 5,
+          "ideasInOrNextPm1": 5,
+          "ideasTotal": 5,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I5"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 5
+        },
+        {
+          "depth": 2,
+          "stops": 7,
+          "words": 790,
+          "wordsPct": 20.669806384092098,
+          "ideasIn": 5,
+          "ideasInOrBeside": 5,
+          "ideasInOrNextPm1": 5,
+          "ideasTotal": 5,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 5
+        },
+        {
+          "depth": 3,
+          "stops": 11,
+          "words": 1169,
+          "wordsPct": 30.586080586080588,
+          "ideasIn": 5,
+          "ideasInOrBeside": 5,
+          "ideasInOrNextPm1": 5,
+          "ideasTotal": 5,
+          "inLabels": [
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5"
+          ],
+          "sectionsWithStop": 3,
+          "contentSections": 5
+        }
+      ],
+      "costNanos": 26004000,
+      "unpriced": 0,
+      "elapsedMs": 5846,
+      "inputTokens": 9712,
+      "outputTokens": 658,
+      "stops": [
+        {
+          "quoteId": "spya-zat4mm",
+          "before": "Using this method, I discovered a few more topics that I had forgotten—among them the efficacy of various forms of psychotherapy. So I began to investigate through the library, and so on, and I have so much to tell you that I can’t do it at all. I will have to limit myself to just a few little things. I’ll concentrate on the things more people believe in. Maybe I will give a series of speeches next year on all these subjects. It will take a long time.",
+          "depth": 1,
+          "again": [
+            3
+          ],
+          "quote": "So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they’re missing something essential, because the planes don’t land.",
+          "quoteFull": "So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they’re missing something essential, because the planes don’t land.",
+          "paragraph": "I think the educational and psychological studies I mentioned are examples of what I would like to call Cargo Cult Science. In the South Seas there is a Cargo Cult of people. During the war they saw airplanes land with lots of good materials, and they want the same thing to happen now. So they’ve arranged to make things like runways, to put fires along the sides of the runways, to make a wooden hut for a man to sit in, with two wooden pieces on his head like headphones and bars of bamboo sticking out like antennas—he’s the controller—and they wait for the airplanes to land. They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land. So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they’re missing something essential, because the planes don’t land.",
+          "cue": "Cargo Cult Science is the name given to work that follows the outward forms of science. What does the quote say is missing, and how does it show?",
+          "section": "Defining Cargo Cult Science",
+          "ideasIn": [
+            "I3"
+          ]
+        },
+        {
+          "quoteId": "spya-zwbtkt",
+          "before": "But this long history of learning how to not fool ourselves—of having utter scientific integrity—is, I’m sorry to say, something that we haven’t specifically included in any particular course that I know of. We just hope you’ve caught on by osmosis.",
+          "depth": 1,
+          "again": [
+            3
+          ],
+          "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool. So you have to be very careful about that. After you’ve not fooled yourself, it’s easy not to fool other scientists. You just have to be honest i",
+          "quoteFull": "The first principle is that you must not fool yourself—and you are the easiest person to fool. So you have to be very careful about that. After you’ve not fooled yourself, it’s easy not to fool other scientists. You just have to be honest in a conventional way after that.",
+          "paragraph": "The first principle is that you must not fool yourself—and you are the easiest person to fool. So you have to be very careful about that. After you’ve not fooled yourself, it’s easy not to fool other scientists. You just have to be honest in a conventional way after that.",
+          "cue": null,
+          "section": "Self-Deception in Experiments",
+          "ideasIn": [
+            "I5"
+          ]
+        },
+        {
+          "quoteId": "spya-y38mpq",
+          "before": "We have learned a lot from experience about how to handle some of the ways we fool ourselves. One example: Millikan measured the charge on an electron by an experiment with falling oil drops and got an answer which we now know not to be quite right. It’s a little bit off, because he had the incorrect value for the viscosity of air. It’s interesting to look at the history of measurements of the charge of the electron, after Millikan. If you plot them as a function of time, you find that one is a little bigger than Millikan’s, and the next one’s a little bit bigger than that, and the next one’s a little bit bigger than that, until finally they settle down to a number which is higher.",
+          "depth": 3,
+          "again": [],
+          "quote": "Why didn’t they discover that the new number was higher right away? It’s a thing that scientists are ashamed of—this history—because it’s apparent that people did things like this: When they got a number that was too high above Millikan’s, ",
+          "quoteFull": "Why didn’t they discover that the new number was higher right away? It’s a thing that scientists are ashamed of—this history—because it’s apparent that people did things like this: When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan’s value they didn’t look so hard. And so they eliminated the numbers that were too far off, and did other things like that.",
+          "paragraph": "Why didn’t they discover that the new number was higher right away? It’s a thing that scientists are ashamed of—this history—because it’s apparent that people did things like this: When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan’s value they didn’t look so hard. And so they eliminated the numbers that were too far off, and did other things like that. We’ve learned those tricks nowadays, and now we don’t have that kind of a disease.",
+          "cue": "This is the story of measurements of a number that Millikan had earlier reported. Why did later results take time to move away from his value?",
+          "section": "Self-Deception in Experiments",
+          "ideasIn": [
+            "I5"
+          ]
+        },
+        {
+          "quoteId": "spya-zz5jad",
+          "before": "Now it behooves me, of course, to tell you what they’re missing. But it would he just about as difficult to explain to the South Sea Islanders how they have to arrange things so that they get some wealth in their system. It is not something simple like telling them how to improve the shapes of the earphones. But there is one feature I notice that is generally missing in Cargo Cult Science. That is the idea that we all hope you have learned in studying science in school—we never explicitly say what this is, but just hope that you catch on by all the examples of scientific investigation. It is interesting, therefore, to bring it out now and speak of it explicitly. It’s a kind of scientific integrity, a principle of scientific thought that corresponds to a kind of utter honesty—a kind of leaning over backwards. For example, if you’re doing an experiment, you should report everything that you think might make it invalid—not only what you think is right about it: other causes that could possibly explain your results; and things you thought of that you’ve eliminated by some other experiment, and how they worked—to make sure the other fellow can tell they have been eliminated.",
+          "depth": 2,
+          "again": [],
+          "quote": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it.",
+          "quoteFull": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it.",
+          "paragraph": "Details that could throw doubt on your interpretation must be given, if you know them. You must do the best you can—if you know anything at all wrong, or possibly wrong—to explain it. If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it. There is also a more subtle problem. When you have put a lot of ideas together to make an elaborate theory, you want to make sure, when explaining what it fits, that those things it fits are not just the things that gave you the idea for the theory; but that the finished theory makes something else come out right, in addition.",
+          "cue": "What must someone who advertises a theory also put down alongside the facts that support it?",
+          "section": "Defining Cargo Cult Science",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "quoteId": "spya-qz4f53",
+          "before": "For example, I was a little surprised when I was talking to a friend who was going to go on the radio. He does work on cosmology and astronomy, and he wondered how he would explain what the applications of this work were. “Well,” I said, “there aren’t any.” He said, “Yes, but then we won’t get support for more research of this kind.” I think that’s kind of dishonest. If you’re representing yourself as a scientist, then you should explain to the layman what you’re doing—and if they don’t want to support you under those circumstances, then that’s their decision.",
+          "depth": 2,
+          "again": [],
+          "quote": "In other words, publication probability depends upon the answer. That should not be done.",
+          "quoteFull": "In other words, publication probability depends upon the answer. That should not be done.",
+          "paragraph": "One example of the principle is this: If you’ve made up your mind to test a theory, or you want to explain some idea, you should always decide to publish it whichever way it comes out. If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result. For example—let’s take advertising again—suppose some particular cigarette has some particular property, like low nicotine. It’s published widely by the company that this means it is good for you—they don’t say, for instance, that the tars are a different proportion, or that something else is the matter with the cigarette. In other words, publication probability depends upon the answer. That should not be done.",
+          "cue": null,
+          "section": "Self-Deception in Experiments",
+          "ideasIn": [
+            "I4"
+          ]
+        },
+        {
+          "quoteId": "spya-zhmerc",
+          "before": "He finally found that they could tell by the way the floor sounded when they ran over it. And he could only fix that by putting his corridor in sand. So he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door. If he relaxed any of his conditions, the rats could tell.",
+          "depth": 3,
+          "again": [],
+          "quote": "Now, from a scientific standpoint, that is an A‑Number‑l experiment. That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it’s using.",
+          "quoteFull": "Now, from a scientific standpoint, that is an A‑Number‑l experiment. That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it’s using.",
+          "paragraph": "Now, from a scientific standpoint, that is an A‑Number‑l experiment. That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it’s using. And that is the experiment that tells exactly what conditions you have to use in order to be careful and control everything in an experiment with rat‑running.",
+          "cue": "Mr. Young ran a rat-running experiment. Why does it make such experiments sensible?",
+          "section": "Case Studies in Poor Science",
+          "ideasIn": []
+        },
+        {
+          "quoteId": "spya-hz6mw5",
+          "before": "I looked into the subsequent history of this research. The subsequent experiment, and the one after that, never referred to Mr. Young. They never used any of his criteria of putting the corridor on sand, or being very careful. They just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young, and his papers are not referred to, because he didn’t discover anything about the rats. In fact, he discovered all the things you have to do to discover something about rats. But not paying attention to experiments like that is a characteristic of Cargo Cult Science.",
+          "depth": 1,
+          "again": [
+            2
+          ],
+          "quote": "All the parapsychologists are looking for some experiment that can be repeated—that you can do again and get the same effect—statistically, even. They run a million rats—no, it’s people this time—they do a lot of things and get a certain st",
+          "quoteFull": "All the parapsychologists are looking for some experiment that can be repeated—that you can do again and get the same effect—statistically, even. They run a million rats—no, it’s people this time—they do a lot of things and get a certain statistical effect. Next time they try it they don’t get it any more. And now you find a man saying that it is an irrelevant demand to expect a repeatable experiment. This is science?",
+          "paragraph": "Another example is the ESP experiments of Mr. Rhine, and other people. As various people have made criticisms—and they themselves have made criticisms of their own experiments—they improve the techniques so that the effects are smaller, and smaller, and smaller until they gradually disappear. All the parapsychologists are looking for some experiment that can be repeated—that you can do again and get the same effect—statistically, even. They run a million rats—no, it’s people this time—they do a lot of things and get a certain statistical effect. Next time they try it they don’t get it any more. And now you find a man saying that it is an irrelevant demand to expect a repeatable experiment. This is science?",
+          "cue": "Can an experiment be repeated and give the same effect again? Note what happens to the parapsychologists' effect on the next try.",
+          "section": "Case Studies in Poor Science",
+          "ideasIn": [
+            "I1",
+            "I2"
+          ]
+        },
+        {
+          "quoteId": "spya-z6r8uh",
+          "before": "Another example is the ESP experiments of Mr. Rhine, and other people. As various people have made criticisms—and they themselves have made criticisms of their own experiments—they improve the techniques so that the effects are smaller, and smaller, and smaller until they gradually disappear. All the parapsychologists are looking for some experiment that can be repeated—that you can do again and get the same effect—statistically, even. They run a million rats—no, it’s people this time—they do a lot of things and get a certain statistical effect. Next time they try it they don’t get it any more. And now you find a man saying that it is an irrelevant demand to expect a repeatable experiment. This is science?",
+          "depth": 2,
+          "again": [],
+          "quote": "It is very dangerous to have such a policy in teaching—to teach students only how to get certain results, rather than how to do an experiment with scientific integrity.",
+          "quoteFull": "It is very dangerous to have such a policy in teaching—to teach students only how to get certain results, rather than how to do an experiment with scientific integrity.",
+          "paragraph": "This man also speaks about a new institution, in a talk in which he was resigning as Director of the Institute of Parapsychology. And, in telling people what to do next, he says that one of the things they have to do is be sure they only train students who have shown their ability to get PSI results to an acceptable extent—not to waste their time on those ambitious and interested students who get only chance results. It is very dangerous to have such a policy in teaching—to teach students only how to get certain results, rather than how to do an experiment with scientific integrity.",
+          "cue": "This is about teaching students. What does it warn against teaching them?",
+          "section": "Case Studies in Poor Science",
+          "ideasIn": [
+            "I2"
+          ]
+        },
+        {
+          "quoteId": "spya-jw75b8",
+          "before": "Now, from a scientific standpoint, that is an A‑Number‑l experiment. That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it’s using. And that is the experiment that tells exactly what conditions you have to use in order to be careful and control everything in an experiment with rat‑running.",
+          "depth": 3,
+          "again": [],
+          "quote": "They just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young, and his papers are not referred to, because he didn’t discover anything about the rats. In fact, he discovered all the th",
+          "quoteFull": "They just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young, and his papers are not referred to, because he didn’t discover anything about the rats. In fact, he discovered all the things you have to do to discover something about rats. But not paying attention to experiments like that is a characteristic of Cargo Cult Science.",
+          "paragraph": "I looked into the subsequent history of this research. The subsequent experiment, and the one after that, never referred to Mr. Young. They never used any of his criteria of putting the corridor on sand, or being very careful. They just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young, and his papers are not referred to, because he didn’t discover anything about the rats. In fact, he discovered all the things you have to do to discover something about rats. But not paying attention to experiments like that is a characteristic of Cargo Cult Science.",
+          "cue": null,
+          "section": "Case Studies in Poor Science",
+          "ideasIn": []
+        },
+        {
+          "quoteId": "spya-gk7rfh",
+          "before": "One example of the principle is this: If you’ve made up your mind to test a theory, or you want to explain some idea, you should always decide to publish it whichever way it comes out. If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result. For example—let’s take advertising again—suppose some particular cigarette has some particular property, like low nicotine. It’s published widely by the company that this means it is good for you—they don’t say, for instance, that the tars are a different proportion, or that something else is the matter with the cigarette. In other words, publication probability depends upon the answer. That should not be done.",
+          "depth": 3,
+          "again": [],
+          "quote": "If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice.",
+          "quoteFull": "If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice.",
+          "paragraph": "I say that’s also important in giving certain types of government advice. Supposing a senator asked you for advice about whether drilling a hole should be done in his state; and you decide it would he better in some other state. If you don’t publish such a result, it seems to me you’re not giving scientific advice. You’re being used. If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice.",
+          "cue": null,
+          "section": "Self-Deception in Experiments",
+          "ideasIn": []
+        },
+        {
+          "quoteId": "spya-mn57wu",
+          "before": "This man also speaks about a new institution, in a talk in which he was resigning as Director of the Institute of Parapsychology. And, in telling people what to do next, he says that one of the things they have to do is be sure they only train students who have shown their ability to get PSI results to an acceptable extent—not to waste their time on those ambitious and interested students who get only chance results. It is very dangerous to have such a policy in teaching—to teach students only how to get certain results, rather than how to do an experiment with scientific integrity.",
+          "depth": 2,
+          "again": [],
+          "quote": "So I wish to you—I have no more time, so I have just one wish for you—the good luck to be somewhere where you are free to maintain the kind of integrity I have described, and where you do not feel forced by a need to maintain your position ",
+          "quoteFull": "So I wish to you—I have no more time, so I have just one wish for you—the good luck to be somewhere where you are free to maintain the kind of integrity I have described, and where you do not feel forced by a need to maintain your position in the organization, or financial support, or so on, to lose your integrity.",
+          "paragraph": "So I wish to you—I have no more time, so I have just one wish for you—the good luck to be somewhere where you are free to maintain the kind of integrity I have described, and where you do not feel forced by a need to maintain your position in the organization, or financial support, or so on, to lose your integrity. May you have that freedom. May I also give you one last bit of advice: Never say that you’ll give a talk unless you know clearly what you’re going to talk about and more or less what you’re going to say.",
+          "cue": null,
+          "section": "Case Studies in Poor Science",
+          "ideasIn": []
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

@@ -5,11 +5,19 @@
  * § Stage 2; the purpose itself is docs/project/reader-profile.md.
  *
  * - **Set**: *Reading for: …* on one line, the whole sentence in a tooltip,
- *   and **Edit**, a link to the Metadata page's box — where it is edited.
- * - **Not set, and a route on screen**: a box and *Plan the route for this*,
- *   which saves the purpose and, **only once the save has answered**, asks for
- *   the route with `ensure()`. Unforced is enough: a route's stamp carries the
- *   profile hash, so the server re-plans one written for another profile.
+ *   and **Edit**, which opens the box below in place, filled with the
+ *   sentence (since 2026-10-11; a link to Metadata's box before). Greg,
+ *   spya-wu83xh: *"an optional input box so that you could say what it is
+ *   that you're trying to skim for. In that way, it wouldn't be so different
+ *   from the search box."* The purpose is what the route is planned for
+ *   already, so this is that box, asked as *What are you skimming for?*, not a
+ *   second, Skim-only focus with its own storage (plan 261011r says why).
+ * - **Not set, and a route on screen**, or **editing**: the box and *Plan the
+ *   route for this*, which saves the purpose and, **only once the save has
+ *   answered**, asks for the route with `ensure()`. Unforced is enough: a
+ *   route's stamp carries the profile hash, so the server re-plans one
+ *   written for another profile. The box never saves an empty sentence —
+ *   clearing the purpose stays in Metadata — nor the sentence already saved.
  *
  * **Never in the empty state** (Sol F6). With no route, `useAutoRun` plans one
  * as the mode opens, and a second request made with a different profile would
@@ -21,11 +29,9 @@ import { useEffect, useRef, useState } from "react";
 import { Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_PURPOSE_CHARS } from "../types.js";
-import { Link } from "./Link.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { savePurpose, storedPurpose, usePurpose } from "./purpose.js";
 import { profileSaved } from "./profile-saved.js";
-import { carriedSearch, readHref } from "./router.js";
 import { Tooltip } from "./Tooltip.js";
 import type { UseSkim } from "./useSkim.js";
 
@@ -40,6 +46,8 @@ export function PurposeLine({ owner, bannerUp }: Props) {
   /** What the server stored after a press here — it wins over the read. */
   const [saved, setSaved] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  /** The box is open over a saved purpose — *Edit* was pressed. */
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* State disables the visible control; the ref closes the smaller gap before
@@ -58,7 +66,11 @@ export function PurposeLine({ owner, bannerUp }: Props) {
   if (read.state !== "ready" || read.purposeFailed) return null;
   const purpose = saved ?? read.purpose;
 
-  if (purpose !== null && purpose !== "") {
+  const set = purpose !== null && purpose !== "";
+  /* A route being planned, or a forced one whose result is not read yet:
+     another request now would race it (GPT Sol, plan review F6). */
+  const planningElsewhere = owner.starting || owner.job !== null || owner.rewriting;
+  if (set && (!editing || bannerUp)) {
     return (
       <div className="skim-purpose">
         <Tooltip content={<p>{purpose}</p>} placement="bottom" className="skim-purpose-tip">
@@ -69,23 +81,38 @@ export function PurposeLine({ owner, bannerUp }: Props) {
             <span className="skim-purpose-text">{purpose}</span>
           </span>
         </Tooltip>
-        <Link
-          className="skim-purpose-edit"
-          href={readHref(owner.slug, carriedSearch(location.search), "metadata")}
-        >
-          Edit
-        </Link>
+        {/* Not under a banner: its own button re-plans, and two ways to ask
+            for a route at once is the race the hold exists to stop. */}
+        {!bannerUp && (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="skim-purpose-edit"
+            disabled={planningElsewhere}
+            onClick={() => {
+              setDraft(purpose);
+              setError(null);
+              setEditing(true);
+            }}
+          >
+            Edit
+          </Button>
+        )}
       </div>
     );
   }
 
+  /* The box waits under a banner, whose own button re-plans. */
   if (bannerUp) return null;
 
-  const busy = saving || owner.starting || owner.job !== null;
+  const busy = saving || planningElsewhere;
   const text = draft.trim();
+  /* Saving the sentence already saved would re-plan nothing and say it had. */
+  const unchanged = set && text === purpose;
   const plan = async () => {
     /* Never an empty draft: `savePurpose(slug, null)` erases (plan F1). */
-    if (text === "" || busy || planning.current) return;
+    if (text === "" || unchanged || busy || planning.current) return;
     planning.current = true;
     setSaving(true);
     setError(null);
@@ -125,13 +152,17 @@ export function PurposeLine({ owner, bannerUp }: Props) {
     if (!live.current) return;
     setSaved(stored);
     setSaving(false);
+    setEditing(false);
+    /* Held until the route has been asked for, so a press in between cannot
+       send a second save and a second `ensure()`. */
     await owner.ensure();
+    planning.current = false;
   };
 
   return (
     <div className="skim-purpose skim-purpose-ask">
       <label className="skim-purpose-q" htmlFor="skim-purpose-input">
-        What do you want from this piece?
+        What are you skimming for?
       </label>
       <textarea
         id="skim-purpose-input"
@@ -143,11 +174,24 @@ export function PurposeLine({ owner, bannerUp }: Props) {
         onChange={(e) => setDraft(e.target.value)}
       />
       <div className="skim-purpose-foot">
-        <Button type="button" variant="outline" size="sm" disabled={busy || text === ""} onClick={() => void plan()}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy || text === "" || unchanged}
+          onClick={() => void plan()}
+        >
           <Route size={13} />
           Plan the route for this
         </Button>
-        <span className="skim-purpose-note">A paid model call.</span>
+        {editing && (
+          <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
+        )}
+        <span className="skim-purpose-note">
+          A paid model call. Saved as your purpose for this piece, which other modes use too.
+        </span>
       </div>
       {error !== null && (
         <p className="gloss-error" role="alert">

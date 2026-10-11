@@ -119,7 +119,8 @@ Live, share. The ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../
 for the kinds that function names and no others. **The guide** (plan
 [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
 `GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
-notes, and no web search.
+notes, and no web search. Asked about the world, it says Chat can look it up; why it still has no
+search is [below](#web-search-is-still-openrouters-and-is-not-in-that-table).
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -135,6 +136,33 @@ last one where our own tools are withheld. Nothing on this side sees it start or
 arrives is a count in `usage` — which is why the panel renders it as one row saying only how many
 searches ran. **It does not say what was searched for, because we do not know**, and a plausible
 invented query would be the most convincing wrong thing on the screen.
+
+**Every typed conversation but the guide has it** — Chat, Learn's Recall, Tutorial and Explore, and
+Referee's Candidates (on Exa).
+
+> I think we should allow web searches in all of the chat modes because very often users are going
+> to wanting to be situating this article relative to other stuff on the web, and it's too strict
+> and limiting to hobble the agent.
+>
+> — Greg, 2026-10-11 (`spya-drbkvc`)
+
+Having the tool and using it are different things, and the prompts decide the second. Asked where the
+piece sat among other work, Recall and Tutorial searched the web 0 times in 8, because they are told
+to stay in the article; their prompts now name that question as a reason to search, and they did 2
+in 4 and 4 in 4. Recall's misses were where the reader's library held a relevant piece and it
+answered from that. It still does not go off unprompted to check the piece against the world,
+because it is testing the reader's memory of *this* piece. Measured in
+[261011t](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md) with
+`evals/chat-web-reach.ts --kind <kind>`.
+
+**The guide was given search the same day and it was backed out.** It searched, then called
+`offer_next_steps` with no words of its own, and the loop went round again without the results:
+a provider search lives only inside the response that ran it, so a round that ends in a call to one
+of our tools with no prose loses everything it found. Its answers then said "I haven't looked this
+up". Chat does not hit this because it writes in the round it searches; the guide is told to end
+every answer on a tool call. What would fix it, and whether to, is
+[261011t § The guide](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md#the-guide-tried-and-backed-out)
+and `q-w26r6u`. **Live has none either**: OpenAI realtime has no server search.
 
 ## The links the prompt does not carry
 
@@ -1021,7 +1049,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
   message only (`experienceLine`), so the cached prefix is the same for everyone.
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
-- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search, and one of its own since
+- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search (it points the reader to Chat;
+  [§ Web search](#web-search-is-still-openrouters-and-is-not-in-that-table) says why), and one of
+  its own since
   2026-10-09: **`offer_to_save`**, which saves nothing
   ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
   Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
@@ -1032,9 +1062,19 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   the page could not tell whether its press was replacing newer words. The page draws a valid
   offer under the answer as a card
   ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx)) with a button, and **the reader's press
-  is the only write**: it reads what is stored, saves only over the basis, and offers an Undo that
-  puts back only over its own write. A planted instruction in the article can at worst put words
-  on a card the reader reads before pressing. Reading the two fields is no tool: every guide turn
+  is the write**: it reads what is stored, saves only over the basis, and offers an Undo that
+  puts back only over its own write. **Since 2026-10-11 one kind of offer saves itself**
+  ([261011s](../plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md);
+  Greg's reply A to q-t3j8hj, and report `spya-yk3r03`): when the turn's question was typed by the
+  reader (the request's `typed: true`, sent by the composer and the bar's *Ask the guide*, never by
+  a button, a retry or an edit) and the offer is a run of it **word for word** — About you as what
+  it held, unchanged, then that run — the tool marks it `now`
+  ([`src/save-closeness.ts`](../../src/save-closeness.ts)), and the card makes the same press itself,
+  once, on an answer this tab's own stream finished
+  ([`answered-here.ts`](../../src/web/chat/answered-here.ts)). So a planted instruction in the
+  article can at worst put words on a card the reader reads before pressing, or save words the
+  reader typed in that message, with an Undo. The model is told not to say whether it saved; the
+  card says. Reading the two fields is no tool: every guide turn
   carries both under WHO IS READING THIS, read fresh. Not offered in Live (`GUIDE_TOOLS` is what
   Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
   you're reading*.

@@ -3,10 +3,14 @@
  * **On a phone, More is never off the edge of the bar** (queue item
  * `qi-t22r9mt4`). Measured in WebKit on 2026-10-09: every phone width is on the
  * last rung with the row at its 44px floor, and with Diagram drawn — Diagram
- * open, or Experimental on — More's place after Skim is x 354–398, past a 390,
- * 375 or 360 window. No label rung fits 360, so More moves to the front of the
- * bands' frame when, and only when, its own place is out of view.
+ * open, or Experimental on — More's place after Skim was x 354–398, past a
+ * 390, 375 or 360 window. No label rung fits 360, so More moves to the front of
+ * the bands' frame when, and only when, its own place is out of view.
  * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md.
+ *
+ * Since 2026-10-11 More's place is after Summary (spya-hdde62, plan 261011x),
+ * two buttons earlier, which every measured phone shows. The fake's buttons
+ * are wide enough that the move is still exercised.
  *
  * jsdom has no layout, so the fake below lays the bar out **by DOM order**,
  * each button `W` wide from the bar's left edge. That is what makes the test
@@ -22,8 +26,13 @@ import { MODE_LABEL } from "../src/title-text.js";
 import { Dock } from "../src/web/Dock.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
-/** One button's width in the fake layout. */
-const W = 50;
+/**
+ * One button's width in the fake layout: wide by default, so More's place can
+ * be past the edge and the fallback is still exercised. The last `describe`
+ * sets it to the phone's 44px floor.
+ */
+const WIDE = 70;
+let W = WIDE;
 /** Everything in the row the fake lays out, in order. */
 const LAID_OUT = ".dock-home, .dock-btn";
 
@@ -36,6 +45,7 @@ function rect(left: number, w: number): DOMRect {
 }
 
 beforeEach(() => {
+  W = WIDE;
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   history.replaceState(null, "", "/read/a-piece");
   host = document.createElement("div");
@@ -126,30 +136,32 @@ function resize(nextWidth: number): void {
   raf.mockRestore();
 }
 
-/* The fake row: Spideryarn, Commands, Plain, then the bands' frame. With the
-   switch on, More's home is the eighth slot — [350, 400] — past a 360 bar. With
-   it off it is the seventh — [300, 350] — inside one. */
+/* The fake row: Spideryarn, Commands, Plain, then the bands' frame. More's
+   home, after Summary, is the sixth slot — [350, 420] — past a 360 or a 410 bar
+   and inside a 430 one, with the switch on or off: Diagram is drawn after it. */
 
 describe("More stays on the bar where its own place is off the edge", () => {
-  it("leads the bands' frame when its place after Skim is past the bar's edge", () => {
+  it("leads the bands' frame when its place after Summary is past the bar's edge", () => {
     width = 360;
     reading({ experimental: EXPERIMENTAL_ON });
     expect(bands().slice(0, 5)).toEqual(["More", L.structure, L.summary, L.diagram, L.skim]);
   });
 
-  it("stays after Skim where its place is in view — Greg's placement holds wherever it can be seen", () => {
-    width = 360;
+  it("stays after Summary where its place is in view — Greg's placement holds wherever it can be seen", () => {
+    width = 430;
     reading({ experimental: EXPERIMENTAL_OFF });
-    expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, L.skim, "More"]);
+    expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, "More", L.skim]);
     width = 1440;
     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
+    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, "More", L.diagram, L.skim]);
   });
 
-  it("Diagram open with the switch off pushes More out too, and More leads", () => {
-    width = 390;
+  it("Diagram drawn, open or by the switch, no longer pushes More's place out: it stands after More", () => {
+    width = 430;
     reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
-    expect(bands()[0]).toBe("More");
+    expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, "More", L.diagram]);
+    reading({ experimental: EXPERIMENTAL_ON });
+    expect(bands()[2]).toBe("More");
   });
 
   it("the links arm (the metadata page) moves More the same way", () => {
@@ -166,7 +178,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
     /* A re-render with a changed signature re-measures; a resize would do the
        same through the ResizeObserver jsdom does not have. */
     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
+    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, "More", L.diagram, L.skim]);
   });
 
   it("repositions on resize even when the rung and content stay the same, in both arms", () => {
@@ -174,9 +186,9 @@ describe("More stays on the bar where its own place is off the edge", () => {
       width = 390;
       render({ experimental: EXPERIMENTAL_ON });
       expect(bands()[0]).toBe("More");
-      resize(410);
+      resize(430);
       expect(host.querySelector(".dock")?.classList.contains("dock-fit-4")).toBe(true);
-      expect(bands()[4]).toBe("More");
+      expect(bands()[2]).toBe("More");
       resize(390);
       expect(bands()[0]).toBe("More");
     }
@@ -193,13 +205,13 @@ describe("More stays on the bar where its own place is off the edge", () => {
   });
 
   it("keeps More ahead of the protected right padding", () => {
-    width = 410;
+    width = 430;
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(bands()[4]).toBe("More");
+    expect(bands()[2]).toBe("More");
     const dock = host.querySelector<HTMLElement>(".dock");
     expect(dock).not.toBeNull();
     if (dock) dock.style.paddingRight = "20px";
-    resize(410);
+    resize(430);
     expect(bands()[0]).toBe("More");
   });
 
@@ -208,8 +220,8 @@ describe("More stays on the bar where its own place is off the edge", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     resize(0);
     expect(bands()[0]).toBe("More");
-    resize(410);
-    expect(bands()[4]).toBe("More");
+    resize(430);
+    expect(bands()[2]).toBe("More");
   });
 
   /* One keyed array (`bandsInOrder`), so a re-order moves nodes rather than
@@ -222,7 +234,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
     act(() => more?.focus());
     width = 1440;
     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
-    expect(bands()[4]).toBe("More");
+    expect(bands()[2]).toBe("More");
     expect(host.querySelector(`[aria-label="${L.skim}"]`)).toBe(skim);
     expect(host.querySelector(".dock-more-trigger")).toBe(more);
     expect(document.activeElement).toBe(more);
@@ -241,6 +253,25 @@ describe("More stays on the bar where its own place is off the edge", () => {
     for (const mode of ["plain", "structure", "summary", "skim"]) {
       reading({ experimental: EXPERIMENTAL_ON, mode });
       expect(bands()[0], mode).toBe("More");
+    }
+  });
+});
+
+/* **What a phone actually draws since 2026-10-11** (plan 261011x): every
+   button at the 44px floor, as measured in WebKit on 2026-10-09, so More's
+   home after Summary ends at 6 × 44 = 264 — inside 360 with Diagram drawn,
+   which is exactly the state that used to send it to the front. */
+describe("on a phone's 44px floor, More stays after Summary", () => {
+  it("with Experimental on, or Diagram open, at 360 and 390, in both arms", () => {
+    W = 44;
+    for (const w of [360, 390]) {
+      width = w;
+      reading({ experimental: EXPERIMENTAL_ON });
+      expect(bands().slice(0, 4), `${w}, switch on`).toEqual([L.structure, L.summary, "More", L.diagram]);
+      reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
+      expect(bands().slice(0, 4), `${w}, Diagram open`).toEqual([L.structure, L.summary, "More", L.diagram]);
+      loose({ experimental: EXPERIMENTAL_ON });
+      expect(bands().slice(0, 4), `${w}, links arm`).toEqual([L.structure, L.summary, "More", L.diagram]);
     }
   });
 });

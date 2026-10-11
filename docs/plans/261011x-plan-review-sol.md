@@ -1,0 +1,18 @@
+PROCEED WITH CHANGES
+
+1. **P1 — Preserve real-phone and fallback coverage separately.** The plan says to “reword” the phone-leading test, but moving More two buttons left means the existing 360/390 cases no longer exercise `moreLeads`. Add:
+
+   - 360/390 assertions that More remains after Summary with Experimental on and Diagram open, in both Dock arms.
+   - A deliberately forced overflow case retaining the resize, scroll, padding, hidden-layout, focus/node-identity and no-oscillation checks in [dock-more-leads.test.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/dock-more-leads.test.tsx:134).
+
+   Globally widening the fake buttons preserves fallback coverage but does not pin the plan’s claimed phone outcome.
+
+2. **P2 — Do not mechanically replace every “after Skim” assertion.** A gathered mode drawn while open still belongs after Skim in `MODES_UI`; only More moves. The intended order is `Structure Summary More [Diagram] Skim | Glossary`. Keep the gathered mode’s separator and `dock-group-start`, and keep [dock-mode-order.test.ts](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/dock-mode-order.test.ts:155) saying the gathered mode is after Skim. Update [dock-groups.test.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/dock-groups.test.tsx:100) to assert this distinction explicitly.
+
+3. **P2 — Make the reference sweep explicit.** Besides `dock-groups`, the live references are:
+
+   - Tests: [dock-more.test.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/dock-more.test.tsx:212), [a-second-press-closes-the-mode.test.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/a-second-press-closes-the-mode.test.tsx:479), plus stale comments in [arrows-belong-to-the-article.test.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/arrows-belong-to-the-article.test.tsx:216) and [dock-corner-controls.test.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/tests/dock-corner-controls.test.tsx:596).
+   - Docs/comments: [reading-view-overview.md](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/docs/project/reading-view-overview.md:131), [narrow-windows.md](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/docs/project/narrow-windows.md:171), [dock-fit.ts](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/src/web/dock-fit.ts:193), [dock-fit.css](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/src/web/styles/dock-fit.css:60), and several Dock comments around [Dock.tsx](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/src/web/Dock.tsx:3090).
+   - Help: update the prose, alt text, and the visibly stale `images/bottom-bar.png` in [the-reading-view.md](/var/tmp/spideryarn-worktrees/fbhdde62-more-button-after-summary/src/web/help/pages/the-reading-view.md:21), then regenerate `src/help-corpus.generated.json`.
+
+The production change itself is correct and minimal. `cutForMore` after the Summary row is sound; `bandsInOrder` applies it identically to `DockModes` and `DockModeLinks`, including Metadata. `groupStarts` ignores More, so separators remain attached to the same mode runs. Keyboard behavior is unchanged; only the intended DOM/tab position moves. The targeted run showed only stale order expectations: the mode-order, arrow-behavior and corner-control suites remained green.

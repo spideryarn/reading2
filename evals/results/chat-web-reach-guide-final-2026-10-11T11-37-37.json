@@ -1,0 +1,276 @@
+{
+  "label": "final",
+  "kind": "guide",
+  "runs": 1,
+  "at": "2026-10-11T11:38:54.137Z",
+  "articles": [
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "word": "Turing",
+      "page": "https://en.wikipedia.org/wiki/Biological_naturalism"
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "word": "cyanobacteria",
+      "page": "https://en.wikipedia.org/wiki/Neural_scaling_law"
+    }
+  ],
+  "outcomes": [
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "situate",
+      "role": "target",
+      "question": "How does this piece compare with other things written on the same question? Where does it sit?",
+      "seconds": 6.2,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-qu7j89",
+        "spya-epw4h3",
+        "spya-xdy4fe"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Chat can look up how other writers and critics have answered this piece. Sources › Reception also lists replies and work that cites it.\n\nFor where Seth places himself, read two spots. He calls his view a minority one and says rival theories mostly \"assume\" computational functionalism rather than defend it [spya-qu7j89]. He also names his opponents: Chalmers and Hinton [spya-epw4h3], and Bostrom's simulation argument [spya-xdy4fe]. For a reading group, those make good discussion anchors.\n\n[cmd:mode:submode%3Asources%3Areception]\n\nWhich side of the debate is your group likely to lean toward?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "since",
+      "role": "target",
+      "question": "What has happened with this idea since this was written?",
+      "seconds": 5,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-qu7j89"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "I can't look that up from here, but Chat can search the web for what has happened since. Press Chat below to ask it.\n\nFor a reading group, Sources › Reception is also worth a look, since it shows replies, reviews and work that cites the essay.\n\nThe essay says where it stands in its own view. Seth admits his position is a minority one: \"The biological naturalist position (whether my version or any other) remains a minority view\" [spya-qu7j89]. That is a good passage to bring to the group.\n\n[cmd:mode:submode%3Asources%3Areception]\n\nIs your group more interested in testing his arguments or in the ethics?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "url",
+      "role": "target",
+      "question": "I found this page: https://en.wikipedia.org/wiki/Biological_naturalism How does what it says relate to this piece?",
+      "seconds": 5.6,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-hj5y6s",
+        "spya-qu7j89"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "I can't open web pages from here. Chat can look the page up and compare it with the essay. What I can do is show you where the essay handles the idea.\n\nSeth credits John Searle with biological naturalism and admits he has no \"knock-down argument\" for it [spya-hj5y6s]. Later he concedes it \"remains a minority view\" [spya-qu7j89]. For a reading group, those two passages are the best place to test the Wikipedia account against his version.\n\nIs your group more interested in the philosophy or in the AI-ethics side?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "remember",
+      "role": "control",
+      "question": "What I remember is that the author argues against one popular view, but I can't remember quite which, or why.",
+      "seconds": 4.9,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-wepmnr",
+        "spya-cv97j7"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "The view he targets is that the right kind of computation is enough for consciousness, which he calls computational functionalism [spya-wepmnr]. For a reading group, give the four-argument section the closest read. It starts where he announces it [spya-cv97j7]. You can skim the opening on human biases and the closing ethics.\n\nStructure shows how those parts fit, so you can plan your time.\n\n[cmd:mode:mode%3Astructure]\n\nFor questions about what he says and why, Chat is the place.\n\nIs your group more likely to debate the arguments or the ethics?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"Turing\"?",
+      "seconds": 6.2,
+      "searches": 0,
+      "tools": [
+        "offer_to_save",
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-u9egtc",
+        "spya-cf70dt",
+        "spya-gamzr3",
+        "spya-cv97j7"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Yes, many times. It first appears where \"Alan Turing towers above everyone else in this story\" [spya-u9egtc]. Turing's definition of computation is explained a little later [spya-cf70dt], and the essay keeps returning to \"Turing world\" [spya-gamzr3].\n\nFor a reading group, the part to read closely is the four arguments against computational functionalism, which begin at [spya-cv97j7]. You can skim the opening history.\n\nDo you want to bring a view on whether the argument convinces you, or mostly to follow it?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "situate",
+      "role": "target",
+      "question": "How does this piece compare with other things written on the same question? Where does it sit?",
+      "seconds": 6.9,
+      "searches": 0,
+      "tools": [
+        "offer_to_save",
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-vr9q2p",
+        "spya-sctj6d",
+        "spya-zyncdd",
+        "spya-suzdvz"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Chat can look up what others have written, since I can't search the web. Sources › Reception lists replies and work that cites the piece.\n\n[cmd:mode:submode%3Asources%3Areception]\n\nThe piece also places itself. It sets the scaling hypothesis against DeepMind's \"weak scaling hypothesis\" [spya-vr9q2p]. It builds on the Kaplan et al. scaling-law curves [spya-sctj6d]. It frames its critics as a \"voice of authority\" [spya-zyncdd]. Its own summary points to a May 2022 follow-up, \"Scaling Hypothesis Revisited\" [spya-suzdvz].\n\nYou can save your reason with the button under this answer.\n\nIs the group more interested in the technical claims or in the argument about the critics?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "since",
+      "role": "target",
+      "question": "What has happened with this idea since this was written?",
+      "seconds": 14.4,
+      "searches": 0,
+      "tools": [
+        "offer_to_save",
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-rbx2kz",
+        "spya-ewxv9q",
+        "spya-cw7jg4",
+        "spya-edr6mj",
+        "spya-fyy04z"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "What has happened since is outside what I can look up from here. Chat can search the web for it, so ask it there.\n\nThe piece does show some of its own later history. It has an editor's note dated 2025-10-19 answering its own question about future models with \"Roughly, yes.\" [spya-rbx2kz]. The summary links to a May 2022 followup and to other later pieces [spya-ewxv9q]. The appendix on agency is also a later addition, and it mentions SayCan and LaMDA [spya-cw7jg4].\n\nFor a reading group, the claims worth checking against later events are the predictions. These include the loss extrapolation [spya-edr6mj] and the claim that no one else would scale [spya-fyy04z].\n\nWhich would help your group more: judging the predictions, or discussing the argument?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "url",
+      "role": "target",
+      "question": "I found this page: https://en.wikipedia.org/wiki/Neural_scaling_law How does what it says relate to this piece?",
+      "seconds": 5.5,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-sctj6d",
+        "spya-kc39vs",
+        "spya-edr6mj"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "I can't open web pages from here, and Chat can look that page up and compare it with the piece. For your reading group, the useful comparison is probably the piece's own scaling-law material.\n\nThe place to read closely is the \"Scaling\" section. It starts from the Kaplan et al. curves [spya-sctj6d] and asks how far they extend [spya-kc39vs]. Then look at the worked loss extrapolation for a hypothetical GPT-4 [spya-edr6mj]. The page you found can serve as a neutral reference for those curves.\n\nDo you want to bring the group a critique of the piece, or mainly a clear account of it?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "remember",
+      "role": "control",
+      "question": "What I remember is that the author argues against one popular view, but I can't remember quite which, or why.",
+      "seconds": 14.8,
+      "searches": 0,
+      "tools": [
+        "offer_to_save",
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-b6zw9f",
+        "spya-zyncdd",
+        "spya-ewxv9q"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Your memory points at the right place. The target is the view that scaling up neural networks can't be the route to general intelligence, along with the experts who held it. The \"Critiquing The Critics\" section is where he presses this, starting at \"Keeping track\" [spya-b6zw9f] and ending with the \"voice of authority\" passage [spya-zyncdd].\n\nFor a reading group, I'd read the opening abstract [spya-ewxv9q] closely, since it sets out his claims. Skim the middle, then read the critics section closely and treat it as the part to argue about.\n\nWhich do you want help with: your own view, or questions for the group?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"cyanobacteria\"?",
+      "seconds": 5,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-h74fhr",
+        "spya-g3b5y7",
+        "spya-e5n86h"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Yes. It appears once, in the pretraining section: \"Humans, one might say, are the cyanobacteria of AI\" [spya-h74fhr]. The sentence says we constantly emit structured data, which a model has to learn to understand in order to predict it.\n\n[cmd:jump-first:cyanobacteria]\n\nFor a reading group, that section is a good place to start a discussion. Its argument for why predicting text might force real understanding runs through [spya-g3b5y7], and the author's own doubts follow in [spya-e5n86h].\n\nDo you want a plan for which parts to read closely and which to skim?"
+    }
+  ]
+}

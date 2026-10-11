@@ -701,7 +701,8 @@ interface Props {
  * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
  * mode icon into the same group after structure and summary"* (spya-wm5gu2,
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
- * The More button stands at the end of the same run (`MORE_AFTER`).
+ * The More button stands in the same run, straight after Summary since
+ * 2026-10-11 (`MORE_AFTER`).
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
@@ -883,7 +884,9 @@ const MODES_UI = [
      **In the shape run, at its end, since 2026-10-08** — Greg: *"move the
      skim mode icon into the same group after structure and summary"*
      (spya-wm5gu2). Its row did not move, so it still leads into the Quotes it
-     walks, which are now under More, the button drawn straight after it.
+     walks, which are now under More. More was drawn straight after it until
+     2026-10-11, and since then it has stood before Diagram and Skim, after
+     Summary (spya-hdde62, plan 261011x).
      docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
   {
     mode: "skim",
@@ -1207,30 +1210,31 @@ function drawnCount(bar: DockBar): number {
 }
 
 /**
- * **The run the More button ends.** Greg, 2026-10-08 (spya-mcs4gb): *"just
- * after the skim mode, just after structure and summary as part of that
- * group, rather than out on their own."* Skim is the last row of the shape run
- * (its `MODES_UI` row), so More stands straight after it, inside the bands'
- * frame, with no line between them.
- * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
+ * **The row More stands straight after: Summary.** Greg, 2026-10-11
+ * (spya-hdde62): *"the triple dot more button that displays more modes. Let's
+ * move that to the right of the summary, and maybe, maybe to the right of the
+ * skim mode."* It had stood after Skim, at the end of the shape run, since
+ * 2026-10-08 (spya-mcs4gb, plan 261008d); it is still inside that run, so no
+ * line stands either side of it, and Diagram and Skim follow it.
+ * docs/plans/261011x-more-button-after-summary-in-the-bottom-bar.md.
  * **Wherever that place can be seen** — on a phone where it is off the edge,
- * More leads the frame instead (`bandsInOrder`, plan 261009c).
+ * More leads the frame instead (`bandsInOrder`, plan 261009c), which since
+ * this move no phone the bar has been measured on needs.
  */
-const MORE_AFTER: ModeGroup = "shape";
+const MORE_AFTER: Mode = "summary";
 
 /**
- * **The bands' frame, cut where More goes**: everything up to the last drawn
- * row of `MORE_AFTER`'s run, and everything after it. With none of that run
- * drawn — no bar today — More goes at the end rather than vanishing, so the
- * gathered modes stay reachable. Both arms cut here, so they cannot disagree.
+ * **The bands' frame, cut where More goes**: everything up to the drawn row of
+ * `MORE_AFTER`, and everything after it. With that row not drawn — no bar
+ * today — More goes at the end rather than vanishing, so the gathered modes
+ * stay reachable. Both arms cut here, so they cannot disagree.
  *
  * Exported for tests/dock-groups.test.tsx.
  */
 export function cutForMore(bands: readonly ModeUi[]): readonly [readonly ModeUi[], readonly ModeUi[]] {
-  /* `findLastIndex` is ES2023, past the client's lib. */
-  const at = bands.length - [...bands].reverse().findIndex((m) => m.group === MORE_AFTER);
-  if (at > bands.length) return [bands, []];
-  return [bands.slice(0, at), bands.slice(at)];
+  const at = bands.findIndex((m) => m.mode === MORE_AFTER);
+  if (at < 0) return [bands, []];
+  return [bands.slice(0, at + 1), bands.slice(at + 1)];
 }
 
 /** `MORE_HOME_ATTR` on the row More's home follows, spread into its props. */
@@ -3089,7 +3093,8 @@ function DockModes({
      **The More button had a fourth, from 2026-10-07 to 2026-10-08**, after
      the radiogroup. Greg then asked for it *"just after the skim mode … as part
      of that group, rather than out on their own"* (spya-mcs4gb), so it stands
-     inside the bands' frame at the end of the shape run (`cutForMore`) — and
+     inside the bands' frame in the shape run (`cutForMore`; straight after
+     Summary since 2026-10-11, spya-hdde62) — and
      so inside the `role="radiogroup"`, which 261007c D6 had kept it out of.
      It is between two radios in reading order, so in the DOM it has to be;
      the cost and the options weighed are in
@@ -3391,7 +3396,7 @@ function DockModeLinks({
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map((m) => link(m))}</div>}
         {/* More in the same place as on the reading view — straight after
-            the shape run, or first where that is off a phone's edge
+            Summary, or first where that is off a phone's edge
             (`bandsInOrder`) — and its items are these same links
             (`modeLinkHref`). Comments after Marginalia, as there. */}
         <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>
@@ -3464,10 +3469,10 @@ type MorePick =
  *
  * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
  *
- * **Not a radio, but inside the radiogroup since 2026-10-08**, straight after
- * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
- * after the skim mode … as part of that group, rather than out on their own"*
- * (spya-mcs4gb) — or first in that frame where its place is off a phone's
+ * **Not a radio, but inside the radiogroup since 2026-10-08**, in the bands'
+ * frame (`cutForMore`), because Greg asked for it *"just after the skim mode …
+ * as part of that group, rather than out on their own"* (spya-mcs4gb), and
+ * straight after Summary since 2026-10-11 (`MORE_AFTER`, spya-hdde62) — or first in that frame where its place is off a phone's
  * edge (`bandsInOrder`, plan 261009c). It had a frame of its own after the radiogroup for a day
  * (261007c D6), kept out because a menu button is not one of *what the middle
  * column shows*. Between two radios in reading order, the DOM has to put it

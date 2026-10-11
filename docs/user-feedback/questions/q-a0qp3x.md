@@ -1,10 +1,11 @@
 ---
 id: q-a0qp3x
 report: spya-x6qjbn
-status: open
+status: answered
 asked: 2026-10-11
 title: Should dictation get a second pass that adds paragraph breaks?
 refs: SPIDERYARN-READING2-HF · qi-6n5th4qh · docs/plans/261011i-dictation-failures-reach-sentry.md · docs/user-feedback/261011_0150-dictation-paragraph-breaks.md
+acted: spya-rg47vu
 ---
 You asked for a small tweak to the dictation clean-up prompt so it adds paragraph breaks. There is no clean-up prompt to tweak, and the transcriber ignores the instruction if we try to give it one (tested today). So the only way to get paragraph breaks is to add a new step after the transcriber. Do you want that?
 
@@ -23,3 +24,9 @@ What I tested, 11 October. I made a 42-second recording of three separate points
 So any paragraph breaks have to come from a second step. The risk with a second model call is that it does more than add line breaks: it fixes a word, smooths a sentence, and your words stop being your words. The check in B and C rules that out mechanically. It compares the before and after with the line breaks removed, and if they differ at all, the original is used. The cost is the extra wait on a call you are sitting watching, which is why C keeps it out of the chat box.
 
 What would change the answer: if you mostly dictate short things into chat, A. If the Feedback box is where you notice it, C.
+
+Greg's reply, 2026-10-11 (spya-rg47vu, in the Feedback dialog):
+
+> A
+
+Acted on by the feedback sweep, 2026-10-11 (queue item qi-zmdjcrnn): dictation stays one paragraph, no second pass. The report's note now ends declined.

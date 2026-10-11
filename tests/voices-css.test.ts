@@ -203,7 +203,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
   faq: [".faq-question"],
-  skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
+  skim: [".skim-cue", ".skim-intro", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   marginalia: [
     ".marg-question",
     ".marg-idea-name",
