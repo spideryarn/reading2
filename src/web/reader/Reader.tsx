@@ -4762,6 +4762,9 @@ export function Reader({
                     void setThread(id);
                   }
                 : undefined,
+            threadGist: openComment.threadId
+              ? chatSummaries.find((c) => c.id === openComment.threadId)?.gist
+              : undefined,
             onDiscuss: (question) => {
               copyOnlyProtected.current.add(openComment.id);
               /* **Into the floating panel, unless a conversation mode is already

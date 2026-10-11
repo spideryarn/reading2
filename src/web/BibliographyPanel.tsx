@@ -675,8 +675,15 @@ export const BIBLIOGRAPHY_NONE = "We found no works this piece cites.";
    `why` is a sentence the model wrote **from the article**, about what the
    article uses the work for. Nothing here has read the work, and without saying
    so `why` reads as a description of it. So `why` carries a label, and every
-   row says what we have not read. The band and the hover card (ProseHoverCard.tsx
-   § CiteCard) both draw these strings, so the two surfaces cannot drift. */
+   row said what we have not read. The band and the hover card (ProseHoverCard.tsx
+   § CiteCard) both draw these strings, so the two surfaces cannot drift.
+
+   **Since 2026-10-11 the plain case is said once, above the list**, not on
+   every row (Greg, 2026-10-10, spya-rbp55k: *"it warms "we have not read this
+   work, just the piece that cites it" over and over and over again. It doesn't
+   really add much"*; plan 261011c). Once 261003j kept `why` off a row nothing
+   checked, that line stood beside a title and an author and qualified nothing.
+   A row still says what it is when something HAS been read, or a page found. */
 
 /** The label on `why`, in the band and the hover card alike. */
 export const CITE_WHY_LABEL = "what the article uses it for";
@@ -694,8 +701,9 @@ export function showsWhy(work: Pick<ShownWork, "lookup">, keptAnswerShown = fals
   return assessedOf(work) !== null || keptAnswerShown;
 }
 
-/** Every row, until something has read the work: nothing has. */
-export const CITE_NOT_READ = "We have not read this work, only the article that cites it.";
+/** Said once, above the list: true of every row until something has read its work. */
+export const CITE_LIST_NOT_READ =
+  "Unless a row says otherwise, we have read none of these works, only the article that cites them.";
 
 /**
  * **After *Find it* kept a page.** What code checked is that a search result's
@@ -740,10 +748,12 @@ export function citeReadUnreadable(host: string): string {
 
 /**
  * **Which line a row says.** A lookup, when there is one, says what it read;
- * otherwise `linkFrom` decides between the two stage-1 lines. Total over both
+ * otherwise `linkFrom` decides between the found page's line and `null`:
+ * nothing read and nothing found, which the band says once above the list
+ * (`CITE_LIST_NOT_READ`) and the hover card leaves unsaid. Total over both
  * unions, as `sourceOf` is. The band and the hover card both call this.
  */
-export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup" | "investigation">): string {
+export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup" | "investigation">): string | null {
   /* *Investigate* read the paper itself (plan 261001a stage 3): the strongest
      thing we have read, so it is what the row says, dated — a kept answer is a
      snapshot. Any other paper state leaves the line to what it was before. */
@@ -773,7 +783,7 @@ export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup" | "invest
     case "arxiv":
     case "article":
     case "search":
-      return CITE_NOT_READ;
+      return null;
     default: {
       const unhandled: never = work.linkFrom;
       return unhandled;
@@ -1082,6 +1092,9 @@ export function BibliographyPanel({
 
           {all.length === 0 && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE}</p>}
 
+          {/* Once, not on every row (plan 261011c). */}
+          {all.length > 0 && <p className="gloss-quiet cite-list-read">{CITE_LIST_NOT_READ}</p>}
+
           {all.length > 0 && (
             <div className="tl-scroll">
               <ol className="tl-list cite-list" ref={list}>
@@ -1268,6 +1281,7 @@ function WorkRow({
      deeper again*: the button went on 2026-10-09 (plan 261009k), and what it
      found stays on the row. Nothing new is written to it. */
   const kept = owned ? work.investigation : undefined;
+  const readNote = readNoteOf(work);
 
   return (
     <li
@@ -1285,7 +1299,7 @@ function WorkRow({
           <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
         </p>
       )}
-      <p className="cite-read">{readNoteOf(work)}</p>
+      {readNote !== null && <p className="cite-read">{readNote}</p>}
       <LookupReading work={work} />
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}

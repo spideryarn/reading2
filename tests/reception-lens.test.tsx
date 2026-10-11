@@ -341,6 +341,25 @@ describe("Your angles", () => {
     expect(angles()[1]?.querySelector(".rcp-angle-count")?.textContent).toBe("2");
   });
 
+  it("shows the chat's gist under its angle, in the model's face, and nothing until there is one (261011c)", () => {
+    /* Greg, 2026-10-10 (spya-rbp55k): a short summary of the chat in the
+       place that started it, "anywhere where we offer Ask in Chat". */
+    const gist = "Two replications failed; the third used a different measure.";
+    paintOwner([
+      summary({ id: "spya-aaa222", origin: LENS, updatedAt: "2026-10-05T11:00:00.000Z", gist }),
+      summary({
+        id: "spya-aaa333",
+        origin: { mode: "reception", lens: "replication attempts" },
+        updatedAt: "2026-10-05T12:00:00.000Z",
+      }),
+    ]);
+    const [fresh, gisted] = angles();
+    expect(fresh?.querySelector(".rcp-angle-gist")).toBeNull();
+    const line = gisted?.querySelector(".rcp-angle-gist");
+    expect(line?.textContent).toBe(gist);
+    expect(line?.classList.contains("voice-ai")).toBe(true);
+  });
+
   it("opens that chat on a press, and hands nothing over", () => {
     paintOwner([
       summary({ id: "spya-aaa222", origin: LENS }),

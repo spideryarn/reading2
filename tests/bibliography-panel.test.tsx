@@ -21,7 +21,7 @@ import { DELAY } from "../src/web/Tooltip.js";
 const {
   CAPPED_NOTE,
   BIBLIOGRAPHY_NONE,
-  CITE_NOT_READ,
+  CITE_LIST_NOT_READ,
   CITE_DOES_LABEL,
   CITE_PAGE_FOUND,
   CITE_QUOTE_LABEL,
@@ -1120,10 +1120,13 @@ describe("citingWordsOf", () => {
    Plan 260929g stage 1. Greg, 2026-09-29: *"be really careful to be clear
    about whether you could get the actual paper, so that we can be sure you're
    not hallucinating"*. `why` is the article's use of the work, never a summary
-   of the work, and every row says we have not read the work — including a row
-   whose Find it matched a page, since a page whose title matches is not a
-   page we checked is the paper (the plan's R-1). Asserted on the element, not
-   on the row's whole text, which a tooltip's words could satisfy. */
+   of the work. The band says once, above the list, that we have read none of
+   the works (Greg, 2026-10-10, spya-rbp55k: *"over and over and over again.
+   It doesn't really add much"*, plan 261011c); a row says something only when
+   it differs — a page Find it matched, which is still not a page we checked
+   is the paper (260929g's R-1), a lookup's extract, the paper read. Asserted
+   on the element, not on the row's whole text, which a tooltip's words could
+   satisfy. */
 
 /** A row *Find it* upgraded: a result whose title matched, attached at read time. */
 const FOUND = work({
@@ -1143,11 +1146,16 @@ const FOUND = work({
 });
 
 describe("what a row says we have read", () => {
-  it("says, on a row nobody looked up, that we have not read the work", async () => {
+  it("says once, above the list, that we have not read the works, and nothing on a row nobody looked up", async () => {
     await draw(owner());
     const r = row(CENTRAL.id);
-    expect(r.querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
-    expect(CITE_NOT_READ).toMatch(/not read/i);
+    expect(r.querySelector(".cite-read")).toBeNull();
+    const once = host.querySelectorAll(".cite-list-read");
+    expect(once).toHaveLength(1);
+    expect(once[0]?.textContent).toBe(CITE_LIST_NOT_READ);
+    expect(CITE_LIST_NOT_READ).toMatch(/read none/i);
+    /* Above the list, so it is read before the rows it qualifies. */
+    expect((once[0]?.compareDocumentPosition(r) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     /* And nothing the model wrote about the work: `why` is a paraphrase of
        the citing paragraph, and on a row nothing has checked it reads as what
        the paper says (Greg, spya-zmdb7y, plan 261003j). */
@@ -1195,14 +1203,14 @@ describe("what a row says we have read", () => {
     expect(said).toMatch(/not read/i);
     expect(said).toMatch(/title/i);
     expect(said).not.toMatch(/verif|confirm|from the (paper|work)|is the (paper|work)/i);
-    /* The other rows keep the plain line. */
-    expect(row(CENTRAL.id).querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+    /* The other rows say nothing; the band said it once. */
+    expect(row(CENTRAL.id).querySelector(".cite-read")).toBeNull();
   });
 
   it("is one function over linkFrom, so the band and the hover card say the same", () => {
     expect(readNoteOf(FOUND)).toBe(CITE_PAGE_FOUND);
     for (const linkFrom of ["doi", "arxiv", "article", "search"] as const) {
-      expect(readNoteOf({ linkFrom })).toBe(CITE_NOT_READ);
+      expect(readNoteOf({ linkFrom })).toBeNull();
     }
   });
 
@@ -1238,7 +1246,8 @@ describe("what a row says we have read", () => {
         }),
       ),
     );
-    expect(row("spya-v2w3x4").querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+    expect(row("spya-v2w3x4").querySelector(".cite-read")).toBeNull();
+    expect(host.querySelector(".cite-list-read")?.textContent).toBe(CITE_LIST_NOT_READ);
     expect(row("spya-v2w3x4").querySelector(".cite-find")).toBeNull();
   });
 
@@ -1301,8 +1310,8 @@ describe("what a row says after Look it up", () => {
     expect(citeReadUnreadable("arxiv.org")).toMatch(/not read the work itself/);
     expect(citeReadUnreadable("arxiv.org")).toMatch(/show nothing from that extract/);
     for (const [, line] of cases.slice(1)) expect(line).toMatch(/nothing/);
-    /* No lookup: stage 1's two lines, unchanged. */
-    expect(readNoteOf({ linkFrom: "doi" })).toBe(CITE_NOT_READ);
+    /* No lookup: the found page's line, or nothing (the band says it once). */
+    expect(readNoteOf({ linkFrom: "doi" })).toBeNull();
     expect(readNoteOf({ linkFrom: "web" })).toBe(CITE_PAGE_FOUND);
   });
 
@@ -1678,8 +1687,10 @@ describe("a row whose work is already an article here", () => {
     expect(a?.title).toContain("the same DOI");
     /* A DOI match is identity, so the row does not repeat the title. */
     expect(row(owned.id).querySelector(".cite-here-how")).toBeNull();
-    /* A matched article does not mean we read the cited work: 5G's line stands. */
-    expect(row(owned.id).querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+    /* A matched article does not mean we read the cited work: the band's
+       line above the list still covers it, and the row claims nothing more. */
+    expect(row(owned.id).querySelector(".cite-read")).toBeNull();
+    expect(host.querySelector(".cite-list-read")?.textContent).toBe(CITE_LIST_NOT_READ);
     expect(row(FAMOUS.id).querySelector(".cite-here")).toBeNull();
   });
 

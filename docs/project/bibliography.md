@@ -37,7 +37,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A row](#a-row) — what one row draws, and where its two scores come from
 - [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
 - [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
-- [§ What we have read of the work](#what-we-have-read-of-the-work-said-on-every-row) — the "read from" line on every row
+- [§ What we have read of the work](#what-we-have-read-of-the-work) — said once above the list, and on a row only when it differs
 - [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
 - [§ Which citation, and whose entry](#which-citation-and-whose-entry) — matching a mention to a bibliography entry; numbered PDF lists
 - [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
@@ -188,21 +188,34 @@ The row always says which. An address shows its host and its rule (*doi.org · D
 search is drawn as a search — the title is not a link, and the one link says *search Scholar*.
 `sourceOf` in [`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) is total over `linkFrom`.
 
-## What we have read of the work, said on every row
+## What we have read of the work
 
 Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 
 > be really careful to be clear about whether you could get the actual paper, so that we can be sure
 > you're not hallucinating
 
-Nothing that makes the list reads the cited work, so every row and hover card carries one quiet line
-saying what we have read. Usually that is nothing: *We have not read this work, only the article that
-cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
-of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
+Nothing that makes the list reads the cited work, so the band says so **once, above the list**:
+*Unless a row says otherwise, we have read none of these works, only the article that cites them.*
+Until 2026-10-11 every row and hover card said it (*We have not read this work, only the article that
+cites it.*), and Greg asked for it to go:
+
+> In bibliography mode, it warms "we have not read this work, just the piece that cites it" over
+> and over and over again. It doesn't really add much. Since we've got rid of the vacuous summary
+> phrase, so maybe we can get rid of that warming as well.
+>
+> — Greg, 2026-10-10 (`spya-rbp55k`), plan [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)
+
+It had been there to qualify `why`, which since 261003j is not drawn on a row nothing checked, so on
+a plain row it qualified nothing. A row, and a hover card, still carry a line when there is
+something different to say: a page *Find it* matched (*We found a web page matching its title,
+but have not read the work itself.*). After *Look it up* it names what was read, which is only ever
+a search engine's extract of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
 (§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), the line says that instead,
 with the host, the length and the day. `readNoteOf` in
 [`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) is the one source of that line for both
-surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
+surfaces, total over `linkFrom` and the lookup's state, and `null` when there is nothing to add to
+the band's line (`CITE_LIST_NOT_READ`); a hover card then says nothing about reading. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
 
 ## Nothing about the work beyond the article's bibliography
@@ -602,7 +615,7 @@ What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
   when the list is read, and attached only on a match.
 
 What it says to the reader: the provenance line (§ [What we have read of the
-work](#what-we-have-read-of-the-work-said-on-every-row)) names the extract, its size and host; the
+work](#what-we-have-read-of-the-work)) names the extract, its size and host; the
 verdict is labelled *the AI's reading of that extract*, the quotes *from the search extract*. **The
 residual risk** is Debate's: a hostile page can steer the AI's reading while every quote shown is
 genuinely in its extract. That is why the verdict is labelled as a reading and never as a fact.

@@ -1692,6 +1692,11 @@ function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
                     “<span className="rcp-angle-words voice-reader">{chat.origin.lens}</span>”
                   </span>
                   <span className="rcp-angle-count">{chat.turns}</span>
+                  {/* The chat's gist under the angle, as every other item's mark
+                      shows it (OriginChat.tsx § OriginChatMark; Greg,
+                      2026-10-10, spya-rbp55k: *"true for anywhere where we
+                      offer Ask in Chat"*, plan 261011c). The model's words. */}
+                  {chat.gist && <span className="rcp-angle-gist origin-chat-gist voice-ai">{chat.gist}</span>}
                 </button>
               </li>
             ))}

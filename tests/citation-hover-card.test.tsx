@@ -35,7 +35,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CITE_NOT_READ,
   CITE_PAGE_FOUND,
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
@@ -471,17 +470,21 @@ describe("resting on a citation", () => {
 describe("what the card says we have read", () => {
   const read = () => card()?.querySelector(".prose-card-cite-read")?.textContent;
 
-  it("says we have not read the work, and labels why as the article's", () => {
+  it("says nothing about reading an unread work, and draws no why (plan 261011c)", () => {
     paint();
     hover(cite(0));
-    expect(read()).toBe(CITE_NOT_READ);
+    /* Greg, 2026-10-10 (spya-rbp55k): said over and over, the line added
+       nothing once nothing beside it was about the work. */
+    expect(card()?.querySelector(".prose-card-cite-read")).toBeNull();
+    /* Nor the part that held it, which would be an empty gap with a margin. */
+    expect(card()?.querySelector(".prose-card-part-why")).toBeNull();
     /* Nothing the model wrote about the work, until something was checked
        against it (Greg, spya-zmdb7y, plan 261003j). */
     expect(card()?.querySelector(".prose-card-part-why .prose-card-label")).toBeNull();
     expect(card()?.textContent).not.toContain(TULVING.why);
     /* A searched row too: a Scholar search is not the work either. */
     hover(cite(1));
-    expect(read()).toBe(CITE_NOT_READ);
+    expect(card()?.querySelector(".prose-card-cite-read")).toBeNull();
   });
 
   it("after Find it, says only that a page matching the title was found", () => {
