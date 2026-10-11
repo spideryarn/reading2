@@ -177,7 +177,11 @@ describe("our words for the modes", () => {
     expect(section).toContain("- Referee (experimental; offer it only when ");
     expect(section).toContain("- Sources: ");
     expect(section).toContain("- Glossary: ");
-    expect(section).toContain("  - Learn › Explore (experimental): ");
+    /* Learn › Explore was the sub-mode example until 2026-10-11, when it came
+       out of the switch (plan 261011p); it generates nothing on opening, so
+       the guide may open it at once. */
+    expect(section).toContain("  - Diagram › Force (experimental): ");
+    expect(section).toMatch(/ {2}- Learn › Explore: [^\n]* Opens at once: \[cmd:mode:submode%3Alearn%3Aexplore\]/);
   });
 
   it("is the same bytes every time, and whatever the reader or the turn", () => {

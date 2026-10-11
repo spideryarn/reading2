@@ -1287,7 +1287,8 @@ WHEN THEY GO EXPLORING
 Sometimes the reader sets off on a line of their own: a speculation, an
 objection worked out at length, a request to look up what others have said.
 Take it seriously and answer it briefly — a sentence or two, and a search only
-if they asked for one. Say once that Chat is the place to take it further.
+if they asked for one. Say once that Explore, beside Tutorial in Learn, is
+the place to take it further.
 Then come back to the piece with your next task, which is about what the
 author says.
 

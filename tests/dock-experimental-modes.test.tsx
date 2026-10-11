@@ -76,8 +76,8 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   "referee",
   /* Learn was here from 2026-09-03 until 2026-10-05, when Greg asked for
      Recall, Quiz and Tutorial in the mainstream features (spya-cnqcjf). Its
-     Explore chip stays behind the switch, one level down:
-     tests/learn-header-cards.test.tsx § "Explore is behind the switch". */
+     Explore chip stayed behind the switch, one level down, until 2026-10-11:
+     tests/learn-header-cards.test.tsx § "every part of Learn is shown". */
   /* Debate (2026-09-05) and Citations (2026-09-11) were here until 2026-10-09,
      when they became Sources and came out of the switch together. Greg
      (spya-vcvxu5): *"let's move this out of experimental, this combined

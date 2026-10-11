@@ -467,9 +467,9 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["recall", "remember", "memorise", "memorize", "study", "revise", "revision", "practice", "practise"],
     /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
        *"I think recall submode for sure. I think quiz mode as well. And then
-       let's try tutorial too."* Explore, the fourth part, stays behind the
-       switch one level down (src/web/sub-modes.ts § `LEARN_SUB_MODES`).
-       docs/project/experimental-features.md. */
+       let's try tutorial too."* Explore, the fourth part, stayed behind the
+       switch one level down until 2026-10-11 (spya-jm0nfg; src/web/sub-modes.ts
+       § `LEARN_SUB_MODES`). docs/project/experimental-features.md. */
     experimental: false,
   },
   quotes: {

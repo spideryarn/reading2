@@ -260,12 +260,13 @@ describe("which sub-mode rows the bar offers", () => {
     expect(modeRows).not.toContain("Referee");
     const names = subRows().map(fullName);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
-    /* Learn is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
-       three of its four parts; Explore is still behind the switch. */
+    /* Learn is in every reader's bar since 2026-10-05 (spya-cnqcjf), and
+       all four of its parts since Explore came out on 2026-10-11 (spya-jm0nfg). */
     expect(modeRows).toContain("Learn");
     expect(names.filter((n) => n.startsWith("Learn"))).toEqual([
       "Learn › Recall",
       "Learn › Tutorial",
+      "Learn › Explore",
       "Learn › Quiz",
     ]);
     expect(names).not.toContain("Diagram › Illustrated");
@@ -313,14 +314,17 @@ describe("which sub-mode rows the bar offers", () => {
   });
 
   it.each(["article", "metadata"] as const)(
-    "with the switch off, offers Explore only for the carried Learn mode on %s",
+    "with the switch off, offers Explore whatever the address carries, on %s",
     (view) => {
+      /* Until 2026-10-11 Explore was offered only for a carried Learn mode on
+         `learn=explore`; since it came out of the switch (spya-jm0nfg) it is
+         offered from every address. */
       for (const [search, offered] of [
         ["?mode=learn&learn=explore", true],
-        ["?mode=chat&learn=explore", false],
-        ["?learn=explore", false],
-        ["?mode=learn&learn=unknown", false],
-        ["?mode=learn&learn=quiz", false],
+        ["?mode=chat&learn=explore", true],
+        ["?learn=explore", true],
+        ["?mode=learn&learn=unknown", true],
+        ["?mode=learn&learn=quiz", true],
       ] as const) {
         if (view === "metadata") metadataPage({ experimental: EXPERIMENTAL_OFF }, search);
         else {

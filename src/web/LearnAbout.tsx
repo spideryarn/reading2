@@ -15,9 +15,10 @@
  * importing sub-modes.ts there put that module in both graphs
  * (tests/eager-client-graph.test.ts). Plan 261004f.
  *
- * **It lists the parts the chip row draws, not always all four**: Explore is
- * behind the experimental-features switch since 2026-10-05, and a line about a
- * part with no chip would describe something the reader cannot find. The hook
+ * **It lists the parts the chip row draws**, which is all four since Explore
+ * came out of the experimental-features switch on 2026-10-11; a part put
+ * behind it again would lose its line too, since a line about a part with no
+ * chip would describe something the reader cannot find. The hook
  * is read here rather than handed down because this is a component of its own,
  * so only a Learn band subscribes. `current` is the part the band is on.
  */

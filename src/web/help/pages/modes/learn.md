@@ -1,6 +1,6 @@
 ---
 keywords: recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn remember check understanding explain back study revise critique criticism problems objections weaknesses
-related: experimental-features
+related: mode-chat, comments
 ---
 
 ## In short
@@ -41,9 +41,7 @@ it again. For something you will not need next week, it is not worth the effort.
   case (your own, when your reason for reading gives one), makes a connection, raises one possible
   problem with the piece for you to weigh, or looks up what others have said and links it. It says
   which parts come from the article, the web, your notes and its own view. One Explore conversation
-  per article; typed or dictated, with no Live conversation yet. Explore is one of the [experimental
-  features](/help/experimental-features), so its chip appears with those on, and stays visible while
-  Explore is open.
+  per article; typed or dictated, with no Live conversation yet.
 - **Quiz**: up to twenty short questions written from the piece, each answered in a sentence or two.
   Writing them takes about a minute the first time.
 

@@ -120,8 +120,8 @@ export function LearnBand({
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("LearnBand");
-  /* Only for which chips the row draws: Explore is behind the switch
-     (QuizPanel.tsx § `LearnSubModeToggle`). */
+  /* Only for which chips the row draws (QuizPanel.tsx § `LearnSubModeToggle`);
+     no Learn part is behind the switch since Explore came out on 2026-10-11. */
   const { on: experimentalOn } = useExperimental();
   const [{ learn, thread }, setBoth] = useQueryStates({
     learn: learnParam,

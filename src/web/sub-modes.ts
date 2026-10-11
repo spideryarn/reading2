@@ -54,8 +54,8 @@ export type ModeWithSubModes = SubMode["mode"];
  * `description` is the bar's one line, in the voice of `MODE_CATALOG`'s; the
  * chips keep their own longer tooltips. `experimental` is whether the chip is
  * behind the experimental-features switch *within* its mode — four of Diagram's
- * pictures are, and Learn's Explore (since 2026-10-05); every other mode
- * puts the whole mode behind it or none.
+ * pictures are (Learn's Explore was, from 2026-10-05 to 2026-10-11); every
+ * other mode puts the whole mode behind it or none.
  *
  * `aliases` is for a sub-mode a reader knows by another word, and one has them:
  * Summary's Thread, which was the Tweets mode until 2026-10-03. They are the
@@ -88,11 +88,10 @@ export const LEARN_SUB_MODES: Readonly<Record<LearnView, SubModeWords>> = {
     /* Widened 2026-10-05 (Greg, spya-mvmpks): not only the reader's own ideas
        but *"potential problems and criticisms and concerns"* about the piece. */
     description: "Think it through for yourself: your own ideas, where the piece may be weak, and what others say. Starts from what you have marked and discussed",
-    /* The one part of Learn still behind the switch. Greg named Recall,
-       Quiz and Tutorial for the mainstream features on 2026-10-04
-       (spya-cnqcjf) and left this one out; it is two days old.
-       docs/project/experimental-features.md. */
-    experimental: true,
+    /* Behind the switch from 2026-10-05, when Greg named the other three for
+       the mainstream features (spya-cnqcjf); out on 2026-10-11, *"because
+       it's useful"* (spya-jm0nfg). docs/project/experimental-features.md. */
+    experimental: false,
   },
   quiz: {
     label: "Quiz",
@@ -105,8 +104,9 @@ export const LEARN_SUB_MODES: Readonly<Record<LearnView, SubModeWords>> = {
  * **The parts of Learn to draw**, in chip order: every part that is not
  * behind the experimental-features switch, plus all of them when the switch is
  * on, plus the one the reader is in (`current`) — the bar's own rule,
- * experimental-visibility.ts. So an old `?learn=explore` link still shows
- * its chip pressed with the switch off.
+ * experimental-visibility.ts. No part of Learn is behind the switch since
+ * Explore came out on 2026-10-11, so today this returns all four; it stays
+ * as the one place a new part would be gated.
  *
  * One function for the two places in the band that list the parts, the chips
  * (QuizPanel.tsx § `LearnSubModeToggle`) and the (i) (LearnAbout.tsx),
