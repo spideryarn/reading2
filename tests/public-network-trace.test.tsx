@@ -3989,11 +3989,19 @@ describe("a visitor holding a private link", () => {
     expect(host.textContent).toContain(PROSE);
     expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
     const asked = trace.filter((r) => r.url.includes(SLUG));
+    /* Twice: after the first read, the page asks once whether this reader's
+       gift claim just made the article theirs, and reads again owner-first
+       whatever the answer (src/web/article/useClaimSharedArticle.ts, 261011n). */
     expect(asked.map((r) => `${r.method} ${r.url}`)).toEqual([
       `GET /api/article/${SLUG}`,
       `GET ${withKey}`,
+      `GET /api/article/${SLUG}`,
+      `GET ${withKey}`,
     ]);
-    expect(asked[1]?.auth, "the public request carries no token").toBeNull();
+    for (const r of asked.filter((r) => r.url.includes("key="))) {
+      expect(r.auth, "the public request carries no token").toBeNull();
+    }
+    expect(trace.filter((r) => r.url.startsWith("/api/billing/usage"))).toHaveLength(1);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 

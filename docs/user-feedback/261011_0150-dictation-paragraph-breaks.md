@@ -1,7 +1,7 @@
 ---
 reports: spya-x6qjbn
-ending: awaiting
-comment: There's no clean-up prompt to tweak, and the transcriber ignores a paragraph instruction (tested). Paragraph breaks would need a new second step, so that's a question to you (q-a0qp3x).
+ending: declined
+comment: There's no clean-up prompt to tweak, and the transcriber ignores a paragraph instruction (tested). You chose to leave dictation as one paragraph rather than add a second step (q-a0qp3x, A).
 ---
 # Paragraph breaks in dictation
 
@@ -15,7 +15,8 @@ An admin report from Greg (`scripts/feedback-reporter.ts` exit 0), `spya-x6qjbn`
 > things up. I don't know if that's right, but if it is, can we make a minimal tweak to that LLM
 > prompt to ask it to add paragraph breaks where appropriate?
 
-**Ending: awaiting Greg**, question [q-a0qp3x](questions/q-a0qp3x.md).
+**Ending: declined**, on Greg's answer A to [q-a0qp3x](questions/q-a0qp3x.md) (reply `spya-rg47vu`,
+2026-10-11): leave dictation as one paragraph, with no second pass. It was *awaiting Greg* until then.
 
 There is no LLM tidy-up step. The quick stage is the browser's own recogniser (Chromium only, a
 preview that is thrown away), and the second is `openai/gpt-transcribe`, whose request carries the

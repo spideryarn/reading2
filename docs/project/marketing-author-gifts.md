@@ -66,3 +66,10 @@ until Greg presses *Send* — nothing is emailed automatically. How it works is
 [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author); the plan,
 its reviews and every decision are
 [261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
+
+**Since 2026-10-11 the gift ends with the article being theirs.** An agent drafting a gift answers
+the draft's own address (`/admin/vouchers?gift=<id>`) for the harness to open, and when the
+recipient signs in and opens the private link, the article moves to their account, made private,
+so they can use chat and every mode on it as its owner. It moves by itself only if Greg left none
+of his own notes or chats on it; otherwise he moves it on `/admin/articles`
+([261011n](../plans/261011n-author-gift-link-and-article-ownership-transfer.md)).

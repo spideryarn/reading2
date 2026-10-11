@@ -1460,9 +1460,36 @@ export interface SkimDrops {
    * `skim/12`, read it as 0.
    */
   shrinkMoved?: number;
+  /**
+   * `again` entries **added** for the same rule, before anything is dropped
+   * or moved: the most important shallower stop carried into a deeper pass
+   * that was not longer than the one before — `growPasses` in src/skim.ts,
+   * since `skim/13` (q-vzd2xt, answer B; docs/plans/261011r-skim-more-always-longer-than-gist-a-pass-intro-shorter-quotes-skim-for-box.md).
+   * Absent before, read it as 0.
+   */
+  growCarried?: number;
+  /**
+   * Pass intros set to `null`: missing, empty, not a string or over
+   * `MAX_INTRO_CHARS` on a pass the route offers, or anything said for one it
+   * does not — `introsOf` in src/skim.ts, since `skim/13`. The route is kept.
+   * Absent before, read it as 0.
+   */
+  badIntro?: number;
+  /**
+   * Pass intros set to `null` because `growPasses` moved one of that pass's
+   * own stops in or out, so the intro maps a different walk — `introsOf`,
+   * since `skim/13` (GPT Sol, plan review F3). Absent before, read it as 0.
+   */
+  movedIntro?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
+
+/**
+ * Each pass's intro — `[gist, more, most]` — what that walk goes through, in
+ * the model's words; never a finding (src/skim.ts § `MAX_INTRO_CHARS`).
+ */
+export type SkimIntros = [string | null, string | null, string | null];
 
 /** The artefact. The `skim` column on `article_revisions`. */
 export interface Skim {
@@ -1488,6 +1515,14 @@ export interface Skim {
   profileHash: string | null;
   /** **The array order is the route.** Each pass walks its own and carried stops in this order (see `SkimDepth`). */
   stops: SkimStop[];
+  /**
+   * **One line per pass, read before its first stop** — Gist, More, Most;
+   * `null` for a pass the route does not offer or whose intro was bad.
+   * **Absent** on routes written before `skim/13`, which draw none.
+   * Owner only: the visitor's route (src/public/dto.ts § `publicSkim`) is built
+   * field by field and does not carry it. Plan 261011r.
+   */
+  intros?: SkimIntros;
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
    * and validated. Growing, by construction. Not what the band counts: it counts the own and
@@ -5946,8 +5981,58 @@ export interface Relations {
    */
   relations: Record<BlockId, Relation>;
   dropped: RelationsDropped;
+  /**
+   * **A few notes the model chose to write**, beside the passage each is about
+   * (`relations/3`, plan 261011o). Absent on a row written before then, which
+   * reads as none. Never more than `noteCap` (src/relations.ts), and often none.
+   */
+  notes?: MarginNote[];
+  /** What validation threw away from `notes`. Absent with them. */
+  notesDropped?: MarginNotesDropped;
   generatedAt: string;
   elapsedMs: number;
+}
+
+/**
+ * **What kind of note the model wrote**: the four Greg asked for (spya-qyuet0).
+ * `recall` and `tension` always point at another passage; `aside` may.
+ */
+export const MARGIN_NOTE_KINDS = ["explain", "recall", "tension", "aside"] as const;
+export type MarginNoteKind = (typeof MARGIN_NOTE_KINDS)[number];
+
+/** One note in the margin, written by the `relations` call. */
+export interface MarginNote {
+  /** The passage it sits beside. */
+  blockId: BlockId;
+  kind: MarginNoteKind;
+  /** The note, in the AI's words. */
+  text: string;
+  /** The words in `blockId` the note is about — the article's characters, checked. */
+  quote: string;
+  /** The other passage it is about, or null. Never `blockId`. */
+  to: BlockId | null;
+  /** The words in `to` it means, the article's characters, checked; null exactly when `to` is. */
+  toQuote: string | null;
+}
+
+/** What validation threw away from the notes. Counts only. */
+export interface MarginNotesDropped {
+  /** A row that is not an object. */
+  malformed: number;
+  /** `blockId` or `to` is not a passage of the article's body. */
+  unknown: number;
+  /** A kind outside `MARGIN_NOTE_KINDS`. */
+  offList: number;
+  /** `to`/`toQuote` disagree on null, or `to` is self, absent when required, or present on `explain`. */
+  badTarget: number;
+  /** A quote that is not in its passage, spacing and all, or is too long to be one. */
+  unquoted: number;
+  /** Empty, or longer than `NOTE_MAX_WORDS`. */
+  badText: number;
+  /** A second note beside a passage that already has one; the first wins. */
+  repeated: number;
+  /** Past the cap, after every other rule, in the model's order. */
+  overCap: number;
 }
 
 /** `GET /api/relations/:slug`. Two staleness facts: no profile is in this stamp. */
@@ -7425,8 +7510,11 @@ export interface Citer {
  * list.** No model made any of it, and it is not part of the stored Debate.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
- * - `no-doi` — the article has no usable DOI, and its own address is not an arXiv page
- *   (`citersIdOf`, src/citation-index.ts), so nothing was asked.
+ * - `no-doi` — the article has no usable DOI, its own address is not an arXiv page
+ *   (`citersIdOf`, src/citation-index.ts), and it has no author or no title
+ *   distinctive enough to search by, so nothing was asked.
+ * - `no-match` — no DOI, so OpenAlex was searched by title, and no one record
+ *   passed `titleMatchOf`. Not a claim that OpenAlex has no record of it.
  * - `not-indexed` — OpenAlex has no record of the DOI.
  * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
  *   article: its title and one author must both agree. Not a claim that the
@@ -7438,16 +7526,23 @@ export interface Citer {
  *   how many records its answer carried, `dropped` how many of those could not
  *   be shown (no title, a malformed id, a duplicate), and `capped` whether the
  *   page limit left some out. `citers.length` is `returned - dropped`, so the
- *   panel can say which of the two reasons a short list has.
+ *   panel can say which of the two reasons a short list has. `via` says how the
+ *   work was reached, by its DOI or by a title search (plan 261011q), and
+ *   `target` is OpenAlex's record of it, which the panel shows after a title
+ *   search so that a wrong match can be seen to be one.
  */
 export type CitersResult =
   | { kind: "no-doi" }
+  | { kind: "no-match" }
   | { kind: "not-indexed" }
   | { kind: "unconfirmed" }
   | { kind: "unavailable" }
   | { kind: "too-large" }
   | {
       kind: "found";
+      via: "doi" | "title";
+      /** OpenAlex's id (`W…`, shape-checked) and its own title for the work: a stranger's string. */
+      target: { openalexId: string; title: string };
       count: number;
       returned: number;
       dropped: number;

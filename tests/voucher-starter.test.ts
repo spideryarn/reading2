@@ -553,7 +553,7 @@ describe("the voucher list", () => {
     expect((await drive("POST", "/api/admin/vouchers", bare)).status).toBe(201);
 
     const listed = await listVouchers();
-    expect(listed.find((v) => v.id === body.id)?.starter).toEqual({ slug: mine.slug, title: mine.title });
+    expect(listed.find((v) => v.id === body.id)?.starter).toEqual({ slug: mine.slug, title: mine.title, owner: null });
     expect(listed.find((v) => v.id === bare.id)?.starter).toBeNull();
     const reply = await drive("GET", "/api/admin/vouchers", null);
     expect(reply.status).toBe(200);
@@ -562,7 +562,7 @@ describe("the voucher list", () => {
 
     /* Deleted: the slug stays, the title goes with the article. */
     await deleteArticle(mine.id);
-    expect((await listVouchers()).find((v) => v.id === body.id)?.starter).toEqual({ slug: mine.slug, title: null });
+    expect((await listVouchers()).find((v) => v.id === body.id)?.starter).toEqual({ slug: mine.slug, title: null, owner: null });
   });
 
   it("reads the emails' state, never their bodies", () => {

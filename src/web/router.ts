@@ -79,6 +79,7 @@ import {
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
 import {
+  ADMIN_ARTICLES_PATH,
   ADMIN_COSTS_PATH,
   ADMIN_FEEDBACK_PATH,
   ADMIN_USERS_PATH,
@@ -101,7 +102,7 @@ import {
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
-export type AdminPage = "home" | "users" | "feedback" | "vouchers" | "costs";
+export type AdminPage = "home" | "users" | "feedback" | "vouchers" | "costs" | "articles";
 
 export type Route =
   | { kind: "library" }
@@ -530,7 +531,7 @@ export function parseRoute(pathname: string): Route {
      matches nothing here and falls through to `not-found`, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
-  const adminPath = /^\/admin(?:\/(users|feedback|vouchers|costs))?\/?$/.exec(pathname);
+  const adminPath = /^\/admin(?:\/(users|feedback|vouchers|costs|articles))?\/?$/.exec(pathname);
   if (adminPath) {
     /* The captured segment *is* the page name for every page but the index,
        which has no segment. Written as a lookup rather than a chain of
@@ -541,7 +542,7 @@ export function parseRoute(pathname: string): Route {
     return {
       kind: "admin",
       page:
-        page === "users" || page === "feedback" || page === "vouchers" || page === "costs"
+        page === "users" || page === "feedback" || page === "vouchers" || page === "costs" || page === "articles"
           ? page
           : "home",
     };
@@ -681,6 +682,8 @@ export const ADMIN_FEEDBACK_HREF = ADMIN_FEEDBACK_PATH;
 export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
 /* The cost explorer — plan 261005a. */
 export const ADMIN_COSTS_HREF = ADMIN_COSTS_PATH;
+/* Every article, and moving one to another account — plan 261011n § D4. */
+export const ADMIN_ARTICLES_HREF = ADMIN_ARTICLES_PATH;
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /** The consent page for an AI app's sign-in — the `oauth-consent` variant. */

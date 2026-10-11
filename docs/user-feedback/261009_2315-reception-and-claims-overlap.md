@@ -1,7 +1,7 @@
 ---
 reports: spya-vh0z7s
-ending: awaiting
-comment: The Claims card no longer reads like a second Reception. Whether to merge the two is a question to you (q-hbg65m); recommended to keep both for now.
+ending: shipped
+comment: You chose to keep Reception and Claims as two sub-modes, with the clearer Claims card already built (q-hbg65m 1A). And Cited by now finds a piece with no DOI by its title and authors at OpenAlex (2C).
 ---
 # Reception and Claims seem to overlap
 
@@ -17,7 +17,7 @@ An admin report from Greg (`scripts/feedback-reporter.ts` exit 0), `spya-vh0z7s`
 > overturned it? I don't know. I mean, those seem kind of overlapping. I wonder if we could/should
 > merge them somehow?
 
-**Ending: awaiting Greg**, question [q-hbg65m](questions/q-hbg65m.md), question 1.
+**Ending: shipped.** It was awaiting Greg on [q-hbg65m](questions/q-hbg65m.md), question 1; on 2026-10-11 he answered `1A` (reply `spya-qne5cs`): keep the two sub-modes, as built. His `2C` on the same question, a title search for a piece with no DOI, was built the same day in [261011q](../plans/261011q-cited-by-finds-a-paper-with-no-doi-by-title-and-author-at-openalex.md) (queue item `qi-4rdhx39b`, session `fbvh0z7s-cited-by-openalex`).
 
 Built meanwhile, because it is right whichever he picks: the Claims chip's card said *"What others
 say about each claim it makes"*, next to Reception's *"What others say about this piece"*. It now

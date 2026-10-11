@@ -2,9 +2,10 @@
 id: q-vzd2xt
 report: spya-nbmce7
 status: answered
+acted: spya-sfm0g4
 asked: 2026-10-10
 title: Skim: should More always have more stops than Gist, even if Gist gets shorter on short articles?
-refs: qi-67k544sa · SPIDERYARN-READING2-GC · docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md · docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md · docs/user-feedback/261010_1800-skim-deeper-passes-never-shorter-and-a-previous-stop.md
+refs: qi-67k544sa · qi-g8pdgfgg · SPIDERYARN-READING2-GC · docs/plans/261011r-skim-more-always-longer-than-gist-a-pass-intro-shorter-quotes-skim-for-box.md · docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md · docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md · docs/user-feedback/261010_1800-skim-deeper-passes-never-shorter-and-a-previous-stop.md
 ---
 Your report: Most had fewer stops than More. That is fixed: Most now always has more stops than More, and no pass has fewer than the one before. One choice is left. On short articles (about 11 to 13 quotes), More can still have the SAME number of stops as Gist, for example 3 / 3 / 5.
 
@@ -36,3 +37,9 @@ Reply "A" or "B"; anything else, say so.
 > q-vzd2xt use your judgment
 
 Settled as A, the Overseer's call on the recommendation above: More may equal Gist on short articles, never fewer, and Gist keeps its 3 stops. That is what is built and live, so nothing changes.
+
+## Greg's answer, 2026-10-11 (reply spya-sfm0g4, in the dialog), superseding the one above
+
+> B (and maybe that means that the more detailed sub-modes get longer, rather than the least detailed one getting shorter)
+
+Built as B, the deeper passes getting longer rather than Gist shorter: skim/13, plan 261011r, on dev and not deployed. With eight or more quotes More now always walks more stops than Gist, and Most more than More. Gist keeps its target. More's own target is at least one more than Gist, and where that is not enough a stop is carried into the deeper pass rather than one taken from Gist. Measured on eight articles, two runs each: every route of eight or more quotes grew strictly, no stop had to leave Gist, and Gist covered as many key ideas as before (docs/investigations/261011b-skim-more-beats-gist-intros-and-short-stops.md).

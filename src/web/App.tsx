@@ -59,6 +59,8 @@ const loadAdminCosts = () =>
   import("./AdminCostsPage.js").then((m) => ({ default: m.AdminCostsPage }));
 const loadAdminVouchers = () =>
   import("./AdminVouchersPage.js").then((m) => ({ default: m.AdminVouchersPage }));
+const loadAdminArticles = () =>
+  import("./AdminArticlesPage.js").then((m) => ({ default: m.AdminArticlesPage }));
 /* One loader per admin page, keyed by the union, so a page added to
    `AdminPage` without a loader is a compile error rather than a fall-through
    to the index — the same reason page-title.ts keys its titles this way. */
@@ -68,6 +70,7 @@ const ADMIN_LOADERS: Record<AdminPage, PageLoader> = {
   feedback: loadAdminFeedback,
   vouchers: loadAdminVouchers,
   costs: loadAdminCosts,
+  articles: loadAdminArticles,
 };
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 /* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is

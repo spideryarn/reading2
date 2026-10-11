@@ -7,8 +7,9 @@ related: mode-ideas, comments
 
 Good readers write in the margins. Marginalia puts notes in a column to the right of the text, each
 beside the paragraph it is about: a question for each part, a mark where an idea turns up, and
-*so*, *but* or *vs* where the argument turns. It is a switch rather than a mode you change to, so it
-can stay open beside whatever else you are doing.
+*so*, *but* or *vs* where the argument turns. It may also add a few short explanations, reminders
+or tensions between passages. It is a switch rather than a mode you change to, so it can stay open
+beside whatever else you are doing.
 
 ![The Marginalia column beside an essay: at the top, the part being read and where its argument has got to; lower down, an introduces note beside the passage where the idea first occurs, and a shut FAQ line](../images/mode-marginalia.png "Marginalia: where you are at the top, an idea’s note beside the passage that first puts it, and a FAQ question shut until you press it.")
 
@@ -30,4 +31,6 @@ pressing **Marginalia** again swaps the notes in for it.
 - **Other modes’ lines**, shut by default: saved FAQ questions, dated Timeline events, Sources’
   claims and cited works can appear beside their passages, as can your comments. A line shows one
   item or a count; press it to open it.
+- **Note, Recall or Tension** is a short AI-written note. Recall and Tension link to the other
+  passage they refer to; press the link to go there and check its words.
 - The top of the column shows where you are, and where the argument has got to.

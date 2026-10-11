@@ -405,6 +405,18 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["POST"],
     witnesses: ["/api/admin/author-gifts/w1/send"],
   },
+  /* Every article, and one article's transfer, 261011n — after the gifts whose
+     starter articles a claim will move. */
+  {
+    match: { kind: "literal", path: "/api/admin/articles" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/articles"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/admin/articles/w1/transfer"],
+  },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
     methods: ["GET"],
@@ -1105,8 +1117,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    old one, for one deploy (plan 261009w Stage 3, removed by its contract);
    116 with dismissing one of the bar's suggestions (plan 261010u); 117 with
    an admin's addenda to their own reports (plan 261010o); 118 with a
-   reviewer's major/minor comment sort (plan 261011f). */
-const EXPECTED_MATCHER_COUNT = 118;
+   reviewer's major/minor comment sort (plan 261011f); 120 with every article
+   and one article's transfer (plan 261011n). */
+const EXPECTED_MATCHER_COUNT = 120;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1121,8 +1134,9 @@ const EXPECTED_MATCHER_COUNT = 118;
    the new Reception GET, the new list GET and the new checks' GET and POST
    beside their old paths (plan 261009w Stage 3); 143 with dismissing one of
    the bar's suggestions (plan 261010u); 144 with the addenda's POST (plan
-   261010o); 145 with a reviewer's major/minor comment sort (plan 261011f). */
-const EXPECTED_GUARD_COUNT = 145;
+   261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
+   with every article, and a transfer's preview and POST (plan 261011n). */
+const EXPECTED_GUARD_COUNT = 148;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2287,6 +2301,10 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/lookups$/",
         "PATCH regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$/",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$/",
+        // every article, and one article's transfer, 261011n — after the gifts
+        "GET literal /api/admin/articles",
+        "GET regex /^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$/",
+        "POST regex /^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$/",
         "GET literal /api/admin/feedback",
         // an admin's own earlier reports, 261007d — beside the list across owners
         "GET literal /api/admin/feedback/earlier",

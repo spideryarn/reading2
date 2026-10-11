@@ -1,7 +1,8 @@
 /**
  * **The citation index's cache, in Postgres** — the mechanical half of
  * src/citation-index.ts: two tables (src/db/schema.ts § citation index), one
- * row per DOI and one per citing paper.
+ * row per DOI (or per OpenAlex work found by title, `CitersKey`) and one per
+ * citing paper.
  *
  * - **The row and its list are replaced together**, in one transaction pinned
  *   to `read committed`: the lookup row is upserted, its old citers deleted and
@@ -21,8 +22,7 @@
 
 import { sql } from "drizzle-orm";
 
-import type { WorkId } from "../bibliographic.js";
-import type { CitationIndexStore, FetchedCiters, StoredCiters } from "../citation-index.js";
+import type { CitationIndexStore, CitersKey, FetchedCiters, StoredCiters } from "../citation-index.js";
 import { getDb } from "../db/client.js";
 import type { Citer } from "../types.js";
 import { guardDbStore } from "./db-errors.js";
@@ -113,7 +113,7 @@ const rawPgCitationIndexStore: CitationIndexStore = {
     }, READ_COMMITTED);
   },
 
-  async write(id: WorkId, answer: FetchedCiters): Promise<string> {
+  async write(id: CitersKey, answer: FetchedCiters): Promise<string> {
     const found = answer.kind === "found" ? answer : null;
     return getDb().transaction(async (tx): Promise<string> => {
       /* `sql.param`, because a bare array inside drizzle's `sql` is spread into

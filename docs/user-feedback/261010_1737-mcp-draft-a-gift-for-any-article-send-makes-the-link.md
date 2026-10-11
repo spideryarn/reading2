@@ -1,7 +1,7 @@
 ---
 reports: spya-cwb56b
 ending: shipped
-comment: An agent can now draft a gift for any article on your shelf; your Send makes the private link. Making an article public from ChatGPT is a question for you (q-pe52f6).
+comment: An agent can now draft a gift for any article on your shelf; your Send makes the private link. You chose C on q-pe52f6; who may build it is asked in q-hpwyf0.
 ---
 # MCP: draft a gift for any article on your shelf, and Send makes the link
 

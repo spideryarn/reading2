@@ -1,7 +1,7 @@
 ---
 reports: spya-nbmce7, spya-q2w7yt, spya-gm858u
 ending: shipped
-comment: spya-nbmce7: Most now always longer than More; whether More must also beat Gist is q-vzd2xt
+comment: spya-nbmce7: Most now always longer than More, and since skim/13 More always longer than Gist too (your answer B to q-vzd2xt)
 ---
 # Skim: a deeper pass is never shorter, Most beats More, and the prose has ‹ Previous stop
 

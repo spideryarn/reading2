@@ -426,12 +426,10 @@ and Ideas, so this is a third default-visible mode that spends on a press
 
 It had been behind the switch since it was built on 2026-10-01, as a first experiment with a column
 to the right of the prose. Its toggle is now at the end of the modes in every reader's bar, a
-visitor's included, where it draws what the public payload carries and starts nothing. Two things
-followed from the flag. **Its relation words are queued when an article is imported**, because the
-add page's list is every mode outside the switch that makes something
-([ingest-queue.md](ingest-queue.md)): one more model call per import, measured once at $0.045.
-**And the first-open default includes it for every signed-in reader with room**, no longer only
-for a reader with the switch on ([url-state.md](url-state.md)).
+visitor's included, where it draws what the public payload carries and starts nothing. For the
+owner, its relation words and short notes are made when the column is first shown, not on import
+([marginalia.md](marginalia.md)). A new article no longer opens the column by default
+([url-state.md](url-state.md)).
 [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md).
 
 **Learn's Explore came out on 2026-10-11**, six days after the rest of Learn. Greg:

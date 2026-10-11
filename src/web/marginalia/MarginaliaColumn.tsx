@@ -25,7 +25,7 @@ import {
 } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
-import type { BlockId, CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
+import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
 import { isFolded, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
 import { useStepFinished } from "../useStepJob.js";
@@ -48,9 +48,11 @@ import {
   type MarginaliaNote,
   layoutNotes,
 } from "./notes.js";
-import { type RelationsByBlock, useRelations } from "../useRelations.js";
+import { type MarginNotesList, type RelationsByBlock, useRelations } from "../useRelations.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
-import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
+import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, NOTE_TIPS, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
+import { BlockRef } from "../BlockRef.js";
+import type { JumpAim } from "../flash.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 import { ownLabel, plainWords } from "../lib/own-label.js";
 import { Excerpt } from "../Excerpt.js";
@@ -82,6 +84,7 @@ export function MarginNotesSlot({
   notes,
   viewer,
   onOpenAsked,
+  onJump,
 }: {
   /** The block these notes sit beside — whose markup a note's quote is drawn from (plan 261009k). */
   blockId: BlockId;
@@ -90,10 +93,12 @@ export function MarginNotesSlot({
   viewer: "owner" | "visitor";
   /** Open a question's conversation — the Comments drawer's own press. Owner only. */
   onOpenAsked?: ((id: string) => void) | undefined;
+  /** Follow a generated note to the exact checked words in its other passage. */
+  onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
 }) {
   return (
     <NoteBoundary>
-      <MarginNotes blockId={blockId} notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} />
+      <MarginNotes blockId={blockId} notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} onJump={onJump} />
     </NoteBoundary>
   );
 }
@@ -188,6 +193,61 @@ function RelationWord({ relation }: { relation: DrawnRelation }) {
   );
 }
 
+/**
+ * **A note the relations call chose to write** (plan 261011o; Greg,
+ * spya-qyuet0). Open, not shut: at most eight in an article and each at most
+ * a couple of short sentences, and a shut line would hide the only thing it
+ * has to say. The stamp is a button with a card, as the relation word is,
+ * saying what kind of note it is and that AI wrote it; the words are in the
+ * AI's face. A note about another passage links to it with the one block
+ * link (`BlockRef`), so it has the block-link card and the jump.
+ */
+function AsideNote({
+  note,
+  onJump,
+}: {
+  note: MarginNote;
+  onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const tip = NOTE_TIPS[note.kind];
+  return (
+    <div className="marg-aside" data-kind={note.kind}>
+      <Tooltip
+        placement="bottom"
+        keepSide
+        open={open}
+        onOpenChange={setOpen}
+        content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
+      >
+        <button
+          type="button"
+          className="marg-aside-stamp"
+          aria-expanded={open}
+          aria-label={`${tip.head}: ${tip.what}`}
+          onClick={() => setOpen((was) => !was)}
+        >
+          {tip.stamp}
+        </button>
+      </Tooltip>{" "}
+      <span className={withVoice("marg-aside-text", "ai")}>{note.text}</span>
+      {note.to !== null && (
+        <>
+          {" "}
+          <BlockRef
+            id={note.to}
+            className="marg-aside-to"
+            {...(onJump === undefined ? {} : { onJump })}
+            {...(note.toQuote === null ? {} : { quotes: [note.toQuote] })}
+          >
+            {note.kind === "tension" ? "the other passage" : "read it"}
+          </BlockRef>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
 function MarginNotes({
@@ -195,11 +255,13 @@ function MarginNotes({
   notes,
   viewer,
   onOpenAsked,
+  onJump,
 }: {
   blockId: BlockId;
   notes: readonly MarginaliaNote[];
   viewer: "owner" | "visitor";
   onOpenAsked?: ((id: string) => void) | undefined;
+  onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
 }) {
   useRenderCount("MarginNotes");
   return (
@@ -208,6 +270,8 @@ function MarginNotes({
         switch (note.kind) {
           case "relation":
             return <RelationWord key="relation" relation={note.relation} />;
+          case "aside":
+            return <AsideNote key="aside" note={note.note} onJump={onJump} />;
           case "question":
             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
           case "idea":
@@ -790,13 +854,22 @@ export type MarginFeed = {
   timeline: readonly TimelineEvent[] | null;
   claims: readonly MarginClaim[] | null;
   relations: RelationsByBlock;
+  /** The notes the relations call wrote (plan 261011o). */
+  notes: MarginNotesList;
 };
 
-export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null, relations: null };
+export const NO_OWNER_FEED: MarginFeed = {
+  ideas: null,
+  faq: null,
+  timeline: null,
+  claims: null,
+  relations: null,
+  notes: null,
+};
 
 /**
  * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
- * the relation words, which are made here. A component of
+ * Marginalia's own relation words and notes, which are made here. A component of
  * its own so the reads happen only while Marginalia is open — the read halves
  * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full hooks, which
  * arm the automatic run and could spend (Debate is the dearest step in the
@@ -826,11 +899,11 @@ export function OwnerMarginFeed({
   const faqRead = useFaqRead(slug);
   const timelineRead = useTimelineRead(slug);
   const receptionRead = useReceptionRead(slug);
-  /* **The one thing here that can spend**: the relation words are Marginalia's
-     own, and this mount is what asks for them where none is stored — once per
+  /* **The one thing here that can spend**: the relations call writes
+     Marginalia's words and notes, and this mount asks for them where none is stored — once per
      article per page load, whatever opened the column, and only while the
      notes are on screen (useRelations.ts). */
-  const relations = useRelations(slug, shown && !awaitingStructure);
+  const { relations, notes } = useRelations(slug, shown && !awaitingStructure);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
      read when its job finishes; this hears the same completion for the margin's
@@ -846,8 +919,8 @@ export function OwnerMarginFeed({
   const claims =
     receptionRead.status === "ready" && !receptionRead.stale ? (receptionRead.reception?.claims.rows ?? null) : null;
   useEffect(() => {
-    onFeed({ ideas, faq, timeline, claims, relations });
-  }, [ideas, faq, timeline, claims, relations, onFeed]);
+    onFeed({ ideas, faq, timeline, claims, relations, notes });
+  }, [ideas, faq, timeline, claims, relations, notes, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
   return null;
 }

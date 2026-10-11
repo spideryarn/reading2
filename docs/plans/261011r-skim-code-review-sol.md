@@ -1,0 +1,7 @@
+1. **Medium — the blind control key was unbalanced.** The saved key placed `old#1` on side A only 1 of 8 times ([key.json](/var/tmp/spideryarn-worktrees/fbwu83xh-skim-purpose-and-lengths/evals/results/skim-261011r-blind/key.json:5)), while the judge preferred side B 12–6 ([investigation](/var/tmp/spideryarn-worktrees/fbwu83xh-skim-purpose-and-lengths/docs/investigations/261011b-skim-more-beats-gist-intros-and-short-stops.md:104)). This weakens the old-vs-old control comparison, though the test key itself was reasonably balanced at 7/16. **FIXED:** [skim-walk-pairs.ts](/var/tmp/spideryarn-worktrees/fbwu83xh-skim-purpose-and-lengths/scripts/eval/skim-walk-pairs.ts:77) now balances control and test assignments separately and records both counts. A regeneration produced exactly 4/8 and 8/16. The historical judgment remains unchanged because rejudging would require a prohibited paid call.
+
+No other correctness issues found in the repair planner, targets, prompt/schema, purpose state machine, owner-only intro rendering, or walked metrics. Spot-check: the metrics reproduce round-two run-one’s Gist median of 42 words and 3/27 stops over 60 words.
+
+Checks: 221 targeted tests passed; lint passed. `npm run typecheck` was blocked by sandbox-denied `tsx` IPC, but the identical driver run via `node --import tsx scripts/typecheck.ts` passed all five projects.
+
+ship after the fixes made

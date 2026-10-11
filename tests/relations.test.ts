@@ -24,6 +24,7 @@ import {
   PROMPT_VERSION,
   RELATIONS_OUTPUT_SCHEMA,
   RELATIONS_SYSTEM,
+  NOTE_MAX_WORDS,
   answerTokens,
   eligibleParagraphs,
   generateRelations,
@@ -31,6 +32,8 @@ import {
   isOutdated,
   isStale,
   renderPrompt,
+  noteCap,
+  toNotes,
   toRelations,
 } from "../src/relations.js";
 
@@ -366,5 +369,183 @@ describe("where the step sits", () => {
     expect(FORCE_ONLY_WHEN_NAMED.has("relations")).toBe(true);
     expect(cascadeForce([...STEP_ORDER], new Set(["fetch"])).has("relations")).toBe(false);
     expect(cascadeForce(["faq", "relations"], new Set(["relations"])).has("relations")).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------- notes -- */
+
+/* The notes the same call may write — plan 261011o. What is pinned is what
+   has no visible symptom: a note whose quote is not in its passage, or whose
+   link names a real but wrong passage, is dropped and counted rather than
+   drawn; the cap is applied last, so a bad row never uses up a slot; and a bad
+   note never costs the relation words. */
+describe("toNotes", () => {
+  const body = [
+    block("spya-aaaaaa", { text: "The trial cut errors by 12% in the first year." }),
+    block("spya-bbbbbb", { text: "Results: an 8% reduction in errors over the same year." }),
+    block("spya-cccccc", { text: "Calibration means the stated odds match how often things happen." }),
+  ];
+  const tension = {
+    blockId: "spya-aaaaaa",
+    kind: "tension",
+    quote: "cut errors by 12%",
+    text: "Here 12%; the results give 8% for the same year.",
+    to: "spya-bbbbbb",
+    toQuote: "an 8% reduction in errors",
+  };
+  const explain = {
+    blockId: "spya-cccccc",
+    kind: "explain",
+    quote: "stated odds match",
+    text: "If it says 70%, it should happen about seven times in ten.",
+    to: null,
+    toQuote: null,
+  };
+
+  it("keeps a good note, storing the article's characters for both quotes", () => {
+    const { notes, dropped } = toNotes(
+      [{ ...tension, quote: "cut  errors by 12%" }, explain],
+      body,
+      8,
+    );
+    expect(notes).toEqual([
+      {
+        blockId: "spya-aaaaaa",
+        kind: "tension",
+        text: tension.text,
+        quote: "cut errors by 12%",
+        to: "spya-bbbbbb",
+        toQuote: "an 8% reduction in errors",
+      },
+      { ...explain, quote: "stated odds match" },
+    ]);
+    expect(Object.values(dropped).every((n) => n === 0)).toBe(true);
+  });
+
+  it("drops a quote that is not in its passage, at either end", () => {
+    expect(toNotes([{ ...tension, quote: "cut errors by 20%" }], body, 8).dropped.unquoted).toBe(1);
+    /* A real passage, the wrong one: the confident wrong join the quote is for. */
+    expect(toNotes([{ ...tension, to: "spya-cccccc" }], body, 8).dropped.unquoted).toBe(1);
+  });
+
+  it("drops a recall or tension with no other passage, an explain with one, and a note pointing at itself", () => {
+    const { notes, dropped } = toNotes(
+      [
+        { ...tension, to: null, toQuote: null },
+        { ...explain, to: "spya-aaaaaa", toQuote: "cut errors" },
+        { ...tension, to: "spya-aaaaaa", toQuote: "12%" },
+      ],
+      body,
+      8,
+    );
+    expect(notes).toEqual([]);
+    expect(dropped.badTarget).toBe(3);
+  });
+
+  it("drops a target and target quote that are not null together", () => {
+    const { notes, dropped } = toNotes(
+      [
+        { ...explain, toQuote: "cut errors by 12%" },
+        { ...tension, toQuote: null },
+      ],
+      body,
+      8,
+    );
+    expect(notes).toEqual([]);
+    expect(dropped.badTarget).toBe(2);
+  });
+
+  it("counts each other kind of bad row under its own name", () => {
+    const { dropped } = toNotes(
+      [
+        "not an object",
+        { ...tension, blockId: "spya-zzzzzz" },
+        { ...tension, kind: "praise" },
+        { ...explain, text: "" },
+        { ...explain, text: Array.from({ length: NOTE_MAX_WORDS + 1 }, () => "w").join(" ") },
+        explain,
+        explain,
+      ],
+      body,
+      8,
+    );
+    expect(dropped).toMatchObject({ malformed: 1, unknown: 1, offList: 1, badText: 2, repeated: 1 });
+  });
+
+  it("applies the cap last, in the model's order, so a bad row never takes a slot", () => {
+    const { notes, dropped } = toNotes([{ ...tension, quote: "not there" }, explain, tension], body, 1);
+    expect(notes.map((n) => n.blockId)).toEqual(["spya-cccccc"]);
+    expect(dropped).toMatchObject({ unquoted: 1, overCap: 1 });
+  });
+
+  it("reads a missing or malformed list as no notes, and never throws", () => {
+    expect(toNotes(undefined, body, 8).notes).toEqual([]);
+    expect(toNotes({ notes: [] }, body, 8).notes).toEqual([]);
+  });
+
+  it("caps an article at one note per eight paragraphs, at least two and at most eight", () => {
+    expect(noteCap(1)).toBe(2);
+    expect(noteCap(24)).toBe(3);
+    expect(noteCap(1000)).toBe(8);
+  });
+});
+
+describe("generateRelations, with notes", () => {
+  const blocks = [
+    block("spya-aaaaaa", { text: "The trial cut errors by 12% in the first year, which is the headline claim." }),
+    block("spya-bbbbbb", { text: "Results: an 8% reduction in errors over the same year, in the same group of people." }),
+    block("spya-cccccc"),
+  ];
+
+  it("stores the notes beside the words, and a bad note does not fail the run", async () => {
+    answer = JSON.stringify({
+      notes: [
+        {
+          blockId: "spya-bbbbbb",
+          kind: "tension",
+          quote: "an 8% reduction in errors",
+          text: "Here 8%; the opening says 12% for the same year.",
+          to: "spya-aaaaaa",
+          toQuote: "cut errors by 12%",
+        },
+        { blockId: "spya-cccccc", kind: "recall", quote: "nowhere", text: "x", to: "spya-aaaaaa", toQuote: "y" },
+      ],
+      relations: [
+        { blockId: "spya-bbbbbb", relation: "but" },
+        { blockId: "spya-cccccc", relation: "and-also" },
+      ],
+    });
+    const run = await generateRelations({ article: article(blocks), power: "standard" });
+    expect(run.relations.relations).toEqual({ "spya-bbbbbb": "but", "spya-cccccc": "and-also" });
+    expect(run.relations.notes?.map((n) => [n.blockId, n.kind, n.to])).toEqual([
+      ["spya-bbbbbb", "tension", "spya-aaaaaa"],
+    ]);
+    expect(run.relations.notesDropped?.unquoted).toBe(1);
+  });
+
+  it("an answer with no notes at all still stores the words, with none", async () => {
+    answer = JSON.stringify({
+      relations: [
+        { blockId: "spya-bbbbbb", relation: "but" },
+        { blockId: "spya-cccccc", relation: "and-also" },
+      ],
+    });
+    const run = await generateRelations({ article: article(blocks), power: "standard" });
+    expect(run.relations.notes).toEqual([]);
+  });
+
+  it("asks for the notes first, in the schema and in the user message", () => {
+    expect(Object.keys(RELATIONS_OUTPUT_SCHEMA.properties)).toEqual(["notes", "relations"]);
+    const user = renderPrompt([{ id: "spya-bbbbbb" as BlockId, previous: "spya-aaaaaa" as BlockId }]);
+    expect(user.indexOf("margin notes")).toBeLessThan(user.indexOf("bears on the paragraph before it"));
+    expect(RELATIONS_OUTPUT_SCHEMA.properties.notes.items.properties.to).toEqual({ type: ["string", "null"] });
+  });
+
+  it("budgets for a full set of notes at their longest, as well as the words", () => {
+    expect(answerTokens(64)).toBeGreaterThanOrEqual(64 * 30 + noteCap(64) * 300);
+  });
+
+  it("carries the plain-words rule, now that the step writes prose a reader sees", () => {
+    expect(RELATIONS_SYSTEM).toContain("PLAIN WORDS");
   });
 });

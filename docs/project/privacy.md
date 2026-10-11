@@ -681,9 +681,20 @@ public indexes of published work are asked about a paper by its identifier, from
   Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)).
 
 Each is sent the identifier and our contact address (in the `User-Agent`, and as `mailto` where the
-service asks for it). Never the article's text, never anything about the reader. For a private
+service asks for it). Never the article's body, never anything about the reader. For a private
 upload this does tell the service that somebody using Spideryarn asked about that paper, and the
 page says so in those words.
+
+**Since 2026-10-11, OpenAlex may be sent a title instead.** An article with no DOI, but an author
+and a title distinctive enough to search by, is looked up by the words of its title
+([261011q](../plans/261011q-cited-by-finds-a-paper-with-no-doi-by-title-and-author-at-openalex.md)):
+lower-cased, punctuation dropped, at most 300 characters. Its authors are not sent; they are
+compared on our side against the authors OpenAlex returns. The search is not stored, so it leaves
+nothing to delete with the article; the list it leads to is cached under OpenAlex's own id for the
+work, like a DOI's. The page says *"When your article has no DOI, OpenAlex is sent the words of its
+title instead"*, and its earlier *"never the article's text"* became *"never the rest of the
+article's text"*, since a title is text. `LAST_UPDATED` moved to 11 October 2026, and
+`tests/privacy-page.test.ts` holds both clauses.
 
 **A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
 sent something of the reader's; these are sent the identifier of a published work. The page names

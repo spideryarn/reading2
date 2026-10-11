@@ -76,6 +76,7 @@ const NEVER = [
   "/admin",
   "/admin/users",
   "/admin/costs",
+  "/admin/articles",
   "/api/health",
   "/api/public/article/some-article",
   "/api/public/asset/some-article/abc.png",

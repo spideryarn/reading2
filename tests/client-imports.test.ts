@@ -313,6 +313,10 @@ const SHARED = new Set([
      261010c). Types and three constants, no imports: the same wire-contract
      argument as `admin-vouchers.js`. */
   "admin-author-gifts.js",
+  /* Every article as /admin/articles draws it, and a transfer's preview and
+     answer (plan 261011n). Types, the reader-state kinds and one pure sum, no
+     imports: the same wire-contract argument as `admin-vouchers.js`. */
+  "admin-articles.js",
   /* How an email address is stored and compared, and the `Name <address>`
      split the admin address boxes apply on paste (plan 261011k). Pure, and
      imports nothing — its header says so, which is why the server's voucher
