@@ -8399,7 +8399,12 @@ export const bibliographicServiceSlots = spideryarn.table(
 export const citationIndexLookups = spideryarn.table(
   "citation_index_lookups",
   {
-    /** `doi:<lower-cased doi>` — a `WorkId` from src/bibliographic.ts, DOI form only. */
+    /**
+     * `doi:<lower-cased doi>` — a `WorkId` from src/bibliographic.ts, DOI form
+     * only — or, since 2026-10-11, `openalex:w<digits>`: OpenAlex's own id for a
+     * work matched by title and authors because the article had no DOI
+     * (`CitersKey` in src/citation-index.ts, plan 261011q).
+     */
     workId: text("work_id").primaryKey(),
     state: text("state").$type<"found" | "not-indexed">().notNull(),
     /** OpenAlex's id for the work, `W…`. Only on a found row. */
@@ -8418,7 +8423,8 @@ export const citationIndexLookups = spideryarn.table(
     check(
       "citation_index_lookups_work_id",
       sql`length(${t.workId}) <= 600 and ${t.workId} = lower(${t.workId})
-          and ${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'`,
+          and (${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'
+               or ${t.workId} ~ '^openalex:w[0-9]{1,15}$')`,
     ),
     check("citation_index_lookups_state", sql`${t.state} in ('found', 'not-indexed')`),
     check(

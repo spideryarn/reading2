@@ -1,0 +1,4 @@
+ALTER TABLE "spideryarn"."citation_index_lookups" DROP CONSTRAINT "citation_index_lookups_work_id";--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_index_lookups" ADD CONSTRAINT "citation_index_lookups_work_id" CHECK (length("spideryarn"."citation_index_lookups"."work_id") <= 600 and "spideryarn"."citation_index_lookups"."work_id" = lower("spideryarn"."citation_index_lookups"."work_id")
+          and ("spideryarn"."citation_index_lookups"."work_id" ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'
+               or "spideryarn"."citation_index_lookups"."work_id" ~ '^openalex:w[0-9]{1,15}$'));

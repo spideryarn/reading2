@@ -4210,7 +4210,7 @@ const rawPgArticleReader: ArticleReader = {
    * columns, with `titleFor` deliberately not applied (the contract says why).
    * The heading query runs only for a revision with no stored title.
    */
-  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url">> {
+  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">> {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
@@ -4224,6 +4224,11 @@ const rawPgArticleReader: ArticleReader = {
       ...(revision.doi === null ? {} : { doi: revision.doi }),
       /* Cited by's fallback for an arXiv paper imported with no DOI (src/citation-index.ts § citersIdOf). */
       ...(revision.finalUrl === null ? {} : { url: revision.finalUrl }),
+      /* Cited by's title search, which takes one agreeing author only with the
+         year (src/citation-index.ts § titleMatchOf, plan 261011q). Straight
+         through, as `metaFrom` passes them. */
+      ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
+      ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
     };
   },
 

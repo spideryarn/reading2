@@ -5,15 +5,27 @@
  * whose § GPT Sol's plan review is where most of the rules below come from.
  *
  * ```
- * no usable DOI on the article or in its address ─► no-doi          (nothing asked)
- * a row fresher than 7 days ───────────────────────► that row, checked against the article
- * else ask OpenAlex, each request in its own polite turn:
- *   1. works/doi:<doi>              404 ► not-indexed (remembered)
- *      its title and an author must be the article's, else ► unconfirmed (nothing stored)
- *   2. works?filter=cites:<W id>    most cited first, one page of 100
- *      too large ► once more with 25 ► too-large
- *   store the row and its list together, then answer
+ * a usable DOI on the article, or arXiv's for its arxiv.org address:
+ *   a row fresher than 7 days ─────────────────────► that row, checked against the article
+ *   else ask OpenAlex, each request in its own polite turn:
+ *     1. works/doi:<doi>              404 ► not-indexed (remembered)
+ *        its title and an author must be the article's, else ► unconfirmed (nothing stored)
+ *     2. works?filter=cites:<W id>    most cited first, one page of 100
+ *        too large ► once more with 25 ► too-large
+ *     store the row and its list together, then answer
+ * no DOI, and a distinctive title and an author (plan 261011q):
+ *   0. works?search.title=<words>    every time; a failure ► unavailable
+ *      exactly one record passes `titleMatchOf`, else ► no-match (nothing stored)
+ *   then as above from step 2, the row keyed openalex:w<digits>, with no DOI asked
+ * otherwise ───────────────────────────────────────► no-doi          (nothing asked)
  * ```
+ *
+ * **A title search is held to more than a DOI is.** A DOI is itself evidence,
+ * so its record needs only the whole title and one author. A search has none,
+ * so `titleMatchOf` wants the whole title, a second fact (two of the authors,
+ * or one and the year within one), and no other record passing as well. The
+ * year is never a veto alone: OpenAlex gives *Attention Is All You Need*
+ * (2017) as 2025.
  *
  * **The DOI is checked before it is trusted, on every way out.** A mistyped DOI
  * resolves perfectly to somebody else's paper, and an article's DOI is not
@@ -43,8 +55,10 @@
  *
  * ## What may be logged from this file
  *
- * The DOI's `WorkId`, the outcome and counts. Never a title or an author: the
- * article's are the reader's business, and OpenAlex's are a stranger's string.
+ * The cache key (a DOI's `WorkId` or `openalex:w…`), the outcome and counts.
+ * Never a title or an author, nor the search's address, which carries the
+ * title: the article's are the reader's business, and OpenAlex's are a
+ * stranger's string.
  */
 
 import { registryAuthorIsOurs, registryIsThisArticle } from "./article-registry.js";
@@ -61,10 +75,12 @@ import {
   plausibleYear,
   record,
 } from "./bibliographic.js";
+import { tokens } from "./citation-lookup.js";
+import { registryTitleIsDistinctive } from "./citation-registry.js";
 import { OPENALEX_WORK_ID } from "./citer-link.js";
 import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
-import { errorFields, log, type Log } from "./log.js";
+import { log, type Log } from "./log.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import type { Citer, CitersResult, Meta } from "./types.js";
 
@@ -95,7 +111,14 @@ const MAX_KIND = 40;
  * article was imported with, never a reader's rename**, which would fail a
  * correct DOI (the route reads it with `loadArticleIdentity`).
  */
-export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" | "url">;
+export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">;
+
+/**
+ * **What a list is cached under**: a DOI's `WorkId`, or OpenAlex's own id for a
+ * work found by title, lower-cased (`openalex:w2626778328`), which is the shape
+ * `citation_index_lookups_work_id` accepts.
+ */
+export type CitersKey = WorkId | `openalex:w${string}`;
 
 /**
  * **The DOI to ask about**: the article's own usable DOI, or else the one its own address
@@ -148,9 +171,9 @@ export type StoredCiters = FetchedCiters & { fetchedAt: string; fresh: boolean }
  */
 export interface CitationIndexStore {
   /** The row for this DOI, fresh or not — or null. */
-  read(id: WorkId, freshMs: number): Promise<StoredCiters | null>;
+  read(id: CitersKey, freshMs: number): Promise<StoredCiters | null>;
   /** Replace the row and its list together. Returns when the database says it was fetched, ISO. */
-  write(id: WorkId, answer: FetchedCiters): Promise<string>;
+  write(id: CitersKey, answer: FetchedCiters): Promise<string>;
 }
 
 export interface CitersDeps {
@@ -177,6 +200,39 @@ export function openAlexCitersUrl(openalexId: string, perPage: number): string {
     `https://api.openalex.org/works?filter=cites:${encodeURIComponent(openalexId)}` +
     `&sort=cited_by_count:desc&per-page=${perPage}&select=${CITER_FIELDS}&mailto=${encodeURIComponent(CONTACT_EMAIL)}`
   );
+}
+
+/** How many records a title search reads. Ten: the exact title ranks near the top, and a page costs the same. */
+export const TITLE_SEARCH_RESULTS = 10;
+/** The longest query sent, in characters, cut at a word. */
+const MAX_TITLE_QUERY = 300;
+const SEARCH_FIELDS = "id,display_name,publication_year,authorships";
+
+/**
+ * **The words of a title, and nothing else**, as one lower-cased line for
+ * `search.title` — or null when there are none. Lower case keeps OpenAlex's
+ * `AND`, `OR` and `NOT` from being read as operators, and the punctuation goes
+ * with `tokens`, the same split the title check uses.
+ */
+export function titleQueryOf(title: string): string | null {
+  let query = "";
+  for (const word of tokens(title)) {
+    const next = query === "" ? word : `${query} ${word}`;
+    if (next.length > MAX_TITLE_QUERY) break;
+    query = next;
+  }
+  return query === "" ? null : query;
+}
+
+/** OpenAlex's works whose title has these words. A search parameter, not a `filter=`, so nothing in it can add one. */
+export function openAlexTitleSearchUrl(query: string): string {
+  const params = new URLSearchParams({
+    "search.title": query,
+    per_page: String(TITLE_SEARCH_RESULTS),
+    select: SEARCH_FIELDS,
+    mailto: CONTACT_EMAIL,
+  });
+  return `https://api.openalex.org/works?${params.toString()}`;
 }
 
 /* ------------------------------------------------------------ the parsing -- */
@@ -304,6 +360,79 @@ function isThisArticle(article: ArticleIdentity, target: CitedTarget): target is
   );
 }
 
+/** The article's year: `publishedYear`, or the year of `publishedAt` — or undefined. */
+function articleYear(article: ArticleIdentity): number | undefined {
+  return article.publishedYear ?? plausibleYear(/^\d{4}/.exec(article.publishedAt ?? "")?.[0]);
+}
+
+/** Whether two OpenAlex display names could be two spellings of one person. */
+function sameNamedPerson(one: string, two: string): boolean {
+  const folded = (value: string) => tokens(value.normalize("NFD").replace(/\p{M}+/gu, "")).join(" ");
+  const variants = (value: string) => openAlexAuthors([value]).map((author) => ({
+    family: folded(author.family),
+    given: tokens((author.given ?? "").normalize("NFD").replace(/\p{M}+/gu, ""))[0] ?? "",
+  }));
+  return variants(one).some((a) => variants(two).some((b) => {
+    if (a.family === "" || a.family !== b.family) return false;
+    /* A missing given name cannot prove these are different people. An
+       initial and its expansion are the same identity for the same reason
+       `registryAuthorIsOurs` accepts either as corroboration. */
+    return a.given === "" || b.given === "" || a.given === b.given ||
+      ((a.given.length === 1 || b.given.length === 1) && a.given[0] === b.given[0]);
+  }));
+}
+
+/**
+ * **How many different people among OpenAlex's names are ours**, each tested
+ * on its own. Duplicate spellings of one person (including an initial beside
+ * the full given name) count once: two strings are not two corroborating facts.
+ */
+function agreeingAuthors(article: ArticleIdentity, names: readonly string[]): number {
+  const seen: string[] = [];
+  for (const name of names) {
+    if (tokens(name).length === 0 || seen.some((prior) => sameNamedPerson(prior, name))) continue;
+    if (registryAuthorIsOurs(article, openAlexAuthors([name]))) seen.push(name);
+  }
+  return seen.length;
+}
+
+/** What a title search found: the one work that passes, or none. */
+export type TitleMatch = { kind: "match"; target: CitedTarget & { title: string } } | { kind: "none" };
+
+/**
+ * **The one record in a title search that is this article** — see the header.
+ * Null when the answer is not a search's. Each record passes only with the
+ * whole title, and two of its authors among ours or one and the year within
+ * one; two different passing works are `none`, because nothing here can tell
+ * which is right.
+ */
+export function titleMatchOf(article: ArticleIdentity, json: unknown): TitleMatch | null {
+  const body = record(json);
+  if (body === null || !Array.isArray(body.results)) return null;
+  const year = articleYear(article);
+  const passing = new Map<string, CitedTarget & { title: string }>();
+  for (const raw of body.results) {
+    const work = record(raw);
+    const openalexId = workIdOf(work?.id);
+    const title = plainRegistryText(work?.display_name);
+    if (work === null || openalexId === null || title === null) continue;
+    if (!registryIsThisArticle(article.title, title)) continue;
+    const authors = authorsOf(work.authorships).names;
+    const agreeing = agreeingAuthors(article, authors);
+    const theirYear = plausibleYear(work.publication_year);
+    const yearAgrees = year !== undefined && theirYear !== undefined && Math.abs(year - theirYear) <= 1;
+    if (agreeing >= 2 || (agreeing === 1 && yearAgrees)) passing.set(openalexId, { openalexId, title, authors });
+  }
+  const [only, ...more] = passing.values();
+  return only !== undefined && more.length === 0 ? { kind: "match", target: only } : { kind: "none" };
+}
+
+/** Whether a title search may be made at all: a title that can be told apart, and an author to check. */
+function searchableTitle(article: ArticleIdentity): string | null {
+  const hasAuthor = (article.byline ?? "").trim() !== "" || (article.authors ?? []).length > 0;
+  return hasAuthor && registryTitleIsDistinctive(article.title) ? titleQueryOf(article.title) : null;
+}
+
 /* ------------------------------------------------------------ the lookup -- */
 
 interface Resolved {
@@ -329,7 +458,8 @@ async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
 /** One request, in its turn: the JSON, or the one-word reason there is none. */
 type Got = { kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" };
 
-async function get(id: WorkId, what: "work" | "citers", url: string, d: Resolved): Promise<Got> {
+/** `id` is what the log names: the cache key, or `title` for a search, whose address is never logged. */
+async function get(id: CitersKey | "title", what: "work" | "citers" | "search", url: string, d: Resolved): Promise<Got> {
   const turn = await inServiceTurn("openalex", { store: d.limiter, sleep: d.sleep }, async (waitMs): Promise<Got> => {
     const started = Date.now();
     try {
@@ -355,10 +485,14 @@ async function get(id: WorkId, what: "work" | "citers", url: string, d: Resolved
   return { kind: "unavailable" };
 }
 
+/** A work confirmed to be this article's, whose list may be asked for. */
+type Confirmed = CitedTarget & { title: string };
+
 /** What a fresh ask comes back with: something to remember, or one of the three answers that store nothing. */
 type Asked = FetchedCiters | { kind: "unconfirmed" | "unavailable" | "too-large" };
 
-async function ask(id: WorkId, article: ArticleIdentity, d: Resolved): Promise<Asked> {
+/** Step 1, for a DOI: the work it resolves to, which must be this article's before its list is asked for. */
+async function askWork(id: WorkId, article: ArticleIdentity, d: Resolved): Promise<Asked | { kind: "confirmed"; target: Confirmed }> {
   const doi = id.slice("doi:".length);
   const first = await get(id, "work", openAlexWorkUrl(doi), d);
   if (first.kind === "missing") return { kind: "not-indexed" };
@@ -368,13 +502,16 @@ async function ask(id: WorkId, article: ArticleIdentity, d: Resolved): Promise<A
   if (target === null) return { kind: "unavailable" };
   /* Before the second request, so a DOI that is not this article's costs
      OpenAlex nothing more and can never have a list fetched for it. */
-  if (!isThisArticle(article, target)) return { kind: "unconfirmed" };
+  return isThisArticle(article, target) ? { kind: "confirmed", target } : { kind: "unconfirmed" };
+}
 
-  let second = await get(id, "citers", openAlexCitersUrl(target.openalexId, CITERS_PER_PAGE), d);
+/** Step 2: the works that cite a confirmed target, one page. */
+async function askCiters(key: CitersKey, target: Confirmed, d: Resolved): Promise<Asked> {
+  let second = await get(key, "citers", openAlexCitersUrl(target.openalexId, CITERS_PER_PAGE), d);
   /* The same request would be too large every time, so a retry of it is no
      use. A shorter page may fit, and is listed as what it is. */
   if (second.kind === "too-large") {
-    second = await get(id, "citers", openAlexCitersUrl(target.openalexId, CITERS_PER_PAGE_SMALL), d);
+    second = await get(key, "citers", openAlexCitersUrl(target.openalexId, CITERS_PER_PAGE_SMALL), d);
     if (second.kind === "too-large") return { kind: "too-large" };
   }
   /* A 404 here would be OpenAlex denying a work it has just described. */
@@ -384,12 +521,32 @@ async function ask(id: WorkId, article: ArticleIdentity, d: Resolved): Promise<A
   return { kind: "found", target, ...page, capped: page.count > page.returned };
 }
 
+/** Step 0, for an article with no DOI: the one OpenAlex work its title and authors pick out. */
+async function searchByTitle(
+  query: string,
+  article: ArticleIdentity,
+  d: Resolved,
+): Promise<{ kind: "match"; key: CitersKey; target: Confirmed } | { kind: "no-match" | "unavailable" }> {
+  const got = await get("title", "search", openAlexTitleSearchUrl(query), d);
+  /* A search has no 404 of its own: a missing answer is a broken one. */
+  if (got.kind !== "json") return { kind: "unavailable" };
+  const match = titleMatchOf(article, got.json);
+  if (match === null) return { kind: "unavailable" };
+  if (match.kind === "none") return { kind: "no-match" };
+  return { kind: "match", key: `openalex:${match.target.openalexId.toLowerCase()}` as CitersKey, target: match.target };
+}
+
+/** How the list was reached. The panel says so when it was by title. */
+type Via = Extract<CitersResult, { kind: "found" }>["via"];
+
 /** A remembered answer, as this article may see it. */
-function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: string): CitersResult {
+function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: string, via: Via): CitersResult {
   if (stored.kind === "not-indexed") return { kind: "not-indexed" };
   if (!isThisArticle(article, stored.target)) return { kind: "unconfirmed" };
   return {
     kind: "found",
+    via,
+    target: { openalexId: stored.target.openalexId, title: stored.target.title },
     count: stored.count,
     returned: stored.returned,
     dropped: stored.dropped,
@@ -399,6 +556,11 @@ function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: s
   };
 }
 
+/** Where the list is, and how it was reached: by the DOI, or by a title search that has already confirmed its work. */
+type Route =
+  | { via: "doi"; key: WorkId }
+  | { via: "title"; key: CitersKey; target: Confirmed };
+
 /**
  * **The papers that cite this article** — see the header for the whole path.
  * Never throws for anything OpenAlex or the database does: both are
@@ -406,18 +568,26 @@ function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: s
  */
 export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}): Promise<CitersResult> {
   const id = citersIdOf(article);
-  if (id === null) return { kind: "no-doi" };
-  const d = await resolveDeps(deps);
+  const query = id === null ? searchableTitle(article) : null;
+  if (id === null && query === null) return { kind: "no-doi" };
+  let d: Resolved;
+  try {
+    d = await resolveDeps(deps);
+  } catch {
+    /* There may be no logger yet, and an import or dependency error's message
+       may contain a database parameter. The public outcome is still usable. */
+    return { kind: "unavailable" };
+  }
   const started = Date.now();
-  const done = (result: CitersResult, from: "cache" | "openalex" | "stale"): CitersResult => {
+  const done = (key: CitersKey | "title", result: CitersResult, from: "cache" | "openalex" | "stale"): CitersResult => {
     d.log.info(
       {
-        id,
+        id: key,
         outcome: result.kind,
         from,
         ms: Date.now() - started,
         ...(result.kind === "found"
-          ? { count: result.count, returned: result.returned, dropped: result.dropped, capped: result.capped }
+          ? { via: result.via, count: result.count, returned: result.returned, dropped: result.dropped, capped: result.capped }
           : {}),
       },
       "citation index lookup",
@@ -425,24 +595,45 @@ export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}):
     return result;
   };
   try {
-    const stored = await d.store.read(id, CITERS_FRESH_MS);
-    if (stored?.fresh) return done(answerFor(article, stored, stored.fetchedAt), "cache");
+    let route: Route;
+    if (id !== null) {
+      route = { via: "doi", key: id };
+    } else {
+      /* The search is made on every open; only the list it leads to is cached.
+         A cache keyed on titles and authors is neither anonymous nor safe to
+         share between articles (plan 261011q, GPT Sol's F3 and F7). */
+      const searched = await searchByTitle(query ?? "", article, d);
+      if (searched.kind !== "match") return done("title", { kind: searched.kind }, "openalex");
+      route = { via: "title", key: searched.key, target: searched.target };
+    }
 
-    const asked = await ask(id, article, d);
+    const stored = await d.store.read(route.key, CITERS_FRESH_MS);
+    if (stored?.fresh) return done(route.key, answerFor(article, stored, stored.fetchedAt, route.via), "cache");
+
+    let asked: Asked;
+    if (route.via === "title") {
+      asked = await askCiters(route.key, route.target, d);
+    } else {
+      const work = await askWork(route.key, article, d);
+      asked = work.kind === "confirmed" ? await askCiters(route.key, work.target, d) : work;
+    }
     if (asked.kind === "found" || asked.kind === "not-indexed") {
-      const fetchedAt = await d.store.write(id, asked);
-      return done(answerFor(article, asked, fetchedAt), "openalex");
+      const fetchedAt = await d.store.write(route.key, asked);
+      return done(route.key, answerFor(article, asked, fetchedAt, route.via), "openalex");
     }
     /* OpenAlex could not be read, and an older list exists: serve it, with its
        own date, if it is still this article's. Not after `unconfirmed` — that
        is OpenAlex answering, and saying something else. */
     if (asked.kind !== "unconfirmed" && stored?.kind === "found") {
-      const stale = answerFor(article, stored, stored.fetchedAt);
-      if (stale.kind === "found") return done(stale, "stale");
+      const stale = answerFor(article, stored, stored.fetchedAt, route.via);
+      if (stale.kind === "found") return done(route.key, stale, "stale");
     }
-    return done({ kind: asked.kind }, "openalex");
-  } catch (err) {
-    d.log.error({ id, outcome: "store", ms: Date.now() - started, ...errorFields(err) }, "citation index lookup failed");
+    return done(route.key, { kind: asked.kind }, "openalex");
+  } catch {
+    /* Error messages from a fetch seam can contain its whole URL, and database
+       errors can include the title/authors being written. This module's log
+       contract permits neither, so record only bounded, non-content fields. */
+    d.log.error({ id: id ?? "title", outcome: "internal-error", ms: Date.now() - started }, "citation index lookup failed");
     return { kind: "unavailable" };
   }
 }

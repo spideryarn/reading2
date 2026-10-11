@@ -7466,8 +7466,11 @@ export interface Citer {
  * list.** No model made any of it, and it is not part of the stored Debate.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
- * - `no-doi` — the article has no usable DOI, and its own address is not an arXiv page
- *   (`citersIdOf`, src/citation-index.ts), so nothing was asked.
+ * - `no-doi` — the article has no usable DOI, its own address is not an arXiv page
+ *   (`citersIdOf`, src/citation-index.ts), and it has no author or no title
+ *   distinctive enough to search by, so nothing was asked.
+ * - `no-match` — no DOI, so OpenAlex was searched by title, and no one record
+ *   passed `titleMatchOf`. Not a claim that OpenAlex has no record of it.
  * - `not-indexed` — OpenAlex has no record of the DOI.
  * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
  *   article: its title and one author must both agree. Not a claim that the
@@ -7479,16 +7482,23 @@ export interface Citer {
  *   how many records its answer carried, `dropped` how many of those could not
  *   be shown (no title, a malformed id, a duplicate), and `capped` whether the
  *   page limit left some out. `citers.length` is `returned - dropped`, so the
- *   panel can say which of the two reasons a short list has.
+ *   panel can say which of the two reasons a short list has. `via` says how the
+ *   work was reached, by its DOI or by a title search (plan 261011q), and
+ *   `target` is OpenAlex's record of it, which the panel shows after a title
+ *   search so that a wrong match can be seen to be one.
  */
 export type CitersResult =
   | { kind: "no-doi" }
+  | { kind: "no-match" }
   | { kind: "not-indexed" }
   | { kind: "unconfirmed" }
   | { kind: "unavailable" }
   | { kind: "too-large" }
   | {
       kind: "found";
+      via: "doi" | "title";
+      /** OpenAlex's id (`W…`, shape-checked) and its own title for the work: a stranger's string. */
+      target: { openalexId: string; title: string };
       count: number;
       returned: number;
       dropped: number;

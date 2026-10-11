@@ -1,10 +1,11 @@
 ---
 id: q-hbg65m
 report: spya-vh0z7s
-status: open
+status: answered
 asked: 2026-10-10
 title: Should Reception and Claims become one sub-mode, and what should Cited by do for a piece with no DOI?
-refs: SPIDERYARN-READING2-G8 · SPIDERYARN-READING2-GB · qi-wtq7c6e8 · docs/plans/261010n-reception-says-plainly-why-it-is-empty-and-finds-an-arxiv-paper-s-doi.md · docs/user-feedback/261009_2315-reception-and-claims-overlap.md · docs/user-feedback/261009_2316-reception-empty-sentence-and-the-arxiv-doi.md
+refs: SPIDERYARN-READING2-G8 · SPIDERYARN-READING2-GB · qi-wtq7c6e8 · docs/plans/261010n-reception-says-plainly-why-it-is-empty-and-finds-an-arxiv-paper-s-doi.md · docs/user-feedback/261009_2315-reception-and-claims-overlap.md · docs/user-feedback/261009_2316-reception-empty-sentence-and-the-arxiv-doi.md · qi-4rdhx39b · docs/plans/261011q-cited-by-finds-a-paper-with-no-doi-by-title-and-author-at-openalex.md
+acted: spya-qne5cs
 ---
 Done, on dev, not deployed: both sentences you could not read are rewritten, and an arXiv paper now finds its DOI, so the Attention paper gets its Cited by list (about 27,000 papers). The Claims card no longer starts "What others say about", which read as a second Reception. Two questions are left.
 
@@ -31,3 +32,10 @@ What you asked, on 9 October, from Sources › Reception on Attention Is All You
 On question 1. What tells the two apart is where they start. Reception: one web search for pages that respond to the piece as a whole (replies, reviews, blog posts), plus the papers that cite it. Claims: up to eight claims the piece rests on, quoted in its own words; you tick some and each gets its own small web search for support and disagreement. They overlap where a critique of the piece argues with one of its claims; that page could turn up in both. Merging (B) would also mean reworking the chip counts, the addresses and old links, and the rule that a press only buys the work of the sub-mode it lands on. Separately, you already chose to rename Referee's Claims to Promises (q-fkq30v), so Sources' Claims will soon be the only Claims.
 
 On question 2. B is a form and its checking. C costs one OpenAlex request per article and needs care, since many papers share a title.
+
+## Greg's answer, 2026-10-11 (in the Feedback dialog, reply `spya-qne5cs`)
+
+> 1A
+> 2C yes, use OpenAlex and/or other methods, with a careful check afterwards
+
+1A: Reception and Claims stay two sub-modes, as built; nothing more to do. 2C: built on 2026-10-11 (plan 261011q, queue item qi-4rdhx39b). A piece with no DOI is searched for at OpenAlex by its title, and taken only when its whole title agrees, two of its authors are ours (or one and its year within one), and no other record passes as well. The list then names and links the record it matched, so a wrong match can be seen. Two follow-ups are queued for later: an OpenAlex API key (qi-7ttvvyjm) and a per-article cache of the search (qi-t7ktp5nv).
