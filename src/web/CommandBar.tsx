@@ -123,7 +123,7 @@ import {
   RUN_AT_ONCE,
   sameKey,
 } from "../command-pick.js";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Compass, X } from "lucide-react";
 import {
   DISMISSED,
   DISMISS_LABEL,
@@ -509,10 +509,31 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
   ];
 }
 
+export const GUIDE_CHAT_LABEL = "Guide chat";
+const GUIDE_CHAT_DESCRIPTION = "Talk through how to read this piece: why you're reading it, where to start, which modes would help.";
+const GUIDE_ROW_ID = "guide";
+const ASK_GUIDE_ROW_ID = "ask-the-guide";
+
 /**
- * **The *Guide* row**: open this article's guide in Chat, sending nothing.
+ * **The two rows that go to the guide wear its `Compass`** — the glyph its row
+ * in Chat's list and its greeting wear (docs/project/icons.md § the guide), and
+ * the bar's only icons, which is the point: no other row goes there.
+ */
+const goesToTheGuide = (command: Command): boolean =>
+  command.kind === "action" && (command.id === GUIDE_ROW_ID || command.id === ASK_GUIDE_ROW_ID);
+
+/**
+ * **The *Guide chat* row**: open this article's guide in Chat, sending nothing.
  * Greg, 2026-10-09, `spya-s6qhzv`: *"there should be a command in the command
  * bar for opening the guide chat"*. Plan 261009i.
+ *
+ * **Named "Guide chat", and first on an empty bar** since 2026-10-10 (plan
+ * 261010g; Greg, `spya-q3pzyn`: *"Add a way to open the guide chat at the top
+ * of the command bar. Find a way to name and/or describe it that will be clear
+ * to new users"*). "Guide" alone was also Help's word, for Help's own reader
+ * guides; *chat* says a press opens a conversation. Inside Chat it stays
+ * "Guide" (`GUIDE_LABEL`), where the band already says chat. The pin is the
+ * `shown` memo's, in `CommandBar`; this list keeps it in its ranked place.
  *
  * Only where the page hands over a way to open it (`executor.openGuide`), which
  * is the owner's reading view: the guide is the owner's, and the Metadata page
@@ -526,10 +547,19 @@ function guideRow(article: CommandBarArticle | undefined): readonly Command[] {
   return [
     {
       kind: "action",
-      id: "guide",
-      label: "Guide",
-      description: "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
-      aliases: ["tour", "where to start", "how to read", "welcome", "getting started"],
+      id: GUIDE_ROW_ID,
+      label: GUIDE_CHAT_LABEL,
+      description: GUIDE_CHAT_DESCRIPTION,
+      aliases: [
+        "guide",
+        "chat with the guide",
+        "help me read",
+        "tour",
+        "where to start",
+        "how to read",
+        "welcome",
+        "getting started",
+      ],
       /* Opening the guide draws its greeting, which is ours; nothing is asked
          of a model until the reader sends. */
       generates: false,
@@ -1776,6 +1806,8 @@ export function CommandBar({
    * stops being shown.
    */
   const [list, setList] = useState<{ slug: string; readFrom: string; suggestions: Suggestions } | null>(null);
+  /** A new list behind a shut bar keeps its first suggestion selected through the next opening. */
+  const selectSuggestionOnOpen = useRef(false);
   /**
    * **The rows dismissed in this tab, under the article and fingerprint they
    * belong to.** Keeping the key rather than the answer object's identity does
@@ -1815,6 +1847,7 @@ export function CommandBar({
     if (savesSeen.current === saves) return;
     savesSeen.current = saves;
     setList(null);
+    selectSuggestionOnOpen.current = false;
     if (suggestOut.current !== null) {
       suggestTurn.current += 1;
       suggestOut.current.abort();
@@ -1829,6 +1862,7 @@ export function CommandBar({
   useLayoutEffect(() => {
     if (suggestSlug !== undefined) return;
     setList(null);
+    selectSuggestionOnOpen.current = false;
     if (suggestOut.current !== null) {
       suggestTurn.current += 1;
       suggestOut.current.abort();
@@ -2062,7 +2096,7 @@ export function CommandBar({
     if (guideSentence === null || askGuide === undefined) return null;
     const command: Command = {
       kind: "action",
-      id: "ask-the-guide",
+      id: ASK_GUIDE_ROW_ID,
       label: guideLabel(guideSentence),
       description: GUIDE_DESCRIPTION,
       aliases: [],
@@ -2086,13 +2120,15 @@ export function CommandBar({
     suggestionsReady.length === 0;
   const reasonFailure = emptyBox && reason.state === "failed" && !suggestWaiting ? REASON_NOT_READ.message : null;
   /**
-   * **The *Guide* row first of all, on an empty box** — plan 261010u. Greg,
-   * 2026-10-10 (`spya-xasbd3`): *"I still want an easy way to get to the guide
-   * chat, somewhere near the top of the command bar."* Above the suggestions
-   * too (GPT Sol's F3: below four of them it was still under the fold). Only
-   * the drawing order: typed, it ranks as any row does.
+   * **The guide chat, first of all on an empty box** — plans 261010g and
+   * 261010u. Greg, 2026-10-10 (`spya-xasbd3`): *"I still want an easy way to
+   * get to the guide chat, somewhere near the top of the command bar."* Above
+   * *Suggest* and the suggestions too (GPT Sol's F3 on 261010u: below four of
+   * them it was still under the fold), with a rule beneath. Free to open, so
+   * it can be what a bare Enter takes. Only the drawing order: typed, it ranks
+   * as any row does, or it would sit above the row the reader is spelling out.
    */
-  const guideFirst = emptyBox ? results.find((c) => c.kind === "action" && c.id === "guide") : undefined;
+  const guideFirst = emptyBox ? results.find((c) => c.kind === "action" && c.id === GUIDE_ROW_ID) : undefined;
   const rest = useMemo(
     () => (guideFirst === undefined ? results : results.filter((c) => c !== guideFirst)),
     [results, guideFirst],
@@ -2137,8 +2173,10 @@ export function CommandBar({
   }, [shown, index]);
   /* A profile read may insert or remove rows while the reader is choosing.
      Keep their highlighted command, rather than applying its index to a new
-     list. A new suggestion answer, save and fresh opening still select row zero.
-     An unknown reason keeps the last save generation until its read lands. */
+     list. A new suggestion answer selects its first suggestion, including
+     when it arrived behind a shut bar; a save and every other fresh opening
+     select row zero. An unknown reason keeps the last save generation until
+     its read lands. */
   const previousReasonRows = useRef({ open, reason, list, saves, rowId: active?.rowId });
   useLayoutEffect(() => {
     const previous = previousReasonRows.current;
@@ -2147,17 +2185,25 @@ export function CommandBar({
       saves: reason.state === "unknown" ? previous.saves : saves,
       rowId: active?.rowId,
     };
-    if (!open || !previous.open || (previous.reason === reason && previous.list === list)) return;
-    /* A new answer deliberately selects its first suggestion — below the Guide
-       row and the fold line, so by finding it rather than by index. Folded,
-       suggestions are not selectable, so keep the first ordinary row. */
+    if (previous.reason === reason && previous.list === list) return;
+    /* A new answer deliberately selects its first suggestion — found by kind,
+       not taken as row zero, which is Guide chat's where the page can open it,
+       and below the fold line (plans 261010g and 261010u, GPT Sol's F1 on
+       261010g). Folded, suggestions are not selectable, so keep the first
+       ordinary row. */
     if (list !== null && previous.list !== list) {
-      const wanted = shown.findIndex((row) =>
+      const first = shown.findIndex((row) =>
         folded ? row.press !== "toggle" && row.suggested === undefined : row.suggested !== undefined,
       );
-      if (wanted >= 0 && wanted !== index) setSelected(wanted);
+      const next = first >= 0 ? first : 0;
+      /* The opening effect below normally restores row zero. This one answer
+         is the exception: it was requested before the bar shut, and its
+         first row must still be what the next Enter confirms. */
+      selectSuggestionOnOpen.current = !folded && first >= 0 && (!open || !previous.open);
+      if (next !== index) setSelected(next);
       return;
     }
+    if (!open || !previous.open) return;
     /* A save restarts the choice; a removed row has no neighbour to confirm. */
     const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
     const next = at >= 0 ? at : 0;
@@ -2187,7 +2233,8 @@ export function CommandBar({
          `No command matches.` — before a passive effect could reset it. A
          layout effect runs before that paint, so there is no frame to see. */
       setDraft("");
-      setSelected(0);
+      if (selectSuggestionOnOpen.current) selectSuggestionOnOpen.current = false;
+      else setSelected(0);
       /* Before `inFlight` is read just below: an ask from the last opening
          is stopped, not waited for. */
       dropAsk();
@@ -2875,6 +2922,11 @@ export function CommandBar({
               const { command } = row;
               return (
               <Fragment key={row.rowId}>
+              {/* Guide chat, pinned, is a group of its own: a rule
+                  beneath it. Not an option: the arrows pass over it. */}
+              {at === 1 && guideFirst !== undefined && (
+                <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
+              )}
               {/* A rule where the bar's ordinary rows begin again, after the
                   list a model wrote (or its folded line). Not an option: the
                   arrows pass over it. */}
@@ -2937,6 +2989,11 @@ export function CommandBar({
                   <FoldLine folded={folded} count={suggestionsReady.length} />
                 ) : (
                 <>
+                {goesToTheGuide(command) && (
+                  <span className="cmdbar-guide-mark tw:shrink-0 tw:self-center tw:text-ink-faint">
+                    <Compass size={14} aria-hidden="true" />
+                  </span>
+                )}
                 {/* A sub-mode says which mode it is in, muted, before its own
                     name — `Learn › Quiz` — so *Simple* is not a mystery and
                     the pictures read as Diagram's. Outside `cmdbar-name`, which

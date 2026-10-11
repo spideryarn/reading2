@@ -175,7 +175,7 @@ asked for less motion gets the bar at once. Which mount plays it is
   prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
   it for the confidence unit, the colours, or the URL parameters.
 - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
-  them a verdict: five sub-modes, an evidence base with two numbers in it, and a confidentiality
+  them a verdict: six sub-modes, an evidence base with two numbers in it, and a confidentiality
   notice written in the past tense on purpose. Open it for how much of it is actually built.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: the mode, its chips, the three
   computed pictures, the five that were cut, and what a visitor sees. Open it for any picture but
@@ -305,7 +305,10 @@ product calls) and the two widenings he has made since. **It was modes only unti
 he asked for `/changelog` to be reachable from it as well as from the footer; on 2026-09-08 he named
 six more — Library, Feedback, Metadata, Tweets, Homepage, Profile — and left *"a few more
 likely/useful"* to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)).
-The rows that are not modes are drawn below all of them, and come in two shapes:
+The rows that are not modes are drawn below all of them — bar one: on the owner's reading view an
+empty bar opens on *Guide chat*, which opens the guide, since 2026-10-10
+([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)) — and come
+in two shapes:
 **pages**, where Enter goes there, and **actions**, where Enter does the thing — Feedback, which
 opens the dialog, Comments, which opens the drawer, and since 2026-10-02 the *Run again* rows below,
 the first that can fail: an action now answers *close* or *stay open, saying why*, and one that is
@@ -498,8 +501,8 @@ say it will last only until the page is closed. Words in
 
 **It proposes a short list from why you are reading, since 2026-10-05**
 ([261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)).
-On the owner's reading view, for an article that has a *why you're reading this*, an empty bar opens
-on *Suggest what to do here*. Pressing it makes one small model call; the bar stays open and then
+On the owner's reading view, for an article that has a *why you're reading this*, an empty bar offers
+*Suggest what to do here*, just under *Guide chat*. Pressing it makes one small model call; the bar stays open and then
 draws, under *From why you're reading*, up to three quick searches, up to two modes and one
 question for chat about what the web says, each with a line saying why. **Every one is a row the
 bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's
@@ -508,7 +511,7 @@ kept for the visit in state of its own, hidden while the reader types, and dropp
 or the reason is saved.
 
 **Since 2026-10-10 the bar draws at most four, the reader can dismiss one for good or fold the lot,
-and *Guide* is the first row of all**
+and *Guide chat* is the first row of all**
 ([261010u](../plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md);
 Greg's `spya-yf23zk` and `spya-xasbd3`: *"three or four should probably be enough … it should be
 possible to dismiss some of them … and collapse them"*, *"an easy way to get to the guide chat,

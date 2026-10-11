@@ -595,6 +595,9 @@ export async function exportArticle(
         /* A highlight's colour, added 2026-10-03 — and another hand-listed
            field, so another line that had to be remembered here. */
         colour: row.colour,
+        /* The reviewer's major/minor sort, added 2026-10-11 — another
+           hand-listed field (plan 261011f). */
+        severity: row.severity,
         status: row.status,
         answer: row.answer,
         citations: row.citations,

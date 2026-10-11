@@ -1,0 +1,567 @@
+diff --git a/docs/project/chat-tools.md b/docs/project/chat-tools.md
+index a2653578a..5be0cce1d 100644
+--- a/docs/project/chat-tools.md
++++ b/docs/project/chat-tools.md
+@@ -1065,8 +1065,10 @@ from the pinned row above the list. What makes it a guide rather than a chat:
+   their press (above). While the conversation is empty it offers three ways in, each sent as the
+   reader's first message (*Where should I start?*, *Help me work out what I want from this*, *How
+   could I read this well?*; plan 261009u); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
+-- **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
+-  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since
++- **A row in the command bar**, *Guide chat*, on the owner's reading view (`guideRow` in
++  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does — first on
++  an empty bar, with the guide's `Compass`, since 2026-10-10
++  ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)); and since
+   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
+ - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
+   (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
+diff --git a/docs/project/icons.md b/docs/project/icons.md
+index 07984e002..96b5e959d 100644
+--- a/docs/project/icons.md
++++ b/docs/project/icons.md
+@@ -99,6 +99,13 @@ looks wrong.
+ 
+   > that information icon is the same one we use elsewhere for information about a mode, and I
+   > think they are different, and so it's a bit confusing to use the same icon for both.
++
++  **`Compass` means the guide**, the one conversation per article about how to read it, and it
++  goes wherever the guide is named on screen: its row above Chat's list, its greeting, Chat's
++  header while it is open, and the command bar's *Guide chat* and *Ask the guide: “…”* rows — the
++  bar's only icons, so the rows that go to the guide stand apart from those that do not. Greg,
++  2026-10-09, `spya-q3pzyn`: *"make sure that we're using an icon for the guide chat applied
++  everywhere"* ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)).
+ - **Colour comes from `currentColor`**, so state is a CSS colour change on the parent and never a
+   prop. See `.cmt-search.on` / `.cmt-search.off` in
+   [`src/web/styles/annotations.css`](../../src/web/styles/annotations.css).
+diff --git a/src/command-pick-catalogue.generated.json b/src/command-pick-catalogue.generated.json
+index a3efe922c..110631196 100644
+--- a/src/command-pick-catalogue.generated.json
++++ b/src/command-pick-catalogue.generated.json
+@@ -872,9 +872,12 @@
+  },
+  {
+   "id": "action:guide",
+-  "label": "Guide",
+-  "description": "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
++  "label": "Guide chat",
++  "description": "Talk through how to read this piece: why you're reading it, where to start, which modes would help.",
+   "aliases": [
++   "guide",
++   "chat with the guide",
++   "help me read",
+    "tour",
+    "where to start",
+    "how to read",
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index d7d71a062..b50f185bc 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -117,7 +117,7 @@
+   "summary": "The command bar and what you can type or say into it, and the keys for moving around an article.",
+   "keywords": "keys hotkeys arrow up down left right command k ctrl enter escape tab skip to modes g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list",
+   "experimental": false,
+-  "body": "(Picture: The command bar open: a box saying “Type a command…” above a list of modes, each with a line on what it does, most marked generates. Caption: The command bar: type a mode, a page or an action. Rows marked generates start the AI writing.)\n\n- <kbd>⌘K</kbd> (Mac) or <kbd>Ctrl K</kbd> opens the **command bar**. Type the name of a mode, a\n  page or an action — *quotes*, *library*, *feedback* — and press <kbd>Enter</kbd>. Rows marked\n  **generates** start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the\n  same thing. It works while you are typing in most boxes too, and simply closing it keeps what you\n  typed. It leaves title editing and boxes inside another open dialog alone. On a Mac, use\n  <kbd>⌘K</kbd>: <kbd>Ctrl K</kbd> stays the box’s own editing key.\n- The command bar also takes a few whole requests. *where does it first mention entropy* jumps to\n  the first place the article says it. *search for entropy* or *find entropy* offers a quick search\n  for it first, on your own articles, and every place the exact word appears second. *look up\n  entropy* opens a matching term already visible in the glossary, or, once the article has a\n  glossary, offers to look it up and add it. *tag as methods* and *untag methods* change your own\n  tags, and *experimental* turns experimental features on or off. *dark mode*, *light mode* and\n  *system* change the page’s colours on this device, the choice your Profile also has. *find more\n  terms* and *more quotes* open Glossary or Quotes and press its **Find more** for you; they are\n  offered only while that list can be added to. Press the microphone in the box to say it instead of\n  typing. Press Stop twice quickly and the bar presses <kbd>Enter</kbd> for you once the words\n  arrive: it runs the command you named, or asks what you meant.\n- If you do not know the name, type or say a whole sentence — *what’s changed on this site*, *is\n  consciousness mentioned anywhere* — and, when nothing matches, press **Ask what you meant** or\n  <kbd>Enter</kbd>. A fast AI model reads your sentence and the list of commands, never the article.\n  If it is sure and the command only takes you somewhere, you go there; otherwise it shows its best\n  guesses under **Did you mean** and you press the one you want, or <kbd>Enter</kbd>. You need to be\n  signed in.\n- On your own article, once you have said why you are reading it, an empty command bar starts with\n  **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for\n  reading, never the article, and proposes a short list under **From why you’re reading**: up to\n  three quick searches, a mode or two, and a question for Chat about what the web says. Nothing is\n  done until you press a row, and each row does what it would anywhere else in the bar; the question\n  lands in Chat’s box unsent. The list stays for your visit, hides while you type, and is thrown\n  away when you edit your profile or your reason. The searches and the question are worded from what\n  you wrote, so read one before you press it.\n- <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the pointer\n  over the spine. Holding a key down does not repeat, so every step lands somewhere you can read.\n- <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and\n  Structure’s smallest sections while that mode is open. Elsewhere they do what your browser\n  normally does.\n- In an article, the first <kbd>Tab</kbd> shows **Skip to modes**. Press <kbd>Enter</kbd> to reach\n  the mode switch in the bottom bar. Focus lands on the open mode, or the first mode button if the\n  open mode lives under **More**.\n- <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for the next\n  term. <kbd>Esc</kbd> takes you back.\n- <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page, and on it takes you\n  back to the article, as pressing **Metadata** again does. In a box you are typing in — a comment,\n  feedback, a quiz answer — it saves or sends instead, and plain <kbd>Enter</kbd> starts a new line.\n- <kbd>Esc</kbd> closes whatever is in front: a dialog, a card, an open panel. On the Metadata page,\n  with nothing in front and focus outside a text box, it takes you back to the article.\n\nThe article-navigation shortcuts leave keys alone while you are typing in a box. <kbd>⌘ Enter</kbd>\n/ <kbd>Ctrl Enter</kbd> is instead left to the box to save or send, and <kbd>Esc</kbd> can still\nclose what is in front."
++  "body": "(Picture: The command bar open: a box saying “Type a command…” above a list of modes, each with a line on what it does, most marked generates. Caption: The command bar: type a mode, a page or an action. Rows marked generates start the AI writing.)\n\n- <kbd>⌘K</kbd> (Mac) or <kbd>Ctrl K</kbd> opens the **command bar**. Type the name of a mode, a\n  page or an action — *quotes*, *library*, *feedback* — and press <kbd>Enter</kbd>. Rows marked\n  **generates** start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the\n  same thing. It works while you are typing in most boxes too, and simply closing it keeps what you\n  typed. It leaves title editing and boxes inside another open dialog alone. On a Mac, use\n  <kbd>⌘K</kbd>: <kbd>Ctrl K</kbd> stays the box’s own editing key.\n- The command bar also takes a few whole requests. *where does it first mention entropy* jumps to\n  the first place the article says it. *search for entropy* or *find entropy* offers a quick search\n  for it first, on your own articles, and every place the exact word appears second. *look up\n  entropy* opens a matching term already visible in the glossary, or, once the article has a\n  glossary, offers to look it up and add it. *tag as methods* and *untag methods* change your own\n  tags, and *experimental* turns experimental features on or off. *dark mode*, *light mode* and\n  *system* change the page’s colours on this device, the choice your Profile also has. *find more\n  terms* and *more quotes* open Glossary or Quotes and press its **Find more** for you; they are\n  offered only while that list can be added to. Press the microphone in the box to say it instead of\n  typing. Press Stop twice quickly and the bar presses <kbd>Enter</kbd> for you once the words\n  arrive: it runs the command you named, or asks what you meant.\n- If you do not know the name, type or say a whole sentence — *what’s changed on this site*, *is\n  consciousness mentioned anywhere* — and, when nothing matches, press **Ask what you meant** or\n  <kbd>Enter</kbd>. A fast AI model reads your sentence and the list of commands, never the article.\n  If it is sure and the command only takes you somewhere, you go there; otherwise it shows its best\n  guesses under **Did you mean** and you press the one you want, or <kbd>Enter</kbd>. You need to be\n  signed in.\n- On your own article, an empty command bar starts with **Guide chat**, marked with a compass: it\n  opens the guide, the conversation about how to read this piece, and sends nothing.\n- Below it, once you have said why you are reading, comes **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for\n  reading, never the article, and proposes a short list under **From why you’re reading**: up to\n  three quick searches, a mode or two, and a question for Chat about what the web says. Nothing is\n  done until you press a row, and each row does what it would anywhere else in the bar; the question\n  lands in Chat’s box unsent. The list stays for your visit, hides while you type, and is thrown\n  away when you edit your profile or your reason. The searches and the question are worded from what\n  you wrote, so read one before you press it.\n- <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the pointer\n  over the spine. Holding a key down does not repeat, so every step lands somewhere you can read.\n- <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and\n  Structure’s smallest sections while that mode is open. Elsewhere they do what your browser\n  normally does.\n- In an article, the first <kbd>Tab</kbd> shows **Skip to modes**. Press <kbd>Enter</kbd> to reach\n  the mode switch in the bottom bar. Focus lands on the open mode, or the first mode button if the\n  open mode lives under **More**.\n- <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for the next\n  term. <kbd>Esc</kbd> takes you back.\n- <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page, and on it takes you\n  back to the article, as pressing **Metadata** again does. In a box you are typing in — a comment,\n  feedback, a quiz answer — it saves or sends instead, and plain <kbd>Enter</kbd> starts a new line.\n- <kbd>Esc</kbd> closes whatever is in front: a dialog, a card, an open panel. On the Metadata page,\n  with nothing in front and focus outside a text box, it takes you back to the article.\n\nThe article-navigation shortcuts leave keys alone while you are typing in a box. <kbd>⌘ Enter</kbd>\n/ <kbd>Ctrl Enter</kbd> is instead left to the box to save or send, and <kbd>Esc</kbd> can still\nclose what is in front."
+  },
+  {
+   "anchor": "touch",
+@@ -177,7 +177,7 @@
+   "summary": "Ask about this article — answers point back at the paragraphs they came from.",
+   "keywords": "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore ask question talk discuss conversation assistant chat",
+   "experimental": false,
+-  "body": "## In short\n\nChat is for the questions the article raises in your own head: what a sentence means, whether a\nclaim really follows, how two parts fit together. You ask in your own words, and every answer points\nback to the paragraphs it came from, so you can check it against the text rather than take it on\ntrust.\n\n(Picture: A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on. Caption: Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.)\n\n## How it works\n\nAsk about this article — answers point back at the paragraphs they came from.\n\nNothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.\n\n## When to use it\n\nWhen you have a question of your own: what a sentence means, whether a claim follows, how two\npassages fit together. It is the wrong tool for “summarise this” — Summary and Structure already do\nthat, and Chat has no summarising tool on purpose.\n\nQuicker ways in than the Chat button:\n\n- **The speech-bubble in a paragraph’s margin** opens a chat about just that paragraph. Nothing is\n  asked until you send.\n- **The ? in a paragraph’s margin** asks “Help me understand” straight away.\n- **Select some words**: they are highlighted, and the box that opens has an **Ask the AI about\n  this…** field.\n\nChat is only for whoever added the article; on someone else’s shared article its button is dimmed.\n\n## Reading it\n\nThe short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or\npoint at it to read the start first. A dimmed code is a paragraph the article no longer has. Check\nthe passage before you trust the claim — that is what the codes are for.\n\nThe lines above an answer say where else Chat looked:\n\n- **searched the web**: the pages it used are listed under the answer as **From the web**.\n- **searched your library for …**: it searched your other saved articles. This matches words, not\n  meaning, so if it finds nothing, try other words before you conclude you never read about it.\n- **read** and a site name: it fetched that page.\n\nAn answer with none of these came from the article alone. Chat decides when it needs them.\n\nEach article keeps its own list of conversations; **‹ Chats**, at the top left of a conversation,\ntakes you back to it. That list holds every\nconversation you have had about the article, not only the ones started in Chat. A row from somewhere\nelse has a small icon in front of it: point at it, or tap it, to see where it came from, for example\na claim in Sources, a passage, or Learn. Pressing a Learn row takes you to Learn, where that\nconversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from\nmore than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow\nit.\n\n<kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer\nstill arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.\nThe bin beside the pencil deletes that question, its answer and everything after it: press it, then\npress it again to confirm. The first question has no bin; to delete it, delete the conversation.\nWhen a conversation is longer than the panel, the arrows under it step to the previous or next\nmessage, or back to the first, and **Latest** jumps to the end. The (i) in the corner of a\nconversation says which AI model answered it, and how hard it was asked to think.\n\n**Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or\nremove a tag, look a term up in the glossary, or show where the article first says something.\nNothing happens until you press the button; Chat cannot do any of these itself.\n\n**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read\nthis article with Spideryarn, rather than about what it says. A new article opens on it when there\nis room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI\nuntil you send something. The guide can do one thing per answer by itself, if it only moves you:\ntake you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the\nGlossary or Summary's Brief or Fuller once they have already been written for this article. It\nsays so when it does, and **Back** undoes it. Anything that costs money or changes your things, such\nas a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its\ngreeting asks why you are reading the piece: answer in the box below as you would any message. When\nyou say why, or something about yourself, the guide offers to save it, as close to your own words\nas it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is\nsaved until you press, and **Undo** puts it back. Under its latest answer the guide offers up to\nthree next steps as buttons: something to ask it next, a mode to open, or a search whose words you\ncan change before you press **Quick search**. Ask it to make a private link, share the article or archive\nit, and it offers **Share this article…** or **Archive or put back…**, which take you to the\nMetadata page where you do it; the guide never does these itself. You can talk to the\nguide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.\n\n**Talking instead of typing.** The microphone turns your speech into text in the box, to edit before\nyou send. It is worth trying even if you type quickly: most people say more out loud than they would\ntype, and the more you say about what you want, the better the answer can fit it. A recording stops\nafter fifteen minutes, and says so a minute before. Press Stop twice quickly and the box finishes its\naction once the words arrive: it sends here, in Feedback, in a comment follow-up and in a quiz answer;\nit saves when you annotate a passage; and in the command bar it presses Enter. **Live**, beside it,\nis a spoken conversation you can interrupt. Your audio goes\ndirectly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,\nand press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all."
++  "body": "## In short\n\nChat is for the questions the article raises in your own head: what a sentence means, whether a\nclaim really follows, how two parts fit together. You ask in your own words, and every answer points\nback to the paragraphs it came from, so you can check it against the text rather than take it on\ntrust.\n\n(Picture: A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on. Caption: Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.)\n\n## How it works\n\nAsk about this article — answers point back at the paragraphs they came from.\n\nNothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.\n\n## When to use it\n\nWhen you have a question of your own: what a sentence means, whether a claim follows, how two\npassages fit together. It is the wrong tool for “summarise this” — Summary and Structure already do\nthat, and Chat has no summarising tool on purpose.\n\nQuicker ways in than the Chat button:\n\n- **The speech-bubble in a paragraph’s margin** opens a chat about just that paragraph. Nothing is\n  asked until you send.\n- **The ? in a paragraph’s margin** asks “Help me understand” straight away.\n- **Select some words**: they are highlighted, and the box that opens has an **Ask the AI about\n  this…** field.\n\nChat is only for whoever added the article; on someone else’s shared article its button is dimmed.\n\n## Reading it\n\nThe short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or\npoint at it to read the start first. A dimmed code is a paragraph the article no longer has. Check\nthe passage before you trust the claim — that is what the codes are for.\n\nThe lines above an answer say where else Chat looked:\n\n- **searched the web**: the pages it used are listed under the answer as **From the web**.\n- **searched your library for …**: it searched your other saved articles. This matches words, not\n  meaning, so if it finds nothing, try other words before you conclude you never read about it.\n- **read** and a site name: it fetched that page.\n\nAn answer with none of these came from the article alone. Chat decides when it needs them.\n\nEach article keeps its own list of conversations; **‹ Chats**, at the top left of a conversation,\ntakes you back to it. That list holds every\nconversation you have had about the article, not only the ones started in Chat. A row from somewhere\nelse has a small icon in front of it: point at it, or tap it, to see where it came from, for example\na claim in Sources, a passage, or Learn. Pressing a Learn row takes you to Learn, where that\nconversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from\nmore than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow\nit.\n\n<kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer\nstill arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.\nThe bin beside the pencil deletes that question, its answer and everything after it: press it, then\npress it again to confirm. The first question has no bin; to delete it, delete the conversation.\nWhen a conversation is longer than the panel, the arrows under it step to the previous or next\nmessage, or back to the first, and **Latest** jumps to the end. The (i) in the corner of a\nconversation says which AI model answered it, and how hard it was asked to think.\n\n**Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or\nremove a tag, look a term up in the glossary, or show where the article first says something.\nNothing happens until you press the button; Chat cannot do any of these itself.\n\n**The guide.** The **Guide** row pinned at the top of the list, with a compass, is a conversation about how to read\nthis article with Spideryarn, rather than about what it says. A new article opens on it when there\nis room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI\nuntil you send something. The guide can do one thing per answer by itself, if it only moves you:\ntake you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the\nGlossary or Summary's Brief or Fuller once they have already been written for this article. It\nsays so when it does, and **Back** undoes it. Anything that costs money or changes your things, such\nas a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its\ngreeting asks why you are reading the piece: answer in the box below as you would any message. When\nyou say why, or something about yourself, the guide offers to save it, as close to your own words\nas it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is\nsaved until you press, and **Undo** puts it back. Under its latest answer the guide offers up to\nthree next steps as buttons: something to ask it next, a mode to open, or a search whose words you\ncan change before you press **Quick search**. Ask it to make a private link, share the article or archive\nit, and it offers **Share this article…** or **Archive or put back…**, which take you to the\nMetadata page where you do it; the guide never does these itself. You can talk to the\nguide out loud with **Live**, as in any chat, and **Guide chat**, the first row of the command bar on your own article, gets you back to it.\n\n**Talking instead of typing.** The microphone turns your speech into text in the box, to edit before\nyou send. It is worth trying even if you type quickly: most people say more out loud than they would\ntype, and the more you say about what you want, the better the answer can fit it. A recording stops\nafter fifteen minutes, and says so a minute before. Press Stop twice quickly and the box finishes its\naction once the words arrive: it sends here, in Feedback, in a comment follow-up and in a quiz answer;\nit saves when you annotate a passage; and in the command bar it presses Enter. **Live**, beside it,\nis a spoken conversation you can interrupt. Your audio goes\ndirectly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,\nand press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all."
+  },
+  {
+   "anchor": "mode-glossary",
+diff --git a/src/web/ChatPanel.tsx b/src/web/ChatPanel.tsx
+index a7d50b332..f2b1cbcd1 100644
+--- a/src/web/ChatPanel.tsx
++++ b/src/web/ChatPanel.tsx
+@@ -680,8 +680,13 @@ export function ChatPanel({
+             {learn ? (
+               MODE_LABEL.learn
+             ) : open?.kind === "guide" ? (
+-              /* One per article, so its name rather than its first question. */
+-              GUIDE_LABEL
++              /* One per article, so its name rather than its first question —
++                 and its `Compass`, as everywhere the guide is named (plan
++                 261010g; docs/project/icons.md). */
++              <span className="chat-head-guide">
++                <Compass size={14} aria-hidden="true" className="chat-head-guide-mark" />
++                {GUIDE_LABEL}
++              </span>
+             ) : open ? (
+               /* The title is the reader's first question, or their rename. */
+               <span className="chat-head-title">{open.title}</span>
+diff --git a/src/web/CommandBar.tsx b/src/web/CommandBar.tsx
+index 6f0e13384..30687e695 100644
+--- a/src/web/CommandBar.tsx
++++ b/src/web/CommandBar.tsx
+@@ -114,6 +114,7 @@
+  * they are on the elements even while they carry no rules.
+  */
+ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { Compass } from "lucide-react";
+ import {
+   type ArgumentKind,
+   COULD_NOT_TELL,
+@@ -501,11 +502,32 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
+   ];
+ }
+ 
++export const GUIDE_CHAT_LABEL = "Guide chat";
++const GUIDE_CHAT_DESCRIPTION = "Talk through how to read this piece: why you're reading it, where to start, which modes would help.";
++const GUIDE_ROW_ID = "guide";
++const ASK_GUIDE_ROW_ID = "ask-the-guide";
++
++/**
++ * **The two rows that go to the guide wear its `Compass`** — the glyph its row
++ * in Chat's list and its greeting wear (docs/project/icons.md § the guide), and
++ * the bar's only icons, which is the point: no other row goes there.
++ */
++const goesToTheGuide = (command: Command): boolean =>
++  command.kind === "action" && (command.id === GUIDE_ROW_ID || command.id === ASK_GUIDE_ROW_ID);
++
+ /**
+- * **The *Guide* row**: open this article's guide in Chat, sending nothing.
++ * **The *Guide chat* row**: open this article's guide in Chat, sending nothing.
+  * Greg, 2026-10-09, `spya-s6qhzv`: *"there should be a command in the command
+  * bar for opening the guide chat"*. Plan 261009i.
+  *
++ * **Named "Guide chat", and first on an empty bar** since 2026-10-10 (plan
++ * 261010g; Greg, `spya-q3pzyn`: *"Add a way to open the guide chat at the top
++ * of the command bar. Find a way to name and/or describe it that will be clear
++ * to new users"*). "Guide" alone was also Help's word, for Help's own reader
++ * guides; *chat* says a press opens a conversation. Inside Chat it stays
++ * "Guide" (`GUIDE_LABEL`), where the band already says chat. The pin is the
++ * `shown` memo's, in `CommandBar`; this list keeps it in its ranked place.
++ *
+  * Only where the page hands over a way to open it (`executor.openGuide`), which
+  * is the owner's reading view: the guide is the owner's, and the Metadata page
+  * has no band. `guide` was already one of Help's aliases and stays there; a
+@@ -518,10 +540,19 @@ function guideRow(article: CommandBarArticle | undefined): readonly Command[] {
+   return [
+     {
+       kind: "action",
+-      id: "guide",
+-      label: "Guide",
+-      description: "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
+-      aliases: ["tour", "where to start", "how to read", "welcome", "getting started"],
++      id: GUIDE_ROW_ID,
++      label: GUIDE_CHAT_LABEL,
++      description: GUIDE_CHAT_DESCRIPTION,
++      aliases: [
++        "guide",
++        "chat with the guide",
++        "help me read",
++        "tour",
++        "where to start",
++        "how to read",
++        "welcome",
++        "getting started",
++      ],
+       /* Opening the guide draws its greeting, which is ours; nothing is asked
+          of a model until the reader sends. */
+       generates: false,
+@@ -1930,7 +1961,7 @@ export function CommandBar({
+     if (guideSentence === null || askGuide === undefined) return null;
+     const command: Command = {
+       kind: "action",
+-      id: "ask-the-guide",
++      id: ASK_GUIDE_ROW_ID,
+       label: guideLabel(guideSentence),
+       description: GUIDE_DESCRIPTION,
+       aliases: [],
+@@ -1953,17 +1984,29 @@ export function CommandBar({
+     (reason.state === "has" || reason.state === "failed") &&
+     suggestedNow.length === 0;
+   const reasonFailure = emptyBox && reason.state === "failed" && !suggestWaiting ? REASON_NOT_READ.message : null;
++  /* **The guide chat, first on an empty box** (plan 261010g): above *Suggest*
++     and anything it suggested, with a rule beneath. Free to open, so it can
++     be what a bare Enter takes. Once the reader types it ranks like any row:
++     pinned, it would sit above the row they are spelling out. */
++  const pinnedGuide = emptyBox
++    ? results.find((c) => c.kind === "action" && c.id === GUIDE_ROW_ID)
++    : undefined;
++  const ordinary = useMemo(
++    () => (pinnedGuide === undefined ? results : results.filter((c) => c !== pinnedGuide)),
++    [results, pinnedGuide],
++  );
+   const shown = useMemo<readonly ShownRow[]>(
+     () => [
++      ...(pinnedGuide === undefined ? [] : [ordinaryRow(pinnedGuide)]),
+       ...(offerSuggest ? [{ command: SUGGEST_ROW, rowId: commandId(SUGGEST_ROW), press: "suggest" } as const] : []),
+       ...suggestedNow,
+-      ...results.map(ordinaryRow),
++      ...ordinary.map(ordinaryRow),
+       ...(guideRow === null ? [] : [guideRow]),
+     ],
+-    [offerSuggest, suggestedNow, results, guideRow],
++    [pinnedGuide, offerSuggest, suggestedNow, ordinary, guideRow],
+   );
+   /** Where the ordinary rows start, for the rule drawn between the list and them. */
+-  const firstOrdinary = shown.length - results.length - (guideRow === null ? 0 : 1);
++  const firstOrdinary = shown.length - ordinary.length - (guideRow === null ? 0 : 1);
+   const index = Math.min(selected, Math.max(0, shown.length - 1));
+   const active = shown[index];
+   /* A profile read may insert or remove rows while the reader is choosing.
+@@ -1979,8 +2022,15 @@ export function CommandBar({
+       rowId: active?.rowId,
+     };
+     if (!open || !previous.open || (previous.reason === reason && previous.list === list)) return;
+-    /* A new answer deliberately selects its first suggestion. */
+-    if (list !== null && previous.list !== list) return;
++    /* A new answer deliberately selects its first suggestion — found by kind,
++       not taken as row zero, which is the pinned guide chat's where the page
++       can open it (plan 261010g, GPT Sol's F1). */
++    if (list !== null && previous.list !== list) {
++      const first = shown.findIndex((row) => row.suggested !== undefined);
++      const next = first >= 0 ? first : 0;
++      if (next !== index) setSelected(next);
++      return;
++    }
+     /* A save restarts the choice; a removed row has no neighbour to confirm. */
+     const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
+     const next = at >= 0 ? at : 0;
+@@ -2639,7 +2689,8 @@ export function CommandBar({
+                   {SUGGEST_HEADING}
+                 </div>
+               )}
+-              {at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined && (
++              {((at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined) ||
++                (at === 1 && pinnedGuide !== undefined)) && (
+                 <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
+               )}
+               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in */}
+@@ -2684,6 +2735,11 @@ export function CommandBar({
+                   pressRow(row);
+                 }}
+               >
++                {goesToTheGuide(command) && (
++                  <span className="cmdbar-guide-mark tw:shrink-0 tw:self-center tw:text-ink-faint">
++                    <Compass size={14} aria-hidden="true" />
++                  </span>
++                )}
+                 {/* A sub-mode says which mode it is in, muted, before its own
+                     name — `Learn › Quiz` — so *Simple* is not a mystery and
+                     the pictures read as Diagram's. Outside `cmdbar-name`, which
+diff --git a/src/web/help/pages/keyboard.md b/src/web/help/pages/keyboard.md
+index 0d31fdba1..ad8a82f14 100644
+--- a/src/web/help/pages/keyboard.md
++++ b/src/web/help/pages/keyboard.md
+@@ -30,8 +30,9 @@ related: touch, jumping-around
+   If it is sure and the command only takes you somewhere, you go there; otherwise it shows its best
+   guesses under **Did you mean** and you press the one you want, or <kbd>Enter</kbd>. You need to be
+   signed in.
+-- On your own article, once you have said why you are reading it, an empty command bar starts with
+-  **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for
++- On your own article, an empty command bar starts with **Guide chat**, marked with a compass: it
++  opens the guide, the conversation about how to read this piece, and sends nothing.
++- Below it, once you have said why you are reading, comes **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for
+   reading, never the article, and proposes a short list under **From why you’re reading**: up to
+   three quick searches, a mode or two, and a question for Chat about what the web says. Nothing is
+   done until you press a row, and each row does what it would anywhere else in the bar; the question
+diff --git a/src/web/help/pages/modes/chat.md b/src/web/help/pages/modes/chat.md
+index e0826b62a..c29a71427 100644
+--- a/src/web/help/pages/modes/chat.md
++++ b/src/web/help/pages/modes/chat.md
+@@ -63,7 +63,7 @@ conversation says which AI model answered it, and how hard it was asked to think
+ remove a tag, look a term up in the glossary, or show where the article first says something.
+ Nothing happens until you press the button; Chat cannot do any of these itself.
+ 
+-**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read
++**The guide.** The **Guide** row pinned at the top of the list, with a compass, is a conversation about how to read
+ this article with Spideryarn, rather than about what it says. A new article opens on it when there
+ is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
+ until you send something. The guide can do one thing per answer by itself, if it only moves you:
+@@ -79,7 +79,7 @@ three next steps as buttons: something to ask it next, a mode to open, or a sear
+ can change before you press **Quick search**. Ask it to make a private link, share the article or archive
+ it, and it offers **Share this article…** or **Archive or put back…**, which take you to the
+ Metadata page where you do it; the guide never does these itself. You can talk to the
+-guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
++guide out loud with **Live**, as in any chat, and **Guide chat**, the first row of the command bar on your own article, gets you back to it.
+ 
+ **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
+ you send. It is worth trying even if you type quickly: most people say more out loud than they would
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index dcdcc41e7..b97572676 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -547,6 +547,9 @@ svg.band-waiting-ghost { flex: none; }
+   padding: 0.55rem 0.25rem 0.25rem;
+   color: var(--ink-faint);
+ }
++/* The same compass in Chat's header while the guide is open (plan 261010g). */
++.chat-head-guide { display: inline-flex; align-items: center; gap: 0.35rem; }
++.chat-head-guide-mark { flex: none; color: var(--ink-faint); }
+ /* Rows are three lines now, so they need a hairline of air between them or
+    two conversations read as one. */
+ .chat-threads li + li { margin-top: 0.1rem; }
+diff --git a/tests/command-bar-guide-row.test.ts b/tests/command-bar-guide-row.test.ts
+index a13a73d4b..bb48f9fba 100644
+--- a/tests/command-bar-guide-row.test.ts
++++ b/tests/command-bar-guide-row.test.ts
+@@ -9,7 +9,7 @@
+  * guide and spends nothing.
+  */
+ import { describe, expect, it, vi } from "vitest";
+-import { besideTheModes } from "../src/web/CommandBar.js";
++import { besideTheModes, GUIDE_CHAT_LABEL } from "../src/web/CommandBar.js";
+ import { type Command, rankCommands } from "../src/web/command-match.js";
+ 
+ const label = (c: Command | undefined): string | undefined => (c !== undefined && "label" in c ? c.label : undefined);
+@@ -34,17 +34,21 @@ function rows(openGuide?: () => { kind: "close" }): readonly Command[] {
+ describe("the Guide row", () => {
+   it("comes first for `guide`, with Help still in the list", () => {
+     const ranked = rankCommands("guide", rows(() => ({ kind: "close" })));
+-    expect(label(ranked[0])).toBe("Guide");
++    expect(label(ranked[0])).toBe(GUIDE_CHAT_LABEL);
+     expect(ranked.map(label)).toContain("Help");
+   });
+ 
++  it("is named for a new reader: Guide chat, which says it is a conversation", () => {
++    expect(GUIDE_CHAT_LABEL).toBe("Guide chat");
++  });
++
+   it("is not drawn where the page cannot open the guide", () => {
+-    expect(rows().map(label)).not.toContain("Guide");
++    expect(rows().map(label)).not.toContain(GUIDE_CHAT_LABEL);
+   });
+ 
+   it("opens the guide, and generates nothing", () => {
+     const open = vi.fn(() => ({ kind: "close" }) as const);
+-    const guide = rows(open).find((c) => label(c) === "Guide");
++    const guide = rows(open).find((c) => label(c) === GUIDE_CHAT_LABEL);
+     expect(guide?.kind).toBe("action");
+     if (guide?.kind !== "action") return;
+     expect(guide.generates).toBe(false);
+diff --git a/tests/command-bar-guide.test.tsx b/tests/command-bar-guide.test.tsx
+index 8e89fa5a0..9e964f3ec 100644
+--- a/tests/command-bar-guide.test.tsx
++++ b/tests/command-bar-guide.test.tsx
+@@ -52,7 +52,9 @@ vi.mock("../src/web/DictationStrip.js", () => ({
+ }));
+ 
+ const { Dock } = await import("../src/web/Dock.js");
+-const { ASK_AGAIN_LABEL, GENERATES_MARKER, NO_MATCH, guideLabel } = await import("../src/web/CommandBar.js");
++const { ASK_AGAIN_LABEL, GENERATES_MARKER, GUIDE_CHAT_LABEL, NO_MATCH, guideLabel } = await import(
++  "../src/web/CommandBar.js"
++);
+ const { jobEngine } = await import("../src/web/jobEngine.js");
+ 
+ const SLUG = "a-piece";
+@@ -271,3 +273,72 @@ describe("the bar's door to the guide", () => {
+     expect(empty()).toBe(`${NO_MATCH} ${ASK_AGAIN_LABEL}`);
+   });
+ });
++
++/**
++ * **The guide chat, first on an empty bar** — plan
++ * docs/plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md
++ * (Greg, 2026-10-09, `spya-q3pzyn`: *"Add a way to open the guide chat at the
++ * top of the command bar"*). Free to open, so a bare Enter may take it.
++ */
++describe("the Guide chat row", () => {
++  let opened: number;
++  function withOpen(): CommandExecutor {
++    opened = 0;
++    return {
++      ...executor(),
++      openGuide: (): ActionOutcome => {
++        opened += 1;
++        return { kind: "close" };
++      },
++    };
++  }
++  const compass = (row: HTMLElement | undefined): boolean => row?.querySelector(".cmdbar-guide-mark svg") != null;
++
++  it("is the first row on an empty bar, wears the compass, and a bare Enter opens the guide and asks nothing", async () => {
++    reading(withOpen());
++    openBar();
++    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
++    expect(compass(rows()[0])).toBe(true);
++    expect(rows()[0]?.querySelector(".cmdbar-generates")).toBeNull();
++    /* Only the guide's rows wear it. */
++    expect(rows().slice(1).some(compass)).toBe(false);
++    press("Enter");
++    await settle();
++    expect(opened).toBe(1);
++    expect(asked).toEqual([]);
++    expect(dialog().open).toBe(false);
++  });
++
++  it("is listed once, with a rule beneath it before the rest", () => {
++    reading(withOpen());
++    openBar();
++    expect(listed().filter((n) => n === GUIDE_CHAT_LABEL)).toHaveLength(1);
++    /* Directly beneath it: the sibling after the first row is the rule. */
++    expect(rows()[0]?.nextElementSibling?.classList.contains("cmdbar-rest")).toBe(true);
++  });
++
++  it("is not pinned once the reader types: it ranks like any row", () => {
++    reading(withOpen());
++    openBar();
++    type("glossary");
++    expect(listed()[0]).toBe("Glossary");
++    expect(listed()).not.toContain(GUIDE_CHAT_LABEL);
++    type("guide");
++    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
++  });
++
++  it("is absent where the page cannot open the guide", () => {
++    reading(executor());
++    openBar();
++    expect(listed()).not.toContain(GUIDE_CHAT_LABEL);
++    expect(dialog().querySelector(".cmdbar-guide-mark")).toBeNull();
++  });
++
++  it("puts the compass on Ask the guide too", async () => {
++    reading(withOpen());
++    openBar();
++    await askAndHear({ kind: "none" });
++    expect(listed()).toEqual([GUIDE_ROW]);
++    expect(compass(rows()[0])).toBe(true);
++  });
++});
+diff --git a/tests/command-bar-suggest.test.tsx b/tests/command-bar-suggest.test.tsx
+index d945b5c5f..791014148 100644
+--- a/tests/command-bar-suggest.test.tsx
++++ b/tests/command-bar-suggest.test.tsx
+@@ -71,6 +71,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
+ }));
+ 
+ const { Dock } = await import("../src/web/Dock.js");
++const { GUIDE_CHAT_LABEL } = await import("../src/web/CommandBar.js");
+ const { jobEngine } = await import("../src/web/jobEngine.js");
+ const { saveProfile } = await import("../src/web/useProfile.js");
+ const { savePurpose } = await import("../src/web/purpose.js");
+@@ -323,6 +324,28 @@ describe("who is offered the row", () => {
+     expect(rows()[0]?.textContent).not.toMatch(/\$|¢|cent|generates/);
+   });
+ 
++  /* Plan 261010g: the guide chat is the bar's first row on an empty box, and
++     the row that asks comes straight after it. */
++  it("sits under the Guide chat row where the page can open the guide", async () => {
++    let opened = 0;
++    await reading({
++      exec: {
++        ...executor(),
++        openGuide: () => {
++          opened += 1;
++          return CLOSE;
++        },
++      },
++    });
++    await openBar();
++    expect(listed().slice(0, 3)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_LABEL, "Plain"]);
++    press("ArrowDown");
++    press("Enter");
++    await settle();
++    expect(asked).toHaveLength(1);
++    expect(opened).toBe(0);
++  });
++
+   it("is not typed into view: a word hides it, and it is not a row a sentence can name", async () => {
+     await reading();
+     await openBar();
+@@ -490,6 +513,33 @@ describe("the list", () => {
+     expect(openedModes).toEqual(["glossary"]);
+   });
+ 
++  /* Plan 261010g, GPT Sol's F1: row zero is the guide chat where the page can
++     open it, so "select the first suggestion" has to find it by kind. */
++  it("selects its first suggestion when it lands, not the Guide chat row above it", async () => {
++    let opened = 0;
++    await reading({
++      exec: {
++        ...executor(),
++        openGuide: () => {
++          opened += 1;
++          return CLOSE;
++        },
++      },
++    });
++    await openBar();
++    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
++    press("ArrowDown");
++    press("Enter");
++    await settle();
++    await answer(list());
++    const on = rows().filter((r) => r.getAttribute("aria-selected") === "true");
++    expect(on.map(nameOf)).toEqual([QUICK_1]);
++    press("Enter");
++    await settle();
++    expect(searched).toEqual([SEARCH_1]);
++    expect(opened).toBe(0);
++  });
++
+   it("drops a key that is not a mode here, and a mode the reader does not have — an Archive key is not a row (F1)", async () => {
+     await reading();
+     await suggestAndLand(
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index e08196e00..c78a2ad67 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -357,6 +357,24 @@ describe("the bar's mode rows are exactly what the Dock offers, directly or unde
+     expect(firstOther).toBeGreaterThan(0);
+   });
+ 
++  /* **The one exception: the pinned Guide chat** (plan 261010g, GPT Sol's F4).
++     On the owner's reading view an empty bar starts with it; below it the
++     claim above holds as before. */
++  it("draws the Guide chat first where the page can open the guide, and every mode before every other row below it", () => {
++    reading({
++      experimental: EXPERIMENTAL_ON,
++      executor: { runners: {}, sources: {}, openGuide: () => ({ kind: "close" }) },
++    });
++    openBar();
++    expect(listed()[0]).toBe("Guide chat");
++    const kinds = rows()
++      .slice(1)
++      .map((row) => row.dataset.kind);
++    const firstOther = kinds.findIndex((k) => k !== "mode");
++    expect(firstOther).toBeGreaterThan(0);
++    expect(kinds.slice(firstOther).some((k) => k === "mode")).toBe(false);
++  });
++
+   /**
+    * **And the two kinds below the modes are in the order `besideTheModes`
+    * builds them**, which is what a reader sees on an empty query: this
+diff --git a/tests/command-match-arguments.test.ts b/tests/command-match-arguments.test.ts
+index f9a62dcce..8665dba5e 100644
+--- a/tests/command-match-arguments.test.ts
++++ b/tests/command-match-arguments.test.ts
+@@ -185,7 +185,7 @@ function everyRow(): readonly Command[] {
+     /* Both bands offering an append, so the two *Find more* rows are in the
+        list by the path production takes (GPT Sol's F5 on plan 261004k: a
+        synthetic list that left them out would keep the matrix green falsely). */
+-    executor: { runners: {}, sources: {}, findMore: { glossary: close, quotes: close } },
++    executor: { runners: {}, sources: {}, findMore: { glossary: close, quotes: close }, openGuide: close },
+   };
+   return [
+     ...MODES.map(modeCommand),
+@@ -230,6 +230,10 @@ describe("the collision matrix (GPT Sol's F7)", () => {
+   const names = namesOf(everyRow().filter((command) => !declared(command)));
+   const findMoreNames = namesOf(everyRow().filter(declared));
+ 
++  it("holds the Guide chat row's words, so they are checked too (plan 261010g)", () => {
++    for (const name of ["Guide chat", "guide", "chat with the guide", "help me read"]) expect(names).toContain(name);
++  });
++
+   it("holds both Find more rows, so the exception below is about rows the bar draws", () => {
+     const ids = everyRow().flatMap((command) => (command.kind === "action" ? [command.id] : []));
+     for (const id of ALSO_A_FIND) expect(ids).toContain(id);
+diff --git a/tests/guide-in-chat-panel.test.tsx b/tests/guide-in-chat-panel.test.tsx
+index c33801ef6..87cfe8809 100644
+--- a/tests/guide-in-chat-panel.test.tsx
++++ b/tests/guide-in-chat-panel.test.tsx
+@@ -240,6 +240,8 @@ describe("the guide's greeting", () => {
+     /* The three ways in, whatever is stored (plan 261009u). */
+     expect(startLabels()).toEqual([...GUIDE_STARTS]);
+     expect(host.querySelector("h2")?.textContent).toBe("Guide");
++    /* With the guide's compass, as in the bar and in Chat's list (plan 261010g). */
++    expect(host.querySelector("h2 .chat-head-guide-mark")).not.toBeNull();
+   });
+ 
+   it("quotes About you back and asks if it is still right, when there is one", async () => {

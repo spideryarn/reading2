@@ -108,13 +108,18 @@ describe("the Hidden text mark is visible in either state", () => {
   });
 });
 
-describe("five chips at phone width", () => {
+describe("six chips and long notes at phone width", () => {
   it("wraps the row rather than wrapping a multi-word chip", () => {
     expect(bodyOf(".ref-top")).toMatch(/flex-wrap:\s*wrap/);
     /* The chips are the shared part-switcher's buttons since 2026-10-07 (plan
        261007h § F2), so their `nowrap` is that rule's (mode-band.css). */
     expect(BAND_SOURCE).toMatch(/ref-view-btn summ-view-btn/);
     expect(bodyOf(".summ-view-btn")).toMatch(/white-space:\s*nowrap/);
+  });
+
+  it("breaks an unspaced passage or note before it widens the band", () => {
+    expect(bodyOf(".ref-notes-passage")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(bodyOf(".ref-notes-words")).toMatch(/overflow-wrap:\s*anywhere/);
   });
 });
 

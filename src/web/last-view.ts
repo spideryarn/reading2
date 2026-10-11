@@ -126,8 +126,8 @@ export const REMEMBERED = [
   "idea", // selected idea
   "quote", // selected quote
   "event", // selected timeline event
-  "depth", // which pass of a Skim — Gist, More or Most
-  "stop", // which quote-sized Skim stop you were reading
+  "depth", // which part of a Skim — Gist, More, Most, or Figures (plan 261011b)
+  "stop", // which Skim stop you were reading — a quote on a pass, a figure's block under Figures
 ] as const;
 
 /**

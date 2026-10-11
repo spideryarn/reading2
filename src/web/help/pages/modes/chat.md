@@ -63,7 +63,7 @@ conversation says which AI model answered it, and how hard it was asked to think
 remove a tag, look a term up in the glossary, or show where the article first says something.
 Nothing happens until you press the button; Chat cannot do any of these itself.
 
-**The guide.** The **Guide** row pinned at the top of the list is a conversation about how to read
+**The guide.** The **Guide** row pinned at the top of the list, with a compass, is a conversation about how to read
 this article with Spideryarn, rather than about what it says. A new article opens on it when there
 is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
 until you send something. The guide can do one thing per answer by itself, if it only moves you:
@@ -79,7 +79,8 @@ three next steps as buttons: something to ask it next, a mode to open, or a sear
 can change before you press **Quick search**. Ask it to make a private link, share the article or archive
 it, and it offers **Share this article…** or **Archive or put back…**, which take you to the
 Metadata page where you do it; the guide never does these itself. You can talk to the
-guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
+guide out loud with **Live**, as in any chat, and **Guide chat**, the first row of the command bar
+while reading your own article, gets you back to it.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
 you send. It is worth trying even if you type quickly: most people say more out loud than they would

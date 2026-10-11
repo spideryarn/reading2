@@ -185,7 +185,7 @@ function everyRow(): readonly Command[] {
     /* Both bands offering an append, so the two *Find more* rows are in the
        list by the path production takes (GPT Sol's F5 on plan 261004k: a
        synthetic list that left them out would keep the matrix green falsely). */
-    executor: { runners: {}, sources: {}, findMore: { glossary: close, quotes: close } },
+    executor: { runners: {}, sources: {}, findMore: { glossary: close, quotes: close }, openGuide: close },
   };
   return [
     ...MODES.map(modeCommand),
@@ -229,6 +229,10 @@ describe("the collision matrix (GPT Sol's F7)", () => {
   ];
   const names = namesOf(everyRow().filter((command) => !declared(command)));
   const findMoreNames = namesOf(everyRow().filter(declared));
+
+  it("holds the Guide chat row's words, so they are checked too (plan 261010g)", () => {
+    for (const name of ["Guide chat", "guide", "chat with the guide", "help me read"]) expect(names).toContain(name);
+  });
 
   it("holds both Find more rows, so the exception below is about rows the bar draws", () => {
     const ids = everyRow().flatMap((command) => (command.kind === "action" ? [command.id] : []));

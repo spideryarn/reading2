@@ -99,6 +99,13 @@ looks wrong.
 
   > that information icon is the same one we use elsewhere for information about a mode, and I
   > think they are different, and so it's a bit confusing to use the same icon for both.
+
+  **`Compass` means the guide**, the one conversation per article about how to read it, and it
+  goes wherever the guide is named on screen: its row above Chat's list, its greeting, Chat's
+  header while it is open, and the command bar's *Guide chat* and *Ask the guide: “…”* rows — the
+  bar's only icons, so the rows that go to the guide stand apart from those that do not. Greg,
+  2026-10-09, `spya-q3pzyn`: *"make sure that we're using an icon for the guide chat applied
+  everywhere"* ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)).
 - **Colour comes from `currentColor`**, so state is a CSS colour change on the parent and never a
   prop. See `.cmt-search.on` / `.cmt-search.off` in
   [`src/web/styles/annotations.css`](../../src/web/styles/annotations.css).

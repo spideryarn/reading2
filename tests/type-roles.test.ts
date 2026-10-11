@@ -111,6 +111,10 @@ const WITNESSES: Record<string, string> = {
   ".cnd-why": ".cnd-row p.cnd-why",
   ".crit-meta": ".crit-row p.crit-meta",
   ".cnd-count": ".cnd-list-head .cnd-count",
+  ".ref-notes-words": ".ref-notes-row .ref-notes-words",
+  ".ref-notes-passage": ".ref-notes-row button.ref-notes-jump .ref-notes-passage",
+  ".ref-notes-count": ".ref-notes-group h3.ref-notes-heading .ref-notes-count",
+  ".ref-notes-heading": ".ref-notes-group h3.ref-notes-heading",
   ".srch-hit-quote": ".srch-hit.on button.srch-hit-btn .srch-hit-body .srch-hit-quote",
   ".srch-hit-why": ".srch-hit.on button.srch-hit-btn .srch-hit-body .srch-hit-why",
   ".srch-count": ".srch-sort .srch-count",
@@ -158,7 +162,7 @@ const REGISTRY: Row[] = [
   { file: "reception.css", selector: ".rcp-meta", role: "meta" },
   { file: "reception.css", selector: ".rcp-group-count", role: "count" },
   { file: "reception.css", selector: ".rcp-group-head:not(.rcp-group-claim)", role: "label" },
-  // Referee: Criteria, Claims, Mirror, Candidates
+  // Referee: Criteria, Claims, Mirror, Notes, Candidates
   { file: "referee.css", selector: ".crit-criterion", role: "item" },
   { file: "referee.css", selector: ".clm-claim", role: "item" },
   { file: "referee.css", selector: ".cnd-name", role: "item" },
@@ -170,6 +174,10 @@ const REGISTRY: Row[] = [
   { file: "referee.css", selector: ".cnd-why", role: "body" },
   { file: "referee.css", selector: ".crit-meta", role: "meta" },
   { file: "referee.css", selector: ".cnd-count", role: "count" },
+  { file: "referee.css", selector: ".ref-notes-words", role: "item" },
+  { file: "referee.css", selector: ".ref-notes-passage", role: "quote" },
+  { file: "referee.css", selector: ".ref-notes-count", role: "count" },
+  { file: "referee.css", selector: ".ref-notes-heading", role: "label" },
   // Search — a result row is the passage, so its quotation is the item.
   { file: "search.css", selector: ".srch-hit-quote", role: "item" },
   { file: "search.css", selector: ".srch-hit-why", role: "body" },

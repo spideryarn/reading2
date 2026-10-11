@@ -738,6 +738,25 @@
   ]
  },
  {
+  "id": "submode:referee:notes",
+  "label": "Notes",
+  "description": "Your own notes, sorted major and minor by you, copied out in your words",
+  "aliases": [
+   "Referee",
+   "Notes Referee",
+   "Referee Notes",
+   "Notes mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:referee:candidates",
   "label": "Candidates",
   "description": "Who could review this piece, and what expertise it would take",
@@ -897,9 +916,12 @@
  },
  {
   "id": "action:guide",
-  "label": "Guide",
-  "description": "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
+  "label": "Guide chat",
+  "description": "Talk through how to read this piece: why you're reading it, where to start, which modes would help.",
   "aliases": [
+   "guide",
+   "chat with the guide",
+   "help me read",
    "tour",
    "where to start",
    "how to read",

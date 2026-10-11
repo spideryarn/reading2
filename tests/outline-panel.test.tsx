@@ -221,6 +221,7 @@ function render(
     reactRoot.render(
       <OutlinePanel
         root={root}
+        figures={[]}
         supplementOf={geometry.supplementOf}
         arcByRow={null}
         focusRow={focusRow}
@@ -386,6 +387,7 @@ describe("what the list says", () => {
         reactRoot.render(
           <OutlinePanel
             root={root}
+            figures={[]}
             supplementOf={geometry.supplementOf}
             arcByRow={null}
             focusRow={focusRow}
@@ -435,6 +437,7 @@ describe("what the list says", () => {
         reactRoot.render(
           <OutlinePanel
             root={tree}
+            figures={[]}
             supplementOf={geometry.supplementOf}
             arcByRow={null}
             focusRow={focusRow}
@@ -606,6 +609,7 @@ describe("follow-along in a list that scrolls", () => {
       reactRoot.render(
         <OutlinePanel
           root={root}
+          figures={[]}
           supplementOf={geometry.supplementOf}
           arcByRow={null}
           focusRow={focusRow}

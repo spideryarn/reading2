@@ -169,10 +169,10 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     src: commandBarPng,
     w: 1100,
     h: 760,
-    shows: "⌘K over the reading view, nothing typed; cropped to the bar’s first eleven rows.",
+    shows: "⌘K over the reading view, as the article’s owner, nothing typed; cropped to the bar’s first nine rows, Guide chat first.",
     article: "Great Hackers (gh-spya-whnhkx)",
     window: "1440×900 at 2×",
-    taken: "2026-10-07",
+    taken: "2026-10-10",
   },
   "adding-articles.png": {
     src: addingArticlesPng,

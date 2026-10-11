@@ -3797,7 +3797,8 @@ export function Reader({
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
-         unmounts — for either band, since they share `useSkimMode`.
+         unmounts — for either band, and for either walk inside it (the route's
+         `useSkimMode`, or `FiguresWalk` on `?depth=figures`, plan 261011b).
          docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
 
          The visitor's branch is gated on the route itself, like the timeline's:
@@ -3910,6 +3911,18 @@ export function Reader({
                judgement; `useComments` is already mounted for the page.
                docs/project/referee-mode.md § the referee's own mark. */
             comments={comments}
+            /* **The same list with its load state, and the one write — for
+               Notes alone**: the reviewer's own major/minor sort. The state, so
+               "no notes yet" is never said over a list still on its way.
+               Plan 261011f. */
+            notes={
+              owner.comments.loadFailed
+                ? { state: "failed" }
+                : owner.comments.loaded
+                  ? { state: "ready", comments, sorting: owner.comments.sorting }
+                  : { state: "loading" }
+            }
+            onSort={owner.comments.sort}
             onJump={bandJump}
             onFound={setRefereeFound}
             /* Which marked passage the referee last pressed, so the prose rings
@@ -4511,7 +4524,7 @@ export function Reader({
              `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
           key={annotateKey(annotating)}
           anchor={annotating}
-          /* **Referee mode only**, and all five of its sub-modes: the criteria
+          /* **Referee mode only**, and all six of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}
