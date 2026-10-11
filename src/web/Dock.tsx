@@ -984,7 +984,7 @@ const MODES_UI = [
   },
   /* **Sources, last of the critical run and before the input run, where
      Debate stood**, since 2026-10-09: Citations and Debate in one button, with
-     Bibliography, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
+     Bibliography, Links, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
      move this out of experimental, this combined mode"*. Bibliography's list is
      the piece's own references, Debate's is the web's, and Referee beside it
      is somebody weighing the piece: the run reads it critically.

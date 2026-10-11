@@ -9,7 +9,7 @@
  * guide and spends nothing.
  */
 import { describe, expect, it, vi } from "vitest";
-import { besideTheModes } from "../src/web/CommandBar.js";
+import { besideTheModes, GUIDE_CHAT_LABEL } from "../src/web/CommandBar.js";
 import { type Command, rankCommands } from "../src/web/command-match.js";
 
 const label = (c: Command | undefined): string | undefined => (c !== undefined && "label" in c ? c.label : undefined);
@@ -34,17 +34,21 @@ function rows(openGuide?: () => { kind: "close" }): readonly Command[] {
 describe("the Guide row", () => {
   it("comes first for `guide`, with Help still in the list", () => {
     const ranked = rankCommands("guide", rows(() => ({ kind: "close" })));
-    expect(label(ranked[0])).toBe("Guide");
+    expect(label(ranked[0])).toBe(GUIDE_CHAT_LABEL);
     expect(ranked.map(label)).toContain("Help");
   });
 
+  it("is named for a new reader: Guide chat, which says it is a conversation", () => {
+    expect(GUIDE_CHAT_LABEL).toBe("Guide chat");
+  });
+
   it("is not drawn where the page cannot open the guide", () => {
-    expect(rows().map(label)).not.toContain("Guide");
+    expect(rows().map(label)).not.toContain(GUIDE_CHAT_LABEL);
   });
 
   it("opens the guide, and generates nothing", () => {
     const open = vi.fn(() => ({ kind: "close" }) as const);
-    const guide = rows(open).find((c) => label(c) === "Guide");
+    const guide = rows(open).find((c) => label(c) === GUIDE_CHAT_LABEL);
     expect(guide?.kind).toBe("action");
     if (guide?.kind !== "action") return;
     expect(guide.generates).toBe(false);

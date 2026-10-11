@@ -1413,13 +1413,14 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' three sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' four sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
  * `liftLegacySources`; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
  *
  * `bibliography` is what the piece cites (the Citations mode until that day);
+ * `links` is the web addresses in the article's own markup;
  * `reception` is what others have written about the piece itself; `claims` is
  * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
  * § 2), with an older search's claim sources under it. The last two were
@@ -1436,15 +1437,18 @@ export function learnInSearch(search: string): LearnView {
  * press and only then — the mode's button, the sub-mode's command-bar row or
  * its chip: a press landing on Bibliography arms the `bibliography` list, on
  * Reception the `reception` search, on Claims the `sources-claims` list
- * (activation.ts § `activationForSources`). Back, a pasted link and a
+ * (activation.ts § `activationForSources`). Links, the article's own
+ * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
+ * off the blocks in the browser. Back, a pasted link and a
  * last-view restore arrive here and buy nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "reception", "claims"] as const;
+export const SOURCES_VIEWS = ["bibliography", "links", "reception", "claims"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
  * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
+ * Bibliography and Links have a panel each.
  */
-export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography">;
+export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "links">;
 
 export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),

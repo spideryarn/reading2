@@ -169,10 +169,10 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     src: commandBarPng,
     w: 1100,
     h: 760,
-    shows: "⌘K over the reading view, nothing typed; cropped to the bar’s first eleven rows.",
+    shows: "⌘K over the reading view, as the article’s owner, nothing typed; cropped to the bar’s first nine rows, Guide chat first.",
     article: "Great Hackers (gh-spya-whnhkx)",
     window: "1440×900 at 2×",
-    taken: "2026-10-07",
+    taken: "2026-10-10",
   },
   "adding-articles.png": {
     src: addingArticlesPng,
@@ -276,11 +276,11 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
   "mode-bibliography.png": {
     src: modeBibliographyPng,
     w: 1088,
-    h: 860,
-    shows: "?mode=sources (Bibliography, prioritised), the chip row and the band alone; clip x12 y44 w544 h430 CSS, cropped after the second work.",
+    h: 948,
+    shows: "?mode=sources (Bibliography, prioritised), the chip row and the band alone, with the one line above the list (we have read none of these works, said once) and the first two works; clip x12 y44 w544 h474 CSS, ending at the second work's bottom rule.",
     article: "The Scaling Hypothesis (scaling-hypothesis)",
     window: "1440×900 at 2×",
-    taken: "2026-10-09",
+    taken: "2026-10-11",
   },
   "mode-skim.png": {
     src: modeSkimPng,

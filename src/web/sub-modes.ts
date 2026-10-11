@@ -234,13 +234,13 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Sources' three sub-modes**, since 2026-10-09: Bibliography (the
- * Citations mode until then), then Reception and Claims (the Debate mode's two,
- * since 2026-10-03). The band's chip row, SourcesMode.tsx §
+ * **Sources' four sub-modes**: Bibliography (the Citations mode until
+ * 2026-10-09), Links (since 2026-10-11), then Reception and Claims (the Debate
+ * mode's two, since 2026-10-03). The band's chip row, SourcesMode.tsx §
  * `SourcesViews`; Bibliography first because it is the default. Greg,
  * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in
  * this article (i.e. the former Citations mode) "Bibliography", and this
- * should be the first submode"*, and the frame for all three, *"what this
+ * should be the first submode"*, and the original frame, *"what this
  * article cites and what other people say about it"*.
  *
  * **The retired mode words are the rows' own aliases**, so typing `citations`
@@ -260,6 +260,15 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
     aliases: [
       "citations", "references", "works cited", "refs", "reference list", "cited works",
     ],
+  },
+  /* The article's own hyperlinks, read off its markup in the browser: no model,
+     nothing stored, nothing armed. Greg, 2026-10-10 (spya-s5mzkd): *"Maybe
+     sources should have a submode for external links as well"*. Plan 261011d. */
+  links: {
+    label: "Links",
+    description: "Where this piece links to: every web address in its text, in the order you meet it",
+    experimental: false,
+    aliases: ["hyperlinks", "external links", "outbound links", "web links", "urls"],
   },
   reception: {
     label: "Reception",

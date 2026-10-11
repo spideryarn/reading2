@@ -523,9 +523,9 @@
     padding: 0;
   }
 }
-/* Under `why`: we have not read the work, or found only a page matching its
-   title. The band's sentence (BibliographyPanel.tsx § readNoteOf), as quiet as the
-   foot's facts. Plan 260929g stage 1. */
+/* Under `why`: what differs from the band's list-wide default — a page found,
+   an extract read, or the work read. A plain unread card has no line or wrapper
+   (BibliographyPanel.tsx § readNoteOf; plan 261011c). */
 .prose-card-cite-read {
   margin: 0.2rem 0 0;
   color: var(--ink-faint);

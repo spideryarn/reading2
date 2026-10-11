@@ -1,10 +1,11 @@
 /**
  * **Sources mode's controller** — what this piece cites, and what others
- * say about it. One band, three sub-modes (`?sources=`):
+ * say about it. One band, four sub-modes (`?sources=`):
  *
  * ```
- *  ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                 (i)
+ *  ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐      (i)
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (default)
+ *  │ LinksPanel, read from the article's markup                    ← Links
  *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims
  * ```
  *
@@ -17,15 +18,15 @@
  * was put to him: *"B Sources. Rename comprehensively, eg including docs,
  * code, database etc"* (spya-egmn6r).
  *
- * **A wrapper, not a rewrite.** The two panels are 1,700 and 3,200 lines,
- * each with its own tests; this draws one chip row (`SourcesViews`, below)
+ * **A wrapper, not a rewrite.** The three panels each own their list; this
+ * draws one chip row (`SourcesViews`, below)
  * and hands it to whichever panel the sub-mode names as that panel's `head`,
  * so there is exactly one `ModeSurface` on screen, the panel's, with
  * `mode="sources"` so its (i) opens with this mode's card. The chips'
  * numbers come from sources-counts.ts, the same selectors the panels draw
  * their lists with (GPT Sol's F4).
  *
- * **Every read stays mounted in all three sub-modes**, so each chip can show
+ * **Every read stays mounted in all four sub-modes**, so each chip can show
  * its count, and **each auto-run is gated on its own sub-mode**: a press that
  * lands on Reception arms the paid search and nothing else, and a press armed
  * for one sub-mode that finds another on screen is retired unspent
@@ -47,7 +48,7 @@
  */
 
 import { useQueryState } from "nuqs";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type { BlockId } from "../../../types.js";
 import type { PublicBibliography, PublicReception, PublicSourcesClaimList } from "../../../public-types.js";
 import {
@@ -77,9 +78,18 @@ import type { ItemFocus } from "../../item-focus.js";
 import { yearOf } from "../../reception-order.js";
 import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
 import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
+import { type LinkableWork, type LinkedBlock, type OutboundLink, outboundLinks } from "../../outbound-links.js";
+import { LinksPanel } from "../../LinksPanel.js";
+
+/** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
+function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
+  return useMemo(() => outboundLinks(blocks, sourceUrl), [blocks, sourceUrl]);
+}
+
+const NO_WORKS: readonly LinkableWork[] = [];
 
 /**
- * **The owner's band.** Every read the three sub-modes need, the chip row, and
+ * **The owner's band.** Every read the four sub-modes need, the chip row, and
  * the panel the sub-mode names.
  *
  * A component of its own for the reason every artefact band is: the hooks
@@ -91,6 +101,9 @@ import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from 
  */
 export function SourcesBand({
   slug,
+  blocks,
+  sourceUrl,
+  fromPdf,
   bibliographyRead,
   onJump,
   blockOrder,
@@ -105,6 +118,12 @@ export function SourcesBand({
   onOpenWork,
 }: {
   slug: string;
+  /** The article's blocks, for Links (outbound-links.ts). */
+  blocks: readonly LinkedBlock[];
+  /** Where the article came from (`meta.url`), or `null` for an upload. */
+  sourceUrl: string | null;
+  /** `meta.source === "pdf"`, for Links' empty sentence. */
+  fromPdf: boolean;
   /** Bibliography's opening read, shared with the prose (useBibliography.ts § `useBibliographyRead`). */
   bibliographyRead: BibliographyRead;
   /** `passage` is Bibliography's: `citePassageKey(work.id)` when a row names the citing words. */
@@ -143,9 +162,11 @@ export function SourcesBand({
   const citers = useCiters(slug, view === "reception");
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
+  const links = useOutboundLinks(blocks, sourceUrl);
 
   const counts = sourcesCounts({
     works: bibliography.bibliography?.citations ?? null,
+    links,
     reception: reception.reception,
     listed: listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList }),
     checked: claimList.status === "ready" ? checkedSources(checks.checks, claimList.claimList) : 0,
@@ -163,6 +184,17 @@ export function SourcesBand({
         onJump={onJump}
         focus={citeFocus}
         onFocusTaken={onCiteFocusTaken}
+      />
+    );
+  if (view === "links")
+    return (
+      <LinksPanel
+        links={links}
+        fromPdf={fromPdf}
+        works={bibliography.bibliography?.citations ?? NO_WORKS}
+        head={head}
+        onJump={onJump}
+        onOpenWork={onOpenWork}
       />
     );
   return (
@@ -205,6 +237,8 @@ function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string
  * visitor has them all.
  */
 export function VisitorSourcesBand({
+  blocks,
+  sourceUrl,
   bibliography,
   reception,
   claimList,
@@ -216,6 +250,10 @@ export function VisitorSourcesBand({
   onCiteFocusTaken,
   onOpenWork,
 }: {
+  /** The article's blocks, for Links — the same markup the visitor's prose draws. */
+  blocks: readonly LinkedBlock[];
+  /** Where the article came from (`meta.url`), or `null` for an upload. */
+  sourceUrl: string | null;
   bibliography: PublicBibliography | null;
   reception: PublicReception | null;
   /** Claims' list, read-only — `PublicSourcesClaimList`, src/public-types.ts. */
@@ -235,8 +273,10 @@ export function VisitorSourcesBand({
   const [view, setView] = useQueryState("sources", sourcesParam);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
+  const links = useOutboundLinks(blocks, sourceUrl);
   const counts = sourcesCounts({
     works: bibliography?.citations ?? null,
+    links,
     reception,
     listed: listedClaims({ kind: "visitor", claimList }),
     checked: 0,
@@ -253,6 +293,17 @@ export function VisitorSourcesBand({
         onJump={onJump}
         focus={citeFocus}
         {...(onCiteFocusTaken ? { onFocusTaken: onCiteFocusTaken } : {})}
+      />
+    );
+  if (view === "links")
+    return (
+      <LinksPanel
+        links={links}
+        fromPdf={false}
+        works={bibliography?.citations ?? NO_WORKS}
+        head={head}
+        onJump={onJump}
+        onOpenWork={onOpenWork}
       />
     );
   return (
@@ -303,11 +354,12 @@ function useReceptionAndClaimsControls() {
 }
 
 /**
- * **Bibliography | Reception | Claims** — Sources' three sub-modes, the
+ * **Bibliography | Links | Reception | Claims** — Sources' four sub-modes, the
  * band's header row. It was Debate's two-way control (`DebateViews`, 2026-10-03,
- * plan 261003o) until 2026-10-09, widened to three, and is built the way
+ * plan 261003o) until 2026-10-09, widened to three and then four on 2026-10-11,
+ * and is built the way
  * Summary's Brief | Fuller | Thread is: a radiogroup of buttons, each its own
- * tab stop, drawn joined so the three read as one choice (mode-band.css § the
+ * tab stop, drawn joined so the four read as one choice (mode-band.css § the
  * part-switcher).
  *
  * **Each chip carries the count of what its list draws** (sources-counts.ts),
@@ -323,7 +375,7 @@ function useReceptionAndClaimsControls() {
  *
  * The owner's press arms the chip's own work, the same contract as its
  * command-bar row (activation.ts § `activationForSources`): Bibliography the
- * citations, Reception the paid search, Claims the claims list. A stored list
+ * citations, Links nothing, Reception the paid search, Claims the claims list. A stored list
  * consumes its token without running. A visitor can never arm owner work.
  */
 export function SourcesViews({
@@ -387,6 +439,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
       return counts.bibliography === null
         ? null
         : { n: counts.bibliography, noun: plural(counts.bibliography, "work") };
+    case "links":
+      return { n: counts.links, noun: counts.links === 1 ? "address" : "addresses" };
     case "reception":
       return { n: counts.reception, noun: plural(counts.reception, "source") };
     case "claims":
@@ -402,6 +456,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
 const VIEW_HOW: Record<SourcesView, string> = {
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
+  links:
+    "Read off the article's own markup in your browser: no model, no search, nothing fetched. One row for each web address, whatever words the article links it with.",
   reception:
     "Found by a search of the open web, run once and kept. Each page has to link, quote or name this piece, and each quotation is checked against what the search returned.",
   claims:

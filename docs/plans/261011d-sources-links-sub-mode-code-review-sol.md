@@ -1,0 +1,20 @@
+1. **P2 — Links was absent from the generated command catalogue.** AI command picking and Guide suggestions could not select it. Regenerated the catalogue and added command-bar activation coverage. Evidence: [src/command-pick-catalogue.generated.json:702](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/src/command-pick-catalogue.generated.json:702), [tests/command-bar-sub-modes.test.tsx:573](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/command-bar-sub-modes.test.tsx:573).
+
+2. **P2 — Enumerating tests still assumed three Sources views.** This caused six failures and made the visitor test address Claims by a brittle numeric index. Added Links to URL state, last-view, activation/spend, surface and error-boundary coverage; changed the visitor test to find Claims by label. Evidence: [tests/every-mode-draws-its-surface.test.tsx:1583](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/every-mode-draws-its-surface.test.tsx:1583), [tests/last-view.test.ts:134](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/last-view.test.ts:134), [tests/public-network-trace.test.tsx:1582](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/public-network-trace.test.tsx:1582).
+
+3. **P3 — Outbound links did not announce that they open a new tab.** Added an accessible label naming the destination host and pinned it in the panel test. Evidence: [src/web/LinksPanel.tsx:120](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/src/web/LinksPanel.tsx:120), [tests/links-panel.test.tsx:64](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/links-panel.test.tsx:64).
+
+4. **P3 — Malformed-input safety was unguarded, and the new parser exceeded the lint complexity threshold.** The URL helpers already fail closed, so I added malformed-href and malformed-Bibliography-address regressions, then extracted grouping without changing behavior. Evidence: [src/web/outbound-links.ts:68](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/src/web/outbound-links.ts:68), [tests/outbound-links.test.ts:106](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/outbound-links.test.ts:106), [tests/outbound-links.test.ts:148](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/outbound-links.test.ts:148).
+
+5. **P3 — Documentation and comments had drifted from the implementation.** Corrected the jump limit, PDF/neutral empty-state condition, memoisation location, clipping difference from chat, fourth-view wording, and command aliases. Evidence: [plan:40](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/docs/plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md:40), [docs/project/sources.md:77](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/docs/project/sources.md:77).
+
+Verified without further findings: URL and phrase keys are deduplicated; `workAt` checks address before DOI/arXiv identity and excludes Scholar; `article.blocks` remains identity-stable, so memoisation is effective; Links makes no external or server request, as covered at [tests/public-network-trace.test.tsx:2195](/var/tmp/spideryarn-worktrees/fbs5mzkd-sources-external-links/tests/public-network-trace.test.tsx:2195). The protected files were untouched.
+
+Checks:
+
+- Requested Vitest suite: **8 files, 477 tests passed**.
+- Command catalogue generation test: **15 passed**.
+- Exact `npm run typecheck`: blocked before compilation by sandbox-denied `tsx` IPC (`EPERM /tmp/tsx-1000/14.pipe`). Equivalent `node --import tsx scripts/typecheck.ts`: **passed all four projects; all 3,676 source files covered**.
+- Full `npm test` was additionally attempted but could not start because this sandbox cannot reach Docker/Postgres; no database action was taken.
+
+VERDICT: ship after my fixes

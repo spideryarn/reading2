@@ -357,6 +357,24 @@ describe("the bar's mode rows are exactly what the Dock offers, directly or unde
     expect(firstOther).toBeGreaterThan(0);
   });
 
+  /* **The one exception: the pinned Guide chat** (plan 261010g, GPT Sol's F4).
+     On the owner's reading view an empty bar starts with it; below it the
+     claim above holds as before. */
+  it("draws the Guide chat first where the page can open the guide, and every mode before every other row below it", () => {
+    reading({
+      experimental: EXPERIMENTAL_ON,
+      executor: { runners: {}, sources: {}, openGuide: () => ({ kind: "close" }) },
+    });
+    openBar();
+    expect(listed()[0]).toBe("Guide chat");
+    const kinds = rows()
+      .slice(1)
+      .map((row) => row.dataset.kind);
+    const firstOther = kinds.findIndex((k) => k !== "mode");
+    expect(firstOther).toBeGreaterThan(0);
+    expect(kinds.slice(firstOther).some((k) => k === "mode")).toBe(false);
+  });
+
   /**
    * **And the two kinds below the modes are in the order `besideTheModes`
    * builds them**, which is what a reader sees on an empty query: this

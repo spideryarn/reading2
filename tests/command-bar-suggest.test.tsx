@@ -89,6 +89,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }
 
 const { Dock } = await import("../src/web/Dock.js");
+const { GUIDE_CHAT_LABEL } = await import("../src/web/CommandBar.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { saveProfile } = await import("../src/web/useProfile.js");
 const { savePurpose } = await import("../src/web/purpose.js");
@@ -379,6 +380,28 @@ describe("who is offered the row", () => {
     expect(rows()[0]?.textContent).not.toMatch(/\$|¢|cent|generates/);
   });
 
+  /* Plan 261010g: the guide chat is the bar's first row on an empty box, and
+     the row that asks comes straight after it. */
+  it("sits under the Guide chat row where the page can open the guide", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    expect(listed().slice(0, 3)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_LABEL, "Plain"]);
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    expect(asked).toHaveLength(1);
+    expect(opened).toBe(0);
+  });
+
   it("is not typed into view: a word hides it, and it is not a row a sentence can name", async () => {
     await reading();
     await openBar();
@@ -455,6 +478,24 @@ describe("asking", () => {
     expect(openedModes).toEqual(["structure"]);
     expect(asked).toEqual([]);
   });
+
+  it("keeps the selected command when that slow read inserts Suggest below the pinned Guide chat", async () => {
+    deferReader = true;
+    await reading({ exec: { ...executor(), openGuide: () => CLOSE } });
+    await openBar();
+    press("ArrowDown");
+    press("ArrowDown");
+    expect(selectedName()).toBe("Structure");
+    act(() => readerAnswers.at(-1)?.());
+    await settle();
+    expect(listed().slice(0, 3)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_LABEL, "Plain"]);
+    expect(selectedName()).toBe("Structure");
+    press("Enter");
+    await settle();
+    expect(openedModes).toEqual(["structure"]);
+    expect(asked).toEqual([]);
+  });
+
   it("posts the keys of the mode rows and nothing else, once, and waits with the bar open", async () => {
     await reading();
     await openBar();
@@ -550,6 +591,52 @@ describe("the list", () => {
     expect(openedModes).toEqual(["glossary"]);
   });
 
+  /* Plan 261010g, GPT Sol's F1: row zero is the guide chat where the page can
+     open it, so "select the first suggestion" has to find it by kind. */
+  it("selects its first suggestion when it lands, not the Guide chat row above it", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await answer(list());
+    const on = rows().filter((r) => r.getAttribute("aria-selected") === "true");
+    expect(on.map(nameOf)).toEqual([QUICK_1]);
+    press("Enter");
+    await settle();
+    expect(searched).toEqual([SEARCH_1]);
+    expect(opened).toBe(0);
+  });
+
+  it("keeps the Guide chat rule above the heading for its suggested rows", async () => {
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => CLOSE,
+      },
+    });
+    await openBar();
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await answer(list());
+
+    const guideRule = rows()[0]?.nextElementSibling;
+    expect(guideRule?.classList.contains("cmdbar-rest")).toBe(true);
+    expect(guideRule?.nextElementSibling?.classList.contains("cmdbar-from-why")).toBe(true);
+    expect(dialog().querySelectorAll(".cmdbar-rest")).toHaveLength(2);
+  });
+
   it("drops a key that is not a mode here, and a mode the reader does not have — an Archive key is not a row (F1)", async () => {
     await reading();
     await suggestAndLand(
@@ -641,6 +728,32 @@ describe("the list", () => {
     expect(suggested()).toHaveLength(4);
     expect(asked).toHaveLength(1);
   });
+
+  it("selects the first suggestion after its list lands while the Guide chat bar is shut", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await shutBar();
+    await answer(list());
+
+    await openBar();
+    expect(selectedName()).toBe(QUICK_1);
+    press("Enter");
+    await settle();
+    expect(searched).toEqual([SEARCH_1]);
+    expect(opened).toBe(0);
+  });
 });
 
 describe("a save drops the list (F3)", () => {
@@ -713,6 +826,31 @@ describe("a save drops the list (F3)", () => {
     press("Enter");
     await settle();
     expect(asked).toHaveLength(2);
+    expect(openedModes).toEqual([]);
+  });
+
+  it("resets to the pinned Guide chat when a save removes Suggest above the selected command", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    press("ArrowDown");
+    press("ArrowDown");
+    press("ArrowDown");
+    expect(selectedName()).toBe("Structure");
+    await act(async () => { await savePurpose(SLUG, null); });
+    await settle();
+    expect(listed()).not.toContain(SUGGEST_LABEL);
+    expect(selectedName()).toBe(GUIDE_CHAT_LABEL);
+    press("Enter");
+    expect(opened).toBe(1);
     expect(openedModes).toEqual([]);
   });
 
@@ -1040,7 +1178,7 @@ describe("folding the list (plan 261010u)", () => {
     );
     /* The disappearing rows cannot leave the active descendant on the fold
        control: the first ordinary row is the executor's Guide. */
-    expect(selectedName()).toBe("Guide");
+    expect(selectedName()).toBe(GUIDE_CHAT_LABEL);
     expect(listed()).not.toContain(SUGGEST_LABEL);
     expect(window.localStorage.getItem("spya.cmdbarSuggestions.folded")).toBe("1");
     expect(dialog().open).toBe(true);
@@ -1060,7 +1198,7 @@ describe("the Guide at the top (plan 261010u)", () => {
   it("is the first row on an empty box, above the row that asks and above a list", async () => {
     await reading({ exec: executor({ guide: true }) });
     await openBar();
-    expect(listed().slice(0, 2)).toEqual(["Guide", SUGGEST_LABEL]);
+    expect(listed().slice(0, 2)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_LABEL]);
     press("Enter");
     await settle();
     expect(guideOpened).toBe(1);
@@ -1068,16 +1206,16 @@ describe("the Guide at the top (plan 261010u)", () => {
     await openBar();
     /* Typed, it ranks as any row does, and is not drawn twice. */
     type("gui");
-    expect(listed()[0]).toBe("Guide");
-    expect(listed().filter((n) => n === "Guide")).toHaveLength(1);
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
+    expect(listed().filter((n) => n === GUIDE_CHAT_LABEL)).toHaveLength(1);
     type("");
-    expect(listed()[0]).toBe("Guide");
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
     press("ArrowDown");
     press("Enter");
     await settle();
     await answer(list());
-    expect(listed().slice(0, 2)).toEqual(["Guide", SUGGEST_HEADING]);
-    expect(listed().filter((n) => n === "Guide")).toHaveLength(1);
+    expect(listed().slice(0, 2)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_HEADING]);
+    expect(listed().filter((n) => n === GUIDE_CHAT_LABEL)).toHaveLength(1);
     /* A fresh answer still selects its first suggestion, not the Guide. */
     expect(selectedName()).toBe(QUICK_1);
     expect(guideOpened).toBe(1);

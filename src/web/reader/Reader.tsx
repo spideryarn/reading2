@@ -1717,10 +1717,10 @@ export function Reader({
    * **Open Bibliography on one work** — the focus and the move in one place,
    * so neither can be written without the other (GPT Sol's F7 on plan
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
-   * (Bibliography is the absent default), so a reader on Reception or Claims
-   * lands on the list the focus is for. Called by a chat's way back to a
-   * cited work, by Claims' *Cited in this paragraph* (that plan's Stage 2),
-   * and by a citation card's *Open in Sources*.
+   * (Bibliography is the absent default), so a reader on Links, Reception or
+   * Claims lands on the list the focus is for. Called by a chat's way back to a
+   * cited work, by Links' *In Bibliography*, by Claims' *Cited in this
+   * paragraph* (that plan's Stage 2), and by a citation card's *Open in Sources*.
    *
    * If Bibliography is already the visible list and no conversation is open,
    * only restore the band and focus the row. A same-value pushed write creates
@@ -3753,6 +3753,8 @@ export function Reader({
         if (!owner)
           return artefacts?.bibliography || artefacts?.reception || artefacts?.sourcesClaims ? (
             <VisitorSourcesBand
+              blocks={article.blocks}
+              sourceUrl={article.meta.url ?? null}
               bibliography={artefacts.bibliography ?? null}
               reception={artefacts.reception ?? null}
               claimList={artefacts.sourcesClaims ?? null}
@@ -3768,6 +3770,9 @@ export function Reader({
         return (
           <SourcesBand
             slug={slug}
+            blocks={article.blocks}
+            sourceUrl={article.meta.url ?? null}
+            fromPdf={article.meta.source === "pdf"}
             bibliographyRead={owner.bibliography}
             onJump={bandJump}
             blockOrder={blockOrder}
@@ -4763,6 +4768,9 @@ export function Reader({
                     void setThread(id);
                   }
                 : undefined,
+            threadGist: openComment.threadId
+              ? chatSummaries.find((c) => c.id === openComment.threadId)?.gist
+              : undefined,
             onDiscuss: (question) => {
               copyOnlyProtected.current.add(openComment.id);
               /* **Into the floating panel, unless a conversation mode is already

@@ -94,6 +94,16 @@ Since 2026-10-10:
 - **Not the lens** (Sources › Reception's angle box, the reader's own words, where a second angle is
   a second question) and not Summary's paragraph button, which has no origin.
 
+**The gist goes wherever a chat was started from and there is room to show it** (Greg, 2026-10-10,
+`spya-rbp55k`: *"if I click Ask in Chat and get a nice response, that that should auto-generate a
+short summary that shows up in the citation entry, and that that should be true for anywhere where
+we offer Ask in Chat"*; plan [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)).
+Since 2026-10-11 that is also each of *Your angles* (under the reader's words) and a comment that
+started a chat (under *Open the conversation this started*). Not yet: Summary's paragraph button,
+which stores nothing to find the chat by (`qi-vj7p4sbh`), and Quotes, Timeline and FAQ, which have
+no button yet (`qi-bd6h2fnd`). Glossary's *Ask in chat* after a free-term lookup found nothing has
+no entry to put a gist on, on purpose.
+
 Tests: `has one chat`, `a prose hover card's Ask in chat, on an item that already has a chat`, and
 `reopens a chat begun moments ago` in `tests/glossary-and-bibliography-ask-in-chat.test.tsx`.
 
