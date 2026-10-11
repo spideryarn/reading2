@@ -1,0 +1,55 @@
+[
+  {
+    "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+    "work": "Exploring the limits of language modeling",
+    "linkFrom": "arxiv",
+    "seconds": 11,
+    "tools": [
+      "read_cited_work (read 1,927 of 5,927 words)"
+    ],
+    "calledTool": true,
+    "read": true,
+    "searches": 0,
+    "text": "Yes, for the first half of the sentence. The passage says \"numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures [38, 24, 15]\" [spya-dew452]. The cited paper fits the \"recurrent language models\" part. I read only the parts of it that were shown to me, about a third of its text, and not the whole paper.\n\nThe abstract (page 1) says the authors \"explore recent advances in Recurrent Neural Networks for large scale Language Modeling\". It reports that their best single model cuts the best published perplexity from 51.3 to 30.0 (page 1). Perplexity is a standard score for how well a language model predicts text, and lower is better. The paper also says its large LSTM language model, with projection layers and importance sampling, \"performs much better than N-grams\" (page 8). That is a clear case of pushing recurrent language models further.\n\nThe paper does not directly cover the \"encoder-decoder architectures\" half. It mentions sequence-to-sequence models only in passing, saying they use conditional language models as a key component (page 1). I did not see any encoder-decoder experiments in the passages shown. My inference is that [38] and [24] carry that half of the citation. The article's reference list gives [38] as Google's neural machine translation system and [24] as Luong et al.'s attention-based translation paper [spya-azqjsw spya-hvzzvu].\n\nTwo smaller points. The paper is from 2016, so \"since\" is loosely accurate: it follows the LSTM and gated-recurrent papers cited just before it [spya-dew452]. Also, Shazeer, an author of the Transformer paper, is a co-author here. My inference is that this is a self-citation of a closely related Google Brain effort, not an outside endorsement."
+  },
+  {
+    "slug": "antikythera-mechanism-spya-zhxrzm",
+    "work": "The Initial Calibration Date of the Antikythera Mechanism after the Saros spiral mechanical Apokatastasis",
+    "linkFrom": "arxiv",
+    "seconds": 12,
+    "tools": [
+      "read_cited_work (read 2,000 of 9,498 words)"
+    ],
+    "calledTool": true,
+    "read": true,
+    "searches": 0,
+    "text": "Partly. The paper supports the first half of the sentence, and the passages I was shown say nothing about the second half.\n\n**23 December 178 BC.** This part holds. The abstract names December 22/23, 178 BC as \"an ideal, functional and representative initial date\" for setting the mechanism's pointers (page 1). The conclusions repeat that the Metonic calendar starting date, the winter solstice of 23 December 178 BC, is \"an ideal date for the initial calibration\" (page 24).\n\n**\"Calibration, not construction.\"** The paper makes this distinction too. It says the mechanism's exact construction date \"could be any date after\" that starting point (page 24). So the article's wording matches the paper.\n\n**Its strength.** The paper argues the date is a good fit, not that it is proven. Its case rests on a rare alignment of lunar cycles and a long annular solar eclipse on 22 December (page 1). It also points to a coincidence with the Isia festival and the winter solstice (page 22). The article's \"could have been\" is therefore about right.\n\n**\"Other experts propose 204 BC.\"** The passages I was shown don't mention 204 BC, and I can't say whether the rest of the paper does. The paper does cite Carman and Evans 2014 and Iversen among earlier work on the mechanism's starting date (page 2). My inference is that the 204 BC claim rests on the other source cited alongside this paper, not on this one. The article's other references to Carman and Evans 2014 and Iversen 2017 [spya-qdcw90] are the likelier support. I haven't read those works, so check them if the 204 BC figure matters to you.\n\nOne more point on the passage itself: the block states this date proposal twice, here and again in [spya-ejygfx], with the same two citations."
+  },
+  {
+    "slug": "scaling-hypothesis",
+    "work": "Santoro et al 2016",
+    "linkFrom": "arxiv",
+    "seconds": 12,
+    "tools": [
+      "article_citations (1 work)",
+      "read_cited_work (could not confirm it is the work)"
+    ],
+    "calledTool": true,
+    "read": false,
+    "searches": 0,
+    "text": "I couldn't confirm that I read the paper. A PDF came back from the arXiv link, but the check that it was this work failed, so I can't tell you what it says.\n\nThe passage makes a claim in its own words. It says GPT-3's attention mechanisms act as \"fast weights\" that have \"learned to learn\" by training on varied data [spya-aqts9c]. The Santoro citation isn't attached to that sentence directly. It sits in the footnote after \"varied data\". That footnote is a \"see:\" list, and it begins \"On implicit meta-learning\" [spya-cc7uc2]. The article's citation list likewise describes it only as background reading on implicit meta-learning. It gives the arXiv link [1605.06065](https://arxiv.org/abs/1605.06065).\n\nThe article doesn't say so, but I remember that arXiv ID as Santoro et al.'s \"One-shot Learning with Memory-Augmented Neural Networks\". I haven't verified that. If it's right, that paper is about networks with external memory that learn new items from very few examples. My inference is that it would support the general idea that meta-learning can emerge from training across many tasks. It would not be evidence about GPT-3 or about attention acting as fast weights, since it predates GPT-3 by four years.\n\nTo check this yourself, open the arXiv abstract and see whether it describes meta-learning arising from training on varied tasks. Also note that the footnote lists several other works alongside it, including Wang et al 2018 and Botvinick et al 2019a [spya-cc7uc2]."
+  },
+  {
+    "slug": "spider-silk-spya-ge30uz",
+    "work": "Silk feeding as an alternative foraging tactic in a kleptoparasitic spider under seasonally changing environments",
+    "linkFrom": "doi",
+    "seconds": 13,
+    "tools": [
+      "read_cited_work (could not read zslpublications.onlinelibrary.wiley.com)"
+    ],
+    "calledTool": true,
+    "read": false,
+    "searches": 1,
+    "text": "I couldn't read the full paper. The publisher's site blocked the automated reader. What follows comes from the abstract, which I found on [Cambridge's issue page](https://www.cambridge.org/core/journals/journal-of-zoology/issue/E60010EC2EFC2214248731DB16569003).\n\nShort answer: yes, the paper supports the passage, but only part of it. The passage says \"In some cases, spiders may use silk as a food source\" [spya-k8j9fe]. The abstract is about one species, *Argyrodes flavescens*, a spider that steals prey from other spiders' webs. It reports that this species eats the silk of its host webs. Silk-eating was common when insect prey on the host webs was scarce. When prey was plentiful, only prey-stealing was seen. Spiders also spent more time feeding on silk than on prey when prey was scarce. The authors conclude that silk eating is an important alternative way to find food when the environment changes with the seasons.\n\nSo the paper backs the claim that some spiders eat silk as food. The Wikipedia sentence is more general than the paper. The paper is about a single kleptoparasitic species (one that steals from hosts) eating other spiders' silk. The article's later table makes the same point more precisely: it names the kleptoparasitic *Argyrodes* eating host webs and adds that some daily weavers eat their own unused silk [spya-jyg3uw]. That second claim cites other sources, [1][38], and the abstract I read doesn't cover it. I haven't checked the other source. The reference list entry for this paper is [spya-ewbjvg].\n\nBecause I only saw the abstract, I can't tell you how the paper handles details such as how much silk the spiders ate or how the observations were made."
+  }
+]

@@ -45,9 +45,10 @@ contract come from.
 ## In this doc
 
 - [§ What Greg asked for, and what is here](#what-greg-asked-for-and-what-is-here) — intent and the tool loop in one picture
-- [§ The nine, and the filter they had to pass](#the-nine-and-the-filter-they-had-to-pass) — adding or judging a tool
+- [§ The ten, and the filter they had to pass](#the-ten-and-the-filter-they-had-to-pass) — adding or judging a tool
 - [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
 - [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
+- [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) — `read_cited_work`, the PDF of a work the article cites
 - [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`, and [the other conversations with every question](#the-other-conversations-come-with-every-question) (each one's gist)
 - [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
 - [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
@@ -98,7 +99,7 @@ improved by work that is already planned, and the seam it goes behind is `librar
 in [`src/store/`](../../src/store/index.ts) — a store contract, so the semantic matcher lands there
 and this file does not change.
 
-## The nine, and the filter they had to pass
+## The ten, and the filter they had to pass
 
 > **Does it send the reader somewhere they could not otherwise get to?**
 
@@ -113,13 +114,15 @@ and this file does not change.
 | `article_glossary` | This article's [glossary](glossary.md), if one has been generated | So an answer about a term agrees with what the app has already told the reader, rather than quietly contradicting it |
 | `article_citations` | The works **this** article cites, from its stored [citations](bibliography.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. Since 2026-10-08 the list of other conversations, each with a line on what it covered, also comes with every Chat question, so the model knows when one is worth opening. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
+| `read_cited_work` | A paper **this** article cites, read from its PDF once code has confirmed it is the work, aimed at the claim the article makes with it | `read_web_page` cannot read a PDF and cannot say which paper it has. *Does the cited work say that?* needs the work's own words. **Chat and Explore only.** See [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) |
 
-**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
-Live, share. The ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+**Eight of the ten are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
+Live, share. The other two are added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
 for the kinds that function names and no others. **The guide** (plan
 [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
 `GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
-notes, and no web search.
+notes, and no web search. Asked about the world, it says Chat can look it up; why it still has no
+search is [below](#web-search-is-still-openrouters-and-is-not-in-that-table).
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -135,6 +138,33 @@ last one where our own tools are withheld. Nothing on this side sees it start or
 arrives is a count in `usage` — which is why the panel renders it as one row saying only how many
 searches ran. **It does not say what was searched for, because we do not know**, and a plausible
 invented query would be the most convincing wrong thing on the screen.
+
+**Every typed conversation but the guide has it** — Chat, Learn's Recall, Tutorial and Explore, and
+Referee's Candidates (on Exa).
+
+> I think we should allow web searches in all of the chat modes because very often users are going
+> to wanting to be situating this article relative to other stuff on the web, and it's too strict
+> and limiting to hobble the agent.
+>
+> — Greg, 2026-10-11 (`spya-drbkvc`)
+
+Having the tool and using it are different things, and the prompts decide the second. Asked where the
+piece sat among other work, Recall and Tutorial searched the web 0 times in 8, because they are told
+to stay in the article; their prompts now name that question as a reason to search, and they did 2
+in 4 and 4 in 4. Recall's misses were where the reader's library held a relevant piece and it
+answered from that. It still does not go off unprompted to check the piece against the world,
+because it is testing the reader's memory of *this* piece. Measured in
+[261011t](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md) with
+`evals/chat-web-reach.ts --kind <kind>`.
+
+**The guide was given search the same day and it was backed out.** It searched, then called
+`offer_next_steps` with no words of its own, and the loop went round again without the results:
+a provider search lives only inside the response that ran it, so a round that ends in a call to one
+of our tools with no prose loses everything it found. Its answers then said "I haven't looked this
+up". Chat does not hit this because it writes in the round it searches; the guide is told to end
+every answer on a tool call. What would fix it, and whether to, is
+[261011t § The guide](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md#the-guide-tried-and-backed-out)
+and `q-w26r6u`. **Live has none either**: OpenAI realtime has no server search.
 
 ## The links the prompt does not carry
 
@@ -268,6 +298,42 @@ deliberately: it is read-only and article-local, and a per-kind tool list is mor
 that warrants. It does not widen what `read_web_page` may fetch; the citation URLs are one of the
 sets the allowlist in [§ Still open](#still-open) would use. *(A per-kind list did arrive, on
 2026-10-03, for the tool in the next section. This one stays in the shared eight.)*
+
+## Reading a cited paper: `read_cited_work`
+
+**Built 2026-10-11** (plan
+[261011w](../plans/261011w-does-the-cited-work-say-that-at-the-citing-sentence.md)), for Greg's 4B
+on [q-fkq30v](../user-feedback/questions/q-fkq30v.md): *does the cited work say that?*, asked at the
+citing sentence. `read_web_page` refuses a PDF, and most cited papers are PDFs, so until this chat
+answered that question from abstracts and snippets.
+
+It takes a work's **title** (as `article_citations` lists it, matched by title only, never the
+*used for* line) and the **claim** the article makes with it, and reads the paper through
+[`paper-evidence.ts`](../../src/paper-evidence.ts), the half of Dig deeper that outlived its button:
+the row's DOI or arXiv link, or a page a current quick check matched, never a row's other links; a
+PDF only; and code confirms it is the work before a word is sent
+([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+It sends the title and abstract and the chunks sharing most words with the claim, up to
+`CITED_WORK_WORDS` (2,000), inside `untrusted()`, with a provenance line of ours outside the fence
+saying what was read and how it was confirmed. Every way it can fail to read says why, and tells the
+model to say the paper was not read. One deadline covers the registry and the paper,
+`CITED_WORK_DEADLINE_MS`. The code is [`src/read-cited-work.ts`](../../src/read-cited-work.ts);
+[`tests/read-cited-work.test.ts`](../../tests/read-cited-work.test.ts).
+
+**Chat and Explore only**, beside `reader_notes` in `toolsFor`: not Live (a 25-second PDF read in a
+spoken turn), not Learn, Tutorial, Candidates or the guide.
+
+**Measured before the button was built**, because a tool the model never calls looks built
+(`evals/read-cited-work.ts`, 2026-10-11, four articles): called 4 of 4 times, the paper read 2 of 4;
+the other two said why (a title the list holds as *Santoro et al 2016* could not be confirmed on page
+one; a publisher refused the reader). Both reads separated what the shown passages say from the
+whole paper. The numbers are in the plan.
+
+**What it does not do:** chat's quotes of the paper are the model's, told to quote only from the
+fenced text, not checked by code (Dig deeper's passages were); a paywalled or HTML-only work stays
+unread; a cited work already on the reader's shelf is not read from the store. And the paper is a
+stranger's text in a prompt whose model has tools, so it carries `read_web_page`'s residual risk
+([§ Security](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers)).
 
 ## The reader's notes: the one tool not every conversation gets
 
@@ -1021,7 +1087,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
   message only (`experienceLine`), so the cached prefix is the same for everyone.
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
-- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search, and one of its own since
+- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search (it points the reader to Chat;
+  [§ Web search](#web-search-is-still-openrouters-and-is-not-in-that-table) says why), and one of
+  its own since
   2026-10-09: **`offer_to_save`**, which saves nothing
   ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
   Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or

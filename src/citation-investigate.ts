@@ -817,8 +817,8 @@ export interface InvestigateCitationDeps {
  * composition root checks it is this function, and that it hands over
  * `lookupWork` itself (docs/reusable — mutate the composition root).
  */
-export function readCitedPaper(input: PaperEvidenceInput): Promise<PaperEvidence> {
-  return readPaperEvidence(input, { lookup: lookupWork });
+export function readCitedPaper(input: PaperEvidenceInput, signal?: AbortSignal): Promise<PaperEvidence> {
+  return readPaperEvidence(input, { lookup: lookupWork, ...(signal ? { signal } : {}) });
 }
 
 /** The stage-2 outcome and the passages, as the row keeps them — a dated snapshot. */

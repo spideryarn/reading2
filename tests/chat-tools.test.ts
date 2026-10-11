@@ -1161,10 +1161,11 @@ describe("converse — a turn that uses a tool", () => {
     const tools = (sent[0] as { tools: { type: string }[] }).tools;
     expect(tools[0]?.type).toBe("openrouter:web_search");
     /* A turn with no `kind` is a chat, and a chat's list is `toolsFor("chat")`:
-       the shared eight and `reader_notes`. What each other kind is offered is
-       tests/reader-notes-tool.test.ts. */
+       the shared eight, `reader_notes` and `read_cited_work` (plan 261011w).
+       What each other kind is offered is tests/reader-notes-tool.test.ts and
+       tests/read-cited-work.test.ts. */
     expect(tools.length).toBe(toolsFor("chat").length + 1);
-    expect(toolsFor("chat").length).toBe(CHAT_TOOLS.length + 1);
+    expect(toolsFor("chat").length).toBe(CHAT_TOOLS.length + 2);
   });
 
   it("leaves our tools out entirely when the caller says so", async () => {

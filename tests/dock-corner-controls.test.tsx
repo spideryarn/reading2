@@ -593,8 +593,8 @@ describe("the route walk: branded home controls and Feedback triggers stay in th
     const drawn = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter((m) => m.mode !== "marginalia");
     expect(drawn.length, "the fixture draws a bar").toBeGreaterThan(5);
     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(drawn.length);
-    /* More stands inside the group since 2026-10-08, between Skim and Search
-       (plan 261008d § D2), and is not counted among its radios: it is a menu
+    /* More stands inside the group since 2026-10-08 (plan 261008d § D2),
+       between Summary and Skim since 2026-10-11 (plan 261011x), and is not counted among its radios: it is a menu
        button, never `role="radio"`. */
     const more = group?.querySelector(".dock-more-trigger");
     expect(more).not.toBeNull();
