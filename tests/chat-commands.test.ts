@@ -195,7 +195,7 @@ describe("a mode or a quick search as a chip", () => {
   it("is no chip for a mode behind the switch, one this page does not offer, or one nobody has heard of", () => {
     for (const raw of [
       "[cmd:mode:mode%3Adebate]", // experimental, switch off: not in the door
-      "[cmd:mode:submode%3Alearn%3Aexplore]", // an experimental sub-mode
+      "[cmd:mode:submode%3Adiagram%3Aforce]", // an experimental sub-mode
       "[cmd:mode:mode%3Anonsense]",
       "[cmd:mode:mode%3Aglossary%20]",
     ]) {

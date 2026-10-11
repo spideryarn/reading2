@@ -441,7 +441,7 @@ Stage 1.
 
 **2. `if ("sourceHash" in body)` can never be true for the state it was written for**, in
 [`src/web/useCriteria.ts`](../../src/web/useCriteria.ts) and
-[`src/web/useClaims.ts`](../../src/web/useClaims.ts), with the same comment above both:
+[`src/web/useClaims.ts`](../../src/web/usePromises.ts), with the same comment above both:
 
 > `in`, not truthiness: the server sends `sourceHash: undefined` — which JSON drops — for a paper
 > whose blocks it could not read, and that is a real answer meaning "we checked and cannot tell".

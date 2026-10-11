@@ -45,7 +45,7 @@
  *   help with `help: true`, `HELP_QUESTION` and the block as the thread's
  *   anchor, as `helpAboutBlock` in src/web/reader/Reader.tsx starts one. Tools
  *   on, as the route leaves them.
- * - **Referee claims** is `runClaims`, which returns its claims and persists
+ * - **Referee promises** is `runPromises`, which returns its claims and persists
  *   nothing (the route does that).
  *
  * **Nothing is written to the database but spend**: `generate` runs inside
@@ -104,12 +104,12 @@ const GENERATORS = [
   "search",
   "learn",
   "help",
-  "referee-claims",
+  "referee-promises",
 ] as const;
 type Generator = (typeof GENERATORS)[number];
 
 /** Whether an item is paired across arms by position rather than by content. */
-const BY_POSITION: ReadonlySet<Generator> = new Set(["arc", "tweets", "ideas", "sketch", "illustrated", "quiz", "faq", "timeline", "referee-claims"]);
+const BY_POSITION: ReadonlySet<Generator> = new Set(["arc", "tweets", "ideas", "sketch", "illustrated", "quiz", "faq", "timeline", "referee-promises"]);
 
 /** The generators whose words should keep the author's own key term. */
 const KEY_TERM: ReadonlySet<Generator> = new Set(["labels", "sketch", "timeline"]);
@@ -131,7 +131,7 @@ export const PROMPT_FILES: Record<Generator, string[]> = {
   search: ["search.ts"],
   learn: ["converse.ts"],
   help: ["converse.ts"],
-  "referee-claims": ["referee-claims-run.ts"],
+  "referee-promises": ["referee-promises-run.ts"],
 };
 
 /** Two readers' Learn summaries — one mostly right, one half wrong — the same in every arm. */
@@ -334,7 +334,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
   const { markAnswer } = await import("../../src/quiz-mark.js");
   const { findPassages } = await import("../../src/search.js");
   const { converse } = await import("../../src/converse.js");
-  const { runClaims } = await import("../../src/referee-claims-run.js");
+  const { runPromises } = await import("../../src/referee-promises-run.js");
   const { HELP_QUESTION } = await import("../../src/web/chat-handoff.js");
 
   /** One first turn of `converse`, to its `done`. */
@@ -482,11 +482,11 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       }
       write("help", items);
     },
-    "referee-claims": async () => {
-      const out = await runClaims({ power: "standard", meta: article.meta, blocks: article.blocks });
+    "referee-promises": async () => {
+      const out = await runPromises({ power: "standard", meta: article.meta, blocks: article.blocks });
       write(
-        "referee-claims",
-        out.claims.flatMap((c, i) => [
+        "referee-promises",
+        out.promises.flatMap((c, i) => [
           { key: pos(i), field: "claim", text: c.claim },
           ...c.passages.map((p, j) => ({ key: `${pos(i)} passage ${j + 1}`, field: "reasoning", text: p.reasoning })),
         ]),

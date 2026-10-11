@@ -120,8 +120,8 @@ export function LearnBand({
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("LearnBand");
-  /* Only for which chips the row draws: Explore is behind the switch
-     (QuizPanel.tsx § `LearnSubModeToggle`). */
+  /* Only for which chips the row draws (QuizPanel.tsx § `LearnSubModeToggle`);
+     no Learn part is behind the switch since Explore came out on 2026-10-11. */
   const { on: experimentalOn } = useExperimental();
   const [{ learn, thread }, setBoth] = useQueryStates({
     learn: learnParam,
@@ -537,7 +537,6 @@ export function ConversationBand({
     settled,
     named,
     speak,
-    onAnswered,
     error,
   } = useChat(slug, onSettled);
   /**
@@ -1390,9 +1389,6 @@ export function ConversationBand({
       /* And in the guide since plan 261009i, with the guide's own spoken prompt
          and tools (`liveKind` in src/routes.ts, `SPOKEN_GUIDE` in src/live.ts). */
       live={OFFERS_LIVE[kind] && !awaitsOrigin(current) ? live : undefined}
-      /* The guide's answers may press one of their own buttons; ChatPanel's
-         conversation listens only when it is the guide (guide-acts.ts). */
-      onAnswered={onAnswered}
       onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
         if (resettingNow.current) return;
         if (awaitsOrigin(id)) return;

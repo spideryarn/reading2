@@ -159,7 +159,7 @@ export function CandidatesBand({
    * brief* button can both reach `startBrief`, and the `thread` guard below is a
    * **render-time** value — it does not become truthy until `useChat`'s
    * optimistic insert has rendered. Two sends before that mint two thread ids
-   * and make two requests. Unlike `useClaims`, nothing here has a `running`
+   * and make two requests. Unlike `usePromises`, nothing here has a `running`
    * flag, and unlike a job step there is no queue to deduplicate against.
    *
    * GPT Sol, 2026-09-06: *"payment correctness should not depend on that
@@ -346,7 +346,7 @@ export function CandidatesPanel({
       {loadFailed && (
         <p className="cnd-error">
           Could not load this conversation.{" "}
-          <button type="button" className="clm-retry" onClick={onReload}>
+          <button type="button" className="prm-retry" onClick={onReload}>
             Try again
           </button>
         </p>
@@ -598,7 +598,7 @@ function Shortlisted({
            the model's list* into a ranking, in the one panel built to have none —
            and a list that silently truncates is the exact shape
            docs/reusable/silent-success.md is about. Mirror prints
-           `placementsOmitted` and Claims prints its drops for the same reason. */
+           `placementsOmitted` and Promises prints its drops for the same reason. */
         <p className="cnd-dropped">
           {omitted} more {omitted === 1 ? "name was" : "names were"} listed after the first{" "}
           {MAX_CANDIDATES} and {omitted === 1 ? "was" : "were"} not read. Narrow the search rather

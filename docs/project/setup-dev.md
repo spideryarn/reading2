@@ -538,7 +538,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
 | `SPIDERYARN_REFEREE_HIDDEN_CHECK_MODEL` | Hidden text's *Ask Opus about these*, an opinion on each row the source scan flagged. Opus whatever the article's High-powered AI setting, unless this is set ([referee-mode.md](referee-mode.md)) |
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
-| `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
+| `SPIDERYARN_REFEREE_PROMISES_MODEL` | Promises (Referee), pulling what the paper promises about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
 | `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — one of the jobs `TASK_TIER` puts on the **quick tier**, so this is a variable for asking whether the cheap model is good enough |
 | `SPIDERYARN_CITATION_FIND_MODEL` | Bibliography's *Look it up* (was *Find it*), the one call with web search for a cited work: picks which result, if any, is its own page, and reads that result's search extract ([bibliography.md](bibliography.md#look-it-up-on-the-web)). Since *Dig deeper* (2026-10-01) a press ignores it — the quick check and the call that picks the cited paper's checked passages are always `DIG_DEEPER_MODEL` (`src/citation-investigate.ts`) — and a lookup a press stored still attaches while it is set, because the read accepts either model's fingerprint (`src/store/pg.ts`). Nothing in the app sends it since the stand-alone `POST …/find` route was deleted (2026-10-04); what it still changes is one of the two fingerprints that read accepts |
@@ -560,7 +560,7 @@ is why two rows were missing until 2026-09-01: `quiz-mark` had been added at the
 variable that exists and is not written down here reads as a variable that does not exist, so the
 rule is the one this repo already keeps — when you add a row there, add it here in the same change.
 **And it went wrong again the same day**: `referee-criteria` had landed with the paragraph above
-already written and still did not reach the table, so it was added alongside `referee-claims` rather
+already written and still did not reach the table, so it was added alongside `referee-promises` rather
 than found later. Three misses in one day is a copy asking to be derived, and the honest fix is a
 test that reads `MODEL_ENV_VAR` and this table and compares them.
 

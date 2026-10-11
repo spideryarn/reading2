@@ -21,7 +21,6 @@ import { chipDoorRows, guideDoorRows, type SubNav } from "../src/web/chip-door.j
 import { commandId } from "../src/web/command-match.js";
 import type { CommandExecutor } from "../src/web/command-proposal.js";
 import { modeDoor, withModeDoor } from "../src/web/command-runners.js";
-import { type GuideAct, GuideActContext } from "../src/web/guide-acts.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -70,26 +69,17 @@ describe("the chip, end to end", () => {
   });
 
   function setup() {
-    const activators = {
-      mode: vi.fn(),
-      sub: vi.fn(),
-      modeUnarmed: vi.fn(),
-      subUnarmed: vi.fn(),
-    };
+    const activators = { mode: vi.fn(), sub: vi.fn() };
     const rows = chipDoorRows({ experimentalOn: false, mode: undefined, marginOpen: false, subNav: NAV });
     const door = (of: typeof rows) =>
-      modeDoor(
-        of,
-        { mode: (c) => activators.mode(c.mode), sub: (c) => activators.sub(c.sub) },
-        { mode: (c) => activators.modeUnarmed(c.mode), sub: (c) => activators.subUnarmed(c.sub) },
-      );
+      modeDoor(of, { mode: (c) => activators.mode(c.mode), sub: (c) => activators.sub(c.sub) });
     const chat = withModeDoor({ runners: {}, sources: {} }, door(rows));
     const executor: CommandExecutor = { ...chat, guide: withModeDoor(chat, door(guideDoorRows(rows, NAV))) };
     return { activators, executor };
   }
 
   /** An answer in a thread of this kind, drawn the way ChatPanel's `Answer` draws it. */
-  function paint(kind: ThreadKind, executor: CommandExecutor, text: string, guide: GuideAct | null = null): void {
+  function paint(kind: ThreadKind, executor: CommandExecutor, text: string): void {
     const Answer = () =>
       createElement(CitedMarkdown, {
         text,
@@ -99,7 +89,7 @@ describe("the chip, end to end", () => {
         commands: useChatCommands() ?? undefined,
       });
     act(() => {
-      const answer = createElement(GuideActContext.Provider, { value: guide }, createElement(Answer));
+      const answer = createElement(Answer);
       root.render(
         createElement(ChatCommands, { executor, children: createElement(ChatCommandsFor, { kind, children: answer }) }),
       );
@@ -113,7 +103,6 @@ describe("the chip, end to end", () => {
     expect(chips()).toHaveLength(1);
     act(() => chips()[0]?.click());
     expect(activators.mode).toHaveBeenCalledWith("referee");
-    expect(activators.modeUnarmed).not.toHaveBeenCalled();
   });
 
   it("opens a Referee sub-mode the same way", () => {
@@ -123,12 +112,10 @@ describe("the chip, end to end", () => {
     expect(activators.sub).toHaveBeenCalledWith({ mode: "referee", view: "criteria" });
   });
 
-  it("never opens it by itself, even as the answer's one act", () => {
+  it("never opens it by itself: drawn, it waits for the press", () => {
     const { activators, executor } = setup();
-    const guide: GuideAct = { messageId: "spya-ans001", used: false, made: new Set() };
-    paint("guide", executor, `For your report:\n\n${REFEREE}`, guide);
+    paint("guide", executor, `For your report:\n\n${REFEREE}`);
     expect(chips()).toHaveLength(1);
-    expect(activators.modeUnarmed).not.toHaveBeenCalled();
     expect(activators.mode).not.toHaveBeenCalled();
   });
 

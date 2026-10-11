@@ -4,11 +4,13 @@
  * Everything here is drawn from what the article already has: the Socratic
  * question the whole-document call wrote on each top-level part
  * (src/structure.ts § `questionFor`), the arc, and the ideas where the reader
- * has made them. Nothing is generated for this mode.
+ * has made them. The one call it makes is its own: the relation words, and
+ * since 2026-10-11 a few notes the same call may write (plan 261011o).
  *
  * **Sparse on purpose.** The risk this mode runs against vision.md is a second
  * article down the margin, so it never draws a gist or a label per paragraph:
- * one question per part, a stamp where an idea occurs, and nothing else.
+ * one question per part, a stamp where an idea occurs, and a few model-written
+ * notes across the whole article.
  * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
  *
  * Ranges are resolved by block position, never by comparing id strings
@@ -23,6 +25,7 @@ import type {
   FaqQuestion,
   Idea,
   IdeaProvenance,
+  MarginNote,
   Relation,
   TimelineEvent,
   Tree,
@@ -61,6 +64,9 @@ const isDrawn = (relation: Relation): relation is DrawnRelation => Object.hasOwn
 export type MarginaliaNote =
   /** How this paragraph bears on the one before it. First in its note. */
   | { kind: "relation"; relation: DrawnRelation }
+  /** A note the relations call chose to write here (plan 261011o): open, not
+      shut, since there are at most eight and the line is the whole of it. */
+  | { kind: "aside"; note: MarginNote }
   /** The question a part — or, at `depth` 0, the whole article — answers. */
   | { kind: "question"; depth: number; text: string }
   /** An idea the piece assumes or introduces, occurring in this block. */
@@ -114,6 +120,8 @@ export type MarginSources = {
   asked?: readonly AskedQuestion[] | null;
   /** How each paragraph bears on the one before — the owner's only in v1. */
   relations?: Readonly<Record<BlockId, Relation>> | null;
+  /** The notes the same call wrote — the owner's only, as the words are. */
+  notes?: readonly MarginNote[] | null;
 };
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
@@ -170,6 +178,16 @@ export function marginaliaNotes(
     const relation = more.relations?.[block.id];
     if (relation !== undefined && isDrawn(relation)) add(block.id, { kind: "relation", relation });
   }
+
+  /* **Then the model's own note**, under its word and above the part's
+     question. One per block, which the step already enforces; a note pointing
+     at a passage this article no longer has is left out rather than drawn
+     with a dead link (a stale list is never handed here, but a fresh one is
+     checked anyway: it costs one lookup). */
+  const placed = (more.notes ?? []).filter((note) => note.to === null || index.has(note.to));
+  /* In article order, as the words are, whatever order the model wrote them. */
+  placed.sort((a, b) => (index.get(a.blockId) ?? 0) - (index.get(b.blockId) ?? 0));
+  for (const note of placed) add(note.blockId, { kind: "aside", note });
 
   /* **Beside the part's first paragraph, not its first block.** A part's range
      starts at its heading, or at the date line under the title, and a question

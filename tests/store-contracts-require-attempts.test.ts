@@ -31,7 +31,7 @@ import { describe, expect, it } from "vitest";
 import type {
   ChatStore,
   CommentStore,
-  RefereeClaimsStore,
+  RefereePromisesStore,
   RefereeCriteriaStore,
   SearchStore,
 } from "../src/store/contracts.js";
@@ -40,7 +40,7 @@ import type {
 async function theContracts(
   search: SearchStore,
   criteria: RefereeCriteriaStore,
-  claims: RefereeClaimsStore,
+  claims: RefereePromisesStore,
   chat: ChatStore,
   comments: CommentStore,
 ): Promise<string[]> {
@@ -67,7 +67,7 @@ async function theContracts(
   // @ts-expect-error — the config is `begin`'s to set, not `finish`'s.
   await criteria.finish("slug", "id", { status: "done", results: [], config: { kind: "single" } }, criterionAttempt);
 
-  /* ---- Referee claims (strict since 261003h; held here so it stays so) ---- */
+  /* ---- Referee promises (strict since 261003h; held here so it stays so) ---- */
   const claimsAttempt: string = (await claims.begin("slug", "hash")).attempt;
   // @ts-expect-error — no attempt.
   await claims.finish("slug", { status: "done", claims: [] });
@@ -75,7 +75,7 @@ async function theContracts(
   await claims.finish("slug", { status: "done", claims: [], sourceHash: "another" }, claimsAttempt);
   // @ts-expect-error — nor re-date it.
   await claims.finish("slug", { status: "done", claims: [], createdAt: "2026-01-01" }, claimsAttempt);
-  await claims.finish("slug", { status: "error", error: "no", claims: [] }, claimsAttempt);
+  await claims.finish("slug", { status: "error", error: "no", promises: [] }, claimsAttempt);
 
   /* ---- Chat ---- */
   const turnAttempt: string = (await chat.begin("slug", { threadId: "t", question: "q" })).attempt;

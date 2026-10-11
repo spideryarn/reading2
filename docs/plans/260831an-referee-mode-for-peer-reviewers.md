@@ -208,7 +208,7 @@ So, three changes, all Sol's:
 
 #### The eval found the hole in those three, and it was on the wrong side of the door
 
-**2026-09-01.** [`evals/referee-claims.ts`](../../evals/referee-claims.ts) was built to measure the
+**2026-09-01.** [`evals/referee-claims.ts`](../../evals/referee-promises.ts) was built to measure the
 third rule, and it did — the linkage/adequacy line held on all five guarded papers, and the ablated
 control (the same paper with the prompt's refusals cut out) came back with six adequacy verdicts in
 eleven passages, so the refusals are what stop it. But the runs said something the eval was not
@@ -230,7 +230,7 @@ Two things landed, and only the first is a fix:
 
 - **What the answer did not account for is now computed and shown.** For each block a claim was
   taken from, the sentences and clauses no claim is anchored in
-  (`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim accounts
+  (`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-promises.ts)). A claim accounts
   for the clause its quote **begins** in, not every clause its quote covers — which is exactly what
   makes a three-claim sentence quoted whole under one claim show its other two. The wording is the
   whole value and is a checked constant: *what was not accounted for*, **never** *claims you
@@ -508,10 +508,10 @@ is a fair description of what shipped.
   dropped as an orphan; the delimiter is forgeable; and the input caps do not cap criterion length,
   passage length, or the same block copied once per comment.
 - ~~**Stage 4 — Claims.**~~ **Done, 2026-09-01.** `GET`/`POST /api/referee/claims/:slug`,
-  [`src/referee-claims.ts`](../../src/referee-claims.ts),
-  [`src/referee-claims-run.ts`](../../src/referee-claims-run.ts),
+  [`src/referee-claims.ts`](../../src/referee-promises.ts),
+  [`src/referee-claims-run.ts`](../../src/referee-promises-run.ts),
   `src/referee-claims-store.ts`,
-  [`src/web/ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx), and `resolveClaim` joining the five
+  [`src/web/ClaimsPanel.tsx`](../../src/web/PromisesPanel.tsx), and `resolveClaim` joining the five
   resolvers already in `src/web/search-hits.ts`. Sol's finding 8 is fixed: the placeholder's code
   comment promising a ranking "by how thin the delivery is" and its visible "actually delivered" are
   both gone with the placeholder.

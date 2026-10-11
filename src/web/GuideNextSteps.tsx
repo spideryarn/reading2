@@ -30,9 +30,8 @@
  *   pressed there, with their own confirmation.
  * - **archive** goes to Metadata, whose top *Archive* or *Put back* button does it.
  *
- * **Never pressed by the guide.** This row is drawn outside the answer's
- * `GuideActContext` (ChatPanel.tsx), so a mode here is a press like a chip in
- * Chat; the guide's one act stays the inline chip's.
+ * **Never pressed by the guide**: each is a button the reader presses, like
+ * every chip in a guide answer (plan 261011m).
  *
  * Drawn under the latest settled answer only, from that answer's last valid
  * offer: three buttons is the most on screen at once (Greg's *"maybe three
@@ -45,7 +44,6 @@ import type { ChatMessage, NextStep, ToolRun } from "../types.js";
 import { chipFor } from "./chat-commands.js";
 import { CommandChip, useChatCommands } from "./CommandChip.js";
 import { type CommandExecutor, formatProposalToken } from "./command-proposal.js";
-import { GuideActContext } from "./guide-acts.js";
 import { withSection } from "./params.js";
 import { carriedSearch, navigate, readHref } from "./router.js";
 import { voiceClass } from "./voice.js";
@@ -111,12 +109,7 @@ export function GuideNextSteps({
   const steps = (stepsIn(message.tools) ?? []).filter((step) => drawable(step, commands, blocks));
   if (steps.length === 0) return null;
   return (
-    /* **No act reaches in here**, wherever the row is drawn: a mode chip under
-       a `GuideActContext` would press itself (CommandChip.tsx), and none of
-       these may. ChatPanel draws the row outside every answer's context as
-       well; this makes it true of the row, not of where it was put. */
-    <GuideActContext.Provider value={null}>
-      <fieldset className="chat-suggest guide-next-steps" aria-label="Next steps">
+    <fieldset className="chat-suggest guide-next-steps" aria-label="Next steps">
         <ul>
           {steps.map((step) => (
             /* The same suggestion can recur in a later answer. Its search box
@@ -127,8 +120,7 @@ export function GuideNextSteps({
             </li>
           ))}
         </ul>
-      </fieldset>
-    </GuideActContext.Provider>
+    </fieldset>
   );
 }
 

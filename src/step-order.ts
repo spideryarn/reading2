@@ -263,11 +263,14 @@ export function previousClientStepName(name: string): string {
  * after the step rather than the file it runs (src/citation-find.ts) and the
  * rate bucket it spends (`citation-find`), which it now matches.
  * `debate-check` was a reader's claim check until the same day, named after
- * the mode rather than the sub-mode it serves (Claims).
+ * the mode rather than the sub-mode it serves (Claims). `referee-claims` was
+ * Referee's Promises job until 2026-10-11, while that sub-mode was called
+ * Claims (plan 261011g); Sources owns the word now.
  */
 export const RETIRED_JOBS: Readonly<Record<string, string>> = {
   "citations-find": "citation-find",
   "debate-check": "sources-claim-check",
+  "referee-claims": "referee-promises",
 };
 
 /** A ledger row's job or step name as it is called now, or the name as it came. */

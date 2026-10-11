@@ -174,7 +174,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   glossary: [".gloss-gloss", ".gloss-name", ".gloss-detail", ".prose-card-term-lead"],
   search: [".srch-hit-why"],
   referee: [
-    ".clm-list .clm-claim",
+    ".prm-list .prm-promise",
     ".crit-why",
     ".mir-note",
     ".ref-scan-opinion-reason",
@@ -414,8 +414,8 @@ describe("voices.css", () => {
       ".cnd-why",
       ".chat-live-line.companion .chat-live-words",
       ".rcp-thread:not(.rcp-thread-key) .rcp-thread-name",
-      ".clm-list .clm-claim",
-      ".clm-why:not(.clm-why-withheld)",
+      ".prm-list .prm-promise",
+      ".prm-why:not(.prm-why-withheld)",
     ]) {
       expect(ai, selector).toContain(selector);
     }

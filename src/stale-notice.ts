@@ -13,7 +13,7 @@
  * clock — the value each mode hook already gives `useRewriteHold`
  * (`generatedAt` for most, `searchedAt` for Reception, the route's
  * `generatedAt` for Skim, the Sketch's or the painting's own identity, the
- * claims run's `createdAt`), or for Search `<runId>@<finishedAt>` per saved
+ * promises run's `createdAt`), or for Search `<runId>@<finishedAt>` per saved
  * run. Making the artefact again re-stamps it, so the new one's notice is a
  * new identity and comes back if that one goes stale too.
  *
@@ -38,7 +38,7 @@ export const STALE_NOTICE_MODES = [
   "search",
   "sketch",
   "illustrated",
-  "claims",
+  "promises",
 ] as const;
 
 export type StaleNoticeMode = (typeof STALE_NOTICE_MODES)[number];
@@ -51,7 +51,10 @@ export function isStaleNoticeMode(x: unknown): x is StaleNoticeMode {
  * **The words a mode's notice was stored under before it was renamed**, and
  * what each is now. Bibliography's was `citations`, Reception's `debate` and
  * Claims' `debate-claims` until 2026-10-09 (plan
- * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md), renamed
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md), and
+ * Referee's Promises' `claims` until 2026-10-11 (plan
+ * docs/plans/261011g-referee-claims-become-promises-and-starter-criteria-wait-for-the-referee-own.md),
+ * when that sub-mode was called Claims; each renamed
  * by expand and contract: the `mode` column's check admits both until the
  * contract narrows it, rows the old code wrote keep the old word until then,
  * and they — and a request from a tab open across the deploy — are read
@@ -63,6 +66,8 @@ export const RETIRED_STALE_NOTICE_MODES: Readonly<Record<string, StaleNoticeMode
   /* Reception's and Claims' until the same plan's Stage 3. */
   debate: "reception",
   "debate-claims": "sources-claims",
+  /* Referee's Promises, called Claims until plan 261011g. */
+  claims: "promises",
 };
 
 /** A retired notice mode's successor, or the value as it came. */
@@ -113,7 +118,7 @@ export function parseStaleNoticeDismissal(body: unknown): StaleNoticeDismissalRe
   }
   const { mode: asked, identities } = body as { mode?: unknown; identities?: unknown };
   /* A tab open across plan 261009w's deploy still says `citations`, `debate`
-     or `debate-claims`. */
+     or `debate-claims`; one across 261011g's says `claims`. */
   const mode = currentStaleNoticeMode(asked);
   if (!isStaleNoticeMode(mode)) return "That is not a mode whose notice can be dismissed";
   if (!Array.isArray(identities) || identities.length === 0 || identities.length > MAX_DISMISSED_IDENTITIES) {

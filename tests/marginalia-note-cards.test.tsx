@@ -13,7 +13,7 @@
  * view's one delegated card (BlockLinkCard.tsx) draws `MARG_TIPS[key]`.
  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
-import { act } from "react";
+import { act, createElement, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CitedWork, FaqQuestion, TimelineEvent } from "../src/types.js";
@@ -132,6 +132,31 @@ describe("a note in the margin", () => {
     });
     expect(card()).toBeNull();
     expect(button.hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("jumps from a cross-passage note to the exact checked words", () => {
+    const onJump = vi.fn();
+    const props = {
+      blockId: "spya-aaaaaa",
+      notes: [
+        {
+          kind: "aside",
+          note: {
+            blockId: "spya-aaaaaa",
+            kind: "tension",
+            text: "The two percentages do not agree.",
+            quote: "12%",
+            to: "spya-bbbbbb",
+            toQuote: "an 8% reduction in errors",
+          },
+        },
+      ],
+      viewer: "owner",
+      onJump,
+    } as ComponentProps<typeof MarginNotesSlot>;
+    act(() => root.render(createElement(MarginNotesSlot, props)));
+    act(() => host.querySelector<HTMLAnchorElement>(".marg-aside-to")?.click());
+    expect(onJump).toHaveBeenCalledWith("spya-bbbbbb", { quotes: ["an 8% reduction in errors"] });
   });
 });
 

@@ -266,7 +266,7 @@
  *     `PUT`. **4 failed:** the pair set (*guards in src/routes.ts that no
  *     contract row allows*), both table cases, and the negative matrix refusing
  *     to send `PUT /api/referee/scan/w1` because the source now answers it.
- * 19. **Two moved rows reordered** — `GET /api/referee/claims/:slug` lifted
+ * 19. **Two moved rows reordered** — `GET /api/referee/promises/:slug` lifted
  *     above `DELETE /api/referee/criteria/:slug/:id`. **1 failed**, and only
  *     one: § `keeps the table in the chain's order`, the expectation written red
  *     first above. Same honest reach as mutation 15.
@@ -1021,9 +1021,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/referee/criteria/w1/w2"],
   },
   {
-    match: { kind: "regex", source: "^\\/api\\/referee\\/claims\\/([\\w.%-]+)$", flags: "" },
+    match: { kind: "regex", source: "^\\/api\\/referee\\/promises\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET", "POST"],
-    witnesses: ["/api/referee/claims/w1"],
+    witnesses: ["/api/referee/promises/w1"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$", flags: "" },
@@ -2454,8 +2454,8 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
         "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
-        "GET regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
-        "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/referee\\/promises\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/promises\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
         // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is;

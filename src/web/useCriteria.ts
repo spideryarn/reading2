@@ -34,7 +34,7 @@ import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
 import { isCriteriaAtCeiling, type SavedCriterion } from "../saved-criteria.js";
 import { isStale } from "../search-stale.js";
-import { criterionRefusalDrafts } from "./criterion-refusal-drafts.js";
+import { criterionRefusalDrafts, criterionStarterLatch } from "./criterion-refusal-drafts.js";
 import { apiFetch, failure, fetchOk, statusOf } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
@@ -55,6 +55,8 @@ export interface CriteriaApi {
    * **Run waits for it**, for the reason given there.
    */
   loaded: boolean;
+  /** Has this referee already pressed Run on one of their own criteria here? */
+  startersUnlocked: boolean;
   /** Did that first fetch fail? The half `loaded` cannot carry. `loadError !== null`. */
   loadFailed: boolean;
   /**
@@ -97,8 +99,10 @@ export function useCriteria(slug: string): CriteriaApi {
   // A queued colour or a stream's re-delete can run after the session changes.
   const madeFor = useMadeFor();
   const drafts = useMemo(() => criterionRefusalDrafts(slug, madeFor), [slug, madeFor]);
+  const starterLatch = useMemo(() => criterionStarterLatch(slug, madeFor), [slug, madeFor]);
   const [rows, setRows] = useState<SavedCriterion[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [startersUnlocked, setStartersUnlocked] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -139,8 +143,13 @@ export function useCriteria(slug: string): CriteriaApi {
 
   useEffect(() => {
     let live = true;
-    setRows(drafts.read());
+    const openingDrafts = drafts.read();
+    setRows(openingDrafts);
     setLoaded(false);
+    // Do not reveal suggestions from a stored latch until the opening read has
+    // settled. A saved refusal draft is still the referee's own work, but it
+    // must not make the loading state look like a known-empty saved list.
+    setStartersUnlocked(false);
     setLoadError(null);
     setFingerprint(null);
     /* With a deadline, because `loaded` is what lets the referee press Run —
@@ -151,6 +160,7 @@ export function useCriteria(slug: string): CriteriaApi {
     read.body
       .then((body) => {
         if (!live) return;
+        let nextRows = drafts.read();
         if (body.error) {
           setLoadError(body.error);
         } else {
@@ -158,7 +168,8 @@ export function useCriteria(slug: string): CriteriaApi {
           // A late acceptance may already have stored a draft's id. The server
           // owns those words now; do not show two rows or revive its old error.
           for (const row of stored) drafts.remove(row.id);
-          setRows([...stored, ...drafts.read()]);
+          nextRows = [...stored, ...drafts.read()];
+          setRows(nextRows);
           /* **Unconditionally, including when the field is missing.** A reply
              that got here is the server's answer about this paper, so
              `undefined` is not silence — it is "we checked and cannot tell",
@@ -171,18 +182,23 @@ export function useCriteria(slug: string): CriteriaApi {
              leaves the fingerprint `null`. */
           setFingerprint({ hash: body.sourceHash });
         }
+        if (nextRows.length > 0) starterLatch.unlock();
+        setStartersUnlocked(nextRows.length > 0 || starterLatch.read());
         setLoaded(true);
       })
       .catch((e: Error) => {
         if (!live) return;
         setLoadError(describeFetchFailure(e));
+        const localDrafts = drafts.read();
+        if (localDrafts.length > 0) starterLatch.unlock();
+        setStartersUnlocked(localDrafts.length > 0 || starterLatch.read());
         setLoaded(true);
       });
     return () => {
       live = false;
       read.abandon();
     };
-  }, [slug, drafts]);
+  }, [slug, drafts, starterLatch]);
 
   /** Replace one row in place, or append it if it is new. */
   const put = useCallback((next: SavedCriterion) => {
@@ -374,11 +390,16 @@ export function useCriteria(slug: string): CriteriaApi {
 
   const ask = useCallback(
     (criterion: string, config: RefereeCriterionConfig) => {
+      // The press, not a successful response, is the point at which the first
+      // question is indisputably the referee's. Keep that fact across a failed
+      // request and across Referee sub-mode remounts in this tab.
+      starterLatch.unlock();
+      setStartersUnlocked(true);
       const id = mintId();
       send(id, criterion.trim(), config, new Date().toISOString(), true);
       return id;
     },
-    [send],
+    [send, starterLatch],
   );
 
   const retry = useCallback(
@@ -467,6 +488,7 @@ export function useCriteria(slug: string): CriteriaApi {
   return {
     criteria: decided,
     loaded,
+    startersUnlocked,
     loadFailed: loadError !== null,
     loadError,
     ask,

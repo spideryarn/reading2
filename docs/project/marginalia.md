@@ -20,7 +20,9 @@ because the two pads only swapped sides.
 
 ## What it shows
 
-**It generates one thing, its own relation words** ([below](#relation-words)). Every other note
+**It has one call of its own**, which generates relation words ([below](#relation-words)) and,
+since 2026-10-11, may add **a few notes of its own** ([§ Notes the model
+writes](#notes-the-model-writes)). Every other note
 comes from something another mode has already stored, and opening the column never runs another
 mode. The owner's lists are read through each mode's *read half*
 (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full mode hook, because the full hook
@@ -42,6 +44,9 @@ one would otherwise be missed; it would not be, so it is not
 
 - **A relation word** (*so*, *but*, *vs*) beside a paragraph where the argument turns —
   [§ Relation words](#relation-words).
+- **A note the model chose to write**, open, under the word: *Tension*, *Recall* or *Note*, a
+  sentence or two, and a link to the other passage where there is one —
+  [§ Notes the model writes](#notes-the-model-writes).
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
   spya-rczgjb). Uncovered rows above the first part (a title, a byline) name the first part, so it is not
@@ -152,9 +157,10 @@ options passed over and GPT Sol's review are in
 
 - **The `relations` step** ([`src/relations.ts`](../../src/relations.ts)): one model call per
   article. Every body paragraph of at least a sentence, bar the first, gets one of ten relations
-  from a closed list (`RELATIONS` in src/types.ts). The model writes no prose. It must answer every
-  listed paragraph; a run that answers fewer than half fails rather than storing a sparse list
-  that would look like an article with few turns. Stored in `article_revisions.relations`.
+  from a closed list (`RELATIONS` in src/types.ts). It must answer every listed paragraph; a run
+  that answers fewer than half fails rather than storing a sparse list that would look like an
+  article with few turns. The same call may write the prose notes below. Stored in
+  `article_revisions.relations`.
 - **Ten are stored, three are drawn.** `DRAWN_RELATIONS` in `notes.ts` is the one place that says
   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
@@ -168,14 +174,14 @@ options passed over and GPT Sol's review are in
   The owner's column mounting is what asks ([`src/web/useRelations.ts`](../../src/web/useRelations.ts),
   through `useAutoRunOnArrival` in [`useAutoRun.ts`](../../src/web/useAutoRun.ts), the rule the
   thread in Summary already used). So it does not matter what showed the column: a press of the
-  toggle, the first-open default that turns it on with nobody pressing anything
-  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)),
-  a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press could
-  not carry it, because the default arrives without one, and a new article would then have had no
-  words until the column was turned off and on.
+  toggle, a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press
+  could not carry the last three. (From 2026-10-05 to 2026-10-11 the first-open default turned the
+  column on too, which is why the rule was made; it no longer does —
+  [url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default).)
   - **One attempt per article per page load**, and unforced, so the step's own stamp check has the
     last word. Turning the column off and on again buys nothing, and a failed run does not loop.
-  - **A stale or outdated list counts as none**, so the next showing rewrites it.
+  - **A stale list is hidden; an outdated one stays on screen.** Either starts one rewrite, and the
+    old words and notes remain visible in the outdated case until their replacements arrive.
   - **Nothing is shown, nothing is spent.** On a window too narrow for the notes the owner's feed
     still reads, but waits to generate until the notes fit on screen. A visitor's column never reaches the hook.
   - **The press arms nothing.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
@@ -185,11 +191,56 @@ options passed over and GPT Sol's review are in
     ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)). That cost a call
     for every article, opened or not. **No backfill**: an article from before gets its words the
     next time its owner has the column open (Greg: *"yes leave that for now"*).
-- **Nothing in the column says it is running.** The notes are drawn without the words, and the
-  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+- **Nothing in the column says it is running.** Notes already supplied by other modes are drawn
+  without the words, and the words and Marginalia's own notes appear when the job finishes, with no
+  reload; the job is in the jobs tray like any other. Metadata has a *Marginalia notes* row (called
+  *Relation words* until 2026-10-11) to run it again.
 - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
   unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
   rewritten one.
+
+## Notes the model writes
+
+> I think we could give the LLM just a bit more freedom to play and experiment, so perhaps it can
+> produce other scribble notes as it sees fit. Perhaps it can explain things that would otherwise
+> be confusing, or provide other notes sparingly that might be helpful to the reader. We don't
+> want to overdo it, though. […] maybe the marginalia mode could highlight really important
+> cross-references, especially if there's an inconsistency or if the reader might benefit from
+> being reminded what that other section said.
+>
+> — Greg, 2026-10-11 (spya-qyuet0)
+
+**The relations call may also write a few notes** (`relations/3`, plan
+[261011o](../plans/261011o-marginalia-off-the-first-open-and-notes-of-its-own.md)). There is no
+second call and no new step: the notes need the same article, the same freshness and the same
+owner-only rule as the words, so they ride on the call that was already there, stored in the same
+`article_revisions.relations` row as `notes` (no migration; a row from before reads as none).
+
+- **Four kinds**, the four Greg named: `tension` (this passage and another seem not to agree),
+  `recall` (what a passage far from here said, which this one leans on), `explain` (a step likely
+  to confuse) and `aside` (anything else, rarely). The stamp says *Tension*, *Recall* or *Note*;
+  its card says what the kind is and that AI wrote it (`NOTE_TIPS` in `tips.ts`).
+- **Both ends are quoted and checked.** Each note quotes the words it is about in its own passage,
+  and a note about another passage quotes that one too; `toNotes` keeps a note only when each quote
+  is in its passage, spacing and all, and stores the article's characters. An id alone could name a
+  real but wrong passage. This proves the join, not the judgement: a *tension* can still be the
+  model misreading, which is why its card says to judge for yourself.
+- **Sparing, in code as well as in the prompt**: at most one note per eight paragraphs asked about,
+  two at least and eight at most (`noteCap`), one per passage, 35 words at most. Every rule runs
+  before the cap. A bad note is dropped and counted in `notesDropped`, and never fails the run:
+  the words are the step's contract and the notes are extra. An article with fewer than two body
+  paragraphs still makes no call, so it gets no notes.
+- **The notes come first in the answer**, before the hundred rows of words. Asked for after them,
+  the model wrote two notes across four articles; asked for first, eleven to fourteen, about one
+  per eighteen paragraphs (the plan's § Measurement).
+- **Open, not shut**, unlike other modes' items: at most a handful, and a shut line would hide the
+  only thing a note has to say. A link to the other passage is the one block link (`BlockRef`), so
+  it has the passage's card and the jump flashes the checked target words.
+- **Owner only**, as the words are.
+
+**Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase
+to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or
+*Tension* note is the few the model judged worth a sentence. Neither reads the other.
 
 ## Every note says where it came from
 
@@ -225,7 +276,8 @@ default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginalia
 it at its earliest surviving block and checks its quote, one small component in
 `MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
 [mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
-forgotten: Quotes, glossary terms, cross-references. The first two already mark
+forgotten: Quotes, glossary terms, cross-references (the few that matter now come as the model's
+own notes, [above](#notes-the-model-writes)). The first two already mark
 the prose.
 
 The constraint each new kind is weighed against is the one the first plan named: the risk is *"a

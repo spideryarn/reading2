@@ -60,6 +60,17 @@ describe("Tutorial's prompt", () => {
     expect(systemOf("tutorial")).toContain("You are a reading tutor");
   });
 
+  /* Plan 261011p: a reader's own line of thought is pointed at Explore, which
+     every owner has since 2026-10-11, and no longer at Chat. */
+  it("points a reader's own line of thought at Explore, not Chat", () => {
+    const system = systemOf("tutorial");
+    const at = system.indexOf("WHEN THEY GO EXPLORING");
+    expect(at).toBeGreaterThan(-1);
+    const section = system.slice(at, system.indexOf("WHAT YOU MAY CLAIM", at));
+    expect(section).toContain("Explore, beside Tutorial in Learn");
+    expect(section).not.toMatch(/\bChat\b/);
+  });
+
   it("sends the same article block as every other kind, so the cache is shared in shape", () => {
     const article = (kind: "chat" | "tutorial") => buildConverseMessages({ ...base, kind })[1];
     expect(article("tutorial")).toEqual(article("chat"));

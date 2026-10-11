@@ -831,13 +831,13 @@ export type Task =
      and up to twenty claims of quoted passages out of it — so a cost report that
      folded it into criteria would report the wrong shape as well as the wrong
      name. */
-  | "referee-claims"
+  | "referee-promises"
   /* Candidates — who could review this paper, for an editor —
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4. **Chat's shape
      exactly**: a streamed multi-turn conversation with tools, answered by
      `converse` with a third system prompt. Its own task rather than `chat`'s all
      the same, and here the reason is sharper than the one `quiz-mark` and
-     `referee-claims` give about naming. This is the only conversation in the app
+     `referee-promises` give about naming. This is the only conversation in the app
      that runs a web search on nearly every turn, several per turn, over a whole
      paper — so its cost per turn does not look like chat's, and folding the two
      together would move the chat line in the cost report whenever somebody spent
@@ -1236,7 +1236,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* Capable, like the two beside it. This reads a whole paper, decides what it
      claims about itself, and answers with quoted block ids — the same job of
      work as a criterion, over more of the paper at once. */
-  "referee-claims": "capable",
+  "referee-promises": "capable",
   /* Capable, like `chat`, which it is a second personality of. It reads a whole
      paper, decides what expertise judging it would take, and then weighs search
      results against that — and the whole feature is worthless if the weighing is
@@ -1516,7 +1516,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "referee-mirror": "chat",
   "referee-hidden-check": "chat",
   "referee-criteria": "chat",
-  "referee-claims": "chat",
+  "referee-promises": "chat",
   "referee-candidates": "chat",
   "pdf-frontmatter": "chat",
   /* **The one pipeline step on this wire**, and the reason is `openrouter:web_search`:
@@ -1701,7 +1701,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "referee-mirror": "SPIDERYARN_REFEREE_MIRROR_MODEL",
   "referee-hidden-check": "SPIDERYARN_REFEREE_HIDDEN_CHECK_MODEL",
   "referee-criteria": "SPIDERYARN_REFEREE_CRITERIA_MODEL",
-  "referee-claims": "SPIDERYARN_REFEREE_CLAIMS_MODEL",
+  "referee-promises": "SPIDERYARN_REFEREE_PROMISES_MODEL",
   "referee-candidates": "SPIDERYARN_REFEREE_CANDIDATES_MODEL",
   /* It has one because it is on the chat wire, where every other task does —
      and because the one comparison this stage will actually want is *kept

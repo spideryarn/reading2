@@ -171,7 +171,7 @@ export const STREAM_TOKENS_PER_SECOND = 95;
  * `budgetFor`.
  *
  * A deadline and a token ceiling are two limits on one stream, and sizing them
- * separately is how a call ends up with one it can never reach: Referee Claims
+ * separately is how a call ends up with one it can never reach: Referee Promises
  * was given room for a large answer plus thinking and, for a draft, a deadline
  * sized for the answer alone, which would have killed exactly the run that
  * thought *and* wrote at length (GPT Sol, plan 260928c F1). The deadline only

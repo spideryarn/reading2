@@ -1,16 +1,18 @@
 ---
 title: Adding an article
 summary: How to add an article from a web address or a file, and what to try when one will not come in.
-keywords: add import paste url link pdf upload file html save page paywall failed error stuck bookmarklet new article stop cancel give up
+keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet new article stop cancel give up
 related: shelf, plans, first-article
 ---
 
 Paste a web address into **Add an article** on your shelf and press **Add**. You can leave off the
-`https://`. To add a file, press **File** or drop one on that box: a PDF, or a web page you saved as
-HTML. One file is read in full. Choose several at once and each is added with only its title,
+`https://`. To add a file, press **File** or drop one on that box: a PDF, a web page you saved as
+HTML, a Word document (`.docx`), or a Markdown (`.md`) or plain text (`.txt`) file. Pictures in a
+Word document are left out for now; its words, headings, lists and tables come in. One file is
+read in full. Choose several at once and each is added with only its title,
 authors and abstract read; open one and press **Read this** when you want the whole of it.
 
-![The Add an article box: an address field, a File button and an Add button](images/adding-articles.png "Add an article, on your shelf: paste an address and press Add, or press File for a PDF or a saved web page.")
+![The Add an article box: an address field with a link icon, a File button and an Add button](images/adding-articles.png "Add an article, on your shelf: paste an address and press Add, or press File for a PDF or a saved web page.")
 
 You can also add a page from its address: go to `/add/` followed by the full URL, for example
 `spideryarn.com/add/https://example.com/essay`. That makes a bookmarklet easy.

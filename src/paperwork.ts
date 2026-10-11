@@ -135,6 +135,6 @@ export const PAPERWORK_EXEMPT: Record<string, string> = {
   "src/quiz-mark.ts": "marks the reader's answer to a question Quiz already chose",
   "src/crossrefs.ts": "links one passage to another; a link into the paperwork is rare and harmless",
   "src/crossrefs-fingerprint.ts": "renders the article only to hash it for crossrefs.ts",
-  "src/referee-claims-run.ts": "for a peer reviewer, for whom the title's claims are claims",
+  "src/referee-promises-run.ts": "for a peer reviewer, for whom the title's claims are claims",
   "src/referee-criteria-run.ts": "ethics, data availability and conflicts are what a reviewer checks",
 };

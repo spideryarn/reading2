@@ -384,7 +384,7 @@ export function useSearch(
         } else {
           setRuns(body.runs ?? []);
           /* **Guarded, and here that guard is load-bearing** — unlike in
-             useCriteria.ts and useClaims.ts, whose GETs do send a fingerprint
+             useCriteria.ts and usePromises.ts, whose GETs do send a fingerprint
              and where the same guard made "we checked and cannot tell"
              unreachable, because a `sourceHash` of `undefined` does not survive
              `JSON.stringify` and so is absent rather than present-and-undefined

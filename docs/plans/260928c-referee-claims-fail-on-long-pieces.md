@@ -14,7 +14,7 @@ before it wrote anything*, under both the old prompt and the new one.
 
 **The model spends the whole allowance thinking, and never gets to the answer.**
 
-`runClaimsStream` ([src/referee-claims-run.ts](../../src/referee-claims-run.ts)) sends Sonnet 5
+`runClaimsStream` ([src/referee-claims-run.ts](../../src/referee-promises-run.ts)) sends Sonnet 5
 through OpenRouter with `max_tokens: 12000` and no `reasoning` field. On this route Sonnet 5 thinks
 before it answers, and **`max_tokens` covers the thinking as well as the answer** — the same fact
 [src/token-budget.ts](../../src/token-budget.ts) was written around for the pipeline stages after

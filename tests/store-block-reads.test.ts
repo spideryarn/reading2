@@ -101,8 +101,8 @@ describe("the relations fingerprint read", () => {
  *
  * Until 2026-09-02 there was no such function and no such test. There were
  * three byte-identical private copies of this query, in `pg-searches.ts`,
- * `pg-referee-criteria.ts` and `pg-referee-claims.ts`. **One of them** —
- * `pg-referee-claims.ts` — called itself "the third copy of this query in
+ * `pg-referee-criteria.ts` and `pg-referee-promises.ts`. **One of them** —
+ * `pg-referee-promises.ts` — called itself "the third copy of this query in
  * src/store/" and named the two things that must not drift, the four columns
  * and the `order by`. Nothing compared them and nothing tested any of them, so
  * that sentence was prose asserting a property nothing held. The copies are now

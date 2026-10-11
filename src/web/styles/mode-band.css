@@ -775,7 +775,9 @@ svg.band-waiting-ghost { flex: none; }
    words, wrapping under it on a narrow band. */
 .guide-next-steps { margin: 0.2rem 0 0.8rem; padding: 0; border: 0; min-width: 0; }
 .guide-next-steps .chat-suggest-btn { display: flex; align-items: center; gap: 0.4rem; }
-.guide-next-search { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.guide-next-search { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; }
+/* The column is centred and each item sized to its words (chat-actions.css § .chat-suggest ul); a search step is a box to type in, so it keeps the width. */
+.guide-next-steps li:has(> .guide-next-search) { align-self: stretch; }
 .guide-next-search-box {
   flex: 1 1 10rem;
   min-width: 0;
@@ -1217,6 +1219,11 @@ svg.band-waiting-ghost { flex: none; }
   gap: 0.4rem;
   padding: 0.5rem;
   border-top: 1px solid var(--rule);
+  /* **A strip of its own, so the box is noticed** (Greg, spya-srg5fa: *"I don't
+     think people initially noticed it"*; plan 261011m). The box keeps the page
+     ground every band field shares (§ text boxes in the bands), and the raised
+     strip around it is what sets it apart from the transcript above. */
+  background: var(--surface-raised);
 }
 /* **The dictation strip gets a line of its own.** Until 2026-09-13 the
    full-width *Use your profile* row sat before it in the DOM and forced every
@@ -1249,9 +1256,9 @@ svg.band-waiting-ghost { flex: none; }
   /* Height is set inline by the component as the content grows; this is the
      floor, and `resize: none` is what stops the reader dragging the box over
      the article it is supposed to sit beside. */
-  max-height: 10rem;
+  max-height: 12.5rem;
   font-family: var(--font-ui);
-  font-size: 0.94rem;
+  font-size: 1rem;
   line-height: 1.4;
   resize: none;
 }

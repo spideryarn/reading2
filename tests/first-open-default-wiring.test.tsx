@@ -9,7 +9,8 @@
  * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
  *
  * jsdom lays nothing out, so the window is its default 1024px wide: room for
- * Summary and for the notes. The widths themselves are the other file's.
+ * a band. The widths themselves are the other file's. Marginalia's notes came
+ * too until 2026-10-11 (spya-mw08mv).
  */
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -71,7 +72,7 @@ describe("opening an article this browser has no key for", () => {
   it("applies the default once under StrictMode and does not reapply on a switch change", () => {
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     act(() => root.render(<StrictMode><Page slug="x" /></StrictMode>));
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     history.replaceState(null, "", "/read/x");
     setting.on = false;
     act(() => root.render(<StrictMode><Page slug="x" /></StrictMode>));
@@ -80,25 +81,25 @@ describe("opening an article this browser has no key for", () => {
 
   it("claims each new slug, and leaves the previous one's key as that one left it", () => {
     open();
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     history.replaceState(null, "", "/read/y");
     act(() => root.render(<Page slug="y" />));
-    expect(location.pathname + location.search).toBe("/read/y?mode=chat&guide=1&margin=1");
-    expect(window.localStorage.getItem(KEY)).toBe("?margin=1");
+    expect(location.pathname + location.search).toBe("/read/y?mode=chat&guide=1");
+    expect(window.localStorage.getItem(KEY)).toBe("");
   });
 
-  it("arrives in the guide with the notes, for a reader whose switch is on", () => {
+  it("arrives in the guide, without the notes, for a reader whose switch is on", () => {
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
-    expect(location.pathname + location.search).toBe("/read/x?mode=chat&guide=1&margin=1");
+    expect(location.pathname + location.search).toBe("/read/x?mode=chat&guide=1");
   });
 
-  it("arrives in the guide with the notes when the switch is off too", () => {
+  it("arrives in the guide when the switch is off too", () => {
     /* Summary alone until 2026-10-05, when Marginalia left the switch
        (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
     Object.assign(setting, { on: false, loaded: true, signedIn: true });
     open();
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("does not wait for the settings store: a read that never answers still lands in the default", () => {
@@ -108,12 +109,12 @@ describe("opening an article this browser has no key for", () => {
        (App hands this hook a null slug until the session is known). */
     Object.assign(setting, { loaded: false, signedIn: false });
     open();
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("is applied once: the settings store answering later does not apply it again", () => {
     open();
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
     history.replaceState(null, "", "/read/x?at=spya-aaaaaa");
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
@@ -147,7 +148,7 @@ describe("opening one it has seen", () => {
     }
     navigate("/read/x");
     open();
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("keeps the existing restoration on metadata and does not restore again on a view change", () => {
@@ -200,7 +201,7 @@ describe("opening one it has seen", () => {
     root = createRoot(host);
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("and a second signed-out visit is not a first open again", () => {
@@ -224,6 +225,6 @@ describe("opening one it has seen", () => {
     root = createRoot(host);
     history.replaceState(null, "", "/read/x");
     act(() => root.render(<Page slug="x" readerId={B} />));
-    expect(location.search, "the next reader gets the default, not the first one's view").toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search, "the next reader gets the default, not the first one's view").toBe("?mode=chat&guide=1");
   });
 });

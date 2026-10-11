@@ -48,7 +48,7 @@
 import { useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type ChosenFile, formatBytes, uploadLimits, uploadProblem } from "../uploads.js";
+import { type ChosenFile, formatBytes, UPLOAD_ACCEPT, uploadLimits, uploadProblem } from "../uploads.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { addUploadHref, navigate } from "./router.js";
 import { batchUpload } from "./batchUpload.js";
@@ -272,7 +272,7 @@ export function UploadPicker({
       <input
         ref={input}
         type="file"
-        accept="application/pdf,.pdf,text/html,.html,.htm"
+        accept={UPLOAD_ACCEPT}
         /* Several at once go to the batch — see `take`. */
         multiple
         className="tw:hidden"
@@ -290,7 +290,7 @@ export function UploadPicker({
         /* The words the dashed box used to say. They were the only thing
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
-        title="Choose a PDF or an HTML file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
+        title="Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
         /* **The caps, for somebody who cannot see the caption.** The line under
            this row states them; this is what makes a screen reader read it out
            as part of the control rather than as a stray paragraph after it.

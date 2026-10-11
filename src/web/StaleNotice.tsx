@@ -16,7 +16,7 @@
  * (`close-x`, so it is every other close cross's size — tests/close-cross.test.ts),
  * a line saying why a failed × did not stick, and the panel's own run button
  * below, as `action`. `className` is the box: `gloss-stale` for most,
- * `quotes-stale`, `srch-stale` or `clm-stale` where a mode has its own.
+ * `quotes-stale`, `srch-stale` or `prm-stale` where a mode has its own.
  *
  * tests/stale-notice-guard.test.ts fails a stale banner drawn anywhere else.
  */

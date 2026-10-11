@@ -385,7 +385,7 @@ and `renderedText` ([`annotate.ts`](../../src/web/annotate.ts)) is
 block**, 551 of them per call on the test article.
 
 Six exported resolvers call it. Two of them **inside a loop**:
-[`ClaimsPanel.tsx`](../../src/web/ClaimsPanel.tsx) once per shown claim,
+[`ClaimsPanel.tsx`](../../src/web/PromisesPanel.tsx) once per shown claim,
 [`CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) once per ticked criterion — so referee mode
 was **O(claims × blocks)** parses, and ticking one criterion paid for all of them again.
 [`App.tsx`](../../src/web/App.tsx) paid a whole pass per search keypress, and `foldCase` paid a

@@ -223,6 +223,29 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
     expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS);
   });
 
+  /* **Several vouchers to one person add up** — Greg, 2026-10-11 (spya-dkddku):
+     *"It should be possible to send multiple gift vouchers to the same person
+     and they're additive."* Plan 261011k. */
+  it("adds several vouchers to one address, a later one too, and a revoke takes back only its own", async () => {
+    const user = { id: READER, email: emailOf(READER) };
+    await givenVoucher(READER, 20);
+    const ten = await givenVoucher(READER, 10);
+    expect(await claims(user, { lookup: confirmed(READER) })).toBe(2);
+    expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS + 30);
+    await sweepReservations(READER);
+
+    /* Made after the claim: waits for the next visit, then adds again. */
+    await givenVoucher(READER, 5);
+    expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS + 30);
+    await sweepReservations(READER);
+    expect(await claims(user, { lookup: confirmed(READER) })).toBe(1);
+    expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS + 35);
+    await sweepReservations(READER);
+
+    expect(await updateVoucher(ten, { revoked: true })).toEqual({ kind: "updated" });
+    expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS + 25);
+  });
+
   it("does not claim a voucher addressed to somebody else", async () => {
     await givenVoucher(OTHER, 20);
     expect(await claims({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(0);

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
 import { checkTree } from "../src/tree-invariants.js";
-import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, TreeNode } from "../src/types.js";
+import type { Arc, Block, BlockId, CitedWork, FaqQuestion, Idea, MarginNote, TimelineEvent, Tree, TreeNode } from "../src/types.js";
 import {
   type MarginClaim,
   type MarginComment,
@@ -703,5 +703,45 @@ describe("marginaliaNotes, relation words (plan 261003f)", () => {
       }).get("spya-aaaaa2") ?? []
     ).map((n) => n.kind);
     expect(kinds).toEqual(["relation", "question", "faq"]);
+  });
+});
+
+/* The notes the relations call may write — plan 261011o. */
+describe("marginaliaNotes, the model's own notes (plan 261011o)", () => {
+  const note = (blockId: string, to: string | null = null): MarginNote => ({
+    blockId: blockId as BlockId,
+    kind: to === null ? "explain" : "tension",
+    text: `about ${blockId}`,
+    quote: "q",
+    to: to as BlockId | null,
+    toQuote: to === null ? null : "t",
+  });
+
+  it("puts a note under its block's relation word and above the part's question", () => {
+    const tree2 = {
+      ...tree,
+      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
+    } as Tree;
+    const kinds = (
+      marginaliaNotes(tree2, quoted, null, {
+        relations: { "spya-aaaaa2": "but" },
+        notes: [note("spya-aaaaa2")],
+      }).get("spya-aaaaa2") ?? []
+    ).map((n) => n.kind);
+    expect(kinds).toEqual(["relation", "aside", "question"]);
+  });
+
+  it("places notes in article order, whatever order the model wrote them in", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      notes: [note("spya-aaaaa5"), note("spya-aaaaa2", "spya-aaaaa4")],
+    });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa2", "spya-aaaaa5"]);
+  });
+
+  it("leaves out a note beside, or pointing at, a passage this article no longer has", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      notes: [note("spya-zzzzzz"), note("spya-aaaaa2", "spya-zzzzzz")],
+    });
+    expect(notes.size).toBe(0);
   });
 });

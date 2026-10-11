@@ -1252,26 +1252,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "file to Postgres never moved its ledger at all. The 2026-09-03 witness agrees: it recorded " +
       "`ai-calls-fs:fsCostStore.record` here. Stage C is what takes it.",
   },
-  "tests/referee-claims-omitted.test.ts": {
+  "tests/referee-promises-omitted.test.ts": {
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` because " +
       "the map shrinks by re-running the witness JSON at the end of the stage, not " +
-      "by re-labelling a file whose conversion is done. `claimsOmitted` was computed by the " +
+      "by re-labelling a file whose conversion is done. `promisesOmitted` was computed by the " +
       "validator, printed by the panel, and never carried between the two — and the file was " +
       "checking the one store that cannot have that bug, since a JSON file carries any key it is " +
       "handed while a column has to be named. It now pins `postgres`, seeds through " +
-      "`scratchArticleInPg` and reads back through `refereeClaimsStore.load`. Watched red by " +
-      "deleting the `claimsOmitted` spread from `finish` in src/store/pg-referee-claims.ts.",
+      "`scratchArticleInPg` and reads back through `refereePromisesStore.load`. Watched red by " +
+      "deleting the `promisesOmitted` spread from `finish` in src/store/pg-referee-promises.ts.",
   },
-  "tests/referee-claims-routes.test.ts": {
+  "tests/referee-promises-routes.test.ts": {
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
       "the witness is re-run, which is what takes a converted file off this map. This is the " +
       "family whose absence let Claims ship filesystem-only and answer 501 in production, so " +
       "converting it is the postmortem's own remedy. **Two cases were dropped rather than " +
-      "translated**: the 400 out of `claimsProblem` — *this article has no text yet* — cannot be " +
+      "translated**: the 400 out of `promisesProblem` — *this article has no text yet* — cannot be " +
       "reached under Postgres at all, because `reasonsNotToPublish` refuses to publish a revision " +
       "with no blocks, so neither it nor *writes nothing when it refuses* has a fixture that can " +
       "exist. The ordering claim they carried survives on the 404 case. Watched red twice: the " +
@@ -1679,7 +1679,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "every referee write. Parity stopped existing at the hinge; the literals did not, and they " +
       "are what this file was really holding. Two have no second home anywhere: a valence of −80 " +
       "beside a confidence of 55 (the `clampConfidence` trap) and the only guard on " +
-      "`CLAIMS_ORPHAN_GRACE_MS` outside `tests/store-pg-referee-claims.test.ts`. The two walks " +
+      "`PROMISES_ORPHAN_GRACE_MS` outside `tests/store-pg-referee-promises.test.ts`. The two walks " +
       "kept their steps and now assert at each one whose comment names what it can break.",
   },
   "tests/store-parity.test.ts": {
@@ -2527,9 +2527,9 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 4, blindSpots: 2, blocksWithoutJudgement: 4 },
   "tests/quiz-step-registration.test.ts":
     { date: "2026-09-05", stage: "D", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 0 },
-  "tests/referee-claims-omitted.test.ts":
+  "tests/referee-promises-omitted.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 2 },
-  "tests/referee-claims-routes.test.ts":
+  "tests/referee-promises-routes.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 1 },
   "tests/referee-criteria-routes.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 4, blindSpots: 4, blocksWithoutJudgement: 1 },
@@ -2820,6 +2820,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/bibliography-expand-pg.test.ts": "private-postgres",
   /* Plan 261009w Stage 3: the same for Reception, Claims and the claim-check table's view. */
   "tests/reception-expand-pg.test.ts": "private-postgres",
+  /* Plan 261011g: the old Referee Claims store's statements through the `referee_claims` view. */
+  "tests/referee-promises-expand-pg.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
   /* Stage 3b's, arriving from this worktree rather than from `dev`, and caught
@@ -3366,13 +3368,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* The five referee suites below were converted together in stage B on
      2026-09-04, and they take the private lane for one reason between them:
      each seeds its own throwaway article through `scratchArticleInPg` and then
-     writes reader state — a claims run, criteria, comments — against it. None
+     writes reader state — a promises run, criteria, comments — against it. None
      goes near GoTrue, and the only Storage traffic is the corpus bytes the
      seeder dedups, except `referee-scan-route`, which stores four small raw
      documents of its own under content-addressed names nothing else can
      collide with. */
-  "tests/referee-claims-omitted.test.ts": "private-postgres",
-  "tests/referee-claims-routes.test.ts": "private-postgres",
+  "tests/referee-promises-omitted.test.ts": "private-postgres",
+  "tests/referee-promises-routes.test.ts": "private-postgres",
   "tests/referee-criteria-routes.test.ts": "private-postgres",
   "tests/referee-criteria-store.test.ts": "private-postgres",
   "tests/referee-mirror-route.test.ts": "private-postgres",
@@ -3509,7 +3511,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-lookups-pg.test.ts": "private-postgres",
   "tests/store-parity-referee.test.ts": "private-postgres",
   "tests/store-parity.test.ts": "private-postgres",
-  "tests/store-pg-referee-claims.test.ts": "private-postgres",
+  "tests/store-pg-referee-promises.test.ts": "private-postgres",
   "tests/store-pg-session.test.ts": "private-postgres",
   "tests/store-publish-guards.test.ts": "private-postgres",
   "tests/store-raw-source-race.test.ts": "private-postgres",
@@ -4104,7 +4106,7 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "seed goes in beside the other two.",
     },
   },
-  "tests/store-pg-referee-claims.test.ts": {
+  "tests/store-pg-referee-promises.test.ts": {
     "00000000-0000-4000-8000-0000000000f4": {
       kind: "no-row-needed",
       why:

@@ -674,6 +674,25 @@ describe("Author gifts", () => {
     expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { recipientName: "Ann Author" } }]);
   });
 
+  /* Plan 261011k, Greg 2026-10-11 (spya-cfbp0q). */
+  it("replaces the address from a pasted `Name <address>`, fills an empty name, and saves both diffs", async () => {
+    giftsAnswer = () => [gift({ email: "old@example.test", recipientName: null })];
+    await mount();
+    const c = card(DRAFT);
+    await act(async () => button(c, "Edit")?.click());
+    const email = c?.querySelector('input[aria-label="Email address"]') as HTMLInputElement;
+    await act(async () => sets(email, "Ann Author <ann@example.test>"));
+    await act(async () => button(c, "Save")?.click());
+    await settle();
+    expect(writes()).toEqual([
+      {
+        method: "PATCH",
+        url: `/api/admin/author-gifts/${DRAFT}`,
+        body: { email: "ann@example.test", recipientName: "Ann Author" },
+      },
+    ]);
+  });
+
   it("discards a draft, and restores a discarded one", async () => {
     giftsAnswer = () => [gift(), gift({ id: SENT, status: "discarded", discardedAt: "2026-10-09T12:00:00Z" })];
     await mount();

@@ -61,8 +61,8 @@
  *
  * Since 2026-10-05, for a signed-in reader: a bare address with **no key at
  * all** for the slug opens in a band where one fits beside the prose — the
- * guide since 2026-10-07, Summary before that — with Marginalia's notes too
- * where those fit. It is the same decision with one more case, and the same rule: the
+ * guide since 2026-10-07, Summary before that. (Marginalia's notes came too
+ * where those fit, from 2026-10-05 to 2026-10-11.) It is the same decision with one more case, and the same rule: the
  * link always wins. So that "no key" means *never opened by this reader in this browser*, an
  * empty view is now stored as `""` rather than removed, and a storage that
  * cannot be read or written means no default rather than one on every visit.
@@ -79,9 +79,8 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { type ArticleView, liftedLegacySearch, onAddressChange, parseRoute } from "./router.js";
 import { type BandMode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { bandCoversProse } from "./layout.js";
-import { notesFit } from "./marginalia/press.js";
 import { storageReader } from "./lib/storage-reader.js";
-import { rootFontPx, usableWidth } from "./reader/measure.js";
+import { usableWidth } from "./reader/measure.js";
 import { peekAskPurpose } from "./ask-purpose.js";
 import { firstOpenHeld, GUIDE_FIRST_OPEN, holdFirstOpen, releaseWhenDecided } from "./first-open-purpose.js";
 
@@ -626,33 +625,27 @@ export function writeLastView(
 /**
  * **What the default is, for a window this wide** — `""` for the article alone.
  *
- * Asked of the two functions the reading view itself uses, so the default can
- * never name a column the layout would then decline to draw: `bandCoversProse`
- * (a band would lie over the prose — below 700px with the rail) and `notesFit`
- * beside Summary's `roomy` band (from 900px). The widths are theirs; the tests
- * sit either side of each.
+ * Asked of the function the reading view itself uses, so the default can
+ * never name a band the layout would then decline to draw: `bandCoversProse`
+ * (a band would lie over the prose — below 700px with the rail). The width is
+ * its; the tests sit either side of it.
  *
- * **Not a question for the experimental switch since 2026-10-05**, when
- * Marginalia left it (spya-vv54j2); until then a third argument kept the notes
- * out for a reader whose switch was off.
- * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
+ * **No Marginalia since 2026-10-11.** It added `&margin=1` from 900px from
+ * 2026-10-05, until Greg took it back (spya-mw08mv):
+ *
+ * > Actually I think the UI complexity is overwhelming for new users so let's
+ * > not open Marginalia mode by default.
+ *
+ * So a first open no longer spends on the column's relation words either.
+ * docs/plans/261011o-marginalia-off-the-first-open-and-notes-of-its-own.md.
  *
  * `?mode=chat&guide=1` starts nothing on arrival: Chat turns `guide=1` into
  * the stored guide or an empty one, and the guide's greeting is drawn, not
  * asked for (GuideGreeting.tsx), so the reader's first message is its first
- * model call. **`?margin=1` does start something, on purpose, since
- * 2026-10-05**: the column asks for its relation words when it is shown, and
- * this default is the case Greg's decision was made for (useRelations.ts) —
- * one call, once per article, for its owner.
+ * model call.
  */
-export function firstOpenSearch(windowWidth: number, rootFontPx: number): string {
-  if (bandCoversProse(windowWidth)) return "";
-  /* Measured beside Summary's `roomy` band, as it was when Summary was the
-     default, though the guide opens Chat's standard one: the marginalia
-     admission in layout.ts § `fitBoth` happens before `bandWidth` sees the
-     shape, so `.both` is the same for the two (plan 261007j F4). */
-  const notes = notesFit({ windowWidth, bandShape: "roomy", rootFontPx }, true).both;
-  return notes ? `${GUIDE_FIRST_OPEN}&margin=1` : GUIDE_FIRST_OPEN;
+export function firstOpenSearch(windowWidth: number): string {
+  return bandCoversProse(windowWidth) ? "" : GUIDE_FIRST_OPEN;
 }
 
 /**
@@ -796,7 +789,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
        has answered. Every arrival holds afresh or drops the hold. */
     holdFirstOpen(
       firstOpenFor.current !== null && peekAskPurpose(slug)
-        ? { slug, readerId, ordinary: firstOpenSearch(usableWidth(), rootFontPx()) }
+        ? { slug, readerId, ordinary: firstOpenSearch(usableWidth()) }
         : null,
     );
     /* A view change keeps the old restoration rule: only a new slug (or a new
@@ -845,7 +838,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
     /* `firstOpenHref` still checks that the address names this arrival and
        carries no explicit article state. */
     if (firstOpenHeld(slug, readerId)) releaseWhenDecided(slug, readerId, apply);
-    else apply(firstOpenSearch(usableWidth(), rootFontPx()));
+    else apply(firstOpenSearch(usableWidth()));
   }, [slug, view, readerId]);
 
   useEffect(() => {

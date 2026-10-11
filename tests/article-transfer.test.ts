@@ -184,7 +184,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
      values ($1, 'b1', 'q1', 'What?', 'my answer', 'a reply')`,
     [a.id],
   );
-  await q("insert into spideryarn.referee_claims (article_id, owner_id, status) values ($1, $2, 'done')", [a.id, owner]);
+  await q("insert into spideryarn.referee_promises (article_id, owner_id, status) values ($1, $2, 'done')", [a.id, owner]);
   await q(
     `insert into spideryarn.referee_hidden_checks (article_id, owner_id, judgments, unanswered, not_sent, model, finished_at)
      values ($1, $2, '[]', 0, 0, 'm', now())`,
@@ -234,7 +234,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
     [owner, a.id, a.block],
   );
   return new Set<ReaderStateTable>([
-    "referee_criteria", "comments", "chat_threads", "chat_messages", "quiz_attempts", "referee_claims",
+    "referee_criteria", "comments", "chat_threads", "chat_messages", "quiz_attempts", "referee_promises",
     "referee_hidden_checks", "sources_claim_checks", "search_runs", "article_tags", "glossary_hidden_entries",
     "glossary_lookups", "citation_finds", "citation_investigations", "reading_time", "stale_notice_dismissals",
     "command_suggestion_dismissals", "link_summaries",

@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -147,8 +147,6 @@ import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 import { chatDraftsFor } from "./chat-draft.js";
-import type { Answered } from "./chat/controller.js";
-import { type GuideAct, GuideActContext, useGuideAct } from "./guide-acts.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
 
@@ -201,12 +199,6 @@ interface Props {
   live?: LiveApi | undefined;
   /** Null creates a chat; returning its id lets the panel carry the unsent draft with it. */
   onStartLive?: ((threadId: string | null) => string | undefined) | undefined;
-  /**
-   * Hear each answer that finishes arriving in this tab — `useChat`'s
-   * `onAnswered`. Only the guide listens: its answer may press one of its own
-   * buttons (guide-acts.ts, plan 261007p). Absent, nothing acts.
-   */
-  onAnswered?: ((listener: (answered: Answered) => void) => () => void) | undefined;
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
@@ -478,7 +470,6 @@ export function ChatPanel({
   subMode,
   live,
   onStartLive,
-  onAnswered,
   origin,
   onOrigin,
 }: Props) {
@@ -491,8 +482,6 @@ export function ChatPanel({
   /* Among `threads`, never among `listed`: what the list draws and what may
      be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
-  /* The event and its act outlive the transcript's server-id remount. */
-  const guideAct = useGuideAct(open?.id ?? null, open?.kind, true, onAnswered);
   /** What the list draws. */
   const rows = listed ?? threads;
   // A stopped session retains recovery text. It must never appear in a different thread.
@@ -779,7 +768,6 @@ export function ChatPanel({
           kind={open.kind}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
-          guideAct={guideAct}
           articleTitle={articleTitle}
         />
       ) : learn ? (
@@ -997,7 +985,12 @@ const SHORT_VIEWPORT = "(max-height: 500px)";
  * **The composer's floor and roof**: the rows it rests at, and the height in
  * px it may grow to with what is typed or dictated.
  *
- * Chat is one row growing to 160px — a question is a sentence. Learn is six
+ * Chat is two rows growing to 200px: a question is a sentence or two, and a
+ * one-row box went unnoticed under the guide's suggestion buttons (Greg,
+ * spya-srg5fa, 2026-10-11: *"can you make the input box larger and a tiny bit
+ * more prominent? I don't think people initially noticed it"*; plan 261011m).
+ * On a short viewport it rests at one row, so the transcript keeps the
+ * room. Learn is six
  * rows growing to 360px: a spoken Learn turn is a paragraph or three, and a
  * box that stops at 160px turns the reader's own words into a four-line
  * scrolling window they cannot read back before sending. On a short viewport
@@ -1007,7 +1000,7 @@ const SHORT_VIEWPORT = "(max-height: 500px)";
  * check, 2026-10-01). Plan 261001m § 5.
  */
 function boxSize(learn: boolean, short: boolean): { rows: number; roof: () => number } {
-  if (!learn) return { rows: 1, roof: () => 160 };
+  if (!learn) return short ? { rows: 1, roof: () => 160 } : { rows: 2, roof: () => 200 };
   if (!short) return { rows: 6, roof: () => 360 };
   return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
@@ -1510,8 +1503,6 @@ export function Conversation({
   sized = "fixed",
   live,
   onStartLive,
-  onAnswered,
-  guideAct,
   articleTitle,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
@@ -1559,21 +1550,8 @@ export function Conversation({
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
-  /** See `onAnswered` in Props. */
-  onAnswered?: ((listener: (answered: Answered) => void) => () => void) | undefined;
-  /** Owned by ChatPanel so a server-id correction cannot discard it with this keyed transcript. */
-  guideAct?: GuideAct | null | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
-  /**
-   * **The guide's one act for the answer that has just finished here**
-   * (guide-acts.ts, plan 261007p). Made only on the controller's `Answered`
-   * event for this conversation, while it is mounted and shown — never from a
-   * transcript that arrived some other way — and handed to that answer's chips
-   * alone. The effect after it spends it once the commit its chips' effects
-   * ran in is over, so nothing that mounts later can act on it.
-   */
-  const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
   /* **The guide's greeting** (plan 261009i): drawn only by a conversation
      that was empty when this mount first saw it, and snapshotted only while it
      is still empty. `usePurpose` is asynchronous; if the reader sends before
@@ -1584,19 +1562,6 @@ export function Conversation({
   const guideRead = usePurpose(kind === "guide" ? slug : null);
   const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
   const greetsHere = useRef(thread.messages.length === 0);
-  const act = guideAct ?? ownAct;
-  /* **Offered, and spent, only once this conversation draws that answer as
-     finished.** The `Answered` event can land before the store's notification
-     does (chat/controller.ts batches those), and then this render still has
-     the answer pending, its last token held back by `partial`: spending the
-     act in that commit left the chip to mount later onto a spent act, so the
-     guide said "I've opened it" and nothing opened
-     (tests/guide-acts-live-stream.test.tsx). */
-  const drawnAct =
-    act !== null && thread.messages.some((m) => m.id === act.messageId && m.status === "done") ? act : null;
-  useEffect(() => {
-    if (drawnAct !== null) drawnAct.used = true;
-  }, [drawnAct]);
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
   const busy = last?.status === "pending";
@@ -2049,7 +2014,7 @@ export function Conversation({
             <Suggestions onAsk={(q) => onSend(q)} />
           ))}
         {thread.messages.map((m, i) => (
-          <GuideActContext.Provider key={m.id} value={drawnAct !== null && drawnAct.messageId === m.id ? drawnAct : null}>
+          <Fragment key={m.id}>
           <Turn
             message={m}
             kind={kind}
@@ -2093,10 +2058,9 @@ export function Conversation({
           {/* The guide's offers to save their reason or About you, each a
               card they press (GuideSaveOffer.tsx, plan 261009q). */}
           {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
-          </GuideActContext.Provider>
+          </Fragment>
         ))}
-        {/* The guide's next steps, under its latest answer only, and outside
-            every answer's `GuideActContext`: none of them presses itself
+        {/* The guide's next steps, under its latest answer only
             (GuideNextSteps.tsx, plan 261009u). Not while a turn is out: the
             buttons would be for the answer before it. */}
         {kind === "guide" && !busy && (
@@ -3177,7 +3141,7 @@ export function Composer({
    * is answering had 58px. So below 500px of viewport height (a landscape
    * phone; no laptop window is that short) Learn's box rests at two rows and
    * grows to 30% of the viewport, still following what is typed or dictated.
-   * Plan 261001m § 5. Chat's one-row box is unchanged.
+   * Plan 261001m § 5. Chat's box drops from two rows to one there too.
    */
   const short = useMedia(SHORT_VIEWPORT);
   const size = useMemo(() => boxSize(learn, short), [learn, short]);
@@ -3219,6 +3183,13 @@ export function Composer({
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
+    /* **Empty, the rows decide.** An empty textarea's `scrollHeight` counts its
+       placeholder, and a long one wrapped in a narrow box grew it to three
+       lines before a word was typed (browser check, plan 261011m). */
+    if (el.value === "") {
+      el.style.height = "";
+      return;
+    }
     el.style.height = "auto";
     /* `rows` below sets the floor; this sets the roof. `boxSize` says why each. */
     el.style.height = `${Math.min(el.scrollHeight, size.roof())}px`;

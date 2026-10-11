@@ -5,7 +5,7 @@
  * `Reader` keeps five `Found[]` slots, one per producer, precisely so that a
  * mode on its way out cannot erase the marks of the mode arriving. Referee's two
  * sub-modes are the one place that guarantee does not reach: `CriteriaBand` and
- * `ClaimsBand` are siblings inside `RefereeSubMode` and both write the *same*
+ * `PromisesBand` are siblings inside `RefereeSubMode` and both write the *same*
  * slot, so changing `?referee=` hands one slot from one producer to another
  * inside a single commit.
  *
@@ -24,7 +24,7 @@
  * ## Why this file uses two stand-in producers rather than the real bands
  *
  * Because the real bands cannot show it, and that was **measured, not assumed**.
- * `CriteriaBand`'s marks come from `useCriteria`'s fetch and `ClaimsBand`'s from
+ * `CriteriaBand`'s marks come from `useCriteria`'s fetch and `PromisesBand`'s from
  * a tick the referee has not made yet, so both publish an *empty* list in their
  * first layout effect. The outgoing clear then overwrites empty with empty and
  * the settled state is right by luck. The hazard is therefore latent in the
@@ -121,7 +121,7 @@ function KeyedProducer({
 }
 
 /**
- * **`ClaimsBand`'s lifecycle**: an `unkeyed` producer, which publishes marks and
+ * **`PromisesBand`'s lifecycle**: an `unkeyed` producer, which publishes marks and
  * owns no key at all, so its unmount clears `found` and nothing else.
  */
 function UnkeyedProducer({ found, onFound }: { found: Found[]; onFound(next: Found[]): void }) {

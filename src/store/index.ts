@@ -90,7 +90,7 @@ import type {
   LinkSummaryStore,
   ReaderStore,
   RealtimeSessionStore,
-  RefereeClaimsStore,
+  RefereePromisesStore,
   RefereeHiddenCheckStore,
   RefereeCriteriaStore,
   SourcesClaimChecksStore,
@@ -125,7 +125,7 @@ import { pgStaleNoticeStore } from "./pg-stale-notices.js";
 import { pgSuggestionDismissalStore } from "./pg-suggestion-dismissals.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
-import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
+import { pgRefereePromisesStore } from "./pg-referee-promises.js";
 import { pgSourcesClaimChecksStore } from "./pg-sources-claim-checks.js";
 import { pgRefereeHiddenCheckStore } from "./pg-referee-hidden-checks.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
@@ -316,19 +316,19 @@ export const searchStore: SearchStore = guarded("searches", pgSearchStore);
 export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-criteria", pgRefereeCriteriaStore);
 
 /**
- * **A paper's claims run** — `guarded(...)` like the criteria above it, since
+ * **A paper's promises run** — `guarded(...)` like the criteria above it, since
  * 2026-09-01.
  *
- * It was not, and the reason is worth keeping rather than deleting. Claims
+ * It was not, and the reason is worth keeping rather than deleting. Promises
  * shipped on 2026-08-31 with a filesystem store only, and every method here
  * refused with a 501 under `SPIDERYARN_STORE=postgres` — a recorded decision
  * with two arguments behind it.
  *
- * **The first still stands**: a claims run is an article-derived reusable
+ * **The first still stands**: a promises run is an article-derived reusable
  * artefact, and the plan
  * (docs/plans/260831an-referee-mode-for-peer-reviewers.md § 2) is explicit that
  * its right home is a **pipeline artefact** — `StepName`, `ArtifactKind`, an
- * `article_revisions` column. `referee_claims` is therefore an **interim**, and
+ * `article_revisions` column. `referee_promises` is therefore an **interim**, and
  * drizzle/0051_referee_claims.sql says so in its own header so that the day it
  * is replaced is a decision rather than a discovery.
  *
@@ -345,11 +345,11 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-crite
  * start or persist a run"*. A sub-mode that only works on a laptop is not built.
  *
  * `guarded(...)` is not optional. The parameters Drizzle puts into a failed
- * query's message here are the paper's own sentences — a claims run is nothing
+ * query's message here are the paper's own sentences — a promises run is nothing
  * but quotations from somebody else's unpublished work. See
  * [db-errors.ts](db-errors.ts).
  */
-export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", pgRefereeClaimsStore);
+export const refereePromisesStore: RefereePromisesStore = guarded("referee-promises", pgRefereePromisesStore);
 
 /**
  * Debate's reader-picked claim checks (plan 261008i § 3). Owner-only, and a

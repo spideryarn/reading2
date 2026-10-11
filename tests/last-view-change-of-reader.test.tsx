@@ -47,9 +47,9 @@ const A_VIEW = "?mode=quotes&at=spya-far";
 /* B has no key here, so B's arrival is B's first open, which since
    2026-10-08 does not wait for the settings store (CR3 of
    docs/plans/261007p-code-review-sol.md). What matters is that it is not A's. */
-const FIRST_OPEN = "?mode=chat&guide=1&margin=1";
+const FIRST_OPEN = "?mode=chat&guide=1";
 /* What the save makes of it: the guide's own parameters are not remembered. */
-const FIRST_OPEN_SAVED = "?margin=1";
+const FIRST_OPEN_SAVED = "";
 
 function Page({ readerId }: { readerId: string | null }) {
   const route = parseRoute(location.pathname);
@@ -126,7 +126,7 @@ describe("A is reading, and the tab becomes B's without the page being remounted
 
   it("B's first open gets the first-open default, as any first open does, settings read or not", () => {
     as(B);
-    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1");
   });
 
   it("A, back again, finds A's place, and B's is kept", () => {

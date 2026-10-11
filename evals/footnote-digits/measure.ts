@@ -22,7 +22,7 @@ const comments = by<any>(snap.comments, (c) => c.article_id);
 const threads = by<any>(snap.chat_threads, (c) => c.article_id);
 const reading = by<any>(snap.reading_time, (c) => c.article_id);
 const idsIn = (rows: any[]) => by<any>(rows.filter((r) => r.ids?.length), (r) => r.article_id);
-const derived = { search: idsIn(snap.search_runs), criteria: idsIn(snap.referee_criteria), claims: idsIn(snap.referee_claims), chatMsgs: idsIn(snap.chat_messages) };
+const derived = { search: idsIn(snap.search_runs), criteria: idsIn(snap.referee_criteria), promises: idsIn(snap.referee_promises), chatMsgs: idsIn(snap.chat_messages) };
 const linkSums = by<any>(snap.link_summaries, (c) => c.article_id);
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -71,7 +71,7 @@ export function measure(a: any, html: string) {
     anchors: anchors.length, anchorBlockGone: blockGone, anchorQuoteGone: quoteGone,
     readLost: `${rtLost.length}/${rt.length}`, readSecLost: Math.round(rtLost.reduce((s, r) => s + r.seconds, 0)),
     chatMsgIds: idsLost(derived.chatMsgs.get(a.id)), searchIds: idsLost(derived.search.get(a.id)),
-    refereeIds: idsLost([...(derived.criteria.get(a.id) ?? []), ...(derived.claims.get(a.id) ?? [])]),
+    refereeIds: idsLost([...(derived.criteria.get(a.id) ?? []), ...(derived.promises.get(a.id) ?? [])]),
     linkSum: `${(linkSums.get(a.id) ?? []).filter((l) => lost.has(l.block_id)).length}/${(linkSums.get(a.id) ?? []).length}`,
     _lost: prev.filter((b) => lost.has(b.block_id)).map((b) => ({ id: b.block_id, tag: b.tag, role: b.role, text: b.text.slice(0, 80) })),
   };

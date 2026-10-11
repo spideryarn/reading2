@@ -64,7 +64,7 @@ export const READER_STATE = [
   { table: "chat_messages", label: "chat messages", ownWords: true },
   { table: "chat_threads", label: "chats", ownWords: true },
   { table: "quiz_attempts", label: "quiz answers", ownWords: true },
-  { table: "referee_claims", label: "Referee claims runs", ownWords: true },
+  { table: "referee_promises", label: "Referee promises runs", ownWords: true },
   { table: "referee_hidden_checks", label: "Referee hidden checks", ownWords: true },
   { table: "referee_criteria", label: "Referee criteria", ownWords: true },
   { table: "sources_claim_checks", label: "Sources claim checks", ownWords: true },

@@ -50,7 +50,7 @@ interface Reader {
 }
 
 const RICH_WATCH =
-  "A long, good, opinionated account. Are the tasks about what the AUTHOR says (say it back, why he needs a step, connect two parts) rather than the reader's own view? At most one own-view task, never in the first two turns. When they speculate and ask for a web search: a brief answer, a pointer to Chat, and back to the piece?";
+  "A long, good, opinionated account. Are the tasks about what the AUTHOR says (say it back, why he needs a step, connect two parts) rather than the reader's own view? At most one own-view task, never in the first two turns. When they speculate and ask for a web search: a brief answer, a pointer to Explore, and back to the piece?";
 
 const READERS: readonly Reader[] = [
   {
