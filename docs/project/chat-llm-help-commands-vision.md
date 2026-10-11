@@ -291,7 +291,7 @@ the interface model.
   a row *Ask the guide: "…"* sends the sentence there. It is where every first open of an article
   lands where a band fits (since 2026-10-07), and stands in there for the "Why are you reading
   this?" modal. [chat-tools.md § The guide](chat-tools.md#the-guide).
-  Unlike the pick, **the guide sees the article**, so it holds the line by pressing alone: nothing
+  Unlike the pick, **the guide sees the article**, so it holds the line at the reader's press: nothing
   it proposes runs without the reader. From 2026-10-07 it could *move* the reader itself, one jump
   or one mode that makes and writes nothing per answer
   ([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)); on

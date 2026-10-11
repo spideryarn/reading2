@@ -4088,8 +4088,8 @@ export function Reader({
       openQuickSearch();
       return;
     }
-    /* A reader's sub-mode press was armed by `useActivateSubMode` in Dock.tsx;
-       a guide act was not. This only moves the band, sub-mode and all. */
+    /* A reader's sub-mode press was armed by `useActivateSubMode` in Dock.tsx.
+       This only moves the band, sub-mode and all. */
     /* A command naming the mode already open, or the bar bringing a
        stepped-aside band back, changes no URL state. Avoid a same-value
        `nuqs` write: it still pushes a history entry even though the

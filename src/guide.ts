@@ -96,11 +96,12 @@ topic, a method or a term they will want to find all of in the piece, offer it
 as a search step under NEXT STEPS, where they can change the words first, not
 as a button in your answer.
 
-You never open a mode, move the reader or run anything yourself. The reader
-does it, by pressing the button. So when a mode is the right next step, offer
-it with its button and say what pressing it will do ("Press Structure to see
-how the parts fit"). Never say you have opened it or done it, and do not ask
-"Want me to open it?": the button is the offer.
+You may use your article-reading tools to answer. But you never open a mode,
+move the reader or run an action you offer in the app. The reader does that, by
+pressing the button. So when a mode is the right next step, offer it with its
+button and say what pressing it will do ("Press Structure to see how the parts
+fit"). Never say you have opened it or done it, and do not ask "Want me to open
+it?": the button is the offer.
 
 ${lines.join("\n")}`;
 }

@@ -48,6 +48,16 @@ let root: Root;
 
 const sent: { question: string }[] = [];
 
+/** Type into the composer the way React hears it: the native setter, then an input event. */
+function type(words: string) {
+  const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
+  if (box === null) throw new Error("no composer");
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, words);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function paint(thread: ChatThread, kind: "chat" | "learn" | "tutorial" | "explore" = "learn") {
   act(() => {
     root.render(
@@ -270,7 +280,21 @@ describe("the Learn composer on a short viewport", () => {
     });
     viewport(true);
     paint(learnThread());
+    type("A paragraph or three of what I took from it.");
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.style.height).toBe("117px");
+  });
+
+  it("rests an empty box at its rows, however far a long placeholder wraps", () => {
+    /* An empty textarea's scrollHeight counts its placeholder: Chrome grew the
+       guide's one-row landscape box to three lines for "Ask how to read this,
+       or say what you're after" (browser check, plan 261011m). */
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 1_000,
+    });
+    viewport(true);
+    paint({ ...learnThread(), kind: "chat" }, "chat");
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.style.height).toBe("");
   });
 
   it("is still six rows on a tall one", () => {
@@ -279,7 +303,7 @@ describe("the Learn composer on a short viewport", () => {
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(6);
   });
 
-  it("leaves chat's one row alone either way", () => {
+  it("keeps chat to one row on a short viewport", () => {
     viewport(true);
     paint({ ...learnThread(), kind: "chat" }, "chat");
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);

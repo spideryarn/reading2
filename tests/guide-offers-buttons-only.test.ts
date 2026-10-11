@@ -56,7 +56,8 @@ describe("the guide's list of modes", () => {
 
 describe("what the guide is told it may do", () => {
   it("forbids it to open anything itself, and to say it has", () => {
-    expect(section).toContain("You never open a mode, move the reader or run anything yourself.");
+    expect(section).toContain("You may use your article-reading tools to answer.");
+    expect(section).toMatch(/you never open a mode,\s+move the reader or run an action you offer in the app/);
     expect(section).toContain("Never say you have opened it or done it");
     expect(section).toContain("say what pressing it will do");
   });

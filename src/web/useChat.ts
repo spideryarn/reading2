@@ -1060,6 +1060,6 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     deleting,
     settled,
     named,
-      error: state.error,
+    error: state.error,
   };
 }

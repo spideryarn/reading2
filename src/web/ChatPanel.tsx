@@ -3183,6 +3183,13 @@ export function Composer({
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
+    /* **Empty, the rows decide.** An empty textarea's `scrollHeight` counts its
+       placeholder, and a long one wrapped in a narrow box grew it to three
+       lines before a word was typed (browser check, plan 261011m). */
+    if (el.value === "") {
+      el.style.height = "";
+      return;
+    }
     el.style.height = "auto";
     /* `rows` below sets the floor; this sets the roof. `boxSize` says why each. */
     el.style.height = `${Math.min(el.scrollHeight, size.roof())}px`;

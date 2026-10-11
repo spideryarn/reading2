@@ -5,7 +5,7 @@ Owned by [plans.md](../project/plans.md). Overseer queue item `qi-gr52s8dn`; rep
 (`feedback-reporter.ts` exit 0). Session `fbgae0zv-guide-suggests-not-jumps`.
 Reverses item 1 of [261007p](261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md)
 and with it [261008a](261008a-guide-opens-glossary-and-summary-when-already-made.md).
-**Status: planned; GPT Sol reviewed the plan ([261011m-plan-review-sol.md](261011m-plan-review-sol.md), "build with changes"), changes folded in below.**
+**Status: built; GPT Sol on the plan ([review](261011m-plan-review-sol.md)) and the code ([review](261011m-code-review-sol.md), "ship after my fixes"); measured ([261011a](../investigations/261011a-the-guide-offers-buttons-only-measured.md)); seen in a browser; on `dev`, not deployed.**
 
 ## What Greg asked for
 
@@ -109,3 +109,23 @@ browser pass (Sonnet subagent, Playwright on the box) of the guide at 1440 and 3
 that names Structure leaves the band where it was and shows a button; the composer and centred
 suggestions in Chat, guide, block chat. GPT Sol on this plan (read-only) before building, and on the
 code before pushing.
+
+## What landed
+
+- **Stage 1** (`7c2cff9f5`), as planned with the review's additions. The guide prompt measured on
+  the eval: no answer claimed to have opened anything (the old prompt: 3 of 12) —
+  [261011a](../investigations/261011a-the-guide-offers-buttons-only-measured.md).
+- **Stage 2** (`bf6e968f5`), as planned.
+- **GPT Sol's code review** fixed three things: the prompt's "never run anything" contradicted the
+  guide's article-reading tools, so it now names app actions; the raised strip was invisible inside
+  the block-chat card, which is itself raised, so the strip there takes `--panel`; and stale act
+  wording in Reader.tsx and the vision doc.
+- **Browser check** (Playwright, 1440, 390 portrait, 844×390, dark, block chat; shots
+  `261011m-shot-*.png`): a guide answer naming Structure left the band on Chat and drew *Open
+  Structure*, which opened it on a press. It found one bug of ours: an empty box grew to fit its
+  placeholder, because an empty textarea's `scrollHeight` counts a wrapped placeholder, so the
+  guide's long placeholder made the landscape one-row box three lines tall. Fixed: an empty box rests
+  at its rows (test in tests/learn-panel.test.tsx, red first).
+- **Seen and left alone:** in an 844×390 landscape guide the Live button wraps under the box, as it
+  did before this change. The light theme could not be emulated in that run, so it was checked only
+  through the tokens.
