@@ -23,9 +23,9 @@ A fifth Sources sub-mode, **Not cited**, after Bibliography:
  │ Found by OpenAlex's search on this piece's title and opening, closest first.
  │ Whether any of them belongs in it is yours to judge.
  │
- │  Sequence to Sequence Learning with Neural Networks          ↗
- │  Sutskever, Vinyals, Le · 2014 · NeurIPS · cited 16,052
- │  "We present a general end-to-end approach to sequence learning…"   (its abstract, a stranger's text)
+ │  Non-Autoregressive Neural Machine Translation               ↗
+ │  Gu, Bradbury, Xiong, … · 2017 · cited 506
+ │  "Existing approaches to neural machine translation condition…"   (its abstract, a stranger's text)
  │  …
 ```
 
@@ -114,3 +114,63 @@ from the cache).
 
 On the owner's Transformer import, Not cited lists 2014–2017 attention/NMT papers, none of them in
 its bibliography, and Sutskever 2014 is not among them. `npm test`, `npm run typecheck` green.
+
+## GPT Sol's plan review, and what changed
+
+[Review](261011ac-sources-not-cited-plan-review-sol.md): BUILD WITH CHANGES, nine findings. Each
+was checked against the code; all accepted, some reshaped. **This section overrides the body above
+where they differ.**
+
+- **F1 (P1), the article's words leave for OpenAlex.** Cited by sends only a DOI or a title, and
+  [privacy.md](../project/privacy.md) promises OpenAlex never gets the rest of the text; a referee
+  may have uploaded a confidential manuscript. So **the search runs on the owner's press**, not on
+  opening the chip: *Search OpenAlex for related work*, with a line under it saying it sends the
+  piece's title and the opening of its text (its abstract, on a paper) to OpenAlex. Once searched,
+  the stored answer is drawn on every later open without a press; *Search again* re-sends. The
+  privacy page, privacy.md, `LAST_UPDATED` and the privacy test change in the same stage.
+- **F2 (P1), the cache key.** Not a global hash-keyed table: **one row per article**
+  (`related_work_searches`, `article_id` primary key, `on delete cascade`), holding the input
+  fingerprint (versioned sha256 of the query and year filter, never logged), OpenAlex's parsed
+  results and `searched_at`. Deleting the article deletes it.
+- **F3 (P1), the exclusion matcher**, tiered, false "not cited" being the worse error:
+  1. identifier: a candidate's DOI (normalised; arXiv's `10.48550/arxiv.<id>` and a bare arXiv id
+     are one identity) equals a Bibliography row's `doi:`/`arxiv:` key or its row's resolved DOI,
+     ignoring an identifier the row marks as conflicting;
+  2. title: the candidate's title agrees with a row's title by the registry's own title test
+     (`registryTitleAgrees`), allowing for a row title cut at 120 characters (prefix agreement on a
+     distinctive title, `registryTitleIsDistinctive`);
+  3. entry: a distinctive candidate title found in a row's `entry` (the article's own reference
+     text).
+  No matching against the article's prose (a work merely discussed is not cited). The piece itself
+  is dropped by DOI, or by title plus an author or the year — never by title alone. Tests cover
+  misses and false exclusions both: subtitle and punctuation variants, a cut title, arXiv vs DOI, a
+  generic title ("Introduction") that must not exclude, a conflicting DOI.
+- **F4 (P1), a stale or capped Bibliography.** The rows always say *not among the works Spideryarn
+  found in its bibliography*, never *not cited*; and the panel puts a warning above the list when
+  the Bibliography is stale (made from an older version) or `capped` (some works were left out),
+  saying the list may include works the piece does cite. No list at all → its own sentence, with no
+  search button.
+- **F5 (P1), OpenAlex's answer is a stranger's text** ([security-map.md](../project/security-map.md)):
+  the request built with `URLSearchParams`; ids and DOIs shape-checked; every string through
+  `plainRegistryText` with a bound; the abstract rebuilt from the inverted index with bounds on
+  tokens, positions and length; ids deduplicated; every link built by `citerUrl`; nothing logged
+  that could carry the query.
+- **F6 (P1), the missing paths.** A server loader for the owner that reads, in one snapshot, the
+  imported title, authors, year, the opening blocks and the current Bibliography with its
+  freshness. Client: `SOURCES_VIEWS`, `ReceptionAndClaimsView`, both bands, `sourcesCounts`,
+  `countOf`, `VIEW_HOW`, `activationForSources`. **A visitor never sees the chip**, and
+  `?sources=not-cited` on a visitor's page degrades to Bibliography. Tests for URL state, the
+  command bar, the owner-only route, the surface shape, the count, the visitor.
+- **F7 (P2), the recipe**, version `related-work/1`: the imported title, then `meta.abstract` if
+  there is one, else the article's first prose blocks (paragraphs, not headings) up to 1,000
+  characters cut at a word; title alone if there is no prose. Year filter
+  `publication_year:<Y+1` only when the piece's year is known; otherwise the panel says the list is
+  not limited by date.
+- **F8 (P2), two cold searches at once.** With a press and the button held until the answer is
+  read, the race is two tabs pressing in the same second, each spending $0.001 of the free
+  allowance; the second write wins. Accepted and written in the module header; no claim table.
+- **F9 (P3).** The mock row is now one the paper does not cite.
+
+So the routes are `GET /api/related-work/:slug` (the stored answer, filtered at read time, or
+`not-searched`; never calls OpenAlex) and `POST /api/related-work/:slug` (searches, stores,
+answers). Both owner-only.
