@@ -140,6 +140,17 @@
 @media (min-width: 1024px) and (min-height: 760px) {
   .fb-panel { min-height: min(90%, 44rem); }
 }
+/* **And bigger still on a large window** — Greg, 2026-10-11 (`spya-tfp3zw`):
+   *"Make the feedback dialog box taller and wider still when the window is
+   large enough."* A step of its own from 1280px rather than a wider 1024px
+   step, so a 1024–1279 window keeps a margin. At this dialog's ~0.82rem text a
+   56rem line is long for prose; that is the cost, named in plan 261011h. */
+@media (min-width: 1280px) {
+  .fb-panel { width: min(90vw, 56rem); }
+}
+@media (min-width: 1280px) and (min-height: 900px) {
+  .fb-panel { min-height: min(90%, 56rem); }
+}
 
 /* The two that stay put, and the one that moves. `min-height: 0` is
    load-bearing and silent — a flex item's default `min-height: auto` refuses to
@@ -379,6 +390,22 @@ a.fb-earlier-page:focus-visible {
   gap: 0.5rem;
 }
 .fb-reply-send:disabled { opacity: 0.45; cursor: default; }
+/* **Green to send, red to put off**, in a Needs-a-decision thread only — Greg,
+   2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
+   shortcut, as colour-scales.md asks of a red/green pair. The addendum box
+   shares the send box and stays neutral; so does Bring back, which undoes a
+   deferral and should not look like one. Plan 261011h. Scoped by the thread's
+   wrapper so each rule outweighs `.fb-copy`, which comes later in this file.
+   **No wash behind**: a tint of the same colour takes the light theme under
+   the 4.5:1 the two tokens are measured at (GPT Sol, plan review 1). */
+.fb-reply-thread .fb-reply-send,
+.fb-reply-thread .fb-reply-send:hover,
+.fb-reply-thread .fb-defer,
+.fb-reply-thread .fb-defer:hover { border-color: currentColor; }
+.fb-reply-thread .fb-reply-send,
+.fb-reply-thread .fb-reply-send:hover { color: var(--positive); }
+.fb-reply-thread .fb-defer,
+.fb-reply-thread .fb-defer:hover { color: var(--danger); }
 /* **As tall as its words, never a scroller of its own** (useFitTextarea.ts):
    the panel is the one scroller, which is what lets iOS keep the caret in
    view with the keyboard up (spya-za2tse). */

@@ -1368,6 +1368,7 @@ function ReplyBox({
       label={`Your reply to: ${question.title}`}
       placeholder="Your reply. “1A” is enough…"
       sendWord="Send reply"
+      className="fb-reply-thread"
       cap={MAX_FEEDBACK_ANSWER_CHARS}
       problems={[
         replies.stage.kind === "failed" ? replies.stage.message : null,
@@ -1378,7 +1379,7 @@ function ReplyBox({
           and it tells agents not to chase it (plan 261008i, decision 3). */}
       <button
         type="button"
-        className="fb-copy"
+        className={deferred ? "fb-copy" : "fb-copy fb-defer"}
         disabled={sending || deferring}
         onClick={() => void replies.defer(question.id, !deferred)}
       >
