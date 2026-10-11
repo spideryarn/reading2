@@ -12,7 +12,7 @@ since. Sources shows both. **Bibliography** lists what this piece cites, with a 
 so you can check what others say about each one. Every source links out, so you can check it rather
 than take our word for it.
 
-![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
+![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with its two bars, and where the piece first cites it.")
 
 ## When to use it
 
@@ -35,8 +35,10 @@ for that.
 
 **Bibliography**
 
-- Each row says what we have read of the work, which is usually nothing: the sentence on what the
-  piece uses it for is written from the article, not from the cited work.
+- When a visible row has no more-specific reading line, one line above the list says we have read
+  none of those works, only the article that cites them. A row says more only when that changes: a
+  page found for it, a search extract read, or the paper itself read. The sentence on what the piece
+  uses a work for is written from the article, not from the cited work.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the
   model’s memory of the work, not a citation count. New lists give a number only when the model is
   confident it knows the work; a low number then means a work it knows and thinks minor. If

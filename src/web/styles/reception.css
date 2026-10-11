@@ -341,6 +341,16 @@
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
+/* The gist on its own line under the angle, lined up with the words after the
+   icon; two lines then an ellipsis, from `.origin-chat-gist` (plan 261011c). */
+.rcp-angle:has(.rcp-angle-gist) { flex-wrap: wrap; }
+.rcp-angle-gist {
+  flex: 1 0 100%;
+  min-width: 0;
+  padding-left: calc(12px + 0.35rem);
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
 @media (pointer: coarse) {
   .rcp-lens-send,
   .rcp-angle,

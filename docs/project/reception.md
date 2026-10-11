@@ -314,7 +314,9 @@ What the reader gets:
   then the question waited in the box. Back returns to Sources' Reception.
 - **Your angles**, under the box: one line per chat started this way, newest first, three and then
   all. A chat appears once its first question is sent.
-  A line opens its conversation beside Sources, as a claim's mark does.
+  A line opens its conversation beside Sources, as a claim's mark does. Under the angle it shows
+  the chat's gist once one is written, two lines then an ellipsis, as every item's mark does (plan
+  [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)).
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
   needs no stored debate.
 - **In Chat's list** the conversation has Sources' icon, with a card that quotes the angle.

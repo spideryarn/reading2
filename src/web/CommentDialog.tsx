@@ -76,6 +76,8 @@ export type CommentAccess =
       onTouched?(): void;
       /** Offered only when the conversation is really there — App.tsx says why. */
       onOpenThread?: (() => void) | undefined;
+      /** That conversation's gist, when a small model has written one (plan 261011c). */
+      threadGist?: string | undefined;
       /** **Referee mode is open**, so a placement can be seen and changed. */
       placing: boolean;
       /** Change this comment's placement, or clear it with both fields `null`. */
@@ -746,9 +748,16 @@ export function CommentDialog({
       {own?.error && <p className="cmt-write-error">{own.error}</p>}
 
       {own?.onOpenThread && (
-        <button type="button" className="linky cmt-open-thread" onClick={own.onOpenThread}>
-          Open the conversation this started
-        </button>
+        <>
+          <button type="button" className="linky cmt-open-thread" onClick={own.onOpenThread}>
+            Open the conversation this started
+          </button>
+          {/* What that conversation covered, as an item's chat mark shows it
+              (OriginChat.tsx § OriginChatMark; Greg, 2026-10-10, spya-rbp55k:
+              *"true for anywhere where we offer Ask in Chat"*, plan 261011c).
+              The model's words, so the model's face. */}
+          {own.threadGist && <p className="cmt-thread-gist voice-ai">{own.threadGist}</p>}
+        </>
       )}
 
       {/* The spinner is only for the wait before any words. Once text is

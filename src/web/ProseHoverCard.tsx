@@ -2197,6 +2197,8 @@ function CiteCard({
   const source = sourceOf(work);
   const by = byLineOf(work);
   const line = workByLine(work);
+  const why = showsWhy({ lookup: work.lookup });
+  const readNote = readNoteOf(work);
 
   return (
     /* No `divided` prop, unlike `LinkCard` and `NoteCard`: the rule between
@@ -2253,20 +2255,27 @@ function CiteCard({
         </div>
       )}
 
-      <div className="prose-card-part prose-card-part-why">
-        {/* `why` only beside the verdict that was checked against it
-            (BibliographyPanel.tsx § showsWhy, plan 261003j). The lookup alone:
-            this card draws no *Dig deeper* answer. */}
-        {showsWhy({ lookup: work.lookup }) && (
-          <>
-            <p className="prose-card-label">{CITE_WHY_LABEL}</p>
-            <p className="prose-card-text">{work.why}</p>
-          </>
-        )}
-        {/* The band's line, from the band's function: what we have read of
-            the work. BibliographyPanel.tsx § what we have and have not read. */}
-        <p className="prose-card-cite-read">{readNoteOf(work)}</p>
-      </div>
+      {/* No part at all when it would be empty: an unread work with nothing
+          checked draws neither line (plan 261011c). */}
+      {(why || readNote !== null) && (
+        <div className="prose-card-part prose-card-part-why">
+          {/* `why` only beside the verdict that was checked against it
+              (BibliographyPanel.tsx § showsWhy, plan 261003j). The lookup alone:
+              this card draws no *Dig deeper* answer. */}
+          {why && (
+            <>
+              <p className="prose-card-label">{CITE_WHY_LABEL}</p>
+              <p className="prose-card-text">{work.why}</p>
+            </>
+          )}
+          {/* The band's line, from the band's function: what we have read of
+              the work, when we have read anything or found a page. Nothing
+              otherwise: the band says that once, and the card leaves it unsaid
+              (plan 261011c). BibliographyPanel.tsx § what we have and have not
+              read. */}
+          {readNote !== null && <p className="prose-card-cite-read">{readNote}</p>}
+        </div>
+      )}
       <CiteCardReading work={work} />
       {work.citedInBody && (
         <CitedAtJumps

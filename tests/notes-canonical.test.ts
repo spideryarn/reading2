@@ -47,6 +47,69 @@ const FIXTURES = path.join(import.meta.dirname, "..", "evals", "extraction", "fi
 /** Large pages through a real extraction. Nothing here is close to vitest's 5s default. */
 const SLOW = 120_000;
 
+it("a single Gwern marker does not make its wrapper replace the rest of the article", async () => {
+  /* Moving a long note into the marker's small wrapper changes Readability's
+     candidate scores: that wrapper can win over the article and discard the
+     sibling paragraphs. Notes recognised before the Bible Gateway adapter
+     must keep their previous placement. */
+  const rest = Array.from({ length: 2 }, (_, i) =>
+    `<p>Article continuation ${i}: This is the rest of the article, a paragraph of real prose ` +
+    `that must survive the extraction because it contains the rest of the argument and its conclusion. ` +
+    `${"Words about a piece of content that helps us understand the argument. ".repeat(3)}</p>`,
+  ).join("");
+  const note = "Lengthy note prose full of various relevant details ".repeat(20) +
+    ", details".repeat(100);
+  const html = `<html><head><title>A test essay</title></head><body><article><div><p>` +
+    `An opening paragraph with important prose words to read while seeing a note ` +
+    `<a href="#fn1" id="fnref1" role="doc-noteref"><sup>1</sup></a>. ` +
+    `Here is more opening prose, a simple little introduction to the article.</p></div>` +
+    `<div>${rest}</div></article><div class="footnotes"><ol><li id="fn1"><p>` +
+    `${note}<a href="#fnref1">↩</a></p></li></ol></div></body></html>`;
+  const extracted = await runExtract({ html, url: "https://example.test/essay", slug: "essay" });
+  const doc = new JSDOM(extracted.extractedHtml).window.document;
+  expect(extracted.notes.shapes.gwern).toBe(1);
+  expect(doc.querySelector("[data-spya-note]")?.textContent).toContain("Lengthy note prose");
+  expect(doc.body.textContent).toContain("Article continuation 0");
+  expect(doc.body.textContent).toContain("Article continuation 1");
+}, SLOW);
+
+describe("notes container placement", () => {
+  it("keeps a lone unlabelled Tufte note attached after replacing its span", () => {
+    const doc = new JSDOM(
+      `<article><p>The author's argument ` +
+      `<span class="sidenote">A useful aside with its own words.</span> continues.</p></article>`,
+    ).window.document;
+    expect(canonicaliseNotes(doc).shapes.tufte).toBe(1);
+    const note = doc.querySelector("[data-spya-note]");
+    expect(note?.isConnected).toBe(true);
+    expect(note?.textContent).toContain("A useful aside with its own words.");
+    expect(doc.querySelector("article > section[data-spya-notes]")).not.toBeNull();
+    expect(doc.querySelector("p")?.textContent).toBe("The author's argument 1 continues.");
+  });
+
+  it("keeps markers in separate wrappers while pruning empty external note wrappers", () => {
+    const doc = new JSDOM(
+      `<main><article><section><p>First citing paragraph ` +
+      `<a role="doc-noteref" id="fnref1" href="#fn1"><sup>1</sup></a>.</p></section>` +
+      `<section><p>Second citing paragraph ` +
+      `<a role="doc-noteref" id="fnref2" href="#fn1"><sup>1</sup></a>.</p></section></article>` +
+      `<div class="footnotes"><ol><li id="fn1">Words shared by both citing paragraphs. ` +
+      `<a href="#fnref1">↩</a><a href="#fnref2">↩</a></li></ol></div></main>`,
+    ).window.document;
+    const stats = canonicaliseNotes(doc);
+    expect(stats.notes).toBe(1);
+    expect(stats.markers).toBe(2);
+    expect(doc.querySelector(".footnotes")).toBeNull();
+    expect(doc.querySelectorAll("article > section")).toHaveLength(2);
+    expect(doc.querySelector("main > section[data-spya-notes]")).not.toBeNull();
+    const note = doc.querySelector("[data-spya-note]");
+    expect(note?.textContent).toContain("Words shared by both citing paragraphs.");
+    for (const marker of doc.querySelectorAll("[data-spya-note-ref]")) {
+      expect(doc.getElementById(marker.getAttribute("href")!.slice(1))).toBe(note);
+    }
+  });
+});
+
 interface Run {
   blocks: Block[];
   byId: Map<string, Block>;
@@ -384,7 +447,7 @@ describe("the two fixtures this stage leaves alone", () => {
       markers: 0,
       backlinks: 0,
       synthesised: 0,
-      shapes: { gwern: 0, wikipedia: 0, substack: 0, tufte: 0 },
+      shapes: { gwern: 0, wikipedia: 0, substack: 0, tufte: 0, biblegateway: 0 },
     });
     expect(run.doc.querySelectorAll("[data-spya-notes]")).toHaveLength(0);
     expect(run.doc.querySelectorAll("[data-spya-note], [data-spya-note-ref]")).toHaveLength(0);

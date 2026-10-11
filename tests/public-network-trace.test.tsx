@@ -1488,10 +1488,11 @@ describe("a signed-out browser on a shared document", () => {
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_WORK);
     /* A visitor has no verdict and no Dig deeper answer, so never the model's
-       sentence about the work (plan 261003j) — only that we have not read it. */
+       sentence about the work (plan 261003j) — only, once above the list,
+       that we have not read the works (plan 261011c). */
     expect(text).not.toContain("The theory the piece argues against.");
     expect(text).toContain("Tononi");
-    expect(text).toContain("We have not read this work");
+    expect(text.split("we have read none of these works")).toHaveLength(2);
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Sources is for whoever added this article");

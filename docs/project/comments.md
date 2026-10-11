@@ -437,7 +437,11 @@ dialog are right before the next reload rather than after it.
 `threadId` is **advisory and has no foreign key**, which reverses the reflex this schema follows
 everywhere else. A deleted conversation leaves a comment that is still the reader's mark, so
 whoever offers "Open the conversation this started" checks the summary list rather than trusting
-the stored id. The full reasoning — including that this is a constraint Postgres can keep and the
+the stored id. Under that link the dialog shows the chat's gist once one is written (`threadGist`,
+from the same summary list; plan
+[261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)), the line an
+item's chat mark shows ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)).
+The full reasoning — including that this is a constraint Postgres can keep and the
 now-deleted filesystem store never could — is in the plan.
 
 ### A click on a doubly-marked passage opens the comment

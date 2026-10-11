@@ -41,7 +41,7 @@ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:
 import type { Readable } from "node:stream";
 
 import { sharedReceiptJournal } from "./action-stores.js";
-import { renderMessage, type Speaker } from "./actions.js";
+import { isSenderName, renderMessage, type Speaker } from "./actions.js";
 import { addressableHost } from "./origin.js";
 import { summarizeReceipt, type ReceiptJournal, type ReceiptOutcome } from "./receipt-journal.js";
 import { lookupRequest, readRequestKey, type RequestLookup } from "./request-key.js";
@@ -509,17 +509,33 @@ export function parseSpeaker(v: unknown): Parsed<Speaker> {
 }
 
 /**
- * `parseSpeaker`, plus `box`, for `POST /api/steer/message` alone.
+ * `parseSpeaker`, plus `box` and `agent`, for `POST /api/steer/message` alone.
  *
  * `box` is a scheduled job on the box telling the Overseer what it measured
- * (scripts/box-notify.ts, plan 261010d). It sends one-line reports, never a
- * spoken action or a broadcast, so the routes that take those keep refusing it
- * through `parseSpeaker`. Like the rest, NOT an authentication boundary.
+ * (scripts/box-notify.ts, plan 261010d). `agent` is another Claude or Codex
+ * session running `gjd-remote tell` (plan 261011e). Both send one line of text,
+ * never a spoken action or a broadcast, so the routes that take those keep
+ * refusing them through `parseSpeaker`. Like the rest, NOT an authentication
+ * boundary.
  */
 export function parseMessageSpeaker(v: unknown): Parsed<Speaker> {
-  if (v === "box") return { ok: true, value: "box" };
+  if (v === "box" || v === "agent") return { ok: true, value: v };
   const parsed = parseSpeaker(v);
-  return parsed.ok ? parsed : bad(`speaker must be 'greg', 'overseer' or 'box', not ${JSON.stringify(v)}`);
+  return parsed.ok ? parsed : bad(`speaker must be 'greg', 'overseer', 'box' or 'agent', not ${JSON.stringify(v)}`);
+}
+
+/**
+ * The message body's `from`: the sending session's name, which `agent`'s
+ * prefix carries (plan 261011e). Absent or null is "an unnamed session". Any
+ * other speaker sending one is refused rather than ignored, so no caller comes
+ * to believe its `from` is shown when it is not. A claim like the speaker,
+ * not an identity; `isSenderName` keeps it from closing the bracket.
+ */
+export function parseSenderName(v: unknown, speaker: Speaker): Parsed<string | null> {
+  if (v === undefined || v === null) return { ok: true, value: null };
+  if (speaker !== "agent") return bad("from is only for speaker 'agent'");
+  if (!isSenderName(v)) return bad("from must be a plain session name: letters, digits and ._:@+-, at most 64 characters");
+  return { ok: true, value: v };
 }
 
 /**
@@ -745,7 +761,14 @@ export function parseTarget(o: Record<string, unknown>): Parsed<SteerTarget> {
  * Greg's. actions.ts § `Speaker` (A12) is the rule; `renderMessage` applies it,
  * and is the same function the queue's drain calls.
  */
-export type MessageRequest = { target: SteerTarget; text: string; declaredStatus: FleetStatus; speaker: Speaker };
+export type MessageRequest = {
+  target: SteerTarget;
+  text: string;
+  declaredStatus: FleetStatus;
+  speaker: Speaker;
+  /** The sending session's name, for `agent` alone (`parseSenderName`). */
+  from: string | null;
+};
 export type AnswerRequest = {
   target: SteerTarget;
   seen: SeenQuestion;
@@ -767,13 +790,15 @@ export function parseMessageBody(raw: unknown): Parsed<MessageRequest> {
   }
   const speaker = parseMessageSpeaker(o.speaker);
   if (!speaker.ok) return speaker;
+  const from = parseSenderName(o.from, speaker.value);
+  if (!from.ok) return from;
   // REFUSED HERE, WHILE SOMEBODY IS LOOKING AT IT, for the reason `checkText`
   // is called at enqueue next door: a message this speaker may not send should
   // fail as an answer to the request that sent it. The render below is done
   // again at the send — this one is the courtesy, that one is the guard.
-  const rendered = renderMessage(text, speaker.value);
+  const rendered = renderMessage(text, speaker.value, from.value);
   if (!rendered.ok) return bad(rendered.why);
-  return { ok: true, value: { target: target.value, text, declaredStatus, speaker: speaker.value } };
+  return { ok: true, value: { target: target.value, text, declaredStatus, speaker: speaker.value, from: from.value } };
 }
 
 /** `POST /api/steer/answer`'s body. */
@@ -1194,7 +1219,7 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     let fire: () => SendAttempt;
     if ("text" in request) {
       const message = request;
-      const rendered = renderMessage(message.text, message.speaker);
+      const rendered = renderMessage(message.text, message.speaker, message.from);
       if (!rendered.ok) {
         refused(notSendable(rendered.why));
         return;

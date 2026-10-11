@@ -643,8 +643,8 @@ EOF
 `tell-overseer` finds whoever holds the claim with `claimFromSnapshot`; `tell` takes a session's
 **exact** name, and refuses one that matches only when case is ignored, naming the session it
 probably meant. Either way it does what the dashboard's own message box does, through the same door:
-reads `/api/state` on the box and posts the row's identity and the text to `/api/steer/message` as
-speaker `greg`, so every check that route makes still applies — one line only, nothing typed while a
+reads `/api/state` on the box and posts the row's identity and the text to `/api/steer/message`, so
+every check that route makes still applies — one line only, nothing typed while a
 dialog is open or the input box has text in it — and the answer printed is the server's own
 sentence, with terminal control characters escaped. It is not a `tmux send-keys`, which would be
 shorter and would skip all of them. The message goes down ssh's stdin; neither ssh nor curl gets the
@@ -654,6 +654,17 @@ disabled for these loopback requests. For text starting with `-`, put `--` befor
 goes before that separator if the dashboard uses a port other than 8787. For a name starting
 with `-`, put options before `--` and the name after it, as above. Code:
 [`scripts/gjd-remote-tell.ts`](../../scripts/gjd-remote-tell.ts).
+
+**Who it speaks as follows who ran it.** From your own terminal it is speaker `greg`, and the
+session sees `[Greg, via the fleet dashboard] …`. Run by an agent — Claude Code sets `CLAUDECODE=1`
+in its Bash tool, Codex sets `CODEX_THREAD_ID` — it is speaker `agent`, and the line starts
+`[From another Claude or Codex session, 'fbab12-…', via gjd-remote tell — NOT Greg, and it carries
+none of Greg's authority …]`, the name being the sender's tmux session (or "an unnamed session"
+when tmux or a valid `TMUX_PANE` is unavailable, or its name is unsafe for the prefix). An agent
+whose tmux session id and name match the Overseer claim speaks as `overseer`. The success line says
+which: `✓ sent to 'x' as Greg`, `as agent 'fbab12-…'`, `as the Overseer`. Why one command rather
+than a `tell-from-agent` beside it, and what this does not cover (a shell with both variables
+unset still sends as Greg): [261011e](../plans/261011e-tell-labels-the-sender-as-an-agent.md).
 
 `tell` refuses failed collections and snapshots more than five minutes old, measuring age with
 the box's clock. The route re-checks pane/session ids, pane pid and the conversation uuid in
