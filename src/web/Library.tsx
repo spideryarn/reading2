@@ -87,7 +87,9 @@ import { ShelfTagFilter } from "./ShelfTagFilter.js";
 import { articleTopics } from "./article-topics.js";
 import { shelfKeyOf, topicsExpected, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
+import { addHref, ADMIN_HREF, navigate, PROFILE_HREF } from "./router.js";
+import { slugFromUrl } from "../ingest.js";
+import { Button } from "./components/ui/button.js";
 import { media } from "./media.js";
 import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
@@ -1224,8 +1226,15 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
      pointer made it, so an abandoned touch cannot poison a later keyboard,
      voice or assistive-technology activation. */
   const fingerOrPenOnCross = useRef(false);
+  const link = linkToAdd(value);
   return (
-    <div className="tw:mb-4">
+    /* **Narrower than the column, and on the right**, so it does not read as
+       a second add box. Greg, spya-zh5f23: *"Users keep confusing them … can
+       we narrow the search box and perhaps right align it"*. The add box
+       above is left-aligned and the wider of the two (AddArticle.tsx). The
+       `- 2rem` keeps a visible step on the left even on a phone, where 24rem
+       is wider than the column. Plan 261011l. */
+    <div className="tw:mb-4 tw:ml-auto tw:w-[min(24rem,calc(100%_-_2rem))]">
       <div className="tw:relative">
         <Search
           size={15}
@@ -1262,7 +1271,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
               onChange("");
             }
           }}
-          placeholder="Search titles, authors, and article text"
+          placeholder="Search your shelf"
           aria-label="Search the library"
           /* A ring as well as a border colour on focus. A 1px border changing
              from grey to orange is about one pixel's worth of colour on a
@@ -1311,8 +1320,44 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
           </button>
         )}
       </div>
+      {/* **A link here was meant for the add box.** The box above takes the
+          cursor on arrival, so a reader who arrives and pastes an address
+          pastes it here. A complete address is a strong signal that they meant
+          the add box. Offered, not done: the press goes through the same
+          `/add/<url>` as Add, and Enter still only puts the keyboard away.
+          Plan 261011l. */}
+      {link !== null && (
+        <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+          That's a link. Add it to your shelf?
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="tap-target"
+            onClick={() => navigate(addHref(link))}
+          >
+            Add it
+          </Button>
+        </p>
+      )}
     </div>
   );
+}
+
+/**
+ * The address a search query is, if the reader plainly meant to add it.
+ *
+ * `slugFromUrl` is the add box's own test, so this never offers what Add would
+ * refuse. On top of it, the query must be one token and carry a scheme or a
+ * path: `nature.com` alone is a fair thing to search a shelf for (the site
+ * name is on the cards), while the path makes `nature.com/articles/x` a much
+ * stronger add signal.
+ */
+export function linkToAdd(query: string): string | null {
+  const q = query.trim();
+  if (q === "" || /\s/.test(q)) return null;
+  if (!/^https?:\/\//i.test(q) && !q.includes("/")) return null;
+  return slugFromUrl(q) === "" ? null : q;
 }
 
 /**
