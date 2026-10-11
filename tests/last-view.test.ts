@@ -131,6 +131,14 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?debate=claims")).toBe(true);
   });
 
+  /* Restoring Not cited draws the stored search, if any: its search is a
+     button in the panel, never a restore (plan 261011ac, F1). */
+  it("keeps Sources' Not cited view, which a restore cannot make search", () => {
+    expect(rememberableSearch("?mode=sources&sources=not-cited")).toBe("?mode=sources&sources=not-cited");
+    expect(restoredHref("/read/x", "", "?mode=sources&sources=not-cited")).toBe("/read/x?mode=sources&sources=not-cited");
+    expect(hasArticleState("?sources=not-cited")).toBe(true);
+  });
+
   it("keeps Sources' Links view without arming or generating anything", () => {
     expect(rememberableSearch("?mode=sources&sources=links")).toBe("?mode=sources&sources=links");
     expect(restoredHref("/read/x", "", "?mode=sources&sources=links")).toBe("/read/x?mode=sources&sources=links");

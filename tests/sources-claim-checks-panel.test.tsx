@@ -286,7 +286,7 @@ describe("what the checks found", () => {
     const titles = [...(claimItem(A.id)?.querySelectorAll(".rcp-item a.rcp-title") ?? [])].map((a) => a.textContent);
     expect(titles).toEqual(["Page at https://a.example/one", "Page at https://a.example/two", "Page at https://a.example/three"]);
     /* The segment counts the rows on screen, a page once per claim. */
-    expect(segments()[3]).toBe("Claims3");
+    expect(segments()[4]).toBe("Claims3");
   });
 
   it("says found nothing only for an explicit empty answer, and something else when a claim was not answered", () => {

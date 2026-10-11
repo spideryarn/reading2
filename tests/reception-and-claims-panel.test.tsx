@@ -423,8 +423,8 @@ describe("Reception and Claims, each drawing its own search", () => {
     );
     const group = host.querySelector(".rcp-views");
     expect(group?.getAttribute("role")).toBe("radiogroup");
-    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims2"]);
-    const [, , reception, claims] = [...(group?.querySelectorAll("[role='radio']") ?? [])];
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2"]);
+    const [, , , reception, claims] = [...(group?.querySelectorAll("[role='radio']") ?? [])];
     expect(reception?.getAttribute("aria-checked")).toBe("true");
     expect(claims?.getAttribute("aria-checked")).toBe("false");
     /* mode.md bans a description line under a control: what each one is goes
@@ -435,7 +435,7 @@ describe("Reception and Claims, each drawing its own search", () => {
 
   it("hands a press back as the sub-mode's word, and nothing for the one already open", () => {
     paint(owner());
-    const [, , reception, claims] = [...host.querySelectorAll(".rcp-views [role='radio']")];
+    const [, , , reception, claims] = [...host.querySelectorAll(".rcp-views [role='radio']")];
     press(reception);
     expect(viewed).toEqual([]);
     press(claims);
@@ -498,13 +498,14 @@ describe("Reception and Claims, each drawing its own search", () => {
     });
     for (const view of ["reception", "claims"] as const) {
       paint(owner({ reception }), view, "prioritised", new Map(), { relevance: "partly" });
-      expect(segments(), view).toEqual(["Bibliography", "Links0", "Reception2", "Claims2"]);
+      expect(segments(), view).toEqual(["Bibliography", "Not cited", "Links0", "Reception2", "Claims2"]);
       expect(host.querySelectorAll(".rcp-item"), view).toHaveLength(2);
     }
   });
 
   it("gives a visitor the same two, with the same counts", () => {
     paintShared(shared());
+    /* No Not cited chip: that view is the owner's (plan 261011ac). */
     expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims1"]);
     expect(rowTitles()).toEqual(["A reply to the piece"]);
     paintShared(shared(), "claims");
@@ -902,7 +903,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
       },
     });
     paint(owner({ reception }), "reception", "prioritised", new Map(), { relevance: "directly", thread: "key" });
-    expect(segments()).toEqual(["Bibliography", "Links0", "Reception0", "Claims0"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0"]);
     expect(handoff()?.textContent).toBe("See the 2 sources on what it claims");
     press(handoff());
     expect(relevanced).toEqual([null]);
@@ -1231,7 +1232,7 @@ describe("Cited by, under Reception", () => {
 
   it("does not change Reception's count, which is the web search's rows", () => {
     withCiters(found(39), owner({ reception: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
-    expect(segments()[2]).toBe("Reception0");
+    expect(segments()[3]).toBe("Reception0");
     expect(host.querySelectorAll(".rcp-item")).toHaveLength(0);
     expect(titles()).toHaveLength(10);
   });
@@ -2257,7 +2258,7 @@ describe("Claims, and the relevance bar", () => {
     );
     /* The claim's own count is the rows under it, and so is the segment's. */
     expect(host.querySelector(".rcp-group-count")?.textContent).toBe("2");
-    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims2"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2"]);
     expect(card()).toContain("2 excerpts on screen.");
     /* The foot counts pages behind the rows drawn, not the ones hidden. */
     expect(card()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
@@ -2587,7 +2588,7 @@ describe("ReceptionAndClaimsPanel — threads", () => {
       expect(titles()).toEqual(["A reply"]);
       expect(host.querySelector(".rcp-thread.on")).toBeNull();
       expect(host.querySelector(".rcp-thread-showing")).toBeNull();
-      expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims1"]);
+      expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1"]);
       /* The positive control: the same address narrows Claims, and says so. */
       paint(owner({ reception: mixed(made) }), "claims", "prioritised", new Map(), { thread: "key" });
       expect(titles()).toEqual(["Three"]);
@@ -2618,7 +2619,7 @@ describe("Claims' list of the article's claims", () => {
 
   it("is reachable before any search is stored: the control is drawn and Claims offers List its claims", () => {
     paint(owner({ status: "none", reception: null }), "claims");
-    expect(segments()).toEqual(["Bibliography", "Links0", "Reception0", "Claims0"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0"]);
     expect(text()).toContain(SOURCES_CLAIMS_LIST_NONE);
     expect(buttonsNamed(SOURCES_CLAIMS_LIST_RUN)).toHaveLength(1);
     /* Reception's pre-search screen is Reception's, not Claims'. */
@@ -2762,9 +2763,9 @@ describe("Claims' list of the article's claims", () => {
   it("counts the listed claims on the segment when there is a list, and an older search's rows when not", () => {
     /* The default debate carries one legacy claim row. */
     paint(owner(), "claims");
-    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims1"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1"]);
     paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
-    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims2"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2"]);
     expect(host.querySelector(".rcp-views [role='radio'][aria-checked='true']")?.getAttribute("aria-label")).toBe(
       "Claims, 2 claims",
     );

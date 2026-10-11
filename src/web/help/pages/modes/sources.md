@@ -1,5 +1,5 @@
 ---
-keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
+keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite
 related: mode-referee, faq-beyond-the-article
 ---
 
@@ -7,6 +7,7 @@ related: mode-referee, faq-beyond-the-article
 
 A piece sits among other people’s work: the works it builds on, and what others have said about it
 since. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;
+**Not cited** lists papers close to it that its bibliography does not;
 **Links** lists every web address the piece itself links to;
 **Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,
 so you can check what others say about each one. Every source links out, so you can check it rather
@@ -17,7 +18,7 @@ than take our word for it.
 ## When to use it
 
 For an academic paper or a report, where the questions are “what is this built on, and where do I
-find it?” and “what have others made of it?”. Four buttons at the top choose the view; the number
+find it?” and “what have others made of it?”. Five buttons at the top choose the view; the number
 on each is how much it has to show. Bibliography is usually prepared in the background when the
 article is added; if it was not, pressing Bibliography makes it. Reception and Claims are never
 made in the background: pressing their view makes them (as does running them again from the
@@ -76,6 +77,22 @@ for that.
   **influence**. The slider hides the works that score lowest on relevance and influence together,
   relevance counting double; a work whose influence is unknown is judged on its relevance alone
   when available. Ordered by influence, the unknown ones come last, the most relevant first.
+
+**Not cited**
+
+- Papers close to this piece that are not among the works Spideryarn found in its bibliography,
+  closest first. Nothing is searched until you press **Search OpenAlex for related work**, which
+  sends the piece’s title and the opening of its text (its abstract, on a paper) to OpenAlex, a
+  free index of research papers, and nothing else of the article. No AI is involved. The answer is
+  kept, so the list is there next time; **Search again** asks afresh.
+- Each paper is checked against the bibliography by DOI or arXiv number, by title, and by the
+  article’s own reference text, and left out if it matches. A paper the piece only mentions in its
+  text can still be listed, and if the bibliography was made from an older version of the piece, or
+  leaves some works out, the list says it may include works the piece does cite. Whether any of
+  them belongs in the piece is yours to judge.
+- Each row is the paper’s title (press it to open the paper in a new tab), its authors, year, venue
+  and how often it is cited, and the opening of its abstract, so you can see why it came up.
+- Only whoever added the article has this view, and it needs Bibliography first.
 
 **Links**
 

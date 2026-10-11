@@ -132,7 +132,8 @@ const SUB_MODE_PARAMS = {
  *   thread too, off the payload — SummaryMode.tsx § `VisitorSummaryBand`),
  *   Structure (Fisheye and Expanded are two bands for anyone, off the payload)
  *   and Sources (Bibliography, Links, Reception and Claims, read by both
- *   `SourcesBand` and `VisitorSourcesBand` — SourcesMode.tsx).
+ *   `SourcesBand` and `VisitorSourcesBand` — SourcesMode.tsx; Not cited is
+ *   the owner's band's alone, and a visitor's reads it as Bibliography).
  *
  * A `Record`, so a new mode with sub-modes is a compile error until somebody
  * has said which. tests/a-broken-mode-leaves-the-article-readable.test.tsx.

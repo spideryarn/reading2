@@ -379,7 +379,9 @@ export function PrivacyPage() {
             something of the reader's. These are sent the identifier of a
             published work, or since 2026-10-11, for an article with no DOI,
             the words of its title to OpenAlex (Cited by's title search,
-            docs/plans/261011q-…), and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
+            docs/plans/261011q-…), or, on the owner's press in Sources' Not
+            cited, the title and the opening of the text (src/related-work.ts,
+            docs/plans/261011ac-…, its review's F1), and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
             is the whole list of hosts, and the request is built in
             src/bibliographic.ts and src/citation-index.ts. Crossref and DataCite
             have been asked since 2026-10-01 and were missing from this page
@@ -418,7 +420,9 @@ export function PrivacyPage() {
           , when you open Sources' Reception on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
-          its title instead, to find it by. Never the rest of the article’s text, and nothing about
+          its title instead, to find it by. And when you press Search OpenAlex for related work, in
+          Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its
+          abstract, on a paper), to find papers close to it. Never the rest of the article’s text, and nothing about
           who you are. They learn that somebody using Spideryarn asked about that work, not who.
         </p>
         <p>

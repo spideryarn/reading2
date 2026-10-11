@@ -282,6 +282,18 @@ const RECEPTION_TITLE = "The Leiden replication";
 /* A work's title, which is what a row leads with — drawn from the artefact,
    so a panel that drew its controls and no rows would not satisfy it. */
 const CITATION_TITLE = "Elements of Episodic Memory";
+/** Sources › Not cited's one stored row (plan 261011ac): a paper OpenAlex found that the Bibliography does not list. */
+const RELATED_TITLE = "Instruments Before Theories";
+const RELATED_WORK = {
+  kind: "found",
+  works: [{ openalexId: "W1234567", title: RELATED_TITLE, authors: ["Ada Lovelace"], authorCount: 1, year: 2019 }],
+  excluded: 0,
+  bibliographyStale: false,
+  bibliographyCapped: false,
+  yearLimited: 2021,
+  queryChanged: false,
+  searchedAt: "2026-10-11T09:00:00.000Z",
+};
 /* A question — the row's own content, not the (i) card's promise, which is a
    constant a panel with no rows would still be free to draw. */
 const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
@@ -826,6 +838,8 @@ function artefact(url: string): Response | null {
     return has ? json({ reception: RECEPTION, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/bibliography/"))
     return has ? json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false }) : GONE();
+  /* Sources' Not cited: the stored search, or none. Its GET never searches. */
+  if (url.startsWith("/api/related-work/")) return json(has ? RELATED_WORK : { kind: "not-searched" });
   /* Sources' Claims: the reader's checks (none), and the list. Before
      2026-10-09 nothing here opened Claims, so neither was served. */
   if (url.startsWith("/api/sources-claims/") && url.endsWith("/checks")) return json({ checks: [] });
@@ -1255,17 +1269,21 @@ const SPENDS: Record<Mode, Spend> = {
   ideas: { kind: "posts", steps: ["ideas"] },
   quotes: { kind: "posts", steps: ["quotes"] },
   timeline: { kind: "posts", steps: ["timeline"] },
-  /* **Four presses since 2026-10-11**, one per sub-mode, as Diagram's are
+  /* **Five presses since 2026-10-11**, one per sub-mode, as Diagram's are
      one per picture: Sources opens on whichever `?sources=` names
      (plan 261009l). Bibliography, the default, is one model call over the
      article (Citations' row until then); Reception is the dearest press in the
      app, one call out to the open web (Debate's); Claims is its own list.
-     Links reads markup already in the article and spends nothing. Each press
-     buys only its own sub-mode's work. */
+     Links reads markup already in the article and spends nothing. Not cited
+     reads its stored search and spends nothing: its search is its own button,
+     never a press that opens it (plan 261011ac, F1), so a `POST
+     /api/related-work` here is red. Each press buys only its own sub-mode's
+     work. */
   sources: {
     kind: "delegated",
     presses: [
       { search: "", steps: ["bibliography"], spends: [] },
+      { search: "?sources=not-cited", steps: [], spends: [] },
       { search: "?sources=links", steps: [], spends: [] },
       { search: "?sources=reception", steps: ["reception"], spends: [] },
       { search: "?sources=claims", steps: ["sources-claims"], spends: [] },
@@ -1574,20 +1592,21 @@ const DRAWS: Record<Mode, Draws> = {
 };
 
 /**
- * **Sources' four sub-modes**, each drawn by its real controller — `DRAWS`
- * asks of the default view only, Bibliography, so Links, Reception and Claims
+ * **Sources' five sub-modes**, each drawn by its real controller — `DRAWS`
+ * asks of the default view only, Bibliography, so Not cited, Links, Reception and Claims
  * get rows here too (GPT Sol's F4 on plan 261009l). One band in every view,
  * with one (i), the panel's: the chip row is that band's header, never a
  * surface of its own.
  */
 const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
   { search: "?mode=sources", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
+  { search: "?mode=sources&sources=not-cited", where: ".mode-band.sources.not-cited", says: RELATED_TITLE },
   { search: "?mode=sources&sources=links", where: ".mode-band.sources.links", says: LINK_PHRASE },
   { search: "?mode=sources&sources=reception", where: ".mode-band.sources.rcp", says: RECEPTION_TITLE },
   { search: "?mode=sources&sources=claims", where: ".mode-band.sources.rcp", says: CLAIM_STATEMENT },
 ];
 
-describe("phase B — Sources' four sub-modes", () => {
+describe("phase B — Sources' five sub-modes", () => {
   for (const view of SOURCES_VIEWS_DRAW) {
     it(
       `${view.search}: one band, its own body, the chip row as its head and one (i)`,
@@ -1602,6 +1621,7 @@ describe("phase B — Sources' four sub-modes", () => {
         const chips = (band as Element).querySelectorAll(":scope > .band-head .rcp-views [role='radio']");
         expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual([
           "Bibliography",
+          "Not cited",
           "Links",
           "Reception",
           "Claims",

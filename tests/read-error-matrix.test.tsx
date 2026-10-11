@@ -695,6 +695,8 @@ const NOT_A_ROW: Record<string, string> = {
   "useOrderedRead.ts": "the definition itself",
   "useCiters.ts":
     "Reception's Cited by is a section inside Debate's band, not a mode's artefact read: it has no error string at all. Every failed request is its `unavailable` outcome, with its own fixed sentence and its own Try again, checked in tests/use-citers.test.tsx and tests/reception-and-claims-panel.test.tsx.",
+  "useRelatedWork.ts":
+    "Sources' Not cited reads as Cited by does: no error string at all. Every failed request is its `unavailable` outcome, with its own fixed sentence and its own Try again, checked in tests/not-cited-panel.test.tsx.",
   "useArc.ts":
     "its `error` is never drawn — Reader reads `capability.arc.arc` and nothing else of it — so there is nothing to put a button beside. Its sentence is checked below.",
   "usePromises.ts":

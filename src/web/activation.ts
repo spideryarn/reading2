@@ -265,7 +265,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   sources: {
     kind: "delegated",
     target: (ctx) => activationForSources(ctx.sources),
-    why: "the sub-mode a press lands on is whatever `?sources=` says: Bibliography arms the citations, Reception the search, Claims the claims list",
+    why: "the sub-mode a press lands on is whatever `?sources=` says: Bibliography arms the citations, Reception the search, Claims the claims list, Not cited and Links nothing",
   },
   faq: { kind: "fixed", target: "faq" },
   /* The target is the route even when the job it starts writes the Quotes
@@ -586,7 +586,7 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Sources' sub-modes arms**: the
- * `bibliography` list for Bibliography, nothing for Links, the `reception`
+ * `bibliography` list for Bibliography, nothing for Not cited or Links, the `reception`
  * search for Reception, and the `sources-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
@@ -611,8 +611,11 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
     /* Citations' fixed target until 2026-10-09: the list of works cited. */
     case "bibliography":
       return "bibliography";
-    /* The article's own hyperlinks, read off the blocks in the browser: nothing
+    /* Not cited's search sends the piece's words to OpenAlex, so it is the
+       panel's own button and never a chip press (plan 261011ac, F1). The
+       article's own hyperlinks are read off the blocks in the browser: nothing
        to buy (plan 261011d). */
+    case "not-cited":
     case "links":
       return null;
     case "reception":

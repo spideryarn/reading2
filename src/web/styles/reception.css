@@ -430,6 +430,26 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 .rcp-citers-all { margin: 0.2rem 0 0; }
 .rcp-citers .rcp-scholar { display: flex; margin-top: 0.6rem; }
 
+/* **Sources › Not cited** — papers close to the piece that its Bibliography
+   does not list, from OpenAlex (NotCitedPanel.tsx). The same notes and rows as
+   *Cited by* above, a band of its own rather than a group under Reception.
+   The warning that the list may include works the piece does cite (a stale or
+   capped bibliography) is in the ink, not the soft note colour, with a rule
+   beside it: it qualifies every row below. The abstract's opening is the
+   work's own words, a stranger's text, so left in the app's face
+   (docs/project/fonts.md), quieter than the title. */
+.rcp-related { padding-top: 0.4rem; }
+.rcp-related-warn { color: var(--ink); border-left: 2px solid var(--rule); padding-left: 0.5rem; }
+.rcp-related-press { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; margin: 0.7rem 0 0.4rem; }
+.rcp-related-press .cmt-spinner { display: inline; }
+.rcp-related-abstract {
+  margin: 0.2rem 0 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 /* **The chip on a row about this piece**, on the small line under the title.
 
    **The three identification levels are drawn identically**, and that is a

@@ -2,7 +2,7 @@
  * **The sub-modes, named once** — the chips inside a mode that change the whole
  * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's six views,
  * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Sources' Bibliography |
- * Reception | Claims.
+ * Not cited | Links | Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
  *
@@ -239,8 +239,8 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Sources' four sub-modes**: Bibliography (the Citations mode until
- * 2026-10-09), Links (since 2026-10-11), then Reception and Claims (the Debate
+ * **Sources' five sub-modes**: Bibliography (the Citations mode until
+ * 2026-10-09), Not cited and Links (since 2026-10-11), then Reception and Claims (the Debate
  * mode's two, since 2026-10-03). The band's chip row, SourcesMode.tsx §
  * `SourcesViews`; Bibliography first because it is the default. Greg,
  * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in
@@ -264,6 +264,20 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: [
       "citations", "references", "works cited", "refs", "reference list", "cited works",
+    ],
+  },
+  /* Papers close to the piece that its Bibliography does not list, from
+     OpenAlex's search, for the owner only (the visitor's band draws no chip;
+     the command bar is the owner's). Beside Bibliography, because it is that
+     list's other side. Plan 261011ac. `not cited` itself is the label, so not
+     an alias (tests/mode-catalog.test.ts § never another row's label). */
+  "not-cited": {
+    label: "Not cited",
+    description: "What this piece does not cite: papers close to it that its bibliography does not list",
+    experimental: false,
+    aliases: [
+      "uncited", "related work", "related papers", "missing citations", "missing references",
+      "what it does not cite", "what it leaves out",
     ],
   },
   /* The article's own hyperlinks, read off its markup in the browser: no model,

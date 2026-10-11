@@ -1717,7 +1717,7 @@ export function Reader({
    * **Open Bibliography on one work** — the focus and the move in one place,
    * so neither can be written without the other (GPT Sol's F7 on plan
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
-   * (Bibliography is the absent default), so a reader on Links, Reception or
+   * (Bibliography is the absent default), so a reader on Not cited, Links, Reception or
    * Claims lands on the list the focus is for. Called by a chat's way back to a
    * cited work, by Links' *In Bibliography*, by Claims' *Cited in this
    * paragraph* (that plan's Stage 2), and by a citation card's *Open in Sources*.

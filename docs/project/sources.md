@@ -2,8 +2,9 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band with four sub-modes: **Bibliography**, the works the piece cites (the
-Citations mode until 2026-10-09), **Links**, every web address its own text links to (since
+One mode in the band with five sub-modes: **Bibliography**, the works the piece cites (the
+Citations mode until 2026-10-09), **Not cited**, papers close to it that its bibliography does not
+list (the owner's, since 2026-10-11), **Links**, every web address its own text links to (since
 2026-10-11), then **Reception**, what others have written about the piece, and **Claims**, the
 claims it rests on for the reader to check against the web (Debate's two). Out of the experimental
 switch, in every reader's bar, since the day it was made.
@@ -29,11 +30,12 @@ for Reception and Claims. This page owns the merge.
 
 ## In this doc
 
-- [§ The band](#the-band) — one chip row, three panels, one surface
+- [§ The band](#the-band) — one chip row, four panels, one surface
+- [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
 - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
-- [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one)
+- [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
 - [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate) — Peer review, then Sources
@@ -42,8 +44,9 @@ for Reception and Claims. This page owns the merge.
 ## The band
 
 ```
- ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐           (i)
+ ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 ┐   (i)
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
+ │ NotCitedPanel                                       ← Not cited (the owner's only)
  │ LinksPanel                                          ← Links
  │ ReceptionAndClaimsPanel, as the Debate mode drew it         ← Reception, Claims
 ```
@@ -58,12 +61,51 @@ under it.
 **Each chip's number is its own list's**, worked out by the pure selectors in
 [`sources-counts.ts`](../../src/web/sources-counts.ts) that the panels draw their lists
 with, so a number and the list under it cannot disagree (GPT Sol's F4): every work cited for
-Bibliography (no number while there is no list), Links' distinct addresses, Reception's rows through its thread, Claims' listed
+Bibliography (no number while there is no list), Not cited's rows (none until a stored search
+has been read), Links' distinct addresses, Reception's rows through its thread, Claims' listed
 claims or, once checked, the sources the checks found.
 
 **The description is the frame Greg gave**, *"What this piece cites, and what others say about
 it"*, and each chip's card leads with one half of it (sub-modes.ts § `SOURCES_SUB_MODES`).
 There is no description line in the band ([mode.md § The client](mode.md#the-client)).
+
+## Not cited
+
+Idea C of the peer-reviewer research
+([261009b](../research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md)),
+work on the same question that the piece does not cite, which Greg left to judgment on ease and value:
+
+> 4 all? Use your judgment based on that combination of ease and value.
+>
+> — Greg, 2026-10-10 (reply spya-dbfeqh to q-fkq30v)
+
+**Papers close to the piece that are not among the works Spideryarn found in its bibliography**,
+closest first: OpenAlex's semantic search on the piece's title and opening, less the works in
+Bibliography and the piece itself. Each row is the title (a link built by `citerUrl`), authors,
+year, venue, cited-by count and the opening of the abstract, so the reader can see why it came up.
+Free, one request, no model. The plan, its review and what was passed over (Reception's paid web
+search, OpenAlex's `related_works`, bibliographic coupling, a model-written *why* per row) are
+[261011ac](../plans/261011ac-sources-not-cited-related-work-it-leaves-out.md).
+
+**Nothing is sent until the owner presses** *Search OpenAlex for related work*, with a line under
+it saying it sends the title and the opening of the text: it is the one request of ours that
+carries the article's body, and a referee may have uploaded a confidential manuscript (the review's
+F1; [privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)). The answer is kept on
+a row of the article's own, so every later open draws it with no press; *Search again* re-sends.
+The button is held from the press until the answer is read.
+
+**The exclusion is ours, at read time, against the current Bibliography**, never OpenAlex's
+`referenced_works` (which misses Sutskever 2014 and ByteNet for the Transformer paper, both cited):
+by identifier, by title, then by the article's own reference text; never by the prose, where a work
+merely discussed is not cited. [`src/related-work.ts`](../../src/related-work.ts) holds the tiers.
+Telling a reviewer the piece omits work it cites is the worst error this view can make, so **no row
+says "not cited"**: the framing says once that none is among the works Spideryarn found in the
+bibliography, and that whether any belongs is the reader's call. A stale or capped Bibliography
+puts a warning above the list; no Bibliography at all is its own sentence, with no button.
+
+**The owner's only**, as *Cited by* is: the route is owner-only, and a visitor pressing would spend
+our OpenAlex allowance. The chip arms nothing (`activationForSources` returns `null`); its read is
+asked the first time the chip is shown, and kept for the chip's number.
 
 ## Links
 
@@ -143,7 +185,8 @@ beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered
 *tests/reception-navigation.test.tsx*.
 
 **In the command bar the old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
-*citations* and the bibliography words (*references*, *works cited*) find Bibliography; *links*,
+*citations* and the bibliography words (*references*, *works cited*) find Bibliography; *uncited*,
+*related work*, *missing citations* and the like find Not cited; *links*,
 *hyperlinks*, *external links*, *outbound links*, *web links* and *urls* find Links; *debate* and
 Debate's words (*critiques*, *reception*) find Reception; and *debate claims* finds Claims. *peer
 review* left Referee's aliases when this mode took the name, and stays this mode's alias now that
@@ -157,9 +200,10 @@ rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *p
 
 **Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
 button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForSources`): the `bibliography` list for Bibliography, nothing for Links, the `reception`
-web search for Reception, and the `sources-claims` list for Claims. Every read stays mounted in all
-four sub-modes, so
+`activationForSources`): the `bibliography` list for Bibliography, nothing for Not cited or Links,
+the `reception` web search for Reception, and the `sources-claims` list for Claims. Not cited's
+search is its panel's own button and nothing else ([§ Not cited](#not-cited)). Every read stays
+mounted in all five sub-modes, so
 the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
 lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
 anything.
@@ -191,6 +235,10 @@ stored lists, so a public article with links and none of them shows the not-buil
 the policy about blocks would change what every public article shows, and was left out of
 [261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
 the report.
+
+**Not cited is not there at all.** The visitor's chip row leaves it out, and a shared
+`?sources=not-cited` draws Bibliography (params.ts § `visitorSourcesView`), so a visitor never asks
+`/api/related-work` (*tests/public-network-trace.test.tsx*).
 
 ## Cited in this paragraph
 
@@ -267,9 +315,13 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
 - [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx),
+  [`src/web/NotCitedPanel.tsx`](../../src/web/NotCitedPanel.tsx),
   [`src/web/LinksPanel.tsx`](../../src/web/LinksPanel.tsx) and
-  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the three panels; each takes the chip row
+  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the four panels; each takes the chip row
   as `head`, and ReceptionAndClaimsPanel draws C1's cited works under claims.
+- [`src/web/useRelatedWork.ts`](../../src/web/useRelatedWork.ts) — Not cited's read and press;
+  [`src/related-work.ts`](../../src/related-work.ts) — the query, the search and the exclusion,
+  behind `GET` and `POST /api/related-work/:slug`.
 - [`src/web/outbound-links.ts`](../../src/web/outbound-links.ts) — Links' rows and the
   *In Bibliography* join.
 - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)

@@ -5874,12 +5874,13 @@ export function citersLines(
    the list is OpenAlex's search minus our reading of the bibliography, and the
    reader decides what belongs in it. */
 
-export const RELATED_WORK_HEADING = "Not cited";
-/** Under the heading, always: what the list is, and who decides. */
+/**
+ * Over every found list, once — never on a row (F4): what the rows are not,
+ * and who decides. How they were found is `relatedWorkLines`' first sentence.
+ */
 export const RELATED_WORK_INTRO =
-  "Papers close to this one that are not among the works Spideryarn found in its bibliography, " +
-  "closest first, by OpenAlex's search on this piece's title and opening. Whether any of them " +
-  "belongs in it is yours to judge.";
+  "None of these is among the works Spideryarn found in this piece's bibliography. Whether any of " +
+  "them belongs in it is yours to judge.";
 export const RELATED_WORK_LOADING = "Reading the last search for related work…";
 export const RELATED_WORK_SEARCHING = "Searching OpenAlex for related work…";
 /** The press (F1). */
@@ -5927,7 +5928,7 @@ export function relatedWorkLines(
 ): string[] {
   if (found.listed === 0) return [RELATED_WORK_NONE];
   const lines = [
-    `${papers(found.listed)} close to this piece, by OpenAlex's search${day ? ` on ${day}` : ""}, closest first.`,
+    `${papers(found.listed)} found by OpenAlex's search on this piece's title and opening${day ? `, on ${day}` : ""}, closest first.`,
   ];
   lines.push(
     found.yearLimited === null

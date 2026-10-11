@@ -696,6 +696,18 @@ title instead"*, and its earlier *"never the article's text"* became *"never the
 article's text"*, since a title is text. `LAST_UPDATED` moved to 11 October 2026, and
 `tests/privacy-page.test.ts` holds both clauses.
 
+**Also since 2026-10-11, Sources' Not cited sends the opening of the text, on the owner's press.**
+*Search OpenAlex for related work*
+([sources.md § Not cited](sources.md#not-cited),
+[261011ac](../plans/261011ac-sources-not-cited-related-work-it-leaves-out.md)) sends the article's
+title and its abstract, or else its first paragraphs, at most 1,000 characters — the first request
+of ours to carry the article's body. So it never runs on opening the chip, only on that press, with
+a line under the button saying what it sends: a referee may have uploaded a confidential manuscript
+(the plan review's F1). The answer is stored on a row of the article's own and deleted with it; the
+query is never logged. The page says *"when you press Search OpenAlex for related work, in Sources'
+Not cited, OpenAlex is sent your article's title and the opening of its text"*;
+`LAST_UPDATED` already read 11 October 2026, and `tests/privacy-page.test.ts` holds the clause.
+
 **A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
 sent something of the reader's; these are sent the identifier of a published work. The page names
 all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.

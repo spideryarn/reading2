@@ -966,7 +966,7 @@ const MODES_UI = [
      referee in the bottom bar."* It had come out of the switch the day before
      (spya-vcvxu5: *"let's move this out of experimental, this combined
      mode"*) as Citations and Debate in one button, in Debate's place after
-     Referee. Its chips are Bibliography, Links, Reception and Claims.
+     Referee. Its chips are Bibliography, Not cited (the owner's), Links, Reception and Claims.
      Bibliography's list is the piece's own references, Debate's is the web's,
      and Referee beside it is somebody weighing the piece: the run reads it
      critically. Sources first also puts the run's line before Sources, the

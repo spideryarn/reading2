@@ -1,10 +1,11 @@
 /**
  * **Sources mode's controller** — what this piece cites, and what others
- * say about it. One band, four sub-modes (`?sources=`):
+ * say about it. One band, five sub-modes (`?sources=`):
  *
  * ```
- *  ┌ Bibliography 42 │ Links 61 │ Reception 3 │ Claims 8 ┐      (i)
+ *  ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 ┐  (i)
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (default)
+ *  │ NotCitedPanel, OpenAlex's search on the owner's press  ← Not cited (owner only)
  *  │ LinksPanel, read from the article's markup                    ← Links
  *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims
  * ```
@@ -18,7 +19,7 @@
  * was put to him: *"B Sources. Rename comprehensively, eg including docs,
  * code, database etc"* (spya-egmn6r).
  *
- * **A wrapper, not a rewrite.** The three panels each own their list; this
+ * **A wrapper, not a rewrite.** The four panels each own their list; this
  * draws one chip row (`SourcesViews`, below)
  * and hands it to whichever panel the sub-mode names as that panel's `head`,
  * so there is exactly one `ModeSurface` on screen, the panel's, with
@@ -26,15 +27,19 @@
  * numbers come from sources-counts.ts, the same selectors the panels draw
  * their lists with (GPT Sol's F4).
  *
- * **Every read stays mounted in all four sub-modes**, so each chip can show
+ * **Every read stays mounted in all five sub-modes**, so each chip can show
  * its count, and **each auto-run is gated on its own sub-mode**: a press that
  * lands on Reception arms the paid search and nothing else, and a press armed
  * for one sub-mode that finds another on screen is retired unspent
- * (useAutoRun.ts § `enabled`). The reads are free GETs.
+ * (useAutoRun.ts § `enabled`). The reads are free GETs. Not cited's read, like
+ * *Cited by*'s, is not asked until its chip is first shown, and its search is
+ * only ever the panel's button (plan 261011ac, F1).
  *
  * The visitor twin, `VisitorSourcesBand`, draws the same chips and panels
  * off the public payload and mounts none of those hooks, so it can neither
- * read the owner's lists nor start anything. Any one of the three artefacts
+ * read the owner's lists nor start anything. It has no Not cited chip, and
+ * reads `?sources=not-cited` as Bibliography (params.ts §
+ * `visitorSourcesView`). Any one of the three artefacts
  * opens the mode for a visitor (visitor.ts § POLICY); a sub-mode with nothing
  * stored says so inside the band.
  *
@@ -60,6 +65,8 @@ import {
   SOURCES_VIEWS,
   type SourcesView,
   sourcesParam,
+  VISITOR_SOURCES_VIEWS,
+  visitorSourcesView,
 } from "../../params.js";
 import { SOURCES_SUB_MODES } from "../../sub-modes.js";
 import { armActivationForSubMode } from "../../activation.js";
@@ -80,6 +87,8 @@ import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js"
 import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
 import { type LinkableWork, type LinkedBlock, type OutboundLink, outboundLinks } from "../../outbound-links.js";
 import { LinksPanel } from "../../LinksPanel.js";
+import { useRelatedWork } from "../../useRelatedWork.js";
+import { NotCitedPanel } from "../../NotCitedPanel.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -89,7 +98,7 @@ function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | nu
 const NO_WORKS: readonly LinkableWork[] = [];
 
 /**
- * **The owner's band.** Every read the four sub-modes need, the chip row, and
+ * **The owner's band.** Every read the five sub-modes need, the chip row, and
  * the panel the sub-mode names.
  *
  * A component of its own for the reason every artefact band is: the hooks
@@ -160,12 +169,16 @@ export function SourcesBand({
   /* Who cites the piece, Reception's *Cited by*: a second read with no job
      under it, so it can never start the search. Plan 261004h. */
   const citers = useCiters(slug, view === "reception");
+  /* Not cited's stored answer, read the first time its chip is shown and kept
+     for its count; its search is the panel's button alone. Plan 261011ac. */
+  const related = useRelatedWork(slug, view === "not-cited");
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
   const links = useOutboundLinks(blocks, sourceUrl);
 
   const counts = sourcesCounts({
     works: bibliography.bibliography?.citations ?? null,
+    notCited: related.result,
     links,
     reception: reception.reception,
     listed: listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList }),
@@ -186,6 +199,7 @@ export function SourcesBand({
         onFocusTaken={onCiteFocusTaken}
       />
     );
+  if (view === "not-cited") return <NotCitedPanel related={related} head={head} />;
   if (view === "links")
     return (
       <LinksPanel
@@ -270,7 +284,10 @@ export function VisitorSourcesBand({
   onOpenWork(workId: string): void;
 }) {
   useRenderCount("VisitorSourcesBand");
-  const [view, setView] = useQueryState("sources", sourcesParam);
+  const [named, setView] = useQueryState("sources", sourcesParam);
+  /* Not cited is the owner's: a shared `?sources=not-cited` draws Bibliography,
+     and the address is left as it is (plan 261011ac, F6). */
+  const view = visitorSourcesView(named);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
   const links = useOutboundLinks(blocks, sourceUrl);
@@ -284,7 +301,8 @@ export function VisitorSourcesBand({
     thread: receptionAndClaimsControls.thread,
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
-  if (view === "bibliography")
+  /* `not-cited` never reaches here (`visitorSourcesView`); named so the type narrows. */
+  if (view === "bibliography" || view === "not-cited")
     return (
       <BibliographyPanel
         access={{ kind: "visitor", bibliography }}
@@ -354,18 +372,20 @@ function useReceptionAndClaimsControls() {
 }
 
 /**
- * **Bibliography | Links | Reception | Claims** — Sources' four sub-modes, the
- * band's header row. It was Debate's two-way control (`DebateViews`, 2026-10-03,
- * plan 261003o) until 2026-10-09, widened to three and then four on 2026-10-11,
- * and is built the way
+ * **Bibliography | Not cited | Links | Reception | Claims** — Sources' five
+ * sub-modes, the band's header row; four for a visitor, who has no Not cited
+ * (`VISITOR_SOURCES_VIEWS`). It was Debate's two-way control (`DebateViews`,
+ * 2026-10-03, plan 261003o) until 2026-10-09, widened to three, then four and
+ * five on 2026-10-11, and is built the way
  * Summary's Brief | Fuller | Thread is: a radiogroup of buttons, each its own
- * tab stop, drawn joined so the four read as one choice (mode-band.css § the
+ * tab stop, drawn joined so they read as one choice (mode-band.css § the
  * part-switcher).
  *
  * **Each chip carries the count of what its list draws** (sources-counts.ts),
  * so a reader on Bibliography can see there are three replies a press away —
  * Greg read one claim's two sources as the whole debate because nothing told
- * him there were others. Bibliography has no number while there is no list.
+ * him there were others. Bibliography has no number while there is no list,
+ * and Not cited none until a stored search has been read.
  *
  * **What each one is goes in its card, never in a sentence under the row**:
  * docs/project/mode.md bans a description line there (GPT Sol's F8 on
@@ -375,7 +395,7 @@ function useReceptionAndClaimsControls() {
  *
  * The owner's press arms the chip's own work, the same contract as its
  * command-bar row (activation.ts § `activationForSources`): Bibliography the
- * citations, Links nothing, Reception the paid search, Claims the claims list. A stored list
+ * citations, Not cited and Links nothing, Reception the paid search, Claims the claims list. A stored list
  * consumes its token without running. A visitor can never arm owner work.
  */
 export function SourcesViews({
@@ -394,7 +414,7 @@ export function SourcesViews({
   return (
     <div ref={group} className="summ-views rcp-views" role="radiogroup" aria-label="Sources view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {SOURCES_VIEWS.map((v) => {
+        {(ownerSlug === null ? VISITOR_SOURCES_VIEWS : SOURCES_VIEWS).map((v) => {
           const words = SOURCES_SUB_MODES[v];
           const count = countOf(counts, v);
           return (
@@ -439,6 +459,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
       return counts.bibliography === null
         ? null
         : { n: counts.bibliography, noun: plural(counts.bibliography, "work") };
+    case "not-cited":
+      return counts.notCited === null ? null : { n: counts.notCited, noun: plural(counts.notCited, "paper") };
     case "links":
       return { n: counts.links, noun: counts.links === 1 ? "address" : "addresses" };
     case "reception":
@@ -456,6 +478,13 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
 const VIEW_HOW: Record<SourcesView, string> = {
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
+  /* Checked against src/related-work.ts: `openAlexRelatedUrl` (semantic search
+     on the `related-work/1` query, the year filter), `notInBibliography` (the
+     identifier, title and entry tiers, run on every read against the current
+     Bibliography, never the prose), `isThisPiece`, and the POST being the only
+     path that asks OpenAlex. */
+  "not-cited":
+    "Found by OpenAlex's search on this piece's title and opening, only when you press Search, and kept; no AI. Each paper is checked against the bibliography Spideryarn listed, by DOI or arXiv number, by title, and by the article's own reference text, and left out if it matches. A paper the piece mentions in its text but not in its bibliography can still be listed, so judge each one yourself.",
   links:
     "Read off the article's own markup in your browser: no model, no search, nothing fetched. One row for each web address, whatever words the article links it with.",
   reception:

@@ -261,6 +261,11 @@ describe("the privacy page", () => {
     expect(prose).toContain("Never the rest of the article’s text, and nothing about who you are");
     /* Plan 261011q: with no DOI, Cited by searches OpenAlex by title. */
     expect(prose).toContain("When your article has no DOI, OpenAlex is sent the words of its title instead");
+    /* Plan 261011ac, F1: Not cited's search sends the title and the opening,
+       and only on the owner's press. */
+    expect(prose).toContain(
+      "when you press Search OpenAlex for related work, in Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its abstract, on a paper)",
+    );
   });
 
   it("says quiz answers are kept, and no longer that they are not", () => {

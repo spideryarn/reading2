@@ -1414,13 +1414,15 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' four sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' five sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
  * `liftLegacySources`; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
  *
  * `bibliography` is what the piece cites (the Citations mode until that day);
+ * `not-cited` is papers close to it that its bibliography does not list, from
+ * OpenAlex, for the owner only (since 2026-10-11, plan 261011ac);
  * `links` is the web addresses in the article's own markup;
  * `reception` is what others have written about the piece itself; `claims` is
  * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
@@ -1440,16 +1442,31 @@ export function learnInSearch(search: string): LearnView {
  * Reception the `reception` search, on Claims the `sources-claims` list
  * (activation.ts § `activationForSources`). Links, the article's own
  * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
- * off the blocks in the browser. Back, a pasted link and a
- * last-view restore arrive here and buy nothing.
+ * off the blocks in the browser. Not cited arms nothing either: its search is
+ * the panel's own button, because it sends the piece's words to OpenAlex. Back,
+ * a pasted link and a last-view restore arrive here and buy nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "links", "reception", "claims"] as const;
+export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
- * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
- * Bibliography and Links have a panel each.
+ * **The sub-modes a visitor's band draws**: all but Not cited, which is the
+ * owner's (its route is owner-only, and a visitor's search would spend our
+ * OpenAlex allowance — plan 261011ac § Who sees it).
  */
-export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "links">;
+export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter((v) => v !== "not-cited");
+/**
+ * **What a visitor's band draws for `?sources=`**: the view it names, or
+ * Bibliography for one the visitor does not have, so a shared
+ * `?sources=not-cited` link opens the default list rather than an empty band.
+ */
+export function visitorSourcesView(view: SourcesView): SourcesView {
+  return VISITOR_SOURCES_VIEWS.includes(view) ? view : "bibliography";
+}
+/**
+ * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
+ * Bibliography, Not cited and Links have a panel each.
+ */
+export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "not-cited" | "links">;
 
 export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),

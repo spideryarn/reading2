@@ -1513,6 +1513,53 @@ describe("a signed-out browser on a shared document", () => {
    * withheld row is disclosed in plain words, and neither *Search the web* nor
    * *Search again* is on the page. The trace is the one public GET.
    */
+  /**
+   * **Not cited is the owner's** (plan 261011ac, F6): its route is
+   * owner-only and a visitor's search would spend our OpenAlex allowance. So a
+   * shared `?sources=not-cited` draws Bibliography, with no Not cited chip,
+   * and asks nothing but the public payload — never `/api/related-work`.
+   */
+  it("reads a shared ?sources=not-cited as Bibliography, with no Not cited chip, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      bibliography: {
+        citations: [
+          {
+            id: "w1",
+            title: PUBLIC_WORK,
+            authors: "Tononi",
+            year: "2004",
+            why: "The theory the piece argues against.",
+            mentions: [],
+            citedAt: [],
+            firstCited: "spya-cccccc",
+            citedInBody: false,
+            url: "https://doi.org/10.1186/1471-2202-5-42",
+            linkFrom: "doi",
+          },
+        ],
+        capped: false,
+      },
+    };
+    await open("?mode=sources&sources=not-cited");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    expect(readable(band as Element)).toContain(PUBLIC_WORK);
+    const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".rcp-views [role='radio']") ?? [])];
+    expect(chips.map((chip) => chip.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Bibliography",
+      "Links",
+      "Reception",
+      "Claims",
+    ]);
+    expect(chips[0]?.getAttribute("aria-checked"), "Bibliography is the one drawn").toBe("true");
+    expect(host.textContent).not.toContain("Search OpenAlex for related work");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+  });
+
   it("draws a stored debate from the payload, asking nothing", async () => {
     await remount();
     served = {
@@ -2201,9 +2248,12 @@ describe("a signed-out browser on a shared document", () => {
       "timeline",
       "skim",
       "faq",
-      /* Sources in each of its four sub-modes, and the two old words. Links
-         (plan 261011d) is read off the blocks and must ask nothing at all. */
+      /* Sources in each of its sub-modes, and the two old words. Links
+         (plan 261011d) is read off the blocks and must ask nothing at all;
+         Not cited (plan 261011ac) is the owner's, and a visitor's band reads
+         it as Bibliography, never asking `/api/related-work`. */
       "sources",
+      "sources&sources=not-cited",
       "sources&sources=links",
       "sources&sources=reception",
       "sources&sources=claims",
