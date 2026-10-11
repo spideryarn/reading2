@@ -1302,6 +1302,10 @@ describe("the artefacts a shared link carries", () => {
       },
       { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
     ],
+    /* `skim/13`'s pass intros (plan 261011r) are the owner's only for now:
+       whether a visitor gets them is a question for Greg, since adding them
+       is an edit to this allowlist. The key set below proves they stay out. */
+    intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
     visible: [1, 2, 2],
     offered: 12,
     dropped: {

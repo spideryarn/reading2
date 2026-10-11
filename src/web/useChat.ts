@@ -182,6 +182,15 @@ export interface SendOptions {
    */
   help?: true;
   /**
+   * **The reader wrote this whole question** — in the composer or the command
+   * bar's direct guide row, not a button's words, a greeting start, a next
+   * step or a suggestion. The route hands a
+   * typed question to the guide's `offer_to_save`, which may then save words
+   * drawn from it without a press (src/save-closeness.ts, plan 261011s). Per
+   * turn and never stored; `true` or absent, like `help`.
+   */
+  typed?: true;
+  /**
    * The comment this conversation is being started from — **only on the send
    * that creates the thread**, and passed straight through to the server.
    *
@@ -711,7 +720,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, origin, kind, help, sourceCommentId, visible } = opts;
+      const { onThreadId, anchor, origin, kind, help, typed, sourceCommentId, visible } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -814,6 +823,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
                route refuses `false` outright rather than reading it as absent,
                so this must never write one. */
             ...(help ? { help: true as const } : {}),
+            ...(typed ? { typed: true as const } : {}),
             ...(sourceCommentId ? { sourceCommentId } : {}),
           },
         },

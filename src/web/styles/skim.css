@@ -362,6 +362,22 @@
   resize: vertical;
 }
 .skim-purpose-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
+
+/* **The pass's intro** — the map of this walk, read before its first stop
+   (`skim/13`, plan 261011r; Greg, spya-wu83xh: *"it feels a bit disorienting
+   and disjointed"*). In the model's face (voices.css), at the cue's size and
+   colour, since it is the same kind of line; above the scroller and never
+   shrunk by it, like the purpose line. */
+.skim-intro {
+  flex: none;
+  margin: 0.3rem 0.7rem 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.mode-band.skim.has-about:not(:has(> .band-head)) > .skim-intro {
+  padding-right: var(--band-about-room);
+}
 .skim-purpose-ask .gloss-error { margin: 0; }
 
 /* ------------------------------------------------------ the door in the prose --

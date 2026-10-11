@@ -224,6 +224,9 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
             profile: renderProfile({ profile: c.about, purpose: c.why }),
             experience: "a-few",
             saved: { purpose: c.why, profile: c.about },
+            /* Typed by the reader, as the composer sends it: so an offer
+               quoted word for word saves at once (plan 261011s). */
+            typed: c.question,
             runToolWith: async (name, args, ctx) => {
               const outcome =
                 name === "offer_to_save" || name === "offer_next_steps"
@@ -287,7 +290,7 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
       answer: result.text,
     });
     console.log(
-      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown ? "" : " NO-STEPS"} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`,
+      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown ? "" : " NO-STEPS"} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.now === true ? "NOW" : "press", o.text]))}`,
     );
   }
 }

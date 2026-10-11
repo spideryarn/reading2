@@ -1,11 +1,11 @@
 ---
 id: q-pe52f6
 report: spya-cwb56b
-status: open
+status: answered
 asked: 2026-10-10
 title: From ChatGPT or Claude on the web, how should you approve making an article public or handing over its private link?
 refs: qi-vm6y7nd4 · docs/plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md · docs/user-feedback/261010_1737-mcp-draft-a-gift-for-any-article-send-makes-the-link.md · SPIDERYARN-READING2-GX
-acted: spya-zyxjxs
+acted: spya-zyxjxs, spya-fsarqm
 ---
 You asked why a press of yours is needed at all. In short: so that nobody but you can make one of your articles public, or hand its private link out. One example of the danger, then the same choice again.
 
@@ -32,3 +32,9 @@ Greg's reply, 2026-10-11 (spya-zyxjxs, in the Feedback dialog):
 > Why does it need the check? I don't understand why all this is necessary.
 
 Answered by rewriting the short part above (feedback sweep 2026-10-11, queue item qi-he3dejmf); the question stays open for his choice.
+
+Greg's reply, 2026-10-11 (spya-fsarqm, in the Feedback dialog):
+
+> C
+
+Acted on by the feedback sweep, 2026-10-11 (queue item qi-svxd4265). C removes one of the listed safety catches, and an unattended run may not build that on a reply alone, so who may build it is asked in q-hpwyf0. The build is queue item qi-jpw55yrq, held until then.

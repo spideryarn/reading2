@@ -41,7 +41,7 @@ import { useChat } from "../../useChat.js";
 import { useExperimental } from "../../useExperimental.js";
 import { softKeyboardIsUp } from "../../useVisualViewport.js";
 import { useLive } from "../../live/useLive.js";
-import { ChatPanel } from "../../ChatPanel.js";
+import { ChatPanel, type SendHow } from "../../ChatPanel.js";
 import { chatDraftsFor } from "../../chat-draft.js";
 
 /**
@@ -347,10 +347,21 @@ interface ChatHandoffBase {
   readonly send: boolean;
 }
 
-/** To the guide: open it (or begin it) and send, or wait in its box. Nothing else rides along. */
-export interface ChatHandoffToGuide extends ChatHandoffBase {
-  readonly target: "guide";
-}
+/**
+ * To the guide: open it (or begin it) and send, or wait in its box. `typed`
+ * says whether the reader wrote the whole question (the bar's *Ask the guide*
+ * row), so the guide may save a quoted run without a press
+ * (src/save-closeness.ts, plan 261011s).
+ *
+ * A waiting question must be reader-authored: when it eventually leaves via
+ * the composer, the composer correctly marks everything in its box typed. A
+ * sender of app/model words must therefore send them at once with
+ * `typed: false`, never prefill them for the composer to launder. The union
+ * makes a future caller say that in a typechecked shape.
+ */
+export type ChatHandoffToGuide =
+  | (ChatHandoffBase & { readonly target: "guide"; readonly send: true; readonly typed: boolean })
+  | (ChatHandoffBase & { readonly target: "guide"; readonly send: false; readonly typed: true });
 
 /** A fresh chat — every *Ask in chat* sender in `Reader` § `handToChat`. */
 export interface ChatHandoffToChat extends ChatHandoffBase {
@@ -989,7 +1000,7 @@ export function ConversationBand({
    */
   const taken = useRef<ChatHandoff | null>(null);
   const sendToRef = useRef<
-    (id: string | null, question: string, first?: ChatHandoffToChat, as?: ThreadKind) => void
+    (id: string | null, question: string, first?: ChatHandoffToChat, as?: ThreadKind, how?: SendHow) => void
   >(() => {});
   useEffect(() => {
     if (!handoff) return;
@@ -1004,7 +1015,9 @@ export function ConversationBand({
         /* The one guide, not a fresh conversation: the bar's *Ask the guide*
            (plan 261007j). Sent as a guide turn, whatever the band had open. */
         const id = openGuide(!handoff.send);
-        if (handoff.send) sendToRef.current(id, handoff.question, undefined, "guide");
+        if (handoff.send) {
+          sendToRef.current(id, handoff.question, undefined, "guide", handoff.typed ? { typed: true } : undefined);
+        }
         else drafts.setThread(id, handoff.question);
       } else if (ours && handoff.target === "chat") {
         /* A fresh chat, even with the guide open: `beginHere` mints the
@@ -1271,6 +1284,9 @@ export function ConversationBand({
     /* The kind of conversation `to` is, when this render cannot see it yet —
        a guide a handoff has just begun. Otherwise the open thread's own. */
     as?: ThreadKind,
+    /* Whether the reader typed it (`SendHow`): the composer or the command
+       bar's direct guide handoff. */
+    how?: SendHow,
   ): void => {
     if (resettingNow.current) return;
     // `send` returns the thread it went to, minted here when this is a new
@@ -1315,6 +1331,9 @@ export function ConversationBand({
       ...(origin ? { origin } : {}),
       ...(first?.anchor ? { anchor: first.anchor } : {}),
       ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
+      /* Only the guide consumes this provenance. Keeping it off Chat and Learn
+         also lets the route refuse a misplaced claim instead of ignoring it. */
+      ...(sendKind === "guide" && how?.typed ? { typed: true as const } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box
@@ -1404,7 +1423,7 @@ export function ConversationBand({
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
-      onSend={(question) => sendTo(current, question)}
+      onSend={(question, how) => sendTo(current, question, undefined, undefined, how)}
       /* The box under the list. `null` rather than `thread` is the whole
          difference: it mints whatever `?thread=` still says, which on the list
          is either nothing, a conversation the fetch has not brought yet, or one

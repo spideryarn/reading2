@@ -43,7 +43,7 @@
  * Each arm's own `generateSkim` renders its own prompt, makes its own
  * call through `streamMessage` (the AI gateway, same model and effort),
  * parses, maps labels back and validates with its own `buildSkim`. Both
- * get `profile: null`, so the profile is not a variable.
+ * get the same profile (none unless `--purpose=` or `--about=`), so it is not a variable.
  *
  * ## What it writes
  *
@@ -95,6 +95,17 @@
  * was measured and removed from src/skim.ts, and the flag went with it (commit
  * c943494a9 has both). The first round's results files still carry
  * `context: true` on that arm's runs.
+ *
+ * ## Also used for `skim/12` vs `skim/13` (plan 261011r § Stage 2)
+ *
+ * Each run records the route's `intros` (`null` for an arm before `skim/13`).
+ * `--purpose=<sentence>` and `--about=<sentence>` give both arms one rendered
+ * profile (`renderProfile`), so a profile-shaped intro or cue can be read;
+ * without them both arms get none, as before. **The DepthRow metrics are
+ * cumulative** (depth ≤ d), the walk from before plan 260929e; a pass as the
+ * reader walks it is `stops[]` filtered by `depth === d` or `again` including
+ * d, which is what scripts/eval/skim-walked-metrics.ts reads (GPT Sol, plan
+ * review F4).
  * scripts/eval/skim-cue-pairs.ts turns several results files into the
  * screens, the route comparison and the blind pairs.
  */
@@ -132,6 +143,9 @@ const FILES = new Map(
       return [slug, rest.join("=")] as const;
     }),
 );
+/* `--purpose=` / `--about=`: one rendered profile for both arms (plan 261011r). */
+const purposeArg = args.find((a) => a.startsWith("--purpose="));
+const aboutArg = args.find((a) => a.startsWith("--about="));
 const sha = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 16);
 const ARMS = NEW_ONLY ? (["new"] as const) : OLD_ONLY ? (["old"] as const) : (["old", "new"] as const);
 const slugArgs = args.filter((a) => !a.startsWith("--"));
@@ -146,6 +160,11 @@ const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const { costStore } = await import("../../src/store/ai-calls.js");
 const NEW = await import("../../src/skim.js");
 const { passRoute } = await import("../../src/web/skim-route.js");
+const { renderProfile } = await import("../../src/profile.js");
+const PROFILE = renderProfile({
+  profile: aboutArg ? aboutArg.slice("--about=".length) : null,
+  purpose: purposeArg ? purposeArg.slice("--purpose=".length) : null,
+});
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
 type RunOut = Promise<{ skim: Skim; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
@@ -325,6 +344,10 @@ interface RunResult {
     /** The nearest body paragraph before the stop's own, whole, wherever it sits — for a judge checking a cue's scene against the text. */
     before: string | null;
   }[];
+  /** Each pass's intro (`skim/13`), or `null` for a route from before it. */
+  intros: Skim["intros"] | null;
+  /** The rendered profile both arms were given, or `null`. */
+  profile: string | null;
   /** Stored quotes under an abstract heading (`NEW.inAbstract`), whichever arm — the NEW arm does not offer them. */
   abstractQuotes: number;
   /** Stops visible at depth ≤ 1, ≤ 2, ≤ 3 that sit under an abstract heading. */
@@ -337,12 +360,12 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     async () => {
       if (arm === "new") {
         const input = NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-        return NEW.generateSkim({ power: "standard", slug, input, profile: null });
+        return NEW.generateSkim({ power: "standard", slug, input, profile: PROFILE });
       }
       if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
       if (!isV6(OLD)) {
         const input = OLD.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-        return OLD.generateSkim({ power: "standard", slug, input, profile: null });
+        return OLD.generateSkim({ power: "standard", slug, input, profile: PROFILE });
       }
       return OLD.generateSkim({
         slug,
@@ -376,6 +399,8 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   return {
     abstractQuotes: quotes.quotes.filter((q) => idx.has(q.blockId) && isAbs(q.blockId)).length,
     abstractStops,
+    intros: skim.intros ?? null,
+    profile: PROFILE,
     slug,
     arm,
     run,
@@ -506,7 +531,7 @@ async function main(): Promise<void> {
         );
         console.log(`  offered ${r.offered}; ${r.abstractQuotes} stored quotes in the abstract; abstract stops at d1/d2/d3: ${r.abstractStops.join("/")}`);
       }
-      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, oldModuleSha: OLD ? sha(OLD_MODULE) : null, newModuleSha: sha("src/skim.ts"), arms: ARMS, profile: null, snapshot, results, failures }, null, 2));
+      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, oldModuleSha: OLD ? sha(OLD_MODULE) : null, newModuleSha: sha("src/skim.ts"), arms: ARMS, profile: PROFILE, snapshot, results, failures }, null, 2));
     }
   });
 
