@@ -427,8 +427,8 @@ key itself calls, so the double press cannot run anything Enter would not: a phr
 row runs that row (a row that writes or generates included, as Enter on it does), and a phrase that
 names nothing is asked about, with the answer drawn under **Did you mean** unless it is a sure pick
 that only moves the reader. The bar does not "send", so the button and the strip take
-`done="enter"` and say *"Press Enter when the words arrive"* and *"Turning that into text, then
-pressing Enter…"* (`DONE_WORDS` in `DictationStrip.tsx`). Like Feedback it stays mounted when shut:
+`done="enter"` and say *"Turning your words into text, then pressing Enter"* and *"Turning that
+into text, then pressing Enter…"* (`DONE_WORDS` in `DictationStrip.tsx`). Like Feedback it stays mounted when shut:
 `onDone` checks `open`, and its `doneKey` is whether it is open. It is not offered while a run is
 `Starting…`, when Enter is refused. **The Illustrated note still has none**: it starts a paid
 repaint.
