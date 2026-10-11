@@ -79,6 +79,8 @@ import {
   CITERS_NONE,
   CITERS_NOT_INDEXED,
   CITERS_NO_DOI,
+  CITERS_NO_MATCH,
+  CITERS_BY_TITLE,
   CITERS_TOO_LARGE,
   CITERS_UNAVAILABLE,
   CITERS_UNCONFIRMED,
@@ -1038,6 +1040,8 @@ describe("Cited by, under Reception", () => {
   function found(n: number, over: Partial<Extract<CitersResult, { kind: "found" }>> = {}): CitersResult {
     return {
       kind: "found",
+      via: "doi",
+      target: { openalexId: "W4399223951", title: "The piece itself" },
       count: n,
       returned: n,
       dropped: 0,
@@ -1051,6 +1055,7 @@ describe("Cited by, under Reception", () => {
   it("has its own plain sentence for every outcome that is not a list", () => {
     const sentences: [CitersResult, string][] = [
       [{ kind: "no-doi" }, CITERS_NO_DOI],
+      [{ kind: "no-match" }, CITERS_NO_MATCH],
       [{ kind: "not-indexed" }, CITERS_NOT_INDEXED],
       [{ kind: "unconfirmed" }, CITERS_UNCONFIRMED],
       [{ kind: "unavailable" }, CITERS_UNAVAILABLE],
@@ -1098,6 +1103,27 @@ describe("Cited by, under Reception", () => {
     expect(lines[0]).toBe("Michael G. Levin · BioEssays · 2024 · review · cited 34 times");
     /* `article` is what nearly every row is, so it is not said; once is not "1 times". */
     expect(lines[1]).toBe("Ada Lovelace · A Journal · 2025 · cited once");
+  });
+
+  /* Plan 261011q: a list reached by a title search names and links the record it
+     matched, so that a wrong match can be seen to be one. A DOI's list does not. */
+  it("names and links the record a title search matched, and only then", () => {
+    const matchLine = () => section()?.querySelector(".rcp-citers-match") ?? null;
+    withCiters(found(1, { via: "title", target: { openalexId: "W2626778328", title: "Attention Is All You Need" } }));
+    expect(matchLine()?.textContent).toBe(`${CITERS_BY_TITLE} Attention Is All You Need`);
+    const link = matchLine()?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://openalex.org/W2626778328");
+    expect(link?.getAttribute("rel")).toBe("noreferrer noopener");
+    expect(titles()).toEqual(["Citing paper 0"]);
+
+    /* An id that is not a `W` id is named, never linked. */
+    withCiters(found(1, { via: "title", target: { openalexId: "W1\"><script>", title: "Odd" } }));
+    expect(matchLine()?.textContent).toBe(`${CITERS_BY_TITLE} Odd`);
+    expect(matchLine()?.querySelector("a")).toBeNull();
+
+    withCiters(found(1));
+    expect(matchLine()).toBeNull();
+    expect(said()).not.toContain(CITERS_BY_TITLE);
   });
 
   it("builds each link itself: the DOI, else the OpenAlex id, with no referrer and no opener", () => {

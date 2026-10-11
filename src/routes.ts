@@ -11927,8 +11927,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    *
    * **A `GET` that may make two outside requests and fill a cache**, which is
    * the link preview's shape above: no model, no money, and almost every call
-   * is answered by a row a week fresh. Every outcome is a 200 carrying one
-   * `CitersResult` member, because each has its own sentence in the panel.
+   * is answered by a row a week fresh. An article with no DOI adds a third, a
+   * title search made on every call (plan 261011q), which spends a little of
+   * OpenAlex's free daily allowance rather than money. Every outcome is a 200
+   * carrying one `CitersResult` member, because each has its own sentence in
+   * the panel.
    *
    * **The owner's only, and in this table.** `loadArticleIdentity` goes through
    * the owner filter, so somebody else's slug is the same 404 as one that does

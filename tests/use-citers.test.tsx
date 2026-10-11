@@ -20,6 +20,7 @@ import type { CitersResult } from "../src/types.js";
 
 /** Every address asked for, in order. */
 const gets: string[] = [];
+const TARGET = { openalexId: "W2626778328", title: "Attention Is All You Need" };
 /** What the next GETs answer: a body, or a status that is not ok. */
 let answer: CitersResult | number = { kind: "not-indexed" };
 let pending: Promise<Response> | null = null;
@@ -112,7 +113,11 @@ it("calls a 200 that is not one of the route's answers unavailable, rather than 
   const bodies: unknown[] = [
     {},
     { kind: "found" },
-    { kind: "found", count: 1, returned: 1, dropped: 0, capped: false, citers: "no", fetchedAt: "2026-10-04T00:00:00Z" },
+    { kind: "found", via: "doi", target: TARGET, count: 1, returned: 1, dropped: 0, capped: false, citers: "no", fetchedAt: "2026-10-04T00:00:00Z" },
+    /* Plan 261011q: a list must say how it was reached, and name its record. */
+    { kind: "found", target: TARGET, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
+    { kind: "found", via: "isbn", target: TARGET, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
+    { kind: "found", via: "title", target: { openalexId: 7 }, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" },
     { kind: "something-new" },
     null,
     [],
@@ -123,7 +128,7 @@ it("calls a 200 that is not one of the route's answers unavailable, rather than 
     expect(host.textContent, JSON.stringify(body)).toBe("unavailable");
   }
   /* The positive control: a well-formed list is passed through. */
-  answer = { kind: "found", count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" };
+  answer = { kind: "found", via: "doi", target: TARGET, count: 0, returned: 0, dropped: 0, capped: false, citers: [], fetchedAt: "2026-10-04T00:00:00Z" };
   await show("fine", true);
   expect(host.textContent).toBe("found");
 });
@@ -160,14 +165,14 @@ it("refuses malformed citer rows before they can crash the Debate band", async (
   };
   for (const [i, row] of [null, {}, { ...valid, authors: null }, { ...valid, title: {} }].entries()) {
     answer = {
-      kind: "found", count: 1, returned: 1, dropped: 0, capped: false,
+      kind: "found", via: "doi", target: TARGET, count: 1, returned: 1, dropped: 0, capped: false,
       citers: [row], fetchedAt: "2026-10-04T00:00:00Z",
     } as CitersResult;
     await show(`malformed-${i}`, true);
     expect(host.textContent, JSON.stringify(row)).toBe("unavailable");
   }
   answer = {
-    kind: "found", count: 1, returned: 1, dropped: 0, capped: false,
+    kind: "found", via: "doi", target: TARGET, count: 1, returned: 1, dropped: 0, capped: false,
     citers: [valid], fetchedAt: "2026-10-04T00:00:00Z",
   };
   await show("valid-row", true);

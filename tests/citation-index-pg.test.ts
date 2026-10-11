@@ -31,7 +31,14 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkId } from "../src/bibliographic.js";
-import { CITERS_FRESH_MS, type FetchedCiters, openAlexCitersUrl, openAlexWorkUrl } from "../src/citation-index.js";
+import {
+  CITERS_FRESH_MS,
+  type FetchedCiters,
+  openAlexCitersUrl,
+  openAlexTitleSearchUrl,
+  openAlexWorkUrl,
+  titleQueryOf,
+} from "../src/citation-index.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
@@ -52,6 +59,23 @@ const TITLE = "Self-Improvising Memory: A Perspective on Memories as Agential, D
 const WORK_URL = openAlexWorkUrl(DOI);
 const CITERS_URL = openAlexCitersUrl("W4399223951", 100);
 
+/* Plan 261011q: a no-DOI article found by title. One agreeing author, so the
+   match also needs the article's year, which `loadArticleIdentity` must carry. */
+const ATTENTION = "Attention Is All You Need";
+const SEARCH_URL = openAlexTitleSearchUrl(titleQueryOf(ATTENTION) ?? "");
+const TITLE_CITERS_URL = openAlexCitersUrl("W2626778328", 100);
+const SEARCH_ANSWER = {
+  meta: { count: 1 },
+  results: [
+    {
+      id: "https://openalex.org/W2626778328",
+      display_name: ATTENTION,
+      publication_year: 2017,
+      authorships: [{ author: { display_name: "Ashish Vaswani" } }, { author: { display_name: "Noam Shazeer" } }],
+    },
+  ],
+};
+
 /** Every address the fake fetcher was asked for, in order. */
 let asked: string[] = [];
 
@@ -65,6 +89,8 @@ vi.mock("../src/fetch.js", async (importActual) => {
       asked.push(url);
       if (url === WORK_URL) return fixture("work-e26060481.json");
       if (url === CITERS_URL) return fixture("citers-e26060481.json");
+      if (url === SEARCH_URL) return SEARCH_ANSWER;
+      if (url === TITLE_CITERS_URL) return fixture("citers-e26060481.json");
       throw new actual.FetchFailure("not-found", url, "HTTP 404", { status: 404 });
     },
   };
@@ -190,6 +216,17 @@ describe("the citation index cache", () => {
     ).toBeUndefined();
   });
 
+  it("keys a row by a DOI or by OpenAlex's lower-cased id, and by nothing else (261011q)", async () => {
+    const key = (workId: string) =>
+      refusedBy(sql`
+        insert into spideryarn.citation_index_lookups (work_id, state) values (${workId}, 'not-indexed')`);
+    expect(await key("openalex:w2626778328")).toBeUndefined();
+    expect(await key("openalex:W2626778328")).toBe("citation_index_lookups_work_id");
+    expect(await key("openalex:w12ab")).toBe("citation_index_lookups_work_id");
+    expect(await key("openalex:2626778328")).toBe("citation_index_lookups_work_id");
+    expect(await key("title:attention is all you need")).toBe("citation_index_lookups_work_id");
+  });
+
   it("refuses a citer whose id or DOI is not the right shape, and one with no lookup behind it", async () => {
     await store.write(ID, found([]));
     const insert = (workId: string, openalexId: string, doi: string | null) =>
@@ -236,6 +273,7 @@ const MINE = "test-citers-mine";
 const NO_DOI = "test-citers-no-doi";
 const WRONG_DOI = "test-citers-wrong-doi";
 const THEIRS = "test-citers-theirs";
+const BY_TITLE = "test-citers-by-title";
 /** A second real reader, so "not yours" is the owner filter rather than a typo. */
 const CAROL = "00000000-0000-4000-8000-00000c17e4c1" as OwnerId;
 
@@ -263,8 +301,25 @@ beforeAll(async () => {
   scratch.push(
     await scratchArticleInPg(NO_DOI, {
       ownerId: TEST_OWNER,
+      /* No author either: with one, it would be searched for by title (plan 261011q). */
       mutate: withMeta((meta) => {
         delete meta.doi;
+        delete meta.byline;
+        delete meta.authors;
+      }),
+    }),
+  );
+  /* No DOI, the title and authors of the work the fake search returns, and a year. */
+  scratch.push(
+    await scratchArticleInPg(BY_TITLE, {
+      ownerId: TEST_OWNER,
+      mutate: withMeta((meta) => {
+        delete meta.doi;
+        delete meta.authors;
+        delete meta.publishedAt;
+        meta.title = ATTENTION;
+        meta.byline = "Ashish Vaswani";
+        meta.publishedYear = 2017;
       }),
     }),
   );
@@ -344,6 +399,21 @@ describe("GET /api/citers/:slug", () => {
   it("says no-doi for an article without one, and asks nothing", async () => {
     expect(await citers(NO_DOI)).toEqual({ status: 200, body: { kind: "no-doi" } });
     expect(asked).toEqual([]);
+  });
+
+  it("finds an article with no DOI by its title, author and year, and keys its list by OpenAlex's id (261011q)", async () => {
+    const { status, body } = await citers(BY_TITLE);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      kind: "found",
+      via: "title",
+      target: { openalexId: "W2626778328", title: ATTENTION },
+      count: 39,
+    });
+    expect(asked).toEqual([SEARCH_URL, TITLE_CITERS_URL]);
+    expect(
+      await rows(sql`select work_id from spideryarn.citation_index_lookups where work_id like 'openalex:%'`),
+    ).toEqual([{ work_id: "openalex:w2626778328" }]);
   });
 
   it("checks the imported title, so a renamed paper still gets its citers (F2)", async () => {

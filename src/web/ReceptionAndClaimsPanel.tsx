@@ -163,10 +163,12 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   CITERS_ABOUT,
+  CITERS_BY_TITLE,
   CITERS_HEADING,
   CITERS_LOADING,
   CITERS_NOT_INDEXED,
   CITERS_NO_DOI,
+  CITERS_NO_MATCH,
   CITERS_TOO_LARGE,
   CITERS_UNAVAILABLE,
   CITERS_UNCONFIRMED,
@@ -1776,6 +1778,8 @@ function CitersAnswer({ result, onRetry }: { result: CitersResult; onRetry(): vo
   switch (result.kind) {
     case "no-doi":
       return <p className="rcp-citers-note">{CITERS_NO_DOI}</p>;
+    case "no-match":
+      return <p className="rcp-citers-note">{CITERS_NO_MATCH}</p>;
     case "not-indexed":
       return <p className="rcp-citers-note">{CITERS_NOT_INDEXED}</p>;
     case "unconfirmed":
@@ -1804,8 +1808,22 @@ function CitersList({ found }: { found: Extract<CitersResult, { kind: "found" }>
   const [all, setAll] = useState(false);
   const listed = found.citers.length;
   const shown = all ? found.citers : found.citers.slice(0, CITERS_SHOWN);
+  /* Built from the shape-checked `W` id, never a string from the answer (src/citer-link.ts). */
+  const matched = found.via === "title" ? citerUrl(found.target) : null;
   return (
     <>
+      {found.via === "title" && (
+        <p className="rcp-citers-note rcp-citers-match">
+          {CITERS_BY_TITLE}{" "}
+          {matched !== null ? (
+            <a href={matched} target="_blank" rel="noreferrer noopener">
+              {found.target.title}
+            </a>
+          ) : (
+            found.target.title
+          )}
+        </p>
+      )}
       <p className="rcp-citers-note">
         {citersLines({ ...found, listed }, dayOf(found.fetchedAt)).join(" ")}
       </p>

@@ -16,16 +16,20 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
-import type { LimiterService, ServiceLimiter, SlotLease, StartTaken, WorkId } from "../src/bibliographic.js";
+import type { LimiterService, ServiceLimiter, SlotLease, StartTaken } from "../src/bibliographic.js";
 import {
   CITERS_FRESH_MS,
+  type CitersKey,
   type CitationIndexStore,
   type FetchedCiters,
   type StoredCiters,
   citersOf,
   openAlexAuthors,
   openAlexCitersUrl,
+  openAlexTitleSearchUrl,
   openAlexWorkUrl,
+  titleMatchOf,
+  titleQueryOf,
   parseOpenAlexCiters,
   parseOpenAlexWork,
 } from "../src/citation-index.js";
@@ -42,7 +46,7 @@ const WORK = fixture("work-e26060481.json") as Record<string, unknown>;
 const CITERS = fixture("citers-e26060481.json") as { meta: { count: number }; results: Record<string, unknown>[] };
 
 const DOI = "10.3390/e26060481";
-const ID = `doi:${DOI}` as WorkId;
+const ID = `doi:${DOI}` as CitersKey;
 const TITLE = "Self-Improvising Memory: A Perspective on Memories as Agential, Dynamically Reinterpreting Cognitive Glue";
 const LEVIN = { title: TITLE, byline: "Michael Levin", doi: DOI };
 
@@ -55,19 +59,19 @@ const CITERS_URL_SMALL = openAlexCitersUrl("W4399223951", 25);
 class MemoryCache implements CitationIndexStore {
   rows = new Map<string, { answer: FetchedCiters; at: number }>();
   writes: string[] = [];
-  async read(id: WorkId, freshMs: number): Promise<StoredCiters | null> {
+  async read(id: CitersKey, freshMs: number): Promise<StoredCiters | null> {
     const row = this.rows.get(id);
     if (!row) return null;
     return { ...row.answer, fetchedAt: new Date(row.at).toISOString(), fresh: Date.now() - row.at < freshMs };
   }
-  async write(id: WorkId, answer: FetchedCiters): Promise<string> {
+  async write(id: CitersKey, answer: FetchedCiters): Promise<string> {
     this.writes.push(`${id}:${answer.kind}`);
     const at = Date.now();
     this.rows.set(id, { answer, at });
     return new Date(at).toISOString();
   }
   /** Make the row older than the freshness window. */
-  age(id: WorkId): void {
+  age(id: CitersKey): void {
     const row = this.rows.get(id);
     if (row) row.at -= CITERS_FRESH_MS + 1_000;
   }
@@ -341,13 +345,15 @@ describe("citersOf", () => {
 
   it("makes no request for an article with no DOI, or one that is not a DOI", async () => {
     const h = harness({});
-    expect(await citersOf({ title: TITLE, byline: "Michael Levin" }, h.deps)).toEqual({ kind: "no-doi" });
-    expect(await citersOf({ ...LEVIN, doi: "not a doi" }, h.deps)).toEqual({ kind: "no-doi" });
-    expect(await citersOf({ ...LEVIN, doi: "arxiv:1706.03762" }, h.deps)).toEqual({ kind: "no-doi" });
+    /* Since plan 261011q an article with no DOI and an author is searched for by
+       title (below), so these have no author: nothing to search with either. */
+    expect(await citersOf({ title: TITLE }, h.deps)).toEqual({ kind: "no-doi" });
+    expect(await citersOf({ title: TITLE, doi: "not a doi" }, h.deps)).toEqual({ kind: "no-doi" });
+    expect(await citersOf({ title: TITLE, doi: "arxiv:1706.03762" }, h.deps)).toEqual({ kind: "no-doi" });
     /* An address that names no work is not a fallback either, nor one that names a
        DOI: the fallback is for arXiv's gap alone (GPT Sol's F4 on plan 261010n). */
     for (const url of ["https://example.com/post", `https://doi.org/${DOI}`]) {
-      expect(await citersOf({ title: TITLE, byline: "Michael Levin", url }, h.deps)).toEqual({ kind: "no-doi" });
+      expect(await citersOf({ title: TITLE, url }, h.deps)).toEqual({ kind: "no-doi" });
     }
     expect(h.api.asked).toEqual([]);
   });
@@ -565,6 +571,181 @@ describe("citersOf", () => {
 });
 
 /* ------------------------------------------------------------ the fetcher -- */
+
+/* ----------------------------------------------- the title search, 261011q -- */
+
+/*
+ * An article with no DOI is looked up by its title at OpenAlex, and a record is
+ * taken only when the whole title agrees, a second fact agrees (two authors, or
+ * one author and the year), and no other record passes as well. The first two
+ * records below are shaped from the answer measured on 2026-10-11 for
+ * "Attention Is All You Need": the right work with a 2025 year and all eight
+ * authors, and a same-titled 2025 book chapter by somebody else.
+ */
+const ATTENTION = "Attention Is All You Need";
+const VASWANI_AUTHORS = [
+  "Ashish Vaswani", "Noam Shazeer", "Niki Parmar", "Jakob Uszkoreit",
+  "Llion Jones", "Aidan N. Gomez", "Łukasz Kaiser", "Illia Polosukhin",
+];
+const authorships = (names: string[]) => names.map((display_name) => ({ author: { display_name } }));
+const VASWANI = {
+  id: "https://openalex.org/W2626778328",
+  doi: "https://doi.org/10.65215/2q58a426",
+  display_name: ATTENTION,
+  publication_year: 2025,
+  authorships: authorships(VASWANI_AUTHORS),
+};
+const BISHOP = {
+  id: "https://openalex.org/W4415754031",
+  doi: "https://doi.org/10.1201/9781003561460-19",
+  display_name: ATTENTION,
+  publication_year: 2025,
+  authorships: authorships(["J. M. Bishop", "Gabriel Seiberth"]),
+};
+const SPEECH = {
+  id: "https://openalex.org/W3163652268",
+  display_name: "Attention Is All You Need In Speech Separation",
+  publication_year: 2021,
+  authorships: authorships(["Cem Subakan", "Mirco Ravanelli"]),
+};
+const searchOf = (...results: unknown[]) => ({ meta: { count: results.length }, results });
+const ATTENTION_ARTICLE = {
+  title: ATTENTION,
+  byline: "Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin",
+  publishedYear: 2017,
+};
+const SEARCH_URL = openAlexTitleSearchUrl(titleQueryOf(ATTENTION)!);
+const VASWANI_CITERS_URL = openAlexCitersUrl("W2626778328", 100);
+const VASWANI_KEY = "openalex:w2626778328" as CitersKey;
+
+describe("the title search's address", () => {
+  it("sends the title's words alone, lower-cased, through URLSearchParams, with our contact address", () => {
+    const query = titleQueryOf("Attention, Is All | You NEED: AND (more) & “quotes”?");
+    expect(query).toBe("attention is all you need and more quotes");
+    const url = new URL(openAlexTitleSearchUrl(query!));
+    expect(url.origin + url.pathname).toBe("https://api.openalex.org/works");
+    expect(url.searchParams.get("search.title")).toBe(query);
+    expect(url.searchParams.get("per_page")).toBe("10");
+    expect(url.searchParams.get("mailto")).toBe(CONTACT_EMAIL);
+    expect(url.searchParams.get("filter")).toBeNull();
+  });
+
+  it("is bounded, and cut at a word", () => {
+    const query = titleQueryOf(`${"memory ".repeat(200)}end`)!;
+    expect(query.length).toBeLessThanOrEqual(300);
+    expect(query.endsWith("memory")).toBe(true);
+  });
+
+  it("is null for a title with no words", () => {
+    expect(titleQueryOf("—?!")).toBeNull();
+  });
+});
+
+describe("titleMatchOf", () => {
+  it("takes the right work, though its year is 2025, because eight of its authors agree", () => {
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, BISHOP, SPEECH))).toMatchObject({
+      kind: "match",
+      target: { openalexId: "W2626778328", title: ATTENTION },
+    });
+  });
+
+  it("refuses the same-titled chapter by somebody else", () => {
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(BISHOP, SPEECH))).toEqual({ kind: "none" });
+  });
+
+  it("needs the year, within one, when only one author agrees", () => {
+    const one = { title: ATTENTION, byline: "Ashish Vaswani" };
+    const sole = { ...VASWANI, authorships: authorships(["Ashish Vaswani", "Somebody Else"]) };
+    expect(titleMatchOf(one, searchOf(sole))).toEqual({ kind: "none" });
+    expect(titleMatchOf({ ...one, publishedYear: 2017 }, searchOf({ ...sole, publication_year: 2018 }))?.kind).toBe("match");
+    expect(titleMatchOf({ ...one, publishedAt: "2017-06-12" }, searchOf({ ...sole, publication_year: 2017 }))?.kind).toBe("match");
+    expect(titleMatchOf({ ...one, publishedYear: 2017 }, searchOf(sole))).toEqual({ kind: "none" });
+  });
+
+  it("does not count one author listed twice as two", () => {
+    const one = { title: ATTENTION, byline: "Ashish Vaswani" };
+    const twice = { ...VASWANI, authorships: authorships(["Ashish Vaswani", "Ashish  vaswani"]) };
+    expect(titleMatchOf(one, searchOf(twice))).toEqual({ kind: "none" });
+  });
+
+  it("matches nothing when two different works pass: the most cited is not evidence", () => {
+    const again = { ...VASWANI, id: "https://openalex.org/W1" };
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, again))).toEqual({ kind: "none" });
+    /* The same work twice in one answer is one work. */
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, VASWANI))?.kind).toBe("match");
+  });
+
+  it("refuses a longer title that starts with this one, and a record with a malformed id", () => {
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf({ ...SPEECH, authorships: VASWANI.authorships }))).toEqual({
+      kind: "none",
+    });
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf({ ...VASWANI, id: "https://example.com/W2626778328x" }))).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("is null for an answer that is not a search's", () => {
+    expect(titleMatchOf(ATTENTION_ARTICLE, { results: "nope" })).toBeNull();
+    expect(titleMatchOf(ATTENTION_ARTICLE, null)).toBeNull();
+  });
+});
+
+describe("citersOf, with no DOI", () => {
+  it("searches by title, lists the matched work's citers by its OpenAlex id, and says how it found it", async () => {
+    const h = harness({ [SEARCH_URL]: searchOf(VASWANI, BISHOP), [VASWANI_CITERS_URL]: CITERS });
+    const got = await citersOf(ATTENTION_ARTICLE, h.deps);
+    expect(got).toMatchObject({ kind: "found", via: "title", target: { openalexId: "W2626778328", title: ATTENTION } });
+    /* No DOI hop: the DOI OpenAlex gives back is its own metadata, not evidence. */
+    expect(h.api.asked).toEqual([SEARCH_URL, VASWANI_CITERS_URL]);
+    expect(h.store.writes).toEqual([`${VASWANI_KEY}:found`]);
+
+    /* The search is asked again on the next open; the list is not. */
+    expect((await citersOf(ATTENTION_ARTICLE, h.deps)).kind).toBe("found");
+    expect(h.api.asked).toEqual([SEARCH_URL, VASWANI_CITERS_URL, SEARCH_URL]);
+  });
+
+  it("a DOI's list says it came by DOI, and names the record", async () => {
+    const h = harness(HAPPY);
+    expect(await citersOf(LEVIN, h.deps)).toMatchObject({
+      kind: "found",
+      via: "doi",
+      target: { openalexId: "W4399223951" },
+    });
+  });
+
+  it("is no-match when nothing passes, and asks for no list", async () => {
+    const h = harness({ [SEARCH_URL]: searchOf(BISHOP, SPEECH) });
+    expect(await citersOf(ATTENTION_ARTICLE, h.deps)).toEqual({ kind: "no-match" });
+    expect(h.api.asked).toEqual([SEARCH_URL]);
+    expect(h.store.writes).toEqual([]);
+  });
+
+  it("asks nothing for a title too short to be told apart", async () => {
+    const h = harness({});
+    expect(await citersOf({ title: "Editorial", byline: "Ashish Vaswani" }, h.deps)).toEqual({ kind: "no-doi" });
+    expect(h.api.asked).toEqual([]);
+  });
+
+  it("is unavailable, storing nothing, when the search fails or is not a search's answer", async () => {
+    for (const answer of [failure(500), { nothing: true }]) {
+      const h = harness({ [SEARCH_URL]: answer });
+      expect(await citersOf(ATTENTION_ARTICLE, h.deps)).toEqual({ kind: "unavailable" });
+      expect(h.store.writes).toEqual([]);
+    }
+  });
+
+  it("serves a fresh cached list under the OpenAlex key without asking for it again", async () => {
+    const h = harness({ [SEARCH_URL]: searchOf(VASWANI) });
+    await h.store.write(VASWANI_KEY, {
+      kind: "found",
+      target: { openalexId: "W2626778328", title: ATTENTION, authors: VASWANI_AUTHORS },
+      count: 0, returned: 0, dropped: 0, capped: false,
+      citers: [],
+    });
+    expect(await citersOf(ATTENTION_ARTICLE, h.deps)).toMatchObject({ kind: "found", via: "title" });
+    expect(h.api.asked).toEqual([SEARCH_URL]);
+  });
+});
 
 describe("fetchBibliographicJson and OpenAlex", () => {
   const resolve = async () => ["93.184.216.34"];
