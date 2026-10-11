@@ -1117,6 +1117,19 @@ export function findHref(slug: string, carried: string, words: string): string {
 }
 
 /**
+ * **The address of one saved quick search, switched on in Search** — the
+ * *Open in Search* link under a search a chat button ran in place
+ * (ChatSearchCard.tsx, plan 261011aa). `findHref`'s rule for what is carried.
+ */
+export function searchRunHref(slug: string, carried: string, runId: string): string {
+  const kept = searchWithoutAny(carried, SEARCH_KEYS);
+  const search = [kept, "mode=search", "match=quick", `runs=${encodeURIComponent(runId)}`]
+    .filter(Boolean)
+    .join("&");
+  return readHref(slug, search, "article");
+}
+
+/**
  * **The rows a query with an argument offers** (plan 261003f, Stage 1) —
  * appended after the ranked rows, as the find row has been since 2026-10-02.
  *

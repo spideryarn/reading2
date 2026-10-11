@@ -981,8 +981,8 @@ prompt.
   `chipFor` turns that into *open the entry* when the visible glossary has it.
 - **Two more ids since 2026-10-07, for Chat and the guide alike**
   ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
-  `quick-search:<words>` is the bar's own *Quick search “X”* row (the same press,
-  `quickSearchPress`; the words take `find`'s rule; it *generates*), and `mode:<catalogue key>` —
+  `quick-search:<words>` is the bar's own *Quick search “X”* row (the words take `find`'s rule;
+  it *generates*; in a chat surface its press runs in place, below), and `mode:<catalogue key>` —
   `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
   sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
   at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
@@ -1025,6 +1025,41 @@ in 2 of 25 answers. So the prompt's sentence about the article is not a defence;
 allowlist are. [261003b](../investigations/261003b-chat-proposes-commands-as-chips.md) has the
 numbers, what was not measured (a hostile *fetched page*, a conversation with history), and the
 runner is [`evals/chat-commands/run.ts`](../../evals/chat-commands/run.ts).
+
+### A search button runs in the conversation
+
+> It shouldn't take me to the search mode because that's really disorienting, and I might want to
+> search for multiple things, and it should be able to initiate searches.
+>
+> — Greg, 2026-10-11, `spya-ma72mx`
+
+**Since 2026-10-11**
+([261011aa](../plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md)),
+a `quick-search` or `find` button in Chat, the guide (its next steps' search included) or the
+passage chat dialog no longer switches the band to Search. The reader still presses it, and
+`chipFor` is still asked again at the press; what the press does is draw what it found in the
+button's place ([`ChatSearchCard.tsx`](../../src/web/ChatSearchCard.tsx)): the passages as block
+links in the article's order, which jump the article and leave the conversation where it is, and
+*Open in Search* for the whole view.
+
+- **`quick-search`** posts the quick search Search mode posts (`POST /api/search/<slug>`, kind
+  `quick`), so it is a saved Search row like any other. The request lives in a per-tab store
+  outside the card ([`chat-searches.ts`](../../src/web/chat-searches.ts)), because a card is
+  remounted whenever the transcript redraws and the server abandons a quick search whose client
+  went away; two buttons with the same words show one search.
+- **`find`** matches the exact words with Search's own matcher (`findLiteral`), in the page, free.
+- **A reload keeps a quick answer**: the article's saved list is read once per page, and a finished
+  quick search with the same words is drawn without a press — a read, which spends and writes
+  nothing — but only while every passage it found is still in the article, and saying the day it
+  was found, because the list carries no fingerprint of the article to judge it by
+  ([search.md § Searches started from a chat](search.md#searches-started-from-a-chat)).
+- **Where it is drawn**: only where Reader.tsx provided `ChatSearchHere`, around the chat band and
+  the dialog. Elsewhere the chip presses through the executor as before; the command bar's own
+  *Quick search* row still opens Search, because there the reader asked for Search.
+
+**Not built**: the thorough search after the quick one, which Search mode starts by itself
+(`auto-thorough.ts`); in chat, *Open in Search* is the way to it. And a Search mode already on
+screen beside a chat search (the dialog over Search) does not hear of it until it is next opened.
 
 ***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
 shown a button, not a token. A token that was drawn as text is copied as text.
@@ -1115,6 +1150,14 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   an empty bar, with the guide's `Compass`, since 2026-10-10
   ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)); and since
   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
+- **Links into the piece, and searches** (since 2026-10-11, plan 261011aa, Greg's `spya-mpg67x`:
+  *"it didn't produce block links to the article readily, which is a big part of what we want the
+  guide chat to do"*): asked for links, or where something is, it cites the blocks at once,
+  without asking which kind of link is meant; the article's own hyperlinks and the web only when
+  the reader says so. Asked to search, it offers up to three search buttons, each of which runs in
+  the conversation ([§ A search button runs in the conversation](#a-search-button-runs-in-the-conversation));
+  it never says it cannot search, and never that it has moved the reader. The spoken guide is told
+  the same in a voice's terms (`SPOKEN_GUIDE`, [live-conversation.md](live-conversation.md)).
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), and **the reader presses every one**: the guide never opens a mode or moves
   the reader itself. Its prompt prints every mode as *Button* (`modeWordsSection` in

@@ -381,7 +381,16 @@ what they can skim, and which of Spideryarn's modes would help.
   reading it. You may say what a part is for, so they know where to go. If they
   want to talk about what it says, do, briefly, and send them to the passage.
 - You cannot open a mode or press anything for them. Say the mode's name so they
-  can find it in the bottom bar, and stop.`;
+  can find it in the bottom bar, and stop.
+- When they ask for links, or to be shown where something is, they mean
+  passages in this article. Show them the passages that answer, straight away,
+  and say in words what each one is. Do not ask which kind of link they mean.
+  They mean the article's own hyperlinks only if they say so, and the web only
+  if they say so.
+- When they explicitly ask you to search the piece for something, that is the
+  exception to the general rule above against using a lookup to reread the
+  supplied article: use the article search, then show the passages it found.
+  Never say you cannot search it.`;
 
 /**
  * **The one tool that exists only in this mode.**

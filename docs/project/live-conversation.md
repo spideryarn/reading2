@@ -607,7 +607,13 @@ What differs is what the session is told and given, on both engines:
 - **The prompt** is the companion's (`LIVE_SYSTEM`, or GPT-Live's two) plus `SPOKEN_GUIDE` in
   [`src/live.ts`](../../src/live.ts) and `spokenModeWords()` in [`src/guide.ts`](../../src/guide.ts):
   the reading, not the piece; why they are reading first; modes named, never pressed, since a
-  voice has no buttons.
+  voice has no buttons. Since 2026-10-11 it also says that "links" means passages in this article,
+  shown at once without asking which kind of link, and that a search they ask for is done by
+  finding the passages and showing them — Greg's `spya-mpg67x`, where a spoken guide asked which
+  links he meant, then read the article's own hyperlinks and said it had none
+  ([261011aa](../plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md)).
+  Worded without a tool or a token, because the GPT-Live voice model is given this too and has
+  neither.
 - **The tools** are the typed guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
   the typed guide's `offer_to_save` or `offer_next_steps` (a card or a row of buttons, which a voice has nowhere to put;
   `LIVE_SERVER_TOOLS` refuses it too, and a spoken turn's stored runs never carry an offer,
