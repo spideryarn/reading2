@@ -513,8 +513,10 @@ import {
   isHighlightColour,
   isLiveEngine,
   isMicPlacement,
+  isSeverity,
   LIVE_ENGINES,
   MIC_PLACEMENTS,
+  SEVERITIES,
 } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
@@ -12501,6 +12503,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       const colour = tidyColour(raw.colour);
       send(res, 200, { comment: await commentStore.patchColour(slug, id, colour) });
+    },
+  },
+
+  /* **A note sorted major or minor, or un-sorted** — its own sub-path for the
+     reason the two above have theirs. The key is required and `{ severity:
+     null }` is how a sort is taken away, in writing. Referee › Notes,
+     docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/severity$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const raw = fields(await readBody(req));
+      if (!("severity" in raw)) {
+        throw httpError(400, "A sort has to say major, minor or null [cmt-severity-missing]");
+      }
+      const severity = raw.severity;
+      if (severity !== null && !isSeverity(severity)) {
+        throw httpError(400, `severity must be one of ${SEVERITIES.join(", ")}, or null [cmt-severity]`);
+      }
+      send(res, 200, { comment: await commentStore.patchSeverity(slug, id, severity) });
     },
   },
 

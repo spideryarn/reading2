@@ -3344,6 +3344,21 @@ export function isHighlightColour(x: unknown): x is HighlightColour {
 }
 
 /**
+ * **How much a reviewer's note matters, in their own judgement**: the two
+ * headings of a referee's report. The database's `comments_severity` CHECK
+ * lists the same two by hand. `Comment.severity`.
+ */
+export type Severity = "major" | "minor";
+
+/** The two, as a value, in the order a report puts them. */
+export const SEVERITIES = ["major", "minor"] as const satisfies readonly Severity[];
+
+/** Is this value off the wire one of the two? */
+export function isSeverity(x: unknown): x is Severity {
+  return typeof x === "string" && (SEVERITIES as readonly string[]).includes(x);
+}
+
+/**
  * Where a comment is anchored: some words in the block, or the whole block.
  *
  * **The whole-block arm is a bookmark made from the gutter** — Greg,
@@ -3468,6 +3483,15 @@ interface CommentFields {
    * `comments_colour_needs_quote` refuses it again in the database.
    */
   colour?: HighlightColour;
+
+  /**
+   * **Major or minor — the reviewer's own sort of their own note.** Absent on
+   * every note nobody has sorted. Written only by its own PATCH
+   * (`patchSeverity`), never by a Save and never by a model; Referee › Notes
+   * lists notes under it and copies them out in the reviewer's words
+   * (docs/plans/261011f-referee-outline-your-notes-sorted-major-and-minor.md).
+   */
+  severity?: Severity;
 
   /**
    * How the *model call* went, and only that.

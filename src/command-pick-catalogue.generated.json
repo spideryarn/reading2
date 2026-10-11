@@ -243,6 +243,25 @@
   ]
  },
  {
+  "id": "mode:sources",
+  "label": "Sources",
+  "description": "What this piece cites, and what others say about it",
+  "aliases": [
+   "peer review",
+   "literature",
+   "further reading"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "mode:referee",
   "label": "Referee",
   "description": "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
@@ -258,25 +277,6 @@
   "generates": false,
   "contexts": [
    "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "mode:sources",
-  "label": "Sources",
-  "description": "What this piece cites, and what others say about it",
-  "aliases": [
-   "peer review",
-   "literature",
-   "further reading"
-  ],
-  "kind": "mode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -578,101 +578,6 @@
   ]
  },
  {
-  "id": "submode:referee:criteria",
-  "label": "Criteria",
-  "description": "Your own reviewing criteria, run over the piece",
-  "aliases": [
-   "Referee",
-   "Criteria Referee",
-   "Referee Criteria",
-   "Criteria mode"
-  ],
-  "kind": "submode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:referee:claims",
-  "label": "Claims",
-  "description": "What the piece promises, against the passages meant to deliver it",
-  "aliases": [
-   "Referee",
-   "Claims Referee",
-   "Referee Claims",
-   "Claims mode"
-  ],
-  "kind": "submode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:referee:mirror",
-  "label": "Mirror",
-  "description": "Your own review comments, read back to you — never a verdict on the paper",
-  "aliases": [
-   "Referee",
-   "Mirror Referee",
-   "Referee Mirror",
-   "Mirror mode"
-  ],
-  "kind": "submode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:referee:candidates",
-  "label": "Candidates",
-  "description": "Who could review this piece, and what expertise it would take",
-  "aliases": [
-   "Referee",
-   "Candidates Referee",
-   "Referee Candidates",
-   "Candidates mode"
-  ],
-  "kind": "submode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:referee:hidden",
-  "label": "Hidden text",
-  "description": "Text the document hides from a reader but a model would read, found in its source",
-  "aliases": [
-   "Referee",
-   "Hidden text Referee",
-   "Referee Hidden text",
-   "Hidden text mode"
-  ],
-  "kind": "submode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
   "id": "submode:sources:bibliography",
   "label": "Bibliography",
   "description": "What this piece cites: the works in its bibliography, each with a link",
@@ -770,6 +675,120 @@
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:criteria",
+  "label": "Criteria",
+  "description": "Your own reviewing criteria, run over the piece",
+  "aliases": [
+   "Referee",
+   "Criteria Referee",
+   "Referee Criteria",
+   "Criteria mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:claims",
+  "label": "Claims",
+  "description": "What the piece promises, against the passages meant to deliver it",
+  "aliases": [
+   "Referee",
+   "Claims Referee",
+   "Referee Claims",
+   "Claims mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:mirror",
+  "label": "Mirror",
+  "description": "Your own review comments, read back to you — never a verdict on the paper",
+  "aliases": [
+   "Referee",
+   "Mirror Referee",
+   "Referee Mirror",
+   "Mirror mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:notes",
+  "label": "Notes",
+  "description": "Your own notes, sorted major and minor by you, copied out in your words",
+  "aliases": [
+   "Referee",
+   "Notes Referee",
+   "Referee Notes",
+   "Notes mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:candidates",
+  "label": "Candidates",
+  "description": "Who could review this piece, and what expertise it would take",
+  "aliases": [
+   "Referee",
+   "Candidates Referee",
+   "Referee Candidates",
+   "Candidates mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:hidden",
+  "label": "Hidden text",
+  "description": "Text the document hides from a reader but a model would read, found in its source",
+  "aliases": [
+   "Referee",
+   "Hidden text Referee",
+   "Referee Hidden text",
+   "Hidden text mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"

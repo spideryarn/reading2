@@ -48,14 +48,22 @@ answer from the model only if you ask for one. Saving costs nothing.
 
 ## What a comment is now
 
-Three independent properties, and a comment may have any combination of them:
+Five independent properties, and a comment may have any combination of them:
 
 ```
    the mark      always. blockId + quote + start, onto the permanent id spine.
    the words     optional — `body`. Nothing written is a bare bookmark.
    the answer    only on one made before 2026-08-28, or on a chat it started.
    the placement optional — `criterionId` + `valence`, and only in Referee mode.
+   the sort      optional — `severity`, major or minor, set only in Referee › Notes.
 ```
+
+**The sort** is the reviewer's own *major* or *minor* on a note, written only by
+`PATCH /api/comments/:slug/:id/severity` (`patchSeverity`; the key is required and `null` un-sorts),
+never by a Save, and stamped in `severity_at`, not `updated_at`. Referee › Notes lists notes under it
+and copies them out in the reviewer's words
+([referee-mode.md § 4. Notes](referee-mode.md#4-notes-the-reviewers-own-notes-sorted-by-them-copied-out-in-their-words)).
+A shared link does not carry the sort value: `publicCommentsQuery` names its columns.
 
 ### The box a selection opens <a id="the-selection-box"></a>
 
@@ -374,7 +382,7 @@ judgement destroyed by a request that never mentioned it, with a 200 in the answ
 the log. A named path cannot express the ambiguity. It goes through the **same `tidyMark`** the
 create path uses, so there is one definition of what a placement is and not a second that can drift.
 
-### The five operations, and why there are five
+### Named operations, because fields have different lifetimes <a id="the-five-operations-and-why-there-are-five"></a>
 
 **Once a comment is free, a collision is an ordinary event** — and a reset would silently overwrite the
 anchor and blank the answer of a comment made in another tab. GPT Sol found this reviewing the
@@ -386,6 +394,7 @@ plan; it is the reason the store contract now names who may write what.
 | `beginAnswer` | the answer fields — plus, in Postgres, an attempt id and a lease | a bookmark, and a `pending` row whose attempt is **still live** — one answer at a time |
 | `patchBody` | `body`, `updatedAt` | a request with **no `body` key at all** — 400, because absent could mean *clear it* or *leave it* |
 | `patchMark` | `criterionId`, `valence`, `updatedAt` | a half-named placement, and everything `tidyMark` refuses on the create path |
+| `patchSeverity` | `severity`, `severity_at` | a request with no `severity` key, and anything but `major`, `minor` or `null` — 400 |
 | `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |
 
 Two more times are stored and shown nowhere ([sql.md § Store when it happened](sql.md#store-when-it-happened)):
@@ -1201,7 +1210,7 @@ bare bookmark.
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
 | [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) | **moving** to one: the drawer pushes, the arrows do not — [§ Opening a question is a jump](#opening-is-a-jump) |
-| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same five operations against Postgres |
+| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the named comment operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
 | [`src/comments.ts`](../../src/comments.ts) | the shared types and rules (`NewComment`, `MarkPatch`, `AnswerPatch`), and `loadComments` for fixtures |
 | [`src/routes.ts`](../../src/routes.ts) | the endpoints, mounted by [`vite.config.ts`](../../vite.config.ts) |

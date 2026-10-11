@@ -872,6 +872,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["PATCH"],
     witnesses: ["/api/comments/w1/w2/colour"],
   },
+  /* A reviewer's major/minor sort, plan 261011f. */
+  {
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/severity$",
+      flags: "",
+    },
+    methods: ["PATCH"],
+    witnesses: ["/api/comments/w1/w2/severity"],
+  },
   // ------------------------------------------------------- chat, and live
   {
     match: { kind: "regex", source: "^\\/api\\/chat\\/([\\w.%-]+)$", flags: "" },
@@ -1094,8 +1104,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    new paths beside their old ones, and the claim checks' new path beside its
    old one, for one deploy (plan 261009w Stage 3, removed by its contract);
    116 with dismissing one of the bar's suggestions (plan 261010u); 117 with
-   an admin's addenda to their own reports (plan 261010o). */
-const EXPECTED_MATCHER_COUNT = 117;
+   an admin's addenda to their own reports (plan 261010o); 118 with a
+   reviewer's major/minor comment sort (plan 261011f). */
+const EXPECTED_MATCHER_COUNT = 118;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1110,8 +1121,8 @@ const EXPECTED_MATCHER_COUNT = 117;
    the new Reception GET, the new list GET and the new checks' GET and POST
    beside their old paths (plan 261009w Stage 3); 143 with dismissing one of
    the bar's suggestions (plan 261010u); 144 with the addenda's POST (plan
-   261010o). */
-const EXPECTED_GUARD_COUNT = 144;
+   261010o); 145 with a reviewer's major/minor comment sort (plan 261011f). */
+const EXPECTED_GUARD_COUNT = 145;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2396,6 +2407,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/answer$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/mark$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/colour$/",
+        "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/severity$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // chat and the live sessions, 260908a

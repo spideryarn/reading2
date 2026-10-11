@@ -456,6 +456,8 @@ const REFEREE_TARGET: Record<RefereeView, AutoRunTarget | null> = {
   criteria: null,
   claims: "claims",
   mirror: null,
+  /* Nothing to run: the reviewer's own notes, and no model. */
+  notes: null,
   candidates: null,
   hidden: null,
 };

@@ -150,7 +150,7 @@ insert succeeds and writes `null` — `npm run db:check` reports a lost default 
 too ([`src/db/schema-drift.ts`](../../src/db/schema-drift.ts)). The audit that started this is
 [261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md).
 
-**A later event gets a column of its own, and the store writes it** — `finished_at`, `colour_at`,
+**A later event gets a column of its own, and the store writes it** — `finished_at`, `colour_at`, `severity_at`,
 `renamed_at`, `cancel_requested_at`, `chat_messages.hint_opened_at`, `articles.updated_at`. These have no default, because no default
 can know the event happened, so each is only as good as the write sites that name it:
 [`tests/event-times.test.ts`](../../tests/event-times.test.ts) holds every one. Three rules they
