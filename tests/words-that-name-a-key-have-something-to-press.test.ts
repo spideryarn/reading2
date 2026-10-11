@@ -41,16 +41,14 @@ const LOOKED_AT: Record<string, string> = {
   /* The microphone's card in the command bar (plan 261009g): it is the app
      that presses Enter, after a double press on Stop, which a finger makes. */
   'DictationStrip.tsx › "Press Stop twice quickly to press Enter as soon as the words arrive."': "the microphone itself: the card names its own double press, which a finger can make",
-  /* The three below are the command bar's microphone, around a double press on
-     Stop (plan 261005a). In all three it is the app that presses Enter, on the
-     reader's behalf, and none asks the reader for a key —
+  /* The two below are the command bar's microphone after a double press on
+     Stop (plans 261005a, 261011y): the button's name once the second press is
+     taken, and the strip's sentence beside it. Both report what the app is
+     about to do on the reader's behalf; neither asks the reader for a key —
      tests/command-bar-double-stop.test.tsx clicks the button and reads each.
-
-     This one is the *name of the microphone button itself* during the moment
-     a second press counts: it says what pressing that button will do. */
-  'DictationStrip.tsx › "Press Enter when the words arrive"': "the microphone button this names, a second time",
-  /* The same button's name once the second press is taken, and the strip's
-     sentence beside it: a report of what is about to happen. */
+     (The button's name *during* the window, "Press Enter when the words
+     arrive", went in 261011y: the button no longer changes until the hold
+     ends.) */
   'DictationStrip.tsx › "Turning your words into text, then pressing Enter"': "nothing: the second press was already taken",
   'DictationStrip.tsx › "Turning that into text, then pressing Enter…"': "nothing: the second press was already taken",
   /* The tooltip on the Dock's own command button. Every row the bar then
