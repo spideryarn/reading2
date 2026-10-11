@@ -35,7 +35,13 @@
  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  */
 import { useCallback, useEffect, useState } from "react";
-import { NONE_YET_AS_NULL_HEADER, type BlockId, type Relation, type RelationsResponse } from "../types.js";
+import {
+  NONE_YET_AS_NULL_HEADER,
+  type BlockId,
+  type MarginNote,
+  type Relation,
+  type RelationsResponse,
+} from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { MalformedReply } from "./lib/reader-facing.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
@@ -51,7 +57,10 @@ type RelationsStatus = "loading" | "none" | "ready" | "error";
  */
 export type RelationsByBlock = Readonly<Record<BlockId, Relation>> | null;
 
-export function useRelations(slug: string, shown: boolean): RelationsByBlock {
+/** The notes the same call wrote (plan 261011o), or null for none, on the same terms as the words. */
+export type MarginNotesList = readonly MarginNote[] | null;
+
+export function useRelations(slug: string, shown: boolean): { relations: RelationsByBlock; notes: MarginNotesList } {
   const [status, setStatus] = useState<RelationsStatus>("loading");
   const [loaded, setLoaded] = useState<RelationsResponse | null>(null);
 
@@ -117,5 +126,14 @@ export function useRelations(slug: string, shown: boolean): RelationsByBlock {
 
   /* `?.` because a reply that is JSON but not this shape must cost the reader
      the words, not the column: this runs inside Marginalia's boundary. */
-  return status === "ready" && loaded !== null && !loaded.stale ? (loaded.relations?.relations ?? null) : null;
+  const usable = status === "ready" && loaded !== null && !loaded.stale;
+  /* Each the stored object itself, so it keeps its identity while `loaded`
+     does, and the feed's effect does not fire on every render. A row from
+     before `relations/3` has no `notes`: none. An answer that is not an array
+     is none too, rather than a crash in the column. */
+  const notes = usable ? loaded.relations?.notes : undefined;
+  return {
+    relations: usable ? (loaded.relations?.relations ?? null) : null,
+    notes: Array.isArray(notes) ? notes : null,
+  };
 }

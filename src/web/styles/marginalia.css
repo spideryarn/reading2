@@ -136,6 +136,32 @@
   outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
+/* A note the relations call wrote (MarginaliaColumn.tsx § AsideNote, plan
+   261011o): the stamp in the relation word's small capitals, then the note,
+   open, in the AI's face, and for a recall or a tension a link to the other
+   passage. A rule on its left, like the part's question, so it reads as
+   something said about the passage rather than a line of it. */
+.marg-aside {
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--rule-strong);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.marg-aside-stamp {
+  all: unset;
+  cursor: help;
+  border-radius: 2px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.marg-aside-stamp:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
+}
 .marg-stamp {
   font-size: 0.6875rem;
   font-weight: 600;

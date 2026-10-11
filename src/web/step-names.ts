@@ -71,8 +71,8 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
   quiz: { sub: { mode: "learn", view: "quiz" } },
   faq: { mode: "faq" },
   relations: {
-    name: "Relation words",
-    what: "The small words Marginalia puts beside a paragraph where the argument turns (so, but, vs)",
+    name: "Marginalia notes",
+    what: "What Marginalia writes itself: the small words beside a paragraph where the argument turns (so, but, vs), and a few short notes where one would help",
   },
   sketch: { sub: { mode: "diagram", view: "sketch" } },
   illustrated: { sub: { mode: "diagram", view: "illustrated" } },

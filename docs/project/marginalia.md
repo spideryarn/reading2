@@ -20,7 +20,9 @@ because the two pads only swapped sides.
 
 ## What it shows
 
-**It generates one thing, its own relation words** ([below](#relation-words)). Every other note
+**It generates one thing, its own relation words** ([below](#relation-words)), and since
+2026-10-11 the same call may add **a few notes of its own** ([§ Notes the model
+writes](#notes-the-model-writes)). Every other note
 comes from something another mode has already stored, and opening the column never runs another
 mode. The owner's lists are read through each mode's *read half*
 (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full mode hook, because the full hook
@@ -42,6 +44,9 @@ one would otherwise be missed; it would not be, so it is not
 
 - **A relation word** (*so*, *but*, *vs*) beside a paragraph where the argument turns —
   [§ Relation words](#relation-words).
+- **A note the model chose to write**, open, under the word: *Tension*, *Recall* or *Note*, a
+  sentence or two, and a link to the other passage where there is one —
+  [§ Notes the model writes](#notes-the-model-writes).
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
   spya-rczgjb). Uncovered rows above the first part (a title, a byline) name the first part, so it is not
@@ -185,10 +190,53 @@ options passed over and GPT Sol's review are in
     for every article, opened or not. **No backfill**: an article from before gets its words the
     next time its owner has the column open (Greg: *"yes leave that for now"*).
 - **Nothing in the column says it is running.** The notes are drawn without the words, and the
-  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Marginalia notes* row (called *Relation words* until 2026-10-11) to run it again.
 - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
   unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
   rewritten one.
+
+## Notes the model writes
+
+> I think we could give the LLM just a bit more freedom to play and experiment, so perhaps it can
+> produce other scribble notes as it sees fit. Perhaps it can explain things that would otherwise
+> be confusing, or provide other notes sparingly that might be helpful to the reader. We don't
+> want to overdo it, though. […] maybe the marginalia mode could highlight really important
+> cross-references, especially if there's an inconsistency or if the reader might benefit from
+> being reminded what that other section said.
+>
+> — Greg, 2026-10-11 (spya-qyuet0)
+
+**The relations call may also write a few notes** (`relations/3`, plan
+[261011o](../plans/261011o-marginalia-off-the-first-open-and-notes-of-its-own.md)). There is no
+second call and no new step: the notes need the same article, the same freshness and the same
+owner-only rule as the words, so they ride on the call that was already there, stored in the same
+`article_revisions.relations` row as `notes` (no migration; a row from before reads as none).
+
+- **Four kinds**, the four Greg named: `tension` (this passage and another seem not to agree),
+  `recall` (what a passage far from here said, which this one leans on), `explain` (a step likely
+  to confuse) and `aside` (anything else, rarely). The stamp says *Tension*, *Recall* or *Note*;
+  its card says what the kind is and that AI wrote it (`NOTE_TIPS` in `tips.ts`).
+- **Both ends are quoted and checked.** Each note quotes the words it is about in its own passage,
+  and a note about another passage quotes that one too; `toNotes` keeps a note only when each quote
+  is in its passage, spacing and all, and stores the article's characters. An id alone could name a
+  real but wrong passage. This proves the join, not the judgement: a *tension* can still be the
+  model misreading, which is why its card says to judge for yourself.
+- **Sparing, in code as well as in the prompt**: at most one note per eight paragraphs asked about,
+  two at least and eight at most (`noteCap`), one per passage, 35 words at most. Every rule runs
+  before the cap. A bad note is dropped and counted in `notesDropped`, and never fails the run:
+  the words are the step's contract and the notes are extra. An article with fewer than two body
+  paragraphs still makes no call, so it gets no notes.
+- **The notes come first in the answer**, before the hundred rows of words. Asked for after them,
+  the model wrote two notes across four articles; asked for first, eleven to fourteen, about one
+  per eighteen paragraphs (the plan's § Measurement).
+- **Open, not shut**, unlike other modes' items: at most a handful, and a shut line would hide the
+  only thing a note has to say. A link to the other passage is the one block link (`BlockRef`), so
+  it has the passage's card and the jump.
+- **Owner only**, as the words are.
+
+**Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase
+to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or
+*Tension* note is the few the model judged worth a sentence. Neither reads the other.
 
 ## Every note says where it came from
 
@@ -224,7 +272,8 @@ default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginalia
 it at its earliest surviving block and checks its quote, one small component in
 `MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
 [mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
-forgotten: Quotes, glossary terms, cross-references. The first two already mark
+forgotten: Quotes, glossary terms, cross-references (the few that matter now come as the model's
+own notes, [above](#notes-the-model-writes)). The first two already mark
 the prose.
 
 The constraint each new kind is weighed against is the one the first plan named: the risk is *"a

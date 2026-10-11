@@ -62,8 +62,14 @@ import {
 } from "./source-hash.js";
 import { budgetFor } from "./token-budget.js";
 import { paperwork } from "./paperwork.js";
+import { plainWords } from "./plain-words.js";
+import { findQuote } from "./quote-match.js";
 import {
+  MARGIN_NOTE_KINDS,
   RELATIONS,
+  type MarginNote,
+  type MarginNoteKind,
+  type MarginNotesDropped,
   type Block,
   type BlockId,
   type Meta,
@@ -76,7 +82,7 @@ import {
 export type { Relation, Relations, RelationsDropped } from "./types.js";
 
 /** Bumped whenever the prompt changes what a relation *is*, or which paragraphs are asked about. */
-export const PROMPT_VERSION = "relations/2";
+export const PROMPT_VERSION = "relations/3";
 
 /**
  * A sentence's worth: fewer words than this is a heading, a date or a byline.
@@ -127,8 +133,14 @@ export function eligibleParagraphs(
  * not degrade: it throws `truncationFailure` and loses the pass.
  */
 export const TOKENS_PER_PARAGRAPH = 30;
+/**
+ * One note at its longest: two ids, a kind, `NOTE_MAX_WORDS` of note and two
+ * quotes of up to `NOTE_MAX_QUOTE_CHARS` each, counted generously (GPT Sol on
+ * the plan, P1-1: a budget sized for the words alone truncates a full answer).
+ */
+export const TOKENS_PER_NOTE = 300;
 export function answerTokens(paragraphs: number): number {
-  return 200 + paragraphs * TOKENS_PER_PARAGRAPH;
+  return 200 + paragraphs * TOKENS_PER_PARAGRAPH + noteCap(paragraphs) * TOKENS_PER_NOTE;
 }
 
 /**
@@ -250,6 +262,126 @@ export function toRelations(
   return { relations, dropped };
 }
 
+/* ------------------------------------------------------------------ notes --
+   **A few notes the model chose to write** — Greg, 2026-10-11 (spya-qyuet0):
+   *"give the LLM just a bit more freedom … explain things that would otherwise
+   be confusing … highlight really important cross-references, especially if
+   there's an inconsistency"*. Plan 261011o. Extra to the relation words, not
+   part of their contract: a bad note is dropped and counted, never fails the
+   run, and none at all is a real answer. */
+
+/**
+ * A note longer than this is dropped. The prompt asks for at most 25 words;
+ * the slack is for a model that runs a little over, not for a paragraph.
+ */
+export const NOTE_MAX_WORDS = 35;
+
+/** A quote longer than this is not a quote of the words a note is about. FAQ's limit (src/faq.ts). */
+export const NOTE_MAX_QUOTE_CHARS = 300;
+
+/**
+ * **How many notes an article may have**: one per eight paragraphs asked
+ * about, at least two and at most eight. The user message says the number;
+ * this keeps it, after every other rule, in the model's order, which the
+ * prompt makes most valuable first. Sparing is the point (*"We don't want to
+ * overdo it"*): the cap is a ceiling the prompt says need not be reached.
+ */
+export function noteCap(paragraphs: number): number {
+  return Math.min(8, Math.max(2, Math.ceil(paragraphs / 8)));
+}
+
+/** Kinds that must name the other passage; `explain` must not; `aside` may. */
+const NEEDS_TARGET: ReadonlySet<MarginNoteKind> = new Set(["recall", "tension"]);
+const NO_TARGET: ReadonlySet<MarginNoteKind> = new Set(["explain"]);
+const NOTE_KIND_SET: ReadonlySet<string> = new Set(MARGIN_NOTE_KINDS);
+
+export function emptyNotesDropped(): MarginNotesDropped {
+  return { malformed: 0, unknown: 0, offList: 0, badTarget: 0, unquoted: 0, badText: 0, repeated: 0, overCap: 0 };
+}
+
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/** The article's characters for `typed` in `block`, or null: the quote must be there, spacing and all. */
+function located(block: Pick<Block, "text">, typed: string): string | null {
+  const span = findQuote(block.text, typed, undefined, "spaced");
+  if (!span || span.end - span.start > NOTE_MAX_QUOTE_CHARS) return null;
+  return block.text.slice(span.start, span.end);
+}
+
+/**
+ * Turn what the model said into notes, believing as little as possible. Pure.
+ *
+ * `body` is every passage of the article's body (`isBodyEvidence`), which is
+ * what the model was shown; a note may sit beside, or point at, any of them.
+ * **Both ends are corroborated by a quote** (GPT Sol on the plan, P1-3): an
+ * id alone can name a real but wrong block, and a note that says "the results
+ * report 8%" beside a link to the methods is a confident wrong join. The
+ * stored quotes are the article's characters, never the model's, as FAQ's.
+ *
+ * Every rule runs before the cap, so a malformed row never uses up a slot.
+ * Never throws: a missing or malformed `notes` is no notes.
+ */
+export function toNotes(
+  raw: unknown,
+  body: readonly Pick<Block, "id" | "text">[],
+  cap: number,
+): { notes: MarginNote[]; dropped: MarginNotesDropped } {
+  const dropped = emptyNotesDropped();
+  if (!Array.isArray(raw)) return { notes: [], dropped };
+  const byId = new Map(body.map((b) => [b.id as string, b]));
+  const taken = new Set<string>();
+  const notes: MarginNote[] = [];
+  for (const row of raw as readonly unknown[]) {
+    if (!row || typeof row !== "object") {
+      dropped.malformed++;
+      continue;
+    }
+    const r = row as Record<string, unknown>;
+    const blockId = str(r.blockId);
+    const to = str(r.to) || null;
+    const block = byId.get(blockId);
+    const target = to === null ? null : byId.get(to);
+    if (!block || target === undefined) {
+      dropped.unknown++;
+      continue;
+    }
+    const kind = str(r.kind);
+    if (!NOTE_KIND_SET.has(kind)) {
+      dropped.offList++;
+      continue;
+    }
+    const k = kind as MarginNoteKind;
+    if (to === blockId || (to === null && NEEDS_TARGET.has(k)) || (to !== null && NO_TARGET.has(k))) {
+      dropped.badTarget++;
+      continue;
+    }
+    const quote = located(block, str(r.quote));
+    const toTyped = str(r.toQuote);
+    const toQuote = target === null ? null : located(target, toTyped);
+    if (quote === null || (target !== null && toQuote === null)) {
+      dropped.unquoted++;
+      continue;
+    }
+    const text = str(r.text).replace(/\s+/g, " ");
+    const words = text === "" ? 0 : text.split(" ").length;
+    if (words === 0 || words > NOTE_MAX_WORDS) {
+      dropped.badText++;
+      continue;
+    }
+    if (taken.has(blockId)) {
+      dropped.repeated++;
+      continue;
+    }
+    if (notes.length >= cap) {
+      dropped.overCap++;
+      continue;
+    }
+    taken.add(blockId);
+    notes.push({ blockId: block.id, kind: k, text, quote, to: target?.id ?? null, toQuote });
+  }
+  return { notes, dropped };
+}
+
 export const RELATIONS_SYSTEM = `You are reading the article above one paragraph at a time, to say how each
 paragraph follows from the one before it.
 
@@ -287,19 +419,79 @@ Most paragraphs in most pieces simply carry on. Choose "therefore", "but" or
 THE RULES
 
 - Answer every listed id exactly once, in the order listed.
-- Answer only the listed ids. Never invent an id, and never answer for a
-  paragraph that is not on the list.
+- In "relations", answer only the listed ids. Never invent an id, and never
+  answer for a paragraph that is not on the list.
 - A paragraph that follows a heading is judged like any other, against the
   paragraph named beside it.
 - "relation" must be one of the ten words above, spelled exactly as shown.
 
 ${paperwork("relation")}
 
+A FEW NOTES IN THE MARGIN — OPTIONAL
+
+The reader sees the article with a narrow margin beside it. Besides the
+relation words, you may write a few short notes for that margin, each beside
+the passage it is about. Most pieces have a few places where a note would
+help a reader — a step that is easy to stumble on, a point that depends on
+something said much earlier, two passages that do not agree — and some have
+none. Write a note only where a careful reader, reading straight through,
+would be glad to find it there. A margin full of notes is worse than an empty
+one, and the number the user message allows is a ceiling, not a target.
+
+Four kinds:
+
+  "tension" — this passage and another in the piece seem incompatible: they
+              make claims about the same thing, in the same scope and at the
+              same time, that cannot both be true as stated — a number that
+              differs, a claim one asserts and the other denies, a term
+              defined one way and used another. Say what each says, plainly.
+              NOT a contrast the author draws on purpose, a qualification, a
+              development of the argument, or a different group or period.
+              It is the most useful note, and the most damaging when wrong.
+  "recall"  — this passage leans on something said far from here, and being
+              reminded of what that was would change how the reader takes
+              this passage. Say the thing itself, not "see section 2". Not
+              for the passage just before: the reader has just read it.
+  "explain" — a step, term or move here that is likely to confuse this
+              reader, unpicked in a sentence. Not a summary of the passage,
+              and not a definition the passage itself gives.
+  "aside"   — anything else short that would help this reader at this point.
+              Use it rarely.
+
+Each note names what it is about by quoting:
+
+- "quote": the words in its own passage that the note is about, copied
+  exactly from that passage, a phrase or a sentence.
+- "to": the other passage's id. Required for "tension" and "recall"; null for
+  "explain"; "aside" may name one or have null. Never the note's own passage.
+- "toQuote": the words in the other passage that the note means, copied
+  exactly from it. Null exactly when "to" is null.
+
+The rules for notes:
+
+- A note may sit beside, or point at, any passage of the article, not only
+  the paragraphs listed for relations: a heading, a caption, the first
+  paragraph.
+- Use only the article. Not what you know from elsewhere.
+- No more notes than the user message allows, and never two beside the same
+  passage. List them most valuable first.
+- Each note is one or two short sentences, at most 25 words, and says
+  something the passage itself does not.
+- Never write a note to paraphrase or summarise a passage, to praise or agree
+  with it, or to label an ordinary step in the argument. Do not try to use
+  every kind.
+
+${plainWords("explain")}
+
 OUTPUT
 
-JSON only, no prose, no code fence:
+JSON only, no prose, no code fence. The notes come first, while the whole
+piece is in mind; "notes" is always present, and may be an empty list:
 
-{"relations": [
+{"notes": [
+  {"blockId": "spya-w4n8hc", "kind": "tension", "quote": "cut errors by 12%", "text": "Here errors fall by 12%; the results give 8% for the same group and period.", "to": "spya-r2d6tm", "toQuote": "an 8% reduction in errors"}
+],
+"relations": [
   {"blockId": "spya-k3m9qt", "relation": "but"},
   {"blockId": "spya-p7x2wd", "relation": "and-also"}
 ]}`;
@@ -307,7 +499,9 @@ JSON only, no prose, no code fence:
 /** The user message: the paragraphs to answer, each beside the one before it. */
 export function renderPrompt(paragraphs: readonly EligibleParagraph[]): string {
   const lines = paragraphs.map((p) => `${p.id} (the paragraph before it: ${p.previous})`);
-  return `Say how each of these ${paragraphs.length} paragraphs bears on the paragraph before it. Answer every one, once, in this order.
+  return `First write at most ${noteCap(paragraphs.length)} margin notes, or none.
+
+Then say how each of these ${paragraphs.length} paragraphs bears on the paragraph before it. Answer every one, once, in this order.
 
 === THE PARAGRAPHS ===
 
@@ -322,6 +516,26 @@ ${lines.join("\n")}`;
 export const RELATIONS_OUTPUT_SCHEMA = {
   type: "object",
   properties: {
+    /* First, so the model writes them with the whole piece in mind rather
+       than after a hundred mechanical rows (plan 261011o § Measurement).
+       Always present, often empty; `to` always present and nullable, never
+       omitted (the comma trap, docs/project/prompting-guide.md). */
+    notes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          blockId: { type: "string" },
+          kind: { type: "string", enum: [...MARGIN_NOTE_KINDS] },
+          quote: { type: "string" },
+          text: { type: "string" },
+          to: { type: ["string", "null"] },
+          toQuote: { type: ["string", "null"] },
+        },
+        required: ["blockId", "kind", "quote", "text", "to", "toQuote"],
+        additionalProperties: false,
+      },
+    },
     relations: {
       type: "array",
       items: {
@@ -335,12 +549,12 @@ export const RELATIONS_OUTPUT_SCHEMA = {
       },
     },
   },
-  required: ["relations"],
+  required: ["notes", "relations"],
   additionalProperties: false,
 } as const;
 
 validateAnthropicJsonSchema(RELATIONS_OUTPUT_SCHEMA);
-assertNoBlockIdEnums(RELATIONS_OUTPUT_SCHEMA, ["blockId"]);
+assertNoBlockIdEnums(RELATIONS_OUTPUT_SCHEMA, ["blockId", "to"]);
 
 export interface RelationsRun {
   relations: Relations;
@@ -386,6 +600,7 @@ export async function generateRelations(opts: {
   const artefact = (
     relations: Record<BlockId, Relation>,
     dropped: RelationsDropped,
+    notes: { notes: MarginNote[]; dropped: MarginNotesDropped },
   ): Relations => ({
     version: PROMPT_VERSION,
     generator: generatorFor(opts.power),
@@ -393,6 +608,8 @@ export async function generateRelations(opts: {
     sourceHash,
     relations,
     dropped: { ...dropped },
+    notes: notes.notes,
+    notesDropped: { ...notes.dropped },
     generatedAt: new Date().toISOString(),
     elapsedMs: Date.now() - started,
   });
@@ -402,7 +619,7 @@ export async function generateRelations(opts: {
   if (paragraphs.length === 0) {
     const dropped = emptyDropped();
     return {
-      relations: artefact({} as Record<BlockId, Relation>, dropped),
+      relations: artefact({} as Record<BlockId, Relation>, dropped, { notes: [], dropped: emptyNotesDropped() }),
       called: false,
       paragraphs: 0,
       dropped,
@@ -466,12 +683,13 @@ export async function generateRelations(opts: {
   }
   const raw = finishedText(message, "relations", maxTokens, answer);
 
-  const parsed = parseJsonAnswer<{ relations?: unknown }>(raw, "the model's answer");
+  const parsed = parseJsonAnswer<{ relations?: unknown; notes?: unknown }>(raw, "the model's answer");
   const { relations, dropped } = toRelations(parsed.relations, eligibleIds);
+  const notes = toNotes(parsed.notes, evidence, noteCap(paragraphs.length));
 
   /* Nothing is written here — the caller writes through the store. */
   return {
-    relations: artefact(relations, dropped),
+    relations: artefact(relations, dropped, notes),
     called: true,
     paragraphs: paragraphs.length,
     dropped,

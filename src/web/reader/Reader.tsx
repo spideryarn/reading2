@@ -2531,6 +2531,7 @@ export function Reader({
       timeline: marginaliaTimeline,
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
+      notes: isOwner ? ownerFeed.notes : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2583,6 +2584,7 @@ export function Reader({
     marginaliaTimeline,
     isOwner,
     ownerFeed.relations,
+    ownerFeed.notes,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
