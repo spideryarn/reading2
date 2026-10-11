@@ -169,9 +169,10 @@ export function SourcesBand({
   /* Who cites the piece, Reception's *Cited by*: a second read with no job
      under it, so it can never start the search. Plan 261004h. */
   const citers = useCiters(slug, view === "reception");
-  /* Not cited's stored answer, read the first time its chip is shown and kept
-     for its count; its search is the panel's button alone. Plan 261011ac. */
-  const related = useRelatedWork(slug, view === "not-cited");
+  /* Not cited's stored answer, read when its chip is first shown and when
+     Bibliography changes, then kept for its count; its search is the panel's
+     button alone. Plan 261011ac. */
+  const related = useRelatedWork(slug, view === "not-cited", bibliography.bibliography);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
   const links = useOutboundLinks(blocks, sourceUrl);
@@ -479,7 +480,7 @@ const VIEW_HOW: Record<SourcesView, string> = {
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
   /* Checked against src/related-work.ts: `openAlexRelatedUrl` (semantic search
-     on the `related-work/1` query, the year filter), `notInBibliography` (the
+     on the `related-work/2` query, the year filter), `notInBibliography` (the
      identifier, title and entry tiers, run on every read against the current
      Bibliography, never the prose), `isThisPiece`, and the POST being the only
      path that asks OpenAlex. */

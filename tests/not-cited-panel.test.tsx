@@ -4,8 +4,9 @@
  * useRelatedWork.ts, with the network mocked. Plan
  * docs/plans/261011ac-sources-not-cited-related-work-it-leaves-out.md.
  *
- * What is held: the GET is not asked until the chip is shown, and only once;
- * nothing is POSTed until the owner presses (F1), and the line saying what the
+ * What is held: the GET is not asked until the chip is shown, and is asked
+ * again only when Bibliography changes; nothing is POSTed until the owner
+ * presses (F1), and the line saying what the
  * press sends is under every button that sends it; the press is held until
  * its answer is read, so two presses are one search; each outcome is its own
  * sentence; a failed *Search again* keeps the list it was over; the framing
@@ -110,8 +111,8 @@ function found(over: Partial<Extract<RelatedWorkResult, { kind: "found" }>> = {}
 let host: HTMLDivElement;
 let root: Root;
 
-function Harness({ wanted }: { wanted: boolean }) {
-  const related = useRelatedWork(SLUG, wanted);
+function Harness({ wanted, bibliographyBasis }: { wanted: boolean; bibliographyBasis: object | null }) {
+  const related = useRelatedWork(SLUG, wanted, bibliographyBasis);
   const head = sourcesHead({ view: "not-cited", onView: () => {}, ownerSlug: SLUG, notCited: related.result });
   return wanted ? createElement(NotCitedPanel, { related, head }) : head;
 }
@@ -120,9 +121,9 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve(); });
 }
 
-async function show(wanted = true): Promise<void> {
+async function show(wanted = true, bibliographyBasis: object | null = null): Promise<void> {
   await act(async () => {
-    root.render(createElement(StrictMode, null, createElement(Harness, { wanted })));
+    root.render(createElement(StrictMode, null, createElement(Harness, { wanted, bibliographyBasis })));
   });
   await settle();
 }
@@ -170,6 +171,18 @@ describe("when Not cited asks", () => {
     await show(false);
     await show(true);
     expect(asked).toEqual([`GET ${API}`]);
+  });
+
+  it("reads again when the Bibliography changes, so a newly listed work cannot remain on screen", async () => {
+    const before = {};
+    const after = {};
+    onGet = found();
+    await show(true, before);
+    onGet = found({ works: [NAT], excluded: 4 });
+    await show(true, after);
+    expect(asked).toEqual([`GET ${API}`, `GET ${API}`]);
+    expect(host.querySelectorAll("li.rcp-related-row")).toHaveLength(1);
+    expect(text()).not.toContain(NO_DOI.title);
   });
 
   it("counts the rows on the chip once the stored answer is read, and keeps it on another chip", async () => {
@@ -227,10 +240,12 @@ describe("each outcome is its own sentence", () => {
     expect(text()).toContain(RELATED_WORK_UNAVAILABLE);
   });
 
-  it("says when everything found is already in the bibliography", async () => {
-    onGet = found({ works: [] });
+  it("does not claim an empty answer was all in the bibliography when OpenAlex may have found nothing but the piece itself", async () => {
+    onGet = found({ works: [], excluded: 0 });
     await show();
     expect(text()).toContain(RELATED_WORK_NONE);
+    expect(text()).toContain("No other papers remain to show");
+    expect(text()).not.toContain("Everything OpenAlex found close to this piece is already among the works in its bibliography");
     expect(host.querySelectorAll("li.rcp-related-row")).toHaveLength(0);
     expect(button(RELATED_WORK_SEARCH_AGAIN)).toBeDefined();
   });

@@ -105,7 +105,8 @@ puts a warning above the list; no Bibliography at all is its own sentence, with 
 
 **The owner's only**, as *Cited by* is: the route is owner-only, and a visitor pressing would spend
 our OpenAlex allowance. The chip arms nothing (`activationForSources` returns `null`); its read is
-asked the first time the chip is shown, and kept for the chip's number.
+asked the first time the chip is shown, asked again when Bibliography changes, and otherwise kept
+for the chip's number.
 
 ## Links
 

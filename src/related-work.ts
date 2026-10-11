@@ -242,7 +242,7 @@ function cutAtWord(text: string, max: number): string {
  * the tree finds no abstract. Brackets and punctuation round it go too.
  */
 function withoutEmails(text: string): string {
-  return text.replace(/[<(\[]?[^\s<>()[\]@]+@[^\s<>()[\]@]+[>)\]]?[.,;:]?/g, " ");
+  return text.replace(/\S+@\S+/g, " ");
 }
 
 /** A block as the opening reads it: its place, its kind, its text, and the three marks that rule it out. */
@@ -308,7 +308,7 @@ export function relatedWorkQueryOf(article: RelatedWorkArticle, opening: readonl
 
 /** The piece's year: `publishedYear`, or the year of `publishedAt` — or null. */
 export function relatedWorkYearOf(article: Pick<RelatedWorkArticle, "publishedAt" | "publishedYear">): number | null {
-  return article.publishedYear ?? plausibleYear(/^\d{4}/.exec(article.publishedAt ?? "")?.[0]) ?? null;
+  return plausibleYear(article.publishedYear) ?? plausibleYear(/^\d{4}/.exec(article.publishedAt ?? "")?.[0]) ?? null;
 }
 
 /** The recipe's version and a sha256 of what was asked. Never logged: its input is the article's words. */
@@ -387,8 +387,10 @@ export function abstractFromInvertedIndex(value: unknown): string | null {
   const words: (string | undefined)[] = [];
   let keys = 0;
   let positions = 0;
-  for (const [raw, at] of Object.entries(index)) {
+  for (const raw in index) {
+    if (!Object.hasOwn(index, raw)) continue;
     if (++keys > ABSTRACT_MAX_KEYS || positions >= ABSTRACT_MAX_POSITIONS) break;
+    const at = index[raw];
     const word = plainRegistryText(raw, ABSTRACT_MAX_WORD);
     if (word === null) continue;
     for (const position of list(at)) {
@@ -418,6 +420,23 @@ function titleKey(title: string): string {
   return tokens(title).join(" ");
 }
 
+/** The three identities used to keep one suggestion once, on fresh and stored answers alike. */
+function relatedWorkKeys(work: Pick<RelatedWork, "openalexId" | "doi" | "title">): string[] {
+  return [
+    `id:${work.openalexId}`,
+    `title:${titleKey(work.title)}`,
+    ...(work.doi !== undefined ? [`doi:${work.doi}`] : []),
+  ];
+}
+
+/** Add `work`'s identities to `seen`, unless any is there already. */
+function firstRelatedWork(work: Pick<RelatedWork, "openalexId" | "doi" | "title">, seen: Set<string>): boolean {
+  const keys = relatedWorkKeys(work);
+  if (keys.some((key) => seen.has(key))) return false;
+  for (const key of keys) seen.add(key);
+  return true;
+}
+
 /**
  * **One page of `works?search.semantic=…`**, in OpenAlex's order (closest
  * first) — or null when it is not that shape. A record is dropped when it has
@@ -436,15 +455,12 @@ export function parseOpenAlexRelated(json: unknown): RelatedWork[] | null {
     const title = plainRegistryText(work?.display_name, MAX_TITLE);
     if (work === null || openalexId === null || title === null || titleKey(title) === "") continue;
     const doi = doiOf(work.doi);
-    const keys = [`id:${openalexId}`, `title:${titleKey(title)}`, ...(doi !== undefined ? [`doi:${doi}`] : [])];
-    if (keys.some((key) => seen.has(key))) continue;
-    for (const key of keys) seen.add(key);
     const authors = authorsOf(work.authorships);
     const year = plausibleYear(work.publication_year);
     const venue = plainRegistryText(record(record(work.primary_location)?.source)?.display_name, MAX_VENUE);
     const citedByCount = count(work.cited_by_count);
     const abstract = abstractFromInvertedIndex(work.abstract_inverted_index);
-    works.push({
+    const parsed: RelatedWork = {
       openalexId,
       ...(doi !== undefined ? { doi } : {}),
       title,
@@ -454,7 +470,10 @@ export function parseOpenAlexRelated(json: unknown): RelatedWork[] | null {
       ...(venue !== null ? { venue } : {}),
       ...(citedByCount !== undefined ? { citedByCount } : {}),
       ...(abstract !== null ? { abstract } : {}),
-    });
+    };
+    if (!firstRelatedWork(parsed, seen)) continue;
+    works.push(parsed);
+    if (works.length === RELATED_WORK_RESULTS) break;
   }
   return works;
 }
@@ -469,7 +488,7 @@ export function relatedWorkOf(value: unknown): RelatedWork | null {
   if (work === null) return null;
   const openalexId = typeof work.openalexId === "string" && OPENALEX_WORK_ID.test(work.openalexId) ? work.openalexId : null;
   const title = plainRegistryText(work.title, MAX_TITLE);
-  if (openalexId === null || title === null) return null;
+  if (openalexId === null || title === null || titleKey(title) === "") return null;
   const doi = typeof work.doi === "string" ? doiOf(work.doi) : undefined;
   const authors = list(work.authors)
     .map((name) => plainRegistryText(name, MAX_NAME))
@@ -490,6 +509,24 @@ export function relatedWorkOf(value: unknown): RelatedWork | null {
     ...(citedByCount !== undefined ? { citedByCount } : {}),
     ...(abstract !== null ? { abstract } : {}),
   };
+}
+
+/**
+ * **A stored answer, re-checked as a list**: items validated, duplicates dropped
+ * and the same result bound as a fresh OpenAlex answer enforced. At most twice
+ * the bound is inspected, so malformed stored JSON cannot make a read unbounded.
+ */
+export function relatedWorksOf(value: unknown): RelatedWork[] | null {
+  if (!Array.isArray(value)) return null;
+  const works: RelatedWork[] = [];
+  const seen = new Set<string>();
+  for (const raw of value.slice(0, RELATED_WORK_RESULTS * 2)) {
+    const work = relatedWorkOf(raw);
+    if (work === null || !firstRelatedWork(work, seen)) continue;
+    works.push(work);
+    if (works.length === RELATED_WORK_RESULTS) break;
+  }
+  return works;
 }
 
 /* --------------------------------------------------------- the exclusion -- */

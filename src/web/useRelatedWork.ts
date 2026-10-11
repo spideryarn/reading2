@@ -5,10 +5,11 @@
  * visitor asks nothing (tests/public-network-trace.test.tsx).
  * docs/plans/261011ac-sources-not-cited-related-work-it-leaves-out.md.
  *
- * **The GET never searches.** It is asked once per article, the first time
- * the Not cited chip is on screen, and kept while the band stays mounted, so
- * the chip has its number on the way back from another chip — useCiters.ts's
- * pattern. **Only `search()` sends the piece's title and opening to
+ * **The GET never searches.** It is first asked when the Not cited chip is on
+ * screen, and asked again when the Bibliography read changes,
+ * so a work newly recognised there cannot remain in this list. The answer is
+ * otherwise kept while the band stays mounted, so the chip has its number on
+ * the way back from another chip. **Only `search()` sends the piece's title and opening to
  * OpenAlex** (the plan's F1), and only from the owner's press.
  *
  * **The press is held from the press until its answer is read** (`searching`):
@@ -118,8 +119,10 @@ interface Answer {
 /**
  * @param wanted whether the Not cited chip is on screen. Nothing is read until
  *   it first is.
+ * @param bibliographyBasis the current Bibliography object. A new object means
+ *   its rows may exclude different works, so the stored search is read again.
  */
-export function useRelatedWork(slug: string, wanted: boolean): UseRelatedWork {
+export function useRelatedWork(slug: string, wanted: boolean, bibliographyBasis: object | null = null): UseRelatedWork {
   /* Kept with the slug it answers, as useCiters.ts: another article shows the
      wait, never the last article's list. */
   const [answer, setAnswer] = useState<Answer | null>(null);
@@ -132,10 +135,10 @@ export function useRelatedWork(slug: string, wanted: boolean): UseRelatedWork {
     },
     [slug],
   );
-  const { reload } = useOrderedRead(load);
+  const { reload, refresh } = useOrderedRead(load);
 
   /* A ref, because StrictMode runs the effect twice in one commit. */
-  const askedFor = useRef<string | null>(null);
+  const askedFor = useRef<{ slug: string; bibliographyBasis: object | null } | null>(null);
   const article = useRef(slug);
   /* The search in the air, by article: a ref so a double press in one frame is one search. */
   const inFlight = useRef<string | null>(null);
@@ -144,10 +147,15 @@ export function useRelatedWork(slug: string, wanted: boolean): UseRelatedWork {
     askedFor.current = null;
   }
   useEffect(() => {
-    if (!wanted || askedFor.current === slug) return;
-    askedFor.current = slug;
-    void reload();
-  }, [wanted, slug, reload]);
+    if (
+      !wanted ||
+      (askedFor.current?.slug === slug && askedFor.current.bibliographyBasis === bibliographyBasis)
+    )
+      return;
+    const changed = askedFor.current?.slug === slug;
+    askedFor.current = { slug, bibliographyBasis };
+    void (changed ? refresh() : reload());
+  }, [wanted, slug, bibliographyBasis, reload, refresh]);
 
   const search = useCallback(() => {
     if (inFlight.current === slug) return;

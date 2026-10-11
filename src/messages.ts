@@ -5901,7 +5901,7 @@ export const RELATED_WORK_RATE_LIMITED =
   "There have been a lot of searches for related work lately. Try again in an hour or so.";
 /** A found search with nothing left once the bibliography and the piece itself are taken out. */
 export const RELATED_WORK_NONE =
-  "Everything OpenAlex found close to this piece is already among the works in its bibliography.";
+  "No other papers remain to show after taking out this piece and the works Spideryarn found in its bibliography.";
 /** Above the list, when the bibliography is stale or capped (F4). */
 export const RELATED_WORK_BIBLIOGRAPHY_STALE =
   "The bibliography was listed from an older version of this piece, so this list may include works it does cite.";

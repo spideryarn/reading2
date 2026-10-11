@@ -33,11 +33,11 @@ import {
   type RelatedWorkLoaded,
   type RelatedWorkSearch,
   type StoredRelatedWork,
-  relatedWorkOf,
   relatedWorkOpening,
+  relatedWorksOf,
 } from "../related-work.js";
 import { citedMetaFingerprintOf } from "../source-hash.js";
-import type { Bibliography, RelatedWork, Tree } from "../types.js";
+import type { Bibliography, Tree } from "../types.js";
 import type { RelatedWorkStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { ownedSlug } from "./owned-slug.js";
@@ -88,8 +88,9 @@ async function firstHeading(tx: Tx, revisionId: string): Promise<string | null> 
 
 /** The kept row, its results checked again; null when there is none, or it is not the shape it should be. */
 function storedOf(row: typeof relatedWorkSearches.$inferSelect | undefined): StoredRelatedWork | null {
-  if (row === undefined || !Array.isArray(row.results)) return null;
-  const works = row.results.map(relatedWorkOf).filter((work): work is RelatedWork => work !== null);
+  if (row === undefined) return null;
+  const works = relatedWorksOf(row.results);
+  if (works === null) return null;
   return {
     fingerprint: row.fingerprint,
     yearLimit: row.yearLimit,

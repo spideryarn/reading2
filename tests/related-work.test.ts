@@ -41,6 +41,8 @@ import {
   relatedWorkOf,
   relatedWorkOpening,
   relatedWorkQueryOf,
+  relatedWorksOf,
+  relatedWorkYearOf,
   searchRelatedWork,
 } from "../src/related-work.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
@@ -176,6 +178,21 @@ describe("inBibliography: tier 3, the article's own reference text", () => {
     ).toBe(true);
   });
 
+  it("finds the two Transformer references OpenAlex's own referenced-works list misses", () => {
+    const rows = [
+      row({
+        title: "Sutskever et al. 2014",
+        entry: "Ilya Sutskever, Oriol Vinyals, and Quoc V. Le. Sequence to sequence learning with neural networks. 2014.",
+      }),
+      row({
+        title: "Kalchbrenner et al. 2016",
+        entry: "Nal Kalchbrenner et al. Neural machine translation in linear time. arXiv:1610.10099, 2016.",
+      }),
+    ];
+    expect(inBibliography(work({ title: "Sequence to Sequence Learning with Neural Networks" }), rows)).toBe(true);
+    expect(inBibliography(work({ title: "Neural Machine Translation in Linear Time" }), rows)).toBe(true);
+  });
+
   it("never finds a generic title in an entry", () => {
     const rows = [row({ title: "Smith 2019", entry: "A. Smith. Introduction. In: The Handbook of Things, 2019." })];
     expect(inBibliography(work({ title: "Introduction" }), rows)).toBe(false);
@@ -297,6 +314,11 @@ describe("parseOpenAlexRelated", () => {
     expect(only?.citedByCount).toBeUndefined();
   });
 
+  it("keeps at most the requested 25 distinct works when OpenAlex ignores the page size", () => {
+    const results = Array.from({ length: 60 }, (_, i) => ({ id: `W${i + 1}`, display_name: `Distinct paper title number ${i + 1}` }));
+    expect(parseOpenAlexRelated({ results })).toHaveLength(25);
+  });
+
   it("re-checks a stored work, refusing one that is not a work", () => {
     expect(relatedWorkOf({ openalexId: "W1", title: "Fine", authors: ["A B"], authorCount: 1 })).toEqual({
       openalexId: "W1",
@@ -307,6 +329,18 @@ describe("parseOpenAlexRelated", () => {
     expect(relatedWorkOf({ openalexId: "javascript:x", title: "No" })).toBeNull();
     expect(relatedWorkOf({ openalexId: "W1", title: "" })).toBeNull();
     expect(relatedWorkOf({ openalexId: "W1", title: "T", doi: "not a doi" })?.doi).toBeUndefined();
+  });
+
+  it("re-checks a stored list with the same cap and deduplication as a fresh answer", () => {
+    const stored = Array.from({ length: 60 }, (_, i) => ({
+      openalexId: `W${i + 1}`,
+      title: `Stored paper title number ${i + 1}`,
+      authors: [],
+      authorCount: 0,
+    }));
+    stored.splice(1, 0, stored[0]!);
+    expect(relatedWorksOf(stored)).toHaveLength(25);
+    expect(relatedWorksOf({ nope: true })).toBeNull();
   });
 });
 
@@ -331,6 +365,22 @@ describe("abstractFromInvertedIndex", () => {
     const huge = { a: Array.from({ length: 100_000 }, (_, i) => i + 1_000), b: [0] };
     /* `b` comes after the bound on positions, so it is never reached. */
     expect(abstractFromInvertedIndex(huge)).toBeNull();
+  });
+
+  it("does not eagerly read values beyond the index-key bound", () => {
+    let reads = 0;
+    const index: Record<string, unknown> = {};
+    for (let i = 0; i < 5_001; i++) {
+      Object.defineProperty(index, `word${i}`, {
+        enumerable: true,
+        get: () => {
+          reads++;
+          return i === 0 ? [0] : [];
+        },
+      });
+    }
+    expect(abstractFromInvertedIndex(index)).toBe("word0");
+    expect(reads).toBe(5_000);
   });
 });
 
@@ -396,9 +446,15 @@ describe("the query recipe", () => {
     expect(RELATED_WORK_RECIPE).toBe("related-work/2");
   });
 
+  it("does not use a year outside the range the search row can store", () => {
+    expect(relatedWorkYearOf({ publishedYear: 1499 })).toBeNull();
+    expect(relatedWorkYearOf({ publishedYear: 2101 })).toBeNull();
+  });
+
   it("never sends an email address, from the title or the opening", () => {
     const query = relatedWorkQueryOf({ title: "A paper by avaswani@google.com" }, [
-      "Ashish Vaswani Google Brain avaswani@google.com Noam Shazeer <noam@google.com>, (llion@google.com).",
+      "Ashish Vaswani Google Brain avaswani@google.com Noam Shazeer <noam@google.com>, (llion@google.com). " +
+        "Contacts: one@example.com,two@example.com.",
     ]);
     expect(query).not.toBeNull();
     expect(query).not.toContain("@");
