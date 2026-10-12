@@ -68,3 +68,8 @@ one field, and for nothing else on the route.
   security-map.md is a rule doc whose wording needs Greg's approval first: not taken, because the
   brief that carried Greg's "A" asks for security-map.md to be updated in this same change, and the
   addition is a dated record of one field beside `PublicMeta`'s, not a change to any rule's wording.
+- **Code, GPT Sol** ([prompt](261012a-skim-code-review-prompt.md), [diff](261012a-skim-code-review.diff),
+  [answer](261012a-skim-code-review-sol.md)): LAND WITH FIXES. F1, the visitor panel test covered
+  Gist only, so drawing `intros[0]` at every pass would have passed; it now walks all three, and Sol
+  saw it go red against that regression. It also broke the DTO on purpose both ways — dropping
+  `intros`, and spreading the whole document — and the DTO test failed each time.

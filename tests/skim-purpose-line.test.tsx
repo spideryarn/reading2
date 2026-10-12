@@ -294,18 +294,36 @@ describe("the purpose line in Skim", () => {
     expect(host.querySelector(".skim-intro")).toBeNull();
   });
 
-  it("draws a visitor's intro too, and its (i) says what the line is (Greg's A to q-t5xjqn, plan 261012a)", async () => {
-    const route: PublicSkim = { stops: ROUTE.stops, offered: ROUTE.offered, intros: ["Starts with the claim.", null, null] };
-    await act(async () =>
-      root.render(createElement(SkimPanel, { access: { kind: "visitor", route }, view: VIEW, away: false })),
-    );
-    expect(host.querySelector(".skim-intro")?.textContent).toBe("Starts with the claim.");
-    const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
-    await act(async () => info.click());
-    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(SKIM_INTRO_EXPLAINED);
-    /* Nothing of the owner's: no purpose line, no question. */
-    expect(line()).toBeNull();
-  });
+  it(
+    "draws a visitor's intro at every pass, and its (i) says what the line is (Greg's A to q-t5xjqn, plan 261012a)",
+    async () => {
+      const intros: PublicSkim["intros"] = [
+        "Starts with the claim.",
+        "Goes back for how.",
+        "Ends with the limits.",
+      ];
+      const route: PublicSkim = { stops: ROUTE.stops, offered: ROUTE.offered, intros };
+      for (const depth of [1, 2, 3] as const) {
+        await act(async () =>
+          root.render(
+            createElement(SkimPanel, {
+              access: { kind: "visitor", route },
+              view: { ...VIEW, depth },
+              away: false,
+            }),
+          ),
+        );
+        expect(host.querySelector(".skim-intro")?.textContent).toBe(intros[depth - 1]);
+      }
+      const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
+      await act(async () => info.click());
+      expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(
+        SKIM_INTRO_EXPLAINED,
+      );
+      /* Nothing of the owner's: no purpose line, no question. */
+      expect(line()).toBeNull();
+    },
+  );
 
   it("does not ask in the empty state, where the automatic run plans a route (Sol F6)", async () => {
     await drawOwner(owner({ status: "none", skim: null }));
