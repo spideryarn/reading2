@@ -1,7 +1,8 @@
 #!/usr/bin/env -S npx tsx
 /**
- * `box-health` — tells the Overseer when the box's health needs it, every ten
- * minutes from `box-health.timer`. Plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+ * `box-health` — tells the Overseer when the box's health needs it, every twenty
+ * minutes from `box-health.timer` (every ten until 2026-10-12, when Greg asked for
+ * every tick on the box to run half as often). Plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
  *
  * > They'd probably also report on box health, so hard disk space, RAM, swap,
  * > CPU load. […] if they don't have anything to report, that they don't—maybe
@@ -31,7 +32,8 @@
  *
  * The alarm is a SET of keys (`critical`, `unknown`, `disk:/`, `disk:/home`).
  * A key that was not in the last message is said at once. A smaller set, or an
- * empty one, is said only after `HOLD_RUNS` runs in a row (half an hour), so a
+ * empty one, is said only after `HOLD_RUNS` runs in a row (two observations twenty
+ * minutes apart, so twenty to forty minutes after recovery), so a
  * reading that flaps around a cutoff is one message, not twenty. An unchanged
  * set is said again once a day. Nothing alarming and nothing said: silence.
  * The journal gets one line per run regardless — that is free.
@@ -64,8 +66,14 @@ import {
   type NotifyOptions,
 } from "./box-notify.js";
 
-/** How many runs in a row a smaller alarm set must hold before it is said. Ten-minute timer: half an hour. */
-export const HOLD_RUNS = 3;
+/**
+ * How many runs in a row a smaller alarm set must hold before it is said.
+ * Two observations on the twenty-minute timer span twenty minutes; depending on
+ * when recovery begins, the all-clear takes twenty to forty minutes. It was 3
+ * on the ten-minute timer until 2026-10-12. Keeping 3 would span forty minutes
+ * and take forty to sixty minutes after recovery.
+ */
+export const HOLD_RUNS = 2;
 /** How often an unchanged alarm is said again. */
 export const REMIND_MS = 24 * 3_600_000;
 

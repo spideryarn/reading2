@@ -63,7 +63,7 @@
  * approval.
  *
  * `box` (2026-10-10, plan 261010d) is a scheduled job on the box — box health,
- * the daily worktree sweep — telling the Overseer what it measured. Its own arm
+ * the worktree sweep — telling the Overseer what it measured. Its own arm
  * rather than `dashboard`, whose prefix says a person started a session; the
  * message route is the only one that accepts it (`parseMessageSpeaker`).
  *

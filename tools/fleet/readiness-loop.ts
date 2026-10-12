@@ -13,11 +13,29 @@ import { WINDOW_HOURS } from "./readiness-wiring.js";
 import type { Reading, TreeStamp } from "./readiness.js";
 
 /**
- * Ten minutes between decisions. This is not the run interval: a check takes
- * about 26 minutes, and this number only bounds how soon a new dev head is
- * noticed while the loop is idle.
+ * Twenty minutes between idle decisions (ten until 2026-10-12). A full check
+ * may take longer; the post-run rest below also bounds its frequency.
  */
-export const TICK_INTERVAL_MS = 10 * 60 * 1000;
+export const TICK_INTERVAL_MS = 20 * 60 * 1000;
+
+/**
+ * How long to wait before the next decision, given when this tick started and
+ * whether it ran a check.
+ *
+ * **After a run, the loop rests for as long as the run took** before it looks
+ * again, so a dev head that moves faster than the suite can keep up costs the
+ * box at most half its time rather than all of it. Greg, 2026-10-12: *"I'm going
+ * to be working to be working on Spideryarn less for a while, so can you make
+ * all the ticks/daemons/services/etc run half as often?"* Until then a run
+ * (80 minutes on a busy box) was followed by the next one at once whenever dev
+ * had moved meanwhile. An idle tick still waits out `TICK_INTERVAL_MS` from its
+ * own start, now twenty minutes rather than ten.
+ */
+export function waitAfterTickMs(startedMs: number, nowMs: number, ranCheck: boolean): number {
+  const untilNextTick = startedMs + TICK_INTERVAL_MS - nowMs;
+  const rest = ranCheck ? nowMs - startedMs : 0;
+  return Math.max(0, untilNextTick, rest);
+}
 
 /**
  * A box kill often means transient pressure. Give the same box thirty minutes

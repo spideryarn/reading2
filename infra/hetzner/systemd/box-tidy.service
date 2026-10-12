@@ -1,4 +1,4 @@
-# Box tidy: the hourly disk tidy. /usr/local/lib/spideryarn/box-tidy.mjs, whose
+# Box tidy: the two-hourly disk tidy. /usr/local/lib/spideryarn/box-tidy.mjs, whose
 # header says exactly what it deletes and what it never touches.
 # docs/project/hetzner-remote-server-box.md, "Keeping the disks from filling".
 #

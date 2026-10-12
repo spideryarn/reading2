@@ -57,8 +57,11 @@ export function formatCheck(check: SessionCheck): string {
  */
 export const PACER_HEARTBEAT_FILE = "pacer-heartbeat";
 
-/** The pacer runs at :12 and :37, so this is three missed ticks, not one unlucky one. */
-export const MAX_PACER_AGE_MS = 90 * MINUTE;
+/**
+ * The pacer runs hourly at :12 (twice hourly until 2026-10-12), so this is two
+ * missed ticks and half an hour's slack, not one unlucky one.
+ */
+export const MAX_PACER_AGE_MS = 150 * MINUTE;
 
 /** How far ahead of this clock a heartbeat may be before it is not believed. */
 const FUTURE_SLACK_MS = 5 * MINUTE;
@@ -198,8 +201,11 @@ export function findOverseerSession(ask: typeof tmux = tmux): OverseerSession {
  * 2. Production behind dev.
  * ------------------------------------------------------------------ */
 
-/** Production may trail dev by this much before it is an alarm. The 3-hourly check aims for six. */
-export const MAX_DEPLOY_LAG_MS = 12 * HOUR;
+/**
+ * Production may trail dev by this much before it is an alarm. The 6-hourly check aims for
+ * twelve (it was 3-hourly aiming for six, with a 12-hour alarm, until 2026-10-12).
+ */
+export const MAX_DEPLOY_LAG_MS = 24 * HOUR;
 
 /** How far back to look for observed failures. The store's retention is 7 days. */
 export const READINESS_WINDOW_MS = 72 * HOUR;
@@ -228,7 +234,8 @@ export type TrunkRead =
  * **A commit that only records a deploy is not undeployed work.**
  * `npm run changelog:promote` commits the deploy record to dev after every
  * deploy, and that commit reaches production only with the next release — so
- * counting it made every quiet 12 hours an alarm (2026-10-12). The files are
+ * counting it made every quiet 12 hours an alarm (2026-10-12, when the alarm was
+ * at 12 hours). The files are
  * the changelog's own two, the same list the deploy gate already says is not a
  * release (`NOT_RELEASE_PATHS`). A commit with no path list — a merge, an empty
  * commit — is counted: this only ever drops a commit it can show is bookkeeping.

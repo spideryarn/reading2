@@ -1,4 +1,4 @@
-# The daily worktree sweep: `npm run worktree:sweep -- --remove`, run by
+# The every-other-day worktree sweep: `npm run worktree:sweep -- --remove`, run by
 # worktree-sweep.timer. scripts/worktree-sweep-daily.ts; plan
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
@@ -19,7 +19,7 @@
 # tests/systemd-units.test.ts compares these bytes against the heredoc in that
 # script.
 [Unit]
-Description=Worktree sweep -- removes landed worktrees daily; tells the Overseer about the rest
+Description=Worktree sweep -- removes landed worktrees every other day; tells the Overseer about the rest
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
 # It fetches dev before it judges anything.
 After=network-online.target

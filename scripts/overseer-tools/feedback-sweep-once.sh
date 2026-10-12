@@ -4,7 +4,7 @@
 # 21:05Z 2026-09-10. The prompt is prompt-feedback-sweep.md beside this script; the debrief goes
 # to OVERSEER_SCRATCH.
 #
-# Run every three hours by feedback-sweep.timer (plan 261010d) once Greg has approved it as a
+# Run every six hours by feedback-sweep.timer (plan 261010d) once Greg has approved it as a
 # permanent unit, and until then by feedback-sweep-loop.sh in tmux. One body for both, so the two
 # cannot drift. Exits with run-claude's status, so a sweep that failed marks the unit failed and
 # box-health tells the Overseer.

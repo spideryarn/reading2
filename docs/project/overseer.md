@@ -368,7 +368,7 @@ recurring form.
   **Look for the same idea under a different id, too**, and put the prior-work check in every brief
   (Greg, 2026-09-30, report 6F: *"I find myself suggesting it again because I can't remember
   whether I've already suggested it"*) — both are in [feedback-reports.md § The run](feedback-reports.md#the-run).
-  Since 2026-10-10 `feedback-sweep.timer` runs one sweep three hours after the last one ended, with
+  Since 2026-10-10 `feedback-sweep.timer` runs one sweep six hours after the last one ended (three until 2026-10-12), with
   its debriefs in `~/.overseer/scratch` (from 2026-09-10 until then a tmux loop,
   `feedback-sweep-loop`, did it), as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
   daemon's scheduler stays off; its first output is queue
@@ -666,7 +666,7 @@ worktree from `origin/dev`, run `--apply` there, `git push origin HEAD:dev`, rem
 What counts as a week old is in the script's header.
 
 **The rest runs by itself since 2026-10-07.** `box-tidy.timer` runs
-[`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs) every hour; what it deletes and
+[`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs) every two hours; what it deletes and
 what it leaves for you is in
 [hetzner-remote-server-box.md § Keeping the disks from filling](hetzner-remote-server-box.md#keeping-the-disks-from-filling).
 It never removes a worktree or a Docker image, and when a disk reaches 80% its last lines in

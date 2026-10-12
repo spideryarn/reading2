@@ -383,7 +383,7 @@ export interface CwdUser {
  * counted and printed. Adding a name here is a decision somebody makes on
  * purpose, not a default.
  *
- * `box-tidy` was added on 2026-10-07. It is the hourly disk tidy
+ * `box-tidy` was added on 2026-10-07. It is the two-hourly disk tidy
  * (infra/hetzner/box-tidy.mjs), which holds two capabilities to read `/proc`
  * and is therefore not dumpable for the seconds it runs. It names itself with
  * `process.title`, and its unit runs it with `WorkingDirectory=/`.
