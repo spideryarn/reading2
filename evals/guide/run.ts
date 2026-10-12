@@ -349,7 +349,8 @@ function verdict(c: Case, s: Omit<Scored, "pass" | "why">): string[] {
   const wrong: string[] = [];
   if (s.invalid.length > 0) wrong.push(`raw brackets shown: ${s.invalid.join(" ")}`);
   if (s.inline.length > 0) wrong.push("token mid-line");
-  if (s.proseWords > 160) wrong.push(`long (${s.proseWords} words)`);
+  /* Plan 261012f asks for under 60; the slack is for a list or a quoted heading. */
+  if (s.proseWords > 80) wrong.push(`long (${s.proseWords} words)`);
   if (s.restates > 2) wrong.push(`restates the piece ${s.restates}×`);
   if (s.offersToAct) wrong.push("offers to open it itself");
   switch (c.kind) {

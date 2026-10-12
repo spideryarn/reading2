@@ -1155,12 +1155,19 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
   the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
-  reader can send next), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
+  reader can send next), `chat` (a question about what the piece says, for a fresh Chat; at most
+  one, since 2026-10-12), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
   search), `share` or `archive`; [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
   server and again on the page, and they ride on the run (`ToolRun.steps`). The page draws the
   latest settled answer's as a row of buttons
-  ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)), **never pressed by the guide**: an ask
-  sends exactly the words on it; a mode is the chip `chipFor` would make; a search is a box the
+  ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)) under a visible *Next steps* heading,
+  **never pressed by the guide**: an ask sends exactly the words on it; *Ask in Chat*, drawn first
+  and the one orange button, starts a fresh Chat with exactly its words as the first question,
+  through the list box's `onSendNew`, and leaves the guide as it was. Greg, 2026-10-12
+  (`spya-es283p`), asked for it, prominent: *"when I watch people using the guide, they often
+  didn't notice that it was suggesting actions for them to take"*. So a question about the content
+  gets a sentence and that button rather than an answer
+  ([261012f](../plans/261012f-guide-hands-content-questions-to-a-new-chat.md)); a mode is the chip `chipFor` would make; a search is a box the
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in

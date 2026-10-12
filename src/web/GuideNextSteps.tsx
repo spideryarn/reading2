@@ -20,6 +20,18 @@
  *   does. The words are the model's, so they are set in its face
  *   (docs/project/fonts.md), and drawn in full: what is on the button is
  *   exactly what is sent.
+ * - **chat** starts a fresh Chat with the words as its first question, and
+ *   sends it: the list's own *new conversation* box (`onSendNew`), since the
+ *   guide only ever opens in Chat's band. Drawn first, and the one orange
+ *   button, because Greg watched readers miss the guide's suggestions (plan
+ *   docs/plans/261012f-guide-hands-content-questions-to-a-new-chat.md):
+ *
+ *   > I guess this needs to be pretty sort of prominent because when I watch
+ *   > people using the guide, they often didn't notice that it was suggesting
+ *   > actions for them to take.
+ *   >
+ *   > — Greg, 2026-10-12, `spya-es283p`
+ *
  * - **mode** is the chip `[cmd:mode:<key>]` would be (CommandChip.tsx), so
  *   `chipFor` decides at the draw and at the press whether this reader can
  *   open it here; a mode it refuses draws nothing.
@@ -38,7 +50,7 @@
  * offer: three buttons is the most on screen at once (Greg's *"maybe three
  * would be about right"*), and an older answer's steps would be stale.
  */
-import { Archive, Share2 } from "lucide-react";
+import { Archive, MessageSquare, Share2 } from "lucide-react";
 import { useState } from "react";
 import { checkNextSteps } from "../next-steps.js";
 import type { ChatMessage, NextStep, ToolRun } from "../types.js";
@@ -57,6 +69,7 @@ import { voiceClass } from "./voice.js";
  * F5 on the plan).
  */
 export const STEP_WORDS = {
+  chat: "Ask in Chat:",
   share: "Share this article…",
   archive: "Archive or put back…",
 } as const;
@@ -93,31 +106,49 @@ function metadataHref(slug: string, section?: "access-sharing"): string {
   return readHref(slug, section === undefined ? here : withSection(here, section), "metadata");
 }
 
+/**
+ * **The order the row draws**: a `chat` step first, the rest as the model put
+ * them. The press most worth not missing goes where the eye lands.
+ */
+export function inDrawOrder(steps: readonly NextStep[]): NextStep[] {
+  return [...steps.filter((s) => s.kind === "chat"), ...steps.filter((s) => s.kind !== "chat")];
+}
+
 export function GuideNextSteps({
   slug,
   message,
   blocks,
   onAsk,
+  onChat,
 }: {
   slug: string;
   /** The conversation's latest message; the row is drawn only under a settled answer. */
   message: ChatMessage | undefined;
   blocks: ReadonlyMap<string, string>;
   onAsk(words: string): void;
+  /**
+   * Start a fresh Chat and send `words` as its first question. Absent where
+   * nothing can start one, and then a `chat` step draws nothing.
+   */
+  onChat?: ((words: string) => void) | undefined;
 }) {
   const commands = useChatCommands();
   if (!mayShowSteps(message)) return null;
-  const steps = (stepsIn(message.tools) ?? []).filter((step) => drawable(step, commands, blocks));
+  const steps = inDrawOrder(
+    (stepsIn(message.tools) ?? []).filter((step) => drawable(step, commands, blocks, onChat !== undefined)),
+  );
   if (steps.length === 0) return null;
   return (
-    <fieldset className="chat-suggest guide-next-steps" aria-label="Next steps">
+    <fieldset className="chat-suggest guide-next-steps">
+        {/* Seen, not only announced: readers missed an unlabelled row (plan 261012f). */}
+        <legend className="guide-next-steps-legend">Next steps</legend>
         <ul>
           {steps.map((step) => (
             /* The same suggestion can recur in a later answer. Its search box
                and CommandChip status belong to that answer, not merely to the
                step's words, so the message id is part of the identity. */
             <li key={`${message.id}:${JSON.stringify(step)}`}>
-              <Step step={step} slug={slug} blocks={blocks} commands={commands} onAsk={onAsk} />
+              <Step step={step} slug={slug} blocks={blocks} commands={commands} onAsk={onAsk} onChat={onChat} />
             </li>
           ))}
         </ul>
@@ -132,12 +163,19 @@ export function GuideNextSteps({
  * row of refused modes is no row rather than an empty group (GPT Sol's F3).
  * The search's own chip is checked again for the reader's words as they type.
  */
-function drawable(step: NextStep, commands: CommandExecutor | null, blocks: ReadonlyMap<string, string>): boolean {
+function drawable(
+  step: NextStep,
+  commands: CommandExecutor | null,
+  blocks: ReadonlyMap<string, string>,
+  canChat: boolean,
+): boolean {
   switch (step.kind) {
     case "mode":
       return commands !== null && chipFor(formatProposalToken({ id: "mode", key: step.mode }), commands, blocks) !== null;
     case "search":
       return commands !== null && chipFor(formatProposalToken({ id: "quick-search", words: step.words }), commands, blocks) !== null;
+    case "chat":
+      return canChat;
     case "ask":
     case "share":
     case "archive":
@@ -155,18 +193,31 @@ function Step({
   blocks,
   commands,
   onAsk,
+  onChat,
 }: {
   step: NextStep;
   slug: string;
   blocks: ReadonlyMap<string, string>;
   commands: CommandExecutor | null;
   onAsk(words: string): void;
+  onChat: ((words: string) => void) | undefined;
 }) {
   switch (step.kind) {
     case "ask":
       return (
         <button type="button" className="chat-suggest-btn" onClick={() => onAsk(step.words)}>
           <span className={voiceClass("ai")}>{step.words}</span>
+        </button>
+      );
+    /* What is on the button is what is sent, as with `ask`: the words in the
+       model's face, after our own label. */
+    case "chat":
+      return onChat === undefined ? null : (
+        <button type="button" className="guide-next-chat" onClick={() => onChat(step.words)}>
+          <MessageSquare size={14} aria-hidden="true" />
+          <span>
+            {STEP_WORDS.chat} <span className={voiceClass("ai")}>{step.words}</span>
+          </span>
         </button>
       );
     /* `drawable` has checked both; `null` here only if the page changed

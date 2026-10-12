@@ -51,6 +51,54 @@
   color: var(--ink);
 }
 
+/* **The guide's next steps, harder to miss** (Greg, spya-es283p: *"when I
+   watch people using the guide, they often didn't notice that it was
+   suggesting actions for them to take"*; plan 261012f). Scoped to the guide's
+   row: the greeting's starters, Explore's and Chat's suggestions keep the quiet
+   look above. Here, after it in source order, so the hover above does not
+   undo these. A visible heading, buttons drawn like the in-answer command chip
+   (`.cmd-chip`, mode-band.css), and one orange button: *Ask in Chat*, in
+   Send's colours. */
+.guide-next-steps-legend {
+  margin: 0 auto;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.guide-next-steps .chat-suggest-btn {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.guide-next-steps .chat-suggest-btn:hover { border-color: var(--highlight); }
+.guide-next-chat {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--highlight);
+  border-radius: var(--radius);
+  background: var(--highlight);
+  color: var(--highlight-foreground);
+  font-family: var(--font-ui);
+  font-size: 0.93rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+/* The question is the model's words, in its face (fonts.md), at its own weight. */
+.guide-next-chat .voice-ai { font-weight: 400; }
+.guide-next-chat svg { flex-shrink: 0; }
+/* `brightness`, not a translucent fill: on this dark ground a see-through
+   orange hovers darker (controls.md § Two hover languages). */
+.guide-next-chat:hover { filter: brightness(1.1); }
+.guide-next-chat:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+
 /* The card every block link shares (BlockLinkCard.tsx): the section the block
    sits in, then the paragraph itself, so a claim can be checked without leaving
    the sentence you are reading. The `tip-cite` names are from when it was the
