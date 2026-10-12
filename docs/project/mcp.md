@@ -105,8 +105,8 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `import_article` | import a URL (uses a free article, as the web app does; one you already have answers that article, free — [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md); one somebody else has made public answers that copy, free, and `own_copy: true` imports the reader's own — [261009j](../plans/261009j-a-public-copy-offered-at-import.md)) |
 | `get_import_status`, `list_imports` | how an import is going |
 | `set_auto_modes` | the "run the main modes after import" switch |
-| `make_article_private`, `make_article_public` | visibility; **public asks you first** |
-| `create_private_link` | the article's private link, key and all, made only if none is on (an existing one is never replaced); **asks you first, every time** |
+| `make_article_private`, `make_article_public` | visibility; **public asks you first** (on the web, an admin is not asked: see below) |
+| `create_private_link` | the article's private link, key and all, made only if none is on (an existing one is never replaced); **asks you first, every time** (on the web, an admin is not asked: see below) |
 | `list_users` | admin: every account, most recently active first — address, sign-up, last sign-in, last read, article counts, plan |
 | `user_activity` | admin: one account's counts and dates, by address or id; never which articles or what they wrote |
 | `list_gift_vouchers` | admin: who you have sent gifts to, claimed or not (no note text) |
@@ -180,12 +180,27 @@ account ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
 - **Other browser origins still refuse.** The origin gate remains the site's own, Claude's and
   ChatGPT's; other apps must call without an `Origin` header, as server-side clients normally do.
 - **The asking tools are not offered there**: no dialog can be shown on your Mac from a server, so
-  `tools/list` leaves out `make_article_public`, `create_private_link`, `create_gift_voucher` and
-  `retry_gift_voucher_email`, and `update_gift_voucher` comes without `email`
-  (`remoteTools()` in `tools.ts`). Left out rather than listed with "not available here", because
-  models plan around whatever they are offered; a new asking tool is left out unless it declares a
-  `remote` form. Gifting from there is `draft_author_gift`, then *Send* on the site
+  `tools/list` leaves out `create_gift_voucher` and `retry_gift_voucher_email`, and
+  `update_gift_voucher` comes without `email` (`remoteTools()` in `tools.ts`). Left out rather than
+  listed with "not available here", because models plan around whatever they are offered; a new
+  asking tool is left out unless it declares a `remote` form. Gifting from there is
+  `draft_author_gift`, then *Send* on the site
   ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)).
+- **Except that an admin may publish and take a private link there, without a press** (since
+  2026-10-12). Greg, asked how he wanted to approve these two from the web, with the risk of a
+  hidden line in a page the agent reads spelled out:
+
+  > C
+  >
+  > — Greg, 2026-10-11 (q-pe52f6: *"Drop the press for these two tools, on your admin account only"*)
+
+  So for an admin, `make_article_public` and `create_private_link` are listed (their `webAdmin`
+  form) and run what the dialog would have approved, with no dialog; each call checks `isAdmin` on
+  the verified id first. Their descriptions tell the model to call them only when the person asked
+  in this conversation. The web route currently refuses every other account; if that gate is later
+  opened, these two tools stay omitted for them. The Mac's server still asks everyone, including an admin
+  ([261012b](../plans/261012b-mcp-admin-publish-and-private-link-from-the-web-without-a-press.md),
+  [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route)).
 - **What the token can do at Supabase** is more than the tools, and is written up in
   [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
 
@@ -207,7 +222,9 @@ stay out of the local server's imports: `tests/mcp-remote-import-graph.test.ts`.
 **Adding a tool** is a row in `TOOLS` that calls an existing route; the server's checks do the
 rest. A tool that sends mail, publishes, or otherwise reaches the outside world gets an `ask`, and a
 test that a *Cancel* sends nothing. An asking tool is then absent from the remote server's list,
-unless part of it never asks: give it a `remote` form, a narrower input under which `ask` cannot
+unless part of it never asks, or Greg has said an admin need not be
+asked there (`webAdmin`, which the type and a test restrict to the two tools above). For the first,
+give it a `remote` form, a narrower input under which `ask` cannot
 ask, as `update_gift_voucher` has.
 
 **Two things not to break.** `serve` speaks MCP on stdout, so nothing else may ever write there; a
