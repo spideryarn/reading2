@@ -1,4 +1,7 @@
-# Runs worktree-sweep.service once a day.
+# Runs worktree-sweep.service every other day (daily until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh.
@@ -9,10 +12,12 @@ Description=Timer for worktree-sweep.service
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
 
 [Timer]
-# 06:30 in the box's own timezone, before the Overseer's renewal at 06:43.
-OnCalendar=*-*-* 06:30:00
+# 06:30 in the box's own timezone on odd days of the month (1st, 3rd, ... --
+# so a 31-day month runs the 31st and the 1st back to back), before the
+# Overseer's renewal at 06:43, which runs on the same days.
+OnCalendar=*-*-01/2 06:30:00
 # Unlike the interval timers here, this one is OnCalendar=, so Persistent= does
-# work: a box that was off at 06:30 runs the sweep shortly after it boots.
+# work: a box that was off at its 06:30 runs the sweep shortly after it boots.
 Persistent=true
 Unit=worktree-sweep.service
 

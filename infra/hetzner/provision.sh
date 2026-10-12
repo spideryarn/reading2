@@ -1671,7 +1671,7 @@ FLEET_DASHBOARD_UNIT
 install_unit overseer-watchdog.service <<'OVERSEER_WATCHDOG_SERVICE_UNIT'
 # Overseer watchdog: a periodic check that the Overseer daemon is still
 # writing its heartbeat, and (since 2026-10-08) that the Overseer session is
-# still pacing the queue and production is not over 12 hours behind dev. The
+# still pacing the queue and production is not over 24 hours behind dev. The
 # last one runs `git fetch` as @USER@, so it needs the GitHub token in
 # /etc/github-tokens. scripts/overseer-watchdog.ts,
 # docs/project/overseer-direction.md.
@@ -1734,7 +1734,10 @@ ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/overseer-w
 OVERSEER_WATCHDOG_SERVICE_UNIT
 
 install_unit overseer-watchdog.timer <<'OVERSEER_WATCHDOG_TIMER_UNIT'
-# Runs overseer-watchdog.service on a plain interval.
+# Runs overseer-watchdog.service on a plain interval: every ten minutes (five
+# until 2026-10-12). Greg, 2026-10-12: "I'm going to be working to be working
+# on Spideryarn less for a while, so can you make all the
+# ticks/daemons/services/etc run half as often?"
 # docs/project/overseer-direction.md, scripts/overseer-watchdog.ts.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
@@ -1749,10 +1752,9 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-directi
 # that failed to come back up after a reboot is caught within a couple of
 # minutes rather than after a full period of silence.
 OnBootSec=2min
-# Off the END of the previous run, the same "chain, not fixed interval" shape
-# overseer-direction.md documents for the dashboard's own collector -- a timer
-# is not something this can overlap with itself on a slow box.
-OnUnitActiveSec=5min
+# Ten minutes after the previous run STARTED. systemd does not start a second
+# instance of the same service while it is still active.
+OnUnitActiveSec=10min
 # INERT ON THIS TIMER, and kept deliberately rather than removed. systemd.timer(5):
 # "Note that this setting only has an effect on timers configured with
 # OnCalendar=." This timer has OnBootSec= and OnUnitActiveSec= and no
@@ -1770,7 +1772,7 @@ WantedBy=timers.target
 OVERSEER_WATCHDOG_TIMER_UNIT
 
 # >>> box-tidy (spliced from infra/hetzner/box-tidy.mjs and systemd/box-tidy.*)
-# THE HOURLY DISK TIDY. /home filled to 100% on 2026-10-05 and took the Overseer
+# THE TWO-HOURLY DISK TIDY. /home filled to 100% on 2026-10-05 and took the Overseer
 # daemon down with ENOSPC; the tidying that would have prevented it was a script
 # in /tmp that somebody had to remember to run. Greg, 2026-10-06: "Perhaps add
 # this and other measures to keep the hard disk fullness down to some routine
@@ -1785,7 +1787,7 @@ install -d -o root -g root -m 0755 /usr/local/lib/spideryarn
 box_tidy_tmp=$(mktemp)
 cat > "$box_tidy_tmp" <<'BOX_TIDY_MJS'
 #!/usr/bin/env node
-// box-tidy: the hourly disk tidy on the Hetzner box. Run by box-tidy.timer.
+// box-tidy: the two-hourly disk tidy on the Hetzner box. Run by box-tidy.timer.
 //
 // Greg, 2026-10-06: "Perhaps add this and other measures to keep the hard disk
 // fullness down to some routine daemon/service". The permissions each step
@@ -2209,7 +2211,7 @@ install -o root -g root -m 0644 "$box_tidy_tmp" /usr/local/lib/spideryarn/box-ti
 rm -f "$box_tidy_tmp"
 
 install_unit box-tidy.service <<'BOX_TIDY_SERVICE_UNIT'
-# Box tidy: the hourly disk tidy. /usr/local/lib/spideryarn/box-tidy.mjs, whose
+# Box tidy: the two-hourly disk tidy. /usr/local/lib/spideryarn/box-tidy.mjs, whose
 # header says exactly what it deletes and what it never touches.
 # docs/project/hetzner-remote-server-box.md, "Keeping the disks from filling".
 #
@@ -2278,7 +2280,10 @@ TimeoutStartSec=30min
 BOX_TIDY_SERVICE_UNIT
 
 install_unit box-tidy.timer <<'BOX_TIDY_TIMER_UNIT'
-# Runs box-tidy.service once an hour.
+# Runs box-tidy.service every two hours (hourly until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/project/hetzner-remote-server-box.md, "Keeping the disks from filling".
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
@@ -2291,11 +2296,11 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/hetzner-remote-s
 [Timer]
 # Ten minutes after boot, so it does not compete with everything else starting.
 OnBootSec=10min
-# An hour after activation of the previous run. systemd does not start a second
+# Two hours after activation of the previous run. systemd does not start a second
 # instance of the same service while it is still active. /home went from
-# comfortable to full inside a day on 2026-10-05; hourly is often enough to
-# matter and rare enough to cost nothing.
-OnUnitActiveSec=1h
+# comfortable to full inside a day on 2026-10-05; every two hours is still often
+# enough to matter and rare enough to cost nothing.
+OnUnitActiveSec=2h
 Unit=box-tidy.service
 
 [Install]
@@ -2304,15 +2309,16 @@ BOX_TIDY_TIMER_UNIT
 # <<< box-tidy
 
 # >>> the box's repeating jobs (docs/plans/261010d-standing-jobs-survive-a-reboot.md)
-# Box health every ten minutes, the worktree sweep daily, the dashboard refresh
-# hourly. Each is a oneshot service run by its timer from the primary checkout,
-# like the watchdog. The feedback sweep every three hours is the fourth pair:
+# Box health every twenty minutes, the worktree sweep every other day, the
+# dashboard refresh every two hours (each half as often since 2026-10-12). Each is
+# a oneshot service run by its timer from the primary checkout, like the
+# watchdog. The feedback sweep every six hours is the fourth pair:
 # installed, and NOT enabled, because it runs Claude and so spends money on a
 # clock -- Greg's call (plan 261010d). The eight heredocs below are the
 # checked-in files under infra/hetzner/systemd/, byte for byte:
 # tests/systemd-units.test.ts holds them equal.
 install_unit box-health.service <<'BOX_HEALTH_SERVICE_UNIT'
-# Box health: disk, memory, swap and load, every ten minutes from
+# Box health: disk, memory, swap and load, every twenty minutes from
 # box-health.timer. scripts/box-health.ts; plan
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
@@ -2353,7 +2359,10 @@ ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/box-health
 TimeoutStartSec=5min
 BOX_HEALTH_SERVICE_UNIT
 install_unit box-health.timer <<'BOX_HEALTH_TIMER_UNIT'
-# Runs box-health.service every ten minutes.
+# Runs box-health.service every twenty minutes (ten until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh.
@@ -2366,17 +2375,17 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/plans/261010d-standing-j
 [Timer]
 # Soon after boot, so a box that came back unhealthy says so within minutes.
 OnBootSec=5min
-# Ten minutes after the previous run STARTED (measured on box-tidy.timer, which
+# Twenty minutes after the previous run STARTED (measured on box-tidy.timer, which
 # has the same shape). Runs never overlap: systemd does not start a oneshot that
 # is still running.
-OnUnitActiveSec=10min
+OnUnitActiveSec=20min
 Unit=box-health.service
 
 [Install]
 WantedBy=timers.target
 BOX_HEALTH_TIMER_UNIT
 install_unit worktree-sweep.service <<'WORKTREE_SWEEP_SERVICE_UNIT'
-# The daily worktree sweep: `npm run worktree:sweep -- --remove`, run by
+# The every-other-day worktree sweep: `npm run worktree:sweep -- --remove`, run by
 # worktree-sweep.timer. scripts/worktree-sweep-daily.ts; plan
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
@@ -2397,7 +2406,7 @@ install_unit worktree-sweep.service <<'WORKTREE_SWEEP_SERVICE_UNIT'
 # tests/systemd-units.test.ts compares these bytes against the heredoc in that
 # script.
 [Unit]
-Description=Worktree sweep -- removes landed worktrees daily; tells the Overseer about the rest
+Description=Worktree sweep -- removes landed worktrees every other day; tells the Overseer about the rest
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
 # It fetches dev before it judges anything.
 After=network-online.target
@@ -2423,7 +2432,10 @@ Nice=10
 TimeoutStartSec=1h
 WORKTREE_SWEEP_SERVICE_UNIT
 install_unit worktree-sweep.timer <<'WORKTREE_SWEEP_TIMER_UNIT'
-# Runs worktree-sweep.service once a day.
+# Runs worktree-sweep.service every other day (daily until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh.
@@ -2434,10 +2446,12 @@ Description=Timer for worktree-sweep.service
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
 
 [Timer]
-# 06:30 in the box's own timezone, before the Overseer's renewal at 06:43.
-OnCalendar=*-*-* 06:30:00
+# 06:30 in the box's own timezone on odd days of the month (1st, 3rd, ... --
+# so a 31-day month runs the 31st and the 1st back to back), before the
+# Overseer's renewal at 06:43, which runs on the same days.
+OnCalendar=*-*-01/2 06:30:00
 # Unlike the interval timers here, this one is OnCalendar=, so Persistent= does
-# work: a box that was off at 06:30 runs the sweep shortly after it boots.
+# work: a box that was off at its 06:30 runs the sweep shortly after it boots.
 Persistent=true
 Unit=worktree-sweep.service
 
@@ -2445,7 +2459,7 @@ Unit=worktree-sweep.service
 WantedBy=timers.target
 WORKTREE_SWEEP_TIMER_UNIT
 install_unit dashboard-refresh.service <<'DASHBOARD_REFRESH_SERVICE_UNIT'
-# The hourly dashboard refresh: merge origin/dev into the primary checkout, and
+# The two-hourly dashboard refresh: merge origin/dev into the primary checkout, and
 # restart the fleet dashboard only when what it is built from changed.
 # scripts/overseer-tools/dashboard-refresh.sh, whose header says why; plan
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
@@ -2482,7 +2496,10 @@ ExecStart=/usr/bin/flock -w 1800 /home/@USER@/.overseer/primary-checkout.lock /b
 TimeoutStartSec=45min
 DASHBOARD_REFRESH_SERVICE_UNIT
 install_unit dashboard-refresh.timer <<'DASHBOARD_REFRESH_TIMER_UNIT'
-# Runs dashboard-refresh.service once an hour.
+# Runs dashboard-refresh.service every two hours (hourly until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh.
@@ -2494,9 +2511,9 @@ Documentation=file:///home/@USER@/code/spideryarn2/scripts/overseer-tools/README
 
 [Timer]
 OnBootSec=15min
-# An hour after the previous run STARTED. A slow npm install cannot overlap the
+# Two hours after the previous run STARTED. A slow npm install cannot overlap the
 # next: systemd does not start a oneshot that is still running.
-OnUnitActiveSec=1h
+OnUnitActiveSec=2h
 Unit=dashboard-refresh.service
 
 [Install]
@@ -2505,7 +2522,7 @@ DASHBOARD_REFRESH_TIMER_UNIT
 install_unit feedback-sweep.service <<'FEEDBACK_SWEEP_SERVICE_UNIT'
 # One feedback sweep: Claude Opus, unattended, under the box's default Claude
 # login, following docs/project/feedback-reports.md. Run by
-# feedback-sweep.timer every three hours. scripts/overseer-tools/feedback-sweep-once.sh;
+# feedback-sweep.timer every six hours. scripts/overseer-tools/feedback-sweep-once.sh;
 # plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # THIS SPENDS MONEY ON A CLOCK, so it is installed but enabled only on Greg's
@@ -2546,7 +2563,11 @@ ExecStart=/bin/bash /home/@USER@/code/spideryarn2/scripts/overseer-tools/feedbac
 TimeoutStartSec=3h
 FEEDBACK_SWEEP_SERVICE_UNIT
 install_unit feedback-sweep.timer <<'FEEDBACK_SWEEP_TIMER_UNIT'
-# Runs feedback-sweep.service every three hours.
+# Runs feedback-sweep.service every six hours (three until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
+#
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md. Enabled only on Greg's
 # word -- see feedback-sweep.service.
 #
@@ -2561,10 +2582,10 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/feedback-reports
 # The first sweep half an hour after boot -- or at once, when the timer is first
 # started on a box that has been up longer than that.
 OnBootSec=30min
-# Three hours after the previous sweep ENDED (OnUnitInactiveSec=, not
-# OnUnitActiveSec=, which counts from the start): the tmux loop's `sleep 10800`
-# after each sweep, which can itself take 150 minutes.
-OnUnitInactiveSec=3h
+# Six hours after the previous sweep ENDED (OnUnitInactiveSec=, not
+# OnUnitActiveSec=, which counts from the start): the old tmux loop's `sleep 10800`
+# (now 21600) after each sweep, which can itself take 150 minutes.
+OnUnitInactiveSec=6h
 Unit=feedback-sweep.service
 
 [Install]
@@ -3120,7 +3141,7 @@ check "overseer restarts always" 'systemctl show -p Restart --value overseer.ser
 # systemd could not use. And no worktree in it, ever -- `git worktree remove`
 # deletes those, which is how the tmux-job predecessors used to vanish.
 check "overseer ExecStart is in the primary checkout" 'out=$(systemctl show -p ExecStart --value overseer.service); case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*worktrees*) false ;; *"/home/'"$USER_NAME"'/code/spideryarn2/"*) true ;; *) false ;; esac'
-# The hourly disk tidy. The dry run is the check that matters: it proves the
+# The two-hourly disk tidy. The dry run is the check that matters: it proves the
 # installed script parses and runs as the user, on this box's node, and it
 # deletes nothing. `timers.target.wants` for the same reason as the symlink
 # above: it is what says the timer comes back after a reboot.

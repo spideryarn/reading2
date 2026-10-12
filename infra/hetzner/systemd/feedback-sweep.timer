@@ -1,4 +1,8 @@
-# Runs feedback-sweep.service every three hours.
+# Runs feedback-sweep.service every six hours (three until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
+#
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md. Enabled only on Greg's
 # word -- see feedback-sweep.service.
 #
@@ -13,10 +17,10 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/feedback-reports
 # The first sweep half an hour after boot -- or at once, when the timer is first
 # started on a box that has been up longer than that.
 OnBootSec=30min
-# Three hours after the previous sweep ENDED (OnUnitInactiveSec=, not
-# OnUnitActiveSec=, which counts from the start): the tmux loop's `sleep 10800`
-# after each sweep, which can itself take 150 minutes.
-OnUnitInactiveSec=3h
+# Six hours after the previous sweep ENDED (OnUnitInactiveSec=, not
+# OnUnitActiveSec=, which counts from the start): the old tmux loop's `sleep 10800`
+# (now 21600) after each sweep, which can itself take 150 minutes.
+OnUnitInactiveSec=6h
 Unit=feedback-sweep.service
 
 [Install]
