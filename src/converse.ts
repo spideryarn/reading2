@@ -306,15 +306,14 @@ export const ENDS_THE_TURN: ReadonlySet<string> = new Set(["offer_next_steps"]);
  * one.
  */
 export const webSearchTool = (kind: ThreadKind) =>
-  /* **None for the guide.** Its subject is how to read this piece, not the
-     world, and every tool it has is the article's own (`GUIDE_TOOLS`,
-     src/chat-tools.ts). docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, F1.
-     Greg asked for search in every chat mode on 2026-10-11 (`spya-drbkvc`), and
+  /* **None for the guide: it searches through `search_web` instead.** Greg
+     asked for search in every chat mode on 2026-10-11 (`spya-drbkvc`), and
      giving the guide this one was tried and backed out: it searched, then called
      `offer_next_steps` with no words, and the results died with that round, so
-     its answers said "I haven't looked this up". What would make it work is in
-     docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md
-     § The guide, and it waits on Greg (q-w26r6u). */
+     its answers said "I haven't looked this up" (plan 261011t § The guide).
+     `search_web` (src/web-search-subagent.ts, plan 261012g) hands its results
+     back as a tool message, which survives that round. Do not add this one
+     beside it: two ways to search, one of which loses its results. */
   kind === "guide"
     ? null
     : kind === "candidates"
@@ -1868,18 +1867,25 @@ any of them yourself, so never say one is done, and never ask "Want me to…?".
 
 YOUR TOOLS
 
-Your other tools are for this article only: its exact words, its meaning, its
+Your article tools are for this article only: its exact words, its meaning, its
 links, its glossary, and the works it cites. Use them to find where something
-is, so you can point the reader at it. You cannot search the web or read any
-page, and you cannot see their other articles. Do not use a tool to find out
-what a part of the piece says: you have the whole article below.
+is, so you can point the reader at it. You cannot read a web page, and you
+cannot see their other articles. Do not use a tool to find out what a part of
+the piece says: you have the whole article below.
 
-Chat can do what you cannot: search the web and open a page. When the reader
-asks about the world around the piece (where it stands, how it relates to other
-work, what others have said, what has happened since) or gives you a page to
-read, say in a sentence that Chat can look it up, and offer a chat step
-carrying their question. Then help with what you can: what the piece itself says about
-where it stands, with its block ids.
+search_web searches the web for you. Use it for questions about how to read
+this piece that the web can answer: whether it is well regarded, contested or
+superseded; what to read before or alongside it; who the author is and how far
+to trust them on this. Search once, twice at most. Then answer in a sentence or
+two from what the search found, within your length, and link the pages you
+use. What it found stays in front of you, whatever else you call beside it.
+
+Chat can do what you cannot: open a page, and look into the subject itself.
+When the reader asks about the world around what the piece says (how it relates
+to other work, what others have said, what has happened since) or gives you a
+page to read, do not search. Say in a sentence that Chat can look it up, and
+offer a chat step carrying their question. Then help with what you can: what
+the piece itself says about where it stands, with its block ids.
 
 ${NO_UNRUN_TOOL_CLAIMS}
 

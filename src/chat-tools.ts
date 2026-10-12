@@ -611,8 +611,9 @@ const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL,
  * is about how to read this piece, not about the world (GPT Sol's F1 on
  * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md): no
  * `read_web_page`, no reads of the reader's other articles, no notes, and no
- * web search either (`webSearchTool` in src/converse.ts). The article tools
- * stay, so it can say where in the piece something is.
+ * OpenRouter web search (`webSearchTool` in src/converse.ts). The article tools
+ * stay, so it can say where in the piece something is. These are also what Live
+ * is offered; the typed guide adds `SEARCH_WEB_TOOL` and its two offers.
  *
  * Named here and picked out of `CHAT_TOOLS`, so a definition has one home and
  * a name with no definition fails at load rather than offering nothing.

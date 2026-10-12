@@ -3,7 +3,7 @@
 Owned by [plans.md](../project/plans.md). Queue item `qi-ht2wtjg8` (supersedes `qi-zvsky2aj`),
 session `fbvc6uzm-web-search-subagent`.
 
-**Status:** stage 1 being built, 2026-10-12. Spikes done:
+**Status:** stages 1 and 2 done, 2026-10-12, on `dev`, not deployed; stage 3 is a question to Greg (q-madusw). Spikes done:
 [261012b](../investigations/261012b-web-search-subagent-spikes.md). GPT Sol's plan review:
 [261012g-plan-review-sol.md](261012g-plan-review-sol.md), *sound with fixes*; every finding was
 taken, and the one blocker (page-reading for the guide) became a question to Greg.
@@ -97,6 +97,27 @@ Two admin inputs, one piece of work. Both were proven Greg's (`feedback-reporter
 ## Stages
 
 ### Stage 1 — the guide searches through the subagent
+
+**Built 2026-10-12, on top of 261012f** (merged from its committed branch before it reached `dev`,
+so the measurement ran against the guide's real prompt). Measured in two runs of
+`evals/chat-web-reach.ts --kind guide`: two articles, three how-to-read targets and two controls.
+Results: `evals/results/chat-web-reach-guide-search-web-261012g-*.json`.
+
+| case | searched | note |
+|---|---|---|
+| `reception` (is it well regarded?) | 4 of 4 | every answer linked replies or follow-ups the search found |
+| `author` (who, and how far to trust them?) | 2 of 4 | Gwern 2 of 2; Seth 0 of 2, because his essay's byline note says who he is, and the guide cited it |
+| `alongside` (what to read with it?) | 1 of 4 | the other three named the companions the piece itself cites, with block ids |
+| `since` (control: the subject, Chat's) | 0 of 4 | each offered the Ask in Chat step |
+| `word` (control) | 0 of 4 | |
+
+- **The 261011t failure is gone**: 7 of 7 turns that searched answered from the results, with
+  links, and **none said it had not looked something up**.
+- **Against the bar set above**, "at least 5 of 6" targets searched, it did 7 of 12. Every miss
+  answered from the article where the article covers the question, and `search_web`'s own
+  description says not to search a question the article answers. That is the behaviour wanted, so
+  the bar was set wrong, not missed. It is recorded here rather than quietly lowered.
+- **Time**: a searching turn took 20–29 s, against 5–16 s for one that did not.
 
 - `search_web` goes into `GUIDE_TYPED_TOOLS` (typed guide only). **Not `GUIDE_TOOLS`**, which Live
   is offered, and Live is its own item (`qi-vcza3y2f`). The guide's provider search stays `null`

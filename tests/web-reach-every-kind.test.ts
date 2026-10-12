@@ -9,7 +9,8 @@
  *
  * Recall and Tutorial always had the tool; their prompts kept them in the
  * article, and "where does this piece sit?" was not a reason to leave it. The
- * guide has no search, and now says Chat can look it up.
+ * guide searches through its own `search_web` since plan 261012g, for questions
+ * about how to read the piece, and sends the subject's questions to Chat.
  */
 import { describe, expect, it } from "vitest";
 
@@ -39,19 +40,27 @@ const systemOf = (kind: ThreadKind) =>
 const flat = (s: string) => s.replace(/\s+/g, " ");
 
 describe("web search", () => {
-  /* The guide is the exception, and for now on purpose: given search, it
-     searched and then called offer_next_steps with no words, and the results
-     died with that round (plan 261011t § The guide; q-w26r6u). */
-  it("is offered to every kind of conversation but the guide", () => {
+  /* OpenRouter's search is offered to every kind but the guide: given it, the
+     guide searched and then called offer_next_steps with no words, and the
+     results died with that round (plan 261011t § The guide). It searches
+     through `search_web` instead, whose results are a tool message (261012g). */
+  it("is offered to every kind of conversation, the guide through search_web", () => {
     for (const kind of THREAD_KINDS) {
       if (kind === "guide") expect(webSearchTool(kind)).toBeNull();
       else expect(webSearchTool(kind), kind).not.toBeNull();
     }
+    expect(toolsFor("guide").map((t) => t.function.name)).toContain("search_web");
+  });
+
+  it("the guide searches for how to read the piece, and not for its subject", () => {
+    const guide = flat(systemOf("guide"));
+    expect(guide).toContain("Use it for questions about how to read this piece that the web can answer");
+    expect(guide).toMatch(/or gives you a page to read, do not search/);
   });
 
   it("is Chat's to do when the guide is asked about the world, and the guide says so", () => {
     const guide = flat(systemOf("guide"));
-    expect(guide).toContain("Chat can do what you cannot: search the web and open a page");
+    expect(guide).toContain("Chat can do what you cannot: open a page, and look into the subject itself");
     /* Since plan 261012f, as a chat step carrying their question, rather than Chat's list. */
     expect(guide).toMatch(/offer a chat step carrying their question/);
     expect(checkNextStep({ kind: "chat", words: "What have others said about it?" })).toEqual({ kind: "chat", words: "What have others said about it?" });
@@ -86,7 +95,7 @@ describe("Recall and Tutorial", () => {
 
 /* Every kind but the guide already read a page the reader handed over, 2 of 2
    times in the plan's baseline, so no wording changed for it. The guide's page
-   tool waits on Greg with its search (q-w26r6u). */
+   tool waits on Greg (q-madusw). */
 describe("an address the reader gives", () => {
   it("can be read in every kind but the guide", () => {
     for (const kind of THREAD_KINDS) {

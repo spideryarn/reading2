@@ -1,0 +1,283 @@
+{
+  "label": "search-web-261012g-run2",
+  "kind": "guide",
+  "runs": 1,
+  "at": "2026-10-12T16:33:08.977Z",
+  "articles": [
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "word": "Turing",
+      "page": "https://en.wikipedia.org/wiki/Biological_naturalism"
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "word": "cyanobacteria",
+      "page": "https://en.wikipedia.org/wiki/Neural_scaling_law"
+    }
+  ],
+  "outcomes": [
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "reception",
+      "role": "target",
+      "question": "Before I put time into this: is it well regarded? Has it been criticised or superseded?",
+      "seconds": 20.8,
+      "searches": 0,
+      "tools": [
+        "offer_to_save",
+        "search_web",
+        "offer_next_steps"
+      ],
+      "links": [
+        "https://www.lesswrong.com/posts/kAHar2hrQbykF9Rt7/contra-anil-seth-on-ai-consciousness",
+        "https://www.ethicsinreview.com/on-anil-seths-the-mythology-of-conscious-ai-part-1/"
+      ],
+      "blockIds": [
+        "spya-gp3g6s",
+        "spya-qu7j89"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "It's well regarded as a piece. It won the 2025 Berggruen Prize essay competition [spya-gp3g6s]. It has also drawn replies, so it's live debate, not superseded. One [LessWrong critique](https://www.lesswrong.com/posts/kAHar2hrQbykF9Rt7/contra-anil-seth-on-ai-consciousness) says he doesn't show that life is necessary for consciousness. Another is a [response at Ethics in Review](https://www.ethicsinreview.com/on-anil-seths-the-mythology-of-conscious-ai-part-1/). Seth admits his view is a minority one [spya-qu7j89], which gives your group something to argue about.\n\nAre you leading the discussion or taking part?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "alongside",
+      "role": "target",
+      "question": "What should I read before or alongside this to get the most out of it?",
+      "seconds": 23.3,
+      "searches": 0,
+      "tools": [
+        "search_web",
+        "offer_next_steps"
+      ],
+      "links": [
+        "https://www.noemamag.com/only-what-is-alive-can-be-conscious",
+        "https://hraness.com/reading/anil-seth-bbs-conscious-ai-biological-naturalism-thread"
+      ],
+      "blockIds": [],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "You don't need anything first, because the essay explains its own terms. For a group, the useful extras come after it. Seth's follow-up in Noema, [Only What Is Alive Can Be Conscious](https://www.noemamag.com/only-what-is-alive-can-be-conscious), expands his biology argument. The search also found a [thread](https://hraness.com/reading/anil-seth-bbs-conscious-ai-biological-naturalism-thread) about a published collection of 50 commentaries on the essay and his reply to them. I haven't opened either, so check them before you assign them.\n\nWhich side will your group argue about most?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "author",
+      "role": "target",
+      "question": "Who is the author, and how far should I trust them on this subject?",
+      "seconds": 7.4,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-rg493b",
+        "spya-hj5y6s",
+        "spya-qu7j89"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "The byline gives his standing: a neuroscience professor who directs Sussex's Centre for Consciousness Science and wrote \"Being You\" [spya-rg493b]. He's a credible guide to the science of consciousness. He is also arguing for his own side, and he says so. He admits \"I don't have a knock-down argument\" [spya-hj5y6s] and that his view \"remains a minority view\" [spya-qu7j89]. Both passages are good places for your group to push back.\n\nTo see how others have responded to the essay, press Reception.\n\n[cmd:mode:submode%3Asources%3Areception]\n\nIs your group more interested in the philosophy or the ethics?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "since",
+      "role": "control",
+      "question": "What has happened with this idea since this was written?",
+      "seconds": 5.2,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-qu7j89"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "That's about the world beyond the essay, so Chat can look it up. The essay itself admits that \"The biological naturalist position... remains a minority view\" [spya-qu7j89], which is a good thing to raise in your group.\n\nSources › Reception lists replies and work that cites it.\n\n[cmd:mode:submode%3Asources%3Areception]\n\nAre you leading the discussion, or just taking part?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "noema-mythology-of-conscious-ai",
+      "blockId": "spya-hj5y6s",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"Turing\"?",
+      "seconds": 10.7,
+      "searches": 0,
+      "tools": [
+        "search_article_words",
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-cf70dt",
+        "spya-gamzr3",
+        "spya-kqs33c"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Yes, it uses \"Turing\" 42 times, across 22 paragraphs. It's the central word of the section arguing that brains are not computers.\n\nStart with where Turing's definition of computation is set out [spya-cf70dt]. The \"Turing world\" idea comes back at [spya-gamzr3]. The Turing test is covered separately [spya-kqs33c].\n\nFor your reading group, do you want to pick the passages to read closely, or get a quick map of the whole essay first?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "reception",
+      "role": "target",
+      "question": "Before I put time into this: is it well regarded? Has it been criticised or superseded?",
+      "seconds": 27.7,
+      "searches": 0,
+      "tools": [
+        "search_web",
+        "article_links",
+        "offer_next_steps"
+      ],
+      "links": [
+        "https://gwern.net/scaling-hypothesis-revisited",
+        "https://exa.ai/library/publication/wvyyyj4b3l1",
+        "https://www.greaterwrong.com/posts/FZL4ftXvcuKmmobmj/causal-confusion-as-an-argument-against-the-scaling"
+      ],
+      "blockIds": [
+        "spya-ewxv9q"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "I can't judge how well regarded it is from one search, but it's worth your time as an opinionated 2020 essay. It's Gwern's own argument, not a neutral survey. He has followed it up himself in [“Scaling Hypothesis Revisited”](https://gwern.net/scaling-hypothesis-revisited) [spya-ewxv9q]. Critiques exist too, such as [“Is the Scaling Hypothesis Falsifiable?”](https://exa.ai/library/publication/wvyyyj4b3l1) and [“Causal confusion as an argument against the scaling hypothesis”](https://www.greaterwrong.com/posts/FZL4ftXvcuKmmobmj/causal-confusion-as-an-argument-against-the-scaling). Those pages are only search summaries, and I haven't read them.\n\nDoes your group want the technical case or the argument about the critics?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "alongside",
+      "role": "target",
+      "question": "What should I read before or alongside this to get the most out of it?",
+      "seconds": 7.3,
+      "searches": 0,
+      "tools": [
+        "offer_to_save",
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-sctj6d",
+        "spya-vn0xpd",
+        "spya-sfkxh8"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "The piece leans on two papers, and both are worth a skim first. They are Kaplan et al 2020 on scaling laws [spya-sctj6d] and Brown et al 2020, the GPT-3 paper [spya-vn0xpd]. Sutton's \"Bitter Lesson\" [spya-sfkxh8] is a short companion read.\n\nPress Sources to see the full bibliography with links.\n\n[cmd:mode:mode%3Asources]\n\nIs your group more interested in the technical argument or the critique of AI experts?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "author",
+      "role": "target",
+      "question": "Who is the author, and how far should I trust them on this subject?",
+      "seconds": 27.1,
+      "searches": 0,
+      "tools": [
+        "search_web",
+        "search_web",
+        "offer_next_steps"
+      ],
+      "links": [
+        "https://gwern.net/me",
+        "https://openreview.net/profile?id=%7EGwern_Branwen1",
+        "https://gwern.net/scaling-hypothesis-revisited",
+        "https://itdoeswhatnow.com/m/2020-05-28-gwern-publishes-the-scaling-hypothesis/"
+      ],
+      "blockIds": [
+        "spya-emqjaa",
+        "spya-zyncdd"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Gwern Branwen is an independent writer and researcher, not an academic lab member. He describes himself as a [freelance writer and researcher](https://gwern.net/me), and [OpenReview](https://openreview.net/profile?id=%7EGwern_Branwen1) lists him as independent since 2009. This is an advocacy essay. He says he doubted scaling before 2020 and now argues it was right [spya-emqjaa]. Treat his forecasts and his attacks on critics as opinion [spya-zyncdd]. The 2020 numbers are checkable. He later wrote [a revisit](https://gwern.net/scaling-hypothesis-revisited), and a [retrospective](https://itdoeswhatnow.com/m/2020-05-28-gwern-publishes-the-scaling-hypothesis/) says Chinchilla later complicated the compute picture.\n\nWill your group focus on the technical claims or on the forecasting and critics?"
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "since",
+      "role": "control",
+      "question": "What has happened with this idea since this was written?",
+      "seconds": 6.4,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-ewxv9q",
+        "spya-rbx2kz"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "What has happened since is a question for Chat, which can look it up. The button below starts one.\n\nThe piece itself points to later work near the top, including the 2022 follow-up \"Scaling Hypothesis Revisited\" [spya-ewxv9q]. It also has an editor's update added in 2025 to one of its predictions [spya-rbx2kz]. Both are good material for a reading group."
+    },
+    {
+      "kind": "guide",
+      "run": 1,
+      "slug": "scaling-hypothesis",
+      "blockId": "spya-m3gtj6",
+      "case": "word",
+      "role": "control",
+      "question": "Does the article ever use the word \"cyanobacteria\"?",
+      "seconds": 5.5,
+      "searches": 0,
+      "tools": [
+        "offer_next_steps"
+      ],
+      "links": [],
+      "blockIds": [
+        "spya-h74fhr"
+      ],
+      "sources": 0,
+      "unknownIds": [],
+      "truncated": false,
+      "model": "anthropic/claude-sonnet-5.5",
+      "text": "Yes, once. In the pretraining section: \"Humans, one might say, are the cyanobacteria of AI\" [spya-h74fhr]. It's a metaphor for how people constantly produce data that a model can learn from.\n\n[cmd:jump-first:cyanobacteria]\n\nFor your reading group, are you leading the discussion or just taking part?"
+    }
+  ]
+}
