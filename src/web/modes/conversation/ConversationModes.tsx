@@ -1337,6 +1337,9 @@ export function ConversationBand({
       /* How the composer saw the words arrive, for every kind: stored on the
          question's row (report spya-z30x5n). */
       ...(how?.modality ? { modality: how.modality } : {}),
+      /* The articles picked with an `@`: a chat's alone, as the server
+         insists (plan 261012d). */
+      ...(sendKind === "chat" && how?.mentions ? { mentions: how.mentions } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box
@@ -1446,6 +1449,7 @@ export function ConversationBand({
           /* The list owns a real Composer too; keep the provenance it saw
              instead of losing the second callback argument at this adapter. */
           ...(how?.modality ? { modality: how.modality } : {}),
+          ...(kind === "chat" && how?.mentions ? { mentions: how.mentions } : {}),
         });
         void setThread(id);
         /* **Not on a soft keyboard.** The send lets go of the keys there so

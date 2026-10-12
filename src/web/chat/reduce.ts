@@ -30,7 +30,7 @@
  *   message is not in this conversation."
  */
 import { splitHint } from "../../recall-hint.js";
-import type { ChatMessage, ChatThread } from "../../types.js";
+import type { ChatMessage, ChatThread, ChatThreadView, MentionedArticleView } from "../../types.js";
 import type {
   ChatCommand,
   ChatEvent,
@@ -69,6 +69,48 @@ export interface Outcome {
 }
 
 const NOTHING: readonly ChatCommand[] = [];
+
+/**
+ * **What a `begin` frame says the conversation holds**, recorded under the
+ * server's name for it. Absent means none — the server resolves a chat's
+ * mentions on every turn and omits the field only when the list is empty, so
+ * an edit that took the last one out is forgotten here too. `ChatState.mentioned`.
+ */
+function withMentioned(
+  state: ChatState,
+  threadId: string,
+  mentioned: readonly MentionedArticleView[] | undefined,
+): ChatState {
+  const had = state.mentioned.get(threadId);
+  if (!mentioned || mentioned.length === 0) {
+    if (had === undefined) return state;
+    const next = new Map(state.mentioned);
+    next.delete(threadId);
+    return { ...state, mentioned: next };
+  }
+  return { ...state, mentioned: new Map(state.mentioned).set(threadId, mentioned) };
+}
+
+/**
+ * **A load's `mentioned`, laid over what this tab already knew.** Added and
+ * replaced, never removed: a list fetched before a send can land after that
+ * send's `begin` frame, and dropping what the frame said for a thread the
+ * older list showed bare would take its citation chips away mid-answer. The
+ * one cost is an edit that removed a thread's last mention, which a later
+ * `begin` frame corrects (`withMentioned`).
+ */
+function mentionedArrival(
+  known: ChatState["mentioned"],
+  threads: readonly ChatThreadView[],
+): ChatState["mentioned"] {
+  let next: Map<string, readonly MentionedArticleView[]> | null = null;
+  for (const t of threads) {
+    if (!t.mentioned || t.mentioned.length === 0) continue;
+    next ??= new Map(known);
+    next.set(t.id, t.mentioned);
+  }
+  return next ?? known;
+}
 
 /** Nothing happened, and the *same* state object says so — see the controller. */
 function unchanged(state: ChatState): Outcome {
@@ -1015,7 +1057,11 @@ function moved(state: ChatState, op: TurnOperation, reply: ChatMessage): Outcome
   return { state: { ...state, operations: withOp(state, { ...op, reply }) }, commands: NOTHING };
 }
 
-function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outcome {
+function applyTurn(stateBefore: ChatState, event: ChatResult, op: TurnOperation): Outcome {
+  /* The articles the conversation holds, as the server resolved them for this
+     turn — recorded before anything else so every branch below keeps it. */
+  const state =
+    event.type === "turn.began" ? withMentioned(stateBefore, event.begun.threadId, event.begun.mentioned) : stateBefore;
   switch (event.type) {
     case "turn.began": {
       const { begun } = event;
@@ -1309,6 +1355,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
              added to what is on screen and never applied over it, and deletions
              win. Its docstring is the reasoning. */
           base: mergedArrival(state.base, event.threads, state.tombstones),
+          mentioned: mentionedArrival(state.mentioned, event.threads),
           operations: withoutOp(state, op.id),
           loadPhase: "ready",
         },

@@ -996,6 +996,8 @@ export function ChatDialog({
            the question just as the full Chat panel does; handed-over and
            automatically sent drafts call `ask` without it and stay unknown. */
         ...(how?.modality ? { modality: how.modality } : {}),
+        /* The articles picked with an `@` (plan 261012d). A passage chat is a chat. */
+        ...(how?.mentions ? { mentions: how.mentions } : {}),
       });
       onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
@@ -1314,6 +1316,7 @@ export function ChatDialog({
                  dropping its second argument here silently erased typed /
                  dictated / mixed on every dialog follow-up. */
               ...(how?.modality ? { modality: how.modality } : {}),
+              ...(how?.mentions ? { mentions: how.mentions } : {}),
             })}
             onRetry={(messageId) => retry(thread.id, messageId)}
             onEdit={(messageId, question) => edit(thread.id, messageId, question, at)}

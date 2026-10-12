@@ -1254,6 +1254,140 @@ svg.band-waiting-ghost { flex: none; }
    the microphone off the band (plan 261008d). Every line carries
    `.dictation-line` for this, and tests/voice-row.test.tsx checks each does. */
 .chat-composer .dictation-line { flex-basis: 100%; }
+
+/* ---- @-mentioning another of your articles (plan 261012d) ----
+   The "Bringing in" row above the box, the `@` list over it, the "Also
+   reading" line at the top of a conversation, and a citation chip that opens
+   another article. Tokens only, so dark mode follows (tokens.css). */
+.mention-chips {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+}
+.mention-chips-label { color: var(--ink-faint); }
+.mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  /* A long title is cut by `shortTitle`; this keeps a phone's row inside the band. */
+  max-width: 100%;
+  padding: 0.05rem 0.1rem 0.05rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--page);
+  color: var(--ink);
+}
+.mention-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mention-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.mention-chip-x:hover { color: var(--ink); background: var(--highlight-wash); }
+.mention-chip-x:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+
+/* The list. In a portal, so above the dock (96) and its drawer (101) as
+   TagEditor's list is. Its width and height are Floating UI's `size`. */
+.mention-picker {
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-pop);
+  font-family: var(--font-ui);
+}
+.mention-picker-status {
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.mention-picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  /* A finger's row: about 40px with two lines, never under 2.5rem. */
+  min-height: 2.5rem;
+  justify-content: center;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mention-picker-row.active { background: var(--highlight-wash); }
+.mention-picker-title {
+  font-size: 0.9rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mention-picker-meta { font-size: 0.75rem; color: var(--ink-faint); }
+
+/* "Also reading", above the first question. Quiet, like `.chat-sources`. */
+.chat-also-reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  margin: 0 0 0.6rem;
+  padding: 0 0 0.4rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+.chat-also-reading-label {
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
+}
+.chat-also-reading-item { color: var(--ink-soft); overflow-wrap: anywhere; }
+a.chat-also-reading-item:hover { color: var(--highlight-ink); }
+.chat-also-reading-item.gone { color: var(--ink-faint); }
+.chat-also-reading-gone { font-style: italic; }
+
+/* A citation of a passage in another article: its short title, an arrow out.
+   Not `.block-ref`'s id type — the words say which article this is. */
+.cross-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  max-width: 16rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+}
+.cross-ref:hover { color: var(--highlight-ink); border-color: var(--highlight-ink); }
+.cross-ref:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 2px; }
 .chat-input {
   flex: 1;
   /**

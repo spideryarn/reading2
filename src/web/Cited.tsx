@@ -58,8 +58,9 @@ import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef } from "./BlockRef.js";
 import { MAX_BLOCK_DEPTH } from "../citable.js";
 import { chipFor } from "./chat-commands.js";
-import { quotesBefore, splitCitations, splitLinks } from "./citations.js";
+import { type CrossArticles, NO_CROSS, quotesBefore, splitCitations, splitLinks } from "./citations.js";
 import { CommandChip } from "./CommandChip.js";
+import { CrossArticleRef } from "./CrossArticleRef.js";
 import type { CommandExecutor } from "./command-proposal.js";
 import type { JumpAim } from "./flash.js";
 import {
@@ -76,6 +77,13 @@ interface Props {
   text: string;
   /** Every block this article has, id to plain text. Also the "is this real" check. */
   blocks: Map<string, string>;
+  /**
+   * **The other articles this conversation brought in**, by block id — Chat's
+   * alone (plan 261012d § 4). An id unique to one of them is a chip that opens
+   * that article; an id more than one article has is text. Absent everywhere
+   * else, and then every id is the open article's or nobody's, as before.
+   */
+  cross?: CrossArticles | undefined;
   /**
    * `aim` arrives only from a chip whose sentence quotes the article, and
    * carries the quoted words so the landing can paint them rather than the
@@ -140,6 +148,7 @@ interface Props {
 /** Everything the walk below needs, gathered once per render. */
 interface Ctx {
   blocks: Map<string, string>;
+  cross: CrossArticles;
   onJump(id: BlockId, aim?: JumpAim): void;
   links: boolean;
   commands: CommandExecutor | undefined;
@@ -181,6 +190,7 @@ export function CitedText(props: Props): ReactElement {
 function Drawn({
   text,
   blocks,
+  cross = NO_CROSS,
   onJump,
   partial = false,
   links = false,
@@ -196,6 +206,7 @@ function Drawn({
   const tree = useMemo(() => fromMarkdown(text), [text]);
   const ctx: Ctx = {
     blocks,
+    cross,
     onJump,
     links,
     commands,
@@ -648,11 +659,26 @@ function cited(text: string, ctx: Ctx, edges: Edges, end: boolean): ReactNode {
  * and one that has none washes whole, as before.
  */
 function citations(text: string, ctx: Ctx): ReactNode {
-  const segs = splitCitations(text, ctx.blocks);
+  const segs = splitCitations(text, ctx.blocks, ctx.cross);
   return segs.map((seg, i) => {
     if (seg.kind === "text") {
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
       return <Fragment key={`s${i}`}>{seg.text}</Fragment>;
+    }
+    if (seg.kind === "cross") {
+      /* Another article brought into the conversation: its own chip, never
+         `BlockRef` and never this article's `onJump` (CrossArticleRef.tsx). */
+      return (
+        <span
+          className={["cite-chips", ctx.className].filter(Boolean).join(" ")}
+          // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+          key={`c${i}`}
+        >
+          {seg.ids.map((id, n) => (
+            <CrossArticleRef key={id} id={id} source={seg.source} titled={n === 0} />
+          ))}
+        </span>
+      );
     }
     const before = segs[i - 1];
     const quotes = before?.kind === "text" ? quotesBefore(before.text) : [];

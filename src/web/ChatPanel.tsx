@@ -91,8 +91,10 @@ import type {
   BlockId,
   ChatMessage,
   ChatThread,
+  ChatThreadView,
   Citation,
   ComposerModality,
+  MentionedArticleView,
   ThreadKind,
   ThreadOrigin,
   ToolRun,
@@ -151,6 +153,11 @@ import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
 import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
+import { crossArticles, type CrossArticles } from "./citations.js";
+import { MentionChips, MentionPicker, useMentionPicker } from "./MentionPicker.js";
+import type { MentionsToSend } from "./mentions.js";
+import { readHref } from "./router.js";
+import { Link } from "./Link.js";
 
 /**
  * **How a question was sent.** `typed` only where the reader wrote the whole
@@ -167,6 +174,12 @@ export interface SendHow {
    * question's row; report spya-z30x5n, plan 261011z.
    */
   modality?: ComposerModality;
+  /**
+   * **The "Bringing in" row** — other articles of the reader's, picked with
+   * an `@` (plan 261012d § 1). Typed Chat's composer only; an adapter passes it
+   * to `send` only for a chat, and never to a retry or an edit.
+   */
+  mentions?: MentionsToSend;
 }
 
 interface Props {
@@ -174,9 +187,10 @@ interface Props {
    * **The conversations this panel may open.** `threadId` is resolved among
    * these and nowhere else. In Learn it is the one conversation; in Chat
    * it is the `chat`-kind ones, which since 2026-10-05 is fewer than the list
-   * draws (`listed` below).
+   * draws (`listed` below). A view, so a chat that brought other articles in
+   * carries them (`ChatThreadView.mentioned`; plan 261012d § 4).
    */
-  threads: ChatThread[];
+  threads: ChatThreadView[];
   /**
    * **What Chat's list draws**: every conversation about the article but
    * Referee's Candidates, since 2026-10-05 (report `spya-hyfqkq`; plan
@@ -1528,7 +1542,8 @@ export function Conversation({
   slug: string;
   /** The article's title, for the guide's greeting (plan 261009i). */
   articleTitle?: string | undefined;
-  thread: ChatThread;
+  /** With `mentioned` when it brought other articles in (plan 261012d § 4). */
+  thread: ChatThreadView;
   /** See `onHintOpened` in Props. Absent where nothing records the press. */
   onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   onJump(id: BlockId): void;
@@ -1581,6 +1596,10 @@ export function Conversation({
   const guideRead = usePurpose(kind === "guide" ? slug : null);
   const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
   const greetsHere = useRef(thread.messages.length === 0);
+  /* The other articles this conversation brought in, by block id, for the
+     answers' citation chips (citations.ts § `crossArticles`). Built from the
+     server's list and the open article's blocks, never from an answer. */
+  const cross = useMemo(() => crossArticles(blocks, thread.mentioned, (s) => readHref(s)), [blocks, thread.mentioned]);
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
   const busy = last?.status === "pending";
@@ -2032,6 +2051,7 @@ export function Conversation({
           ) : (
             <Suggestions onAsk={(q) => onSend(q)} />
           ))}
+        <AlsoReading mentioned={thread.mentioned} />
         {thread.messages.map((m, i) => (
           <Fragment key={m.id}>
           <Turn
@@ -2041,6 +2061,7 @@ export function Conversation({
             onJump={onJump}
             recovering={recovering.has(m.id)}
             blocks={blocks}
+            cross={cross}
             /* Only the last answer may be retried — see `retryTurn` in
                src/chat.ts. The button is hidden rather than shown-and-refused,
                because a button that exists and always says no is worse than one
@@ -2344,6 +2365,7 @@ export function Turn({
   onJump,
   recovering,
   blocks,
+  cross,
   onRetry,
   onEdit,
   onHintOpened,
@@ -2369,6 +2391,8 @@ export function Turn({
   /** This answer's stream is lost and the client is asking the server about it. */
   recovering: boolean;
   blocks: Map<string, string>;
+  /** Other articles the conversation brought in, for their citation chips. */
+  cross?: CrossArticles | undefined;
   /** Present only on the last message. See the call site. */
   onRetry?: ((messageId: string) => void) | undefined;
   onEdit(messageId: string, question: string): void;
@@ -2585,6 +2609,7 @@ export function Turn({
           text={body}
           onJump={onJump}
           blocks={blocks}
+          cross={cross}
           /* Tooltips only once the answer has landed — see Cited.tsx. */
           live={message.status === "pending"}
         />
@@ -2608,7 +2633,7 @@ export function Turn({
           </Button>
           {hintOpen && (
             <div id={hintId} className="chat-hint-text">
-              <Answer text={hint} onJump={onJump} blocks={blocks} live={false} />
+              <Answer text={hint} onJump={onJump} blocks={blocks} cross={cross} live={false} />
             </div>
           )}
         </div>
@@ -2816,6 +2841,36 @@ function ToolIcon({ name }: { name: string }) {
  * non-web URL is non-empty and lists nothing, so a guard on the unfiltered array
  * would put "From the web" over an empty list (Sol F10).
  */
+/**
+ * **"Also reading"** — the other articles this conversation brought in with an
+ * @-mention, at the top of its transcript (Greg: *"local to that chat for
+ * now? (and indicates that)"*; plan 261012d). Each one the server still finds
+ * is a link to it; one it does not — deleted, no longer the reader's, not
+ * processed, now too long — keeps its title and says *No longer available*.
+ * The title is the one stored when it was mentioned, so it is drawn in the
+ * app's face: nothing here says whose words it is now (fonts.md).
+ */
+function AlsoReading({ mentioned }: { mentioned: readonly MentionedArticleView[] | undefined }) {
+  if (!mentioned || mentioned.length === 0) return null;
+  return (
+    <p className="chat-also-reading">
+      <span className="chat-also-reading-label">Also reading</span>
+      {mentioned.map((m, i) =>
+        m.available ? (
+          <Link key={m.slug} href={readHref(m.slug)} className="chat-also-reading-item">
+            {m.title}
+          </Link>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: an unavailable mention has no slug, and the list is the server's, in order
+          <span key={`gone${i}`} className="chat-also-reading-item gone">
+            {m.title} <span className="chat-also-reading-gone">No longer available</span>
+          </span>
+        ),
+      )}
+    </p>
+  );
+}
+
 export function WebSources({ citations }: { citations: Citation[] | undefined }) {
   const web = (citations ?? []).filter((c) => isWebUrl(c.url));
   if (web.length === 0) return null;
@@ -3031,11 +3086,13 @@ function Answer({
   text,
   onJump,
   blocks,
+  cross,
   live,
 }: {
   text: string;
   onJump(id: BlockId): void;
   blocks: Map<string, string>;
+  cross?: CrossArticles | undefined;
   live: boolean;
 }) {
   /* The blocks, the chips, the web links and the marks all live in Cited.tsx,
@@ -3053,6 +3110,7 @@ function Answer({
     <CitedMarkdown
       text={text}
       blocks={blocks}
+      cross={cross}
       onJump={onJump}
       /* Only the **end** of an answer still arriving can be half-written, and
          a bare URL cut in half is a link that goes somewhere wrong for the
@@ -3170,6 +3228,7 @@ export function Composer({
   const short = useMedia(SHORT_VIEWPORT);
   const size = useMemo(() => boxSize(learn, short), [learn, short]);
   const box = useRef<HTMLTextAreaElement>(null);
+  const mention = useMentionPicker(kind === "chat", slug, value);
 
   /**
    * Take focus when a new conversation has just been started.
@@ -3326,8 +3385,12 @@ export function Composer({
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
+    /* The "Bringing in" row, read at the press like the words. It empties
+       only once the server has begun the turn (`MentionsToSend.onAccepted`),
+       so a refused question keeps its articles. */
+    const mentions = mention.toSend();
     /* Typed here, by the reader: the one send that says so (`SendHow`). */
-    onSend(question, { typed: true, ...(modality ? { modality } : {}) });
+    onSend(question, { typed: true, ...(modality ? { modality } : {}), ...(mentions ? { mentions } : {}) });
     /* The question has gone and the answer arrives under the keys: let go of
        a soft keyboard, and only a soft one (useVisualViewport.ts §
        `putKeyboardAway`; Greg, spya-gmtt4b). A live handoff can wait long
@@ -3341,6 +3404,40 @@ export function Composer({
   /** Every state `submit` refuses, so the Send button can say so before a press. */
   const unavailable = busy || dictate.busy || value.trim() === "";
 
+  /* **Picking an article from the `@` list** writes `@Short title ` over the
+     `@query`, and the caret lands after it once React has drawn the new text
+     (`caretTo`, below). */
+  const caretTo = useRef<number | null>(null);
+  const choose = (index: number) => {
+    const el = box.current;
+    const next = mention.pick(index, value, el?.selectionStart ?? value.length);
+    if (!next) return;
+    provenance.current = afterChange(provenance.current, next.value, "keyboard");
+    setValue(next.value);
+    onDraft(next.value);
+    caretTo.current = next.caret;
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the caret moves once the picked title is in the box
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (caretTo.current === null || !el) return;
+    el.setSelectionRange(caretTo.current, caretTo.current);
+    caretTo.current = null;
+  }, [value]);
+  /* Typed Chat's box is the picker's combobox; every other kind's is a plain box. */
+  const comboProps =
+    kind === "chat"
+      ? {
+          role: "combobox" as const,
+          "aria-autocomplete": "list" as const,
+          "aria-expanded": mention.shown,
+          ...(mention.shown ? { "aria-controls": mention.listId } : {}),
+          ...(mention.shown && mention.current >= 0
+            ? { "aria-activedescendant": `${mention.listId}-o${mention.current}` }
+            : {}),
+        }
+      : {};
+
   return (
     <form
       className="chat-composer"
@@ -3349,9 +3446,11 @@ export function Composer({
         void submit();
       }}
     >
+      <MentionChips picked={mention.picked} onRemove={mention.remove} />
       <textarea
         ref={box}
         className="chat-input"
+        {...comboProps}
         /* Six rows rather than one, so the box LOOKS like somewhere to put a
            paragraph before a word is in it. The height then follows the content
            exactly as chat's does. */
@@ -3382,7 +3481,12 @@ export function Composer({
           // Kept above this component so the words survive it; see `drafts`
           // in ChatPanel.
           onDraft(e.target.value);
+          mention.track(e.target);
         }}
+        /* Where the caret is decides whether an `@` is being typed. */
+        onSelect={(e) => mention.track(e.currentTarget)}
+        onFocus={(e) => mention.track(e.currentTarget)}
+        onBlur={mention.blur}
         onKeyDown={(e) => {
           /* Every key press in here is stopped from bubbling, and that is not
              tidiness: the article's ↑/↓ navigation listens on the window
@@ -3400,6 +3504,12 @@ export function Composer({
              drawer winning rather than this stopping it. Found by a GPT-5.6
              review, 2026-08-26. */
           e.stopPropagation();
+          /* **The `@` list owns the keys while it is open**, before Send and
+             before the Escape ladder: arrows move, Enter or Tab picks — so Enter
+             does not send a half-written question — and Escape closes the list
+             and nothing else, its first rung. Not a key an input method is
+             using (keyboard.md § A key an input method is using is not ours). */
+          if (mention.shown && !isImeComposing(e) && mention.keyDown(e, choose)) return;
           if (isSendEnter(e)) {
             e.preventDefault();
             void submit();
@@ -3422,7 +3532,9 @@ export function Composer({
              reader typing Japanese or Chinese presses it to dismiss the
              candidate list, and the second rung emptied their question. The
              test sits here, after the `stopPropagation` above, so a composing
-             key is still contained like every other. */
+             key is still contained like every other.
+
+             (An open `@` list is the rung above all three, handled first.) */
           if (e.key === "Escape" && !isImeComposing(e)) {
             if (onStop) onStop();
             else if (value !== "") {
@@ -3441,6 +3553,7 @@ export function Composer({
           Keyed apart, so the two are never one reused <button> whose type
           flips to "submit" mid-click (postmortem 261007p); today the Tooltip
           round Send keeps them apart, and the keys say so. */}
+      {mention.shown && <MentionPicker anchor={box.current} state={mention} onPick={choose} />}
       {onStop ? (
         <button key="stop" type="button" className="chat-send stop" onClick={onStop} title="Stop (Esc)">
           <Square size={14} fill="currentColor" />

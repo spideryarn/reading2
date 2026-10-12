@@ -20,7 +20,7 @@
  * imported *by* the hook, and a module that imports the module importing it is
  * a cycle — `npm run cycles` would have caught it.
  */
-import type { ChatMessage, ChatThread, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, ChatThreadView, ToolRun } from "../../types.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
 import { heldReader } from "../lib/session.js";
@@ -413,7 +413,9 @@ export async function settledAnswer(
  */
 export async function askForThreads(slug: string, signal?: AbortSignal): Promise<ThreadsOutcome> {
   try {
-    const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
+    /* `ChatThreadView`: the full list carries `mentioned` on a thread that
+       brought other articles in (plan 261012d § 4). */
+    const body = await readJson<{ threads?: ChatThreadView[]; error?: string }>(
       await apiFetch(`/api/chat/${encodeURIComponent(slug)}`, signal ? { signal } : undefined),
     );
     if (body.error) return { ok: false, error: body.error };
