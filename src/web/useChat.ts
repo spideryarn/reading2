@@ -147,6 +147,11 @@ export interface SendOptions {
    */
   onThreadId?: (id: string) => void;
   /**
+   * The server began the turn, whether or not it changed the optimistic thread
+   * id. Navigation-only: unlike `onConfirmed`, detached with the panel.
+   */
+  onBegun?: (id: string) => void;
+  /**
    * The passage this conversation is about — **only on the send that creates
    * the thread**. The server 409s an anchor for a thread that already has a
    * different one, rather than quietly ignoring it.
@@ -547,7 +552,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     /* **And when this hook goes, its navigation callbacks go with it.** The controller
        outlives it on purpose — the stream still holds it, so a cancel waiting
        for the `begin` frame is still sent after the panel closed — but
-       `onThreadId` is the panel's own `setThread`, and calling that from a
+       the navigation callbacks are the panel's own state setters, and calling one from a
        conversation the reader has left reopens or repoints whatever they are
        looking at now. What the controller decides for itself survives; what it
        was doing on somebody else's behalf does not. Data-only draft
@@ -757,7 +762,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
+      const { onThreadId, onBegun, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -882,6 +887,8 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
             }
           : opts.onConfirmed,
         opts.onGone,
+        onBegun,
+        mentions?.onRefused,
       );
       return id;
     },

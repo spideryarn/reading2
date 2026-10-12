@@ -74,7 +74,8 @@ const NOTHING: readonly ChatCommand[] = [];
  * **What a `begin` frame says the conversation holds**, recorded under the
  * server's name for it. Absent means none — the server resolves a chat's
  * mentions on every turn and omits the field only when the list is empty, so
- * an edit that took the last one out is forgotten here too. `ChatState.mentioned`.
+ * deleting the question that held the last one is forgotten on the next turn
+ * too. `ChatState.mentioned`.
  */
 function withMentioned(
   state: ChatState,
@@ -96,7 +97,7 @@ function withMentioned(
  * replaced, never removed: a list fetched before a send can land after that
  * send's `begin` frame, and dropping what the frame said for a thread the
  * older list showed bare would take its citation chips away mid-answer. The
- * one cost is an edit that removed a thread's last mention, which a later
+ * one cost is a deletion that removed a thread's last mention, which a later
  * `begin` frame corrects (`withMentioned`).
  */
 function mentionedArrival(

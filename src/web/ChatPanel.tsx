@@ -3210,6 +3210,9 @@ export function Composer({
      this keeps the value because typing into it must not repaint the
      transcript above. */
   const [value, setValue] = useState(draft);
+  /* A first mentioned question can remain in the list composer until `begin`.
+     Refuse a second send from that box while its first result is unknown. */
+  const [mentionWaiting, setMentionWaiting] = useState(false);
   /* **How this draft's words arrived**, so the question can be stored with it
      (report spya-z30x5n). A ref: it decides nothing on screen. Seeded when the
      box starts non-empty, and then unrecorded until it is emptied
@@ -3228,7 +3231,7 @@ export function Composer({
   const short = useMedia(SHORT_VIEWPORT);
   const size = useMemo(() => boxSize(learn, short), [learn, short]);
   const box = useRef<HTMLTextAreaElement>(null);
-  const mention = useMentionPicker(kind === "chat", slug, value);
+  const mention = useMentionPicker(kind === "chat" && !mentionWaiting, slug, value);
 
   /**
    * Take focus when a new conversation has just been started.
@@ -3370,8 +3373,9 @@ export function Composer({
        review item 3, then its code review of 2026-09-04 for the half that was
        missing. docs/project/dictation.md § Adding it to a box. */
     if (dictate.busy) return;
-    const question = value.trim();
-    if (question === "" || busy) return;
+    const submittedDraft = value;
+    const question = submittedDraft.trim();
+    if (question === "" || busy || mentionWaiting) return;
     const submittedBox = box.current;
     const handoff = live && live.phase !== "idle" && live.phase !== "failed";
     // Revoke never-submitted recovery before the wait: another draft can be
@@ -3380,15 +3384,33 @@ export function Composer({
     /* Read before the box is cleared and before Live's hand-off is awaited, and
        reset at once: the reader may start the next draft during that wait, and
        its words are not this question's (Sol's plan review F2, 261011z). */
-    const modality = composerModality(provenance.current);
+    const submittedProvenance = provenance.current;
+    const modality = composerModality(submittedProvenance);
     provenance.current = freshProvenance("");
+    /* Read at the press, before a Live handoff can wait. A later pick belongs
+       to the next draft and `onAccepted` deliberately removes only these. */
+    const selectedMentions = mention.toSend();
+    const mentions: MentionsToSend | undefined = selectedMentions
+      ? {
+          ...selectedMentions,
+          onAccepted: () => {
+            setMentionWaiting(false);
+            selectedMentions.onAccepted();
+          },
+          onRefused: () => {
+            setMentionWaiting(false);
+            /* Do not overwrite a next draft typed while the request was out. */
+            if (box.current?.value) return;
+            provenance.current = submittedProvenance;
+            setValue(submittedDraft);
+            onDraft(submittedDraft);
+          },
+        }
+      : undefined;
+    if (mentions) setMentionWaiting(true);
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
-    /* The "Bringing in" row, read at the press like the words. It empties
-       only once the server has begun the turn (`MentionsToSend.onAccepted`),
-       so a refused question keeps its articles. */
-    const mentions = mention.toSend();
     /* Typed here, by the reader: the one send that says so (`SendHow`). */
     onSend(question, { typed: true, ...(modality ? { modality } : {}), ...(mentions ? { mentions } : {}) });
     /* The question has gone and the answer arrives under the keys: let go of
@@ -3402,7 +3424,7 @@ export function Composer({
     ) putKeyboardAway(submittedBox);
   };
   /** Every state `submit` refuses, so the Send button can say so before a press. */
-  const unavailable = busy || dictate.busy || value.trim() === "";
+  const unavailable = busy || mentionWaiting || dictate.busy || value.trim() === "";
 
   /* **Picking an article from the `@` list** writes `@Short title ` over the
      `@query`, and the caret lands after it once React has drawn the new text

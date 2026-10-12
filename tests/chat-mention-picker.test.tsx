@@ -130,6 +130,9 @@ describe("the @ list", () => {
     await type("compare with @");
     expect(box().getAttribute("role")).toBe("combobox");
     expect(box().getAttribute("aria-expanded")).toBe("true");
+    expect(listbox()?.getAttribute("aria-label")).toBe("Your articles");
+    expect(box().getAttribute("aria-controls")).toBe(listbox()?.id);
+    expect(box().getAttribute("aria-activedescendant")).toBe(options()[0]?.id);
     const titles = options().map((o) => o.textContent);
     expect(titles).toEqual(["Smith 2024, Replicationnature.com", "Reply to Jonesarchived"]);
   });
@@ -149,6 +152,48 @@ describe("the @ list", () => {
     expect(box().value).toBe("compare with @Smith 2024, Replication ");
     expect(host.querySelector(".mention-chips")?.textContent).toContain("Smith 2024, Replication");
     expect(listbox()).toBeNull();
+  });
+
+  it("picks a row on Tab, but leaves Tab alone when there is no row", async () => {
+    paint();
+    await type("compare with @jon");
+    const picked = press("Tab");
+    expect(picked.defaultPrevented).toBe(true);
+    expect(box().value).toBe("compare with @Reply to Jones ");
+
+    await type("compare");
+    await type("compare with @nobody");
+    const empty = press("Tab");
+    expect(empty.defaultPrevented).toBe(false);
+    expect(sent).toEqual([]);
+  });
+
+  it("closes a no-match query on Enter, but sends it once a space makes it prose", async () => {
+    paint();
+    await type("compare with @nobody");
+    const closed = press("Enter");
+    expect(closed.defaultPrevented).toBe(true);
+    expect(sent).toEqual([]);
+    expect(listbox()).toBeNull();
+
+    await type("compare with @nobody please");
+    expect(listbox()).toBeNull();
+    press("Enter");
+    expect(sent.map((s) => s.question)).toEqual(["compare with @nobody please"]);
+  });
+
+  it("picks on pointerdown before a touch can blur the box", async () => {
+    paint();
+    await type("compare with @jon");
+    const row = options()[0] as HTMLElement;
+    const down = new MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+    act(() => {
+      row.dispatchEvent(down);
+      box().blur();
+    });
+    expect(down.defaultPrevented).toBe(true);
+    expect(box().value).toBe("compare with @Reply to Jones ");
+    expect(host.querySelector(".mention-chips")?.textContent).toContain("Reply to Jones");
   });
 
   it("closes on Escape and keeps the draft — and a second Escape is the ladder's old first rung", async () => {
@@ -203,6 +248,18 @@ describe("the @ list", () => {
     expect(host.querySelector(".mention-chips")).not.toBeNull();
     act(() => sent[0]?.how?.mentions?.onAccepted());
     expect(host.querySelector(".mention-chips")).toBeNull();
+  });
+
+  it("restores the submitted words and keeps the row when the server refuses before begin", async () => {
+    paint();
+    await type("compare with @jon");
+    press("Enter");
+    await type("compare the two");
+    press("Enter");
+    expect(box().value).toBe("");
+    act(() => sent[0]?.how?.mentions?.onRefused?.());
+    expect(box().value).toBe("compare the two");
+    expect(host.querySelector(".mention-chips")?.textContent).toContain("Reply to Jones");
   });
 
   it("is not there in a box that is not typed Chat's", async () => {

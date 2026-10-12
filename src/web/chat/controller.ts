@@ -208,6 +208,10 @@ export class ChatController {
    * compare. Pruned when its operation retires.
    */
   #onThreadId = new Map<OpId, (id: string) => void>();
+  /** Navigation that waits for any `begin`, including when the optimistic id was accepted. */
+  #onBegun = new Map<OpId, (id: string) => void>();
+  /** Restore a mentioned question only when the request was refused before `begin`. */
+  #onRefused = new Map<OpId, () => void>();
   /** Draft bookkeeping, unlike navigation, must finish even after detach. */
   #onConfirmed = new Map<OpId, (id: string) => void>();
   /**
@@ -276,10 +280,14 @@ export class ChatController {
     onThreadId?: (id: string) => void,
     onConfirmed?: (id: string) => void,
     onGone?: (id: string) => void,
+    onBegun?: (id: string) => void,
+    onRefused?: () => void,
   ): void {
     if (onThreadId) this.#onThreadId.set(event.op.id, onThreadId);
     if (onConfirmed) this.#onConfirmed.set(event.op.id, onConfirmed);
     if (onGone) this.#onGone.set(event.op.threadId, onGone);
+    if (onBegun) this.#onBegun.set(event.op.id, onBegun);
+    if (onRefused) this.#onRefused.set(event.op.id, onRefused);
     this.dispatch(event);
   }
 
@@ -368,6 +376,13 @@ export class ChatController {
     const before = this.#current;
     const { state, commands } = reduce(before.state, event);
     const operation = "opId" in event ? before.state.operations.get(event.opId) : undefined;
+    const onRefused =
+      (event.type === "turn.failed" || event.type === "turn.refused") &&
+      operation?.kind === "turn" &&
+      !operation.began &&
+      !operation.superseded
+        ? this.#onRefused.get(operation.id)
+        : undefined;
     this.#moveGoneAfter(event, operation);
     /* A lost stream or refused write is still being reconciled. Its recovery
        or repair will notify when it finishes, including after detach. */
@@ -402,6 +417,7 @@ export class ChatController {
          docs/postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md */
       this.#notify();
     }
+    onRefused?.();
     for (const command of commands) this.#perform(command);
     this.#retireGone(event, operation, state);
     if (finished) this.#onSettled?.();
@@ -491,13 +507,13 @@ export class ChatController {
    * it, which is what lets a cancel pressed before the `begin` frame still be
    * sent after the dialog closed itself. That is right for everything the
    * reducer decides, because none of it touches the screen. It is wrong for
-   * `#onThreadId`, which is the panel's `setThread`: called after the reader
+   * the navigation/UI callbacks (`#onThreadId`, `#onBegun`, `#onRefused`): called after the reader
    * closed the dialog or moved to another article, it reopens or repoints
    * whatever they are looking at *now*, because the server corrected an id in a
    * conversation they have left. Unsubscribing removes the render listener and
    * says nothing about this. GPT Sol, 2026-08-28.
    *
-   * Only navigation callbacks go. Draft acknowledgements and article completion
+   * Only callbacks into the mounted UI go. Draft acknowledgements and article completion
    * callbacks survive, as do the intent commands: the controller's own work
    * carries on, which is the whole distinction: what this object decides for
    * itself survives the unmount, and what it was doing on somebody else's behalf
@@ -505,11 +521,13 @@ export class ChatController {
    */
   detach(): void {
     this.#onThreadId.clear();
+    this.#onBegun.clear();
+    this.#onRefused.clear();
   }
 
   /** Forget the callbacks of turns that have finished. */
   #prune(state: ChatState): void {
-    for (const callbacks of [this.#onThreadId, this.#onConfirmed]) {
+    for (const callbacks of [this.#onThreadId, this.#onBegun, this.#onRefused, this.#onConfirmed]) {
       for (const id of [...callbacks.keys()]) {
         if (!state.operations.has(id)) callbacks.delete(id);
       }
@@ -622,6 +640,7 @@ export class ChatController {
         return;
       case "named":
         this.#onConfirmed.get(command.opId)?.(command.threadId);
+        this.#onBegun.get(command.opId)?.(command.threadId);
         if (command.wasThreadId !== command.threadId) {
           // The URL is pointing at an id the server did not accept. Tell the
           // caller so `?thread=` can follow, or a reload lands on a

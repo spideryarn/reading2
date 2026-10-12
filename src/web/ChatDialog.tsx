@@ -959,6 +959,9 @@ export function ChatDialog({
         ...(quote ? { quote } : {}),
         question,
       });
+      /* Keep the draft composer mounted until a mentioned first question is
+         accepted, so a 400 can put its words back beside its chips. */
+      const waitsForMentionBegin = how?.mentions !== undefined;
       const id: string = send(null, text, at, {
         /* **Data in `onConfirmed`, navigation in `onThreadId`**, and the split
            is the controller's (chat/controller.ts § `detach`): the first
@@ -980,6 +983,7 @@ export function ChatDialog({
           onRenamed(id, real);
         },
         onThreadId: (real) => onThread(real),
+        ...(waitsForMentionBegin ? { onBegun: (real: string) => onThread(real) } : {}),
         anchor: target.anchor,
         /* **The "?" says so on the wire.** The draft has known which button
            opened it since 2026-09-04 and used it, three lines up, to decide what
@@ -999,7 +1003,7 @@ export function ChatDialog({
         /* The articles picked with an `@` (plan 261012d). A passage chat is a chat. */
         ...(how?.mentions ? { mentions: how.mentions } : {}),
       });
-      onThread(id);
+      if (!waitsForMentionBegin) onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
          different one, the two callbacks above rename the summary and correct the
          URL together. Until 2026-10-05 only the URL followed, on the theory

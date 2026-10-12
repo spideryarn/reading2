@@ -59,6 +59,8 @@ export interface MentionsToSend {
   slugs: readonly string[];
   /** The server began the turn, so these went with it. Data-only; may run after unmount. */
   onAccepted(): void;
+  /** The server refused before `begin`; restore the submitted draft if its composer still owns it. */
+  onRefused?(): void;
 }
 
 /**

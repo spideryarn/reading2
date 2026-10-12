@@ -1300,8 +1300,13 @@ export function ConversationBand({
        transcript. */
     const sendKind: ThreadKind = as ?? threads.find((t) => t.id === to)?.kind ?? kind;
     const origin = sendKind === "chat" ? pendingOrigin(to) : undefined;
+    /* The list's composer would otherwise unmount at once and take its picked
+       chips with it. A mentioned first question stays there until `begin`; a
+       pre-stream refusal restores its words in that same composer. */
+    const waitsForMentionBegin = to === null && sendKind === "chat" && how?.mentions !== undefined;
     const id = send(to, question, at, {
       onThreadId: (corrected) => void setThread(corrected),
+      ...(waitsForMentionBegin ? { onBegun: (confirmed: string) => void setThread(confirmed) } : {}),
       ...((first || (origin && to)) ? {
         /* Data survives a mode change; URL navigation above does not. */
         onConfirmed: (confirmed: string) => {
@@ -1345,7 +1350,7 @@ export function ConversationBand({
        the arrival rule may begin again — whatever is typed into its box
        afterwards, and whether or not this write ever lands. */
     drafts.submitted(id);
-    if (id !== to) void setThread(id);
+    if (id !== to && !waitsForMentionBegin) void setThread(id);
   };
   sendToRef.current = sendTo;
 

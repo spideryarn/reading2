@@ -217,7 +217,9 @@ const ID_SHAPED = /spya-[a-z0-9]{6}/g;
  *  - **Some are** — the usable ones come back as a citation and the rest are
  *    dropped. That loses a little of what the model literally said, chosen over
  *    printing a bogus id beside a working one, where it would read as a second
- *    link that happens to be broken.
+ *    link that happens to be broken. A run containing an ambiguous id is the
+ *    exception: the whole run remains text, because dropping a collision would
+ *    hide the fact that its source could not be established.
  *
  * Empty text segments are never emitted, so a paragraph that is nothing but a
  * citation does not come back with empty strings on either side of it.
@@ -237,9 +239,14 @@ export function splitCitations(para: string, known: Known, cross: CrossArticles 
        An id more than one article has is not usable at all (`CrossArticles`),
        not even as the open article's: which one the model meant is exactly
        what nobody can tell. */
+    const shaped = match[0].match(ID_SHAPED) ?? [];
+    /* A collision is evidence that this whole citation run has no unambiguous
+       provenance. Keep the run exactly as the model wrote it, rather than
+       linking its other ids while silently deleting the colliding one. */
+    if (shaped.some((id) => cross.ambiguous.has(id))) continue;
     const usable = [
       ...new Set(
-        (match[0].match(ID_SHAPED) ?? []).filter(
+        shaped.filter(
           (id) =>
             ID_PATTERN.test(id) && !cross.ambiguous.has(id) && (known.has(id) || cross.byId.has(id)),
         ),

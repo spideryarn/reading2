@@ -18,8 +18,8 @@
  *
  * The list is placed with Floating UI, above the box by preference since the
  * composer sits at the bottom of its band, in a portal so a band's `overflow`
- * cannot clip it. Rows are pressed on `mousedown` with the default prevented,
- * so the box keeps focus and its caret.
+ * cannot clip it. Rows are pressed on `pointerdown` with the default prevented,
+ * so a mouse, pen or finger picks before the box can blur and keeps its caret.
  */
 import { autoUpdate, flip, FloatingPortal, offset, shift, size, useFloating } from "@floating-ui/react";
 import { X } from "lucide-react";
@@ -245,7 +245,7 @@ export function MentionPicker({
               role="option"
               aria-selected={i === current}
               className={`mention-picker-row${i === current ? " active" : ""}`}
-              onMouseDown={(e) => {
+              onPointerDown={(e) => {
                 e.preventDefault();
                 onPick(i);
               }}

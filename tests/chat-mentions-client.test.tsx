@@ -126,16 +126,66 @@ describe("mentions on the wire", () => {
   it("does not empty the row when the server refuses the question", async () => {
     await mount();
     let accepted = 0;
+    let refused = 0;
     reply = { status: 400, error: "That is the article you have open." };
     await act(async () => {
       chat?.send(null, "compare them", null, {
         kind: "chat",
-        mentions: { slugs: [SLUG], onAccepted: () => accepted++ },
+        mentions: { slugs: [SLUG], onAccepted: () => accepted++, onRefused: () => refused++ },
       });
     });
     await settleChat();
     expect(posts).toHaveLength(1);
     expect(accepted).toBe(0);
+    expect(refused).toBe(1);
+  });
+
+  it("does not call a refusal callback when the stream outcome is unknown", async () => {
+    await mount();
+    let refused = 0;
+    /* A 200 that closes before `begin`: the write may still have landed, so the
+       client must not make the same question immediately sendable again. */
+    reply = { frames: "" };
+    await act(async () => {
+      chat?.send(null, "compare them", null, {
+        kind: "chat",
+        mentions: { slugs: [SLUG], onAccepted: () => {}, onRefused: () => refused++ },
+      });
+    });
+    await settleChat();
+    expect(refused).toBe(0);
+  });
+
+  it("reports begin even when the server accepts the optimistic thread id", async () => {
+    await mount();
+    let begun: string | null = null;
+    answer = (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { threadId: string };
+      return Promise.resolve(
+        new Response(
+          frames({
+            threadId: body.threadId,
+            title: "compare them",
+            messageId: "spya-rep222",
+            questionId: "spya-qst222",
+            mentioned: [SMITH],
+          }),
+          { status: 200 },
+        ),
+      );
+    };
+    let sentTo = "";
+    await act(async () => {
+      sentTo = chat?.send(null, "compare them", null, {
+        kind: "chat",
+        onBegun: (id) => {
+          begun = id;
+        },
+        mentions: { slugs: ["smith-2024"], onAccepted: () => {} },
+      }) ?? "";
+    });
+    await settleChat();
+    expect(begun).toBe(sentTo);
   });
 
   it("sends no mentions on a retry or an edit", async () => {
