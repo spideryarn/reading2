@@ -76,7 +76,9 @@ const ARTICLES: readonly { slug: string; blockId: string; word: string; page: st
   },
 ];
 
-type CaseName = "help" | "broader" | "since" | "plain" | "word" | "situate" | "url" | "remember";
+type CaseName =
+  | "help" | "broader" | "since" | "plain" | "word" | "situate" | "url" | "remember"
+  | "reception" | "alongside" | "author";
 
 interface Case {
   readonly name: CaseName;
@@ -175,10 +177,57 @@ const OTHER_KIND_CASES: readonly Case[] = [
   },
 ];
 
+/**
+ * **The guide's cases**, since it searches through `search_web` (plan 261012g).
+ * The guide is about how to read the piece, and plan 261012f sends a question
+ * about what the piece says to Chat. So its targets are the questions about
+ * *how to read it* that the web answers, and `since` — what the world has said
+ * on the subject — is a control here: it belongs to Chat.
+ *
+ *   reception  is it well regarded, contested, superseded — TARGET
+ *   alongside  what to read before or with it — TARGET
+ *   author     who wrote it, and how far to trust them on this — TARGET
+ *   since      what has happened with the idea since — CONTROL (Chat's)
+ *   word       does the article use the word X — CONTROL
+ */
+const GUIDE_CASES: readonly Case[] = [
+  {
+    name: "reception",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: () => "Before I put time into this: is it well regarded? Has it been criticised or superseded?",
+  },
+  {
+    name: "alongside",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: () => "What should I read before or alongside this to get the most out of it?",
+  },
+  {
+    name: "author",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: () => "Who is the author, and how far should I trust them on this subject?",
+  },
+  { ...OTHER_KIND_CASES.find((c) => c.name === "since")!, role: "control" },
+  OTHER_KIND_CASES.find((c) => c.name === "word")!,
+];
+
 /* The kinds a reader converses in; Candidates is Referee's and has its own eval. */
 const KINDS = ["chat", "learn", "tutorial", "explore", "guide"] as const;
 type EvalKind = (typeof KINDS)[number];
-const casesFor = (kind: EvalKind): readonly Case[] => (kind === "chat" ? CASES : OTHER_KIND_CASES);
+const casesFor = (kind: EvalKind): readonly Case[] =>
+  kind === "chat" ? CASES : kind === "guide" ? GUIDE_CASES : OTHER_KIND_CASES;
+
+/** A search by either route: OpenRouter's inside the reply, or our `search_web` (plan 261012g). */
+const searched = (o: { searches: number; tools: string[] }) => o.searches > 0 || o.tools.includes("search_web");
+
+/** The 261011t failure: an answer that says it has not looked anything up. */
+const SAID_UNSEARCHED =
+  /haven't looked|have not looked|can't search|cannot search|can't look|cannot look|not able to (search|look)|unable to (search|look)/i;
 
 /* A neutral reason, so the guide does not spend its first turn asking for one
    (GUIDE_SYSTEM: "If they still have not said why they are reading it, ask that
@@ -397,14 +446,14 @@ async function main(): Promise<void> {
   }
 
   console.log(`\n## Summary (${opts.kind})`);
-  console.log("case     role     searched  read-page  mean-searches  mean-links  mean-blockIds");
+  console.log("case     role     searched  read-page  said-unsearched  mean-searches  mean-links  mean-blockIds");
   for (const c of casesFor(opts.kind)) {
     const rows = outcomes.filter((o) => o.case === c.name && !o.error);
     const n = rows.length || 1;
     const mean = (f: (o: Outcome) => number) =>
       (rows.reduce((s, o) => s + f(o), 0) / n).toFixed(2);
     console.log(
-      `${c.name.padEnd(8)} ${c.role.padEnd(8)} ${rows.filter((o) => o.searches > 0).length}/${rows.length}       ${rows.filter((o) => o.tools.includes("read_web_page")).length}/${rows.length}        ${mean((o) => o.searches).padStart(6)}        ${mean((o) => o.links.length).padStart(6)}      ${mean((o) => o.blockIds.length).padStart(6)}`,
+      `${c.name.padEnd(8)} ${c.role.padEnd(8)} ${rows.filter(searched).length}/${rows.length}       ${rows.filter((o) => o.tools.includes("read_web_page")).length}/${rows.length}        ${rows.filter((o) => searched(o) && SAID_UNSEARCHED.test(o.text)).length}/${rows.length}            ${mean((o) => o.searches).padStart(6)}        ${mean((o) => o.links.length).padStart(6)}      ${mean((o) => o.blockIds.length).padStart(6)}`,
     );
   }
 

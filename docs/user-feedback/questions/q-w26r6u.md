@@ -1,10 +1,11 @@
 ---
 id: q-w26r6u
 report: spya-drbkvc
-status: open
+status: answered
 asked: 2026-10-11
 title: Should the guide get web search after all, at the cost of a special case in the chat loop?
-refs: qi-bj329ze3 · qi-zvsky2aj · docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md · docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address-guide-consult-sol.md · docs/user-feedback/261011_0140-web-search-in-every-chat-mode.md · SPIDERYARN-READING2-H9
+refs: qi-bj329ze3 · qi-zvsky2aj · qi-ht2wtjg8 · q-madusw · docs/plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md · docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md · docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address-guide-consult-sol.md · docs/user-feedback/261011_0140-web-search-in-every-chat-mode.md · SPIDERYARN-READING2-H9
+acted: spya-q2z37j
 ---
 You asked for web search in every chat mode. Recall and Tutorial now search when a reader asks where the piece stands. The guide (the "how should I read this?" chat) still cannot: I gave it search, it went wrong, and I took it out. It now tells the reader that Chat can look it up. Should I build the fix that makes guide search work?
 
@@ -25,3 +26,9 @@ What I found. Chat, Recall, Tutorial and Explore could already search the web an
 The guide. With search switched on, it searched and then pressed its own "next steps" tool before writing a word. A search's results only exist inside the reply that ran it, so they were gone by the time it wrote, and it told the reader "I haven't looked this up" (most of a dozen tries; one failed outright). Telling it to write first did not help. GPT Sol's suggested fix: use a search provider that hands back what it found straight away, and when the guide does exactly this, pass those findings forward and make it answer with no tools. Sol puts it at half a day, starting with a check that the provider really does hand the findings back in this case.
 
 Page-reading is asked here too because each conversation's list of tools is one of the security checks, and your report named page-reading only for Chat, which already had it.
+
+Greg's answer, 2026-10-12 10:10 UTC (reply spya-q2z37j, in the Feedback dialog):
+
+> You said 'I gave it search, it went wrong, and I took it out'. Let's try and get it working well. / Perhaps the web search tool that we create has an option for web search to run in a subagent (which hands back links/summary) for the caller-agent to retrieve if it chooses to? Or is there an OpenRouter web search API that would do this well? Run some spikes. / Obviously if it's really complicated let's discuss further, but it feels like it should be feasible.
+
+Done (plan docs/plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md, spikes docs/investigations/261012b-web-search-subagent-spikes.md): there is no OpenRouter search API on its own, so the guide now has search_web, a small model that runs the search and hands back up to five links with a sentence each, as an ordinary tool result that survives its next-steps buttons. Page-reading for the guide was not added: GPT Sol did not read your words as plainly choosing it, so it is asked again, with keeping a page in a Chat, in q-madusw.

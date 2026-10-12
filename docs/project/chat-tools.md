@@ -115,14 +115,15 @@ and this file does not change.
 | `article_citations` | The works **this** article cites, from its stored [citations](bibliography.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. Since 2026-10-08 the list of other conversations, each with a line on what it covered, also comes with every Chat question, so the model knows when one is worth opening. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
 | `read_cited_work` | A paper **this** article cites, read from its PDF once code has confirmed it is the work, aimed at the claim the article makes with it | `read_web_page` cannot read a PDF and cannot say which paper it has. *Does the cited work say that?* needs the work's own words. **Chat and Explore only.** See [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) |
+| `search_web` | A web search run by a subagent: up to five results, each a title, an address and a sentence on what the page says | OpenRouter's own search lives inside one reply, and the guide's reply ended on a tool call and lost it. This one comes back as a tool result, which survives. **The typed guide only**, since 2026-10-12. See [§ The guide searches through a subagent](#the-guide-searches-through-a-subagent-search_web) |
 
-**Eight of the ten are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
-Live, share. The other two are added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+**Eight of the eleven are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
+Live, share. The other three are added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
 for the kinds that function names and no others. **The guide** (plan
 [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
-`GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
-notes, and no web search. Asked about the world, it says Chat can look it up; why it still has no
-search is [below](#web-search-is-still-openrouters-and-is-not-in-that-table).
+`GUIDE_TOOLS`: the article's own — no `read_web_page`, no library, no notes. The typed guide adds
+one way out, `search_web`, since 2026-10-12 ([below](#the-guide-searches-through-a-subagent-search_web));
+Live's guide does not.
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -162,9 +163,35 @@ because it is testing the reader's memory of *this* piece. Measured in
 a provider search lives only inside the response that ran it, so a round that ends in a call to one
 of our tools with no prose loses everything it found. Its answers then said "I haven't looked this
 up". Chat does not hit this because it writes in the round it searches; the guide is told to end
-every answer on a tool call. What would fix it, and whether to, is
-[261011t § The guide](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md#the-guide-tried-and-backed-out)
-and `q-w26r6u`. **Live has none either**: OpenAI realtime has no server search.
+every answer on a tool call. **Live has none either**: OpenAI realtime has no server search.
+
+### The guide searches through a subagent: `search_web`
+
+> Perhaps the web search tool that we create has an option for web search to run in a subagent
+> (which hands back links/summary) for the caller-agent to retrieve if it chooses to?
+>
+> — Greg, 2026-10-12, reply `spya-q2z37j` to `q-w26r6u`
+
+Since 2026-10-12 the typed guide has `search_web`, one of *our* tools
+([`src/web-search-subagent.ts`](../../src/web-search-subagent.ts), plan
+[261012g](../plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md), the spikes
+[261012b](../investigations/261012b-web-search-subagent-spikes.md)). A small model (the quick tier,
+job `web-search-subagent`) runs a forced Exa search and writes at most five
+lines of a title, a link and a sentence. We keep a line only if its link is one the search returned, and take
+its title from the search. The guide gets them as an ordinary `tool` message, fenced. That message is
+replayed into the next round whatever else the guide called beside it, which is the whole fix.
+
+- **What it does not check**: the sentence. That a link came back from the search is checked; what
+  the small model says the page says is still its account, and is fenced as a stranger's words.
+- **Its bounds**: two calls a turn (`SEARCH_WEB_PER_TURN`; a third is refused, not run) and a
+  300-character query. See [§ Security](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers).
+- **What the guide searches for**: questions about *how to read* the piece — is it well regarded,
+  what to read alongside it, who the author is. A question about what the world says on the
+  subject goes to Chat.
+- **No page-reading for the guide.** Whether it should open a result is a question to Greg; until
+  then the result tells it only to link what it uses.
+- **Chat keeps OpenRouter's search** until the comparison in 261012g § Stage 2 says otherwise: the
+  citation chips and the single round are what the subagent would have to match.
 
 ## The links the prompt does not carry
 
@@ -711,8 +738,18 @@ query cap bounds in bulk and does not keep in.
 [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) has the
 arithmetic.
 
-What *does* still hold, and is worth keeping true: nothing chat can call writes a file, deletes
-anything, or spends money. That is the reason the write tools below are not built yet — the first one
+**A search query is the same kind of channel.** Every query, OpenRouter's or ours, is text the model
+wrote leaving for a search engine, and a hostile article can ask for one that carries the reader's
+profile or the piece. Chat has had that exposure since it had search, and its bounds are
+`max_uses`, which OpenRouter does not honour
+([`webSearchTool`](../../src/converse.ts)). **The guide gained it on 2026-10-12** with
+`search_web`, and because that tool is ours its bounds are real: two calls a turn and 300
+characters a query, both refused in code before anything is sent. `PROFILE_RULES` still tells every
+conversation never to put the profile into a query, and that is prompt text, not a boundary.
+
+What *does* still hold, and is worth keeping true: nothing chat can call writes a file or deletes
+anything. One tool spends money: `search_web` (since 2026-10-12) makes a model call of about $0.007,
+at most twice a turn, recorded in the ledger like any other. That is the reason the write tools below are not built yet — the first one
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
 reader's data". Since 2026-10-03 an answer can *offer* a write or a spend as a button, and the
 sentence above is unchanged by it, because a button is pressed by the reader and called by nothing:
@@ -1122,9 +1159,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
   message only (`experienceLine`), so the cached prefix is the same for everyone.
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
-- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search (it points the reader to Chat;
-  [§ Web search](#web-search-is-still-openrouters-and-is-not-in-that-table) says why), and one of
-  its own since
+- **Its tools** are `GUIDE_TOOLS` (§ The eleven above), `search_web` since 2026-10-12
+  ([§ The guide searches through a subagent](#the-guide-searches-through-a-subagent-search_web)),
+  and one of its own since
   2026-10-09: **`offer_to_save`**, which saves nothing
   ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
   Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
