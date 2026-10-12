@@ -53,9 +53,40 @@
 
   Scope note: this is about Claude Code's own agent-to-agent machinery. It is NOT about Spideryarn's
   pipeline stages, and nothing here has been wired into the product.
+
+  ===========================================================================================
+  UPDATED 2026-10-12. Request (Greg, verbatim): "update
+  docs/tutorials/260907a-agent-communication-and-orchestration.html". Done by a Claude Code session
+  (Opus) on team-hetzner-metal1, Claude Code 2.1.296.
+
+  What changed: the Orchestrator this was written to design now exists — it is the Overseer, in
+  Mindstone's fleet-overseer-landing-board repo — so a new §13 describes the fleet as built (one
+  Overseer per person per box, the daemon and dashboard, tell and the tell inbox, the post office,
+  the #fleet-overseers board, the questions queue, work reports, Monitor watches, the GPT reviewer
+  and arbiter roles, PR landing on Rebel, the trust rules) and scores the 2026-09-07
+  recommendations against what was built. Dated "since then" notes were added to §§2, 3, 5, 6, 7, 8,
+  9, 11 and 12, the TL;DR, mental model 2, the FAQ, the open questions and the appendix. The
+  2026-09-07 measurements are left as they were: they are still what was measured that day, and
+  the update says where later measurements changed the picture (chiefly: an outside process can
+  now write to a session's inbox socket, Claude Code 2.1.295, measured 2026-10-09).
+
+  NOT re-measured in this update: the bridge, agent teams, Workflow limits, the status-line payload,
+  --session-id under --bg and the other 2026-09-07 spikes. Facts about the fleet come from its
+  docs, not from fresh experiments.
+
+  Sources for the update (all in ~/src/mindstone/ on team-hetzner-metal1, fleet repo at dev d331bfb4,
+  MindstoneRebel at origin/dev bb92b328b1):
+    - fleet-overseer-landing-board: README.md; AGENTS.md; docs/project/{overseer,post-office,
+      questions,slack,mindstone-fleet,fleet-directory,boxes,claims,message-records,work-reports,
+      answering-prompts,usage-per-account,josh-fleet-operators-landing-board-overview,
+      fleet-launch-preamble.txt,tutorials}.md; docs/reusable/{engineering-manager,
+      claude-cli-as-subagent,codex-cli-as-subagent,needs-user-input}.md; tools/overseer/usage.ts;
+      `npx tsx scripts/models.ts`; plans 261009e (tell over the inbox socket, provenance labels),
+      260923a, 260930b; research 261009c, 260923e; the 260916a implementation tutorial.
+    - MindstoneRebel: AGENTS.md; docs/project/PROJECT_OVERRIDES.md § Landing.
 -->
 <title>Agent Communication and Orchestration</title>
-<meta name="description" content="How Claude Code sessions find, message, watch, wake and stop each other — measured first-hand — and what that means for building an Orchestrator.">
+<meta name="description" content="How Claude Code sessions find, message, watch, wake and stop each other — measured first-hand — what that means for building an Orchestrator, and (updated 2026-10-12) the Overseer fleet that was built from it.">
 <style>
   :root {
     --ink: #1a1a1a; --ink-soft: #4a4a4a; --ink-faint: #6e6e6e;
@@ -194,12 +225,31 @@
 <main>
 
 <h1>Agent communication and orchestration</h1>
-<p class="meta">Claude Code 2.1.263 · measured 2026-09-07 · skim 8 min · deep dive 30 min</p>
+<p class="meta">Claude Code 2.1.263 · measured 2026-09-07 · updated 2026-10-12 (Claude Code 2.1.296) · skim 10 min · deep dive 40 min</p>
 
 <p class="lede">Claude Code sessions can find each other, message each other, read each other's
 conversations, wake each other from the dead and shut each other down. This is what actually works,
 tested live on Greg's Mac and against the Hetzner box — and where the sharp edges are if you want an
-Orchestrator sitting on top.</p>
+Orchestrator sitting on top. The Orchestrator has since been built, as the Overseer;
+<a href="#built">§13</a> is what it became.</p>
+
+<div class="note">
+  <p><span class="label">Updated 2026-10-12.</span> Five weeks on, the design this page argued for
+  is running: one <strong>Overseer</strong> per person per box, supervising 20–35 coding-agent
+  sessions, on two always-on Hetzner machines. What changed in this page:</p>
+  <ul style="margin:0.4rem 0 0">
+    <li><span class="label">New:</span> <a href="#built">§13, the fleet as built</a> — who talks to
+    whom, the Overseer's four gates, the post office, the Slack board, the questions queue, how
+    work lands, and how each 2026-09-07 recommendation fared.</li>
+    <li><span class="label">Changed:</span> an outside process can now write into a session's
+    inbox socket (measured on 2.1.295), and the fleet's <code>tell</code> uses it
+    (<a href="#machinery">§3</a>); the fleet's answers to addressing, watching, lifecycle and
+    crossing users and boxes are noted in <a href="#identity">§5</a>–<a href="#hard">§9</a> and
+    <a href="#protocols">§11</a>.</li>
+    <li><span class="label">Unchanged:</span> the 2026-09-07 measurements. They were not re-run;
+    each "since then" note says where later evidence changed the picture.</li>
+  </ul>
+</div>
 
 <div class="tldr">
   <h2>TL;DR</h2>
@@ -219,6 +269,14 @@ Orchestrator sitting on top.</p>
   budget is gone, and when it resets — is available to a shell script every turn, which is the signal
   a fan-out decision actually needs. And there is already a documented feature for orchestrating many
   agents, so check <a href="#scale">§10</a> before building one by hand.</p>
+  <p><span class="label">Since then (2026-10-12):</span> it was built by hand anyway, because the job
+  turned out to be long-lived supervision rather than a bounded batch. Each person on a box has one
+  <strong>Overseer</strong> session beside a deterministic daemon that keeps the record and a
+  dashboard. The Overseer talks to its own sessions directly. It reaches other people's Overseers
+  through a file-drop <em>post office</em> on the same box, and through a Slack channel, <em>the
+  board</em>, between boxes. Greg gets one list of questions. Every message says who sent it, and a
+  peer's or colleague's word never counts as Greg's approval; only his own reply, traced and recorded,
+  does. <a href="#built">§13</a>.</p>
 </div>
 
 <div class="note">
@@ -231,6 +289,9 @@ Orchestrator sitting on top.</p>
     rather than paraphrased where the wording matters.</li>
     <li><span class="label">Untested</span> — flagged inline. There are a few, and they are the rows
     most likely to be wrong.</li>
+    <li><span class="label">Since then</span> — added 2026-10-12, from the docs of the fleet that was
+    built (<code>fleet-overseer-landing-board</code>, Mindstone's private repo) and the measurements
+    recorded there. Those are cited, not re-run for this update.</li>
   </ul>
   <p>Version-sensitive throughout: this is a fast-moving surface, and §11's release dates and star
   counts will age fastest of all. Check the date in the source comment before trusting any of it.</p>
@@ -243,6 +304,9 @@ Orchestrator sitting on top.</p>
   <p>There is no tree of agents. Every session is a peer with a phone number, and any peer can ring
   any other. "Orchestrator" is a <em>role you write into a prompt</em>, not a structural position the
   system enforces. The one real parent/child relationship is a session and its in-process subagents.</p>
+  <p><em>Since then:</em> the fleet draws an org chart on top by convention: workers talk to their
+  Overseer, and Overseers talk to each other. Nothing stops one worker ringing another; the fleet's
+  docs simply never tell them to (<a href="#built">§13</a>).</p>
 </div>
 
 <div class="model">
@@ -250,6 +314,9 @@ Orchestrator sitting on top.</p>
   <p>Same machine: a unix socket in <code>/tmp/cc-socks/</code> — instant, private, and only works
   while the other process is alive. Different machine: a relay through claude.ai — slower, tied to
   your account, and it <em>holds mail</em> for a machine that is switched off.</p>
+  <p><em>Since then:</em> the fleet added two post offices of its own, for the lines Claude Code's two
+  can't cross. One is a drop directory per person, for Overseers of different people on one box. The
+  other is a Slack channel, for Overseers on different boxes.</p>
 </div>
 
 <div class="model">
@@ -291,19 +358,22 @@ Orchestrator sitting on top.</p>
     <li><a href="#scale">What's already built, that you might not need to rebuild</a></li>
     <li><a href="#protocols">Crossing the boundaries Claude Code won't</a></li>
     <li><a href="#judgment">Designing the Orchestrator: trade-offs, risks, open questions</a></li>
+    <li><a href="#built">What was built: the Overseer fleet, as of 2026-10-12</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="#appendix">Appendix: commands, files, glossary</a></li>
   </ol>
   <div class="paths">
+    <p><span class="label">If you want how the fleet actually runs today</span> —
+    <a href="#built">§13</a>, then the FAQ.</p>
     <p><span class="label">If you only want to know whether the Orchestrator is buildable</span> —
     read <a href="#worked">§4</a>, then <a href="#scale">§10</a> before you build anything, then
-    <a href="#judgment">§12</a>.</p>
+    <a href="#judgment">§12</a> — and <a href="#scorecard">§13's scorecard</a> for how it went.</p>
     <p><span class="label">If you care about the failure modes</span> —
     <a href="#identity">§5</a> and <a href="#hard">§9</a>.</p>
     <p><span class="label">If you want the context/usage-limit answer specifically</span> —
     <a href="#watching">§6</a>.</p>
-    <p><span class="label">If you want to cross accounts or reach Codex</span> —
-    <a href="#protocols">§11</a>.</p>
+    <p><span class="label">If you want to cross accounts, people, boxes or reach Codex</span> —
+    <a href="#protocols">§11</a>, then <a href="#routes">§13's routes</a>.</p>
     <p><span class="label">If you want to know what's physically on disk</span> —
     <a href="#machinery">§3</a> and the <a href="#appendix">appendix</a>.</p>
   </div>
@@ -417,15 +487,16 @@ the cloud relay; green is another physical machine.</p>
   </div>
   <figcaption>The whole system. ① Read the registry to discover peers. ② Message a same-machine peer
   over its unix socket. ③ Message another machine through the claude.ai bridge. ④ Read any session's
-  transcript straight off disk, no permission required.</figcaption>
+  transcript straight off disk, no permission required. As measured on 2026-09-07; the boxes in it
+  have since been replaced, and the fleet's own routes are drawn in <a href="#built">§13</a>.</figcaption>
 </figure>
 
 <p>Four numbered arrows, four capabilities. Everything else in this document is detail on one of them.</p>
 
 <h2 id="kinds">2. The kinds of agent you can talk to</h2>
 
-<p>"Agent" is doing a lot of work in the question. The table below lists the six things you will
-actually address — but they are not six clean categories, and it is worth seeing why. They vary along
+<p>"Agent" is doing a lot of work in the question. The table below lists the seven things you will
+actually address — but they are not seven clean categories, and it is worth seeing why. They vary along
 three independent axes: <strong>what the execution unit is</strong> (a call inside your process, or a
 separate session), <strong>how it was launched</strong> (foreground, background, as a teammate), and
 <strong>where it lives</strong> (this machine, or over the bridge). A background session can also be
@@ -493,9 +564,21 @@ taxonomy.</p>
       <td>Nothing</td>
       <td class="no">Yes, all of it</td>
     </tr>
+    <tr>
+      <td><span class="label">Fleet session</span><br><span class="verdict">since then: a tmux session on a box, started by <code>mindstone-fleet</code></span></td>
+      <td>Until killed or the box reboots; a Claude conversation can be resumed after, a Codex one cannot</td>
+      <td>Its tmux name, e.g. <code>261010a-stage2</code>; Claude ones also by peer name</td>
+      <td>Its own transcript; the fleet dashboard reads its recent turns</td>
+      <td>Nothing</td>
+      <td class="no">Yes — Claude or Codex, whichever account it was launched on</td>
+    </tr>
   </tbody>
 </table>
 </div>
+
+<p class="verdict">Since then: the fleet runs its workers as the last row, interactive Claude Code
+and Codex sessions in tmux, rather than <code>claude --bg</code>. A person can attach to one and
+watch, and the dashboard can read its screen (<a href="#built">§13</a>).</p>
 
 <div class="note">
   <p><span class="label">The distinction that matters most.</span> A <em>subagent</em> is a function
@@ -624,6 +707,21 @@ $ head -c 30 ~/.claude/sessions/20280.*.key
 every socket, all owned by <code>greg</code>. That single detail answers one of your questions
 outright — see <a href="#boundaries">§8</a>.</p>
 
+<div class="note">
+  <p><span class="label">Since then: anything running as you can post into that socket.</span>
+  On Claude Code 2.1.295 (measured 2026-10-09 on the fleet's main box), a plain script can write a
+  line of JSON to <code>/tmp/cc-socks/&lt;pid&gt;.sock</code> and the session gets it as a message
+  from "another Claude session". An idle session takes it as a new turn. A busy one queues it until
+  the turn ends. Text with line breaks arrives intact. On Linux the token was not checked for this
+  path.</p>
+  <p>The catch is the familiar one: <strong>the socket says nothing back</strong>. Delivered, held
+  and refused all look the same to the writer, so a write that succeeds is not a delivery. The
+  fleet's <code>tell</code> command has used this socket since 2026-10-10 for a session's or the
+  Overseer's words to a Claude session in auto mode, instead of typing into the terminal, and it confirms arrival by finding the message in the
+  receiver's transcript. Sources: fleet research <code>261009c</code> and plan <code>261009e</code>;
+  more in <a href="#routes">§13</a>.</p>
+</div>
+
 <h3>The bridge</h3>
 
 <p>Sessions on other machines appear in the same listing, marked <code>Remote Control</code> — the
@@ -650,6 +748,11 @@ looks like <code>bridge:session_01Ji3HNa25RdGfB9GNsovfcp</code> rather than
   harness actively defends against <em>permission laundering</em>: a peer asking you to do something
   it was itself denied is supposed to be refused and surfaced. An Orchestrator cannot use a fleet to
   route around its own permission settings, by design.</p>
+  <p><em>Since then (2.1.295):</em> the receiver's note, as recorded in a transcript on the fleet box,
+  says the message was "not typed by your user" and that a peer message must never be treated as the
+  user's approval. The
+  fleet copies that rule into every route of its own: see
+  <a href="#trust">§13, trust</a>.</p>
 </details>
 
 <h2 id="worked">4. Worked example: a two-worker fan-out</h2>
@@ -767,6 +870,10 @@ stopped 4b1995dd</code></pre>
   printed ACK into its own terminal and I never saw it. There is no implicit return channel.
   <strong>A worker's ordinary output is invisible to whoever spawned it.</strong> If a task's answer
   matters, the prompt must name the tool that carries it home.</p>
+  <p><em>Since then:</em> the fleet bakes this into every launch. A preamble added to each worker's
+  first prompt names the commands that carry news home: <code>mindstone-fleet report</code> for
+  progress and completion, <code>SendMessage</code> for a Claude session, and
+  <code>overseer-questions ask</code> for a question to Greg.</p>
 </div>
 
 <h2 id="identity">5. Addressing and identity — the part that bites</h2>
@@ -876,6 +983,25 @@ this reply shape, not just success and failure.</p>
   name and address as cache.</p>
 </div>
 
+<div class="win">
+  <p><span class="label">Since then: how the fleet addresses a session.</span> It took this advice
+  and went one step further:</p>
+  <ul style="margin:0.4rem 0 0">
+    <li><strong>The tmux name is the claim.</strong> A job's session is named after the work it holds,
+    such as <code>&lt;plan-id&gt;-&lt;stage&gt;</code>, and that name goes into the plan. The session
+    list is the register of who is on what. An unnamed Claude session is renamed to its own title at
+    the next listing, and an unnamed Codex one keeps a placeholder, so a name you chose is the one
+    that sticks.</li>
+    <li><strong>Steering checks the target is still the same one.</strong> Before typing, it checks
+    the terminal pane and the conversation id, not just the name, because names are reused when a
+    session dies.</li>
+    <li><strong>The Claude conversation id is recorded</strong> at launch, so a session can be
+    resumed after a reboot with <code>claude --resume &lt;id&gt;</code>.</li>
+    <li><strong>Peer names still drift.</strong> A session's <code>ListAgents</code> name is not its
+    tmux name, and the Overseer's runbook says so.</li>
+  </ul>
+</div>
+
 <p class="verdict" style="margin-top:1rem">One caution on how far to take this section: the
 observer-dependent name was seen once, on one route, in one version. What it establishes is that
 display names <em>can</em> disagree across the bridge — enough to stop you trusting them, not enough
@@ -915,6 +1041,11 @@ read. The repo already has a recipe for mining these in bulk:
     (<a href="#judgment">§12</a>). Transcript reading is how you find out <em>why</em> when that goes
     wrong.</li>
   </ul>
+  <p><em>Since then:</em> the fleet follows all three. The dashboard takes a snapshot of every session
+  about once a minute, and fetches a session's recent turns when asked (they may lag a turn or two).
+  The Overseer asks the dashboard for them (<code>GET /api/messages</code>) rather than grepping hundreds of megabytes of transcripts. Agents
+  publish what they claim in <strong>work reports</strong>, and the reports are kept as claims, never
+  as facts (<a href="#watching-fleet">§13</a>).</p>
 </div>
 
 <h3>You can measure any session's context use, including your own</h3>
@@ -1044,6 +1175,22 @@ exactly the early warning I had concluded did not exist.</p>
   speed decision.</p>
 </div>
 
+<div class="note">
+  <p><span class="label">Since then: how the fleet reads quota.</span> Not through the status line.
+  The Overseer runs <code>overseer usage</code>, which prints the five-hour and seven-day windows for
+  <em>every</em> Claude and Codex subscription registered on the box, each read live from the
+  provider (Claude's usage endpoint, Codex's app server). A separate single-account reading uses the
+  cached figures in <code>~/.claude.json</code>, trusted only while their reset time is still in the
+  future, and 429 rejections in transcripts, which count only while their window has not reset. A
+  reading it cannot vouch for says <em>unknown</em>, never a percentage. A 20-minute timer
+  outside the Overseer checks the box and the limits too.</p>
+  <p>And the policy changed direction. Greg, 2026-09-10: <em>"Our goal should be to maximise progress,
+  which means surfing close to the edge of the limits."</em> So an account has room while its
+  projected use at reset stays under 90%, and the box's <strong>memory</strong>, not the session
+  count, decides when the box is full. The ChatGPT subscription that pays for every Codex review is
+  rationed the same way, because without it nothing lands.</p>
+</div>
+
 <h2 id="lifecycle">7. Lifecycle: spawn, sleep, wake, stop</h2>
 
 <p>All four verbs work. The waking one surprised me.</p>
@@ -1114,6 +1261,28 @@ request that the receiver evaluates, not a kill. For sessions you spawned yourse
 <code>claude stop &lt;id&gt;</code> and <code>TaskStop</code> are the real controls. You cannot
 force-quit somebody else's terminal, which is correct.</p>
 
+<div class="note">
+  <p><span class="label">Since then: the fleet's four verbs.</span></p>
+  <ul style="margin:0.4rem 0 0">
+    <li><strong>Spawn:</strong> <code>mindstone-fleet session new-claude --name &lt;name&gt; --no-attach
+    -p -</code> (or <code>new-codex</code>), with the brief on stdin, in tmux. Claude runs in auto
+    permission mode; Codex runs with <code>--approve-for-me</code>, which sends approval requests to
+    its automatic reviewer instead of waiting for a person.
+    <code>--wait 5h</code> creates the session now and starts it later, so a whole wave goes out in
+    one pass.</li>
+    <li><strong>Sleep:</strong> a pause is a message, not a kill: <em>finish the step you are in,
+    commit and push, then start nothing until the Overseer says resume.</em> An idle session costs
+    nothing.</li>
+    <li><strong>Wake:</strong> after a reboot, <code>mindstone-fleet box recover --resume
+    &lt;name|id&gt;</code> brings one Claude conversation back, verified, by its recorded conversation
+    id; <code>--resume-all</code> does every one in turn, 120 seconds apart. Codex sessions are
+    reported, never resumed. The Overseer itself is revived by
+    a systemd timer: a resumer inside the thing being resumed would not be much use.</li>
+    <li><strong>Stop:</strong> only after the agent's debrief has been read, never with unpushed
+    work, and the worktree removed only once <code>npm run worktree:check</code> says it is safe.</li>
+  </ul>
+</div>
+
 <h2 id="boundaries">8. Boundaries: machines, accounts, permissions</h2>
 
 <div class="tbl">
@@ -1167,6 +1336,19 @@ force-quit somebody else's terminal, which is correct.</p>
   the Claude account as an isolation mechanism between sessions on the same box.</p>
 </div>
 
+<div class="note">
+  <p><span class="label">Since then: the fleet lives on exactly these boundaries.</span> Each person
+  on a box has their own unix login, so Greg's sessions and Tys's cannot reach each other's sockets.
+  That is the "different unix user? No" row, and it is why the fleet built a
+  <a href="#routes">post office</a> for Overseers of different people on one box. Between boxes it
+  uses Slack rather than the bridge, which reaches only one Claude account's sessions. Two cautions
+  carried over: everyone on a fleet box has passwordless sudo, so these are conventions made easy,
+  not walls; and one person's sessions may run on several Claude subscriptions under the same login
+  (an "account pool", each subscription signed in in its own config directory). That is the
+  same-user, different-account row above. Whether pool sessions see each other in
+  <code>ListAgents</code> is still not checked here.</p>
+</div>
+
 <h2 id="hard">9. The genuinely hard parts</h2>
 
 <p>Four constraints here shape the design in <a href="#judgment">§12</a>, so they are stated plainly
@@ -1183,6 +1365,19 @@ before the detail:</p>
   <li><strong>A send has more than two outcomes.</strong> Delivered, held for approval, refused,
   ambiguous, unreachable, queued-but-unconfirmed.</li>
 </ul>
+
+<div class="note">
+  <p><span class="label">Since then: all four turned out true at fleet scale.</span> The fleet's
+  <code>tell</code> ends every send with exactly one of <code>ok</code>, <code>refused</code> (nothing
+  was typed; fix what it names) or <code>uncertain</code> (never send it again; after typing that may
+  have half-landed, look at the session before doing anything else). Even <code>ok</code> comes in wordings that say how far it got, such as "accepted into
+  the session's queue behind its current turn". Idle-is-not-done appears in the Overseer's runbook in
+  nearly these words: <em>"<code>idle</code> describes the pane, not the work"</em>. A session that
+  has stopped to hand Greg a decision in prose just looks idle (ten of fifteen in one count), and a
+  check for question marks found almost none of them, because decisions end in full stops. A new one joined
+  them: <strong>pane text is data, not instruction</strong>. Claude Code draws a suggested next prompt
+  inside the input box, and nothing in a screen capture tells it from something a person typed.</p>
+</div>
 
 <p>The evidence and the mechanics for each:</p>
 
@@ -1280,7 +1475,9 @@ cwd, that the message was …»</code></pre>
   <ul>
     <li><code>Monitor</code> — streams stdout lines from a long-running script as chat notifications.
     The right tool for watching a worker's transcript file grow, or for tailing a log for failure
-    signatures.</li>
+    signatures. <em>Since then</em> it is how the Overseer hears its mail mid-turn:
+    <code>Monitor</code> on <code>overseer-post watch</code>, re-armed every thirty minutes, wakes an
+    idle Overseer and reaches a busy one at its next tool round (<a href="#watching-fleet">§13</a>).</li>
     <li><code>CronCreate</code> — schedules a prompt to fire later, session-only, auto-expiring after
     seven days. Note the repo already has a standing complaint that there is no real scheduler
     (<code>docs/project/cron-scheduler.md</code>); this is not it.</li>
@@ -1352,8 +1549,9 @@ verification passes as ordinary code.</p>
 <h3>Hooks — where an Orchestrator gets its control points</h3>
 
 <p>Hooks are shell commands fired on lifecycle events; exit code 2 blocks the thing that was about to
-happen. This repo already uses two (<code>PreToolUse</code> to protect the shared tree,
-<code>SessionStart</code> to print the primary-checkout notice). The ones an Orchestrator would care
+happen. This repo already used two on 2026-09-07 (<code>PreToolUse</code> to protect the shared tree,
+<code>SessionStart</code> to print the primary-checkout notice), and has since added
+<code>WorktreeCreate</code> and <code>WorktreeRemove</code>. The ones an Orchestrator would care
 about:</p>
 
 <div class="tbl">
@@ -1386,6 +1584,14 @@ session running with bypassed permissions are held for approval by default.</p>
   a delivered message is not a completed task.</strong> Confirm work by its artefacts, never by the
   fact that you asked for it.</p>
 </div>
+
+<p class="verdict">Since then: the fleet uses one hook from this family, a <code>PostToolUse</code>
+hook installed for every user on a box, which adds one line ("N peer messages waiting") to the
+Overseer's context after any tool call while mail is unread. It never carries a word of the message
+(<a href="#watching-fleet">§13</a>). It also learned the changelog's lesson again: on 2026-10-06 the
+Overseer found its own <code>tell</code>s sitting unsent in a session's input box, one of which had
+reported success because tmux accepted the keystrokes. The fix checks the receiver's state after
+Enter, and the inbox route that followed types nothing at all.</p>
 
 <h2 id="protocols">11. Crossing the boundaries Claude Code won't</h2>
 
@@ -1490,7 +1696,32 @@ docs and examples — so coding models have seen it — and a well-designed, typ
   </ul>
 </div>
 
+<div class="note">
+  <p><span class="label">Since then: no protocol was adopted, and no Postgres either.</span> The
+  principle held: durable state outside any conversation, and messages only for poking. The stores
+  turned out to be even duller than a table:</p>
+  <ul style="margin:0.4rem 0 0">
+    <li><strong>Append-only files on the box</strong>, under
+    <code>~/.local/state/mindstone-fleet/</code>: the event log, decisions, questions, work reports,
+    received messages. One writer each, behind a lock.</li>
+    <li><strong>Linear for the work queue</strong> since 2026-09-23: tickets assigned to a person,
+    and moving one to Todo is the clearest "start this".</li>
+    <li><strong>Git refs on GitHub for claims</strong> that must hold across boxes ("this Sentry issue
+    is mine until T"), each write a compare-and-swap on the server.</li>
+    <li><strong>A file-drop post office</strong> between people on one box, and <strong>Slack</strong>
+    between boxes (<a href="#routes">§13</a>). A research pass on 2026-09-23 compared brokers and
+    chat protocols and found none that solved the hard part, which is telling a session that is
+    busy mid-turn.</li>
+  </ul>
+  <p>Codex sits beside Claude rather than on the bus. A Codex worker is a tmux session the Overseer
+  steers by <code>tell</code>, typed. A Codex review is a subprocess run by <code>run-codex</code>.
+  Neither uses <code>SendMessage</code>.</p>
+</div>
+
 <h2 id="judgment">12. Designing the Orchestrator</h2>
+
+<p class="verdict">Written on 2026-09-07, before anything was built, and left as written. How each
+recommendation fared is <a href="#scorecard">§13's scorecard</a>.</p>
 
 <h3>Trade-offs and decision points</h3>
 
@@ -1636,11 +1867,361 @@ something measured earlier, not a preference.</p>
   <li>Since quota is metered per-machine in the status line payload but pooled server-side, how far
   apart do the Mac's and the box's numbers drift under a real fan-out? Worth measuring before trusting
   either one as the budget signal.</li>
-  <li>What is the practical ceiling on concurrent background sessions on one machine — memory, file
-  descriptors, or quota? I ran three; the answer at thirty is unknown.</li>
+  <li><s>What is the practical ceiling on concurrent background sessions on one machine — memory, file
+  descriptors, or quota? I ran three; the answer at thirty is unknown.</s>
+  <em>Answered since:</em> <strong>memory</strong>. The fleet runs 20–35 sessions a box, and what
+  brings a box down is several heavy test runs at once. One Rebel lint step alone takes about
+  10 GiB. On 2026-09-14 an out-of-memory kill ended every session on the old box at once. Heavy runs
+  now take one of a fixed number of slots, and the Overseer adds up the memory before starting
+  one.</li>
   <li>Would the <a href="#scale">Workflow tool</a> do the whole job better than a hand-rolled
-  Orchestrator? It is the documented answer for scale, and I have not tried it.</li>
+  Orchestrator? It is the documented answer for scale, and I have not tried it. <em>Since then:</em>
+  the supervisor was hand-rolled, because the job is long-lived. Whether Workflow suits the bounded
+  fan-outs inside it is still untested here.</li>
 </ul>
+
+<h2 id="built">13. What was built: the Overseer fleet, as of 2026-10-12</h2>
+
+<p>The Orchestrator this page was written to design was built over the following weeks. It is called
+the <strong>Overseer</strong>, and it lives in Mindstone's private repo
+<code>fleet-overseer-landing-board</code>, the staging ground for merging Greg's Overseer with Josh's
+coordinator. Everything in this section comes from that repo's docs as of 2026-10-12; the doc each
+fact comes from is named in <code>code</code> so you can find it there.</p>
+
+<div class="model">
+  <strong>An airport, not a chatbot.</strong>
+  <p>The fleet's own tutorial puts it this way. The sessions in tmux are the aircraft. The dashboard
+  server is the radar. The daemon is the flight recorder. The Overseer is the controller who makes the
+  judgement calls. If the controller and the flight recorder disagree, the recorder wins: the
+  Overseer's conversation compacts, the record does not.</p>
+</div>
+
+<h3>The shape</h3>
+
+<ul>
+  <li><strong>Boxes.</strong> Two always-on Hetzner machines: <code>team-hetzner-metal1</code>, the
+  main box since 2026-09-16, and <code>team-hetzner-metal2</code>, built 2026-09-25. The first
+  box, where §4's spikes reached, is retired. <span class="verdict">(<code>docs/project/boxes.md</code>)</span></li>
+  <li><strong>People.</strong> Each person has their own login and their own <em>cell</em>: a tmux
+  server, a dashboard, a daemon, a keep-alive and an Overseer. On metal1: Greg, Tys and Liam. On
+  metal2: Greg, Liam, Peter and Harry. Josh runs a separate system, the Product Factory, on a box of
+  his own. It is not wired into this one, but it posts on the same Slack board.</li>
+  <li><strong>The Overseer</strong> is a permanent Claude session named <code>overseer</code>, one per
+  person per box. It runs on the cleverest Claude, chosen by role, not by version (Opus today). Its
+  job, in Greg's words (2026-09-11), is <em>"decomposing, prioritising (by a combination of ease and
+  value), queuing, farming out, monitoring progress and bottlenecks etc, then closing them off"</em>.
+  It does very little of the work itself. <span class="verdict">(<code>docs/project/overseer.md</code>)</span></li>
+  <li><strong>The daemon</strong> is deterministic at its core. It folds what the dashboard sees into
+  an append-only event log, with a small, budgeted amount of model help for sorting what needs
+  attention. It records; it does not steer. Its standing jobs and automatic actions are built but not
+  armed, so dispatch today is the Overseer session's judgement, not a scheduler.</li>
+  <li><strong>The dashboard</strong> is one web page for every session: what each is doing, what
+  needs a person, the usage limits, and a box to type to a session.</li>
+  <li><strong>Workers</strong> are Claude Code and Codex sessions in tmux, 20–35 a box, each in its
+  own git worktree, briefed with a plan doc, a few stages, and a GPT review at the end of each.</li>
+</ul>
+
+<h3 id="routes">Who talks to whom</h3>
+
+<p>Here is the picture §1 drew for raw Claude Code, redrawn for the fleet. Greg's Overseer sits in
+the middle; every spoke is a different route, with its own rules.</p>
+
+<figure class="fig">
+  <div class="key">
+    <span><i class="sw" style="background:var(--local)"></i> session on this box</span>
+    <span><i class="sw" style="background:var(--disk)"></i> file on disk</span>
+    <span><i class="sw" style="background:var(--cloud)"></i> outside service</span>
+    <span><i class="sw" style="background:var(--remote)"></i> another box</span>
+  </div>
+  <div class="scroll">
+  <svg viewBox="0 0 860 430" role="img" aria-label="The routes between Greg's Overseer and everything it talks to">
+    <defs>
+      <marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+
+    <!-- Greg -->
+    <rect x="340" y="16" width="180" height="56" rx="8" fill="var(--card)" stroke="var(--ink-soft)" stroke-width="1.6"/>
+    <text x="430" y="40" font-size="14" font-weight="700" text-anchor="middle" fill="var(--ink)">Greg</text>
+    <text x="430" y="59" font-size="12" text-anchor="middle" fill="var(--ink-soft)">phone · laptop</text>
+    <g color="var(--ink-soft)">
+      <path d="M430,76 L430,174" stroke="currentColor" stroke-width="1.8" fill="none" marker-start="url(#ah5)" marker-end="url(#ah5)"/>
+    </g>
+    <text x="440" y="114" font-size="12" fill="var(--ink-soft)">Slack DM · dashboard</text>
+    <text x="440" y="132" font-size="12" fill="var(--ink-soft)">questions queue</text>
+
+    <!-- Overseer (hub) -->
+    <rect x="340" y="180" width="180" height="66" rx="9" fill="var(--local-bg)" stroke="var(--local)" stroke-width="2.2"/>
+    <text x="430" y="207" font-size="14" font-weight="700" text-anchor="middle" fill="var(--ink)">Greg's Overseer</text>
+    <text x="430" y="227" font-size="12" text-anchor="middle" fill="var(--ink-soft)">one per person per box</text>
+
+    <!-- workers -->
+    <rect x="20" y="180" width="186" height="66" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="113" y="207" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">his workers, in tmux</text>
+    <text x="113" y="227" font-size="12" text-anchor="middle" fill="var(--ink-soft)">Claude · Codex</text>
+    <g color="var(--local)">
+      <path d="M210,213 L336,213" stroke="currentColor" stroke-width="1.8" fill="none" marker-start="url(#ah5)" marker-end="url(#ah5)"/>
+    </g>
+    <text x="273" y="204" font-size="12" text-anchor="middle" fill="var(--ink-soft)">tell · SendMessage</text>
+    <text x="273" y="231" font-size="12" text-anchor="middle" fill="var(--ink-soft)">report</text>
+
+    <!-- Tys's Overseer -->
+    <rect x="644" y="180" width="196" height="66" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="742" y="207" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">Tys's Overseer</text>
+    <text x="742" y="227" font-size="12" text-anchor="middle" fill="var(--ink-soft)">same box, other login</text>
+    <g color="var(--disk)">
+      <path d="M524,213 L640,213" stroke="currentColor" stroke-width="1.8" fill="none" marker-start="url(#ah5)" marker-end="url(#ah5)"/>
+    </g>
+    <text x="582" y="204" font-size="12" text-anchor="middle" fill="var(--ink-soft)">post office</text>
+    <text x="582" y="231" font-size="12" text-anchor="middle" fill="var(--ink-faint)">files on disk</text>
+
+    <!-- reviewers -->
+    <rect x="20" y="352" width="196" height="62" rx="8" fill="var(--card)" stroke="var(--local)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text x="118" y="377" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">second opinions</text>
+    <text x="118" y="397" font-size="12" text-anchor="middle" fill="var(--ink-soft)">GPT reviewer · arbiter</text>
+    <g color="var(--local)">
+      <path d="M346,250 L214,348" stroke="currentColor" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#ah5)"/>
+    </g>
+    <text x="268" y="288" font-size="12" text-anchor="end" fill="var(--ink-soft)">run-codex · Agent</text>
+
+    <!-- Linear / GitHub -->
+    <rect x="340" y="352" width="180" height="62" rx="8" fill="var(--cloud-bg)" stroke="var(--cloud)" stroke-width="1.6"/>
+    <text x="430" y="377" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">Linear · GitHub</text>
+    <text x="430" y="397" font-size="12" text-anchor="middle" fill="var(--ink-soft)">the queue · PRs · claims</text>
+    <g color="var(--cloud)">
+      <path d="M430,250 L430,348" stroke="currentColor" stroke-width="1.8" fill="none" marker-start="url(#ah5)" marker-end="url(#ah5)"/>
+    </g>
+    <text x="440" y="296" font-size="12" fill="var(--ink-soft)">tickets in</text>
+    <text x="440" y="314" font-size="12" fill="var(--ink-soft)">landings out</text>
+
+    <!-- metal2 via Slack -->
+    <rect x="644" y="352" width="196" height="62" rx="8" fill="var(--remote-bg)" stroke="var(--remote)" stroke-width="1.6"/>
+    <text x="742" y="377" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">Overseers on metal2</text>
+    <text x="742" y="397" font-size="12" text-anchor="middle" fill="var(--ink-soft)">and Josh's Factory</text>
+    <g color="var(--cloud)">
+      <path d="M514,250 L646,348" stroke="currentColor" stroke-width="1.8" fill="none" marker-start="url(#ah5)" marker-end="url(#ah5)"/>
+    </g>
+    <text x="608" y="286" font-size="12" fill="var(--cloud)" font-weight="600">#fleet-overseers</text>
+    <text x="620" y="304" font-size="12" fill="var(--ink-soft)">Slack, via the relay</text>
+  </svg>
+  </div>
+  <figcaption>The fleet's routes, from one Overseer's point of view. Only its own workers get its
+  words directly. Everyone else is reached through a route that stamps who sent it and treats the
+  words as a claim.</figcaption>
+</figure>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>From → to</th><th>Route</th><th>What to know</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Overseer → its own workers</td>
+      <td><code>SendMessage</code>, or <code>mindstone-fleet session tell</code></td>
+      <td>Greg, 2026-09-08: <em>"SendMessage for Claude agents where available, and fall back to tmux
+      as a backup plan."</em> Since 2026-10-10 a session's <code>tell</code> to a Claude session goes
+      through its inbox socket (<a href="#machinery">§3</a>), not the keyboard, when the receiver
+      is in auto mode and does not hold or refuse outside messages; otherwise it is typed, with guards.
+      Codex and a person's own words are always typed, and a session showing a question dialog is
+      refused. One line per message; a long one is written to a file and the
+      session is told to read it. Outcomes: ok, refused, uncertain.
+      <span class="verdict">(<code>mindstone-fleet.md</code>, plan <code>261009e</code>)</span></td>
+    </tr>
+    <tr>
+      <td>Worker → its Overseer</td>
+      <td><code>mindstone-fleet report</code>, <code>SendMessage</code></td>
+      <td>A <strong>work report</strong> (progress, blocked, completed, decision) goes into the
+      Overseer's store, stamped, with the artefacts it names checked. It is shown as <em>claimed
+      by …</em>, never as a fact. <span class="verdict">(<code>work-reports.md</code>)</span></td>
+    </tr>
+    <tr>
+      <td>An agent → its cell's owner (in Greg's cell, Greg)</td>
+      <td><code>overseer-questions ask</code></td>
+      <td><strong>The one list Greg reads.</strong> Greg, 2026-09-12: <em>"The number one thing I want
+      is to be able to see a list of questions, really well explained."</em> A question carries who is
+      asking, the background, each option with its cost, and a recommendation. One that is blocking
+      also pings him on Slack, and he can answer by replying. Recording an answer is not delivering it: the
+      answer reaches the asking session separately, with its own receipt.
+      <span class="verdict">(<code>questions.md</code>, <code>needs-user-input.md</code>)</span></td>
+    </tr>
+    <tr>
+      <td>Greg → his Overseer</td>
+      <td>Slack DM, the dashboard, <code>mindstone-fleet overseer tell</code></td>
+      <td>A DM reply reaches the Overseer as a claim from Slack. The Overseer records his answer and
+      DMs back, and asks him to confirm any option that is one-way before acting on it.</td>
+    </tr>
+    <tr>
+      <td>Overseer → another person's Overseer, same box</td>
+      <td>The <strong>post office</strong>: <code>overseer-post send</code></td>
+      <td>A drop directory per person that anyone can write into and only its owner's daemon reads.
+      The sender is whoever the kernel says owns the file, not what the file claims. It is delivered
+      only to the other <em>Overseer</em>, never to its agents: Greg, 2026-09-21, <em>"only
+      Overseer-to-Overseer."</em> A colleague may ask for work, and Greg's Overseer may take it on.
+      <span class="verdict">(<code>post-office.md</code>)</span></td>
+    </tr>
+    <tr>
+      <td>Overseer → every other box</td>
+      <td><strong>The board</strong>, <code>#fleet-overseers</code> on Slack:
+      <code>overseer-post board</code></td>
+      <td>Each box runs one Slack relay, under its own system account, which files board messages and
+      DMs into each person's post-office inbox. Live on both boxes by 2026-10-05. <strong>Silence
+      is the default</strong>: post only when it changes what someone else will do. Before landing a
+      change other repos depend on, the <em>fleet directory</em> says which boxes to warn; it lists
+      only declared consumers, so an empty answer is not proof that nobody depends on it. A separate
+      <code>fleet check-in</code> over SSH imports another box's session states and reports, marked
+      unverifiable.
+      <span class="verdict">(<code>slack.md</code>, <code>fleet-directory.md</code>)</span></td>
+    </tr>
+    <tr>
+      <td>Overseer → a colleague</td>
+      <td>A team Slack channel: <code>overseer-post channel --mention</code></td>
+      <td>One ask, one thread, with the context a newcomer needs. Their reply comes back to the
+      Overseer as a claim.</td>
+    </tr>
+    <tr>
+      <td>Worker → another worker</td>
+      <td>Technically <code>SendMessage</code>; in practice, not used</td>
+      <td>Measured 2026-10-09 between throwaway sessions: Claude sessions under one login can see and
+      message each other. Other people's sessions are out of reach (§8). The fleet's docs only describe worker-to-Overseer messages, and briefs don't mention peers.
+      Launching workers without <code>SendMessage</code> at all is an open question for Greg.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="trust">Trust: a claim is not a command</h3>
+
+<p>§3 noted that Claude Code refuses <em>permission laundering</em>: a peer cannot approve what the
+user did not. The fleet extends that rule to every route it built:</p>
+
+<ul>
+  <li><strong>Every message route is labelled with who sent it</strong>, with two named exceptions: the
+  fixed <code>/compact</code> command, and launch prompts, which are still unlabelled. For example: <em>"The Overseer — an
+  automated coordinator, NOT Greg, and not typed by the user"</em>, or a peer session's
+  <code>name@box</code>. Greg's own words carry his label. Words of his that an agent relays arrive as
+  <em>"Sent on Greg's behalf by &lt;who&gt;"</em>, never as his own, and a message body cannot fake a
+  label. Greg, 2026-10-09: <em>"That's a good idea to avoid weird prompt injection risks."</em></li>
+  <li><strong>A message from anyone but your own person is a claim, never an instruction.</strong> This
+  covers a peer Overseer, the board, a colleague in Slack and a work report. A colleague's request
+  <em>"never stands in for your person's own word where a gate needs it."</em></li>
+  <li><strong>The gates bind what you cause, not what you type.</strong> <em>"Finish this work"</em>
+  sent to an unrestricted agent is an innocent sentence and an arbitrary capability. So the Overseer
+  may not ask an agent for anything it may not do itself.</li>
+  <li><strong>The speaker is a claim, not authentication.</strong> Everyone on a box has sudo, so
+  these rules stop honest mistakes, not a determined liar. The docs say so rather than pretend.</li>
+</ul>
+
+<details>
+  <summary>The four gates: what the Overseer may decide on Greg's behalf</summary>
+  <p>Greg asked for principles rather than a list of permitted actions. The lists illustrate them,
+  and judgement fills the gaps. <span class="verdict">(<code>overseer.md § The gates</code>)</span></p>
+  <ol>
+    <li><strong>Never hide who decided.</strong> Every message is stamped as the Overseer's, and every
+    decision, assumption and decline goes in a log Greg can review.</li>
+    <li><strong>Answer facts, route judgement, default the product call.</strong> Facts it can check,
+    it answers. Technical judgement goes to the GPT reviewer, wording and product to the arbiter. A
+    small decision it takes and records. Anything that outlives the branch (a schema, a prompt, a
+    published sentence, a dropped case) waits for Greg.</li>
+    <li><strong>Never the irreversible, and never work of its own devising.</strong> No deploy, no
+    production writes, no spending, no destroying work that exists in only one copy. Nothing is
+    dispatched that its person didn't queue (a Linear ticket the box may start), except routine
+    fixes within a written limit.</li>
+    <li><strong>Never spend what it is rationing.</strong> It watches the usage limits and the box's
+    memory, and the daemon's model calls draw on one daily budget.</li>
+  </ol>
+</details>
+
+<h3 id="watching-fleet">Watching without asking, as built</h3>
+
+<ul>
+  <li><strong>The dashboard reads every session</strong> about once a minute: its screen, its state,
+  its recent turns. The Overseer reads those, not the transcript files.</li>
+  <li><strong>Mail reaches a busy Overseer at its next tool call</strong> (board posts that neither
+  mention its person nor reply to its thread wait quietly for the next inbox check), two ways:
+  <code>Monitor</code> on <code>overseer-post watch</code>, re-armed every thirty minutes, and a
+  <code>PostToolUse</code> hook that adds "N peer messages waiting". Neither carries a word of the
+  message: the Overseer reads it with <code>overseer-post inbox</code>, fenced as a claim.</li>
+  <li><strong>The tick</strong>, about every half hour: usage and memory first, then close out what
+  finished, then pull from the queue if there is room. A pause it sends is checked later to see
+  that the session woke up again. Greg asked for that second half explicitly.</li>
+  <li><strong>Ask in a form that cannot be answered from memory.</strong> <em>"Are you done?"</em>
+  invites a recited yes. <em>"Should <code>dev</code> have this tonight?"</em> forces a look. This is
+  §12's "verify by artefact", turned into a habit of phrasing.</li>
+</ul>
+
+<h3>Delegation and second opinions</h3>
+
+<ul>
+  <li><strong>Inside a session</strong>, the <code>Agent</code> tool's subagents and forks
+  (<a href="#kinds">§2</a>) do the legwork. A job is run the way <code>engineering-manager.md</code>
+  says: a plan doc, a few stages, the work delegated, and the job lead keeping the plan, the briefs and
+  the commits.</li>
+  <li><strong>The GPT reviewer</strong> is the cross-family check, run as a subprocess with
+  <code>scripts/run-codex.ts</code>. It reviews the plan before the build and the code after every
+  stage, and a code review may fix what it finds. After two rounds the job lead settles the rest and
+  writes down why, except that overruling a P0 or P1 goes to the arbiter or Greg first, and a fix
+  made after round two gets a narrow check of its own.</li>
+  <li><strong>The arbiter</strong> settles product and wording calls, and two options that both look
+  fine.</li>
+  <li><strong>Models are named by role or tier, never by version.</strong> The versions live once, in
+  <code>tools/fleet/models.ts</code>. Today the <code>overseer</code>, <code>arbiter</code> and
+  <code>claudeWorker</code> roles are Opus; <code>reviewer</code> and <code>codexWorker</code> are
+  the latest GPT Sol. A daily check asks Greg when one falls behind.</li>
+  <li><strong>Codex sessions</strong> do much of the fleet repo's own work. A Rebel job keeps a Claude
+  session as its lead, because Rebel's workflow runs through Claude Code's subagents and skills; the
+  lead may still hand implementation to Codex.</li>
+</ul>
+
+<h3>Landing work</h3>
+
+<p>Two rules decide how finished work reaches the shared branch, and both bear on orchestration,
+because a landing is where agents queue for one shared resource.</p>
+
+<ul>
+  <li><strong>Rebel (Mindstone's product).</strong> Most sessions still land <em>directly</em> on
+  <code>dev</code> through Rebel's safe-sync script. On a fleet box they push only on the Overseer's
+  GO, one at a time. A pull-request route is being piloted ahead of a full switch: a session publishes
+  its branch, opens a PR, and arms auto-merge. Only a worktree switched to the PR route uses it, and
+  pushing the branch still runs the full local gate, so it still asks the Overseer for a slot. <code>rebel-gate</code> has been a required check on
+  <code>dev</code> since 2026-10-07, so GitHub merges only once it is green. Greg, 2026-10-10:
+  <em>"Yes, I want any agent to be able to merge without review if the PR is green."</em> A PR that
+  needs a person's judgement (a risky area, landing order, a reviewer finding overridden) is held
+  instead, and says so in its first line.
+  <span class="verdict">(Rebel <code>docs/project/PROJECT_OVERRIDES.md § Landing</code>;
+  <code>overseer.md</code>)</span></li>
+  <li><strong>The fleet repo</strong> lands by pushing to <code>dev</code>. Nobody pushes to
+  <code>main</code> by hand.</li>
+</ul>
+
+<h3 id="scorecard">How the 2026-09-07 recommendations fared</h3>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>§12 said</th><th>What happened</th></tr></thead>
+  <tbody>
+    <tr><td>Try Workflow first</td><td><span class="part">Not for the supervisor.</span> The job turned out to be long-lived and interactive, which is the case §10 said to hand-roll.</td></tr>
+    <tr><td>Put the state in Postgres, not the Orchestrator's head</td><td><span class="yes">The principle, yes; the store, no.</span> Append-only files on the box, Linear for the queue, git refs for claims. <em>"Your context is a cache, not the record"</em> is in the Overseer's runbook.</td></tr>
+    <tr><td>One worker per worktree</td><td><span class="yes">Yes</span>, as a rule in every repo the fleet works on.</td></tr>
+    <tr><td>Read the session id back; never assume it</td><td><span class="yes">Yes.</span> The conversation id is recorded at launch, and steering checks the pane and conversation, not the name.</td></tr>
+    <tr><td>Results in the row; messages only for nudging</td><td><span class="yes">Mostly.</span> Results are commits, plan docs and work reports; messages poke. What the Overseer <em>says</em> to an agent is not kept by the fleet, so it writes anything it will need later into a plan or ticket.</td></tr>
+    <tr><td>Log the quota and spend it deliberately</td><td><span class="yes">Yes, and more boldly than proposed.</span> Every account is read, and the goal is to use most of each window, not to save it. Memory turned out to be the tighter limit.</td></tr>
+    <tr><td>Put a supervisor outside the fleet</td><td><span class="yes">Yes.</span> A systemd keep-alive revives the Overseer, a 20-minute timer checks the box and the limits, and (live on metal2 first) a person is told on Slack when their Overseer is down.</td></tr>
+    <tr><td>Verify by artefact, never by report</td><td><span class="yes">Yes.</span> Work reports are claims; a <code>tell</code> that cannot see its message arrive says <em>uncertain</em>.</td></tr>
+    <tr><td>Run it on the box, not the laptop</td><td><span class="yes">Yes</span>, on two boxes, with one Overseer per person on each.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <p><span class="label">What the original page did not foresee.</span> It imagined one Orchestrator
+  for one person. The fleet's hardest new problems came from <em>several people</em>: whose Overseer
+  may say what to whom, how a busy Overseer hears a colleague at once, and how two Overseers avoid
+  fixing the same bug. The answers were the post office, the board, claims, and the rule that a
+  colleague's word is a claim. And the most costly failures were not addressing at all. They were a
+  session stalled at a permission dialog with nobody awake, a box running out of memory, and a send
+  that reported success because tmux accepted the keystrokes. Every one is the same class this page
+  warned about: something reporting success while doing nothing.</p>
+</div>
 
 <h2 id="faq">FAQ</h2>
 
@@ -1670,12 +2251,37 @@ no polling, and it costs the other session nothing.</p>
 <h4>Can the Orchestrator talk to Codex this way?</h4>
 <p>No — the bus is Claude-only and account-bound. Keep driving Codex as a subprocess via
 <code>scripts/run-codex.ts</code>, and if the Orchestrator needs to coordinate with it, put the
-handoff in a database row rather than inventing a channel (<a href="#protocols">§11</a>).</p>
+handoff in a database row rather than inventing a channel (<a href="#protocols">§11</a>).
+<em>Since then:</em> the fleet also runs Codex as interactive workers in tmux, and the Overseer
+reaches them with <code>tell</code>, which types into the terminal for Codex. A Codex worker reports
+back with <code>mindstone-fleet report</code>.</p>
 
 <h4>How do I see my own quota right now?</h4>
 <p><code>/usage</code> in an interactive session. Bear in mind it counts <em>this machine's</em>
 sessions only, so with a fleet across the Mac and the box, neither machine's figure is the real
-total.</p>
+total. <em>On a fleet box:</em> the dashboard's Usage limits tab, or
+<code>npx tsx scripts/overseer.ts usage</code>, which reads every Claude and Codex subscription the
+box can launch on (<a href="#watching">§6</a>).</p>
+
+<h4>How does an agent ask Greg something?</h4>
+<p>Through <code>npx tsx scripts/overseer-questions.ts ask</code>, starting from its template, so the
+question lands in the one list he reads, shaped so he can answer without scrolling. A blocking one
+pings him on Slack. The Overseer sends a bare "A or B?" back to the agent to rewrite
+(<a href="#routes">§13</a>).</p>
+
+<h4>Can my Overseer talk to a colleague's agents?</h4>
+<p>No, by design: only Overseer to Overseer. It can ask a colleague's Overseer, through the post office
+on the same box or the board between boxes, and that Overseer decides. A colleague may ask Greg's
+Overseer for work, and it may take it on, but that request never counts as Greg's own word where a
+gate needs it (<a href="#trust">§13</a>).</p>
+
+<h4>If the Overseer passes on "Greg says yes", is that Greg's approval?</h4>
+<p>Only when it traces to Greg himself: his reply to the question, by Slack DM or on the dashboard,
+which the Overseer passes on and records as his answer, relayed by the Overseer. If the option he
+picked is one-way, the Overseer asks him to confirm it first. Words an agent relays for him arrive
+labelled <em>"Sent on Greg's behalf by …"</em>, never as his own. Claude Code itself tells a
+receiving session never to treat a peer message as the user's approval. A peer, a board post or a
+colleague cannot approve anything for him.</p>
 
 <h4>Is any of this in the product?</h4>
 <p>No. This is Claude Code's own machinery, on the development machines. Nothing here touches
@@ -1700,6 +2306,29 @@ Spideryarn's pipeline, database or reading view.</p>
 </table>
 </div>
 
+<h3>The fleet's own commands (since then, 2026-10-12)</h3>
+<p class="verdict">Run on a fleet box, from the <code>fleet-overseer-landing-board</code> checkout
+(<code>mindstone-fleet</code> also runs from a laptop with <code>FLEET_HOST</code> set). Its
+<code>docs/project/commands.md</code> lists every command.</p>
+<div class="tbl">
+<table>
+  <thead><tr><th>Want to</th><th>Command</th><th>Who runs it</th></tr></thead>
+  <tbody>
+    <tr><td>See who is on what</td><td><code>mindstone-fleet session list</code></td><td>anyone; the Overseer before every dispatch</td></tr>
+    <tr><td>Start a worker</td><td><code>mindstone-fleet session new-claude --name &lt;n&gt; --no-attach -p -</code> (or <code>new-codex</code>; <code>--wait 5h</code> to start later)</td><td>the Overseer, or a person</td></tr>
+    <tr><td>Say one line to a running session</td><td><code>mindstone-fleet session tell &lt;n&gt; -p -</code>; <code>overseer tell</code> for whoever holds the Overseer claim</td><td>the Overseer, a person, or a session naming itself with <code>--as-session</code></td></tr>
+    <tr><td>Report progress or completion</td><td><code>mindstone-fleet report progress|blocked|completed|decision</code></td><td>a worker</td></tr>
+    <tr><td>Ask Greg</td><td><code>npx tsx scripts/overseer-questions.ts ask</code> (<code>template</code> first)</td><td>any agent</td></tr>
+    <tr><td>Message another person's Overseer</td><td><code>npx tsx scripts/overseer-post.ts send</code>; read with <code>inbox</code>, mark read with <code>ack</code></td><td>an Overseer only; the command refuses anyone else</td></tr>
+    <tr><td>Post to every box</td><td><code>npx tsx scripts/overseer-post.ts board "…"</code></td><td>an Overseer</td></tr>
+    <tr><td>Hear mail mid-turn</td><td><code>Monitor</code> on <code>npx tsx scripts/overseer-post.ts watch</code></td><td>an Overseer, every tick</td></tr>
+    <tr><td>Read the usage limits</td><td><code>npx tsx scripts/overseer.ts usage</code></td><td>the Overseer, every tick</td></tr>
+    <tr><td>Get a cross-family review</td><td><code>npx tsx scripts/run-codex.ts --prompt-file … --output …</code></td><td>any job lead, at the end of every stage</td></tr>
+    <tr><td>See which model each role is</td><td><code>npx tsx scripts/models.ts</code></td><td>anyone</td></tr>
+  </tbody>
+</table>
+</div>
+
 <h3>File map</h3>
 <div class="tbl">
 <table>
@@ -1710,7 +2339,7 @@ Spideryarn's pipeline, database or reading view.</p>
     <tr><td><code>/tmp/cc-socks/&lt;pid&gt;.sock</code></td><td>Same-machine message transport, owner-only</td></tr>
     <tr><td><code>~/.claude/projects/&lt;cwd-slug&gt;/&lt;uuid&gt;.jsonl</code></td><td>Full transcript: every message, tool call, token count, compaction and rate-limit event</td></tr>
     <tr><td><code>~/.claude/teams/session-&lt;id&gt;/config.json</code></td><td>In-process subagent roster, including each one's full prompt</td></tr>
-    <tr><td><code>.claude/settings.json</code></td><td>Per-repo permissions and hooks (this repo wires <code>PreToolUse</code> and <code>SessionStart</code>)</td></tr>
+    <tr><td><code>.claude/settings.json</code></td><td>Per-repo permissions and hooks (this repo wires <code>PreToolUse</code>, <code>SessionStart</code>, <code>WorktreeCreate</code> and <code>WorktreeRemove</code>, as of 2026-10-12)</td></tr>
     <tr><td><code>.claude/agents/*.md</code></td><td>Custom agent definitions — only <code>name</code> and <code>description</code> are required; also <code>model</code>, <code>tools</code>, <code>skills</code>, <code>permissionMode</code>, <code>maxTurns</code>, <code>isolation: worktree</code></td></tr>
     <tr><td><code>~/.claude/settings.json</code> → <code>statusLine</code></td><td>The command that receives live <code>rate_limits</code> and <code>context_window</code> JSON on stdin every turn — the Orchestrator's quota feed (<a href="#watching">§6</a>)</td></tr>
   </tbody>
@@ -1731,6 +2360,31 @@ Spideryarn's pipeline, database or reading view.</p>
   <li><span class="label">Permission laundering</span> — asking a peer to do what you were denied.
   Explicitly defended against in the note attached to every delivered message.</li>
 </ul>
+<p class="verdict">Since then, the fleet's nouns:</p>
+<ul>
+  <li><span class="label">Overseer</span> — the one supervising Claude session per person per box, named
+  <code>overseer</code>. Coordinates, delegates, and decides only within its four gates.</li>
+  <li><span class="label">Cell</span> — one person's set of services on a box: tmux server, dashboard,
+  daemon, keep-alive and Overseer.</li>
+  <li><span class="label">Daemon</span> — the deterministic, model-free process that turns what the
+  dashboard sees into an append-only record.</li>
+  <li><span class="label">tell</span> — the fleet's command for putting one line into a running
+  session, with who sent it stamped on. Uses Claude Code's inbox socket for a session's or the
+  Overseer's words to a Claude session that accepts outside messages; types otherwise.</li>
+  <li><span class="label">Post office</span> — a drop directory per person, for messages between
+  Overseers of different people on one box.</li>
+  <li><span class="label">The board</span> — <code>#fleet-overseers</code> on Slack, shared by every
+  box's Overseers, carried by each box's Slack relay.</li>
+  <li><span class="label">Questions queue</span> — the one list of questions waiting on a person,
+  each shaped so it can be answered without scrolling.</li>
+  <li><span class="label">Work report</span> — an agent's one-line claim of progress, a blocker, a
+  decision or completion. Always shown as claimed, never as fact.</li>
+  <li><span class="label">Claim</span> (across Overseers) — "this key is mine until T", kept as a git
+  ref on GitHub, so cooperating Overseers do not knowingly take the same work, such as one bug.
+  Not a guarantee: an Overseer that doesn't ask can't see it.</li>
+  <li><span class="label">GPT reviewer · arbiter</span> — roles, not models: the cross-family code
+  and plan reviewer, and the tie-breaker for product and wording.</li>
+</ul>
 
 <h3>Related reading in this repo</h3>
 <ul>
@@ -1740,6 +2394,26 @@ Spideryarn's pipeline, database or reading view.</p>
   <li><code>docs/reusable/engineering-manager.md</code> — how delegation is meant to be run here.</li>
   <li><code>docs/reusable/silent-success.md</code> — the class both <code>--resume</code> gotchas
   belong to.</li>
+</ul>
+
+<h3>Related reading in the fleet repo (since then)</h3>
+<p class="verdict">Mindstone's private <code>fleet-overseer-landing-board</code>, checked out at
+<code>~/src/mindstone/fleet-overseer-landing-board</code> on the fleet boxes. Paths are relative to it.</p>
+<ul>
+  <li><code>README.md</code> — what is built and what is not, and where to start.</li>
+  <li><code>docs/project/overseer.md</code> — the Overseer's runbook: the four gates, the tick,
+  steering, dispatching, and "things that will catch you".</li>
+  <li><code>docs/project/post-office.md</code> · <code>slack.md</code> ·
+  <code>fleet-directory.md</code> — Overseer to Overseer, on one box and between boxes.</li>
+  <li><code>docs/project/mindstone-fleet.md § Sending a line to a session that is already
+  running</code> — <code>tell</code>, its outcomes and its labels.</li>
+  <li><code>docs/project/questions.md</code> · <code>work-reports.md</code> ·
+  <code>message-records.md</code> — what is asked, what is claimed, and what is kept of a message.</li>
+  <li><code>docs/tutorials/260916a-what-fleet-overseer-landing-board-is-and-how-it-works.html</code>
+  and <code>260923b-the-post-office-how-a-message-travels-between-overseers.html</code> — the
+  fleet's own explainers.</li>
+  <li>This repo's <a href="261007a-harness-of-harness-and-the-overseer.html">261007a</a> — the Overseer
+  set beside a published planner → developer → tester loop.</li>
 </ul>
 
 </main>
