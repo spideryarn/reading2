@@ -589,7 +589,7 @@ import { inputFingerprint as sourcesClaimsFingerprint } from "./sources-claims.j
 import { LEARN_STANCES, NONE_YET_AS_NULL_HEADER } from "./types.js";
 import type { Article, CommentAnchor, HighlightColour, PublicCopyFound, ResetResponse } from "./types.js";
 import type { ChatThreadView } from "./types.js";
-import { MENTIONS_MAX_PER_QUESTION } from "./chat-mention-limits.js";
+import { MENTIONS_MAX_PER_QUESTION, MENTIONS_QUESTION_FULL } from "./chat-mention-limits.js";
 import { admitMentions, mentionView, resolveMentions, resolveThreadMentions } from "./chat-mentions.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
@@ -3388,7 +3388,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       throw httpError(400, "mentions must be a list of article slugs");
     }
     if (mentions.length > MENTIONS_MAX_PER_QUESTION) {
-      throw httpError(400, `You can bring in at most ${MENTIONS_MAX_PER_QUESTION} articles with one question.`);
+      throw httpError(400, MENTIONS_QUESTION_FULL);
     }
   }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {

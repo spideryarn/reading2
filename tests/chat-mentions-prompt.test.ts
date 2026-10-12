@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { cacheProblems } from "../evals/chat-mention-caching.js";
 import { buildConverseMessages, citationIds, type MentionForPrompt } from "../src/converse.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
 
@@ -132,5 +133,35 @@ describe("which cited ids are known", () => {
     const third: MentionForPrompt = { available: true, meta, blocks: [block("spya-m3n4b5", "Same as the first mention.")] };
     const ids = citationIds(open, [other, twin, third]);
     expect([...ids.ambiguous].sort()).toEqual(["spya-m3n4b5", "spya-q4w8re"]);
+  });
+});
+
+describe("the live cache probe's verdict", () => {
+  it("accepts bp2 already being warm from an earlier run", () => {
+    expect(
+      cacheProblems(
+        [
+          { label: "1 no mention", read: 10_000, write: 0, input: 10_100 },
+          { label: "2 mention added", read: 15_000, write: 0, input: 15_100 },
+          { label: "3 mention kept", read: 15_000, write: 0, input: 15_100 },
+        ],
+        10_000,
+        5_000,
+      ),
+    ).toEqual([]);
+  });
+
+  it("still refuses a turn that neither reads nor writes bp2", () => {
+    expect(
+      cacheProblems(
+        [
+          { label: "1 no mention", read: 0, write: 10_000, input: 10_100 },
+          { label: "2 mention added", read: 10_000, write: 0, input: 15_100 },
+          { label: "3 mention kept", read: 10_000, write: 0, input: 15_100 },
+        ],
+        10_000,
+        5_000,
+      ),
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/bp2/)]));
   });
 });

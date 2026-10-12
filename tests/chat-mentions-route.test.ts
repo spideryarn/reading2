@@ -446,6 +446,24 @@ describe("a mentioned article that is not the reader's to read any more", () => 
 });
 
 describe("the store's own guard", () => {
+  it("refuses more than three mentions on one question inside begin's transaction", async () => {
+    const T = "spya-eeeeee";
+    await expect(
+      asTestOwner(() =>
+        chatStore.begin(OPEN, {
+          threadId: T,
+          question: "four copies must not get through",
+          /* The repeated id keeps the thread's distinct-article count at one,
+             so this exercises the per-question guard rather than the thread
+             guard below. The route dedupes; the store still owns its invariant. */
+          mentions: Array.from({ length: 4 }, () => ({ articleId: a.articleId, title: "A" })),
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/one question/) });
+    expect(await storedMentions()).toEqual([]);
+    expect(await threads()).toEqual([]);
+  });
+
   it("refuses a fourth article inside begin's transaction, whatever the route did", async () => {
     const T = "spya-dddddd";
     await ask(T, "first", [a.slug, b.slug, c.slug]);

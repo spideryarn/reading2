@@ -18,16 +18,18 @@
  *   1. no mention — writes the open article's prefix (bp1), or reads it if a
  *      previous run left it warm;
  *   2. the same conversation's next question, now bringing the article in —
- *      expect a READ of about the open article's size (bp1 untouched) and a
- *      WRITE of about the mentioned article's size (bp2);
+ *      expect a READ of about the open article's size (bp1 untouched) and,
+ *      on a cold run, a WRITE of about the mentioned article's size (bp2). If
+ *      a previous run left bp2 warm, expect a READ of about both instead;
  *   3. the next question again, with the mention still in the thread —
  *      expect a READ of about both.
  *
  * A pass needs (2) to read at least 80% of the open article's estimated
- * tokens and write at least 80% of the mentioned one's, and (3) to read at
- * least 80% of both together. Estimates come from `estimateTokens`, which
- * under-counts; the 80% is for that, not for slack in the cache. A cache that
- * silently stopped working answers correctly and shows up only as a bill.
+ * tokens and either write at least 80% of the mentioned one's or read at
+ * least 80% of both together, and (3) to read at least 80% of both. Estimates
+ * come from `estimateTokens`, which under-counts; the 80% is for that, not for
+ * slack in the cache. A cache that silently stopped working answers correctly
+ * and shows up only as a bill.
  */
 
 import { loadEnvLocal } from "../src/env.js";
@@ -37,11 +39,41 @@ import { withLedger } from "../src/cli-ledger.js";
 import { isMain } from "../src/is-main.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
 
-interface Turn {
+export interface Turn {
   label: string;
   read: number | null;
   write: number | null;
   input: number | null;
+}
+
+/** Pure verdict for the paid probe, exported so its pass criteria are guarded without paid calls. */
+export function cacheProblems(
+  turns: readonly Turn[],
+  openTokens: number,
+  otherTokens: number,
+): string[] {
+  const added = turns[1];
+  const kept = turns[2];
+  if (!added || !kept) return ["the probe did not complete all three turns"];
+
+  const why: string[] = [];
+  const openFloor = 0.8 * openTokens;
+  const otherFloor = 0.8 * otherTokens;
+  const bothFloor = 0.8 * (openTokens + otherTokens);
+  if ((added.read ?? 0) < openFloor) {
+    why.push(`turn 2 read ${added.read ?? "nothing"}, expected about the open article (${openTokens}): bp1 was not reused`);
+  }
+  const bp2WasRead = (added.read ?? 0) >= bothFloor;
+  const bp2WasWritten = (added.write ?? 0) >= otherFloor;
+  if (!bp2WasRead && !bp2WasWritten) {
+    why.push(
+      `turn 2 neither read a warm bp2 nor wrote a cold one (read ${added.read ?? "nothing"}, wrote ${added.write ?? "nothing"})`,
+    );
+  }
+  if ((kept.read ?? 0) < bothFloor) {
+    why.push(`turn 3 read ${kept.read ?? "nothing"}, expected about both (${openTokens + otherTokens})`);
+  }
+  return why;
 }
 
 async function ask(
@@ -84,6 +116,8 @@ async function ask(
 }
 
 async function main(): Promise<void> {
+  /* Kept here as well as before `withLedger`: paid-CLI coverage checks the
+     entry function itself, and the second call is memoised. */
   loadEnvLocal();
   const [openSlug, mentionedSlug] = process.argv.slice(2);
   if (!openSlug || !mentionedSlug) {
@@ -111,22 +145,15 @@ async function main(): Promise<void> {
     console.log(`${t.label.padEnd(18)} input ${t.input ?? "?"}  cache read ${t.read ?? "?"}  cache write ${t.write ?? "?"}`);
   }
 
-  const [, added, kept] = turns as [Turn, Turn, Turn];
-  const why: string[] = [];
-  if ((added.read ?? 0) < 0.8 * openTokens) {
-    why.push(`turn 2 read ${added.read ?? "nothing"}, expected about the open article (${openTokens}): bp1 was not reused`);
-  }
-  if ((added.write ?? 0) < 0.8 * otherTokens) {
-    why.push(`turn 2 wrote ${added.write ?? "nothing"}, expected about the mentioned article (${otherTokens})`);
-  }
-  if ((kept.read ?? 0) < 0.8 * (openTokens + otherTokens)) {
-    why.push(`turn 3 read ${kept.read ?? "nothing"}, expected about both (${openTokens + otherTokens})`);
-  }
+  const why = cacheProblems(turns, openTokens, otherTokens);
   console.log(why.length === 0 ? "\nPASS" : `\nFAIL\n- ${why.join("\n- ")}`);
   if (why.length > 0) process.exitCode = 1;
 }
 
 if (isMain(import.meta.url)) {
+  /* `withLedger` asks for the environment owner before it calls `main`, so
+     load .env.local first or a dev default can own the paid eval's ledger. */
+  loadEnvLocal();
   withLedger("eval", main).catch((err) => {
     console.error(err);
     process.exit(1);

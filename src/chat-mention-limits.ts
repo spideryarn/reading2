@@ -1,8 +1,8 @@
 /**
  * **The limits on bringing other articles into a conversation**, each one
  * constant, and the words the reader is told when one is reached. A leaf, so
- * the store (which enforces the thread limit inside `begin`'s transaction) and
- * the route (which refuses first, with the sentence) share one number.
+ * the store (which enforces both caps inside `begin`'s transaction) and the
+ * route (which refuses first, with the sentence) share one number.
  *
  * Plan docs/plans/261012d-chat-at-mention-your-own-articles.md § 3, "The cap".
  */
@@ -19,6 +19,9 @@ export const MENTION_MAX_CHARS = 120_000;
 
 /** At most this many articles named by one question. */
 export const MENTIONS_MAX_PER_QUESTION = 3;
+
+/** The reader-facing refusal when one question names too many articles. */
+export const MENTIONS_QUESTION_FULL = `You can bring in at most ${MENTIONS_MAX_PER_QUESTION} articles with one question.`;
 
 /** At most this many distinct articles brought into one conversation, ever. */
 export const MENTIONS_MAX_PER_THREAD = 3;

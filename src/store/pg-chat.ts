@@ -96,7 +96,12 @@ import {
   type SweepOptions,
 } from "./contracts.js";
 import { heldMentionKeys, insertMentions, mentionKey, mentionRows } from "./pg-chat-mentions.js";
-import { MENTIONS_MAX_PER_THREAD, MENTIONS_THREAD_FULL } from "../chat-mention-limits.js";
+import {
+  MENTIONS_MAX_PER_QUESTION,
+  MENTIONS_MAX_PER_THREAD,
+  MENTIONS_QUESTION_FULL,
+  MENTIONS_THREAD_FULL,
+} from "../chat-mention-limits.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
@@ -451,6 +456,12 @@ const rawPgChatStore: ChatStore = {
          docs/plans/261012d-chat-at-mention-your-own-articles.md § 2. */
       const mentions = turn.mentions ?? [];
       if (mentions.length > 0) {
+        /* The route gives this refusal early, but the store owns the invariant
+           too. Keep it under the article lock with the per-thread check: an
+           internal caller cannot write a turn the HTTP path would refuse. */
+        if (mentions.length > MENTIONS_MAX_PER_QUESTION) {
+          throw new ChatTurnRefused(MENTIONS_QUESTION_FULL);
+        }
         const held = await heldMentionKeys(tx, articleId, thread.id);
         for (const m of mentions) held.add(mentionKey(m.articleId, m.title));
         if (held.size > MENTIONS_MAX_PER_THREAD) throw new ChatTurnRefused(MENTIONS_THREAD_FULL);
