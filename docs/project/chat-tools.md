@@ -53,6 +53,7 @@ contract come from.
 - [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
 - [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
 - [§ Chat's list shows every conversation about the article](#chats-list-shows-every-conversation-about-the-article) — list sources, icons, the `?chatfrom=` filter, chats started from a mode
+- [§ Bringing in another of your articles with @](#bringing-in-another-of-your-articles-with-) — `chat_mentions`, the second cached part, citations into another article
 - [§ Security: a tool result is data, and one of them is a stranger's](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers) — prompt-injection stance
 - [§ A transcript cannot be published by column allowlist, and that is why chat is not shared](#a-transcript-cannot-be-published-by-column-allowlist-and-that-is-why-chat-is-not-shared) — why no shared chat
 - [§ What is logged](#what-is-logged) — logging rules for tool calls
@@ -654,6 +655,41 @@ written up where it is built: [reception.md § Check a claim in chat](reception.
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
 `tests/chat-list-sources.test.tsx` (the panel).
 
+## Bringing in another of your articles with @
+
+> I'd like to be able to @-mention another article in my shelf (including archived and public etc)
+> from within a Chat. … Then I guess it would have to include that article into the Chat context.
+>
+> — Greg, via Feedback, 2026-10-12
+
+Since 2026-10-12, in typed Chat only. The plan, the reviews and the measurements are
+[261012d](../plans/261012d-chat-at-mention-your-own-articles.md); what is worth knowing before
+changing it:
+
+- **It is not a tool.** `@` in the composer picks one of the reader's own articles (shelf, archived,
+  public), and the question carries its slug in `mentions`. The article then comes **whole** into
+  every later turn of that conversation. The model does not choose it, and reading it costs no
+  round. Tool-only reading was passed over: the model reads three passages and answers as if it had
+  read the piece.
+- **The stored thread decides, never the request.** `chat_mentions` holds one row per mention, with
+  a foreign key to the question (cascade) and to the mentioned article (`SET NULL`, with a title
+  snapshot). Each turn, `resolveMentions` ([`src/chat-mentions.ts`](../../src/chat-mentions.ts))
+  re-reads the rows, re-checks the current owner in the join, and re-measures each article against
+  the cap. Send, retry, edit, the thread GET and the `begin` frame all use it. `mentions` is refused
+  on a retry and on an edit.
+- **Limits** ([`src/chat-mention-limits.ts`](../../src/chat-mention-limits.ts)): 120,000 characters
+  per article, three per question, three per conversation. Over a limit is a 400 the composer
+  shows, never a cut. On production on 2026-10-12, 4% of articles were over 120k characters.
+- **The cache.** Mentioned articles are a second text part in the first user message, after the
+  open article's, with their own breakpoint. A conversation with no mentions sends the same bytes
+  as before, which is why the mention rules live in that part rather than in `SYSTEM`. Measured
+  live (`evals/chat-mention-caching.ts`, 2026-10-12, $0.36): adding a mention read the open
+  article's 73k tokens from cache, and the next turn read all 120k.
+- **Citations into another article.** Block ids are unique only within an article, so the client
+  maps an id to its article only when exactly one article (open or mentioned) holds it. An id two of
+  them share stays plain text. The chip is `CrossArticleRef`, not `BlockRef`, and its href is built
+  from the slug the server listed, never from the model's text.
+
 ## Security: a tool result is data, and one of them is a stranger's
 
 `read_web_page` puts arbitrary text from the open web into a prompt that also holds an article and a
@@ -681,6 +717,12 @@ What is done about it:
   line-for-line beside the tool's own instructions with nothing saying which of the two we wrote.
   The fence says it, and a sentence above the fence names who wrote what is inside. Our own words
   stay outside, or the fence would mark our instructions as data — the same mistake reversed.
+- an article brought in with `@` ([§ above](#bringing-in-another-of-your-articles-with-)) is fenced
+  whole, title included. The reader chose it, but somebody else wrote it, and the hidden-instruction
+  scan does not read PDFs. That is **stricter** than `search_library` and `read_library_passage`,
+  whose rows are still bare. It opens no new outbound channel and no new reader: the article is
+  the reader's own, owner-checked on every turn, and chat could already reach it through those two
+  tools, archived ones aside. It does give the URL channel below more to carry.
 
 **This is a mitigation, not a fix.** A determined injection can still steer an answer.
 

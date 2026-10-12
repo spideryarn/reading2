@@ -1,6 +1,7 @@
 # Chat: @-mention one of your own articles to bring it into the conversation
 
-**Status:** planned and reviewed, 2026-10-12; building.
+**Status:** built, 2026-10-12: stages 1–3 on `dev`, not yet deployed. § What landed says what
+changed from the design below. Attachments are a follow-up question to Greg (q-jzx20h).
 **Why:** two admin inputs, one piece of work (queue item `qi-c8vnqatv`):
 
 > I'd like to be able to @-mention another article in my shelf (including archived and public etc)
@@ -357,6 +358,44 @@ Each stage gets a Sol code review, write-capable, then is committed and pushed.
 - **Where the two disagreed.** Opus wanted a size field on the shelf so that a too-long article
   could be greyed out in the picker. Sol's server-only check won: it is one fewer field to keep
   true, and it covers a re-extraction.
+
+## What landed
+
+- **Stage 1, server**: `f64a446cc`, then Sol's fixes in `f22ad3fc5`.
+  - Sol's review was *approve with fixes applied*, with no P0 or P1.
+  - It fixed four P2s:
+    - article transfer counts `chat_mentions`;
+    - the per-question limit is also enforced under `begin`'s lock;
+    - two corrections to the eval.
+  - **Departure: the mention rules live in the mentions part, not in `SYSTEM`.** A conversation with
+    no mentions then sends exactly the bytes it sent before. Adding one does not rewrite the open
+    article's cache either, and no existing conversation pays a cache rewrite on deploy.
+- **The live cache check passed** (`evals/chat-mention-caching.ts`, 2026-10-12, $0.36). The open
+  article was `race-human-categorization` (73k tokens) and the mentioned one `dodo` (106k
+  characters).
+  - Turn 2 read the open article's 73,189 tokens from cache and wrote 46,745.
+  - Turn 3 read 119,934 tokens from cache.
+  - The model cited the mentioned article's passages: 6 on turn 2, 3 on turn 3.
+  - **Correction to § 3:** 106k characters came to about 47k tokens, nearer 0.44 tokens a character
+    than 0.35. So the 120k cap is about 53k tokens, not 42k.
+- **Stage 2, client**: `0d20d315e`, then Sol's fixes in `da34d26e1`.
+  - Sol's review was *approve with fixes applied*. It fixed three P1s:
+    - a bracket that mixes an ambiguous id with a usable one now stays wholly plain text;
+    - a picker row picks on `pointerdown`, so a tap is not lost to the blur;
+    - a refused first question keeps its draft and its chips.
+- **Browser pass** (Sonnet, Playwright, 1440 and 390, dark): all eight checks passed, with no
+  console errors. Its screenshots are `261012d-shot-*.png`. Four smaller findings were fixed after
+  it:
+  - "@do" ranked substring matches above a title starting with "do";
+  - the chip's × left the `@Title` text behind;
+  - "@john-von" did not match "John von Neumann";
+  - at 390 the list was 163px wide.
+- **Stage 3, docs**: chat-tools.md § Bringing in another of your articles, two rows in
+  security-map.md, two rows in web-client.md.
+  - **The privacy page has one new sentence**, from Sol's stage 1 report: deleting an article does
+    not reach chats on the reader's *other* articles that brought it in or quoted it.
+  - That was already true of any answer that used `search_library`. Now a title snapshot is kept
+    as well.
 
 ## The simpler option passed over
 

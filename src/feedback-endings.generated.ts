@@ -15,6 +15,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-a52jsr": "shipped",
   "spya-a5gzb9": "shipped",
   "spya-a5yxnt": "shipped",
+  "spya-a63vmt": "shipped",
   "spya-a689m4": "shipped",
   "spya-a6xsr2": "shipped",
   "spya-a868zs": "shipped",
@@ -587,6 +588,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
+  "spya-a63vmt": "Shipped. In Chat, type @ to bring in one of your own articles, archived and public included; citations of it open it at the passage. Other people's articles are not included.",
   "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).",
   "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text, and, on your answer, the kinds of line that recur across modes now share six named sizes (on /design, under Text roles).",
   "spya-axbxr8": "Thirteen more wordmark animations, on dev and not yet deployed: seven for the spider, six for the letters, picked from about fifty ideas from four directions, GPT Sol's among them. Twelve also play on the article loading screen.",
@@ -652,7 +654,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-rbp55k": "The line is said once above the list now. A chat's summary shows wherever Ask in chat has an item to put it on; Summary's paragraph and Quotes, Timeline and FAQ are still queued.",
   "spya-s6qhzv": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
   "spya-sbj3yk": "Both sentences now say what happened, and arXiv papers find their DOI, so Attention gets its Cited by list. Since 11 October a piece with no DOI is also looked up at OpenAlex by title and authors, strictly checked.",
-  "spya-skpxw2": "Yes, as one of your articles attached to a chat as a source, with claims you can check; not a file dropped into the model. Planned, not built: which shape, and a security go-ahead, are open.",
+  "spya-skpxw2": "Part built: type @ in Chat to bring in one of your articles, so an uploaded file can be brought in once it is an article. Attachments that belong to an article are still a question for you.",
   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",
   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
   "spya-t6nmxt": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",

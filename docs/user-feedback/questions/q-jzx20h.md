@@ -3,22 +3,33 @@ id: q-jzx20h
 report: spya-skpxw2
 status: open
 asked: 2026-10-11
-title: Chat attachments: attach one of your articles as a source, or a file kept only in the chat?
-refs: SPIDERYARN-READING2-HA · qi-ghnqkf5v · docs/plans/261011v-chat-attachments.md · docs/plans/261011v-chat-attachments-plan-review-sol.md · docs/user-feedback/261011_0141-chat-attachments.md
+acted: spya-zake3w
+title: Attachments to an article: what should one be, now that you can @-mention your articles in chat?
+refs: SPIDERYARN-READING2-HA · SPIDERYARN-READING2-HX · qi-ghnqkf5v · qi-c8vnqatv · docs/plans/261011v-chat-attachments.md · docs/plans/261011v-chat-attachments-plan-review-sol.md · docs/plans/261012d-chat-at-mention-your-own-articles.md · docs/plans/261012d-chat-at-mention-plan-review-sol.md · docs/user-feedback/261011_0141-chat-attachments.md · docs/user-feedback/261012_1006-chat-at-mention-your-articles.md
 ---
-You asked for attachments in chat, and invited push-back. My answer: yes, but only as "bring a second text into this conversation", never as "drop a file into the model". Which do you want built?
+Built from your answer: in Chat, type @ and pick any of your own articles (on the shelf, archived, or ones you made public). It comes into that conversation whole, a line at the top says so, and the answer's references to it are buttons that open it at the passage. So a file you upload the ordinary way can already be brought into a chat once it is ready.
 
-A. Attach an article as a source. In chat you press "Add a source" and pick one of your articles. To use a new file, you upload it as usual (it becomes an ordinary private article, costs one slot, and a long PDF takes minutes), then pick it. Chat reads that one article's passages, and every claim about it is a button that opens the exact passage. Chat keeps its web access. A few days' work. It changes two existing security defences (who may attach what, and which articles chat's tools may read), which is why I am asking rather than building.
+Not built: "attachments to an article", your better-still. Every version of it needs a new kind of thing stored with the article, so I am asking which one, rather than guessing. What would you use it for first?
 
-B. A file kept only with the conversation, never an article. For your own draft or a manuscript you are refereeing. Much more work: new storage, export, delete and privacy-page wording. And in that conversation chat must lose web search and web pages, or a hostile article could leak your file through a web address. Claims about the file could not point to passages.
+A. An attachment is a document tied to this article. You upload it from the article (or from its chat). It becomes a hidden article of its own: not on your shelf, no slot, deleted along with its parent. It is listed first when you type @ in that article's chats, under "Attached to this article". Chat can quote it and link to the passage, like any article. About a few days' work.
 
-C. A now, and B later as its own piece of work, if you find you need it.
+B. A text addendum. You paste or dictate notes onto the article, and chat can @-mention them and cite them. The cheapest, and enough for "my scribbles" if they are typed. It does not take files.
 
-D. Neither, for now.
+C. Photos or scans of handwritten scribbles, read as pictures. Needs a model that reads images, and a spending limit on chat, which it does not have yet. Much bigger; later.
 
-Recommended: A (C if you already know you want drafts kept out of your shelf). A covers comparing with a related paper, a reply, a supplement or your own draft, and keeps every claim checkable.
+D. Nothing more for now: upload as an ordinary article, then @-mention it.
+
+Recommended: B if your scribbles are mostly typed notes, A if they are mostly files (PDFs, drafts). Either way, one risk carries over from before: a private draft that chat can read, in a chat that can also fetch web pages, could in principle be leaked a little at a time by a hostile web page. That is the same today for your notes and the article itself.
+
+One smaller thing: you wrote "including archived and public". I took "public" to mean your own articles that you have made public. Chat cannot read other people's public articles, and letting it would widen what a hostile article could put in front of the model. If you meant other people's, say so and I will ask that separately.
 
 Details
+
+Your reply, 12 October:
+
+> I was thinking it would be a way to upload my scribbles or similar or some other addendum to the current article. Let's keep things simple. Maybe it's local to that chat for now? (and indicates that) / Or better still, maybe there's a way to add attachments to an article, and this uploading them to a Chat would be one way. I don't have a clear sense of what we'd use this for yet, so if it's really complicated we should discuss. But it feels like it should be straightforward enough. / And ideally then I could @-mention any attachment to the current article in a chat.
+
+Earlier question, 11 October: A, attach one of your articles to a chat as a source (recommended); B, a file kept only with the conversation, with web access cut; C, A now and B later; D, neither. Your reply above chose A's direction, which is what was built.
 
 What you asked, on 11 October: "It would be nice if the various chat modes could accept attachments, PDFs, etc. There may be protections that you need to put in place to make this secure, or if you think it's a terrible idea (e.g. because of complexity/security/etc), push back."
 
