@@ -1,4 +1,7 @@
-# Runs box-tidy.service once an hour.
+# Runs box-tidy.service every two hours (hourly until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/project/hetzner-remote-server-box.md, "Keeping the disks from filling".
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
@@ -11,11 +14,11 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/hetzner-remote-s
 [Timer]
 # Ten minutes after boot, so it does not compete with everything else starting.
 OnBootSec=10min
-# An hour after activation of the previous run. systemd does not start a second
+# Two hours after activation of the previous run. systemd does not start a second
 # instance of the same service while it is still active. /home went from
-# comfortable to full inside a day on 2026-10-05; hourly is often enough to
-# matter and rare enough to cost nothing.
-OnUnitActiveSec=1h
+# comfortable to full inside a day on 2026-10-05; every two hours is still often
+# enough to matter and rare enough to cost nothing.
+OnUnitActiveSec=2h
 Unit=box-tidy.service
 
 [Install]

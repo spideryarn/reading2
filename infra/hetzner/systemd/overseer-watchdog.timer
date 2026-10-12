@@ -1,4 +1,7 @@
-# Runs overseer-watchdog.service on a plain interval.
+# Runs overseer-watchdog.service on a plain interval: every ten minutes (five
+# until 2026-10-12). Greg, 2026-10-12: "I'm going to be working to be working
+# on Spideryarn less for a while, so can you make all the
+# ticks/daemons/services/etc run half as often?"
 # docs/project/overseer-direction.md, scripts/overseer-watchdog.ts.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh; see the
@@ -13,10 +16,9 @@ Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-directi
 # that failed to come back up after a reboot is caught within a couple of
 # minutes rather than after a full period of silence.
 OnBootSec=2min
-# Off the END of the previous run, the same "chain, not fixed interval" shape
-# overseer-direction.md documents for the dashboard's own collector -- a timer
-# is not something this can overlap with itself on a slow box.
-OnUnitActiveSec=5min
+# Ten minutes after the previous run STARTED. systemd does not start a second
+# instance of the same service while it is still active.
+OnUnitActiveSec=10min
 # INERT ON THIS TIMER, and kept deliberately rather than removed. systemd.timer(5):
 # "Note that this setting only has an effect on timers configured with
 # OnCalendar=." This timer has OnBootSec= and OnUnitActiveSec= and no

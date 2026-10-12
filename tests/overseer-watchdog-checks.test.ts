@@ -55,12 +55,17 @@ describe("assessPacer", () => {
     expect(check.state).toBe("ok");
   });
 
-  it("is unhealthy when the heartbeat is older than 90 minutes, and says to recreate the jobs", () => {
-    expect(MAX_PACER_AGE_MS).toBe(90 * 60_000);
-    const check = assessPacer({ kind: "text", text: iso(NOW - 2 * HOUR) }, present, NOW);
+  it("is ok after one missed hourly tick", () => {
+    // The pacer is hourly since 2026-10-12, so two hours is one tick missed, not an alarm.
+    expect(assessPacer({ kind: "text", text: iso(NOW - 2 * HOUR) }, present, NOW).state).toBe("ok");
+  });
+
+  it("is unhealthy when the heartbeat is older than 150 minutes, and says to recreate the jobs", () => {
+    expect(MAX_PACER_AGE_MS).toBe(150 * 60_000);
+    const check = assessPacer({ kind: "text", text: iso(NOW - 3 * HOUR) }, present, NOW);
     expect(check.state).toBe("unhealthy");
     expect(check.detail).toContain("standing-jobs.md");
-    expect(check.detail).toMatch(/120 min|2\.0 h/);
+    expect(check.detail).toMatch(/180 min|3\.0 h/);
   });
 
   it("is unhealthy when the heartbeat is missing while the Overseer session exists", () => {
@@ -306,9 +311,9 @@ describe("assessDeployLag", () => {
     expect(assessDeployLag(knownTrunk(null), ready, NOW).state).toBe("ok");
   });
 
-  it("is ok when the oldest undeployed commit is younger than 12 hours", () => {
-    expect(MAX_DEPLOY_LAG_MS).toBe(12 * HOUR);
-    expect(assessDeployLag(knownTrunk(11 * HOUR), ready, NOW).state).toBe("ok");
+  it("is ok when the oldest undeployed commit is younger than 24 hours", () => {
+    expect(MAX_DEPLOY_LAG_MS).toBe(24 * HOUR);
+    expect(assessDeployLag(knownTrunk(23 * HOUR), ready, NOW).state).toBe("ok");
   });
 
   it("stays ok within the threshold while the loop has not reached dev's new head", () => {
@@ -318,16 +323,16 @@ describe("assessDeployLag", () => {
     expect(assessDeployLag(knownTrunk(HOUR), unsettled, NOW).state).toBe("ok");
   });
 
-  it("is unhealthy past 12 hours, and says how long dev has been undeployable", () => {
+  it("is unhealthy past 24 hours, and says how long dev has been undeployable", () => {
     const streak: ReadinessStreak = {
       kind: "known",
       head: { kind: "red", why: "test failed on this commit", sinceMs: NOW - 3 * HOUR },
-      lastReady: { sha: SHA_A, untilMs: NOW - 17 * HOUR, how: "moved" },
+      lastReady: { sha: SHA_A, untilMs: NOW - 27 * HOUR, how: "moved" },
     };
-    const check = assessDeployLag(knownTrunk(17 * HOUR), streak, NOW);
+    const check = assessDeployLag(knownTrunk(27 * HOUR), streak, NOW);
     expect(check.state).toBe("unhealthy");
-    expect(check.detail).toContain("17 hours behind");
-    expect(check.detail).toContain("dev has been undeployable for about 17 hours");
+    expect(check.detail).toContain("27 hours behind");
+    expect(check.detail).toContain("dev has been undeployable for about 27 hours");
     expect(check.detail).toContain("red for at least 3.0 hours");
   });
 
@@ -341,7 +346,7 @@ describe("assessDeployLag", () => {
 
   it("does not infer 72 hours of red from one failure an hour ago", () => {
     const streak = readinessStreak({ readings: [loopReading(SHA_C, "test", "fail", NOW - HOUR)], unreadable: 0 }, SHA_C, NOW, 72 * HOUR, LOOP_CWD);
-    const detail = assessDeployLag(knownTrunk(20 * HOUR), streak, NOW).detail;
+    const detail = assessDeployLag(knownTrunk(30 * HOUR), streak, NOW).detail;
     expect(detail).not.toMatch(/undeployable for (about|at least) 72/);
     expect(detail).toContain("passed no dev commit in the last 72 hours");
     expect(detail).toContain("red for at least 1.0 hours");
@@ -349,7 +354,7 @@ describe("assessDeployLag", () => {
 
   it("rounds a red lower bound down so it does not overstate the evidence", () => {
     const streak: ReadinessStreak = { kind: "known", head: { kind: "red", why: "failed", sinceMs: NOW - 14.9 * HOUR }, lastReady: null };
-    expect(assessDeployLag(knownTrunk(20 * HOUR), streak, NOW).detail).toContain("at least 14 hours");
+    expect(assessDeployLag(knownTrunk(30 * HOUR), streak, NOW).detail).toContain("at least 14 hours");
   });
 
   it("is ok when the only undeployed commits are changelog bookkeeping, and says so", () => {
@@ -363,7 +368,7 @@ describe("assessDeployLag", () => {
   });
 
   it("names the bookkeeping it left out when there is real lag too", () => {
-    const check = assessDeployLag(knownTrunk(20 * HOUR, 2, 1), ready, NOW);
+    const check = assessDeployLag(knownTrunk(30 * HOUR, 2, 1), ready, NOW);
     expect(check.state).toBe("unhealthy");
     expect(check.detail).toContain("3 commit(s) on origin/dev are not on origin/main");
     expect(check.detail).toContain("1 of them changelog bookkeeping, not counted");
@@ -376,7 +381,7 @@ describe("assessDeployLag", () => {
   });
 
   it("keeps the readiness reading in the line even when it is unknown, and does not call it ok", () => {
-    const check = assessDeployLag(knownTrunk(20 * HOUR), { kind: "unknown", why: "1 record unreadable" }, NOW);
+    const check = assessDeployLag(knownTrunk(30 * HOUR), { kind: "unknown", why: "1 record unreadable" }, NOW);
     expect(check.state).toBe("unhealthy");
     expect(check.detail).toContain("1 record unreadable");
   });

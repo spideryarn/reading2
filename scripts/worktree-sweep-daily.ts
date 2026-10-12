@@ -1,6 +1,7 @@
 #!/usr/bin/env -S npx tsx
 /**
- * The daily worktree sweep, from `worktree-sweep.timer`. Plan
+ * The worktree sweep, from `worktree-sweep.timer` — daily until 2026-10-12, every
+ * other day since (the file keeps its name). Plan
  * docs/plans/261010d-standing-jobs-survive-a-reboot.md.
  *
  * > it would run deterministically and invisibly unless it hits worktrees that
@@ -107,7 +108,7 @@ export function sweepMessage(outcomes: readonly SweepOutcome[], unownedSay: read
   const named = judge.slice(0, NAMED_MAX).map((o) => `${o.name} (${firstLine(o)})`);
   const more = judge.length > NAMED_MAX ? `, and ${judge.length - NAMED_MAX} more` : "";
   return (
-    `daily worktree sweep: removed ${removed}; ${judge.length} for you to judge — ${named.join("; ")}${more}. ` +
+    `worktree sweep: removed ${removed}; ${judge.length} for you to judge — ${named.join("; ")}${more}. ` +
     "For each with no live owner (gjd-remote ls; a deploy or readiness job counts): run npm run worktree:check in it, " +
     "then remove it under docs/project/worktrees.md, kill a leftover process under Greg's 2026-10-09 permission, or delegate one agent. " +
     "An in-use tree is named once; full report: journalctl -u worktree-sweep."
@@ -227,7 +228,7 @@ async function main(): Promise<number> {
     return refused ? 1 : 0;
   }
   const delivery = await queueSweepMessage(file, current, text, next);
-  // Once a day, so a message that did not go waits for tomorrow's — and the
+  // Every other day, so a message that did not go waits for the next run — and the
   // non-zero exit puts this run in `systemctl --failed` meanwhile.
   return delivery.outcome.kind !== "sent" || refused ? 1 : 0;
 }

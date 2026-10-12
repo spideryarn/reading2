@@ -1,4 +1,4 @@
-# The hourly dashboard refresh: merge origin/dev into the primary checkout, and
+# The two-hourly dashboard refresh: merge origin/dev into the primary checkout, and
 # restart the fleet dashboard only when what it is built from changed.
 # scripts/overseer-tools/dashboard-refresh.sh, whose header says why; plan
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.

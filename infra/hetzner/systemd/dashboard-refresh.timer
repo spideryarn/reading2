@@ -1,4 +1,7 @@
-# Runs dashboard-refresh.service once an hour.
+# Runs dashboard-refresh.service every two hours (hourly until 2026-10-12).
+# Greg, 2026-10-12: "I'm going to be working to be working on Spideryarn less
+# for a while, so can you make all the ticks/daemons/services/etc run half as
+# often?"
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # @USER@ is substituted at install time by infra/hetzner/provision.sh.
@@ -10,9 +13,9 @@ Documentation=file:///home/@USER@/code/spideryarn2/scripts/overseer-tools/README
 
 [Timer]
 OnBootSec=15min
-# An hour after the previous run STARTED. A slow npm install cannot overlap the
+# Two hours after the previous run STARTED. A slow npm install cannot overlap the
 # next: systemd does not start a oneshot that is still running.
-OnUnitActiveSec=1h
+OnUnitActiveSec=2h
 Unit=dashboard-refresh.service
 
 [Install]

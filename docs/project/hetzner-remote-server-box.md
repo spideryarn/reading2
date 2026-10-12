@@ -1290,7 +1290,7 @@ when somebody cleans up. Two consequences follow, and both are real rather than 
 - They run **whatever is in the primary checkout when they start**, including a red `dev`. That is
   deliberate: a dashboard that refuses to boot until somebody fixes `dev` is unavailable exactly
   when it is needed.
-- `dashboard-refresh.timer` fetches and merges `origin/dev` hourly, then rebuilds and restarts only
+- `dashboard-refresh.timer` fetches and merges `origin/dev` every two hours, then rebuilds and restarts only
   when dashboard inputs changed. A failed merge or restart leaves the unit failed for box-health to
   report; until the next successful run, the primary and served bundle can still lag.
 
@@ -1320,14 +1320,17 @@ form.
 > — Greg, 2026-10-09 (`spya-q2qb7q`)
 
 Beside `box-tidy.timer` and `overseer-watchdog.timer`, four oneshot services run on timers, from the
-primary checkout, as `greg` — [plan 261010d](../plans/261010d-standing-jobs-survive-a-reboot.md):
+primary checkout, as `greg` — [plan 261010d](../plans/261010d-standing-jobs-survive-a-reboot.md).
+Every interval was doubled on 2026-10-12 — Greg: *"I'm going to be working to be working on
+Spideryarn less for a while, so can you make all the ticks/daemons/services/etc run half as
+often?"* (the watchdog went from five minutes to ten, box-tidy from one hour to two):
 
 | timer | when | job | heard by the Overseer |
 |---|---|---|---|
-| `box-health` | 10 min | the dashboard's own health verdict, and whether any of the box's units has `failed` | when its alarms change; daily while one lasts |
-| `worktree-sweep` | 06:30 daily | `worktree:sweep --remove` | only trees that need judging |
-| `dashboard-refresh` | hourly | merge `origin/dev` into the primary; restart the dashboard if its inputs changed | through box-health, when it fails |
-| `feedback-sweep` | 3 h after the last | one Claude feedback sweep | through box-health, when it fails. Installed; provisioning leaves enablement unchanged until Greg says |
+| `box-health` | 20 min | the dashboard's own health verdict, and whether any of the box's units has `failed` | when its alarms change; daily while one lasts |
+| `worktree-sweep` | 06:30 every other day | `worktree:sweep --remove` | only trees that need judging |
+| `dashboard-refresh` | 2 h | merge `origin/dev` into the primary; restart the dashboard if its inputs changed | through box-health, when it fails |
+| `feedback-sweep` | 6 h after the last | one Claude feedback sweep | through box-health, when it fails. Installed; provisioning leaves enablement unchanged until Greg says |
 
 Each exits nonzero when it could not do its work, so its unit shows `failed`; box-health reports
 those failures as a line from speaker `box`. The worktree sweep also sends its own successful
@@ -1362,7 +1365,7 @@ Greg, 2026-10-06: *"Perhaps add this and other measures to keep the hard disk fu
 routine daemon/service"*. Three things do that now
 ([the plan](../plans/261006m-box-disk-hygiene-timer-and-a-rebuildable-box.md)):
 
-**`box-tidy.timer`, hourly**, runs [`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs).
+**`box-tidy.timer`, every two hours**, runs [`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs).
 The script's header is the list of what it deletes, and it is short on purpose: Codex transcripts
 older than 7 days, `logs/tmux-jobs/*.log` older than 14 days, and the npm download cache when
 `/home` is at 80%. The permission for each is Greg's, quoted in
