@@ -17,6 +17,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job, Skim } from "../src/types.js";
+import type { PublicSkim } from "../src/public-types.js";
 import type { UseSkim } from "../src/web/useSkim.js";
 import type { SkimView } from "../src/web/modes/skim/SkimMode.js";
 import { profileGeneration } from "../src/web/profile-saved.js";
@@ -64,7 +65,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   return { ...real, apiFetch, fetchOk: apiFetch };
 });
 
-const { SkimPanel } = await import("../src/web/SkimPanel.js");
+const { SkimPanel, SKIM_INTRO_EXPLAINED } = await import("../src/web/SkimPanel.js");
 
 /* ------------------------------------------------------------- the harness -- */
 
@@ -291,6 +292,19 @@ describe("the purpose line in Skim", () => {
     expect(host.querySelector(".skim-intro")?.textContent).toBe("Starts with the claim.");
     await drawOwner(owner());
     expect(host.querySelector(".skim-intro")).toBeNull();
+  });
+
+  it("draws a visitor's intro too, and its (i) says what the line is (Greg's A to q-t5xjqn, plan 261012a)", async () => {
+    const route: PublicSkim = { stops: ROUTE.stops, offered: ROUTE.offered, intros: ["Starts with the claim.", null, null] };
+    await act(async () =>
+      root.render(createElement(SkimPanel, { access: { kind: "visitor", route }, view: VIEW, away: false })),
+    );
+    expect(host.querySelector(".skim-intro")?.textContent).toBe("Starts with the claim.");
+    const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
+    await act(async () => info.click());
+    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(SKIM_INTRO_EXPLAINED);
+    /* Nothing of the owner's: no purpose line, no question. */
+    expect(line()).toBeNull();
   });
 
   it("does not ask in the empty state, where the automatic run plans a route (Sol F6)", async () => {

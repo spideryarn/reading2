@@ -110,6 +110,8 @@ const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure."
 const PUBLIC_TWEET = "The first post of the thread.";
 /** A stored Skim stop's cue — on the wire once published, never before. */
 const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
+/** A stored Skim pass intro — the same, since 2026-10-12 (plan 261012a). */
+const PUBLIC_INTRO = "Starts with what a measurement would have to show, then the test it is put to.";
 /** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
 const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
 const PUBLIC_WORK = "Consciousness as integrated information";
@@ -245,6 +247,7 @@ const ARTEFACTS: {
     sourceHash: "abc",
     profileHash: PRIVATE_PROFILE_HASH,
     stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+    intros: [PUBLIC_INTRO, null, null],
     visible: [1, 1, 1],
     offered: 4,
     dropped: {
@@ -837,7 +840,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        Skim is on this row too, and must not be readable either. */
     /* The FAQ's question and the cited work's title joined the same day. */
     /* And the Debate's claim quotation, since plan 260929c stage 4. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_RECEPTION_QUOTE]) {
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_INTRO, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_RECEPTION_QUOTE]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -1125,7 +1128,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * **The stored Skim route, since 2026-09-29** — the bug was a visitor
    * to a public article with a built route being refused it
    * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
-   * planned for does not, and neither does the pipeline around it. Read off a
+   * planned for does not, and neither does the pipeline around it. The pass
+   * intros cross since 2026-10-12 (plan 261012a). Read off a
    * real row, because the question is whether the public `select` fetches the
    * column at all — a DTO test only ever sees what it was handed.
    */
@@ -1135,9 +1139,12 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     const body = r.body as { skim?: Record<string, unknown> };
     expect(body.skim).toEqual({
       stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+      /* The pass intros, since 2026-10-12 (Greg's "A" to q-t5xjqn, plan 261012a). */
+      intros: [PUBLIC_INTRO, null, null],
       offered: 4,
     });
     expect(r.text).toContain(PUBLIC_CUE);
+    expect(r.text).toContain(PUBLIC_INTRO);
     expect(JSON.stringify(body.skim)).not.toContain("profileHash");
     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
   });

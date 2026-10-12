@@ -673,7 +673,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-vzj8fc": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
   "spya-wm5gu2": "Skim and More now sit in Structure and Summary's group, and Comments sits with Marginalia, after it. On a phone More is now almost on screen, but the bar still scrolls sideways.",
   "spya-wqvxjv": "A draft gift now has its own address for the agent to open; a private gift article becomes the recipient's when they sign in; /admin/articles moves any article. Titles of other readers' articles stay hidden there.",
-  "spya-wu83xh": "Shipped: a skim-for box (your purpose, edited in Skim), a map line per pass, shorter stops. Visitors seeing the map is q-t5xjqn; per-stop linking lines and a Skim-only focus are queued.",
+  "spya-wu83xh": "Shipped: a skim-for box (your purpose, edited in Skim), a map line per pass (visitors see it too, your A to q-t5xjqn), shorter stops. Per-stop linking lines and a Skim-only focus are queued.",
   "spya-x0rfs2": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
   "spya-x38nge": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
   "spya-x6qjbn": "There's no clean-up prompt to tweak, and the transcriber ignores a paragraph instruction (tested). You chose to leave dictation as one paragraph rather than add a second step (q-a0qp3x, A).",

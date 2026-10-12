@@ -700,16 +700,18 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   fewest of the model's carries, then adds the fewest. So a short More gets a carried stop rather
   than costing Gist one. Counted in `dropped.growCarried`. The greedy order before it could leave a
   fixable route broken (GPT Sol, plan review F1).
-- **Each pass opens with an intro** (`intros`, owner only for now): one or two sentences above the
+- **Each pass opens with an intro** (`intros`, a visitor's too since 2026-10-12): one or two sentences above the
   stops, in the model's face, saying what the walk goes through and in what order, naming what each
   passage is about and never which way it comes out. Written in the same call. A pass whose own
   stops the repair moved loses its intro (`movedIntro`), since it maps a different walk. **Why not a
   linking line on every stop**: a stop can be walked in two passes after different stops, and a
   reader arrives at any stop from anywhere, so a bridge would read wrong after a jump; and every line
   beside a quote is another chance to give its finding away, which is what sank the every-cue scene
-  (above). Whether a visitor sees the intros too is Greg's call,
-  [q-t5xjqn](../user-feedback/questions/q-t5xjqn.md): adding them means editing the visitor
-  allowlist, a listed defence. A linking line per stop is queued, for if the intro is not enough.
+  (above). A visitor sees the intros too, since 2026-10-12: adding them was an edit to the visitor
+  allowlist, a listed defence, so it was Greg's call, and he answered *"A"* to
+  [q-t5xjqn](../user-feedback/questions/q-t5xjqn.md)
+  ([261012a](../plans/261012a-skim-pass-intros-cross-to-visitors.md)). A linking line per stop is
+  queued, for if the intro is not enough.
 - **Shorter stops.** Each quote record states its length in words, and one over `LONG_STOP_WORDS`
   (60, about the top eighth of production's quotes) is marked LONG; Gist may hold one LONG quote and
   More two, each only when it carries a key idea no shorter quote carries. A first wording, a 90-word
