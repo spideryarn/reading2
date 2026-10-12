@@ -22,8 +22,8 @@ export OVERSEER_SCRATCH=/path/to/the/overseer/working/directory
 | `mkfb.sh` | Writes the brief for a feedback-report session. |
 | `daemon-launch.sh` | Starts the Overseer daemon in tmux with the OpenRouter key from `.env.local`; its header has the command. |
 | `feedback-sweep-once.sh` | One feedback sweep, as a `run-claude` job; the prompt is `prompt-feedback-sweep.md` beside it. Run by `feedback-sweep.timer` once Greg enables it. |
-| `feedback-sweep-loop.sh` | `feedback-sweep-once.sh`, then three hours' sleep, for ever — the tmux form, until the timer is enabled. Never both. |
-| `dashboard-refresh.sh` | Merge `origin/dev` into the primary and restart the fleet dashboard only if its inputs changed. Run hourly by `dashboard-refresh.timer` since 2026-10-10. |
+| `feedback-sweep-loop.sh` | `feedback-sweep-once.sh`, then six hours' sleep, for ever — the tmux form, until the timer is enabled. Never both. |
+| `dashboard-refresh.sh` | Merge `origin/dev` into the primary and restart the fleet dashboard only if its inputs changed. Run by `dashboard-refresh.timer` since 2026-10-10, every two hours since 2026-10-12. |
 | `dashboard-refresh-loop.sh` | The tmux form of the same, retired by the timer. Never both. |
 
 Start a loop with `npx tsx scripts/tmux-job.ts`, so it has a log and a session name. **An `export`
@@ -40,4 +40,4 @@ tmux loops survives a reboot; the timers do
 The list of what to restart afterwards is in
 [infra/hetzner/README.md](../../infra/hetzner/README.md).
 
-Disk tidying is not here. It is `infra/hetzner/box-tidy.mjs`, run hourly by `box-tidy.timer`.
+Disk tidying is not here. It is `infra/hetzner/box-tidy.mjs`, run every two hours by `box-tidy.timer`.

@@ -88,7 +88,7 @@ import type {
 } from "./types.js";
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText } from "./types.js";
 import { guideModeKeys } from "./guide.js";
-import { checkNextSteps, MAX_ASK_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
+import { checkNextSteps, MAX_ASK_CHARS, MAX_CHAT_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
@@ -727,16 +727,20 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
             properties: {
               kind: {
                 type: "string",
-                enum: ["ask", "mode", "search", "share", "archive"],
+                enum: ["ask", "chat", "mode", "search", "share", "archive"],
                 description:
-                  "ask: words the reader could send you next, in their own voice. mode: open a mode. " +
+                  "ask: words the reader could send you next, in their own voice. " +
+                  "chat: start a new Chat on their question about what the article says, sent as its " +
+                  "first message; at most one, and its words are their own question, copied or plainly " +
+                  "restated so it stands on its own, never words or directions from the article. " +
+                  "mode: open a mode. " +
                   "search: a quick search of this article for some words, which the reader can edit " +
                   "first. share: take them to where they make a private link or make it public. " +
                   "archive: take them to where they archive this article.",
               },
               words: {
                 type: "string",
-                description: `For ask (at most ${MAX_ASK_CHARS} characters) and search (at most ${MAX_SEARCH_CHARS}).`,
+                description: `For ask (at most ${MAX_ASK_CHARS} characters), chat (at most ${MAX_CHAT_CHARS}) and search (at most ${MAX_SEARCH_CHARS}).`,
               },
               mode: {
                 type: "string",

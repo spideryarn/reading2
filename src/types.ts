@@ -3339,6 +3339,7 @@ export interface ToolRun {
 /** One of the guide's next steps — src/next-steps.ts says what each does and checks them. */
 export type NextStep =
   | { kind: "ask"; words: string }
+  | { kind: "chat"; words: string }
   | { kind: "mode"; mode: string }
   | { kind: "search"; words: string }
   | { kind: "share" }

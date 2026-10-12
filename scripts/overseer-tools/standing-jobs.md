@@ -1,41 +1,49 @@
 # The Overseer's standing scheduled jobs
 
-The Overseer session's recurring prompts: the queue pacer, the 3-hourly check and the renewal
-that keeps both alive (and runs the daily worktree sweep). They are Claude Code scheduled jobs (`CronCreate`), so they are **session
+The Overseer session's recurring prompts: the queue pacer, the 6-hourly check and the renewal
+that keeps both alive (and runs the worktree sweep when its timer is not armed). They are Claude Code scheduled jobs (`CronCreate`), so they are **session
 memory only**. They vanish when the session exits, and **a recurring job is deleted 7 days after it
 was created**. That second fact is what stopped them on the night of 2026-10-07/08: the pacer made
 on 2026-09-30 expired at 23:15 UTC, and production went 17 hours without a deploy. Greg,
 2026-10-08: *"Why haven't there been any deploys in 17h?"*
 
-**So the renewal job deletes and recreates all three every day, itself included.** No job is ever
-older than a day. After any restart of the Overseer session, create the three below by hand,
+**So the renewal job deletes and recreates all three every other day, itself included.** No job
+is normally older than about two days, well inside the seven: the renewal runs on odd days of the month, so a
+31-day month runs it on the 31st and again on the 1st, and every other gap is two days. After any restart of the Overseer session, create the three below by hand,
 exactly as written. `CronList` should then show three jobs. Each pacer tick writes
 `~/.overseer/pacer-heartbeat`, so something outside the session can tell it has stopped:
-`overseer-watchdog` fails, every five minutes, once that file is over 90 minutes old or is missing
-while a session holds the Overseer claim, and again when production is more than 12 hours behind
-dev. Its sentences are in `journalctl -u overseer-watchdog -n 6`
+`overseer-watchdog` fails, checking every ten minutes, once that file is over 150 minutes old or is
+missing while a session holds the Overseer claim, and again when production is more than 24 hours
+behind dev. Its sentences are in `journalctl -u overseer-watchdog -n 6`
 ([`scripts/overseer-watchdog-checks.ts`](../overseer-watchdog-checks.ts)).
+
+**Every interval here was doubled on 2026-10-12.** Greg: *"I'm going to be working to be working on
+Spideryarn less for a while, so can you make all the ticks/daemons/services/etc run half as
+often?"* The pacer went from twice hourly (`:12,:37`, alternating 25- and 35-minute gaps) to hourly, the check from 3-hourly to 6-hourly, the
+renewal from daily to every other day, and the watchdog's thresholds with them (90 minutes to 150,
+12 hours to 24).
 
 `$SP` below is the Overseer's scratch directory; set it to the current session's scratchpad path.
 
-## 1. Queue pacer, cron `12,37 * * * *`
+## 1. Queue pacer, cron `12 * * * *`
 
 ```
 Queue pacer (Greg, 2026-09-30: "yes, ideally bring the queue forward - but use your judgment and adapt if you notice problems"; "Let's not stress tooooo much about Codex usage limits…"; and 2026-10-01: "just keep on ploughing through it all, proceeding autonomously as per docs/reusable/engineering-manager.md gates etc, at whatever pace is sustainable. I'll check in to see how things are going every day or so."). First `date -u +%FT%TZ > ~/.overseer/pacer-heartbeat`. Run $SP/queue-status.sh (SP=<scratch dir>). 1) Close finished sessions: idle, with a final debrief saying the work landed on dev and the worktree was removed (check the pane; if the worktree still exists, run worktree:check first; never kill one mid-work or holding unpushed work). Collect any decisions a debrief leaves for Greg into one batched message, each with a recommendation. 2) Count the working Claude sessions (ignore codex/tmux-job helpers like *-plan-review-*, *-code-review-*, *-fullsuite-*, *-full-*, *-suite-*, *-sol-*). If fewer than 6, release the soonest waiting ones with $SP/release.sh NAME, at most 2 per tick, prioritising by a combination of ease and value, and only if memory available is at least 9 GB, swap used is under 24 GB, and the 1-minute load is under 20. Codex is not a gate unless its weekly usage reaches 95% or a session reports a Codex rate-limit refusal — Sol running out stops work, never Luna. If a gate fails, hold, and say why in one line. 3) Readiness: if the readiness loop's last two outcomes are both fail, dispatch the fix now (overseer.md § Deploying step 5). 4) Stay silent unless you released, closed, held or dispatched something; then one short line.
 ```
 
-## 2. The 3-hourly check, cron `17 */3 * * *`
+## 2. The 6-hourly check, cron `17 */6 * * *`
 
 ```
-Overseer 3-hourly check. A) FEEDBACK: new Feedback reports since the last check (Sentry org greg-detre, issue.category:feedback, unresolved; and the feedback-sweep loop's latest debrief). Skip any already covered by a session (grep ~/gjd-remote/prompts for the short id). Delegate the rest per docs/project/feedback-reports.md. B) DEPLOY per docs/project/overseer.md § Deploying: if origin/main..origin/dev holds finished, reviewed work, prepare the notes and deploy (`--ready` when the loop has a green commit carrying the notes, else plain), then verify. Production should not lag dev by more than about six hours of finished work. C) Tell Greg in plain words what went where and what was deployed; one line if nothing new.
+Overseer 6-hourly check. A) FEEDBACK: new Feedback reports since the last check (Sentry org greg-detre, issue.category:feedback, unresolved; and the feedback-sweep loop's latest debrief). Skip any already covered by a session (grep ~/gjd-remote/prompts for the short id). Delegate the rest per docs/project/feedback-reports.md. B) DEPLOY per docs/project/overseer.md § Deploying: if origin/main..origin/dev holds finished, reviewed work, prepare the notes and deploy (`--ready` when the loop has a green commit carrying the notes, else plain), then verify. Production should not lag dev by more than about twelve hours of finished work. C) Tell Greg in plain words what went where and what was deployed; one line if nothing new.
 ```
 
-## 3. Renewal, cron `43 6 * * *`
+## 3. Renewal, cron `43 6 */2 * *`
 
 ```
-Overseer renewal of the standing scheduled jobs (recurring jobs expire after 7 days). Read scripts/overseer-tools/standing-jobs.md. CronList; CronDelete every job whose prompt starts "Queue pacer", "Overseer 3-hourly check" or "Overseer renewal"; then CronCreate the three from that file, exactly as written, with $SP filled in. CronList again and confirm three. Then the daily worktree sweep, ONLY if either `systemctl is-enabled worktree-sweep.timer` does not print `enabled` OR `systemctl is-active worktree-sweep.timer` does not print `active` (only both together mean the timer is armed; otherwise use the fallback): in the primary checkout run `npm run worktree:sweep -- --remove`, which removes every landed tree itself and lists the rest. For each tree it lists as in use or needing a look that no live session (`gjd-remote ls`) or deploy/readiness job owns, run worktree:check and either remove it under Greg's standing permission (worktrees.md) or delegate one agent to resolve it. One line, naming what was removed and anything left for Greg.
+Overseer renewal of the standing scheduled jobs (recurring jobs expire after 7 days). Read scripts/overseer-tools/standing-jobs.md. CronList; CronDelete every job whose prompt starts "Queue pacer", "Overseer 6-hourly check", "Overseer 3-hourly check" or "Overseer renewal"; then CronCreate the three from that file, exactly as written, with $SP filled in. CronList again and confirm three. Then the worktree sweep, ONLY if either `systemctl is-enabled worktree-sweep.timer` does not print `enabled` OR `systemctl is-active worktree-sweep.timer` does not print `active` (only both together mean the timer is armed; otherwise use the fallback): in the primary checkout run `npm run worktree:sweep -- --remove`, which removes every landed tree itself and lists the rest. For each tree it lists as in use or needing a look that no live session (`gjd-remote ls`) or deploy/readiness job owns, run worktree:check and either remove it under Greg's standing permission (worktrees.md) or delegate one agent to resolve it. One line, naming what was removed and anything left for Greg.
 ```
 
-**Moving to a timer.** From 2026-10-10 `worktree-sweep.timer` runs the sweep at 06:30 and tells you only about trees that need judging ([plan 261010d](../../docs/plans/261010d-standing-jobs-survive-a-reboot.md)); the renewal's copy stays for a box where the timer is not enabled yet. `box-health.timer` likewise tells you, unasked, when health goes critical, a disk fills, or one of the box's units fails — including the watchdog, whose verdict used to reach only its journal.
+**Moving to a timer.** From 2026-10-10 `worktree-sweep.timer` runs the sweep at 06:30 (every other day, on the odd days
+the renewal runs, since 2026-10-12) and tells you only about trees that need judging ([plan 261010d](../../docs/plans/261010d-standing-jobs-survive-a-reboot.md)); the renewal's copy stays for a box where the timer is not enabled yet. `box-health.timer` likewise tells you, unasked, when health goes critical, a disk fills, or one of the box's units fails — including the watchdog, whose verdict used to reach only its journal.
 
-The sweep rides on the renewal rather than being a fourth job because both are once a day, and a fourth job is one more thing a restart has to recreate. Greg, 2026-10-09, relayed from his Mac: *"Can we ask the Overseer whether we have anything scheduled to run this like every day, to do a worktree sweep as part of its existing daemon service cron loops? If not, I think we should, that way then those scripts remind or handle it for, that way those scripts handle it and then they nudge the Overseer if they need its input. It can delegate to other agents to resolve individual worktrees."*
+The sweep rides on the renewal rather than being a fourth job because both run on the same days, and a fourth job is one more thing a restart has to recreate. Greg, 2026-10-09, relayed from his Mac: *"Can we ask the Overseer whether we have anything scheduled to run this like every day, to do a worktree sweep as part of its existing daemon service cron loops? If not, I think we should, that way then those scripts remind or handle it for, that way those scripts handle it and then they nudge the Overseer if they need its input. It can delegate to other agents to resolve individual worktrees."*

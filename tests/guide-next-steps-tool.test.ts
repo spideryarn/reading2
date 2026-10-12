@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ALREADY_ON_SCREEN, GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
 import { converse, type ConverseEvent } from "../src/converse.js";
-import { checkNextSteps, MAX_ASK_CHARS } from "../src/next-steps.js";
+import { checkNextSteps, MAX_ASK_CHARS, MAX_CHAT_CHARS } from "../src/next-steps.js";
 import { MAX_PURPOSE_CHARS, type Block, type Meta } from "../src/types.js";
 
 const ctx = (kind: "guide" | "chat") => ({ slug: "s", kind, meta: {} as Meta, blocks: [] as Block[], power: "standard" as const });
@@ -29,7 +29,7 @@ describe("offer_next_steps, the tool", () => {
     expect(out.content).toMatch(/no tool called/);
   });
 
-  it("hands back each of the five kinds, checked", async () => {
+  it("hands back each of the six kinds, checked", async () => {
     const out = await runTool(
       "offer_next_steps",
       {
@@ -51,6 +51,35 @@ describe("offer_next_steps, the tool", () => {
     const actions = await runTool("offer_next_steps", { steps: [{ kind: "share" }, { kind: "archive" }] }, ctx("guide"));
     expect(actions.steps).toEqual([{ kind: "share" }, { kind: "archive" }]);
     expect(actions.settles).toBe(true);
+    const chat = await runTool(
+      "offer_next_steps",
+      { steps: [{ kind: "chat", words: " Why does he think\nconsciousness is not computation? " }] },
+      ctx("guide"),
+    );
+    expect(chat.steps).toEqual([{ kind: "chat", words: "Why does he think consciousness is not computation?" }]);
+  });
+
+  /* Plan 261012f: a whole question, drawn in full, and one orange button at most (GPT Sol's F1). */
+  it("keeps one chat step, within its length, and says what it dropped", () => {
+    const { steps, problems } = checkNextSteps([
+      { kind: "chat", words: "x".repeat(MAX_CHAT_CHARS + 1) },
+      { kind: "chat", words: "  " },
+      { kind: "chat", words: "Why does he say that?" },
+      { kind: "chat", words: "And what about the second claim?" },
+      { kind: "share" },
+    ]);
+    expect(steps).toEqual([{ kind: "chat", words: "Why does he say that?" }, { kind: "share" }]);
+    expect(problems.join("; ")).toMatch(/chat step's words were 161 characters/);
+    expect(problems.join("; ")).toMatch(/needs words/);
+    expect(problems.join("; ")).toMatch(/only one chat step/);
+    expect(checkNextSteps([{ kind: "chat", words: "x".repeat(MAX_CHAT_CHARS) }]).steps).toHaveLength(1);
+  });
+
+  it("reports an exact repeated chat step as the second orange button it dropped", () => {
+    const repeated = { kind: "chat", words: "Why does he say that?" };
+    const { steps, problems } = checkNextSteps([repeated, repeated]);
+    expect(steps).toEqual([repeated]);
+    expect(problems).toEqual(["only one chat step is shown"]);
   });
 
   it("drops what it cannot draw, and says so", async () => {

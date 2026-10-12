@@ -1,4 +1,4 @@
-# Box health: disk, memory, swap and load, every ten minutes from
+# Box health: disk, memory, swap and load, every twenty minutes from
 # box-health.timer. scripts/box-health.ts; plan
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #

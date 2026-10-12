@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// box-tidy: the hourly disk tidy on the Hetzner box. Run by box-tidy.timer.
+// box-tidy: the two-hourly disk tidy on the Hetzner box. Run by box-tidy.timer.
 //
 // Greg, 2026-10-06: "Perhaps add this and other measures to keep the hard disk
 // fullness down to some routine daemon/service". The permissions each step
