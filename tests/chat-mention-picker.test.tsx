@@ -248,6 +248,7 @@ describe("the @ list", () => {
     press("Enter");
     expect(host.querySelector(".mention-chips")).not.toBeNull();
     act(() => sent[0]?.how?.mentions?.onAccepted());
+    expect(box().value).toBe("");
     expect(host.querySelector(".mention-chips")).toBeNull();
   });
 
@@ -359,5 +360,23 @@ describe("the @ list, more", () => {
     act(() => host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click());
     expect(box().value).toBe("compare with @Reply to J. please");
     expect(host.querySelector(".mention-chips")).toBeNull();
+  });
+
+  it("removes the occurrence it inserted, not identical words already in the draft", async () => {
+    paint();
+    await type("@Reply to Jones was cited; compare with @jon");
+    press("Enter");
+    expect(box().value).toBe("@Reply to Jones was cited; compare with @Reply to Jones ");
+    act(() => host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click());
+    expect(box().value).toBe("@Reply to Jones was cited; compare with ");
+  });
+
+  it("does not delete identical earlier words when the inserted occurrence was edited", async () => {
+    paint();
+    await type("@Reply to Jones was cited; compare with @jon");
+    press("Enter");
+    await type("@Reply to Jones was cited; compare with @Reply to J. ");
+    act(() => host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click());
+    expect(box().value).toBe("@Reply to Jones was cited; compare with @Reply to J. ");
   });
 });

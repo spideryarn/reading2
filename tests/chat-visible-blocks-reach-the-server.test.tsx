@@ -33,6 +33,7 @@ vi.mock("../src/web/ChatPanel.js", () => ({
 }));
 
 const calls: { method: string; body: Record<string, unknown> | undefined }[] = [];
+let postAnswer: () => Promise<Response>;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
@@ -47,12 +48,7 @@ vi.mock("../src/web/lib/api.js", async () => {
         body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined,
       });
       if (method === "POST") {
-        return Promise.resolve(
-          new Response(new ReadableStream<Uint8Array>({ start() {} }), {
-            status: 200,
-            headers: { "content-type": "text/event-stream" },
-          }),
-        );
+        return postAnswer();
       }
       return Promise.resolve(
         new Response(JSON.stringify({ threads: [STORED] }), {
@@ -92,6 +88,13 @@ beforeEach(() => {
   calls.length = 0;
   panel = undefined;
   screen = ["spya-before"];
+  postAnswer = () =>
+    Promise.resolve(
+      new Response(new ReadableStream<Uint8Array>({ start() {} }), {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -161,6 +164,26 @@ describe("the blocks on screen, sent with a chat question", () => {
     screen = ["spya-cccccc"];
     await press("onSendNew", "Something else", false);
     expect(posted()[0]?.visible).toEqual(["spya-cccccc"]);
+  });
+
+  it("keeps a refused first mentioned question in the list composer", async () => {
+    await mount("chat");
+    history.replaceState(null, "", "/a-piece?mode=chat");
+    const refused = vi.fn();
+    postAnswer = () => Promise.resolve(
+      Response.json({ error: "That is the article you have open." }, { status: 400 }),
+    );
+    await act(async () => {
+      const sendNew = panel?.onSendNew as ((question: string, how: Record<string, unknown>) => void) | undefined;
+      sendNew?.("compare them", {
+        typed: true,
+        modality: "typed",
+        mentions: { slugs: ["a-piece"], onAccepted: () => {}, onRefused: refused },
+      });
+    });
+    await vi.waitFor(() => expect(refused).toHaveBeenCalledTimes(1));
+    await new Promise((go) => setTimeout(go, 100));
+    expect(new URLSearchParams(location.search).get("thread")).toBeNull();
   });
 
   it("go with an edited question, read at Save", async () => {

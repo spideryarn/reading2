@@ -152,6 +152,12 @@ export interface SendOptions {
    */
   onBegun?: (id: string) => void;
   /**
+   * A first turn ended before `begin` without a definite refusal. Its local
+   * failed thread, rather than the composer, owns the question now.
+   * Navigation-only: detached with the panel.
+   */
+  onUnconfirmed?: (id: string) => void;
+  /**
    * The passage this conversation is about — **only on the send that creates
    * the thread**. The server 409s an anchor for a thread that already has a
    * different one, rather than quietly ignoring it.
@@ -762,7 +768,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, onBegun, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
+      const { onThreadId, onBegun, onUnconfirmed, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -889,6 +895,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         opts.onGone,
         onBegun,
         mentions?.onRefused,
+        onUnconfirmed,
       );
       return id;
     },

@@ -27,6 +27,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import {
   loadMentionCandidates,
+  afterMentionEdit,
   type MentionCandidate,
   type MentionsToSend,
   mentionOptions,
@@ -64,6 +65,8 @@ export interface MentionPickerState {
   hover(index: number): void;
   /** Pick row `index`: the box's next text and caret, or null if nothing was picked. */
   pick(index: number, value: string, caret: number): { value: string; caret: number } | null;
+  /** Move or retire remembered inserted-title ranges after a reader edit. */
+  edit(before: string, after: string): void;
   /**
    * Take an article out of the row, and its `@Title ` out of the box if the
    * text is still as the pick wrote it: the box's next text and caret, or null
@@ -117,11 +120,20 @@ export function useMentionPicker(enabled: boolean, slug: string, value: string):
     const chosen = options[index];
     if (!chosen || !live || refusal) return null;
     const next = withMention(text, live, at, chosen.title);
-    setPicked((p) =>
-      p.some((m) => m.slug === chosen.slug)
-        ? p
-        : [...p, { slug: chosen.slug, title: chosen.title, titleOverridden: chosen.titleOverridden }],
-    );
+    setPicked((p) => {
+      const moved = p.map((m) => afterMentionEdit(m, text, next.value));
+      return moved.some((m) => m.slug === chosen.slug)
+        ? moved
+        : [
+            ...moved,
+            {
+              slug: chosen.slug,
+              title: chosen.title,
+              titleOverridden: chosen.titleOverridden,
+              insertedAt: live.at,
+            },
+          ];
+    });
     /* The `@` just written would read as a search for the title after it. */
     setDismissedAt(live.at);
     setCaret(next.caret);
@@ -130,8 +142,19 @@ export function useMentionPicker(enabled: boolean, slug: string, value: string):
 
   const remove = (slug_: string, text: string, at: number) => {
     const gone = picked.find((m) => m.slug === slug_);
-    setPicked((p) => p.filter((m) => m.slug !== slug_));
-    return gone ? withoutMention(text, mentionText(gone.title), at) : null;
+    const next = gone && gone.insertedAt !== null
+      ? withoutMention(text, mentionText(gone.title), at, gone.insertedAt)
+      : null;
+    setPicked((p) =>
+      p
+        .filter((m) => m.slug !== slug_)
+        .map((m) => (next ? afterMentionEdit(m, text, next.value) : m)),
+    );
+    return next;
+  };
+
+  const edit = (before: string, after: string) => {
+    setPicked((p) => p.map((m) => afterMentionEdit(m, before, after)));
   };
 
   const toSend = (): MentionsToSend | undefined => {
@@ -179,6 +202,7 @@ export function useMentionPicker(enabled: boolean, slug: string, value: string):
     },
     hover: setActive,
     pick,
+    edit,
     remove,
     toSend,
   };

@@ -1,0 +1,12 @@
+# Code review round 2 (write-capable): 261012d, everything after your stage reviews
+
+Repo root: the current directory, a git worktree. This is the second and last review round for the 261012d work (plan: docs/plans/261012d-chat-at-mention-your-own-articles.md, read § What landed). Scope is narrow: the code written after your stage reviews, plus a factual check of the docs.
+
+Review:
+1. `git show da34d26e1` — your own stage 2 fixes (CR-1 mixed collisions, CR-2 pointerdown, CR-3 refused first question keeps draft and chips). Nobody else has reviewed them. Check CR-3 particularly: the composer/controller/ConversationModes changes, that a successful send still clears the draft and chips, that an existing conversation's refusal also keeps them, and that a disconnect is not made resendable twice.
+2. `git show 01f668b1d` — picker fixes from a browser pass: tiered ranking, matchForm normalisation (case, accents, - and _ as spaces), chip × also removes its inserted `@Title ` unless edited (caret handling), min-width on the list.
+3. `git show 84f845a33` — docs and copy: docs/project/chat-tools.md new section and Security bullet, docs/project/security-map.md new rows, docs/project/web-client.md rows, docs/project/privacy.md and src/web/PrivacyPage.tsx sentence about deletion not reaching other articles' chats, src/web/help/pages/modes/chat.md paragraph, the question file docs/user-feedback/questions/q-jzx20h.md, and the feedback notes. Check every factual claim against the code (limits, what is refused, what survives deletion, where the rules live, that the help text matches behaviour — e.g. "your question stays in the box" on a refusal, archived articles included, three per conversation). Fix wrong statements in place. Do not restyle prose that is correct.
+
+Rules: fix narrowly, failing test first where it is a guard; report anything wider. No git commands that discard work; do not commit. Pure client tests run in your sandbox: tests/chat-mention-*.test.ts(x), tests/chat-mentions-client.test.tsx, tests/chat*.test.tsx, tests/help-*.test.ts(x), tests/doc-links.test.ts, tests/privacy-page.test.ts. If you edit src/web/help/pages/*.md, run `WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts`. If you edit docs/user-feedback/**, run `npx tsx scripts/feedback-endings.ts`.
+
+Severity: P0, P1, P2, P3 as before. Every finding: ID, severity, file:line, FIXED (with test) or REPORTING. End with one line: APPROVE, APPROVE WITH FIXES APPLIED, or CHANGES NEEDED.

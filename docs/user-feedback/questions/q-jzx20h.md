@@ -33,15 +33,15 @@ Earlier question, 11 October: A, attach one of your articles to a chat as a sour
 
 What you asked, on 11 October: "It would be nice if the various chat modes could accept attachments, PDFs, etc. There may be protections that you need to put in place to make this secure, or if you think it's a terrible idea (e.g. because of complexity/security/etc), push back."
 
-Nothing is built yet. Opus and GPT Sol were asked separately and came to the same view, and GPT Sol then reviewed the plan.
+The @-mention route is built; attachments that belong to an article are not. Opus and GPT Sol were asked separately and came to the same view, and GPT Sol then reviewed the plan.
 
 Why not simply put the file into the conversation, the way ChatGPT does? When chat was first built it deliberately left attachments out. Chat here is defensible only because every claim points back to a passage you can open, and a file pasted into the model has no passages. Answers about it would be confident claims with no way to check them, which is one of the anti-goals in vision.md. It is also costly: a PDF sent whole is several thousand tokens a page on every turn, and chat has no spending limit per reader today.
 
-Why turning the file into an article fixes that. An article has stable passage ids. The private storage, export and permanent delete you already have cover it, and chat can already search your other articles. What is missing is saying "this one", and letting a claim about another article be a button. Today chat may only name another article's title. A builds both.
+Why turning the file into an article fixes that. An article has stable passage ids. The private storage, export and permanent delete you already have cover it, and chat can already search your other articles. The shipped @-mention work added saying "this one" and made a claim about another article a button. A would reuse both for a document attached to this article.
 
 Why B is bigger. Your own draft is the most valuable thing a hostile web page could try to steal. Chat can fetch web pages and run web searches, and a page can try to make it put your words into a web address. A length limit only slows that down. Note that your articles are already private to you, so B is not about privacy from other readers. It is about keeping a file off your shelf, and away from the web, inside one conversation.
 
-What you would see with A: a small chip above the chat naming the source, with an Archived or Source deleted mark if that happens, and citations that open the source at the passage.
+What you see with the shipped @-mention: a **Bringing in** chip above the box before sending, then an **Also reading** line at the top of the conversation. If the source later becomes unavailable, that line keeps its title and says **No longer available**. Citations open an available source at the passage. A would reuse that behaviour for an attachment.
 
 Deferred, whichever you choose, each to be queued separately:
 - attaching a freshly uploaded file automatically when it is ready, instead of coming back to pick it;

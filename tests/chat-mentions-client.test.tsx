@@ -127,10 +127,14 @@ describe("mentions on the wire", () => {
     await mount();
     let accepted = 0;
     let refused = 0;
+    let unconfirmed: string | null = null;
     reply = { status: 400, error: "That is the article you have open." };
     await act(async () => {
       chat?.send(null, "compare them", null, {
         kind: "chat",
+        onUnconfirmed: (id) => {
+          unconfirmed = id;
+        },
         mentions: { slugs: [SLUG], onAccepted: () => accepted++, onRefused: () => refused++ },
       });
     });
@@ -138,22 +142,51 @@ describe("mentions on the wire", () => {
     expect(posts).toHaveLength(1);
     expect(accepted).toBe(0);
     expect(refused).toBe(1);
+    expect(unconfirmed).toBeNull();
   });
 
-  it("does not call a refusal callback when the stream outcome is unknown", async () => {
+  it("keeps an uncertain closed stream out of the composer and exposes its local failed thread", async () => {
     await mount();
     let refused = 0;
+    let unconfirmed: string | null = null;
     /* A 200 that closes before `begin`: the write may still have landed, so the
-       client must not make the same question immediately sendable again. */
+       client must not make the same question immediately sendable again. The
+       caller instead opens the local failed thread, as an ordinary first send
+       already does. */
     reply = { frames: "" };
+    let sentTo = "";
     await act(async () => {
-      chat?.send(null, "compare them", null, {
+      sentTo = chat?.send(null, "compare them", null, {
         kind: "chat",
+        onUnconfirmed: (id) => {
+          unconfirmed = id;
+        },
         mentions: { slugs: [SLUG], onAccepted: () => {}, onRefused: () => refused++ },
-      });
+      }) ?? "";
     });
     await settleChat();
     expect(refused).toBe(0);
+    expect(unconfirmed).toBe(sentTo);
+  });
+
+  it("does not make a pre-header network loss resendable either", async () => {
+    await mount();
+    let refused = 0;
+    let unconfirmed: string | null = null;
+    answer = () => Promise.reject(new TypeError("Failed to fetch"));
+    let sentTo = "";
+    await act(async () => {
+      sentTo = chat?.send(null, "compare them", null, {
+        kind: "chat",
+        onUnconfirmed: (id) => {
+          unconfirmed = id;
+        },
+        mentions: { slugs: [SLUG], onAccepted: () => {}, onRefused: () => refused++ },
+      }) ?? "";
+    });
+    await settleChat();
+    expect(refused).toBe(0);
+    expect(unconfirmed).toBe(sentTo);
   });
 
   it("reports begin even when the server accepts the optimistic thread id", async () => {

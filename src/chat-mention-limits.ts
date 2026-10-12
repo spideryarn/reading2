@@ -9,8 +9,8 @@
 
 /**
  * **Per article: 120,000 characters of the article as the prompt carries it**
- * (`mentionPromptChars`, src/chat-mentions.ts), about 42,000 tokens at this
- * repo's measured 0.35 tokens a character. Measured on production 2026-10-12:
+ * (`mentionPromptChars`, src/chat-mentions.ts), about 53,000 tokens at the
+ * live cache check's measured 0.44 tokens a character. Measured on production 2026-10-12:
  * of 160 articles the median is 28k characters and 7 (4%) are over this.
  * Per article rather than a thread total, so a second paper is never refused
  * because of the first.

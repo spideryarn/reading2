@@ -47,6 +47,8 @@ export interface PickedMention {
   slug: string;
   title: string;
   titleOverridden?: boolean | undefined;
+  /** Where the picker wrote `@Short title `, or null once the reader edited that run. */
+  insertedAt: number | null;
 }
 
 /**
@@ -202,20 +204,57 @@ export function mentionText(title: string): string {
 }
 
 /**
- * The box once a chip is taken out: the first `inserted` (`mentionText`) still
- * there word for word is removed, and the caret moves with the text after it.
- * Null when the reader has changed it — then their words are theirs, and stay.
+ * The box once a chip is taken out: the `inserted` (`mentionText`) at the
+ * picker's remembered position is removed, and the caret moves with the text
+ * after it. Without a position this remains useful as a pure helper and finds
+ * the first occurrence. Null when the reader has changed it — then their words
+ * are theirs, and stay.
  */
 export function withoutMention(
   value: string,
   inserted: string,
   caret: number,
+  insertedAt = value.indexOf(inserted),
 ): { value: string; caret: number } | null {
-  const at = value.indexOf(inserted);
-  if (at < 0) return null;
+  const at = insertedAt;
+  if (at < 0 || value.slice(at, at + inserted.length) !== inserted) return null;
   const end = at + inserted.length;
   const next = caret <= at ? caret : caret >= end ? caret - inserted.length : at;
   return { value: value.slice(0, at) + value.slice(end), caret: next };
+}
+
+/**
+ * Keep one inserted title anchored while the reader edits elsewhere in the
+ * draft. An edit that overlaps the title gives the words to the reader: its
+ * chip can still be removed, but those words no longer are.
+ */
+export function afterMentionEdit(
+  mention: PickedMention,
+  before: string,
+  after: string,
+): PickedMention {
+  const at = mention.insertedAt;
+  if (at === null || before === after) return mention;
+  const inserted = mentionText(mention.title);
+  if (before.slice(at, at + inserted.length) !== inserted) {
+    return { ...mention, insertedAt: null };
+  }
+  let prefix = 0;
+  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    suffix < after.length - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  ) suffix++;
+  const oldEnd = before.length - suffix;
+  const newEnd = after.length - suffix;
+  const insertedEnd = at + inserted.length;
+  const movedAt = oldEnd <= at ? at + (newEnd - oldEnd) : prefix >= insertedEnd ? at : null;
+  if (movedAt === null || after.slice(movedAt, movedAt + inserted.length) !== inserted) {
+    return { ...mention, insertedAt: null };
+  }
+  return movedAt === at ? mention : { ...mention, insertedAt: movedAt };
 }
 
 /** Why a pick is refused, or null. One sentence, ours. */

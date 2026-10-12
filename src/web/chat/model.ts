@@ -726,8 +726,9 @@ export type ChatResult =
   /**
    * The turn is over and there is nothing to recover.
    *
-   * The `error` frame inside a 200, a request that never opened, a non-2xx that
-   * is not a 409. `text` is the partial answer where the server sent one back;
+   * The `error` frame inside a 200, a request that never opened, or an
+   * uncertain non-2xx. A mention request's definite 4xx is `turn.refused`
+   * instead. `text` is the partial answer where the server sent one back;
    * what arrived is kept, because the reader watched it appear.
    *
    * **`repair` is for the one case that keeps nothing**: a retry or an edit
@@ -763,7 +764,8 @@ export type ChatResult =
       recovery: { id: OpId; until: number };
     }
   /**
-   * A 409: the server refused a turn this client had already performed.
+   * A definite HTTP refusal: a 409, or a mention request rejected before its
+   * stream opened. The server did not write this turn.
    *
    * **Dropping the turn and registering the repair is one transition**, because
    * they are one decision — this conversation on screen is wrong, drop what made

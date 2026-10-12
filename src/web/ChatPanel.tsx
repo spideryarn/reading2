@@ -3508,6 +3508,7 @@ export function Composer({
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
+          mention.edit(value, e.target.value);
           provenance.current = afterChange(provenance.current, e.target.value, "keyboard");
           setValue(e.target.value);
           // Kept above this component so the words survive it; see `drafts`

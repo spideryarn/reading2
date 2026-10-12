@@ -963,9 +963,9 @@ export function ChatDialog({
          accepted, so a 400 can put its words back beside its chips. */
       const waitsForMentionBegin = how?.mentions !== undefined;
       const id: string = send(null, text, at, {
-        /* **Data in `onConfirmed`, navigation in `onThreadId`**, and the split
-           is the controller's (chat/controller.ts § `detach`): the first
-           survives this dialog closing and the second does not. A dialog
+        /* **Data in `onConfirmed`, navigation in the callbacks beside it**,
+           and the split is the controller's (chat/controller.ts § `detach`):
+           the first survives this dialog closing and the others do not. A dialog
            closed before the first frame must still have its summary renamed,
            or the list asked for again when the answer stops puts the real row
            beside the guess; it must not have `?thread=` moved under whatever
@@ -982,8 +982,12 @@ export function ChatDialog({
           drafts.moveThread(id, real);
           onRenamed(id, real);
         },
-        onThreadId: (real) => onThread(real),
-        ...(waitsForMentionBegin ? { onBegun: (real: string) => onThread(real) } : {}),
+        ...(waitsForMentionBegin
+          ? {
+              onBegun: (real: string) => onThread(real),
+              onUnconfirmed: (local: string) => onThread(local),
+            }
+          : { onThreadId: (real: string) => onThread(real) }),
         anchor: target.anchor,
         /* **The "?" says so on the wire.** The draft has known which button
            opened it since 2026-09-04 and used it, three lines up, to decide what
@@ -1005,8 +1009,8 @@ export function ChatDialog({
       });
       if (!waitsForMentionBegin) onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
-         different one, the two callbacks above rename the summary and correct the
-         URL together. Until 2026-10-05 only the URL followed, on the theory
+         different one, the acknowledgement and navigation above rename the
+         summary and correct the URL together. Until 2026-10-05 only the URL followed, on the theory
          that a mark keyed on a guess was invisible and self-healing; it closed
          this dialog mid-answer and then counted the conversation twice. Not
          drawing it at all until the round trip lands is the visible failure:
