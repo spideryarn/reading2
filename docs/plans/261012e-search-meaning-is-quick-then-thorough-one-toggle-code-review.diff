@@ -1,0 +1,1704 @@
+diff --git a/docs/project/keyboard.md b/docs/project/keyboard.md
+index 2864fc7c0..7c9c2577b 100644
+--- a/docs/project/keyboard.md
++++ b/docs/project/keyboard.md
+@@ -721,7 +721,7 @@ key, and there is no way to switch it off or remap it.
+ 
+ **`/` jumps to quick search** — it focuses the quick-search box in the bottom bar, or, where the
+ box is not shown (a coarse pointer, fit rung 4 or a window under 732px, where since 2026-10-05
+-nothing is drawn; or Search mode open with the bar box unfocused, where the ⚡ is), opens Search mode on *quick* with the panel's box focused.
++nothing is drawn; or Search mode open with the bar box unfocused, where the ⚡ is), opens Search mode on *meaning* (which was the *quick* matcher until plan 261012e folded the two) with the panel's box focused.
+ Built 2026-10-02 with the box itself
+ ([search.md § Search as you type](search.md#search-as-you-type-and-the-box-in-the-bottom-bar),
+ [261002h](../plans/261002h-quick-search-bar-in-the-dock.md)); the code is `isQuickSearchKey` in
+diff --git a/docs/project/reading-view-overview.md b/docs/project/reading-view-overview.md
+index 70eb0b0f9..10664df10 100644
+--- a/docs/project/reading-view-overview.md
++++ b/docs/project/reading-view-overview.md
+@@ -173,8 +173,8 @@ asked for less motion gets the bar at once. Which mount plays it is
+ - **[timeline.md](timeline.md)** — when the piece *says* these things happened, in the order it says
+   they happened. Open it for the four dating states, which are the whole design: ten of twenty-six
+   rows on the test article carry no date, and drawing them alike throws away what the article said.
+-- **[search.md](search.md)** — one box, three matchers (words, quick, thorough), hits marked in the
+-  prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
++- **[search.md](search.md)** — one box, two matchers (words, and meaning, which answers quick and then
++  thorough), hits marked in the prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
+   it for the confidence unit, the colours, or the URL parameters.
+ - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
+   them a verdict: six sub-modes, an evidence base with two numbers in it, and a confidentiality
+diff --git a/docs/project/search.md b/docs/project/search.md
+index 8c816bf94..9dfb5b60a 100644
+--- a/docs/project/search.md
++++ b/docs/project/search.md
+@@ -2,8 +2,11 @@
+ 
+ Up: [reading-view-overview.md](reading-view-overview.md)
+ 
+-**Built 2026-08-26.** One box in the mode band, three ways of matching behind it (two until
+-2026-10-02, when *quick* arrived — [§ Quick search](#quick-search-a-meaning-search-in-about-a-second)),
++**Built 2026-08-26.** One box in the mode band, two matchers on its toggle — *words* and
++*meaning* — and three ways of matching behind them, because a meaning search answers quick first and
++then thorough ([§ One meaning button](#one-meaning-button-quick-first-then-thorough-since-2026-10-12);
++the toggle had a third button, *quick*, from 2026-10-02 to 2026-10-12 —
++[§ Quick search](#quick-search-a-meaning-search-in-about-a-second)),
+ and the passages that match get marked in the article beside it. Quick search can also be started
+ from a box in the bottom bar, from anywhere in the article, and searches as you type —
+ [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). Greg's ask:
+@@ -109,7 +112,7 @@ function doing the same job.
+ ## In this doc
+ 
+ - [§ The one decision](#the-one-decision-everything-else-follows-from) — why two matchers share one downstream
+-- [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the third matcher (Jev, ~1 s), and how it hands over to thorough
++- [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the meaning button's first answer (Jev, ~1 s), how it hands over to thorough, and why the toggle has two buttons since 2026-10-12
+ - [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross
+ - [§ Why this is on the augment side](#why-this-is-on-the-augment-side-of-the-line) — the intent: finding, not answering
+ - [§ The mode band](#the-mode-band) and [§ The bottom bar](#the-bottom-bar) — where search sits in the chrome
+@@ -138,14 +141,17 @@ function doing the same job.
+ ## The one decision everything else follows from
+ 
+ **One box, one results list, and a toggle that says how to match.** It was two matchers, the
+-letters or the meaning, until 2026-10-02; *quick* sits between them:
++letters or the meaning, until 2026-10-02, when *quick* came between them; since 2026-10-12 it is two
++again, and the *meaning* button runs the quick column below first and the meaning column after it
++([§ One meaning button](#one-meaning-button-quick-first-then-thorough-since-2026-10-12)). The table
++is of the three ways of matching, which are still three kinds of saved run:
+ 
+ | | **words** | **quick** | **meaning** |
+ |---|---|---|---|
+ | what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
+ | where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
+ | what it costs | nothing | about $0.0004, and about a second | a few cents (a $0.06 mean per provider call in the [sample](#a-quick-search-starts-the-thorough-one-by-itself)), and usually about ten seconds (the 90th centile is about twenty) |
+-| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find**, and [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled |
++| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled, or as soon as it lands after **find**; and on a quick row's **thorough** (until 2026-10-12, also on **find** in a meaning matcher of its own) |
+ | what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
+ | is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* — one row per typing session | yes, beside the article |
+ 
+@@ -172,8 +178,9 @@ of that file instead: it returns the same `SearchHit`s as meaning, so it is a se
+ the same route and the same saved list.
+ 
+ The practical difference the panel is at pains to make obvious is *what pressing a key does*. In
+-words mode the results are already there as you type. In meaning mode nothing happens until you
+-submit, because submitting spends money. Quick sits between them since 2026-10-02: it asks when you
++words mode the results are already there as you type. Until 2026-10-12, in meaning mode nothing
++happened until you submitted, because submitting spends money; since then the meaning button is what
++the quick one was, and the rest of this paragraph is about it. Quick sat between them from 2026-10-02: it asks when you
+ pause, because a pause costs about $0.0004 and one typing session keeps one saved row —
+ [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). Since 2026-10-04 a quick
+ answer that has settled also starts one meaning search without a press, which Greg asked for; what
+@@ -346,6 +353,37 @@ endpoint answers in one body, so all the hits arrive together, under one deadlin
+ Why a third arm of the toggle rather than a new mode or a separate quick-search bar, and why it is
+ saved rather than thrown away: the plan's § The decision.
+ 
++### One meaning button: quick first, then thorough, since 2026-10-12
++
++**Built 2026-10-12**, from Greg's report `spya-sy4rn0`. The plan, the cost and the options passed
++over are [261012e](../plans/261012e-search-meaning-is-quick-then-thorough-one-toggle.md).
++
++> In search mode, it looks like we have something that checks for exact string match, and then a
++> quick mode, and then a meaning mode, which is effectively the thorough version of quick. Let's
++> collapse those latter two so that really you just have the string matching version and then the
++> meaning version. And let's, as an experiment for the meaning version, maybe it does a quick
++> version asap and then replaces it with a thorough version as soon after as it can.
++>
++> — Greg, 2026-10-12
++
++The second half was already what *quick* did (below), so the change is the toggle: **words ·
++meaning**, and *meaning* is what *quick* was. It searches as you pause, keeps one quick row per
++typing session, and the thorough search replaces each settled answer. What went is the manual
++meaning matcher, which asked the thorough search alone on *find*; nobody can now ask it without a
++quick search first, and the row's *thorough* button still asks it on a quick row (for when the
++automatic one failed, and for quick rows chat made).
++
++- **`?match=quick` is still read, as `meaning`** (`matchParam` in
++  [`params.ts`](../../src/web/params.ts)), for every link and chat card written before the fold.
++- **The matcher is not the run's kind any more**: the meaning matcher asks `quick` runs (`kindFor`),
++  and `search_runs.kind` is unchanged, so a row still says *quick* while it is the first pass.
++- **What it costs**: the default matcher now spends without a press — a quick search per pause, and
++  a thorough search per settled answer, as § below measures. Greg asked for it as an experiment.
++- **The bar's box and the command bar's row keep the name *Quick search***: they are the quick way
++  in, and what they start is still a quick search first.
++- **Chat's in-place searches are unchanged.** They run a quick search and stop; the thorough search
++  after them, and one search client shared with this mode, are still held as `qi-dhy8q2nq`.
++
+ ### A quick search starts the thorough one by itself
+ 
+ **Built 2026-10-04.** The plan, its review and the options passed over are
+@@ -398,8 +436,9 @@ hook that carries them out is beside them, in
+ - The thorough search is asked *quietly*: not ticked, and neither its start nor its failure touches
+   the panel's error line.
+ - Its row is hidden until it is complete: not listed, not counted, not coloured, and its passages
+-  are not drawn as they arrive. It still counts as running, so *find* on the meaning matcher for the
+-  same words is disabled rather than silently refused.
++  are not drawn as they arrive. It still counts as running, so a quick row's *thorough* button for
++  the same words is disabled rather than silently refused. (Until 2026-10-12 so was *find* on the
++  manual meaning matcher, which has gone.)
+ - At the swap the thorough row takes the colour the quick row is drawn in at that moment, replaces
+   its id in `?runs=` where it was, and is listed at the quick row's time so it does not jump above
+   rows asked meanwhile. Then the quick row is deleted. Nothing scrolls. A result that was pressed
+@@ -514,8 +553,8 @@ Every one is metered as `search-quick` in `ai_calls`.
+ **The box in the bottom bar** ([`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx)) is a
+ second view of the same draft ([`search-draft.ts`](../../src/web/search-draft.ts)), not a second
+ search: the asking is the band's typing session either way. Type into it with Search mode closed and
+-the first qualifying pause opens Search mode on `?match=quick` (switching from another matcher if
+-needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
++the first qualifying pause opens Search mode on `?match=meaning` (`?match=quick` until 2026-10-12;
++switching from words if needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
+ pointer setting hides the focused bar box, focus transfers to the panel with scrolling prevented.
+ While Search mode is open and the bar box is not focused it shows as a ⚡ button (where the bar
+ has room for the box at all). Both boxes can
+@@ -538,8 +577,9 @@ be visible while the bar box has focus; they share the same words and typing ses
+   **The two were not quite the same door**, and the difference is what a phone gave up: the ⚡
+   opened Search on *quick*, while the Search button opens it on whichever kind the URL names, and
+   with none named that is *thorough* (`resolveMatcher` in [`params.ts`](../../src/web/params.ts)).
+-  So on a phone *quick* is the Search button and then the *quick* tab. `/` still goes straight
+-  there. [261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md).
++  So on a phone *quick* was the Search button and then the *quick* tab. `/` still goes straight
++  there. Since 2026-10-12 the two doors are the same, unless the URL names *words*: the meaning
++  matcher, the default, is the quick one. [261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md).
+ - **The ⚡ that is left** stands in for the box while Search mode is open and the box is not
+   focused, at a width that has the box. It opens Search mode on quick with the panel's box focused.
+   When the panel is not yet mounted it focuses a render after the press.
+@@ -589,7 +629,7 @@ exact-words row alone. A *Find “X”* chip in a chat answer still opens the ex
+ 
+ ### The cross in the panel's own box
+ 
+-The Search panel's box has the same cross since 2026-10-05, for all three matchers (Greg,
++The Search panel's box has the same cross since 2026-10-05, for both matchers (Greg,
+ 2026-10-04: *"Q-panel-box-cross yes"*). A phone has no Escape, and this is the only box a phone types a search into.
+ It is Escape's clear (one `clear` in `Box`,
+ [`SearchPanel.tsx`](../../src/web/SearchPanel.tsx)): it empties the box, leaves the ticked searches
+@@ -1415,14 +1455,14 @@ reader pressed**. Every part of that is silent. The key is now `runId:blockId:n`
+ 
+ ## The URL
+ 
+-Six parameters, which is more than any other mode wants, because search mode has three matchers in it
++Six parameters, which is more than any other mode wants, because search mode has two matchers in it
+ rather than one feature. The division: `match` says which matcher, and then exactly one of `find` and
+ `runs` is the thing being matched. (`run` is the sixth and is legacy — read on load, never written.)
+ 
+ | Parameter | Values | History | Why |
+ |---|---|---|---|
+ | `mode` | `search` | push | A mode is where you are, not a glance |
+-| `match` | `words`, `quick` (since 2026-10-02), `meaning` (default) | **push** | It changes what the article looks like, like a column toggle. Back should undo it. `quick` behaves as `meaning` does for `runs` and the draft — `asksTheServer` in [`params.ts`](../../src/web/params.ts) — and differs only in the `kind` it asks with |
++| `match` | `words`, `meaning` (default). `quick` (2026-10-02 to 2026-10-12) is still read, as `meaning` | **push** | It changes what the article looks like, like a column toggle. Back should undo it. The matcher is not the run's kind: `meaning` asks `quick` runs, and auto-thorough asks the `meaning` one — `kindFor` in [`params.ts`](../../src/web/params.ts) |
+ | `find` | any string | replace, debounced 200ms | Written on every keystroke. A Back button that walked back through a half-typed word one letter at a time would be useless — same call `?at=` makes |
+ | `runs` | comma-separated minted ids | replace | Which saved searches are switched on. Ticking one while you read is browsing; `mode` already put the entry on the stack Back should use |
+ | `run` | a minted id | replace | **Read, never written.** The single-search spelling from before 2026-08-26, kept so the links already in the world still open the search they name |
+@@ -1457,7 +1497,10 @@ Changed by Greg on 2026-08-26. The original argument for `words` was that **it i
+ reader who opens the panel and types should get instant highlights, not a bill.
+ 
+ That argument was about the wrong thing, and it is worth saying why rather than just flipping the
+-constant. **Nothing in meaning mode spends anything until the reader presses find.** The cost is
++constant. **Nothing in meaning mode spent anything until the reader pressed find** — true until
++2026-10-12, when the meaning matcher began asking as you pause and buying a thorough search per
++settled answer, at Greg's request ([§ One meaning button](#one-meaning-button-quick-first-then-thorough-since-2026-10-12)
++says what that costs). The cost was
+ attached to the submit, not to the mode; the free-ness of `words` was never at risk from the default,
+ because a default cannot spend money. What the default actually decided was which *question* the
+ panel opens on — and the interesting one, the one this app exists to offer, is *describe what you are
+@@ -1711,7 +1754,7 @@ rather than opening this mode. The button and what it draws are
+ what matters here is what it shares with this mode and what it does not.
+ 
+ - **It is this mode's request.** `POST /api/search/<slug>`, kind `quick`, so the answer is a saved
+-  row in this mode's list, and *Open in Search* opens it here (`?mode=search&match=quick&runs=<id>`).
++  row in this mode's list, and *Open in Search* opens it here (`?mode=search&match=meaning&runs=<id>`).
+ - **It is not this mode's client.** [`chat-searches.ts`](../../src/web/chat-searches.ts) is a small
+   second reader of the stream, outside `useSearch`, because `useSearch` lives inside the band and
+   the band is not mounted while chat is. So nothing here hears of a chat search until the mode
+diff --git a/docs/project/url-state.md b/docs/project/url-state.md
+index 2d2c7d132..0fae09745 100644
+--- a/docs/project/url-state.md
++++ b/docs/project/url-state.md
+@@ -84,7 +84,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
+ | `bar` | the bar the quotes' prioritised order hides under — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) | **replace**, debounced | `?bar=0.55` |
+ | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
+ | `gate` | the bar the glossary's prioritised order hides under — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `PRIORITY_GATE` ([`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx)) | **replace**, debounced | `?gate=0.45` |
+-| `match` | which matcher search mode is using: the letters you typed (`words`), what they mean scored fast by Jev (`quick`, since 2026-10-02), or what they mean in full (`meaning`, the default) — [search.md](search.md) | push | `?match=words`, `?match=quick` |
++| `match` | which matcher search mode is using: the letters you typed (`words`), or what they mean (`meaning`, the default — a quick search first, then the thorough one in its place). `quick` was a third matcher from 2026-10-02 to 2026-10-12 and is still read, as `meaning` — [search.md](search.md) | push | `?match=words`, `?match=meaning` |
+ | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
+ | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
+ | `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index 1cf595d68..7d73ae968 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -414,6 +414,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-sutes9": "shipped",
+   "spya-svsbae": "shipped",
+   "spya-sxvq2j": "shipped",
++  "spya-sy4rn0": "shipped",
+   "spya-sz8qzx": "shipped",
+   "spya-szdjek": "shipped",
+   "spya-sze5ug": "shipped",
+@@ -655,6 +656,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-skpxw2": "Yes, as one of your articles attached to a chat as a source, with claims you can check; not a file dropped into the model. Planned, not built: which shape, and a security go-ahead, are open.",
+   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",
+   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
++  "spya-sy4rn0": "Search's toggle is now just words and meaning. A meaning search shows a quick answer in about a second and swaps in the thorough one by itself once you stop typing; old quick links still open it.",
+   "spya-t6nmxt": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
+   "spya-t858ug": "Live conversation is on GPT-Live for everyone now, with no engine dropdown. With Experimental features on, Realtime is a small arrow on the Live button.",
+   "spya-t9qu3v": "The hang wasn't reproduced, so the three ways Send could do nothing are closed instead: Send now works while the microphone is on, and a send gives up after a minute. And an unsent report now survives a reload.",
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index 8c728a0ee..4a09630de 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -197,7 +197,7 @@
+   "summary": "Find a passage by the words it uses, or by what it says.",
+   "keywords": "find look for passage words meaning quick fast phrase highlight mark colour where does it say semantic theme find highlight locate look for ctrl f ctrl+f cmd f keyword semantic search search",
+   "experimental": false,
+-  "body": "## In short\n\nSearch finds a passage when you remember roughly what it said but not where. Search by **words** for\nan exact phrase, or by **meaning** to ask a question of the whole piece — “where does she concede a\nweakness?” — and find passages the AI thinks answer it even when they use none of your words. The\nmatches are marked in the text, so you can see where a theme runs through the piece.\n\n(Picture: A search for the word science: 16 passages, each shown with the words around the match. Caption: A search by words: every passage that uses them, in the order they come.)\n\n## How it works\n\nFind a passage by the words it uses, or by what it says.\n\nTwo matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words. Meaning searches are saved, so you can switch several on together and come back to them.\n\n## When to use it\n\nUse **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —\n“where does he concede a weakness?”, “anywhere she gives numbers” — or to follow a theme through a\nlong article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own\nFind works as usual.\n\n**quick** asks the same kind of question and answers in about a second: a fast model scores every\nparagraph, and the ones that match are marked whole, with no reasons. It searches whenever you pause\ntyping, and what you type keeps one saved search, updated as you go rather than a new one each time.\nPress Enter when you are done; typing again after that, or after a break, starts a new one. Its\nparagraphs are marked with a bar down the side and a mark in the spine, not a highlight over the\nwords. Use it for a first look; **thorough** on a quick search runs the full meaning search on the\nsame words, usually in about ten seconds, and replaces the quick one. You do not have to press it:\nonce you stop typing and the quick answer has settled for two seconds, the thorough search starts by\nitself (at once if you pressed Enter). The quick search shows a spinner in place of its **thorough**\nbutton while it runs. On success its results take the quick ones' place; if it fails, the quick\nresults stay.\n\nTo start a quick search from anywhere in the article, type in the **Quick search** box in the bottom\nbar, press the **⚡** button that takes its place while Search is open, or press **/**. A phone or a\nnarrow window has no room for the box: open **Search** and choose **quick**. Typing *search for …*\nin the command bar does it too, at any width: the first row it offers is the quick search, and the\nsecond finds the exact words. The box keeps your words after a search, so you can add to them; the\n**×** at its right-hand end empties it, and the box in the Search panel has one as well.\n\n## Reading it\n\nEach meaning search gets its own colour, and its matches are marked in the text in that colour and\n**down the spine** as thin bars, so you can see at a glance whether a theme sits in one place or\nruns through the whole piece — see [Reading the spine](/help/spine).\n\nTick several searches to show them together; click a search’s words to show only that one. **↺**\nputs the question back in the box to ask again.\n\nEach match has a score out of 100. It is the AI’s judgement of its own answer, not a measurement, so\nread a high score as “worth a look” rather than “certain”. **prioritised**, the default, hides weak\nmatches from the list *and* the text; if you expected more marks, move the **confidence** slider\nleft.\n\nWhich searches are showing is part of the address, so a link you send opens with the same marks."
++  "body": "## In short\n\nSearch finds a passage when you remember roughly what it said but not where. Search by **words** for\nan exact phrase, or by **meaning** to ask a question of the whole piece — “where does she concede a\nweakness?” — and find passages the AI thinks answer it even when they use none of your words. The\nmatches are marked in the text, so you can see where a theme runs through the piece.\n\n(Picture: A search for the word science: 16 passages, each shown with the words around the match. Caption: A search by words: every passage that uses them, in the order they come.)\n\n## How it works\n\nFind a passage by the words it uses, or by what it says.\n\nTwo matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words. Meaning searches are saved, so you can switch several on together and come back to them.\n\n## When to use it\n\nUse **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —\n“where does he concede a weakness?”, “anywhere she gives numbers” — or to follow a theme through a\nlong article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own\nFind works as usual.\n\nA meaning search answers twice. First, in about a second, a fast model scores every paragraph,\nand the ones that match are marked whole, with no reasons; that search is tagged **quick**. It\nsearches whenever you pause typing, and what you type keeps one saved search, updated as you go\nrather than a new one each time. Press Enter when you are done; typing again after that, or after a\nbreak, starts a new one. Its paragraphs are marked with a bar down the side and a mark in the spine,\nnot a highlight over the words.\n\nThen, once you stop typing and the quick answer has settled for two seconds (at once if you pressed\nEnter), the thorough search starts by itself: the full model reads the whole piece, usually in about\nten seconds, and marks the words that answer you, each with a line of reasoning. The quick search\nshows a spinner while it runs. On success its results take the quick ones' place; if it fails, the\nquick results stay, and **thorough** on the quick search asks again.\n\nTo start a quick search from anywhere in the article, type in the **Quick search** box in the bottom\nbar, press the **⚡** button that takes its place while Search is open, or press **/**. A phone or a\nnarrow window has no room for the box: open **Search** and type. Typing *search for …*\nin the command bar does it too, at any width: the first row it offers is the quick search, and the\nsecond finds the exact words. The box keeps your words after a search, so you can add to them; the\n**×** at its right-hand end empties it, and the box in the Search panel has one as well.\n\n## Reading it\n\nEach meaning search gets its own colour, and its matches are marked in the text in that colour and\n**down the spine** as thin bars, so you can see at a glance whether a theme sits in one place or\nruns through the whole piece — see [Reading the spine](/help/spine).\n\nTick several searches to show them together; click a search’s words to show only that one. **↺**\nputs the question back in the box to ask again.\n\nEach match has a score out of 100. It is the AI’s judgement of its own answer, not a measurement, so\nread a high score as “worth a look” rather than “certain”. **prioritised**, the default, hides weak\nmatches from the list *and* the text; if you expected more marks, move the **confidence** slider\nleft.\n\nWhich searches are showing is part of the address, so a link you send opens with the same marks."
+  },
+  {
+   "anchor": "mode-referee",
+diff --git a/src/web/DockQuickSearch.tsx b/src/web/DockQuickSearch.tsx
+index 200cb98e4..e5c63a0ed 100644
+--- a/src/web/DockQuickSearch.tsx
++++ b/src/web/DockQuickSearch.tsx
+@@ -16,7 +16,7 @@
+  *   the band's own rule, `stepQuickSession` from quick-session.ts, not a copy
+  *   of it — then opens Search mode and hands the draft over. Focus stays here
+  *   (the panel does not take it, Sol F2) and the article does not move.
+- * - **With the band on *quick***, every keystroke, Enter, focus and blur goes
++ * - **With the band on *meaning***, every keystroke, Enter, focus and blur goes
+  *   straight to the band's session, exactly as the panel's box does, so one
+  *   session keeps one row whichever box the reader types in.
+  *
+@@ -38,7 +38,7 @@
+  *   works there, and does what the ⚡ did;
+  * - **Search mode open and this box not focused**, at a width that has the
+  *   box: the ⚡ (a class this component sets), so there is only ever one box
+- *   to type in. It opens Search mode on *quick* with the panel's box focused.
++ *   to type in. It opens Search mode on *meaning* with the panel's box focused.
+  *
+  * The ⚡ focuses the panel's box inside the tap when the panel is already
+  * mounted. When it is not, the box mounts a render later and focuses itself
+diff --git a/src/web/SearchPanel.tsx b/src/web/SearchPanel.tsx
+index e444b2167..4999091bb 100644
+--- a/src/web/SearchPanel.tsx
++++ b/src/web/SearchPanel.tsx
+@@ -111,7 +111,7 @@ import {
+   PRIORITY_CONF,
+ } from "./search-hits.js";
+ import { hiddenNote } from "./threshold.js";
+-import { asksTheServer, type HitOrder, type Matcher } from "./params.js";
++import { asksTheServer, type HitOrder, kindFor, type Matcher } from "./params.js";
+ import { PALETTE_BY_HUE } from "./hit-colours.js";
+ import { ModeSurface } from "./ModeSurface.js";
+ import { Tooltip, TooltipGroup } from "./Tooltip.js";
+@@ -580,7 +580,7 @@ const Box = forwardRef<
+      */
+     loaded: boolean;
+     onAsk(criterion: string, kind: SearchKind): void;
+-    /** Search-as-you-type, for quick only — see `TypingControls`. */
++    /** Search-as-you-type, for the meaning matcher — see `TypingControls`. */
+     typing: TypingControls | undefined;
+     /** Do not take focus on mount: the bar's box has it (Sol F2). */
+     quietMount: boolean;
+@@ -622,11 +622,13 @@ const Box = forwardRef<
+   /* Not `!busy` any more: several searches may run at once, and only an exact
+      repeat of one still running — same words, same kind — is refused. See
+      `running` in SearchPanel. */
+-  const asking = asksTheServer(matcher) ? matcher : null;
+-  /* Quick, as you type: the session owns the asking, and Enter or *find*
+-     flushes the words into its row and ends it — **even when those words are
+-     already running** (Sol F5), which is exactly the state a pause leaves. */
+-  const session = matcher === "quick" ? typing : undefined;
++  const asking = asksTheServer(matcher) ? kindFor(matcher) : null;
++  /* Meaning, as you type: the session owns the asking, and Enter or *find*
++     flushes the words into its quick row and ends it — **even when those
++     words are already running** (Sol F5), which is exactly the state a pause
++     leaves — and the flush starts the thorough search at once
++     (auto-thorough.ts § `submitted`). */
++  const session = asksTheServer(matcher) ? typing : undefined;
+   const repeat = asking !== null && session === undefined && running.has(runningKey(draft, asking));
+   const ready =
+     asking !== null && (loaded || session !== undefined) && draft.trim().length > 0 && !repeat;
+@@ -661,8 +663,8 @@ const Box = forwardRef<
+    */
+   function switchTo(next: Matcher, toBox: boolean) {
+     if (next !== matcher) {
+-      /* Only a crossing between words and the other two moves the text. Quick
+-         and meaning both read the draft, so between them it simply stays. */
++      /* A crossing between words and meaning moves the text: one reads
++         `?find=`, the other the draft. */
+       if (matcher === "words") {
+         setDraft(value);
+         onFind(null);
+@@ -690,18 +692,10 @@ const Box = forwardRef<
+           enterKeyHint="search"
+           value={value}
+           placeholder={
+-            matcher === "words"
+-              ? "find these words…"
+-              : matcher === "quick"
+-                ? "describe it — a fast first pass…"
+-                : "describe what to look for…"
++            matcher === "words" ? "find these words…" : "describe what to look for…"
+           }
+           aria-label={
+-            matcher === "words"
+-              ? "Find these words"
+-              : matcher === "quick"
+-                ? "Describe what to look for, for a quick search"
+-                : "Describe what to look for"
++            matcher === "words" ? "Find these words" : "Describe what to look for"
+           }
+           onChange={(e) => {
+             if (matcher === "words") onFind(e.target.value || null);
+@@ -808,19 +802,7 @@ const Box = forwardRef<
+           >
+             <Type size={12} /> words
+           </button>
+-          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of three, in one group, with one label */}
+-          <button
+-            type="button"
+-            role="radio"
+-            aria-checked={matcher === "quick"}
+-            tabIndex={0}
+-            className={`srch-mode summ-view-btn${matcher === "quick" ? " on" : ""}`}
+-            onClick={(e) => switchTo("quick", e.detail > 0)}
+-            title="A fast first pass: scores every paragraph in about a second. Whole paragraphs, no reasons."
+-          >
+-            <Zap size={12} /> quick
+-          </button>
+-          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of three, in one group, with one label */}
++          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of two, in one group, with one label */}
+           <button
+             type="button"
+             role="radio"
+@@ -828,12 +810,15 @@ const Box = forwardRef<
+             tabIndex={0}
+             className={`srch-mode summ-view-btn${matcher === "meaning" ? " on" : ""}`}
+             onClick={(e) => switchTo("meaning", e.detail > 0)}
+-            title="Describe what you are looking for and the model finds it. Costs a model call."
++            /* Quick and meaning were two buttons until 2026-10-12 (plan
++               261012e): now one, which asks the quick search as you pause and
++               replaces each settled answer with the thorough one. */
++            title="Describe what you are looking for: a fast first pass in about a second, then a thorough search that replaces it."
+           >
+             <Sparkles size={12} /> meaning
+           </button>
+         </div>
+-        {/* Only in quick and meaning, because only they have a moment of
++        {/* Only in meaning, because only it has a moment of
+             submission. In words mode there is nothing to press: the results are
+             already there. Saying so with the absence of a button is clearer
+             than a disabled one, which invites a reader to wonder what they did
+@@ -856,9 +841,7 @@ const Box = forwardRef<
+                 ? "Waiting for your saved searches to load"
+                 : repeat
+                   ? "Already searching for this — change the words to ask something else"
+-                  : asking === "quick"
+-                    ? "Score every paragraph against this — about a second"
+-                    : "Find the passages that match — one model call"
++                  : "Search now — a fast first pass, then the thorough search"
+             }
+           >
+             find
+diff --git a/src/web/help/pages/modes/search.md b/src/web/help/pages/modes/search.md
+index 9ada455fb..f13229415 100644
+--- a/src/web/help/pages/modes/search.md
++++ b/src/web/help/pages/modes/search.md
+@@ -19,21 +19,22 @@ Use **words** when you remember a phrase. Use **meaning** to ask a question of t
+ long article. Search opens on meaning, so switch to words for an exact look-up. Your browser’s own
+ Find works as usual.
+ 
+-**quick** asks the same kind of question and answers in about a second: a fast model scores every
+-paragraph, and the ones that match are marked whole, with no reasons. It searches whenever you pause
+-typing, and what you type keeps one saved search, updated as you go rather than a new one each time.
+-Press Enter when you are done; typing again after that, or after a break, starts a new one. Its
+-paragraphs are marked with a bar down the side and a mark in the spine, not a highlight over the
+-words. Use it for a first look; **thorough** on a quick search runs the full meaning search on the
+-same words, usually in about ten seconds, and replaces the quick one. You do not have to press it:
+-once you stop typing and the quick answer has settled for two seconds, the thorough search starts by
+-itself (at once if you pressed Enter). The quick search shows a spinner in place of its **thorough**
+-button while it runs. On success its results take the quick ones' place; if it fails, the quick
+-results stay.
++A meaning search answers twice. First, in about a second, a fast model scores every paragraph,
++and the ones that match are marked whole, with no reasons; that search is tagged **quick**. It
++searches whenever you pause typing, and what you type keeps one saved search, updated as you go
++rather than a new one each time. Press Enter when you are done; typing again after that, or after a
++break, starts a new one. Its paragraphs are marked with a bar down the side and a mark in the spine,
++not a highlight over the words.
++
++Then, once you stop typing and the quick answer has settled for two seconds (at once if you pressed
++Enter), the thorough search starts by itself: the full model reads the whole piece, usually in about
++ten seconds, and marks the words that answer you, each with a line of reasoning. The quick search
++shows a spinner while it runs. On success its results take the quick ones' place; if it fails, the
++quick results stay, and **thorough** on the quick search asks again.
+ 
+ To start a quick search from anywhere in the article, type in the **Quick search** box in the bottom
+ bar, press the **⚡** button that takes its place while Search is open, or press **/**. A phone or a
+-narrow window has no room for the box: open **Search** and choose **quick**. Typing *search for …*
++narrow window has no room for the box: open **Search** and type. Typing *search for …*
+ in the command bar does it too, at any width: the first row it offers is the quick search, and the
+ second finds the exact words. The box keeps your words after a search, so you can add to them; the
+ **×** at its right-hand end empties it, and the box in the Search panel has one as well.
+diff --git a/src/web/modes/search/SearchMode.tsx b/src/web/modes/search/SearchMode.tsx
+index 820fcb2cb..959770e4d 100644
+--- a/src/web/modes/search/SearchMode.tsx
++++ b/src/web/modes/search/SearchMode.tsx
+@@ -317,19 +317,19 @@ export function SearchBand({
+  * **The band's half of the bar's quick-search box** (plan 261002h stage 3,
+  * src/web/DockQuickSearch.tsx). Two jobs, both through the shared draft:
+  *
+- * - **While on *quick*, the band's typing session is registered**, so the
++ * - **While on *meaning*, the band's typing session is registered**, so the
+  *   bar's keystrokes, Enter, focus and blur reach the very session the
+  *   panel's box drives. One session, one row, whichever box is typed in.
+  * - **A handoff is taken** — the bar's pause, Enter or ⚡ that arrived while
+- *   this band was closed or on another matcher, or the command bar's *Quick
+- *   search “X”* row (plan 261005i). Not on *quick* yet: switch, and take it on
+- *   the next pass. On *quick*: ask with the draft as it is now, which is the
+- *   latest the reader typed.
++ *   this band was closed or on words, or the command bar's *Quick search “X”*
++ *   row (plan 261005i). Not on *meaning* yet: switch, and take it on the next
++ *   pass. On *meaning* (which was *quick* until plan 261012e folded the two):
++ *   ask with the draft as it is now, which is the latest the reader typed.
+  *
+  *   **The switch replaces the history entry only when the band has just
+  *   mounted**, which is when the press that left the handoff also pushed
+  *   Search open: one Back then still leaves Search mode. A band already open
+- *   on words or meaning had nothing pushed for it (both openers skip a
++ *   on words had nothing pushed for it (both openers skip a
+  *   same-mode write), so there the switch pushes, and Back returns to the view
+  *   the reader was on rather than skipping it (GPT Sol's F3 on that plan).
+  *
+@@ -363,7 +363,7 @@ function useBarHandoff(
+     };
+   }, [draft]);
+   useEffect(
+-    () => (matcher === "quick" ? draft.registerBand(typing) : undefined),
++    () => (matcher === "meaning" ? draft.registerBand(typing) : undefined),
+     [draft, matcher, typing],
+   );
+   // Defer consumption past StrictMode's setup/cleanup replay: its session
+@@ -376,8 +376,8 @@ function useBarHandoff(
+       const opened = opening.current;
+       opening.current = false;
+       if (draft.handoff() === null) return;
+-      if (matcher !== "quick") {
+-        void setMatch("quick", { history: opened ? "replace" : "push" });
++      if (matcher !== "meaning") {
++        void setMatch("meaning", { history: opened ? "replace" : "push" });
+         clearOpenHit();
+         return;
+       }
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 074292d74..808dea55b 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -795,33 +795,55 @@ export const faqBarParam = createParser<number>({
+  * `push`, like `cols` and `text`: switching matcher changes what the article
+  * looks like, and Back should undo it.
+  *
+- * **`quick` sits between them** (2026-10-02, docs/plans/261002e-quick-search-v1.md):
+- * the same saved, ticked, coloured runs as `meaning`, asked of a fast model
+- * that scores every paragraph in about a second instead of quoting and
+- * reasoning in about ten seconds. Wherever the panel talks about the draft or the
+- * saved list, `quick` behaves as `meaning` does — `asksTheServer` below — and
+- * it differs only in the `kind` it asks with.
+- */
+-export const MATCHERS = ["words", "quick", "meaning"] as const;
++ * **`meaning` asks the quick search first, and swaps in the thorough one**
++ * (2026-10-12, docs/plans/261012e-search-meaning-is-quick-then-thorough-one-toggle.md,
++ * Greg's `spya-sy4rn0`). From 2026-10-02 there was a third matcher, `quick`,
++ * between these two, and `meaning` was the thorough search alone, asked on
++ * **find**. They were folded into one: the meaning matcher searches as you
++ * pause, as `quick` did, and `auto-thorough.ts` replaces each settled quick
++ * answer with the thorough one. So the matcher is no longer the run's kind —
++ * `kindFor` below says which kind it asks with.
++ *
++ * **`?match=quick` still parses, as `meaning`**, because every pasted link,
++ * bookmark, history entry and chat card written before the fold says it.
++ * (The remembered last view never replays search parameters, so it needs
++ * nothing.) Nothing rewrites the URL; the next matcher write says `meaning`.
++ */
++export const MATCHERS = ["words", "meaning"] as const;
+ export type Matcher = (typeof MATCHERS)[number];
+ 
++/** The matcher folded into `meaning` on 2026-10-12, still read from old URLs. */
++const FORMER_MATCHERS: Readonly<Record<string, Matcher>> = { quick: "meaning" };
++
+ export const matchParam = createParser<Matcher>({
+-  parse: (v) => (MATCHERS.includes(v as Matcher) ? (v as Matcher) : null),
++  parse: (v) => (MATCHERS.includes(v as Matcher) ? (v as Matcher) : (FORMER_MATCHERS[v] ?? null)),
+   serialize: (v) => v,
+ }).withOptions({ history: "push" });
+ 
++/**
++ * **Which kind of run a matcher asks the server for.** The meaning matcher
++ * asks a `quick` run first; the thorough `meaning` run that replaces it is
++ * asked by auto-thorough.ts (or the row's *thorough* button), never by the box.
++ */
++export function kindFor(matcher: Exclude<Matcher, "words">): "quick" {
++  switch (matcher) {
++    case "meaning":
++      return "quick";
++  }
++}
++
+ const DEFAULT_MATCHER: Matcher = "meaning";
+ 
+ /**
+  * **Does this matcher ask the server, and save what comes back?** True for
+- * `quick` and `meaning`; false for `words`, which is answered in the browser
+- * on every keystroke and saves nothing. When it is true, the matcher *is* the
+- * `kind` the run is asked and saved with.
++ * `meaning`; false for `words`, which is answered in the browser on every
++ * keystroke and saves nothing. When it is true, `kindFor` says which `kind`
++ * the run is asked and saved with.
+  *
+  * A named question rather than `matcher === "meaning"` at each call site,
+- * because that comparison was this question's spelling until a third matcher
+- * arrived, and every copy of it left behind would quietly have treated `quick`
+- * as `words` — no saved list, no draft, no find button.
++ * because there were three matchers from 2026-10-02 to 2026-10-12, and a
++ * comparison spelt for one of them would quietly have treated another as
++ * `words` — no saved list, no draft, no find button.
+  */
+ export function asksTheServer(matcher: Matcher): matcher is Exclude<Matcher, "words"> {
+   return matcher !== "words";
+diff --git a/src/web/search-draft.ts b/src/web/search-draft.ts
+index 14c0cfbae..3db066499 100644
+--- a/src/web/search-draft.ts
++++ b/src/web/search-draft.ts
+@@ -15,7 +15,7 @@
+  *
+  * - The bar's box writes the draft **only while it has focus** — that is,
+  *   only from its own `onChange`.
+- * - The panel's box reads and writes it with *quick* or *meaning* chosen.
++ * - The panel's box reads and writes it with *meaning* chosen.
+  *   *Words* keeps `?find=`, as it always has, and never touches it.
+  * - **Fetches never write it.** A criterion arriving from the server is not
+  *   something the reader typed, and that was a bug this panel once had
+@@ -28,10 +28,10 @@
+  *
+  * - **A handoff** — the bar has had its first qualifying pause (or Enter, or
+  *   the ⚡) while the band could not hear it: Search mode closed, or open on
+- *   another matcher. The band, once it is mounted on *quick*, takes it and
+- *   asks. `useSyncExternalStore` so a band already mounted on *meaning*
++ *   another matcher. The band, once it is mounted on *meaning*, takes it and
++ *   asks. `useSyncExternalStore` so a band already mounted on *words*
+  *   notices it and switches.
+- * - **The band's typing controls**, registered while the band is on *quick*,
++ * - **The band's typing controls**, registered while the band is on *meaning*,
+  *   so the bar's later keystrokes reach the same session the panel's do.
+  * - **The panel box's focus**, registered by the panel, so the ⚡ can focus it
+  *   inside the tap when the panel is already mounted.
+@@ -48,7 +48,7 @@ import type { TypingControls } from "./SearchPanel.js";
+  * - `enter`: Enter in the bar's box, or the command bar's *Quick search “X”*
+  *   row, which sends it whether or not the band is listening — ask the draft
+  *   now, and seal it.
+- * - `quick`: the ⚡ — nothing to ask, only be on *quick*.
++ * - `quick`: the ⚡ — nothing to ask, only be on *meaning*.
+  */
+ export type HandoffKind = "pause" | "enter" | "quick";
+ export type Handoff = { type: "pause" | "quick" } | { type: "enter"; text: string };
+@@ -69,7 +69,7 @@ export interface SearchDraft {
+   clearHandoffs(): void;
+   /** Take the next pending action. */
+   take(): Handoff | null;
+-  /** The band's session, while it is on *quick*; `null` otherwise. */
++  /** The band's session, while it is on *meaning*; `null` otherwise. */
+   band(): BandTyping | null;
+   registerBand(band: BandTyping): () => void;
+   /** Focus the panel's box, if one is mounted. False if none is. */
+diff --git a/src/web/search-hrefs.ts b/src/web/search-hrefs.ts
+index f597771a1..8e586db45 100644
+--- a/src/web/search-hrefs.ts
++++ b/src/web/search-hrefs.ts
+@@ -35,7 +35,7 @@ export function findHref(slug: string, carried: string, words: string): string {
+  */
+ export function searchRunHref(slug: string, carried: string, runId: string): string {
+   const kept = searchWithoutAny(carried, SEARCH_KEYS);
+-  const search = [kept, "mode=search", "match=quick", `runs=${encodeURIComponent(runId)}`]
++  const search = [kept, "mode=search", "match=meaning", `runs=${encodeURIComponent(runId)}`]
+     .filter(Boolean)
+     .join("&");
+   return readHref(slug, search, "article");
+diff --git a/tests/chat-search-in-place.test.tsx b/tests/chat-search-in-place.test.tsx
+index f68f66070..5efee2a5a 100644
+--- a/tests/chat-search-in-place.test.tsx
++++ b/tests/chat-search-in-place.test.tsx
+@@ -265,7 +265,8 @@ describe("a quick-search button in a chat answer", () => {
+     await flush();
+     expect(links()).toEqual(["spya-cccccc"]);
+     expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("runs=spya-run777");
+-    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("match=quick");
++    // The meaning matcher, which asks the quick search, since plan 261012e folded quick into it.
++    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("match=meaning");
+   });
+ 
+   it("asks once for two presses in a row", async () => {
+diff --git a/tests/dock-quick-search.test.tsx b/tests/dock-quick-search.test.tsx
+index f3d93b1ab..17e1bd078 100644
+--- a/tests/dock-quick-search.test.tsx
++++ b/tests/dock-quick-search.test.tsx
+@@ -194,6 +194,8 @@ function key(el: EventTarget, init: KeyboardEventInit): KeyboardEvent {
+   return e;
+ }
+ const match = () => new URLSearchParams(location.search).get("match");
++/** The matcher the panel's toggle has lit — the URL says nothing when it is the default. */
++const lit = () => host.querySelector(".srch-mode[aria-checked='true']")?.textContent?.trim() ?? null;
+ 
+ beforeEach(() => {
+   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+@@ -211,7 +213,7 @@ afterEach(async () => {
+ });
+ 
+ describe("typing in the bar's box", () => {
+-  it("opens Search mode on quick at the first pause, asks there, and keeps focus in the bar", async () => {
++  it("opens Search mode on meaning at the first pause, asks quick there, and keeps focus in the bar", async () => {
+     const posted = server();
+     mount();
+     type(barBox(), "why replication");
+@@ -221,7 +223,7 @@ describe("typing in the bar's box", () => {
+ 
+     await pause();
+     expect(opened).toBe(1);
+-    expect(match()).toBe("quick");
++    expect(lit()).toBe("meaning");
+     expect(posted.map((p) => [p.criterion, p.kind, p.revises ?? false])).toEqual([
+       ["why replication", "quick", false],
+     ]);
+@@ -325,9 +327,10 @@ describe("typing in the bar's box", () => {
+     expect(older.defaultPrevented).toBe(true);
+   });
+ 
+-  it("switches Search mode to quick when it is open on another matcher", async () => {
++  /* Words, since plan 261012e: it is the only other matcher left. */
++  it("switches Search mode to meaning when it is open on words", async () => {
+     const posted = server();
+-    mount({ startOpen: true, url: "?mode=search&match=meaning" });
++    mount({ startOpen: true, url: "?mode=search&match=words" });
+     await flush();
+     // Open from another door: the panel took focus, as it always has.
+     expect(document.activeElement).toBe(panelBox());
+@@ -336,7 +339,7 @@ describe("typing in the bar's box", () => {
+     // …so typing in the bar happens after somebody focused it; do so.
+     type(barBox(), "why replication");
+     await pause();
+-    expect(match()).toBe("quick");
++    expect(match()).toBe("meaning");
+     expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["why replication", "quick"]]);
+   });
+ });
+@@ -524,7 +527,8 @@ describe("handoffs before the band mounts", () => {
+ 
+   it("drops an unconsumed handoff when leaving Search mode before its matcher switches", async () => {
+     const posted = server();
+-    mount({ startOpen: true, url: "?mode=search&match=meaning" });
++    // Words: a band on meaning takes the bar's Enter itself, so nothing is handed off.
++    mount({ startOpen: true, url: "?mode=search&match=words" });
+     await flush();
+     type(barBox(), "why replication");
+     key(barBox(), { key: "Enter" });
+@@ -612,36 +616,50 @@ describe("a search sent from the command bar", () => {
+     expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["the limits of free will", "quick"]]);
+   });
+ 
+-  /* Sol's F3. Opening Search pushes an entry, and the switch to *quick* then
+-     replaces it, so one Back leaves Search. With Search already open nothing
+-     was pushed, and a replace would overwrite the words or meaning view the
+-     reader was on: Back would skip it. */
++  /* Sol's F3. Opening Search pushes an entry, and the switch to *meaning* then
++     replaces it, so one Back leaves Search. With Search already open on words
++     nothing was pushed, and a replace would overwrite the words view the reader
++     was on: Back would skip it. Already on meaning there is no switch, and so
++     no entry at all (plan 261012e, Sol's F1 on it). */
+   it("does not push an extra matcher entry when the band has just mounted", async () => {
+     const posted = server();
+-    mount({ url: "?match=meaning" });
++    // On words, so the band that mounts has a switch to make.
++    mount({ url: "?match=words" });
+     const before = history.length;
+     // This host mounts the band without writing ?mode=. The actual opening and
+     // Back path are covered through Reader in mode-herald-wiring.test.tsx.
+     type(barBox(), "the limits of free will");
+     key(barBox(), { key: "Enter" });
+     await flush();
+-    expect(match()).toBe("quick");
++    expect(match()).toBe("meaning");
+     expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+     expect(history.length).toBe(before);
+   });
+ 
+-  it.each(["words", "meaning"])("pushes when Search was already open on %s, so Back returns to it", async (was) => {
++  it("pushes when Search was already open on words, so Back returns to it", async () => {
+     const posted = server();
+-    mount({ startOpen: true, url: `?mode=search&match=${was}` });
++    mount({ startOpen: true, url: "?mode=search&match=words" });
+     await flush();
+     const before = history.length;
+     send("the limits of free will");
+     await flush();
+-    expect(match()).toBe("quick");
++    expect(match()).toBe("meaning");
+     expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+     expect(history.length).toBe(before + 1);
+   });
+ 
++  it("pushes nothing when Search was already open on meaning: there is no switch to undo", async () => {
++    const posted = server();
++    mount({ startOpen: true, url: "?mode=search&match=meaning" });
++    await flush();
++    const before = history.length;
++    send("the limits of free will");
++    await flush();
++    expect(match()).toBe("meaning");
++    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
++    expect(history.length).toBe(before);
++  });
++
+   /* Sol's F4: a submitted search has nothing left to type, so on a touch
+      screen the box that mounts for it does not raise the keyboard over the
+      hits. The ⚡ asks for the box, and a desk keeps its caret. */
+@@ -703,17 +721,18 @@ describe("preserved boundaries", () => {
+     expect(posted).toHaveLength(0);
+   });
+ 
+-  it("meaning edits share the draft and ask only on Enter", async () => {
++  /* Was "meaning edits share the draft and ask only on Enter": plan 261012e
++     made the meaning matcher search as you pause, asking quick. */
++  it("meaning edits share the draft and ask quick at the pause", async () => {
+     const posted = server();
+     mount({ startOpen: true, url: "?mode=search&match=meaning" });
+     await flush();
+     type(panelBox()!, "comparison group");
+-    await pause();
++    await flush();
+     expect(barBox().value).toBe("comparison group");
+     expect(posted).toHaveLength(0);
+-    key(panelBox()!, { key: "Enter" });
+-    await flush();
+-    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["comparison group", "meaning"]]);
++    await pause();
++    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["comparison group", "quick"]]);
+   });
+ 
+   it("unmount removes the shortcut and focus/band registrations", async () => {
+@@ -815,25 +834,25 @@ describe("the box outlives the labels (the fit ladder's CSS)", () => {
+ });
+ 
+ describe("the ⚡ button", () => {
+-  it("opens Search mode on quick with the panel's box focused", async () => {
++  it("opens Search mode on meaning with the panel's box focused", async () => {
+     server();
+     mount();
+     act(() => bolt().click());
+     await flush();
+     expect(opened).toBe(1);
+-    expect(match()).toBe("quick");
++    expect(lit()).toBe("meaning");
+     expect(document.activeElement).toBe(panelBox());
+   });
+ 
+-  it("with Search mode already open, focuses the panel's box inside the tap", async () => {
++  it("with Search mode already open on words, focuses the panel's box inside the tap and switches to meaning", async () => {
+     server();
+-    mount({ startOpen: true, url: "?mode=search&match=meaning" });
++    mount({ startOpen: true, url: "?mode=search&match=words" });
+     await flush();
+     act(() => (document.activeElement as HTMLElement | null)?.blur());
+     act(() => bolt().click());
+     expect(document.activeElement, "focus waited for a later render").toBe(panelBox());
+     await flush();
+-    expect(match()).toBe("quick");
++    expect(match()).toBe("meaning");
+   });
+ });
+ 
+diff --git a/tests/mode-herald-wiring.test.tsx b/tests/mode-herald-wiring.test.tsx
+index d035dca85..8bf702585 100644
+--- a/tests/mode-herald-wiring.test.tsx
++++ b/tests/mode-herald-wiring.test.tsx
+@@ -319,6 +319,15 @@ describe("Reader hands the herald a press", () => {
+ 
+ const text = (): string => host.textContent ?? "";
+ 
++/**
++ * Search is open on the meaning matcher — read off the band's toggle, because
++ * the URL says nothing when meaning is the default. Meaning is what the quick
++ * search lands on since plan 261012e folded *quick* into it.
++ */
++const onMeaning = (): boolean =>
++  modeInUrl() === "search" &&
++  host.querySelector(".srch-mode[aria-checked='true']")?.textContent?.trim() === "meaning";
++
+ /** Exercise the command row through the Reader's actual executor and URL setters. */
+ async function quickSearchFromBar(words: string): Promise<void> {
+   const proto = HTMLDialogElement.prototype;
+@@ -333,14 +342,14 @@ async function quickSearchFromBar(words: string): Promise<void> {
+   });
+   expect(host.querySelector(".cmdbar-row .cmdbar-name")?.textContent).toBe(`Quick search “${words}”`);
+   await act(async () => input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+-  await until(() => modeInUrl() === "search" && new URLSearchParams(location.search).get("match") === "quick");
++  await until(onMeaning);
+ }
+ 
+ describe("the command bar's quick search through Reader", () => {
+   it("the Dock quick-search opener still names Search, and its mode button still closes it", async () => {
+     await open("?mode=summary");
+     await act(async () => host.querySelector<HTMLButtonElement>(".dock-qs-bolt")?.click());
+-    await until(() => modeInUrl() === "search" && new URLSearchParams(location.search).get("match") === "quick");
++    await until(onMeaning);
+     expect(herald()).toContain(MODE_LABEL.search);
+     await press(MODE_LABEL.search);
+     expect(modeInUrl()).toBe("plain");
+@@ -358,14 +367,29 @@ describe("the command bar's quick search through Reader", () => {
+     expect(new URLSearchParams(location.search).get("spine")).toBe("0");
+   });
+ 
+-  it.each(["words", "meaning"])("one Back restores an already-open %s matcher", async (matcher) => {
+-    await open(`?mode=search&match=${matcher}&find=entropy`);
++  it("one Back restores an already-open words matcher", async () => {
++    await open("?mode=search&match=words&find=entropy");
+     await quickSearchFromBar("free will");
++    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
+     await act(async () => history.back());
+-    await until(() => new URLSearchParams(location.search).get("match") === matcher);
++    await until(() => new URLSearchParams(location.search).get("match") === "words");
+     expect(modeInUrl()).toBe("search");
+     expect(new URLSearchParams(location.search).get("find")).toBe("entropy");
+   });
++
++  /* Already on meaning, the search switches nothing, so it pushes nothing
++     (plan 261012e, Sol's F1 on it): one Back undoes the press that opened
++     Search, not a matcher step the reader never saw. */
++  it("on an already-open meaning matcher, pushes nothing: one Back leaves Search", async () => {
++    await open("?mode=summary&match=meaning");
++    await press(MODE_LABEL.search);
++    expect(modeInUrl()).toBe("search");
++    await quickSearchFromBar("free will");
++    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
++    await act(async () => history.back());
++    await until(() => modeInUrl() === "summary");
++    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
++  });
+ });
+ 
+ const CHIP_THREAD = "spya-k3m9qt";
+diff --git a/tests/opening-read-gates-writes.test.tsx b/tests/opening-read-gates-writes.test.tsx
+index 9f504f81e..a3dc408fc 100644
+--- a/tests/opening-read-gates-writes.test.tsx
++++ b/tests/opening-read-gates-writes.test.tsx
+@@ -20,7 +20,9 @@
+  *
+  * - **While the read is out**, the action is refused through every door it has
+  *   (the button, the form's submit, the key chord), **no request is sent**, and
+- *   the reader's draft is still in the box.
++ *   the reader's draft is still in the box. (Search's press, since plan
++ *   261012e, is held rather than refused, and sent when the read settles:
++ *   § Search below.)
+  * - **After it succeeds**, the action works and **A and B are both on screen**.
+  *   Requiring A as well as B is what rejects the tempting wrong fix — dropping
+  *   the opening snapshot whenever a write begins — which leaves B alone and
+@@ -65,7 +67,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ 
+ import type { SavedCriterion } from "../src/saved-criteria.js";
+ import type { AnnotateDraft } from "../src/web/AnnotateDialog.js";
+-import type { Block, BlockId, Comment, SearchRun } from "../src/types.js";
++import type { Block, BlockId, Comment, SearchKind, SearchRun } from "../src/types.js";
+ 
+ /** One reply per request, decided by the case that is running. */
+ let answer: (url: string, init: RequestInit) => Promise<Response>;
+@@ -115,6 +117,8 @@ const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
+ const { AnnotateDialog } = await import("../src/web/AnnotateDialog.js");
+ const { useComments } = await import("../src/web/useComments.js");
+ const { OPENING_READ_DEADLINE_MS } = await import("../src/web/lib/opening-read.js");
++const { PAUSE_MS } = await import("../src/web/quick-session.js");
++const { searchDraftFor } = await import("../src/web/search-draft.js");
+ const { Dock } = await import("../src/web/Dock.js");
+ const { EXPERIMENTAL_OFF } = await import("./helpers/experimental-fixtures.js");
+ 
+@@ -226,6 +230,11 @@ beforeEach(() => {
+   strict = false;
+   honourAbort = true;
+   history.replaceState(null, "", `/read/${SLUG}`);
++  /* Search's draft outlives the band, per article, for the page's life. Left
++     over from the case before, the box already holds the words a case types,
++     so React sees no change, no typing session opens, and the case tests a
++     path the reader is not on. */
++  searchDraftFor(SLUG).set("");
+   host = document.createElement("div");
+   document.body.append(host);
+   root = createRoot(host);
+@@ -427,23 +436,40 @@ describe("Criteria: Run waits for the opening read", () => {
+ 
+ /* ================================================================ Search == */
+ 
++/* **Since plan 261012e the band's default matcher is a typing session**, not a
++   manual meaning search: a pause or Enter/*find* asks a `quick` run, and once
++   that answer is in, auto-thorough asks the `meaning` run for the same words
++   and swaps it in. So *find* is no longer `disabled` while the list loads —
++   the session **holds** the press, with its words, and sends it the moment
++   the read settles (src/web/quick-session.ts § `flush`, `loaded`). The
++   property is unchanged: nothing is POSTed before the read has answered, and
++   both the earlier runs and the new one are on screen after it. The reader's
++   press is counted as the quick runs; the thorough run auto-thorough asks
++   after each is counted apart. */
++
+ const OLD_QUESTION = "arguments against substrate independence";
+ const NEW_QUESTION = "anywhere he gives numbers";
+ 
+-function runRow(id: string, criterion: string): SearchRun {
+-  return { id, criterion, kind: "meaning", createdAt: "2026-09-01T09:00:00.000Z", status: "done", hits: [] };
++function runRow(id: string, criterion: string, kind: SearchKind = "meaning"): SearchRun {
++  return { id, criterion, kind, createdAt: "2026-09-01T09:00:00.000Z", status: "done", hits: [] };
+ }
+ const OLD_RUN = runRow("spya-aaaab2", OLD_QUESTION);
+ 
++interface SearchPost {
++  id: string;
++  kind: SearchKind;
++}
++
++/** A held GET, and a POST that streams the run — as the kind it was asked — to done. */
+ function searchServer() {
+   const get = held();
+-  const posted: string[] = [];
++  const posted: SearchPost[] = [];
+   answer = (_url, init) => {
+     if (method(init) === "GET") return get.promise;
+     if (method(init) === "POST") {
+-      const id = sentId(init);
+-      posted.push(id);
+-      const run = runRow(id, NEW_QUESTION);
++      const { id, kind } = JSON.parse(String(init.body)) as SearchPost;
++      posted.push({ id, kind });
++      const run = runRow(id, NEW_QUESTION, kind);
+       return Promise.resolve(
+         sse([
+           { event: "begin", data: { ...run, status: "pending", sourceHash: "h" } },
+@@ -456,6 +482,9 @@ function searchServer() {
+   return { get, posted };
+ }
+ 
++/** The reader's asks: the quick runs. Auto-thorough's meaning run follows each by itself. */
++const quickAsks = (posted: SearchPost[]) => posted.filter((p) => p.kind === "quick");
++
+ function mountSearch(): void {
+   render(
+     createElement(
+@@ -481,26 +510,33 @@ function pressFindEveryWay(): void {
+   key(searchBox(), { key: "Enter" });
+ }
+ 
+-describe("Search: Find waits for the opening read", () => {
+-  it("refuses Find and Enter while the list is loading, keeps the draft, and keeps both runs after", async () => {
++describe("Search: nothing is asked until the opening read settles", () => {
++  it("holds a pause, Find and Enter while the list is loading, keeps the draft, and sends one search after, with both runs on screen", async () => {
++    // Only the timers are fake, so the session's pause can be passed without waiting.
++    fakeClock();
+     const { get, posted } = searchServer();
+     mountSearch();
+     await flush();
+ 
+     type(searchBox(), NEW_QUESTION);
++    // The pause the session asks on: carried, not sent.
++    await act(async () => {
++      await vi.advanceTimersByTimeAsync(PAUSE_MS + 50);
++    });
++    await flush();
++    expect(posted, "a pause sent a search while the opening read was still out").toHaveLength(0);
+     pressFindEveryWay();
+     await flush();
+     expect(posted, "a search was sent while the opening read was still out").toHaveLength(0);
+-    expect(findButton().disabled).toBe(true);
+-    expect(searchBox().value, "the refused press threw the draft away").toBe(NEW_QUESTION);
++    expect(findButton().title).toBe("Waiting for your saved searches to load");
++    expect(searchBox().value, "the held press threw the draft away").toBe(NEW_QUESTION);
+ 
+     get.release(json({ runs: [OLD_RUN] }));
+     await flush();
+-    expect(host.textContent).toContain(OLD_QUESTION);
+-
+-    key(searchBox(), { key: "Enter" });
+-    await flush();
+-    expect(posted).toHaveLength(1);
++    /* The held press goes now, by itself — once, though it was paused on and
++       pressed twice — and its thorough search follows it. */
++    expect(quickAsks(posted), "the held press was lost, or sent twice").toHaveLength(1);
++    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning"]);
+     expect(host.textContent, "the saved search from before was lost").toContain(OLD_QUESTION);
+     expect(host.textContent, "the search just run is not on screen").toContain(NEW_QUESTION);
+   });
+@@ -514,10 +550,11 @@ describe("Search: Find waits for the opening read", () => {
+     get.release(json({ error: "The database is busy. [db-busy]" }, 503));
+     await flush();
+     expect(host.textContent).toContain("[db-busy]");
++    expect(posted).toHaveLength(0);
+ 
+     click(findButton());
+     await flush();
+-    expect(posted).toHaveLength(1);
++    expect(quickAsks(posted)).toHaveLength(1);
+     expect(host.textContent).toContain(NEW_QUESTION);
+   });
+ 
+@@ -531,7 +568,7 @@ describe("Search: Find waits for the opening read", () => {
+ 
+     click(findButton());
+     await flush();
+-    expect(posted).toHaveLength(1);
++    expect(quickAsks(posted)).toHaveLength(1);
+     expect(host.textContent).toContain(NEW_QUESTION);
+     expect(host.textContent, "the search cleared the load's error").toContain("[db-busy]");
+     expect(host.textContent, "nothing says the earlier searches are missing").toContain(
+@@ -547,12 +584,16 @@ describe("Search: Find waits for the opening read", () => {
+     await flush();
+     type(searchBox(), NEW_QUESTION);
+ 
++    /* The clock passes the session's pause on its way to the deadline. That
++       pause was carried while the read was out, and the deadline releases it. */
+     await pastTheDeadline();
+     expect(host.textContent).toContain("[rd-timeout]");
++    expect(quickAsks(posted), "the carried pause was not asked at the deadline").toHaveLength(1);
+ 
++    // Find on words already asked flushes the same row: no second search.
+     click(findButton());
+     await flush();
+-    expect(posted).toHaveLength(1);
++    expect(quickAsks(posted)).toHaveLength(1);
+     expect(host.textContent).toContain(NEW_QUESTION);
+ 
+     get.release(json({ runs: [OLD_RUN] }));
+@@ -576,9 +617,7 @@ describe("Search: Find waits for the opening read", () => {
+ 
+     get.release(json({ runs: [OLD_RUN] }));
+     await flush();
+-    click(findButton());
+-    await flush();
+-    expect(posted).toHaveLength(1);
++    expect(quickAsks(posted), "the held press was lost, or sent twice").toHaveLength(1);
+     expect(host.textContent).toContain(OLD_QUESTION);
+     expect(host.textContent).toContain(NEW_QUESTION);
+   });
+diff --git a/tests/quick-search-panel.test.tsx b/tests/quick-search-panel.test.tsx
+index 4d7e6f3d1..cf3be8178 100644
+--- a/tests/quick-search-panel.test.tsx
++++ b/tests/quick-search-panel.test.tsx
+@@ -192,7 +192,7 @@ describe("the third arm of the toggle", () => {
+       await mount({ access, runs: [], start: "meaning", active: [] });
+       type(pending.criterion);
+       act(() => findButton().click());
+-      expect(asked).toEqual([[pending.criterion, "meaning"]]);
++      expect(asked).toEqual([[pending.criterion, "quick"]]);
+       const line = container.querySelector('.srch-working[role="status"]');
+       expect(line?.textContent).toBe("Reading the article for you…");
+       expect(line?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+@@ -201,27 +201,25 @@ describe("the third arm of the toggle", () => {
+     }
+   });
+ 
+-  it("is drawn between words and meaning, and checked when the matcher is quick", async () => {
+-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
++  /* Plan 261012e, Greg's `spya-sy4rn0`: quick and meaning were folded into
++     one meaning matcher, which asks the quick search and lets auto-thorough
++     swap the thorough one in. There is no button that asks meaning alone. */
++  it("draws two matchers, words and meaning, and no quick", async () => {
++    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
+     const names = [...container.querySelectorAll('[role="radio"]')].map((b) => b.textContent?.trim());
+-    expect(names).toEqual(["words", "quick", "meaning"]);
+-    expect(radio("quick").getAttribute("aria-checked")).toBe("true");
+-    expect(radio("meaning").getAttribute("aria-checked")).toBe("false");
++    expect(names).toEqual(["words", "meaning"]);
++    expect(radio("meaning").getAttribute("aria-checked")).toBe("true");
+   });
+ 
+-  it("asks as quick on find, and as meaning once switched", async () => {
+-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
++  it("asks the quick search first on find", async () => {
++    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
+     type("statistical evidence");
+     act(() => findButton().click());
+     expect(asked).toEqual([["statistical evidence", "quick"]]);
+-
+-    act(() => radio("meaning").click());
+-    act(() => findButton().click());
+-    expect(asked.at(-1)).toEqual(["statistical evidence", "meaning"]);
+   });
+ 
+-  it("asks as quick on Enter", async () => {
+-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
++  it("asks the quick search first on Enter", async () => {
++    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
+     type("anywhere he gives numbers");
+     act(() => {
+       input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+@@ -229,14 +227,14 @@ describe("the third arm of the toggle", () => {
+     expect(asked).toEqual([["anywhere he gives numbers", "quick"]]);
+   });
+ 
+-  it.each(["quick", "meaning"] as const)("puts the soft keyboard away on the %s find button", async (start) => {
++  it.each(["meaning"] as const)("puts the soft keyboard away on the %s find button", async (start) => {
+     vi.stubGlobal("innerHeight", 800);
+     vi.stubGlobal("visualViewport", { height: 464, offsetTop: 0, scale: 1 });
+     await mount({ access: owner(), runs: [], start, active: [] });
+     type("statistical evidence");
+     input().focus();
+     act(() => findButton().click());
+-    expect(asked).toEqual([["statistical evidence", start]]);
++    expect(asked).toEqual([["statistical evidence", "quick"]]);
+     expect(document.activeElement).not.toBe(input());
+   });
+ 
+@@ -247,7 +245,7 @@ describe("the third arm of the toggle", () => {
+     type("statistical evidence");
+     input().focus();
+     act(() => findButton().click());
+-    expect(asked).toEqual([["statistical evidence", "meaning"]]);
++    expect(asked).toEqual([["statistical evidence", "quick"]]);
+     expect(document.activeElement).toBe(input());
+   });
+ 
+@@ -255,7 +253,7 @@ describe("the third arm of the toggle", () => {
+      picks a word, it does not ask. Both spellings — the flag and keyCode 229.
+      docs/project/keyboard.md § Enter in a text box. */
+   it("asks nothing on the Enter that ends an IME composition", async () => {
+-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
++    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
+     type("日本語の");
+     const flagged = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true });
+     const legacy = new KeyboardEvent("keydown", {
+@@ -273,19 +271,17 @@ describe("the third arm of the toggle", () => {
+     expect(legacy.defaultPrevented).toBe(false);
+   });
+ 
+-  it("keeps the draft between quick and meaning, and carries it to words and back", async () => {
++  it("carries the draft to words and back", async () => {
+     await mount({ access: owner(), runs: [], start: "meaning", active: [] });
+     type("where the controls are");
+-    act(() => radio("quick").click());
+-    expect(input().value).toBe("where the controls are");
+     act(() => radio("words").click());
+     expect(input().value).toBe("where the controls are");
+-    act(() => radio("quick").click());
++    act(() => radio("meaning").click());
+     expect(input().value).toBe("where the controls are");
+   });
+ 
+-  it("shows the saved list in quick mode as well as meaning", async () => {
+-    await mount({ access: owner(), runs: [QUICK, MEANING], start: "quick", active: [] });
++  it("lists quick rows and meaning rows together", async () => {
++    await mount({ access: owner(), runs: [QUICK, MEANING], start: "meaning", active: [] });
+     expect(container.querySelectorAll(".srch-saved-row")).toHaveLength(2);
+   });
+ });
+@@ -298,25 +294,17 @@ describe("the already-searching guard", () => {
+     await mount({
+       access: owner(new Set([pendingQuick.id])),
+       runs: [pendingQuick],
+-      start: "quick",
++      start: "meaning",
+       active: [],
+     });
+     type(pendingQuick.criterion);
+     expect(findButton().disabled).toBe(true);
+   });
+ 
+-  it("lets a meaning search for the same words go while the quick one is out", async () => {
+-    await mount({
+-      access: owner(new Set([pendingQuick.id])),
+-      runs: [pendingQuick],
+-      start: "meaning",
+-      active: [],
+-    });
+-    type(pendingQuick.criterion);
+-    expect(findButton().disabled).toBe(false);
+-    act(() => findButton().click());
+-    expect(asked).toEqual([[pendingQuick.criterion, "meaning"]]);
+-  });
++  /* The other half — the same words as meaning go while the quick search is
++     out — was asked from this box until plan 261012e. The box asks only quick
++     now; the row's *thorough* button is what asks meaning, and § a quick row
++     below holds its guard. */
+ });
+ 
+ describe("a quick row", () => {
+@@ -401,7 +389,7 @@ describe("a quick row", () => {
+     await mount({
+       access: owner(),
+       runs: [{ ...QUICK, status: "pending" }],
+-      start: "quick",
++      start: "meaning",
+       active: [],
+     });
+     expect(thorough()).toBeNull();
+@@ -419,7 +407,7 @@ describe("a quick row", () => {
+ /** F9: a quick score says what it is, on the result itself. */
+ describe("a quick hit's score", () => {
+   it("is named as a quick score, not as the model's confidence", async () => {
+-    await mount({ access: owner(), runs: [QUICK], start: "quick", active: [QUICK.id], found: [HIT] });
++    await mount({ access: owner(), runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
+     const gutter = container.querySelector<HTMLButtonElement>(".srch-hit .srch-gutter");
+     const label = gutter?.getAttribute("aria-label") ?? "";
+     expect(label).toContain("quick score 93 out of 100");
+@@ -428,7 +416,7 @@ describe("a quick hit's score", () => {
+   });
+ 
+   it("is explained as a quick score in its card", async () => {
+-    await mount({ access: owner(), runs: [QUICK], start: "quick", active: [QUICK.id], found: [HIT] });
++    await mount({ access: owner(), runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
+     const gutter = container.querySelector<HTMLButtonElement>(".srch-hit .srch-gutter");
+     await act(async () => {
+       gutter?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+@@ -473,7 +461,7 @@ describe("the box's clear cross", () => {
+     return { access: { ...owner(), typing } as SearchAccess, edits };
+   }
+ 
+-  it.each(["words", "quick", "meaning"] as const)("is there only while the %s box has words in it", async (start) => {
++  it.each(["words", "meaning"] as const)("is there only while the %s box has words in it", async (start) => {
+     await mount({ access: owner(), runs: [], start, active: [] });
+     expect(cross()).toBeNull();
+     type("free will");
+@@ -484,7 +472,7 @@ describe("the box's clear cross", () => {
+ 
+   it("empties the quick draft, tells the session, and leaves the cursor in the box", async () => {
+     const { access, edits } = typingOwner();
+-    await mount({ access, runs: [], start: "quick", active: [] });
++    await mount({ access, runs: [], start: "meaning", active: [] });
+     type("free will");
+     act(() => input().blur());
+     const down = press(cross() as HTMLButtonElement);
+@@ -510,7 +498,7 @@ describe("the box's clear cross", () => {
+ 
+   it("is what Escape does", async () => {
+     const { access, edits } = typingOwner();
+-    await mount({ access, runs: [], start: "quick", active: [] });
++    await mount({ access, runs: [], start: "meaning", active: [] });
+     type("free will");
+     act(() => {
+       input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+@@ -527,7 +515,7 @@ describe("the box's clear cross", () => {
+     ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+   ])("is not what a composing Escape does (%s)", async (_how, init) => {
+     const { access, edits } = typingOwner();
+-    await mount({ access, runs: [], start: "quick", active: [] });
++    await mount({ access, runs: [], start: "meaning", active: [] });
+     type("日本語の");
+     const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+     act(() => {
+diff --git a/tests/search-as-you-type.test.tsx b/tests/search-as-you-type.test.tsx
+index 089835bac..73370db5e 100644
+--- a/tests/search-as-you-type.test.tsx
++++ b/tests/search-as-you-type.test.tsx
+@@ -451,15 +451,17 @@ describe("quick search as you type", () => {
+     });
+   });
+ 
+-  it("leaves words inert after a matcher switch: nothing is asked until the next edit", async () => {
++  /* A round trip through words, since plan 261012e left no second
++     server-asking matcher to step through. */
++  it("leaves the typed words inert after a trip to words and back: nothing is asked until the next edit", async () => {
+     const { posted } = server();
+     mount();
+     await flush();
+     type("why");
+     await pause();
+     expect(posted).toHaveLength(1);
++    click(matcher("words"));
+     click(matcher("meaning"));
+-    click(matcher("quick"));
+     await pause();
+     expect(posted).toHaveLength(1);
+     // And the next edit starts a new row rather than revising the old one.
+@@ -468,9 +470,12 @@ describe("quick search as you type", () => {
+     expect(posted[1]?.body.revises).toBeUndefined();
+   });
+ 
+-  it("never asks while the matcher is meaning", async () => {
++  /* This was "never asks while the matcher is meaning", when meaning was the
++     thorough search asked only on find. Plan 261012e made the meaning matcher
++     search as you type, so words is now the one matcher that never asks. */
++  it("never asks while the matcher is words", async () => {
+     const { posted } = server();
+-    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=meaning`);
++    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=words`);
+     mount();
+     await flush();
+     type("why replication");
+@@ -478,6 +483,6 @@ describe("quick search as you type", () => {
+     expect(posted).toHaveLength(0);
+     enter();
+     await flush();
+-    expect(posted.map((p) => p.body.kind)).toEqual(["meaning"]);
++    expect(posted).toHaveLength(0);
+   });
+ });
+diff --git a/tests/search-auto-thorough.test.tsx b/tests/search-auto-thorough.test.tsx
+index 09c7f2387..646dfc60e 100644
+--- a/tests/search-auto-thorough.test.tsx
++++ b/tests/search-auto-thorough.test.tsx
+@@ -293,10 +293,6 @@ function click(el: Element): void {
+     (el as HTMLElement).click();
+   });
+ }
+-const matcher = (name: string) =>
+-  [...host.querySelectorAll<HTMLButtonElement>(".srch-mode")].find((b) =>
+-    b.textContent?.includes(name),
+-  )!;
+ const savedRows = () => [...host.querySelectorAll<HTMLElement>(".srch-saved-row")];
+ /** The saved rows' words, top to bottom. */
+ const listed = () =>
+@@ -726,7 +722,13 @@ describe("a quick search starts the thorough one", () => {
+     expect(listed()).toEqual([]);
+   });
+ 
+-  it("F6: find on the meaning matcher is disabled for words whose thorough search is hidden", async () => {
++  /* F6 was "find on the manual meaning matcher is disabled while these words'
++     thorough search runs hidden", so it could not ask the same thorough search
++     twice. Plan 261012e removed that matcher: the box asks only quick runs now,
++     and the thorough one comes from here. What is left of F6 is that a second
++     find on the same words does not buy a second thorough search (it does ask
++     a second quick row, as the quick matcher always did). */
++  it("F6: a second find on the same words does not ask their thorough search again", async () => {
+     const s = server();
+     mount();
+     await flush();
+@@ -735,14 +737,14 @@ describe("a quick search starts the thorough one", () => {
+     await flush();
+     expect(s.asked("meaning")).toEqual([WORDS]);
+ 
+-    click(matcher("meaning"));
++    const find = must<HTMLButtonElement>("button.srch-go");
++    // Not vacuous: find is live, and the press does ask (a second quick row,
++    // as it did on the old quick matcher).
++    expect(find.disabled).toBe(false);
++    click(find);
+     await flush();
+-    expect(box().value).toBe(WORDS);
+-    expect(must<HTMLButtonElement>("button.srch-go").disabled).toBe(true);
+-    // Control: other words can be asked, so the button is not simply dead.
+-    type(`${WORDS} dualism`);
+-    await flush();
+-    expect(must<HTMLButtonElement>("button.srch-go").disabled).toBe(false);
++    expect(s.asked("quick")).toEqual([WORDS, WORDS]);
++    expect(s.asked("meaning")).toEqual([WORDS]);
+   });
+ 
+   it("follows a begin that answers thorough under another id", async () => {
+diff --git a/tests/search-parallel-finds.test.tsx b/tests/search-parallel-finds.test.tsx
+index ccb387a9d..785e1c6e2 100644
+--- a/tests/search-parallel-finds.test.tsx
++++ b/tests/search-parallel-finds.test.tsx
+@@ -14,6 +14,14 @@
+  * paired with a positive control, so a harness that had stopped reaching the
+  * handler could not pass as a refusal.
+  *
++ * **Since plan 261012e the box asks a quick search** through the typing
++ * session (Enter and Find flush into it), and auto-thorough asks the meaning
++ * search once that has finished. The same question is the same words *as the
++ * same kind*, so the box's repeat is refused by the session's `start`, and
++ * *find* is no longer disabled for it; the meaning search's own repeat is
++ * refused at a quick row's *thorough* and at retry. The server below answers
++ * each POST as the kind it was asked.
++ *
+  * Mounts the real `SearchBand` over the real `useSearch`, with `apiFetch`
+  * mocked — the harness tests/opening-read-gates-writes.test.tsx uses. Each POST
+  * is a stream the case feeds by hand, so a search can be held open.
+@@ -23,7 +31,7 @@ import { createRoot, type Root } from "react-dom/client";
+ import { NuqsAdapter } from "nuqs/adapters/react";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ 
+-import type { Block, BlockId, SearchRun } from "../src/types.js";
++import type { Block, BlockId, SearchKind, SearchRun } from "../src/types.js";
+ 
+ let answer: (url: string, init: RequestInit) => Promise<Response>;
+ 
+@@ -44,6 +52,7 @@ vi.mock("../src/web/lib/api.js", async () => {
+ });
+ 
+ const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
++const { searchDraftFor } = await import("../src/web/search-draft.js");
+ 
+ const SLUG = "a-paper";
+ const BLOCK = "spya-k3m9qt" as BlockId;
+@@ -105,6 +114,8 @@ function openStream(): { response: Response; frame(event: string, data: unknown)
+ interface Posted {
+   id: string;
+   criterion: string;
++  /** As the client sent it: the server's rows carry the kind they were asked as. */
++  kind: SearchKind;
+   stream: ReturnType<typeof openStream>;
+ }
+ 
+@@ -123,12 +134,12 @@ function server(
+     const method = (init.method ?? "GET").toUpperCase();
+     if (method === "GET") return Promise.resolve(json({ runs: saved }));
+     if (method === "POST") {
+-      const sent = JSON.parse(String(init.body)) as { id: string; criterion: string };
+-      const { criterion } = sent;
++      const sent = JSON.parse(String(init.body)) as { id: string; criterion: string; kind: SearchKind };
++      const { criterion, kind } = sent;
+       const id = renamed[sent.id] ?? sent.id;
+       const stream = openStream();
+-      posted.push({ id, criterion, stream });
+-      if (beginImmediately) stream.frame("begin", run(id, criterion, "pending"));
++      posted.push({ id, criterion, kind, stream });
++      if (beginImmediately) stream.frame("begin", run(id, criterion, "pending", kind));
+       return Promise.resolve(stream.response);
+     }
+     return Promise.resolve(json({ ok: true }));
+@@ -136,8 +147,13 @@ function server(
+   return posted;
+ }
+ 
+-function run(id: string, criterion: string, status: SearchRun["status"]): SearchRun {
+-  return { id, criterion, kind: "meaning", createdAt: "2026-09-30T09:00:00.000Z", status, hits: [], sourceHash: "h" };
++function run(
++  id: string,
++  criterion: string,
++  status: SearchRun["status"],
++  kind: SearchKind = "meaning",
++): SearchRun {
++  return { id, criterion, kind, createdAt: "2026-09-30T09:00:00.000Z", status, hits: [], sourceHash: "h" };
+ }
+ 
+ /** Each search finds its own words, so a row can be traced to the search that found it. */
+@@ -160,7 +176,7 @@ function hit(p: Posted): void {
+ 
+ function finish(p: Posted): void {
+   act(() => {
+-    p.stream.frame("done", { ...run(p.id, p.criterion, "done"), hits: [hitFor(p)] });
++    p.stream.frame("done", { ...run(p.id, p.criterion, "done", p.kind), hits: [hitFor(p)] });
+     p.stream.end();
+   });
+ }
+@@ -168,7 +184,7 @@ function finish(p: Posted): void {
+ /** A model failure: the request succeeded at recording the question, so it is a `done` carrying `error`. */
+ function fail(p: Posted, message: string): void {
+   act(() => {
+-    p.stream.frame("done", { ...run(p.id, p.criterion, "error"), error: message });
++    p.stream.frame("done", { ...run(p.id, p.criterion, "error", p.kind), error: message });
+     p.stream.end();
+   });
+ }
+@@ -240,6 +256,10 @@ function ticked(): string[] {
+ beforeEach(() => {
+   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+   history.replaceState(null, "", `/read/${SLUG}?mode=search`);
++  /* The draft outlives the band, per article: left over from the case before,
++     a box already holding FIRST sees no change when FIRST is typed, and no
++     typing session opens. */
++  searchDraftFor(SLUG).set("");
+   host = document.createElement("div");
+   document.body.append(host);
+   root = createRoot(host);
+@@ -351,12 +371,16 @@ describe("Search: several meaning-searches at once", () => {
+     type(FIRST);
+     enter();
+     await flush();
++    expect(posted.map((p) => p.kind)).toEqual(["quick"]);
+     // Untick it: it is still running.
+     click(must(`input[aria-label="Also mark: ${FIRST}"]`));
+     await flush();
+     expect(ticked()).toEqual([]);
+ 
+-    expect(findButton().disabled).toBe(true);
++    /* Plan 261012e: the press goes through the typing session, which leaves
++       *find* enabled, so the refusal is read off what was sent. It is the
++       session's `start` that refuses (`isRunning(words, "quick")`). */
++    click(findButton());
+     enter();
+     await flush();
+     expect(posted).toHaveLength(1);
+@@ -374,7 +398,7 @@ describe("Search: several meaning-searches at once", () => {
+     await flush();
+ 
+     type(FIRST);
+-    // Both handlers see the same rendered `ready`; the controller's in-flight
++    // Both handlers see the same rendered state; the controller's in-flight
+     // registry is what makes duplicate protection survive one React batch.
+     act(() => {
+       findButton().click();
+@@ -385,56 +409,61 @@ describe("Search: several meaning-searches at once", () => {
+ 
+     // The draft is still in the box. Pressing again would pay for the same search twice.
+     expect(box().value).toBe(FIRST);
+-    expect(findButton().disabled).toBe(true);
+     click(findButton());
+     enter();
+     await flush();
+     expect(posted, "an identical search was sent while the first was running").toHaveLength(1);
+ 
+-    // Trailing space is the same question.
++    // Trailing space is the same question — and typing it opens a new typing session.
+     type(`${FIRST} `);
+     enter();
+     await flush();
+     expect(posted).toHaveLength(1);
+ 
+-    // Positive control: once it has finished, the same press sends.
++    /* Positive control: once it has finished, the same press sends. Finishing
++       a submitted quick search also starts its thorough one by itself
++       (auto-thorough.ts, plan 261012e), which is not the reader's press. */
+     finish(posted[0] as Posted);
+     await flush();
+-    expect(findButton().disabled).toBe(false);
+     enter();
+     await flush();
+-    expect(posted).toHaveLength(2);
++    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning", "quick"]);
+   });
+ 
+   it("does not mistake a pending row loaded from the server for a request this tab is watching", async () => {
+-    const old = run("spya-q7w2er", FIRST, "pending");
++    // A quick row, since plan 261012e: the kind the box now asks, so the same question.
++    const old = run("spya-q7w2er", FIRST, "pending", "quick");
+     const posted = server([old]);
+     mount();
+     await flush();
+ 
+     type(FIRST);
+-    expect(findButton().disabled, "a persisted pending row wedged Find in this tab").toBe(false);
+     enter();
+     await flush();
+-    expect(posted.map((p) => p.criterion)).toEqual([FIRST]);
++    expect(
++      posted.map((p) => [p.criterion, p.kind]),
++      "a persisted pending row wedged Find in this tab",
++    ).toEqual([[FIRST, "quick"]]);
+ 
+     // Once this tab has actually sent it, the ordinary duplicate guard applies.
+-    expect(findButton().disabled).toBe(true);
+     enter();
+     await flush();
+     expect(posted).toHaveLength(1);
+ 
+     finish(posted[0] as Posted);
+     await flush();
++    enter();
++    await flush();
+     expect(
+-      findButton().disabled,
++      posted.filter((p) => p.kind === "quick"),
+       "the persisted pending row kept blocking after this tab's request finished",
+-    ).toBe(false);
++    ).toHaveLength(2);
+   });
+ 
+   it("refuses retry while this tab already has the same criterion in flight", async () => {
+     const message = "The model service was unavailable. Try again. [ai-500]";
+-    const failed = { ...run("spya-r8x3tf", FIRST, "error"), error: message };
++    // A failed quick row, since plan 261012e: the kind the box now asks.
++    const failed = { ...run("spya-r8x3tf", FIRST, "error", "quick"), error: message };
+     const posted = server([failed]);
+     mount();
+     await flush();
+@@ -456,7 +485,9 @@ describe("Search: several meaning-searches at once", () => {
+     expect(enabled.disabled).toBe(false);
+     click(enabled);
+     await flush();
+-    expect(posted.map((p) => p.criterion)).toEqual([FIRST, FIRST]);
++    // Between them, auto-thorough's meaning search for the finished quick one.
++    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning", "quick"]);
++    expect(posted.at(-1)?.id, "the last request was not the retry").toBe(failed.id);
+   });
+ 
+   it("keeps refusing the question when the server answers a retry under a new id, and keeps it ticked", async () => {
+@@ -465,14 +496,19 @@ describe("Search: several meaning-searches at once", () => {
+        and the sent id fell out of the list — so the same question could be
+        paid for again while it was still running, and the search the reader was
+        watching dropped out of `?runs=`.
+-       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
++       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
++
++       Since plan 261012e the box asks a quick search, so typing the words
++       again is not the same question. What asks the meaning search for them
++       again is a finished quick row's *thorough*, so the case has one. */
+     const message = "The model service was unavailable. Try again. [ai-500]";
+     const sentId = "spya-r8x3tf";
+     const serverId = "spya-w4n7pk";
+     history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${sentId}`);
+-    const posted = server([{ ...run(sentId, FIRST, "error"), error: message }], {
+-      [sentId]: serverId,
+-    });
++    const posted = server(
++      [{ ...run(sentId, FIRST, "error"), error: message }, run("spya-m3n8kd", FIRST, "done", "quick")],
++      { [sentId]: serverId },
++    );
+     mount();
+     await flush();
+     expect(ticked()).toEqual([FIRST]);
+@@ -482,8 +518,9 @@ describe("Search: several meaning-searches at once", () => {
+     expect(posted.map((p) => p.id)).toEqual([serverId]);
+ 
+     // The same question, while the renamed run is still open: refused.
+-    type(FIRST);
+-    enter();
++    const thorough = must<HTMLButtonElement>("button.srch-thorough");
++    expect(thorough.title).toBe("Already running the thorough search for this");
++    click(thorough);
+     await flush();
+     expect
+       .soft(posted, "an identical search was sent while the renamed one was running")
+@@ -507,10 +544,13 @@ describe("Search: several meaning-searches at once", () => {
+     // And once the renamed run has finished, the question is free again.
+     finish(posted[0] as Posted);
+     await flush();
+-    type(FIRST);
+-    enter();
++    click(must<HTMLButtonElement>("button.srch-thorough"));
+     await flush();
+-    expect(posted.map((p) => p.criterion)).toEqual([FIRST, SECOND, FIRST]);
++    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([
++      [FIRST, "meaning"],
++      [SECOND, "quick"],
++      [FIRST, "meaning"],
++    ]);
+   });
+ 
+   it("does not retick a retry unticked before its renamed begin arrives", async () => {
+diff --git a/tests/search-thorough-duration-copy.test.ts b/tests/search-thorough-duration-copy.test.ts
+index 7479968f6..5985f0a95 100644
+--- a/tests/search-thorough-duration-copy.test.ts
++++ b/tests/search-thorough-duration-copy.test.ts
+@@ -21,7 +21,8 @@ describe("thorough search duration copy", () => {
+     /* The file as written, with its line breaks taken out: Help's words are
+        Markdown since 2026-10-07 and a sentence wraps where the file wraps. */
+     const src = read("src/web/help/pages/modes/search.md").replace(/\s+/g, " ");
+-    const i = src.indexOf("on a quick search runs the full meaning search");
++    // The sentence was rewritten when quick folded into meaning (plan 261012e).
++    const i = src.indexOf("the thorough search starts by itself");
+     expect(i).toBeGreaterThan(-1);
+     const passage = src.slice(i, i + 200);
+     expect(passage).not.toContain("half a minute");
+diff --git a/tests/url-state.test.ts b/tests/url-state.test.ts
+index 64685756e..e3979b52e 100644
+--- a/tests/url-state.test.ts
++++ b/tests/url-state.test.ts
+@@ -344,14 +344,21 @@ describe("Sources' sub-mode, and Reception's order", () => {
+ });
+ 
+ describe("search mode parameters", () => {
+-  it("reads the three matchers and refuses anything else", () => {
++  it("reads the two matchers and refuses anything else", () => {
+     expect(matchParam.parse("words")).toBe("words");
+-    expect(matchParam.parse("quick")).toBe("quick");
+     expect(matchParam.parse("meaning")).toBe("meaning");
+     expect(matchParam.parse("regex")).toBeNull();
+     expect(matchParam.parse("")).toBeNull();
+   });
+ 
++  /* *quick* folded into *meaning* on 2026-10-12 (plan 261012e, Greg's
++     `spya-sy4rn0`): meaning now asks the quick search first and swaps in the
++     thorough one. Every link, bookmark and chat card written before then that
++     says `match=quick` must still open on it. */
++  it("reads an old ?match=quick as meaning", () => {
++    expect(matchParam.parse("quick")).toBe("meaning");
++  });
++
+   /**
+    * The default, and the one URL shape it must not swallow.
+    *
+@@ -379,7 +386,6 @@ describe("search mode parameters", () => {
+     it("lets an explicit ?match= win over the words it is carrying", () => {
+       expect(resolveMatcher("meaning", "wet hardware")).toBe("meaning");
+       expect(resolveMatcher("words", null)).toBe("words");
+-      expect(resolveMatcher("quick", null)).toBe("quick");
+     });
+ 
+     it("is not fooled by a query of nothing but spaces", () => {

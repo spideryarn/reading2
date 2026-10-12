@@ -16,7 +16,7 @@
  *   the band's own rule, `stepQuickSession` from quick-session.ts, not a copy
  *   of it — then opens Search mode and hands the draft over. Focus stays here
  *   (the panel does not take it, Sol F2) and the article does not move.
- * - **With the band on *quick***, every keystroke, Enter, focus and blur goes
+ * - **With the band on *meaning***, every keystroke, Enter, focus and blur goes
  *   straight to the band's session, exactly as the panel's box does, so one
  *   session keeps one row whichever box the reader types in.
  *
@@ -38,7 +38,7 @@
  *   works there, and does what the ⚡ did;
  * - **Search mode open and this box not focused**, at a width that has the
  *   box: the ⚡ (a class this component sets), so there is only ever one box
- *   to type in. It opens Search mode on *quick* with the panel's box focused.
+ *   to type in. It opens Search mode on *meaning* with the panel's box focused.
  *
  * The ⚡ focuses the panel's box inside the tap when the panel is already
  * mounted. When it is not, the box mounts a render later and focuses itself

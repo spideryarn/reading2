@@ -154,10 +154,11 @@
    > without the input text bar, because the quick search icon does just the
    > same thing as clicking the search icon, which we are already also showing
 
-   (Not quite the same: the ⚡ opened Search on quick, and the Search button
-   opens it on whichever kind the URL names — search.md § the box in the bottom
-   bar.) `/` still opens Search on quick from here; that is the component's,
-   not the button's.
+   (Not quite the same until 2026-10-12: the ⚡ opened Search on quick, and the
+   Search button opened whichever matcher the URL named. Quick then folded
+   into the default meaning matcher — search.md § the box in the bottom bar.)
+   `/` still opens Search on meaning from here; that is the component's, not
+   the button's.
 
    **The field and the ⚡ are hidden by name, as well as the wrapper.**
    DockQuickSearch.tsx asks for the field's own computed `display` to decide

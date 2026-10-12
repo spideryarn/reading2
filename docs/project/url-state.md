@@ -84,7 +84,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `bar` | the bar the quotes' prioritised order hides under — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) | **replace**, debounced | `?bar=0.55` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
 | `gate` | the bar the glossary's prioritised order hides under — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `PRIORITY_GATE` ([`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx)) | **replace**, debounced | `?gate=0.45` |
-| `match` | which matcher search mode is using: the letters you typed (`words`), what they mean scored fast by Jev (`quick`, since 2026-10-02), or what they mean in full (`meaning`, the default) — [search.md](search.md) | push | `?match=words`, `?match=quick` |
+| `match` | which matcher search mode is using: the letters you typed (`words`), or what they mean (`meaning`, the default — a quick search first, then the thorough one in its place). `quick` was a third matcher from 2026-10-02 to 2026-10-12 and is still read, as `meaning` — [search.md](search.md) | push | `?match=words`, `?match=meaning` |
 | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
@@ -396,13 +396,13 @@ without it. Sending someone a link to a term sends them the underlines too. `?fi
 there for exactly the same reason, and it is the same reason a fourth time: a search outlines the
 passages that match, so a URL without it shows you a different page from the one you were sent.
 
-**Search mode has four parameters and every other mode has one or two**, which is worth explaining
-rather than treating as sprawl: it holds three matchers rather than one feature. `match` says which
-matcher, and then exactly one of `find` and `run` is the thing being matched (`find` for words,
-`run` for quick and meaning, which are both saved). Its `?order=` is
-deliberately not the glossary's `?sort=` — two modes' orderings have nothing in common but the word,
-and `sort=difficulty` arriving in search mode would be a value with no meaning that something would
-eventually have to guess at.
+**Search mode has six parameters**, which is worth explaining rather than treating as sprawl: one
+mode holds a literal matcher and a saved meaning-search pipeline. `match` says which matcher;
+`find` holds the literal words; `runs` says which saved quick or thorough answers are showing; and
+the singular `run` is its legacy spelling. Its `?order=` and `?conf=` describe the shared results
+view. `?order=` is deliberately not the glossary's `?sort=` — two modes' orderings have nothing in
+common but the word, and `sort=difficulty` arriving in search mode would be a value with no meaning
+that something would eventually have to guess at.
 
 `match` **defaults to `meaning`** since 2026-08-26, and the one consequence worth writing down here
 is a URL that carries `?find=` and no `?match=`. There is exactly one producer of those — the

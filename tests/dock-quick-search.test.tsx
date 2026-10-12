@@ -194,6 +194,8 @@ function key(el: EventTarget, init: KeyboardEventInit): KeyboardEvent {
   return e;
 }
 const match = () => new URLSearchParams(location.search).get("match");
+/** The matcher the panel's toggle has lit — the URL says nothing when it is the default. */
+const lit = () => host.querySelector(".srch-mode[aria-checked='true']")?.textContent?.trim() ?? null;
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -211,7 +213,7 @@ afterEach(async () => {
 });
 
 describe("typing in the bar's box", () => {
-  it("opens Search mode on quick at the first pause, asks there, and keeps focus in the bar", async () => {
+  it("opens Search mode on meaning at the first pause, asks quick there, and keeps focus in the bar", async () => {
     const posted = server();
     mount();
     type(barBox(), "why replication");
@@ -221,7 +223,7 @@ describe("typing in the bar's box", () => {
 
     await pause();
     expect(opened).toBe(1);
-    expect(match()).toBe("quick");
+    expect(lit()).toBe("meaning");
     expect(posted.map((p) => [p.criterion, p.kind, p.revises ?? false])).toEqual([
       ["why replication", "quick", false],
     ]);
@@ -325,9 +327,10 @@ describe("typing in the bar's box", () => {
     expect(older.defaultPrevented).toBe(true);
   });
 
-  it("switches Search mode to quick when it is open on another matcher", async () => {
+  /* Words, since plan 261012e: it is the only other matcher left. */
+  it("switches Search mode to meaning when it is open on words", async () => {
     const posted = server();
-    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    mount({ startOpen: true, url: "?mode=search&match=words" });
     await flush();
     // Open from another door: the panel took focus, as it always has.
     expect(document.activeElement).toBe(panelBox());
@@ -336,7 +339,7 @@ describe("typing in the bar's box", () => {
     // …so typing in the bar happens after somebody focused it; do so.
     type(barBox(), "why replication");
     await pause();
-    expect(match()).toBe("quick");
+    expect(match()).toBe("meaning");
     expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["why replication", "quick"]]);
   });
 });
@@ -524,7 +527,8 @@ describe("handoffs before the band mounts", () => {
 
   it("drops an unconsumed handoff when leaving Search mode before its matcher switches", async () => {
     const posted = server();
-    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    // Words: a band on meaning takes the bar's Enter itself, so nothing is handed off.
+    mount({ startOpen: true, url: "?mode=search&match=words" });
     await flush();
     type(barBox(), "why replication");
     key(barBox(), { key: "Enter" });
@@ -612,34 +616,48 @@ describe("a search sent from the command bar", () => {
     expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["the limits of free will", "quick"]]);
   });
 
-  /* Sol's F3. Opening Search pushes an entry, and the switch to *quick* then
-     replaces it, so one Back leaves Search. With Search already open nothing
-     was pushed, and a replace would overwrite the words or meaning view the
-     reader was on: Back would skip it. */
+  /* Sol's F3. Opening Search pushes an entry, and the switch to *meaning* then
+     replaces it, so one Back leaves Search. With Search already open on words
+     nothing was pushed, and a replace would overwrite the words view the reader
+     was on: Back would skip it. Already on meaning there is no switch, and so
+     no entry at all (plan 261012e, Sol's F1 on it). */
   it("does not push an extra matcher entry when the band has just mounted", async () => {
     const posted = server();
-    mount({ url: "?match=meaning" });
+    // On words, so the band that mounts has a switch to make.
+    mount({ url: "?match=words" });
     const before = history.length;
     // This host mounts the band without writing ?mode=. The actual opening and
     // Back path are covered through Reader in mode-herald-wiring.test.tsx.
     type(barBox(), "the limits of free will");
     key(barBox(), { key: "Enter" });
     await flush();
-    expect(match()).toBe("quick");
+    expect(match()).toBe("meaning");
     expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
     expect(history.length).toBe(before);
   });
 
-  it.each(["words", "meaning"])("pushes when Search was already open on %s, so Back returns to it", async (was) => {
+  it("pushes when Search was already open on words, so Back returns to it", async () => {
     const posted = server();
-    mount({ startOpen: true, url: `?mode=search&match=${was}` });
+    mount({ startOpen: true, url: "?mode=search&match=words" });
     await flush();
     const before = history.length;
     send("the limits of free will");
     await flush();
-    expect(match()).toBe("quick");
+    expect(match()).toBe("meaning");
     expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
     expect(history.length).toBe(before + 1);
+  });
+
+  it("pushes nothing when Search was already open on meaning: there is no switch to undo", async () => {
+    const posted = server();
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    const before = history.length;
+    send("the limits of free will");
+    await flush();
+    expect(match()).toBe("meaning");
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(history.length).toBe(before);
   });
 
   /* Sol's F4: a submitted search has nothing left to type, so on a touch
@@ -703,17 +721,18 @@ describe("preserved boundaries", () => {
     expect(posted).toHaveLength(0);
   });
 
-  it("meaning edits share the draft and ask only on Enter", async () => {
+  /* Was "meaning edits share the draft and ask only on Enter": plan 261012e
+     made the meaning matcher search as you pause, asking quick. */
+  it("meaning edits share the draft and ask quick at the pause", async () => {
     const posted = server();
     mount({ startOpen: true, url: "?mode=search&match=meaning" });
     await flush();
     type(panelBox()!, "comparison group");
-    await pause();
+    await flush();
     expect(barBox().value).toBe("comparison group");
     expect(posted).toHaveLength(0);
-    key(panelBox()!, { key: "Enter" });
-    await flush();
-    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["comparison group", "meaning"]]);
+    await pause();
+    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["comparison group", "quick"]]);
   });
 
   it("unmount removes the shortcut and focus/band registrations", async () => {
@@ -815,25 +834,25 @@ describe("the box outlives the labels (the fit ladder's CSS)", () => {
 });
 
 describe("the ⚡ button", () => {
-  it("opens Search mode on quick with the panel's box focused", async () => {
+  it("opens Search mode on meaning with the panel's box focused", async () => {
     server();
     mount();
     act(() => bolt().click());
     await flush();
     expect(opened).toBe(1);
-    expect(match()).toBe("quick");
+    expect(lit()).toBe("meaning");
     expect(document.activeElement).toBe(panelBox());
   });
 
-  it("with Search mode already open, focuses the panel's box inside the tap", async () => {
+  it("with Search mode already open on words, focuses the panel's box inside the tap and switches to meaning", async () => {
     server();
-    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    mount({ startOpen: true, url: "?mode=search&match=words" });
     await flush();
     act(() => (document.activeElement as HTMLElement | null)?.blur());
     act(() => bolt().click());
     expect(document.activeElement, "focus waited for a later render").toBe(panelBox());
     await flush();
-    expect(match()).toBe("quick");
+    expect(match()).toBe("meaning");
   });
 });
 

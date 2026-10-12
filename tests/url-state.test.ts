@@ -344,12 +344,19 @@ describe("Sources' sub-mode, and Reception's order", () => {
 });
 
 describe("search mode parameters", () => {
-  it("reads the three matchers and refuses anything else", () => {
+  it("reads the two matchers and refuses anything else", () => {
     expect(matchParam.parse("words")).toBe("words");
-    expect(matchParam.parse("quick")).toBe("quick");
     expect(matchParam.parse("meaning")).toBe("meaning");
     expect(matchParam.parse("regex")).toBeNull();
     expect(matchParam.parse("")).toBeNull();
+  });
+
+  /* *quick* folded into *meaning* on 2026-10-12 (plan 261012e, Greg's
+     `spya-sy4rn0`): meaning now asks the quick search first and swaps in the
+     thorough one. Every link, bookmark and chat card written before then that
+     says `match=quick` must still open on it. */
+  it("reads an old ?match=quick as meaning", () => {
+    expect(matchParam.parse("quick")).toBe("meaning");
   });
 
   /**
@@ -379,7 +386,6 @@ describe("search mode parameters", () => {
     it("lets an explicit ?match= win over the words it is carrying", () => {
       expect(resolveMatcher("meaning", "wet hardware")).toBe("meaning");
       expect(resolveMatcher("words", null)).toBe("words");
-      expect(resolveMatcher("quick", null)).toBe("quick");
     });
 
     it("is not fooled by a query of nothing but spaces", () => {

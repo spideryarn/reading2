@@ -759,13 +759,12 @@ export const faqBarParam = createParser<number>({
 
 
 /* ------------------------------------------------------------- search mode --
-   Four parameters, which is more than any other mode needs, and the reason is
-   that search mode has two matchers in it rather than one feature. See
-   docs/project/search.md § The URL for the table.
+   Six parameters, because one mode holds a literal matcher and a saved
+   meaning-search pipeline. See docs/project/search.md § The URL for the table.
 
-   The division: `match` says which matcher, and then exactly one of `find` and
-   `run` is the thing being matched — the letters you typed, or the saved
-   meaning-search you re-opened. `order` is how the answers are stacked. */
+   `match` chooses the matcher; `find` holds literal words; `runs` names the
+   saved quick or thorough answers showing (`run` is its legacy spelling);
+   `order` and `conf` describe the shared results view. */
 
 /**
  * Which way the box matches: on the letters you typed, or on what they mean.
@@ -780,12 +779,14 @@ export const faqBarParam = createParser<number>({
  * before, and the argument for that was that `words` is the free one — a reader
  * who opens the panel and types should get instant highlights, not a bill.
  *
- * That argument was about the wrong thing. Nothing in `meaning` mode spends
- * anything until the reader presses **find**; the free-ness of `words` was never
- * at risk, because the cost is attached to the submit and not to the mode. What
- * the old default actually decided was which *question* the panel opens on, and
- * the interesting one — describe what you are looking for — is the one this app
- * exists to offer. Find-on-page is the thing every reader already has a key for.
+ * That argument was about the wrong thing. At the time, nothing in `meaning`
+ * spent anything until the reader pressed **find**; the free-ness of `words`
+ * was never at risk, because the cost was attached to the submit and not to the
+ * mode. What the old default actually decided was which *question* the panel
+ * opened on, and the interesting one — describe what you are looking for — is
+ * the one this app exists to offer. Find-on-page is the thing every reader
+ * already has a key for. Meaning has searched on a pause since the 2026-10-12
+ * fold described below.
  *
  * The one URL that relied on the old default is the library's passage
  * deep-link, which carries `?find=` and nothing else. It now says `match=words`
@@ -795,33 +796,55 @@ export const faqBarParam = createParser<number>({
  * `push`, like `cols` and `text`: switching matcher changes what the article
  * looks like, and Back should undo it.
  *
- * **`quick` sits between them** (2026-10-02, docs/plans/261002e-quick-search-v1.md):
- * the same saved, ticked, coloured runs as `meaning`, asked of a fast model
- * that scores every paragraph in about a second instead of quoting and
- * reasoning in about ten seconds. Wherever the panel talks about the draft or the
- * saved list, `quick` behaves as `meaning` does — `asksTheServer` below — and
- * it differs only in the `kind` it asks with.
+ * **`meaning` asks the quick search first, and swaps in the thorough one**
+ * (2026-10-12, docs/plans/261012e-search-meaning-is-quick-then-thorough-one-toggle.md,
+ * Greg's `spya-sy4rn0`). From 2026-10-02 there was a third matcher, `quick`,
+ * between these two, and `meaning` was the thorough search alone, asked on
+ * **find**. They were folded into one: the meaning matcher searches as you
+ * pause, as `quick` did, and `auto-thorough.ts` replaces each settled quick
+ * answer with the thorough one. So the matcher is no longer the run's kind —
+ * `kindFor` below says which kind it asks with.
+ *
+ * **`?match=quick` still parses, as `meaning`**, because every pasted link,
+ * bookmark, history entry and chat card written before the fold says it.
+ * (The remembered last view never replays search parameters, so it needs
+ * nothing.) Nothing rewrites the URL; the next matcher write says `meaning`.
  */
-export const MATCHERS = ["words", "quick", "meaning"] as const;
+export const MATCHERS = ["words", "meaning"] as const;
 export type Matcher = (typeof MATCHERS)[number];
 
+/** The matcher folded into `meaning` on 2026-10-12, still read from old URLs. */
+const FORMER_MATCHERS: Readonly<Record<string, Matcher>> = { quick: "meaning" };
+
 export const matchParam = createParser<Matcher>({
-  parse: (v) => (MATCHERS.includes(v as Matcher) ? (v as Matcher) : null),
+  parse: (v) => (MATCHERS.includes(v as Matcher) ? (v as Matcher) : (FORMER_MATCHERS[v] ?? null)),
   serialize: (v) => v,
 }).withOptions({ history: "push" });
+
+/**
+ * **Which kind of run a matcher asks the server for.** The meaning matcher
+ * asks a `quick` run first; the thorough `meaning` run that replaces it is
+ * asked by auto-thorough.ts (or the row's *thorough* button), never by the box.
+ */
+export function kindFor(matcher: Exclude<Matcher, "words">): "quick" {
+  switch (matcher) {
+    case "meaning":
+      return "quick";
+  }
+}
 
 const DEFAULT_MATCHER: Matcher = "meaning";
 
 /**
  * **Does this matcher ask the server, and save what comes back?** True for
- * `quick` and `meaning`; false for `words`, which is answered in the browser
- * on every keystroke and saves nothing. When it is true, the matcher *is* the
- * `kind` the run is asked and saved with.
+ * `meaning`; false for `words`, which is answered in the browser on every
+ * keystroke and saves nothing. When it is true, `kindFor` says which `kind`
+ * the run is asked and saved with.
  *
  * A named question rather than `matcher === "meaning"` at each call site,
- * because that comparison was this question's spelling until a third matcher
- * arrived, and every copy of it left behind would quietly have treated `quick`
- * as `words` — no saved list, no draft, no find button.
+ * because there were three matchers from 2026-10-02 to 2026-10-12, and a
+ * comparison spelt for one of them would quietly have treated another as
+ * `words` — no saved list, no draft, no find button.
  */
 export function asksTheServer(matcher: Matcher): matcher is Exclude<Matcher, "words"> {
   return matcher !== "words";

@@ -10,6 +10,7 @@ import { createSearchDraft, searchDraftFor, type BandTyping } from "../src/web/s
 const noBand = (): BandTyping => ({
   edit() {},
   flush() {},
+  ownsWords() { return false; },
   end() {},
   blur() {},
   focus() {},

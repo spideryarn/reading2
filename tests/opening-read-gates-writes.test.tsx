@@ -20,7 +20,9 @@
  *
  * - **While the read is out**, the action is refused through every door it has
  *   (the button, the form's submit, the key chord), **no request is sent**, and
- *   the reader's draft is still in the box.
+ *   the reader's draft is still in the box. (Search's press, since plan
+ *   261012e, is held rather than refused, and sent when the read settles:
+ *   § Search below.)
  * - **After it succeeds**, the action works and **A and B are both on screen**.
  *   Requiring A as well as B is what rejects the tempting wrong fix — dropping
  *   the opening snapshot whenever a write begins — which leaves B alone and
@@ -65,7 +67,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { AnnotateDraft } from "../src/web/AnnotateDialog.js";
-import type { Block, BlockId, Comment, SearchRun } from "../src/types.js";
+import type { Block, BlockId, Comment, SearchKind, SearchRun } from "../src/types.js";
 
 /** One reply per request, decided by the case that is running. */
 let answer: (url: string, init: RequestInit) => Promise<Response>;
@@ -115,6 +117,8 @@ const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 const { AnnotateDialog } = await import("../src/web/AnnotateDialog.js");
 const { useComments } = await import("../src/web/useComments.js");
 const { OPENING_READ_DEADLINE_MS } = await import("../src/web/lib/opening-read.js");
+const { PAUSE_MS } = await import("../src/web/quick-session.js");
+const { searchDraftFor } = await import("../src/web/search-draft.js");
 const { Dock } = await import("../src/web/Dock.js");
 const { EXPERIMENTAL_OFF } = await import("./helpers/experimental-fixtures.js");
 
@@ -226,6 +230,11 @@ beforeEach(() => {
   strict = false;
   honourAbort = true;
   history.replaceState(null, "", `/read/${SLUG}`);
+  /* Search's draft outlives the band, per article, for the page's life. Left
+     over from the case before, the box already holds the words a case types,
+     so React sees no change, no typing session opens, and the case tests a
+     path the reader is not on. */
+  searchDraftFor(SLUG).set("");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -427,23 +436,40 @@ describe("Criteria: Run waits for the opening read", () => {
 
 /* ================================================================ Search == */
 
+/* **Since plan 261012e the band's default matcher is a typing session**, not a
+   manual meaning search: a pause or Enter/*find* asks a `quick` run, and once
+   that answer is in, auto-thorough asks the `meaning` run for the same words
+   and swaps it in. So *find* is no longer `disabled` while the list loads —
+   the session **holds** the press, with its words, and sends it the moment
+   the read settles (src/web/quick-session.ts § `flush`, `loaded`). The
+   property is unchanged: nothing is POSTed before the read has answered, and
+   both the earlier runs and the new one are on screen after it. The reader's
+   press is counted as the quick runs; the thorough run auto-thorough asks
+   after each is counted apart. */
+
 const OLD_QUESTION = "arguments against substrate independence";
 const NEW_QUESTION = "anywhere he gives numbers";
 
-function runRow(id: string, criterion: string): SearchRun {
-  return { id, criterion, kind: "meaning", createdAt: "2026-09-01T09:00:00.000Z", status: "done", hits: [] };
+function runRow(id: string, criterion: string, kind: SearchKind = "meaning"): SearchRun {
+  return { id, criterion, kind, createdAt: "2026-09-01T09:00:00.000Z", status: "done", hits: [] };
 }
 const OLD_RUN = runRow("spya-aaaab2", OLD_QUESTION);
 
+interface SearchPost {
+  id: string;
+  kind: SearchKind;
+}
+
+/** A held GET, and a POST that streams the run — as the kind it was asked — to done. */
 function searchServer() {
   const get = held();
-  const posted: string[] = [];
+  const posted: SearchPost[] = [];
   answer = (_url, init) => {
     if (method(init) === "GET") return get.promise;
     if (method(init) === "POST") {
-      const id = sentId(init);
-      posted.push(id);
-      const run = runRow(id, NEW_QUESTION);
+      const { id, kind } = JSON.parse(String(init.body)) as SearchPost;
+      posted.push({ id, kind });
+      const run = runRow(id, NEW_QUESTION, kind);
       return Promise.resolve(
         sse([
           { event: "begin", data: { ...run, status: "pending", sourceHash: "h" } },
@@ -455,6 +481,9 @@ function searchServer() {
   };
   return { get, posted };
 }
+
+/** The reader's asks: the quick runs. Auto-thorough's meaning run follows each by itself. */
+const quickAsks = (posted: SearchPost[]) => posted.filter((p) => p.kind === "quick");
 
 function mountSearch(): void {
   render(
@@ -481,26 +510,33 @@ function pressFindEveryWay(): void {
   key(searchBox(), { key: "Enter" });
 }
 
-describe("Search: Find waits for the opening read", () => {
-  it("refuses Find and Enter while the list is loading, keeps the draft, and keeps both runs after", async () => {
+describe("Search: nothing is asked until the opening read settles", () => {
+  it("holds a pause, Find and Enter while the list is loading, keeps the draft, and sends one search after, with both runs on screen", async () => {
+    // Only the timers are fake, so the session's pause can be passed without waiting.
+    fakeClock();
     const { get, posted } = searchServer();
     mountSearch();
     await flush();
 
     type(searchBox(), NEW_QUESTION);
+    // The pause the session asks on: carried, not sent.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PAUSE_MS + 50);
+    });
+    await flush();
+    expect(posted, "a pause sent a search while the opening read was still out").toHaveLength(0);
     pressFindEveryWay();
     await flush();
     expect(posted, "a search was sent while the opening read was still out").toHaveLength(0);
-    expect(findButton().disabled).toBe(true);
-    expect(searchBox().value, "the refused press threw the draft away").toBe(NEW_QUESTION);
+    expect(findButton().title).toBe("Waiting for your saved searches to load");
+    expect(searchBox().value, "the held press threw the draft away").toBe(NEW_QUESTION);
 
     get.release(json({ runs: [OLD_RUN] }));
     await flush();
-    expect(host.textContent).toContain(OLD_QUESTION);
-
-    key(searchBox(), { key: "Enter" });
-    await flush();
-    expect(posted).toHaveLength(1);
+    /* The held press goes now, by itself — once, though it was paused on and
+       pressed twice — and its thorough search follows it. */
+    expect(quickAsks(posted), "the held press was lost, or sent twice").toHaveLength(1);
+    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning"]);
     expect(host.textContent, "the saved search from before was lost").toContain(OLD_QUESTION);
     expect(host.textContent, "the search just run is not on screen").toContain(NEW_QUESTION);
   });
@@ -514,10 +550,11 @@ describe("Search: Find waits for the opening read", () => {
     get.release(json({ error: "The database is busy. [db-busy]" }, 503));
     await flush();
     expect(host.textContent).toContain("[db-busy]");
+    expect(posted).toHaveLength(0);
 
     click(findButton());
     await flush();
-    expect(posted).toHaveLength(1);
+    expect(quickAsks(posted)).toHaveLength(1);
     expect(host.textContent).toContain(NEW_QUESTION);
   });
 
@@ -531,7 +568,7 @@ describe("Search: Find waits for the opening read", () => {
 
     click(findButton());
     await flush();
-    expect(posted).toHaveLength(1);
+    expect(quickAsks(posted)).toHaveLength(1);
     expect(host.textContent).toContain(NEW_QUESTION);
     expect(host.textContent, "the search cleared the load's error").toContain("[db-busy]");
     expect(host.textContent, "nothing says the earlier searches are missing").toContain(
@@ -547,12 +584,16 @@ describe("Search: Find waits for the opening read", () => {
     await flush();
     type(searchBox(), NEW_QUESTION);
 
+    /* The clock passes the session's pause on its way to the deadline. That
+       pause was carried while the read was out, and the deadline releases it. */
     await pastTheDeadline();
     expect(host.textContent).toContain("[rd-timeout]");
+    expect(quickAsks(posted), "the carried pause was not asked at the deadline").toHaveLength(1);
 
+    // Find on words already asked flushes the same row: no second search.
     click(findButton());
     await flush();
-    expect(posted).toHaveLength(1);
+    expect(quickAsks(posted)).toHaveLength(1);
     expect(host.textContent).toContain(NEW_QUESTION);
 
     get.release(json({ runs: [OLD_RUN] }));
@@ -576,9 +617,7 @@ describe("Search: Find waits for the opening read", () => {
 
     get.release(json({ runs: [OLD_RUN] }));
     await flush();
-    click(findButton());
-    await flush();
-    expect(posted).toHaveLength(1);
+    expect(quickAsks(posted), "the held press was lost, or sent twice").toHaveLength(1);
     expect(host.textContent).toContain(OLD_QUESTION);
     expect(host.textContent).toContain(NEW_QUESTION);
   });

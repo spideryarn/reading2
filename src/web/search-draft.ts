@@ -15,7 +15,7 @@
  *
  * - The bar's box writes the draft **only while it has focus** — that is,
  *   only from its own `onChange`.
- * - The panel's box reads and writes it with *quick* or *meaning* chosen.
+ * - The panel's box reads and writes it with *meaning* chosen.
  *   *Words* keeps `?find=`, as it always has, and never touches it.
  * - **Fetches never write it.** A criterion arriving from the server is not
  *   something the reader typed, and that was a bug this panel once had
@@ -28,10 +28,10 @@
  *
  * - **A handoff** — the bar has had its first qualifying pause (or Enter, or
  *   the ⚡) while the band could not hear it: Search mode closed, or open on
- *   another matcher. The band, once it is mounted on *quick*, takes it and
- *   asks. `useSyncExternalStore` so a band already mounted on *meaning*
+ *   another matcher. The band, once it is mounted on *meaning*, takes it and
+ *   asks. `useSyncExternalStore` so a band already mounted on *words*
  *   notices it and switches.
- * - **The band's typing controls**, registered while the band is on *quick*,
+ * - **The band's typing controls**, registered while the band is on *meaning*,
  *   so the bar's later keystrokes reach the same session the panel's do.
  * - **The panel box's focus**, registered by the panel, so the ⚡ can focus it
  *   inside the tap when the panel is already mounted.
@@ -48,7 +48,7 @@ import type { TypingControls } from "./SearchPanel.js";
  * - `enter`: Enter in the bar's box, or the command bar's *Quick search “X”*
  *   row, which sends it whether or not the band is listening — ask the draft
  *   now, and seal it.
- * - `quick`: the ⚡ — nothing to ask, only be on *quick*.
+ * - `quick`: the ⚡ — nothing to ask, only be on *meaning*.
  */
 export type HandoffKind = "pause" | "enter" | "quick";
 export type Handoff = { type: "pause" | "quick" } | { type: "enter"; text: string };
@@ -69,7 +69,7 @@ export interface SearchDraft {
   clearHandoffs(): void;
   /** Take the next pending action. */
   take(): Handoff | null;
-  /** The band's session, while it is on *quick*; `null` otherwise. */
+  /** The band's session, while it is on *meaning*; `null` otherwise. */
   band(): BandTyping | null;
   registerBand(band: BandTyping): () => void;
   /** Focus the panel's box, if one is mounted. False if none is. */

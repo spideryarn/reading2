@@ -451,15 +451,17 @@ describe("quick search as you type", () => {
     });
   });
 
-  it("leaves words inert after a matcher switch: nothing is asked until the next edit", async () => {
+  /* A round trip through words, since plan 261012e left no second
+     server-asking matcher to step through. */
+  it("leaves the typed words inert after a trip to words and back: nothing is asked until the next edit", async () => {
     const { posted } = server();
     mount();
     await flush();
     type("why");
     await pause();
     expect(posted).toHaveLength(1);
+    click(matcher("words"));
     click(matcher("meaning"));
-    click(matcher("quick"));
     await pause();
     expect(posted).toHaveLength(1);
     // And the next edit starts a new row rather than revising the old one.
@@ -468,9 +470,12 @@ describe("quick search as you type", () => {
     expect(posted[1]?.body.revises).toBeUndefined();
   });
 
-  it("never asks while the matcher is meaning", async () => {
+  /* This was "never asks while the matcher is meaning", when meaning was the
+     thorough search asked only on find. Plan 261012e made the meaning matcher
+     search as you type, so words is now the one matcher that never asks. */
+  it("never asks while the matcher is words", async () => {
     const { posted } = server();
-    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=meaning`);
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=words`);
     mount();
     await flush();
     type("why replication");
@@ -478,6 +483,6 @@ describe("quick search as you type", () => {
     expect(posted).toHaveLength(0);
     enter();
     await flush();
-    expect(posted.map((p) => p.body.kind)).toEqual(["meaning"]);
+    expect(posted).toHaveLength(0);
   });
 });

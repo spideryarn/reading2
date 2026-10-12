@@ -111,7 +111,7 @@ import {
   PRIORITY_CONF,
 } from "./search-hits.js";
 import { hiddenNote } from "./threshold.js";
-import { asksTheServer, type HitOrder, type Matcher } from "./params.js";
+import { asksTheServer, type HitOrder, kindFor, type Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -153,16 +153,18 @@ import { Excerpt } from "./Excerpt.js";
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
  */
 /**
- * **Quick search as you type** — what the box tells the typing session
+ * **Meaning search as you type** — what the box tells the typing session
  * (`useTypingSession` in src/web/modes/search/SearchMode.tsx, the rules in
- * src/web/quick-session.ts). Only with *quick* chosen; words and meaning never
- * call these.
+ * src/web/quick-session.ts). The meaning matcher asks a quick run first;
+ * words never calls these.
  */
 export interface TypingControls {
   /** The reader changed the box. */
   edit(text: string): void;
   /** Enter or *find*: flush changed words into the row, and end the session. */
   flush(text: string): void;
+  /** Does the open session own the quick row for these exact words? */
+  ownsWords(text: string): boolean;
   /** ↺, or anything else that starts the next words afresh. */
   end(): void;
   blur(): void;
@@ -173,9 +175,9 @@ export type SearchAccess =
   | {
       kind: "owner";
       /**
-       * Search-as-you-type for *quick* (plan 261002h). Absent, quick asks on
-       * Enter and *find* only, as it did before — which is what a test that
-       * mounts the panel on its own gets.
+       * Search-as-you-type for meaning's quick first pass (plan 261002h,
+       * folded into meaning by 261012e). Absent, the quick run asks on Enter
+       * and *find* only — which is what a test mounting the panel alone gets.
        */
       typing?: TypingControls;
       /**
@@ -203,9 +205,9 @@ export type SearchAccess =
       upgrading?: ReadonlySet<string>;
       /**
        * Those thorough searches' own rows, which are **not** in `runs` until
-       * they are complete. Here only so the "already running" keys include
-       * them: *find* on the meaning matcher for the same words is disabled
-       * rather than silently refused (plan 261004l, review F6).
+       * they are complete. Here so the one meaning button refuses the same
+       * quick-then-thorough pipeline while its thorough half is hidden
+       * (plan 261004l, review F6).
        */
       hidden?: readonly SavedSearch[];
       /**
@@ -444,7 +446,7 @@ export function SearchPanel({
           seen from here: the ticks are the control and the list below is what
           they add up to, so a reader can watch one appear as they tick it.
           Words mode has no saved searches to tick, so it gets the results
-          alone. Quick and meaning share the one list. */}
+          alone. The quick and meaning run kinds share the one list. */}
       {asksTheServer(matcher) && (
         <Saved
           access={access}
@@ -491,18 +493,18 @@ export function SearchPanel({
 }
 
 /**
- * How a question still out from this tab is told apart from another: its
- * trimmed words **and its kind**. A quick search and a meaning search for the
- * same words are two questions, so the box can ask meaning while quick is
- * still running. *Thorough* appears on a finished quick row (plan 261002e,
- * review F5). `useSearch.isRunning` keys its ref the same way.
+ * How a request still out from this tab is told apart from another: its
+ * trimmed words **and its stored run kind**. The one meaning matcher owns a
+ * quick-then-thorough pipeline; saved rows still use the two kinds so a quick
+ * row's *thorough* control can guard its own request. `useSearch.isRunning`
+ * keys its ref the same way.
  */
 function runningKey(criterion: string, kind: SearchKind): string {
   return `${kind}\u0000${criterion.trim()}`;
 }
 
 /**
- * The box, the three-way toggle, and the one submit.
+ * The box, the two-way toggle, and the one submit.
  *
  * One `<input>` over **two sources of truth**. In words mode the text *is*
  * `?find=`, because a literal search changes what the article looks like and
@@ -580,7 +582,7 @@ const Box = forwardRef<
      */
     loaded: boolean;
     onAsk(criterion: string, kind: SearchKind): void;
-    /** Search-as-you-type, for quick only — see `TypingControls`. */
+    /** Search-as-you-type, for the meaning matcher — see `TypingControls`. */
     typing: TypingControls | undefined;
     /** Do not take focus on mount: the bar's box has it (Sol F2). */
     quietMount: boolean;
@@ -619,15 +621,23 @@ const Box = forwardRef<
 
   const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;
-  /* Not `!busy` any more: several searches may run at once, and only an exact
-     repeat of one still running — same words, same kind — is refused. See
-     `running` in SearchPanel. */
-  const asking = asksTheServer(matcher) ? matcher : null;
-  /* Quick, as you type: the session owns the asking, and Enter or *find*
-     flushes the words into its row and ends it — **even when those words are
-     already running** (Sol F5), which is exactly the state a pause leaves. */
-  const session = matcher === "quick" ? typing : undefined;
-  const repeat = asking !== null && session === undefined && running.has(runningKey(draft, asking));
+  /* Not `!busy` any more: several searches may run at once. Only an exact
+     repeat of this meaning pipeline is refused; the quick and thorough halves
+     still have separate stored kinds. See `running` in SearchPanel. */
+  const asking = asksTheServer(matcher) ? kindFor(matcher) : null;
+  /* Meaning, as you type: the session owns the asking, and Enter or *find*
+     flushes the words into its quick row and ends it — **even when that row
+     is still running**, if this open session owns it. That is exactly the
+     state a pause leaves, and the flush starts the thorough search as soon as
+     the quick answer lands (auto-thorough.ts § `submitted`). A closed or
+     different session cannot make an exact repeat do anything, so it is
+     refused visibly below. */
+  const session = asksTheServer(matcher) ? typing : undefined;
+  const ownsQuick = session?.ownsWords(draft) ?? false;
+  const repeat = asking !== null && (
+    running.has(runningKey(draft, "meaning")) ||
+    (running.has(runningKey(draft, asking)) && !ownsQuick)
+  );
   const ready =
     asking !== null && (loaded || session !== undefined) && draft.trim().length > 0 && !repeat;
   const ask = () => {
@@ -661,8 +671,8 @@ const Box = forwardRef<
    */
   function switchTo(next: Matcher, toBox: boolean) {
     if (next !== matcher) {
-      /* Only a crossing between words and the other two moves the text. Quick
-         and meaning both read the draft, so between them it simply stays. */
+      /* A crossing between words and meaning moves the text: one reads
+         `?find=`, the other the draft. */
       if (matcher === "words") {
         setDraft(value);
         onFind(null);
@@ -690,18 +700,10 @@ const Box = forwardRef<
           enterKeyHint="search"
           value={value}
           placeholder={
-            matcher === "words"
-              ? "find these words…"
-              : matcher === "quick"
-                ? "describe it — a fast first pass…"
-                : "describe what to look for…"
+            matcher === "words" ? "find these words…" : "describe what to look for…"
           }
           aria-label={
-            matcher === "words"
-              ? "Find these words"
-              : matcher === "quick"
-                ? "Describe what to look for, for a quick search"
-                : "Describe what to look for"
+            matcher === "words" ? "Find these words" : "Describe what to look for"
           }
           onChange={(e) => {
             if (matcher === "words") onFind(e.target.value || null);
@@ -808,19 +810,7 @@ const Box = forwardRef<
           >
             <Type size={12} /> words
           </button>
-          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of three, in one group, with one label */}
-          <button
-            type="button"
-            role="radio"
-            aria-checked={matcher === "quick"}
-            tabIndex={0}
-            className={`srch-mode summ-view-btn${matcher === "quick" ? " on" : ""}`}
-            onClick={(e) => switchTo("quick", e.detail > 0)}
-            title="A fast first pass: scores every paragraph in about a second. Whole paragraphs, no reasons."
-          >
-            <Zap size={12} /> quick
-          </button>
-          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of three, in one group, with one label */}
+          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of two, in one group, with one label */}
           <button
             type="button"
             role="radio"
@@ -828,12 +818,15 @@ const Box = forwardRef<
             tabIndex={0}
             className={`srch-mode summ-view-btn${matcher === "meaning" ? " on" : ""}`}
             onClick={(e) => switchTo("meaning", e.detail > 0)}
-            title="Describe what you are looking for and the model finds it. Costs a model call."
+            /* Quick and meaning were two buttons until 2026-10-12 (plan
+               261012e): now one, which asks the quick search as you pause and
+               replaces each settled answer with the thorough one. */
+            title="Describe what you are looking for: a fast first pass in about a second, then a thorough search that replaces it."
           >
             <Sparkles size={12} /> meaning
           </button>
         </div>
-        {/* Only in quick and meaning, because only they have a moment of
+        {/* Only in meaning, because only it has a moment of
             submission. In words mode there is nothing to press: the results are
             already there. Saying so with the absence of a button is clearer
             than a disabled one, which invites a reader to wonder what they did
@@ -856,9 +849,7 @@ const Box = forwardRef<
                 ? "Waiting for your saved searches to load"
                 : repeat
                   ? "Already searching for this — change the words to ask something else"
-                  : asking === "quick"
-                    ? "Score every paragraph against this — about a second"
-                    : "Find the passages that match — one model call"
+                  : "Search now — a fast first pass, then the thorough search"
             }
           >
             find

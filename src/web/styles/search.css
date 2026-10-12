@@ -124,7 +124,7 @@
   gap: 0.25rem;
   margin-top: 0.4rem;
 }
-/* **The matchers** — words | quick | meaning — are the part-switcher every
+/* **The matchers** — words | meaning — are the part-switcher every
    mode shares, `.summ-views` / `.summ-view-btn` (mode-band.css § the
    part-switcher; plan 261007h § F2), so their look is not here and
    `.srch-mode` stays on each as a hook. The chosen one was drawn in the search
@@ -833,4 +833,3 @@
 }
 .tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
 .tip-hit-meta em { font-style: italic; }
-

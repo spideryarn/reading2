@@ -2,8 +2,11 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-26.** One box in the mode band, three ways of matching behind it (two until
-2026-10-02, when *quick* arrived — [§ Quick search](#quick-search-a-meaning-search-in-about-a-second)),
+**Built 2026-08-26.** One box in the mode band, two matchers on its toggle — *words* and
+*meaning* — and three ways of matching behind them, because a meaning search answers quick first and
+then thorough ([§ One meaning button](#one-meaning-button-quick-first-then-thorough-since-2026-10-12);
+the toggle had a third button, *quick*, from 2026-10-02 to 2026-10-12 —
+[§ Quick search](#quick-search-a-meaning-search-in-about-a-second)),
 and the passages that match get marked in the article beside it. Quick search can also be started
 from a box in the bottom bar, from anywhere in the article, and searches as you type —
 [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). Greg's ask:
@@ -109,7 +112,7 @@ function doing the same job.
 ## In this doc
 
 - [§ The one decision](#the-one-decision-everything-else-follows-from) — why two matchers share one downstream
-- [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the third matcher (Jev, ~1 s), and how it hands over to thorough
+- [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the meaning button's first answer (Jev, ~1 s), how it hands over to thorough, and why the toggle has two buttons since 2026-10-12
 - [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross
 - [§ Why this is on the augment side](#why-this-is-on-the-augment-side-of-the-line) — the intent: finding, not answering
 - [§ The mode band](#the-mode-band) and [§ The bottom bar](#the-bottom-bar) — where search sits in the chrome
@@ -138,14 +141,17 @@ function doing the same job.
 ## The one decision everything else follows from
 
 **One box, one results list, and a toggle that says how to match.** It was two matchers, the
-letters or the meaning, until 2026-10-02; *quick* sits between them:
+letters or the meaning, until 2026-10-02, when *quick* came between them; since 2026-10-12 it is two
+again, and the *meaning* button runs the quick column below first and the meaning column after it
+([§ One meaning button](#one-meaning-button-quick-first-then-thorough-since-2026-10-12)). The table
+is of the three ways of matching, which are still three kinds of saved run:
 
 | | **words** | **quick** | **meaning** |
 |---|---|---|---|
 | what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
 | where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
 | what it costs | nothing | about $0.0004, and about a second | a few cents (a $0.06 mean per provider call in the [sample](#a-quick-search-starts-the-thorough-one-by-itself)), and usually about ten seconds (the 90th centile is about twenty) |
-| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find**, and [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled |
+| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled, or as soon as it lands after **find**; and on a quick row's **thorough** (until 2026-10-12, also on **find** in a meaning matcher of its own) |
 | what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
 | is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* — one row per typing session | yes, beside the article |
 
@@ -172,8 +178,9 @@ of that file instead: it returns the same `SearchHit`s as meaning, so it is a se
 the same route and the same saved list.
 
 The practical difference the panel is at pains to make obvious is *what pressing a key does*. In
-words mode the results are already there as you type. In meaning mode nothing happens until you
-submit, because submitting spends money. Quick sits between them since 2026-10-02: it asks when you
+words mode the results are already there as you type. Until 2026-10-12, in meaning mode nothing
+happened until you submitted, because submitting spends money; since then the meaning button is what
+the quick one was, and the rest of this paragraph is about it. Quick sat between them from 2026-10-02: it asks when you
 pause, because a pause costs about $0.0004 and one typing session keeps one saved row —
 [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). Since 2026-10-04 a quick
 answer that has settled also starts one meaning search without a press, which Greg asked for; what
@@ -346,6 +353,37 @@ endpoint answers in one body, so all the hits arrive together, under one deadlin
 Why a third arm of the toggle rather than a new mode or a separate quick-search bar, and why it is
 saved rather than thrown away: the plan's § The decision.
 
+### One meaning button: quick first, then thorough, since 2026-10-12
+
+**Built 2026-10-12**, from Greg's report `spya-sy4rn0`. The plan, the cost and the options passed
+over are [261012e](../plans/261012e-search-meaning-is-quick-then-thorough-one-toggle.md).
+
+> In search mode, it looks like we have something that checks for exact string match, and then a
+> quick mode, and then a meaning mode, which is effectively the thorough version of quick. Let's
+> collapse those latter two so that really you just have the string matching version and then the
+> meaning version. And let's, as an experiment for the meaning version, maybe it does a quick
+> version asap and then replaces it with a thorough version as soon after as it can.
+>
+> — Greg, 2026-10-12
+
+The second half was already what *quick* did (below), so the change is the toggle: **words ·
+meaning**, and *meaning* is what *quick* was. It searches as you pause, keeps one quick row per
+typing session, and the thorough search replaces each settled answer. What went is the manual
+meaning matcher, which asked the thorough search alone on *find*; nobody can now ask it without a
+quick search first, and the row's *thorough* button still asks it on a quick row (for when the
+automatic one failed, and for quick rows chat made).
+
+- **`?match=quick` is still read, as `meaning`** (`matchParam` in
+  [`params.ts`](../../src/web/params.ts)), for every link and chat card written before the fold.
+- **The matcher is not the run's kind any more**: the meaning matcher asks `quick` runs (`kindFor`),
+  and `search_runs.kind` is unchanged, so a row still says *quick* while it is the first pass.
+- **What it costs**: the default matcher now spends without a press — a quick search per pause, and
+  a thorough search per settled answer, as § below measures. Greg asked for it as an experiment.
+- **The bar's box and the command bar's row keep the name *Quick search***: they are the quick way
+  in, and what they start is still a quick search first.
+- **Chat's in-place searches are unchanged.** They run a quick search and stop; the thorough search
+  after them, and one search client shared with this mode, are still held as `qi-dhy8q2nq`.
+
 ### A quick search starts the thorough one by itself
 
 **Built 2026-10-04.** The plan, its review and the options passed over are
@@ -398,8 +436,9 @@ hook that carries them out is beside them, in
 - The thorough search is asked *quietly*: not ticked, and neither its start nor its failure touches
   the panel's error line.
 - Its row is hidden until it is complete: not listed, not counted, not coloured, and its passages
-  are not drawn as they arrive. It still counts as running, so *find* on the meaning matcher for the
-  same words is disabled rather than silently refused.
+  are not drawn as they arrive. It still counts as running, so a quick row's *thorough* button for
+  the same words is disabled rather than silently refused. (Until 2026-10-12 so was *find* on the
+  manual meaning matcher, which has gone.)
 - At the swap the thorough row takes the colour the quick row is drawn in at that moment, replaces
   its id in `?runs=` where it was, and is listed at the quick row's time so it does not jump above
   rows asked meanwhile. Then the quick row is deleted. Nothing scrolls. A result that was pressed
@@ -514,8 +553,8 @@ Every one is metered as `search-quick` in `ai_calls`.
 **The box in the bottom bar** ([`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx)) is a
 second view of the same draft ([`search-draft.ts`](../../src/web/search-draft.ts)), not a second
 search: the asking is the band's typing session either way. Type into it with Search mode closed and
-the first qualifying pause opens Search mode on `?match=quick` (switching from another matcher if
-needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
+the first qualifying pause opens Search mode on `?match=meaning` (`?match=quick` until 2026-10-12;
+switching from words if needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
 pointer setting hides the focused bar box, focus transfers to the panel with scrolling prevented.
 While Search mode is open and the bar box is not focused it shows as a ⚡ button (where the bar
 has room for the box at all). Both boxes can
@@ -536,12 +575,14 @@ be visible while the bar box has focus; they share the same words and typing ses
   > which we are already also showing, so the quick search icon alone doesn't add any value.
 
   **The two were not quite the same door**, and the difference is what a phone gave up: the ⚡
-  opened Search on *quick*, while the Search button opens it on whichever kind the URL names, and
-  with none named that is *thorough* (`resolveMatcher` in [`params.ts`](../../src/web/params.ts)).
-  So on a phone *quick* is the Search button and then the *quick* tab. `/` still goes straight
-  there. [261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md).
+  opened Search on *quick*, while the Search button opened whichever matcher the URL named, and
+  with none named that was *meaning*, then the thorough-only matcher (`resolveMatcher` in
+  [`params.ts`](../../src/web/params.ts)). So on a phone quick took two presses through Search but
+  one through `/`. Since 2026-10-12 the two doors are the same, unless the URL names *words*: the
+  meaning matcher, the default, is the quick one.
+  [261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md).
 - **The ⚡ that is left** stands in for the box while Search mode is open and the box is not
-  focused, at a width that has the box. It opens Search mode on quick with the panel's box focused.
+  focused, at a width that has the box. It opens Search mode on *meaning* with the panel's box focused.
   When the panel is not yet mounted it focuses a render after the press.
 - **Only on an owner's reading view**, where the band that can ask (`SearchBand`) would mount; a
   visitor's view has no control and no `/` (`hasQuickSearch` in
@@ -579,8 +620,9 @@ avoids focusing a newly mounted box on a touch screen:
 
 - **A hidden rail comes back**, as it does when the Dock opens Search (`arrivalBringsRailBack` in
   [`mode-press.ts`](../../src/web/reader/mode-press.ts)).
-- **Back.** If Search was closed, one Back leaves it. If it was already open on words or meaning,
-  the switch to quick is its own history entry, so Back returns to that view.
+- **Back.** If Search was closed, one Back leaves it. If it was already open on words, the switch
+  to meaning is its own history entry, so Back returns to words. If it was already on meaning,
+  nothing switches and no extra entry is pushed, so one Back leaves Search.
 - **On a touch screen the panel's box does not take focus** when it mounts for a search already
   sent, so the keyboard does not rise over the hits. The ⚡ still focuses it.
 
@@ -589,7 +631,7 @@ exact-words row alone. A *Find “X”* chip in a chat answer still opens the ex
 
 ### The cross in the panel's own box
 
-The Search panel's box has the same cross since 2026-10-05, for all three matchers (Greg,
+The Search panel's box has the same cross since 2026-10-05, for both matchers (Greg,
 2026-10-04: *"Q-panel-box-cross yes"*). A phone has no Escape, and this is the only box a phone types a search into.
 It is Escape's clear (one `clear` in `Box`,
 [`SearchPanel.tsx`](../../src/web/SearchPanel.tsx)): it empties the box, leaves the ticked searches
@@ -1415,14 +1457,14 @@ reader pressed**. Every part of that is silent. The key is now `runId:blockId:n`
 
 ## The URL
 
-Six parameters, which is more than any other mode wants, because search mode has three matchers in it
+Six parameters, which is more than any other mode wants, because search mode has two matchers in it
 rather than one feature. The division: `match` says which matcher, and then exactly one of `find` and
 `runs` is the thing being matched. (`run` is the sixth and is legacy — read on load, never written.)
 
 | Parameter | Values | History | Why |
 |---|---|---|---|
 | `mode` | `search` | push | A mode is where you are, not a glance |
-| `match` | `words`, `quick` (since 2026-10-02), `meaning` (default) | **push** | It changes what the article looks like, like a column toggle. Back should undo it. `quick` behaves as `meaning` does for `runs` and the draft — `asksTheServer` in [`params.ts`](../../src/web/params.ts) — and differs only in the `kind` it asks with |
+| `match` | `words`, `meaning` (default). `quick` (2026-10-02 to 2026-10-12) is still read, as `meaning` | **push** | It changes what the article looks like, like a column toggle. Back should undo it. The matcher is not the run's kind: `meaning` asks `quick` runs, and auto-thorough asks the `meaning` one — `kindFor` in [`params.ts`](../../src/web/params.ts) |
 | `find` | any string | replace, debounced 200ms | Written on every keystroke. A Back button that walked back through a half-typed word one letter at a time would be useless — same call `?at=` makes |
 | `runs` | comma-separated minted ids | replace | Which saved searches are switched on. Ticking one while you read is browsing; `mode` already put the entry on the stack Back should use |
 | `run` | a minted id | replace | **Read, never written.** The single-search spelling from before 2026-08-26, kept so the links already in the world still open the search they name |
@@ -1457,7 +1499,10 @@ Changed by Greg on 2026-08-26. The original argument for `words` was that **it i
 reader who opens the panel and types should get instant highlights, not a bill.
 
 That argument was about the wrong thing, and it is worth saying why rather than just flipping the
-constant. **Nothing in meaning mode spends anything until the reader presses find.** The cost is
+constant. **Nothing in meaning mode spent anything until the reader pressed find** — true until
+2026-10-12, when the meaning matcher began asking as you pause and buying a thorough search per
+settled answer, at Greg's request ([§ One meaning button](#one-meaning-button-quick-first-then-thorough-since-2026-10-12)
+says what that costs). The cost was
 attached to the submit, not to the mode; the free-ness of `words` was never at risk from the default,
 because a default cannot spend money. What the default actually decided was which *question* the
 panel opens on — and the interesting one, the one this app exists to offer, is *describe what you are
@@ -1711,7 +1756,7 @@ rather than opening this mode. The button and what it draws are
 what matters here is what it shares with this mode and what it does not.
 
 - **It is this mode's request.** `POST /api/search/<slug>`, kind `quick`, so the answer is a saved
-  row in this mode's list, and *Open in Search* opens it here (`?mode=search&match=quick&runs=<id>`).
+  row in this mode's list, and *Open in Search* opens it here (`?mode=search&match=meaning&runs=<id>`).
 - **It is not this mode's client.** [`chat-searches.ts`](../../src/web/chat-searches.ts) is a small
   second reader of the stream, outside `useSearch`, because `useSearch` lives inside the band and
   the band is not mounted while chat is. So nothing here hears of a chat search until the mode
@@ -1727,6 +1772,13 @@ what matters here is what it shares with this mode and what it does not.
 
 ## What is still open
 
+- **A second quick row in the two seconds before thorough starts.** If the box loses focus after a
+  quick answer has landed and before the settle timer starts the thorough search, nothing is
+  running, so *find* on the same words asks a second quick search and leaves a second row. Once
+  either half is in flight, *find* is disabled for those words (GPT Sol's F1 on
+  [261012e](../plans/261012e-search-meaning-is-quick-then-thorough-one-toggle.md)). Closing the gap
+  means keeping the session's ownership past its end, or showing the panel auto-thorough's private
+  settle state; it costs a fraction of a cent when hit, so it was left (Sol's F3).
 - **Nothing steps between results with the arrow keys.** `/` opens quick search
   ([keyboard.md § Quick search: the slash key](keyboard.md#quick-search-the-slash-key)); there is
   no next-result or previous-result key.

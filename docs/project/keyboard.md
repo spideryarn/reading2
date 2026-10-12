@@ -721,7 +721,7 @@ key, and there is no way to switch it off or remap it.
 
 **`/` jumps to quick search** — it focuses the quick-search box in the bottom bar, or, where the
 box is not shown (a coarse pointer, fit rung 4 or a window under 732px, where since 2026-10-05
-nothing is drawn; or Search mode open with the bar box unfocused, where the ⚡ is), opens Search mode on *quick* with the panel's box focused.
+nothing is drawn; or Search mode open with the bar box unfocused, where the ⚡ is), opens Search mode on *meaning* (which was the *quick* matcher until plan 261012e folded the two) with the panel's box focused.
 Built 2026-10-02 with the box itself
 ([search.md § Search as you type](search.md#search-as-you-type-and-the-box-in-the-bottom-bar),
 [261002h](../plans/261002h-quick-search-bar-in-the-dock.md)); the code is `isQuickSearchKey` in

@@ -35,7 +35,7 @@ export function findHref(slug: string, carried: string, words: string): string {
  */
 export function searchRunHref(slug: string, carried: string, runId: string): string {
   const kept = searchWithoutAny(carried, SEARCH_KEYS);
-  const search = [kept, "mode=search", "match=quick", `runs=${encodeURIComponent(runId)}`]
+  const search = [kept, "mode=search", "match=meaning", `runs=${encodeURIComponent(runId)}`]
     .filter(Boolean)
     .join("&");
   return readHref(slug, search, "article");

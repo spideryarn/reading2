@@ -265,7 +265,8 @@ describe("a quick-search button in a chat answer", () => {
     await flush();
     expect(links()).toEqual(["spya-cccccc"]);
     expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("runs=spya-run777");
-    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("match=quick");
+    // The meaning matcher, which asks the quick search, since plan 261012e folded quick into it.
+    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("match=meaning");
   });
 
   it("asks once for two presses in a row", async () => {

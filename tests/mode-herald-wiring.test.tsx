@@ -319,6 +319,15 @@ describe("Reader hands the herald a press", () => {
 
 const text = (): string => host.textContent ?? "";
 
+/**
+ * Search is open on the meaning matcher — read off the band's toggle, because
+ * the URL says nothing when meaning is the default. Meaning is what the quick
+ * search lands on since plan 261012e folded *quick* into it.
+ */
+const onMeaning = (): boolean =>
+  modeInUrl() === "search" &&
+  host.querySelector(".srch-mode[aria-checked='true']")?.textContent?.trim() === "meaning";
+
 /** Exercise the command row through the Reader's actual executor and URL setters. */
 async function quickSearchFromBar(words: string): Promise<void> {
   const proto = HTMLDialogElement.prototype;
@@ -333,14 +342,14 @@ async function quickSearchFromBar(words: string): Promise<void> {
   });
   expect(host.querySelector(".cmdbar-row .cmdbar-name")?.textContent).toBe(`Quick search “${words}”`);
   await act(async () => input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-  await until(() => modeInUrl() === "search" && new URLSearchParams(location.search).get("match") === "quick");
+  await until(onMeaning);
 }
 
 describe("the command bar's quick search through Reader", () => {
   it("the Dock quick-search opener still names Search, and its mode button still closes it", async () => {
     await open("?mode=summary");
     await act(async () => host.querySelector<HTMLButtonElement>(".dock-qs-bolt")?.click());
-    await until(() => modeInUrl() === "search" && new URLSearchParams(location.search).get("match") === "quick");
+    await until(onMeaning);
     expect(herald()).toContain(MODE_LABEL.search);
     await press(MODE_LABEL.search);
     expect(modeInUrl()).toBe("plain");
@@ -358,13 +367,28 @@ describe("the command bar's quick search through Reader", () => {
     expect(new URLSearchParams(location.search).get("spine")).toBe("0");
   });
 
-  it.each(["words", "meaning"])("one Back restores an already-open %s matcher", async (matcher) => {
-    await open(`?mode=search&match=${matcher}&find=entropy`);
+  it("one Back restores an already-open words matcher", async () => {
+    await open("?mode=search&match=words&find=entropy");
     await quickSearchFromBar("free will");
+    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
     await act(async () => history.back());
-    await until(() => new URLSearchParams(location.search).get("match") === matcher);
+    await until(() => new URLSearchParams(location.search).get("match") === "words");
     expect(modeInUrl()).toBe("search");
     expect(new URLSearchParams(location.search).get("find")).toBe("entropy");
+  });
+
+  /* Already on meaning, the search switches nothing, so it pushes nothing
+     (plan 261012e, Sol's F1 on it): one Back undoes the press that opened
+     Search, not a matcher step the reader never saw. */
+  it("on an already-open meaning matcher, pushes nothing: one Back leaves Search", async () => {
+    await open("?mode=summary&match=meaning");
+    await press(MODE_LABEL.search);
+    expect(modeInUrl()).toBe("search");
+    await quickSearchFromBar("free will");
+    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
+    await act(async () => history.back());
+    await until(() => modeInUrl() === "summary");
+    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
   });
 });
 

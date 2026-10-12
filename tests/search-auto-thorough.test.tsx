@@ -293,10 +293,6 @@ function click(el: Element): void {
     (el as HTMLElement).click();
   });
 }
-const matcher = (name: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>(".srch-mode")].find((b) =>
-    b.textContent?.includes(name),
-  )!;
 const savedRows = () => [...host.querySelectorAll<HTMLElement>(".srch-saved-row")];
 /** The saved rows' words, top to bottom. */
 const listed = () =>
@@ -440,6 +436,25 @@ describe("a quick search starts the thorough one", () => {
     await flush();
     expect(s.asked("quick"), "Enter on unchanged words asks no second quick search").toEqual([WORDS]);
     expect(s.asked("meaning")).toEqual([WORDS]);
+  });
+
+  it("keeps find live when this typing session owns the pending quick row", async () => {
+    const s = server({ quick: "hold" });
+    mount();
+    await flush();
+    type(WORDS);
+    await pause();
+    expect(s.asked("quick")).toEqual([WORDS]);
+
+    const find = must<HTMLButtonElement>("button.srch-go");
+    expect(find.disabled).toBe(false);
+    click(find);
+    await flush();
+    expect(s.asked("quick"), "submitting the owned row asked a duplicate").toEqual([WORDS]);
+
+    act(() => s.posts("quick")[0]!.finish());
+    await flush();
+    expect(s.asked("meaning"), "find did not submit the owned row").toEqual([WORDS]);
   });
 
   it("a pause alone starts it only after the settle", async () => {
@@ -726,7 +741,10 @@ describe("a quick search starts the thorough one", () => {
     expect(listed()).toEqual([]);
   });
 
-  it("F6: find on the meaning matcher is disabled for words whose thorough search is hidden", async () => {
+  /* F6 was "find on the manual meaning matcher is disabled while these words'
+     thorough search runs hidden". Meaning is now a quick-then-thorough
+     pipeline, but the same guard still belongs on its one visible button. */
+  it("F6: find is disabled while the same words' thorough search is hidden", async () => {
     const s = server();
     mount();
     await flush();
@@ -735,14 +753,20 @@ describe("a quick search starts the thorough one", () => {
     await flush();
     expect(s.asked("meaning")).toEqual([WORDS]);
 
-    click(matcher("meaning"));
+    const find = must<HTMLButtonElement>("button.srch-go");
+    expect(find.disabled).toBe(true);
+    expect(find.title).toBe("Already searching for this — change the words to ask something else");
+    click(find);
     await flush();
-    expect(box().value).toBe(WORDS);
-    expect(must<HTMLButtonElement>("button.srch-go").disabled).toBe(true);
-    // Control: other words can be asked, so the button is not simply dead.
+    expect(s.asked("quick")).toEqual([WORDS]);
+    expect(s.asked("meaning")).toEqual([WORDS]);
+
+    // Positive control: other words still start their own pipeline.
     type(`${WORDS} dualism`);
+    expect(find.disabled).toBe(false);
+    click(find);
     await flush();
-    expect(must<HTMLButtonElement>("button.srch-go").disabled).toBe(false);
+    expect(s.asked("quick")).toEqual([WORDS, `${WORDS} dualism`]);
   });
 
   it("follows a begin that answers thorough under another id", async () => {

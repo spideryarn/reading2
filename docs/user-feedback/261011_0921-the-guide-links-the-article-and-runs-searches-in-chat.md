@@ -52,4 +52,6 @@ searches for you", and offered buttons that would all have switched the band to 
 
 **Not done** (queue item `qi-dhy8q2nq`): the automatic thorough search after the quick one, which
 Search mode does by itself; one search client shared with Search mode; and marks in the article for
-a chat search.
+a chat search. Search's toggle folding *quick* into *meaning* on 2026-10-12
+([261012_0941](261012_0941-search-one-meaning-button-quick-then-thorough.md)) did not change this:
+auto-thorough still lives only in Search mode's band.

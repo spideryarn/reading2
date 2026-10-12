@@ -192,7 +192,7 @@ describe("the third arm of the toggle", () => {
       await mount({ access, runs: [], start: "meaning", active: [] });
       type(pending.criterion);
       act(() => findButton().click());
-      expect(asked).toEqual([[pending.criterion, "meaning"]]);
+      expect(asked).toEqual([[pending.criterion, "quick"]]);
       const line = container.querySelector('.srch-working[role="status"]');
       expect(line?.textContent).toBe("Reading the article for you…");
       expect(line?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
@@ -201,27 +201,25 @@ describe("the third arm of the toggle", () => {
     }
   });
 
-  it("is drawn between words and meaning, and checked when the matcher is quick", async () => {
-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
+  /* Plan 261012e, Greg's `spya-sy4rn0`: quick and meaning were folded into
+     one meaning matcher, which asks the quick search and lets auto-thorough
+     swap the thorough one in. There is no button that asks meaning alone. */
+  it("draws two matchers, words and meaning, and no quick", async () => {
+    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
     const names = [...container.querySelectorAll('[role="radio"]')].map((b) => b.textContent?.trim());
-    expect(names).toEqual(["words", "quick", "meaning"]);
-    expect(radio("quick").getAttribute("aria-checked")).toBe("true");
-    expect(radio("meaning").getAttribute("aria-checked")).toBe("false");
+    expect(names).toEqual(["words", "meaning"]);
+    expect(radio("meaning").getAttribute("aria-checked")).toBe("true");
   });
 
-  it("asks as quick on find, and as meaning once switched", async () => {
-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
+  it("asks the quick search first on find", async () => {
+    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
     type("statistical evidence");
     act(() => findButton().click());
     expect(asked).toEqual([["statistical evidence", "quick"]]);
-
-    act(() => radio("meaning").click());
-    act(() => findButton().click());
-    expect(asked.at(-1)).toEqual(["statistical evidence", "meaning"]);
   });
 
-  it("asks as quick on Enter", async () => {
-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
+  it("asks the quick search first on Enter", async () => {
+    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
     type("anywhere he gives numbers");
     act(() => {
       input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
@@ -229,14 +227,14 @@ describe("the third arm of the toggle", () => {
     expect(asked).toEqual([["anywhere he gives numbers", "quick"]]);
   });
 
-  it.each(["quick", "meaning"] as const)("puts the soft keyboard away on the %s find button", async (start) => {
+  it.each(["meaning"] as const)("puts the soft keyboard away on the %s find button", async (start) => {
     vi.stubGlobal("innerHeight", 800);
     vi.stubGlobal("visualViewport", { height: 464, offsetTop: 0, scale: 1 });
     await mount({ access: owner(), runs: [], start, active: [] });
     type("statistical evidence");
     input().focus();
     act(() => findButton().click());
-    expect(asked).toEqual([["statistical evidence", start]]);
+    expect(asked).toEqual([["statistical evidence", "quick"]]);
     expect(document.activeElement).not.toBe(input());
   });
 
@@ -247,7 +245,7 @@ describe("the third arm of the toggle", () => {
     type("statistical evidence");
     input().focus();
     act(() => findButton().click());
-    expect(asked).toEqual([["statistical evidence", "meaning"]]);
+    expect(asked).toEqual([["statistical evidence", "quick"]]);
     expect(document.activeElement).toBe(input());
   });
 
@@ -255,7 +253,7 @@ describe("the third arm of the toggle", () => {
      picks a word, it does not ask. Both spellings — the flag and keyCode 229.
      docs/project/keyboard.md § Enter in a text box. */
   it("asks nothing on the Enter that ends an IME composition", async () => {
-    await mount({ access: owner(), runs: [], start: "quick", active: [] });
+    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
     type("日本語の");
     const flagged = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true });
     const legacy = new KeyboardEvent("keydown", {
@@ -273,19 +271,17 @@ describe("the third arm of the toggle", () => {
     expect(legacy.defaultPrevented).toBe(false);
   });
 
-  it("keeps the draft between quick and meaning, and carries it to words and back", async () => {
+  it("carries the draft to words and back", async () => {
     await mount({ access: owner(), runs: [], start: "meaning", active: [] });
     type("where the controls are");
-    act(() => radio("quick").click());
-    expect(input().value).toBe("where the controls are");
     act(() => radio("words").click());
     expect(input().value).toBe("where the controls are");
-    act(() => radio("quick").click());
+    act(() => radio("meaning").click());
     expect(input().value).toBe("where the controls are");
   });
 
-  it("shows the saved list in quick mode as well as meaning", async () => {
-    await mount({ access: owner(), runs: [QUICK, MEANING], start: "quick", active: [] });
+  it("lists quick rows and meaning rows together", async () => {
+    await mount({ access: owner(), runs: [QUICK, MEANING], start: "meaning", active: [] });
     expect(container.querySelectorAll(".srch-saved-row")).toHaveLength(2);
   });
 });
@@ -298,25 +294,17 @@ describe("the already-searching guard", () => {
     await mount({
       access: owner(new Set([pendingQuick.id])),
       runs: [pendingQuick],
-      start: "quick",
+      start: "meaning",
       active: [],
     });
     type(pendingQuick.criterion);
     expect(findButton().disabled).toBe(true);
   });
 
-  it("lets a meaning search for the same words go while the quick one is out", async () => {
-    await mount({
-      access: owner(new Set([pendingQuick.id])),
-      runs: [pendingQuick],
-      start: "meaning",
-      active: [],
-    });
-    type(pendingQuick.criterion);
-    expect(findButton().disabled).toBe(false);
-    act(() => findButton().click());
-    expect(asked).toEqual([[pendingQuick.criterion, "meaning"]]);
-  });
+  /* The other half — the same words as meaning go while the quick search is
+     out — was asked from this box until plan 261012e. The box asks only quick
+     now; the row's *thorough* button is what asks meaning, and § a quick row
+     below holds its guard. */
 });
 
 describe("a quick row", () => {
@@ -401,7 +389,7 @@ describe("a quick row", () => {
     await mount({
       access: owner(),
       runs: [{ ...QUICK, status: "pending" }],
-      start: "quick",
+      start: "meaning",
       active: [],
     });
     expect(thorough()).toBeNull();
@@ -419,7 +407,7 @@ describe("a quick row", () => {
 /** F9: a quick score says what it is, on the result itself. */
 describe("a quick hit's score", () => {
   it("is named as a quick score, not as the model's confidence", async () => {
-    await mount({ access: owner(), runs: [QUICK], start: "quick", active: [QUICK.id], found: [HIT] });
+    await mount({ access: owner(), runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
     const gutter = container.querySelector<HTMLButtonElement>(".srch-hit .srch-gutter");
     const label = gutter?.getAttribute("aria-label") ?? "";
     expect(label).toContain("quick score 93 out of 100");
@@ -428,7 +416,7 @@ describe("a quick hit's score", () => {
   });
 
   it("is explained as a quick score in its card", async () => {
-    await mount({ access: owner(), runs: [QUICK], start: "quick", active: [QUICK.id], found: [HIT] });
+    await mount({ access: owner(), runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
     const gutter = container.querySelector<HTMLButtonElement>(".srch-hit .srch-gutter");
     await act(async () => {
       gutter?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -466,6 +454,7 @@ describe("the box's clear cross", () => {
         edits.push(text);
       },
       flush: () => {},
+      ownsWords: () => false,
       end: () => {},
       blur: () => {},
       focus: () => {},
@@ -473,7 +462,7 @@ describe("the box's clear cross", () => {
     return { access: { ...owner(), typing } as SearchAccess, edits };
   }
 
-  it.each(["words", "quick", "meaning"] as const)("is there only while the %s box has words in it", async (start) => {
+  it.each(["words", "meaning"] as const)("is there only while the %s box has words in it", async (start) => {
     await mount({ access: owner(), runs: [], start, active: [] });
     expect(cross()).toBeNull();
     type("free will");
@@ -484,7 +473,7 @@ describe("the box's clear cross", () => {
 
   it("empties the quick draft, tells the session, and leaves the cursor in the box", async () => {
     const { access, edits } = typingOwner();
-    await mount({ access, runs: [], start: "quick", active: [] });
+    await mount({ access, runs: [], start: "meaning", active: [] });
     type("free will");
     act(() => input().blur());
     const down = press(cross() as HTMLButtonElement);
@@ -510,7 +499,7 @@ describe("the box's clear cross", () => {
 
   it("is what Escape does", async () => {
     const { access, edits } = typingOwner();
-    await mount({ access, runs: [], start: "quick", active: [] });
+    await mount({ access, runs: [], start: "meaning", active: [] });
     type("free will");
     act(() => {
       input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
@@ -527,7 +516,7 @@ describe("the box's clear cross", () => {
     ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
   ])("is not what a composing Escape does (%s)", async (_how, init) => {
     const { access, edits } = typingOwner();
-    await mount({ access, runs: [], start: "quick", active: [] });
+    await mount({ access, runs: [], start: "meaning", active: [] });
     type("日本語の");
     const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
     act(() => {

@@ -317,19 +317,19 @@ export function SearchBand({
  * **The band's half of the bar's quick-search box** (plan 261002h stage 3,
  * src/web/DockQuickSearch.tsx). Two jobs, both through the shared draft:
  *
- * - **While on *quick*, the band's typing session is registered**, so the
+ * - **While on *meaning*, the band's typing session is registered**, so the
  *   bar's keystrokes, Enter, focus and blur reach the very session the
  *   panel's box drives. One session, one row, whichever box is typed in.
  * - **A handoff is taken** — the bar's pause, Enter or ⚡ that arrived while
- *   this band was closed or on another matcher, or the command bar's *Quick
- *   search “X”* row (plan 261005i). Not on *quick* yet: switch, and take it on
- *   the next pass. On *quick*: ask with the draft as it is now, which is the
- *   latest the reader typed.
+ *   this band was closed or on words, or the command bar's *Quick search “X”*
+ *   row (plan 261005i). Not on *meaning* yet: switch, and take it on the next
+ *   pass. On *meaning* (which was *quick* until plan 261012e folded the two):
+ *   ask with the draft as it is now, which is the latest the reader typed.
  *
  *   **The switch replaces the history entry only when the band has just
  *   mounted**, which is when the press that left the handoff also pushed
  *   Search open: one Back then still leaves Search mode. A band already open
- *   on words or meaning had nothing pushed for it (both openers skip a
+ *   on words had nothing pushed for it (both openers skip a
  *   same-mode write), so there the switch pushes, and Back returns to the view
  *   the reader was on rather than skipping it (GPT Sol's F3 on that plan).
  *
@@ -363,7 +363,7 @@ function useBarHandoff(
     };
   }, [draft]);
   useEffect(
-    () => (matcher === "quick" ? draft.registerBand(typing) : undefined),
+    () => (matcher === "meaning" ? draft.registerBand(typing) : undefined),
     [draft, matcher, typing],
   );
   // Defer consumption past StrictMode's setup/cleanup replay: its session
@@ -376,8 +376,8 @@ function useBarHandoff(
       const opened = opening.current;
       opening.current = false;
       if (draft.handoff() === null) return;
-      if (matcher !== "quick") {
-        void setMatch("quick", { history: opened ? "replace" : "push" });
+      if (matcher !== "meaning") {
+        void setMatch("meaning", { history: opened ? "replace" : "push" });
         clearOpenHit();
         return;
       }
@@ -485,6 +485,8 @@ function useTypingSession({
         clearTimeout(pauseTimer);
         dispatch({ type: "flush", loaded: latest.current.loaded, text });
       },
+      ownsWords: (text: string) =>
+        state.open && state.rowId !== null && state.asked === text.trim(),
       /* The pause already happened, in the bar's box (plan 261002h stage 3):
          ask now rather than wait another 600 ms. */
       pause() {

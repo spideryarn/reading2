@@ -14,6 +14,14 @@
  * paired with a positive control, so a harness that had stopped reaching the
  * handler could not pass as a refusal.
  *
+ * **Since plan 261012e the box asks a quick search** through the typing
+ * session (Enter and Find flush into it), and auto-thorough asks the meaning
+ * search once that has finished. The same question is the same words *as the
+ * same kind*, so the box's repeat is refused by the session's `start`, and
+ * *find* is no longer disabled for it; the meaning search's own repeat is
+ * refused at a quick row's *thorough* and at retry. The server below answers
+ * each POST as the kind it was asked.
+ *
  * Mounts the real `SearchBand` over the real `useSearch`, with `apiFetch`
  * mocked — the harness tests/opening-read-gates-writes.test.tsx uses. Each POST
  * is a stream the case feeds by hand, so a search can be held open.
@@ -23,7 +31,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Block, BlockId, SearchRun } from "../src/types.js";
+import type { Block, BlockId, SearchKind, SearchRun } from "../src/types.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 
@@ -44,6 +52,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
+const { searchDraftFor } = await import("../src/web/search-draft.js");
 
 const SLUG = "a-paper";
 const BLOCK = "spya-k3m9qt" as BlockId;
@@ -105,6 +114,8 @@ function openStream(): { response: Response; frame(event: string, data: unknown)
 interface Posted {
   id: string;
   criterion: string;
+  /** As the client sent it: the server's rows carry the kind they were asked as. */
+  kind: SearchKind;
   stream: ReturnType<typeof openStream>;
 }
 
@@ -123,12 +134,12 @@ function server(
     const method = (init.method ?? "GET").toUpperCase();
     if (method === "GET") return Promise.resolve(json({ runs: saved }));
     if (method === "POST") {
-      const sent = JSON.parse(String(init.body)) as { id: string; criterion: string };
-      const { criterion } = sent;
+      const sent = JSON.parse(String(init.body)) as { id: string; criterion: string; kind: SearchKind };
+      const { criterion, kind } = sent;
       const id = renamed[sent.id] ?? sent.id;
       const stream = openStream();
-      posted.push({ id, criterion, stream });
-      if (beginImmediately) stream.frame("begin", run(id, criterion, "pending"));
+      posted.push({ id, criterion, kind, stream });
+      if (beginImmediately) stream.frame("begin", run(id, criterion, "pending", kind));
       return Promise.resolve(stream.response);
     }
     return Promise.resolve(json({ ok: true }));
@@ -136,8 +147,13 @@ function server(
   return posted;
 }
 
-function run(id: string, criterion: string, status: SearchRun["status"]): SearchRun {
-  return { id, criterion, kind: "meaning", createdAt: "2026-09-30T09:00:00.000Z", status, hits: [], sourceHash: "h" };
+function run(
+  id: string,
+  criterion: string,
+  status: SearchRun["status"],
+  kind: SearchKind = "meaning",
+): SearchRun {
+  return { id, criterion, kind, createdAt: "2026-09-30T09:00:00.000Z", status, hits: [], sourceHash: "h" };
 }
 
 /** Each search finds its own words, so a row can be traced to the search that found it. */
@@ -160,7 +176,7 @@ function hit(p: Posted): void {
 
 function finish(p: Posted): void {
   act(() => {
-    p.stream.frame("done", { ...run(p.id, p.criterion, "done"), hits: [hitFor(p)] });
+    p.stream.frame("done", { ...run(p.id, p.criterion, "done", p.kind), hits: [hitFor(p)] });
     p.stream.end();
   });
 }
@@ -168,7 +184,7 @@ function finish(p: Posted): void {
 /** A model failure: the request succeeded at recording the question, so it is a `done` carrying `error`. */
 function fail(p: Posted, message: string): void {
   act(() => {
-    p.stream.frame("done", { ...run(p.id, p.criterion, "error"), error: message });
+    p.stream.frame("done", { ...run(p.id, p.criterion, "error", p.kind), error: message });
     p.stream.end();
   });
 }
@@ -240,6 +256,10 @@ function ticked(): string[] {
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   history.replaceState(null, "", `/read/${SLUG}?mode=search`);
+  /* The draft outlives the band, per article: left over from the case before,
+     a box already holding FIRST sees no change when FIRST is typed, and no
+     typing session opens. */
+  searchDraftFor(SLUG).set("");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -351,12 +371,19 @@ describe("Search: several meaning-searches at once", () => {
     type(FIRST);
     enter();
     await flush();
+    expect(posted.map((p) => p.kind)).toEqual(["quick"]);
     // Untick it: it is still running.
     click(must(`input[aria-label="Also mark: ${FIRST}"]`));
     await flush();
     expect(ticked()).toEqual([]);
 
+    /* The session has ended, so the visible control says why this exact
+       repeat is refused instead of accepting a press that can send nothing. */
     expect(findButton().disabled).toBe(true);
+    expect(findButton().title).toBe(
+      "Already searching for this — change the words to ask something else",
+    );
+    click(findButton());
     enter();
     await flush();
     expect(posted).toHaveLength(1);
@@ -374,7 +401,7 @@ describe("Search: several meaning-searches at once", () => {
     await flush();
 
     type(FIRST);
-    // Both handlers see the same rendered `ready`; the controller's in-flight
+    // Both handlers see the same rendered state; the controller's in-flight
     // registry is what makes duplicate protection survive one React batch.
     act(() => {
       findButton().click();
@@ -391,50 +418,66 @@ describe("Search: several meaning-searches at once", () => {
     await flush();
     expect(posted, "an identical search was sent while the first was running").toHaveLength(1);
 
-    // Trailing space is the same question.
+    // Trailing space is the same question — and typing it opens a new typing session.
     type(`${FIRST} `);
     enter();
     await flush();
     expect(posted).toHaveLength(1);
 
-    // Positive control: once it has finished, the same press sends.
+    /* Finishing a submitted quick search starts its thorough one by itself.
+       That is the same visible meaning search, so an exact repeat stays
+       refused until the thorough half has finished too. */
     finish(posted[0] as Posted);
     await flush();
+    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning"]);
+    expect(findButton().disabled).toBe(true);
+    finish(posted[1] as Posted);
+    await flush();
+
+    // Positive control: once the whole pipeline has finished, the same press sends.
     expect(findButton().disabled).toBe(false);
     enter();
     await flush();
-    expect(posted).toHaveLength(2);
+    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning", "quick"]);
   });
 
   it("does not mistake a pending row loaded from the server for a request this tab is watching", async () => {
-    const old = run("spya-q7w2er", FIRST, "pending");
+    // A quick row, since plan 261012e: the kind the box now asks, so the same question.
+    const old = run("spya-q7w2er", FIRST, "pending", "quick");
     const posted = server([old]);
     mount();
     await flush();
 
     type(FIRST);
-    expect(findButton().disabled, "a persisted pending row wedged Find in this tab").toBe(false);
     enter();
     await flush();
-    expect(posted.map((p) => p.criterion)).toEqual([FIRST]);
+    expect(
+      posted.map((p) => [p.criterion, p.kind]),
+      "a persisted pending row wedged Find in this tab",
+    ).toEqual([[FIRST, "quick"]]);
 
     // Once this tab has actually sent it, the ordinary duplicate guard applies.
-    expect(findButton().disabled).toBe(true);
     enter();
     await flush();
     expect(posted).toHaveLength(1);
 
     finish(posted[0] as Posted);
     await flush();
+    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning"]);
+    finish(posted[1] as Posted);
+    await flush();
+    enter();
+    await flush();
     expect(
-      findButton().disabled,
+      posted.filter((p) => p.kind === "quick"),
       "the persisted pending row kept blocking after this tab's request finished",
-    ).toBe(false);
+    ).toHaveLength(2);
   });
 
   it("refuses retry while this tab already has the same criterion in flight", async () => {
     const message = "The model service was unavailable. Try again. [ai-500]";
-    const failed = { ...run("spya-r8x3tf", FIRST, "error"), error: message };
+    // A failed quick row, since plan 261012e: the kind the box now asks.
+    const failed = { ...run("spya-r8x3tf", FIRST, "error", "quick"), error: message };
     const posted = server([failed]);
     mount();
     await flush();
@@ -456,7 +499,9 @@ describe("Search: several meaning-searches at once", () => {
     expect(enabled.disabled).toBe(false);
     click(enabled);
     await flush();
-    expect(posted.map((p) => p.criterion)).toEqual([FIRST, FIRST]);
+    // Between them, auto-thorough's meaning search for the finished quick one.
+    expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning", "quick"]);
+    expect(posted.at(-1)?.id, "the last request was not the retry").toBe(failed.id);
   });
 
   it("keeps refusing the question when the server answers a retry under a new id, and keeps it ticked", async () => {
@@ -465,14 +510,19 @@ describe("Search: several meaning-searches at once", () => {
        and the sent id fell out of the list — so the same question could be
        paid for again while it was still running, and the search the reader was
        watching dropped out of `?runs=`.
-       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
+
+       Since plan 261012e the box asks a quick search, so typing the words
+       again is not the same question. What asks the meaning search for them
+       again is a finished quick row's *thorough*, so the case has one. */
     const message = "The model service was unavailable. Try again. [ai-500]";
     const sentId = "spya-r8x3tf";
     const serverId = "spya-w4n7pk";
     history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${sentId}`);
-    const posted = server([{ ...run(sentId, FIRST, "error"), error: message }], {
-      [sentId]: serverId,
-    });
+    const posted = server(
+      [{ ...run(sentId, FIRST, "error"), error: message }, run("spya-m3n8kd", FIRST, "done", "quick")],
+      { [sentId]: serverId },
+    );
     mount();
     await flush();
     expect(ticked()).toEqual([FIRST]);
@@ -482,8 +532,9 @@ describe("Search: several meaning-searches at once", () => {
     expect(posted.map((p) => p.id)).toEqual([serverId]);
 
     // The same question, while the renamed run is still open: refused.
-    type(FIRST);
-    enter();
+    const thorough = must<HTMLButtonElement>("button.srch-thorough");
+    expect(thorough.title).toBe("Already running the thorough search for this");
+    click(thorough);
     await flush();
     expect
       .soft(posted, "an identical search was sent while the renamed one was running")
@@ -507,10 +558,13 @@ describe("Search: several meaning-searches at once", () => {
     // And once the renamed run has finished, the question is free again.
     finish(posted[0] as Posted);
     await flush();
-    type(FIRST);
-    enter();
+    click(must<HTMLButtonElement>("button.srch-thorough"));
     await flush();
-    expect(posted.map((p) => p.criterion)).toEqual([FIRST, SECOND, FIRST]);
+    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([
+      [FIRST, "meaning"],
+      [SECOND, "quick"],
+      [FIRST, "meaning"],
+    ]);
   });
 
   it("does not retick a retry unticked before its renamed begin arrives", async () => {

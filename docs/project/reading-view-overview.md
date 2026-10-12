@@ -173,8 +173,8 @@ asked for less motion gets the bar at once. Which mount plays it is
 - **[timeline.md](timeline.md)** — when the piece *says* these things happened, in the order it says
   they happened. Open it for the four dating states, which are the whole design: ten of twenty-six
   rows on the test article carry no date, and drawing them alike throws away what the article said.
-- **[search.md](search.md)** — one box, three matchers (words, quick, thorough), hits marked in the
-  prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
+- **[search.md](search.md)** — one box, two matchers (words, and meaning, which answers quick and then
+  thorough), hits marked in the prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
   it for the confidence unit, the colours, or the URL parameters.
 - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
   them a verdict: six sub-modes, an evidence base with two numbers in it, and a confidentiality
