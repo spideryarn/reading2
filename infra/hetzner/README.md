@@ -520,7 +520,7 @@ value is written here or anywhere in the repo; each line names where one lives.
    [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md);
    no systemd unit does this for you.
    The watchdog alarms when they stop, and its `deploy-lag` check fetches `dev` and `main` as the
-   box user every five minutes, which needs the `spideryarn` token in `/etc/github-tokens` (step 5)
+   box user every ten minutes, which needs the `spideryarn` token in `/etc/github-tokens` (step 5)
    and nothing else.
 10. **Only if somebody needs to watch the browser**: `start-vnc`
     ([Watching the browser](#watching-the-browser)). Nothing starts it at boot.

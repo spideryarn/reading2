@@ -80,6 +80,7 @@ import {
   articleVisibilityChanges,
   articles,
   billingVouchers,
+  chatMentions,
   chatMessages,
   chatThreads,
   citationFinds,
@@ -145,6 +146,8 @@ export const ARTICLE_TABLES = {
   /* ---- reader-state: the old owner's, deleted (src/admin-articles.ts § READER_STATE) ---- */
   /** Before `referee_criteria`: `comments_criterion` references it and does not cascade. */
   comments: "reader-state",
+  /** Would cascade from the message; deleted first so it is counted. */
+  chat_mentions: "reader-state",
   /** Would cascade from the thread (`chat_messages_thread_fk`); deleted first so it is counted. */
   chat_messages: "reader-state",
   chat_threads: "reader-state",
@@ -198,6 +201,7 @@ type ArticleChild = PgTable & { readonly articleId: AnyPgColumn };
  */
 export const READER_STATE_TABLES = {
   comments,
+  chat_mentions: chatMentions,
   chat_messages: chatMessages,
   chat_threads: chatThreads,
   quiz_attempts: quizAttempts,

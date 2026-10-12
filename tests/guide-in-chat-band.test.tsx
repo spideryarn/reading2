@@ -17,7 +17,10 @@
  *   is open;
  * - the guide's unsent words come back after a mode change, under the same
  *   guide, stored or begun here;
- * - Live in the guide, since plan 261009i.
+ * - Live in the guide, since plan 261009i;
+ * - the guide's *Ask in Chat* step (plan 261012f), which the panel presses
+ *   through `onSendNew`: one fresh chat, one question, nothing added to the
+ *   guide, and the guide's unsent words left where they were.
  *
  * The real band and the real `useChat`, with `ChatPanel` stubbed to expose
  * the props it is handed: tests/conversation-band-origin.test.tsx's harness.
@@ -357,6 +360,34 @@ describe("handoffs and the guide", () => {
     expect(posts).toHaveLength(0);
     expect(panel?.threadId).toBe(GUIDE.id);
     expect(chatDraftsFor(SLUG).thread(GUIDE.id)).toBe("Where should I start?");
+  });
+});
+
+/* Plan 261012f, GPT Sol's F5: the panel hands the guide's chat step to
+   `onSendNew` (tests/guide-in-chat-panel.test.tsx); this is what that does here. */
+describe("the guide's Ask in Chat", () => {
+  it("starts one fresh chat with the question, adds nothing to the guide, and keeps its draft", async () => {
+    stored = [GUIDE, CHAT];
+    await mount();
+    await openGuide();
+    expect(panel?.threadId).toBe(GUIDE.id);
+    chatDraftsFor(SLUG).setThread(GUIDE.id, "half a thought");
+    await act(async () => prop<(q: string, how?: SendHow) => void>("onSendNew")("Why does he say memory moves?"));
+    await settleChat();
+    expect(posts, "one press, one model call").toHaveLength(1);
+    const body = posts[0]?.body ?? {};
+    expect(body.question).toBe("Why does he say memory moves?");
+    expect(body.threadId).not.toBe(GUIDE.id);
+    expect(body.threadId).not.toBe(CHAT.id);
+    /* A chat, so no kind, and the blocks on screen go with it. */
+    expect(body).not.toHaveProperty("kind");
+    expect(body).not.toHaveProperty("typed");
+    expect(body.visible).toEqual(ON_SCREEN);
+    expect(panel?.threadId).toBe(body.threadId);
+    expect(threads().find((t) => t.id === body.threadId)?.kind).toBe("chat");
+    expect(guides()).toHaveLength(1);
+    expect(guides()[0]?.messages).toHaveLength(2);
+    expect(chatDraftsFor(SLUG).thread(GUIDE.id)).toBe("half a thought");
   });
 });
 

@@ -1,7 +1,7 @@
 ---
 reports: spya-drbkvc
 ending: shipped
-comment: Recall and Tutorial now search the web when you ask where a piece stands. Chat and Learn already opened pasted links. The guide can do neither and now sends you to Chat; whether to fix that is a question for you.
+comment: Recall and Tutorial now search the web when you ask where a piece stands, and Chat and Learn open a link you paste. The guide now searches too, through a small helper (12 October); whether it may open pages is asked in q-madusw.
 ---
 # Web search in every chat mode, and reading a given address
 
@@ -53,8 +53,11 @@ What we did:
 
 Still open:
 
-- **`q-w26r6u`**: whether to build the fix that makes guide search work (GPT Sol's design, about
-  half a day, a special case in the chat loop) and give it page-reading too. Queue item
-  `qi-zvsky2aj`.
+- **`q-w26r6u`, answered 2026-10-12** (reply `spya-q2z37j`): make guide search work, perhaps
+  through a subagent. Built as `search_web`, a subagent whose results survive the guide's
+  next-steps call, rather than Sol's special case in the loop:
+  [261012g](../plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md), noted in
+  [261012_1007](261012_1007-web-search-through-a-subagent.md). Page-reading for the guide is asked
+  again in `q-madusw`. Queue item `qi-ht2wtjg8` (superseding `qi-zvsky2aj`).
 - **`qi-vcza3y2f`**: spoken conversations (Live) have no web search at all, because OpenAI's
   realtime voice has no provider search; that is its own project.

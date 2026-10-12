@@ -45,7 +45,7 @@ contract come from.
 ## In this doc
 
 - [§ What Greg asked for, and what is here](#what-greg-asked-for-and-what-is-here) — intent and the tool loop in one picture
-- [§ The ten, and the filter they had to pass](#the-ten-and-the-filter-they-had-to-pass) — adding or judging a tool
+- [§ The eleven, and the filter they had to pass](#the-eleven-and-the-filter-they-had-to-pass) — adding or judging a tool
 - [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
 - [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
 - [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) — `read_cited_work`, the PDF of a work the article cites
@@ -53,6 +53,7 @@ contract come from.
 - [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
 - [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
 - [§ Chat's list shows every conversation about the article](#chats-list-shows-every-conversation-about-the-article) — list sources, icons, the `?chatfrom=` filter, chats started from a mode
+- [§ Bringing in another of your articles with @](#bringing-in-another-of-your-articles-with-) — `chat_mentions`, the second cached part, citations into another article
 - [§ Security: a tool result is data, and one of them is a stranger's](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers) — prompt-injection stance
 - [§ A transcript cannot be published by column allowlist, and that is why chat is not shared](#a-transcript-cannot-be-published-by-column-allowlist-and-that-is-why-chat-is-not-shared) — why no shared chat
 - [§ What is logged](#what-is-logged) — logging rules for tool calls
@@ -99,7 +100,7 @@ improved by work that is already planned, and the seam it goes behind is `librar
 in [`src/store/`](../../src/store/index.ts) — a store contract, so the semantic matcher lands there
 and this file does not change.
 
-## The ten, and the filter they had to pass
+## The eleven, and the filter they had to pass
 
 > **Does it send the reader somewhere they could not otherwise get to?**
 
@@ -115,14 +116,15 @@ and this file does not change.
 | `article_citations` | The works **this** article cites, from its stored [citations](bibliography.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. Since 2026-10-08 the list of other conversations, each with a line on what it covered, also comes with every Chat question, so the model knows when one is worth opening. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
 | `read_cited_work` | A paper **this** article cites, read from its PDF once code has confirmed it is the work, aimed at the claim the article makes with it | `read_web_page` cannot read a PDF and cannot say which paper it has. *Does the cited work say that?* needs the work's own words. **Chat and Explore only.** See [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) |
+| `search_web` | A web search run by a subagent: up to five results, each a title, an address and a sentence on what the page says | OpenRouter's own search lives inside one reply, and the guide's reply ended on a tool call and lost it. This one comes back as a tool result, which survives. **The typed guide only**, since 2026-10-12. See [§ The guide searches through a subagent](#the-guide-searches-through-a-subagent-search_web) |
 
-**Eight of the ten are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
-Live, share. The other two are added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+**Eight of the eleven are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
+Live, share. The other three are added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
 for the kinds that function names and no others. **The guide** (plan
 [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
-`GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
-notes, and no web search. Asked about the world, it says Chat can look it up; why it still has no
-search is [below](#web-search-is-still-openrouters-and-is-not-in-that-table).
+`GUIDE_TOOLS`: the article's own — no `read_web_page`, no library, no notes. The typed guide adds
+one way out, `search_web`, since 2026-10-12 ([below](#the-guide-searches-through-a-subagent-search_web));
+Live's guide does not.
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -130,7 +132,7 @@ badge that says it did research. It is [the anti-goal](vision.md#anti-goals) wit
 of it. `tests/chat-tools.test.ts` asserts no tool name matches `/summar/i`, which is a blunt check
 and is meant to be.
 
-### Web search is still OpenRouter's, and is not in that table
+### Provider web search is still OpenRouter's
 
 `openrouter:web_search` is a **server** tool: it runs inside the provider and comes back in the same
 response, so it costs no extra round trip. It is therefore offered in *every* round, including the
@@ -162,9 +164,36 @@ because it is testing the reader's memory of *this* piece. Measured in
 a provider search lives only inside the response that ran it, so a round that ends in a call to one
 of our tools with no prose loses everything it found. Its answers then said "I haven't looked this
 up". Chat does not hit this because it writes in the round it searches; the guide is told to end
-every answer on a tool call. What would fix it, and whether to, is
-[261011t § The guide](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md#the-guide-tried-and-backed-out)
-and `q-w26r6u`. **Live has none either**: OpenAI realtime has no server search.
+every answer on a tool call. **Live has none either**: OpenAI realtime has no server search.
+
+### The guide searches through a subagent: `search_web`
+
+> Perhaps the web search tool that we create has an option for web search to run in a subagent
+> (which hands back links/summary) for the caller-agent to retrieve if it chooses to?
+>
+> — Greg, 2026-10-12, reply `spya-q2z37j` to `q-w26r6u`
+
+Since 2026-10-12 the typed guide has `search_web`, one of *our* tools
+([`src/web-search-subagent.ts`](../../src/web-search-subagent.ts), plan
+[261012g](../plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md), the spikes
+[261012b](../investigations/261012b-web-search-subagent-spikes.md)). A small model (the quick tier,
+job `web-search-subagent`) runs one forced-search model call through Exa and writes at most five
+lines of a title, a link and a sentence. We keep a line only if its link is one the search returned, and take
+its title from the search. The guide gets them as an ordinary `tool` message, fenced. That message is
+replayed into the next round whatever else the guide called beside it, which is the whole fix.
+
+- **What it does not check**: the sentence. That a link came back from the search is checked; what
+  the small model says the page says is still its account, and is fenced as a stranger's words.
+- **Its bounds**: two calls a turn (`SEARCH_WEB_PER_TURN`; a third is refused, not run) and a
+  300-character query. See [§ Security](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers).
+- **What the guide searches for**: outside evidence about *how to read* the piece — is the piece
+  well regarded, what to read alongside it, who the author is and how far to trust them. It
+  searches even when the piece gives its own account; a byline is not outside evidence. A
+  question about what the world says on the subject goes to Chat.
+- **No page-reading for the guide.** Whether it should open a result is a question to Greg; until
+  then the result tells it only to link what it uses.
+- **Chat keeps OpenRouter's search.** The comparison in 261012g § Stage 2 found the subagent about
+  15% cheaper, but 11 seconds slower on every searching answer and without Chat's citation chips.
 
 ## The links the prompt does not carry
 
@@ -654,6 +683,41 @@ written up where it is built: [reception.md § Check a claim in chat](reception.
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
 `tests/chat-list-sources.test.tsx` (the panel).
 
+## Bringing in another of your articles with @
+
+> I'd like to be able to @-mention another article in my shelf (including archived and public etc)
+> from within a Chat. … Then I guess it would have to include that article into the Chat context.
+>
+> — Greg, via Feedback, 2026-10-12
+
+Since 2026-10-12, in typed Chat only. The plan, the reviews and the measurements are
+[261012d](../plans/261012d-chat-at-mention-your-own-articles.md); what is worth knowing before
+changing it:
+
+- **It is not a tool.** `@` in the composer picks one of the reader's own articles (shelf, archived,
+  public), and the question carries its slug in `mentions`. The article then comes **whole** into
+  every later turn of that conversation. The model does not choose it, and reading it costs no
+  round. Tool-only reading was passed over: the model reads three passages and answers as if it had
+  read the piece.
+- **The stored thread decides, never the request.** `chat_mentions` holds one row per mention, with
+  a foreign key to the question (cascade) and to the mentioned article (`SET NULL`, with a title
+  snapshot). Each turn, `resolveMentions` ([`src/chat-mentions.ts`](../../src/chat-mentions.ts))
+  re-reads the rows, re-checks the current owner in the join, and re-measures each article against
+  the cap. Send, retry, edit, the thread GET and the `begin` frame all use it. `mentions` is refused
+  on a retry and on an edit.
+- **Limits** ([`src/chat-mention-limits.ts`](../../src/chat-mention-limits.ts)): 120,000 characters
+  per article, three per question, three per conversation. Over a limit is a 400 the composer
+  shows, never a cut. On production on 2026-10-12, 4% of articles were over 120k characters.
+- **The cache.** Mentioned articles are a second text part in the first user message, after the
+  open article's, with their own breakpoint. A conversation with no mentions sends the same bytes
+  as before, which is why the mention rules live in that part rather than in `SYSTEM`. Measured
+  live (`evals/chat-mention-caching.ts`, 2026-10-12, $0.36): adding a mention read the open
+  article's 73k tokens from cache, and the next turn read all 120k.
+- **Citations into another article.** Block ids are unique only within an article, so the client
+  maps an id to its article only when exactly one article (open or mentioned) holds it. An id two of
+  them share stays plain text. The chip is `CrossArticleRef`, not `BlockRef`, and its href is built
+  from the slug the server listed, never from the model's text.
+
 ## Security: a tool result is data, and one of them is a stranger's
 
 `read_web_page` puts arbitrary text from the open web into a prompt that also holds an article and a
@@ -681,6 +745,12 @@ What is done about it:
   line-for-line beside the tool's own instructions with nothing saying which of the two we wrote.
   The fence says it, and a sentence above the fence names who wrote what is inside. Our own words
   stay outside, or the fence would mark our instructions as data — the same mistake reversed.
+- an article brought in with `@` ([§ above](#bringing-in-another-of-your-articles-with-)) is fenced
+  whole, title included. The reader chose it, but somebody else wrote it, and the hidden-instruction
+  scan does not read PDFs. That is **stricter** than `search_library` and `read_library_passage`,
+  whose rows are still bare. It opens no new outbound channel and no new reader: the article is
+  the reader's own, owner-checked on every turn, and chat could already reach it through those two
+  tools, archived ones aside. It does give the URL channel below more to carry.
 
 **This is a mitigation, not a fix.** A determined injection can still steer an answer.
 
@@ -711,8 +781,18 @@ query cap bounds in bulk and does not keep in.
 [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) has the
 arithmetic.
 
-What *does* still hold, and is worth keeping true: nothing chat can call writes a file, deletes
-anything, or spends money. That is the reason the write tools below are not built yet — the first one
+**A search query is the same kind of channel.** Every query, OpenRouter's or ours, is text the model
+wrote leaving for a search engine, and a hostile article can ask for one that carries the reader's
+profile or the piece. Chat has had that exposure since it had search, and its bounds are
+`max_uses`, which OpenRouter does not honour
+([`webSearchTool`](../../src/converse.ts)). **The guide gained it on 2026-10-12** with
+`search_web`, and because that tool is ours its bounds are real: two calls a turn and 300
+characters a query, both refused in code before anything is sent. `PROFILE_RULES` still tells every
+conversation never to put the profile into a query, and that is prompt text, not a boundary.
+
+What *does* still hold, and is worth keeping true: nothing chat can call writes a file or deletes
+anything. One tool spends money: `search_web` (since 2026-10-12) makes a model call of about $0.007,
+at most twice a turn, recorded in the ledger like any other. That is the reason the write tools below are not built yet — the first one
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
 reader's data". Since 2026-10-03 an answer can *offer* a write or a spend as a button, and the
 sentence above is unchanged by it, because a button is pressed by the reader and called by nothing:
@@ -1116,15 +1196,15 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 
 - **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
   reading, never a summary in its place; ask why they are reading if they have not said; invite
-  *About you* once; under 100 words; point to at most three places, by block id. It carries our
+  *About you* once; under 60 words; point to at most two places, by block id. It carries our
   words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
   [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
   message only (`experienceLine`), so the cached prefix is the same for everyone.
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
-- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search (it points the reader to Chat;
-  [§ Web search](#web-search-is-still-openrouters-and-is-not-in-that-table) says why), and one of
-  its own since
+- **Its tools** are `GUIDE_TOOLS` (§ The eleven above), `search_web` since 2026-10-12
+  ([§ The guide searches through a subagent](#the-guide-searches-through-a-subagent-search_web)),
+  and one of its own since
   2026-10-09: **`offer_to_save`**, which saves nothing
   ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
   Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
@@ -1155,12 +1235,19 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
   the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
-  reader can send next), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
+  reader can send next), `chat` (a question about what the piece says, for a fresh Chat; at most
+  one, since 2026-10-12), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
   search), `share` or `archive`; [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
   server and again on the page, and they ride on the run (`ToolRun.steps`). The page draws the
   latest settled answer's as a row of buttons
-  ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)), **never pressed by the guide**: an ask
-  sends exactly the words on it; a mode is the chip `chipFor` would make; a search is a box the
+  ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)) under a visible *Next steps* heading,
+  **never pressed by the guide**: an ask sends exactly the words on it; *Ask in Chat*, drawn first
+  and the one orange button, starts a fresh Chat with exactly its words as the first question,
+  through the list box's `onSendNew`, and leaves the guide as it was. Greg, 2026-10-12
+  (`spya-es283p`), asked for it, prominent: *"when I watch people using the guide, they often
+  didn't notice that it was suggesting actions for them to take"*. So a question about the content
+  gets a sentence and that button rather than an answer
+  ([261012f](../plans/261012f-guide-hands-content-questions-to-a-new-chat.md)); a mode is the chip `chipFor` would make; a search is a box the
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in

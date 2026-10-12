@@ -9,7 +9,7 @@ echo "== pause state:"
 cat "$SCRATCH/pause-state.md"
 echo "== box services (a stopped daemon, or a tidy that is not running, shows here):"
 # The daemon stopped for 46 hours on 2026-10-05 and nothing said so. The watchdog checks its
-# heartbeat every five minutes and its verdict reaches only the journal, so this is where it is read.
+# heartbeat every ten minutes and its verdict reaches only the journal, so this is where it is read.
 for u in overseer-watchdog.timer box-tidy.timer; do printf '  %-26s %s\n' "$u" "$(systemctl is-active "$u" 2>&1)"; done
 # The daemon's own unit. It never stops retrying (since 2026-10-07), so one that cannot start shows as
 # `activating (auto-restart)` with a climbing count rather than `failed`; inactive is right while the

@@ -27,6 +27,7 @@ import {
   preparationAfterChanges,
   preparationTarget,
   TICK_INTERVAL_MS,
+  waitAfterTickMs,
   VOID_RETRY_COOLDOWN_MS,
   type PreparationState,
   type TickInput,
@@ -53,6 +54,7 @@ import {
   prepareRunner,
   readinessCheckEnv,
   runCommand,
+  runTickAttempt,
   runnerWorktreeProblem,
   TERMINATION_GRACE_MS,
   type PreparationDeps,
@@ -532,7 +534,45 @@ describe("decideTick", () => {
 
   it("runs when every gate permits it", () => {
     expect(decideTick(input())).toEqual({ kind: "run", sha: SHA_A });
-    expect(TICK_INTERVAL_MS).toBe(10 * 60_000);
+    expect(TICK_INTERVAL_MS).toBe(20 * 60_000);
+  });
+});
+
+describe("waitAfterTickMs", () => {
+  const MIN = 60_000;
+  it("waits out the rest of the twenty-minute tick when nothing ran", () => {
+    expect(waitAfterTickMs(0, 2 * MIN, false)).toBe(18 * MIN);
+    expect(waitAfterTickMs(0, 22 * MIN, false)).toBe(0);
+  });
+
+  it("rests as long as the run took after a check, so back-to-back runs use at most half the box's time", () => {
+    // 2026-10-12: Greg asked for everything to run half as often.
+    expect(waitAfterTickMs(0, 80 * MIN, true)).toBe(80 * MIN);
+  });
+
+  it("never rests less than the tick after a short run", () => {
+    expect(waitAfterTickMs(0, 3 * MIN, true)).toBe(17 * MIN);
+  });
+});
+
+describe("runTickAttempt", () => {
+  it("retains the rest when outcome processing throws after a long check", async () => {
+    let now = 0;
+    const error = new Error("cannot read readiness records");
+    const onError = vi.fn();
+    const result = await runTickAttempt(async (onCheckStarted) => {
+      onCheckStarted();
+      now = 80 * 60_000;
+      throw error;
+    }, onError, () => now);
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(result).toEqual({ ranCheck: true, waitMs: 80 * 60_000 });
+  });
+
+  it("lets a fatal tick error propagate, as required for --once and a lost lock", async () => {
+    const error = new Error("lost loop lock");
+    await expect(runTickAttempt(async () => { throw error; }, (caught) => { throw caught; }))
+      .rejects.toBe(error);
   });
 });
 

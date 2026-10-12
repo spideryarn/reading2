@@ -342,7 +342,7 @@ describe("box-health: a run, end to end", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* the daily worktree sweep                                            */
+/* the worktree sweep                                                 */
 /* ------------------------------------------------------------------ */
 
 describe("worktree-sweep-daily", () => {

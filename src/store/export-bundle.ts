@@ -55,6 +55,7 @@ import { zip } from "fflate";
 import {
   ARTICLE_TABLE_COVERAGE,
   type ArticleRows,
+  mentionsOfMessage,
   messagesOfThread,
   readArticleRows,
 } from "./article-rows.js";
@@ -529,9 +530,20 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
        and `truncated` on each message. The rollback names those fields too now;
        this projection's stronger guarantee is that nothing below names a field,
        so the next column survives without another edit. */
+    /* A question's @-mentions nested under it, as `mentions`, only when it has
+       any: the other article's id and the title the reader saw, never its text
+       (plan 261012d § 5). */
     const threads = rows.chatThreads.map((thread) => ({
       ...rowJson(thread),
-      messages: messagesOfThread(rows, thread.id).map((row) => rowJson(row, ["threadId"])),
+      messages: messagesOfThread(rows, thread.id).map((row) => {
+        const mentions = mentionsOfMessage(rows, thread.id, row.id);
+        return {
+          ...rowJson(row, ["threadId"]),
+          ...(mentions.length > 0
+            ? { mentions: mentions.map((m) => rowJson(m, ["threadId", "messageId"])) }
+            : {}),
+        };
+      }),
     }));
     at("chat.json", { threads });
   }
@@ -673,7 +685,9 @@ one thing that will make the rest of these files make sense.
       comments.json        Your comments, bookmarks and notes, each anchored to a block.
                            A bookmark on a whole paragraph has \`quote\` and \`start\` null.
       chat.json            Your conversations about the article: threads, and every message
-                           nested inside the thread it belongs to.
+                           nested inside the thread it belongs to. A question that
+                           brought in another of your articles lists it under \`mentions\`:
+                           its id and the title you saw, not its text.
       searches.json        Meaning-searches you ran, and what they matched.
       referee-promises.json  Referee mode: what the paper claims.
       sources-claim-checks.json Sources › Claims: the claims you picked or typed, and what each search found.

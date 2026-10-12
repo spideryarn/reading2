@@ -236,6 +236,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* *Dig deeper*'s forced search, before the answer a reader pressed for —
      src/dig-deeper.ts. Request scope, reader-triggered. */
   "dig-deeper-search": "interactive request work",
+  /* `search_web` inside a conversation turn — src/web-search-subagent.ts.
+     Request scope, the reader's own question. */
+  "web-search-subagent": "interactive request work",
   /* *Dig deeper*'s answer, on the high-power model — src/explain.ts with a
      `dig`. Request scope, reader-triggered. */
   "dig-deeper": "interactive request work",

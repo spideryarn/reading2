@@ -4910,6 +4910,58 @@ export const chatMessages = spideryarn.table(
   ],
 );
 
+/**
+ * **Another of the reader's articles, brought into a conversation by an
+ * @-mention on one question.** One row per article per question, in the order
+ * the question named them. Plan docs/plans/261012d-chat-at-mention-your-own-articles.md § 2.
+ *
+ * Rows rather than a jsonb list on the message, because each one points at
+ * another row and docs/project/sql.md wants that to be a foreign key.
+ *
+ * - **Under the question it came with**: the composite key to `chat_messages`
+ *   cascades, so an edit or a delete-from that discards later questions takes
+ *   their mentions with them, and deleting the open article takes the lot.
+ * - **`mentioned_article_id`, never the slug**: a slug can be reused and an
+ *   article can change owner. Who may read it is decided per turn against the
+ *   *current* owner (src/chat-mentions.ts § `resolveMentions`), not here.
+ * - **`set null`, not `cascade`, on the mentioned article**: deleting it leaves
+ *   the mention and its `title`, so the conversation can say by name that the
+ *   article is no longer available.
+ * - **`title` is a snapshot at send**, and the only thing an unavailable
+ *   mention ever shows. Not a size-limited column (sql.md § Except a size limit).
+ *
+ * Written only by `chatStore.begin`, in the same transaction as the question.
+ * A retry or an edit writes none: it keeps what the question was sent with.
+ */
+export const chatMentions = spideryarn.table(
+  "chat_mentions",
+  {
+    articleId: uuid("article_id").notNull(),
+    threadId: text("thread_id").notNull(),
+    messageId: text("message_id").notNull(),
+    /** Order within the question, from 0. */
+    position: smallint("position").notNull(),
+    mentionedArticleId: uuid("mentioned_article_id").references(() => articles.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.threadId, t.messageId, t.position] }),
+    check("chat_mentions_position", sql`${t.position} >= 0`),
+    foreignKey({
+      name: "chat_mentions_message_fk",
+      columns: [t.articleId, t.threadId, t.messageId],
+      foreignColumns: [chatMessages.articleId, chatMessages.threadId, chatMessages.id],
+    }).onDelete("cascade"),
+    /* "Which conversations mention this article" is what `set null` has to
+       find when an article is deleted; without an index that is a scan of
+       every mention on every article delete. */
+    index("chat_mentions_mentioned_idx").on(t.mentionedArticleId),
+  ],
+);
+
 /* ---------------------------------------------------------------- search -- */
 
 /**

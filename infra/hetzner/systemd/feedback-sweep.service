@@ -1,6 +1,6 @@
 # One feedback sweep: Claude Opus, unattended, under the box's default Claude
 # login, following docs/project/feedback-reports.md. Run by
-# feedback-sweep.timer every three hours. scripts/overseer-tools/feedback-sweep-once.sh;
+# feedback-sweep.timer every six hours. scripts/overseer-tools/feedback-sweep-once.sh;
 # plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # THIS SPENDS MONEY ON A CLOCK, so it is installed but enabled only on Greg's

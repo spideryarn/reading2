@@ -71,7 +71,7 @@ import {
   PREPARATION_PATHSPEC,
   preparationTarget,
   preparationAfterChanges,
-  TICK_INTERVAL_MS,
+  waitAfterTickMs,
   type PreparationState,
   type TickDecision,
 } from "../tools/fleet/readiness-loop.js";
@@ -903,6 +903,7 @@ async function tick(
   store: ReadinessStore,
   preparation: PreparationState,
   assertLock: () => void,
+  onCheckStarted: () => void,
 ): Promise<void> {
   assertLock();
   const tickMs = Date.now();
@@ -954,8 +955,25 @@ async function tick(
     /* Stamped only when preparation latched at exactly this sha; otherwise the
        run is still recorded, and simply cannot stand in for a deploy's gate. */
     const stamped = preparation.preparedFor === decision.sha ? preparationEnv(runner, decision.sha) : {};
+    onCheckStarted();
     await runReadinessCheck(runner, decision.sha, store, stamped);
   }
+}
+
+/** Time one tick, retaining whether a check ran even if its outcome handling throws. */
+export async function runTickAttempt(
+  run: (onCheckStarted: () => void) => Promise<void>,
+  onError: (error: unknown) => void,
+  now: () => number = Date.now,
+): Promise<{ ranCheck: boolean; waitMs: number }> {
+  const started = now();
+  let ranCheck = false;
+  try {
+    await run(() => { ranCheck = true; });
+  } catch (error) {
+    onError(error);
+  }
+  return { ranCheck, waitMs: waitAfterTickMs(started, now(), ranCheck) };
 }
 
 const HELP = [
@@ -1029,7 +1047,6 @@ async function main(): Promise<number> {
     };
     let anotherTick = true;
     while (anotherTick) {
-      const started = Date.now();
       /**
        * **One bad tick must not end the loop.**
        *
@@ -1046,16 +1063,17 @@ async function main(): Promise<number> {
        * work*. Under `--once` it still surfaces as a non-zero exit, because a
        * person who asked for one tick wants its status.
        */
-      try {
-        await tick(runner, primary.path, opened.store, preparation, assertLock);
-      } catch (error) {
-        if (error instanceof LostLoopLockError) throw error;
-        if (once) throw error;
-        console.error(`${new Date().toISOString()} tick failed, carrying on: ${(error as Error).message}`);
-      }
+      const { ranCheck, waitMs } = await runTickAttempt(
+        (onCheckStarted) => tick(runner, primary.path, opened.store, preparation, assertLock, onCheckStarted),
+        (error) => {
+          if (error instanceof LostLoopLockError) throw error;
+          if (once) throw error;
+          console.error(`${new Date().toISOString()} tick failed, carrying on: ${(error as Error).message}`);
+        },
+      );
       anotherTick = !once;
       if (!anotherTick) break;
-      const waitMs = Math.max(0, started + TICK_INTERVAL_MS - Date.now());
+      if (ranCheck && waitMs > 0) console.log(`${new Date().toISOString()} resting ${Math.round(waitMs / 60_000)} min after that run before the next decision`);
       if (waitMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
     }
     return 0;

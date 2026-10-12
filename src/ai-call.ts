@@ -666,6 +666,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **`search_web`'s subagent** (src/web-search-subagent.ts) — the same
+     request shape as Dig deeper's search, so its row and its reasons: a
+     quick-tier OpenAI model wants no `order`, and an upstream that dropped
+     `tool_choice` or the Exa tool would answer from memory. */
+  "web-search-subagent": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
      policy and its reason: the request sends `openrouter:web_search`, and a
      fallback that silently dropped the tool leaves a model answering from
@@ -1177,6 +1186,8 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      (`link-summary`'s note) still buys about a thousand tokens of thinking;
      src/dig-deeper.ts § DIG_SEARCH_MAX_TOKENS is sized clear of it. */
   "dig-deeper-search": { effort: "low" },
+  /* Low: one forced-search call, then five lines from what came back. */
+  "web-search-subagent": { effort: "low" },
   "citation-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },

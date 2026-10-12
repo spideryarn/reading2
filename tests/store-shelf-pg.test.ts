@@ -54,6 +54,8 @@ import {
   authorGifts,
   billingVouchers,
   blockIdentities,
+  chatMentions,
+  chatMessages,
   chatThreads,
   checkpoints,
   citationFinds,
@@ -892,6 +894,9 @@ describe("destroying an article", () => {
   const GONE_SESSION = "00000000-0000-4000-8000-0000000000d9";
   /** A gift voucher that named the article as its starter (plan 261007j). */
   const GONE_VOUCHER = "00000000-0000-4000-8000-0000000b0c6d";
+  /** Another article whose conversation brought this one in with @ (plan 261012d). */
+  const MENTIONER_SLUG = "test-pg-shelf-mentioner";
+  const MENTIONER_ARTICLE = "00000000-0000-4000-8000-0000000c4a70";
 
   async function seed(): Promise<void> {
     const db = getDb();
@@ -1029,6 +1034,37 @@ describe("destroying an article", () => {
           starterSlug: GONE_SLUG,
         }),
       block_identities: () => Promise.resolve(),
+      /* A question in *another* article's conversation that brought this one
+         in with @ (plan 261012d): `set null`, because that conversation is the
+         other article's, and the mention keeps its title so the chat can still
+         say what it read. The row cascades only with its own question. */
+      chat_mentions: async () => {
+        const threadId = mintId();
+        const messageId = mintId();
+        await db
+          .insert(articles)
+          .values({ id: MENTIONER_ARTICLE, ownerId: owner, slug: MENTIONER_SLUG });
+        await db
+          .insert(chatThreads)
+          .values({ articleId: MENTIONER_ARTICLE, id: threadId, ownerId: owner, title: "A thread" });
+        await db.insert(chatMessages).values({
+          articleId: MENTIONER_ARTICLE,
+          threadId,
+          id: messageId,
+          ordinal: 0,
+          role: "user",
+          text: "Compare @About to go",
+          status: "done",
+        });
+        await db.insert(chatMentions).values({
+          articleId: MENTIONER_ARTICLE,
+          threadId,
+          messageId,
+          position: 0,
+          mentionedArticleId: GONE_ARTICLE,
+          title: "About to go",
+        });
+      },
       chat_threads: () =>
         db
           .insert(chatThreads)
@@ -1225,6 +1261,7 @@ describe("destroying an article", () => {
     await db.delete(articleShareLinkEvents).where(eq(articleShareLinkEvents.slug, GONE_SLUG));
     await db.delete(ingestEvents).where(eq(ingestEvents.slug, GONE_SLUG));
     await db.delete(billingVouchers).where(eq(billingVouchers.id, GONE_VOUCHER));
+    await db.delete(articles).where(eq(articles.id, MENTIONER_ARTICLE));
     /* And then the one statement, which is the whole of what the Stage A spike
        measured: tidying the cascade's children by hand first is what fails. */
     await db.delete(articles).where(eq(articles.id, GONE_ARTICLE));
@@ -1287,12 +1324,14 @@ describe("destroying an article", () => {
       found.filter((fk) => fk.survives).map((fk) => fk.name),
       "the deliberate survivors, docs/plans/260906h § What survives a delete; " +
         "the private link's audit joined them on 2026-10-05 (plan 261005e), and a " +
-        "gift voucher's starter on 2026-10-07 (plan 261007j)",
+        "gift voucher's starter on 2026-10-07 (plan 261007j), and another " +
+        "conversation's @-mention of it on 2026-10-12 (plan 261012d)",
     ).toEqual([
       "ai_calls",
       "article_share_link_events",
       "article_visibility_changes",
       "billing_vouchers",
+      "chat_mentions",
       "ingest_events",
       "realtime_sessions",
     ]);

@@ -1,6 +1,6 @@
 # Overseer watchdog: a periodic check that the Overseer daemon is still
 # writing its heartbeat, and (since 2026-10-08) that the Overseer session is
-# still pacing the queue and production is not over 12 hours behind dev. The
+# still pacing the queue and production is not over 24 hours behind dev. The
 # last one runs `git fetch` as @USER@, so it needs the GitHub token in
 # /etc/github-tokens. scripts/overseer-watchdog.ts,
 # docs/project/overseer-direction.md.

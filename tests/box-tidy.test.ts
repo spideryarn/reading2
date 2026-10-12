@@ -1,5 +1,5 @@
 /**
- * The hourly disk tidy on the box, `infra/hetzner/box-tidy.mjs`.
+ * The two-hourly disk tidy on the box, `infra/hetzner/box-tidy.mjs`.
  *
  * It deletes files with nobody watching, so every test here runs the real
  * script against a temporary home and asks what is left on disk afterwards.

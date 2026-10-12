@@ -10,7 +10,8 @@
  * Asserted here: the experience line is resolved per turn from the **stored**
  * thread's kind and lands in the final message only; a failed count costs the
  * line and not the turn, and says so in the log without a count; a guide turn
- * is offered no web search and no tool that leaves the article; and a guide
+ * is offered no OpenRouter search and, but for search_web, no tool that leaves
+ * the article; and a guide
  * refuses `visible`, as every non-chat kind does.
  *
  * Plan 261008a read which modes were already made on every guide turn; plan
@@ -202,7 +203,7 @@ describe("a guide turn", () => {
     expect(head).toBe(first);
   });
 
-  it("is offered no web search and no tool that leaves the article", async () => {
+  it("is offered no OpenRouter search and no tool that leaves the article but search_web", async () => {
     vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
     await post({ threadId: "spya-gdrtc2", question: "What should I read closely?", kind: "guide" });
     const { tools } = lastRequest();
@@ -212,6 +213,8 @@ describe("a guide turn", () => {
       "article_links",
       "article_glossary",
       "article_citations",
+      /* A web search whose results come back as a tool message (plan 261012g). */
+      "search_web",
       /* Its own, and it saves nothing (plan 261009q). */
       "offer_to_save",
       /* And its next steps, which run nothing (plan 261009u). */

@@ -272,6 +272,7 @@ describe("declaredTables", () => {
       "billing_voucher_emails",
       "billing_vouchers",
       "block_identities",
+      "chat_mentions",
       "chat_messages",
       "chat_threads",
       "checkpoints",
@@ -410,8 +411,9 @@ describe("against a real database", () => {
          2026-10-10 (plan 261010a); fifty-eight since
          `command_suggestion_dismissals` the same day (plan 261010u); fifty-nine
          since `feedback_addenda` the same day (plan 261010o); sixty since
-         `related_work_searches`, 2026-10-11 (plan 261011ac). */
-      expect(report.declaredTables).toBe(60);
+         `related_work_searches`, 2026-10-11 (plan 261011ac); sixty-one since
+         `chat_mentions`, 2026-10-12 (plan 261012d). */
+      expect(report.declaredTables).toBe(61);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

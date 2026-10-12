@@ -84,6 +84,14 @@ is a stricter reader than the tab, and it changed three things here:
 **The loop has to be restarted to pick this up**: it loads its code once, at start, from the runner
 checkout. Restart it between checks, when the runner's log says it is idle.
 
+**Since 2026-10-12 the loop rests after every run for as long as that run took** before it decides
+again (`waitAfterTickMs` in [`tools/fleet/readiness-loop.ts`](../../tools/fleet/readiness-loop.ts)),
+so a dev head that keeps moving gets a full suite at most every other suite-length rather than back
+to back. Greg asked for everything on the box to run half as often: *"I'm going to be working to be
+working on Spideryarn less for a while, so can you make all the ticks/daemons/services/etc run half
+as often?"* Idle ticks now decide every twenty minutes, up from ten. A check that finishes and
+then throws while processing its outcome still earns the same rest.
+
 Since 2026-10-08 a `test` or `check` record also carries **`testOutcome`**: vitest's own verdict on
 the suite inside the run — green, red only in the files it names, or no use, and why — written by
 [`scripts/vitest-outcome-reporter.ts`](../../scripts/vitest-outcome-reporter.ts), which the wrapper

@@ -11,6 +11,8 @@
  *   261009i (no box): why you are reading when no reason is stored, About you
  *   quoted back when it is there, three ways in while it is empty (plan
  *   261009u), nothing asked when the reason could not be read;
+ * - **the guide's Ask in Chat step** (plan 261012f), pressed through
+ *   `onSendNew` and never the guide's own `onSend`;
  * - **the guide's offer to save** (plans 261009q and 261011s), a card under
  *   its answer that writes on a press, or at once for checked reader-typed
  *   words; never over words changed since the guide offered it; once per
@@ -107,6 +109,8 @@ let root: Root;
 const sent: string[] = [];
 /** How each send was made (`SendHow`), beside `sent`. */
 const sentHow: (SendHow | undefined)[] = [];
+/** What reached `onSendNew`: a fresh conversation's first question. */
+const sentNew: string[] = [];
 let guideOpened = 0;
 
 function paint(
@@ -140,7 +144,9 @@ function paint(
           sentHow.push(how);
         },
         onNew: () => {},
-        onSendNew: () => {},
+        onSendNew: (q: string) => {
+          sentNew.push(q);
+        },
         onDiscard: () => {},
         onRename: () => {},
         onDelete: () => {},
@@ -178,6 +184,7 @@ beforeEach(() => {
   delayedRead = null;
   sent.length = 0;
   sentHow.length = 0;
+  sentNew.length = 0;
   forgetAnsweredHere();
   guideOpened = 0;
   forgetChatDrafts();
@@ -192,6 +199,44 @@ afterEach(() => {
 });
 
 const guideRow = (): HTMLElement | null => host.querySelector<HTMLElement>(".chat-guide");
+
+describe("the guide's Ask in Chat step", () => {
+  it("starts a new conversation with its words, and sends nothing to the guide", async () => {
+    const guide = thread("spya-gdeaab", "guide", {
+      messages: [
+        { id: "spya-gdeq01", role: "user", text: "Why does he say memory moves?", createdAt: AT, status: "done" },
+        {
+          id: "spya-gdea01",
+          role: "assistant",
+          text: "This conversation is for how to read it; the button below starts a Chat.",
+          createdAt: AT,
+          status: "done",
+          tools: [
+            {
+              name: "offer_next_steps",
+              label: "offered next steps",
+              status: "done",
+              steps: [{ kind: "chat", words: "Why does he say memory moves?" }],
+            },
+          ],
+        },
+      ],
+    });
+    paint([CHAT], { guide, threadId: guide.id });
+    await settle();
+    const button = host.querySelector<HTMLButtonElement>("button.guide-next-chat");
+    expect(button).not.toBeNull();
+    act(() => button?.click());
+    expect(sentNew).toEqual(["Why does he say memory moves?"]);
+    expect(sent).toEqual([]);
+  });
+
+  it("is not drawn in a chat, which has no next steps", async () => {
+    paint([CHAT], { threadId: CHAT.id });
+    await settle();
+    expect(host.querySelector("button.guide-next-chat")).toBeNull();
+  });
+});
 
 describe("the guide's pinned row", () => {
   it.each([null, "chats", "sources", "learn"] as const)("is above the list whatever the filter says (%s)", (from) => {
@@ -648,14 +693,14 @@ describe("the guide's next steps in the panel", () => {
         { id: "spya-gdea12", role: "assistant", text: "Then the method.", createdAt: AT, status: last, tools: last === "done" ? steps("Newer step") : [] },
       ],
     });
-  const labels = () => [...host.querySelectorAll('[aria-label="Next steps"] button')].map((b) => b.textContent);
+  const labels = () => [...host.querySelectorAll('fieldset.guide-next-steps button')].map((b) => b.textContent);
 
   it("draws the latest answer's steps only, with no tool line for them, and a press sends the words", async () => {
     paint([CHAT], { guide: twoAnswers("done"), threadId: "spya-gdenxt" });
     await settle();
     expect(labels()).toEqual(["Newer step"]);
     expect(host.textContent).not.toContain("offered next steps");
-    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Next steps"] button')?.click());
+    act(() => host.querySelector<HTMLButtonElement>('fieldset.guide-next-steps button')?.click());
     expect(sent).toEqual(["Newer step"]);
   });
 

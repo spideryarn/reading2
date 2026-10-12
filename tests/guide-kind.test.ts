@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 
 import { withTurn } from "../src/chat.js";
-import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_NEXT_STEPS_TOOL, OFFER_TO_SAVE_TOOL, toolsFor } from "../src/chat-tools.js";
+import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_NEXT_STEPS_TOOL, OFFER_TO_SAVE_TOOL, SEARCH_WEB_TOOL, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, roundTools, webSearchTool } from "../src/converse.js";
 import { cachedText } from "../src/article-prompt.js";
 import { A_FEW_ARTICLES, experienceLine, experienceOf, modeWordsSection } from "../src/guide.js";
@@ -103,6 +103,12 @@ describe("the guide's prompt", () => {
     expect(guide).toMatch(/Never summarise the\s+piece/);
     expect(guide).toMatch(/not a conversation about what the piece says/);
     expect(lastOf(build("guide"))).toContain("not a summary of the piece");
+  });
+
+  it("repeats the current 60-word limit beside the question, not the old one", () => {
+    const last = lastOf(build("guide"));
+    expect(last).toContain("under 60 words");
+    expect(last).not.toContain("under 100 words");
   });
 
   it("asks why they are reading when they have not said, and invites About you once", () => {
@@ -249,8 +255,8 @@ describe("how much the reader has used Spideryarn", () => {
 });
 
 describe("the guide's tools", () => {
-  it("are the article's own five, in chat's order, then the two offers", () => {
-    expect(toolsFor("guide")).toEqual([...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL, OFFER_NEXT_STEPS_TOOL]);
+  it("are the article's own five, in chat's order, then its search, then the two offers", () => {
+    expect(toolsFor("guide")).toEqual([...GUIDE_TOOLS, SEARCH_WEB_TOOL, OFFER_TO_SAVE_TOOL, OFFER_NEXT_STEPS_TOOL]);
     expect(GUIDE_TOOLS.map((t) => t.function.name)).toEqual([
       "search_article_words",
       "search_article_meaning",
@@ -262,7 +268,7 @@ describe("the guide's tools", () => {
     for (const tool of GUIDE_TOOLS) expect(CHAT_TOOLS).toContain(tool);
   });
 
-  it("include no web search, on any round", () => {
+  it("include no OpenRouter web search, on any round", () => {
     expect(webSearchTool("guide")).toBeNull();
     const first = roundTools("guide", true);
     const last = roundTools("guide", false);

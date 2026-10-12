@@ -966,6 +966,15 @@ export type Task =
    */
   | "dig-deeper-search"
   /**
+   * **`search_web`, a conversation's search subagent** — a forced-search call
+   * through Exa on a small model that writes at most five
+   * `[title](url) — sentence` lines,
+   * handed back to the guide as an ordinary tool result
+   * (src/web-search-subagent.ts, plan 261012g). Its own job so the ledger shows
+   * what a conversation's searches cost beside the answer they feed.
+   */
+  | "web-search-subagent"
+  /**
    * **Who wrote an article, and how to reach them** — the author gift's one
    * lookup (src/author-lookup.ts, plan 261010c D4). Admin-only, pressed by an
    * administrator for one article at a time, run after the response. Chat
@@ -1226,6 +1235,9 @@ export const TASK_TIER: Record<Task, Tier> = {
      search query and a keyword line, never words a reader reads. Measured on
      2026-10-01 against Sonnet: the same five sources at a third of the price. */
   "dig-deeper-search": "quick",
+  /* Quick by measurement (investigation 261012b): GPT Luna wrote no link the
+     search had not returned, in 28, at $0.007 a search, nearly all of it Exa's. */
+  "web-search-subagent": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, and on Opus for every article: `ALWAYS_HIGH_POWER` below. */
@@ -1544,6 +1556,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   /* Chat, for `citation-find`'s reason — the web-search server tool — and
      the quick tier's only wire. */
   "dig-deeper-search": "chat",
+  "web-search-subagent": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1693,6 +1706,8 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   /* For a comparison run: does another model write as good a search, for the
      price. The answer the reader reads is not this — it is `DIG_DEEPER_MODEL`. */
   "dig-deeper-search": "SPIDERYARN_DIG_DEEPER_SEARCH_MODEL",
+  /* For a comparison run, as investigation 261012b ran Haiku beside it. */
+  "web-search-subagent": "SPIDERYARN_WEB_SEARCH_SUBAGENT_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm

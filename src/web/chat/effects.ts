@@ -20,7 +20,7 @@
  * imported *by* the hook, and a module that imports the module importing it is
  * a cycle — `npm run cycles` would have caught it.
  */
-import type { ChatMessage, ChatThread, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, ChatThreadView, ToolRun } from "../../types.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
 import { heldReader } from "../lib/session.js";
@@ -105,11 +105,12 @@ export interface TurnSink {
   done(done: TurnDone): void;
   /**
    * It is over and there is nothing to recover — the `error` frame, a request
-   * that never opened, a refusal that is not a 409. `text` is the partial
-   * answer where the server sent one back.
+   * that never opened, or an uncertain server failure. `text` is the partial
+   * answer where the server sent one back. Definite HTTP refusals use
+   * `refused` below.
    */
   failed(error: string, text?: string): void;
-  /** A 409: the server refused a turn this client had already performed. */
+  /** A definite HTTP refusal: the server answered before opening the stream. */
   refused(error: string): void;
   /**
    * The stream stopped without ending, or ended without saying how.
@@ -169,10 +170,10 @@ export async function runTurn(
       // question over the size cap. After it starts, failures arrive as an
       // `error` frame inside a 200, and `drainTurn` handles those.
       const refusal = await failure(response);
-      /* A 409 proves the write was refused. Other failures leave its outcome
-         uncertain. The reducer withdraws and repairs a refused turn, and also
-         a retry or edit of a confirmed conversation that failed before `begin`. */
-      if (response.status === 409) {
+      /* A 4xx proves the request was refused. For mention sends this includes
+         the validation 400s whose words must go back beside the chips. A 5xx,
+         a timeout or a lost response is uncertain: the write may have landed. */
+      if (response.status === 409 || (Array.isArray(payload.mentions) && response.status >= 400 && response.status < 500)) {
         sink.refused(refusal.message);
         return;
       }
@@ -413,7 +414,9 @@ export async function settledAnswer(
  */
 export async function askForThreads(slug: string, signal?: AbortSignal): Promise<ThreadsOutcome> {
   try {
-    const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
+    /* `ChatThreadView`: the full list carries `mentioned` on a thread that
+       brought other articles in (plan 261012d § 4). */
+    const body = await readJson<{ threads?: ChatThreadView[]; error?: string }>(
       await apiFetch(`/api/chat/${encodeURIComponent(slug)}`, signal ? { signal } : undefined),
     );
     if (body.error) return { ok: false, error: body.error };

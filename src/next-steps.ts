@@ -15,10 +15,14 @@
  * the same function (src/web/GuideNextSteps.tsx), because a stored run is JSON
  * and is checked again rather than trusted. Node-free, so both can import it.
  *
- * Five kinds and no others. Each is a press by the reader; none of them writes,
+ * Six kinds and no others. Each is a press by the reader; none of them writes,
  * shares or spends on its own:
  *
  * - `ask`: words the reader can send to the guide as their own message;
+ * - `chat`: a question about what the piece says, sent as the first question of
+ *   a fresh Chat (plan
+ *   docs/plans/261012f-guide-hands-content-questions-to-a-new-chat.md). At most
+ *   one per answer: it is the one orange button in the row;
  * - `mode`: a mode to open, drawn as the chip `[cmd:mode:<key>]` would be, so
  *   `chipFor` decides at the draw and at the press whether it is offered here;
  * - `search`: words for a quick search, in a box the reader can change first;
@@ -32,6 +36,11 @@ import type { NextStep } from "./types.js";
 export const MAX_NEXT_STEPS = 3;
 /** An `ask` step is drawn in full on its button, so it is one short line. */
 export const MAX_ASK_CHARS = 80;
+/**
+ * A `chat` step is a whole question, standing on its own in a conversation
+ * that has not seen the guide's, and it too is drawn in full.
+ */
+export const MAX_CHAT_CHARS = 160;
 /** A quick search is a few words. */
 export const MAX_SEARCH_CHARS = 60;
 
@@ -60,6 +69,12 @@ export function checkNextStep(raw: unknown, modeKeys?: ReadonlySet<string>): Nex
       if (words.length > MAX_ASK_CHARS) return `an ask step's words were ${words.length} characters, and the most is ${MAX_ASK_CHARS}`;
       return { kind: "ask", words };
     }
+    case "chat": {
+      const words = oneLine(step.words);
+      if (words === null) return "a chat step needs words";
+      if (words.length > MAX_CHAT_CHARS) return `a chat step's words were ${words.length} characters, and the most is ${MAX_CHAT_CHARS}`;
+      return { kind: "chat", words };
+    }
     case "search": {
       const words = oneLine(step.words);
       if (words === null) return "a search step needs words";
@@ -78,7 +93,7 @@ export function checkNextStep(raw: unknown, modeKeys?: ReadonlySet<string>): Nex
     case "archive":
       return { kind: "archive" };
     default:
-      return `a step's kind must be ask, mode, search, share or archive`;
+      return `a step's kind must be ask, chat, mode, search, share or archive`;
   }
 }
 
@@ -98,6 +113,11 @@ export function checkNextSteps(
     const checked = checkNextStep(item, modeKeys);
     if (typeof checked === "string") {
       problems.push(checked);
+      continue;
+    }
+    /* One orange button, not three (GPT Sol's F1 on plan 261012f). */
+    if (checked.kind === "chat" && steps.some((s) => s.kind === "chat")) {
+      problems.push("only one chat step is shown");
       continue;
     }
     const key = JSON.stringify(checked);

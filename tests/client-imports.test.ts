@@ -72,6 +72,11 @@ const SHARED = new Set([
      what a dismissal may say — the route checks a body with it and the hook
      builds one, so the two cannot disagree. Imports nothing. Plan 261010a. */
   "stale-notice.js",
+  /* How many other articles one chat question and one conversation may bring
+     in, and the sentences a refusal says — the route and the store enforce
+     them and the picker stops offering past them, so the two cannot disagree.
+     Imports nothing. Plan 261012d. */
+  "chat-mention-limits.js",
   /* Which influence a Citations row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`

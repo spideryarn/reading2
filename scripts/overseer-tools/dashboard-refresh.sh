@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hourly, deterministic: bring the primary up to dev, and restart the live dashboard ONLY when
+# Every two hours (hourly until 2026-10-12), deterministic: bring the primary up to dev, and restart the live dashboard ONLY when
 # what it is built from has changed since the commit it last served. Greg, 2026-09-09: "make sure that
 # the webserver gets restarted every so often (hourly? or use your judgment) ... ideally deterministic."
 # The restart itself is scripts/fleet-restart.ts, which refuses over a non-empty steering queue and
@@ -79,6 +79,6 @@ if ./node_modules/.bin/tsx scripts/fleet-restart.ts restart >>"$LOG" 2>&1; then
   fi
 else
   rc=$?
-  say "restart refused or failed (exit $rc) — see $LOG; will try again next hour"
+  say "restart refused or failed (exit $rc) — see $LOG; will try again on the next run"
   exit 1
 fi

@@ -1,6 +1,6 @@
 /**
  * One line from a scheduled job ON the box to the Overseer — box-health and the
- * daily worktree sweep. Plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+ * worktree sweep. Plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
  *
  * **The same client as `gjd-remote tell-overseer`, minus the ssh.** Both read
  * the dashboard's `/api/state`, pick the Overseer's row with `overseerTarget`

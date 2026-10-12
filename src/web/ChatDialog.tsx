@@ -63,6 +63,7 @@ import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from 
 
 import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
 import { Composer, Conversation, type SendHow } from "./ChatPanel.js";
+import type { PickedMention } from "./mentions.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { answerOpening } from "../answer-opening.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
@@ -375,6 +376,16 @@ export function ChatDialog({
       else setDraftState({ target: draftTarget, text });
     },
     [draftTarget, threadTarget, drafts],
+  );
+  /* The conversation's "Bringing in" row is kept beside its words, so it
+     crosses to and from the panel with them (Composer § `draftMentions`). A
+     passage draft's lives as long as its box, as its words do here. */
+  const draftMentions = threadTarget !== null ? drafts.threadMentions(threadTarget) : undefined;
+  const setDraftMentions = useCallback(
+    (picked: readonly PickedMention[]) => {
+      if (threadTarget !== null) drafts.setThreadMentions(threadTarget, picked);
+    },
+    [threadTarget, drafts],
   );
   const focused = useRef(0);
 
@@ -959,10 +970,13 @@ export function ChatDialog({
         ...(quote ? { quote } : {}),
         question,
       });
+      /* Keep the draft composer mounted until a mentioned first question is
+         accepted, so a 400 can put its words back beside its chips. */
+      const waitsForMentionBegin = how?.mentions !== undefined;
       const id: string = send(null, text, at, {
-        /* **Data in `onConfirmed`, navigation in `onThreadId`**, and the split
-           is the controller's (chat/controller.ts § `detach`): the first
-           survives this dialog closing and the second does not. A dialog
+        /* **Data in `onConfirmed`, navigation in the callbacks beside it**,
+           and the split is the controller's (chat/controller.ts § `detach`):
+           the first survives this dialog closing and the others do not. A dialog
            closed before the first frame must still have its summary renamed,
            or the list asked for again when the answer stops puts the real row
            beside the guess; it must not have `?thread=` moved under whatever
@@ -979,7 +993,12 @@ export function ChatDialog({
           drafts.moveThread(id, real);
           onRenamed(id, real);
         },
-        onThreadId: (real) => onThread(real),
+        ...(waitsForMentionBegin
+          ? {
+              onBegun: (real: string) => onThread(real),
+              onUnconfirmed: (local: string) => onThread(local),
+            }
+          : { onThreadId: (real: string) => onThread(real) }),
         anchor: target.anchor,
         /* **The "?" says so on the wire.** The draft has known which button
            opened it since 2026-09-04 and used it, three lines up, to decide what
@@ -996,11 +1015,13 @@ export function ChatDialog({
            the question just as the full Chat panel does; handed-over and
            automatically sent drafts call `ask` without it and stay unknown. */
         ...(how?.modality ? { modality: how.modality } : {}),
+        /* The articles picked with an `@` (plan 261012d). A passage chat is a chat. */
+        ...(how?.mentions ? { mentions: how.mentions } : {}),
       });
-      onThread(id);
+      if (!waitsForMentionBegin) onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
-         different one, the two callbacks above rename the summary and correct the
-         URL together. Until 2026-10-05 only the URL followed, on the theory
+         different one, the acknowledgement and navigation above rename the
+         summary and correct the URL together. Until 2026-10-05 only the URL followed, on the theory
          that a mark keyed on a guess was invisible and self-healing; it closed
          this dialog mid-answer and then counted the conversation twice. Not
          drawing it at all until the round trip lands is the visible failure:
@@ -1314,6 +1335,7 @@ export function ChatDialog({
                  dropping its second argument here silently erased typed /
                  dictated / mixed on every dialog follow-up. */
               ...(how?.modality ? { modality: how.modality } : {}),
+              ...(how?.mentions ? { mentions: how.mentions } : {}),
             })}
             onRetry={(messageId) => retry(thread.id, messageId)}
             onEdit={(messageId, question) => edit(thread.id, messageId, question, at)}
@@ -1324,6 +1346,8 @@ export function ChatDialog({
             focused={focused}
             draft={draft}
             onDraft={setDraft}
+            draftMentions={draftMentions}
+            onDraftMentions={setDraftMentions}
             visible={!collapsed}
             /* The card's height is its content's; the corner and the dock have
                the panel's. Said here, not left to a stylesheet, because the
