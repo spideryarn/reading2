@@ -3449,6 +3449,20 @@ export function Composer({
        to the next draft and `onAccepted` deliberately removes only these. */
     const selectedMentions = mention.toSend();
     const submittedRow = mention.picked;
+    /* The Chat request has definitely not started yet. Put its question back
+       after a refusal, or after Live could not finish handing over the
+       conversation tail. A newer draft wins; its words must not acquire the
+       submitted question's chips. */
+    const restoreUnsent = () => {
+      setMentionWaiting(false);
+      if (box.current?.value) {
+        selectedMentions?.onUnconfirmed?.();
+        return;
+      }
+      provenance.current = submittedProvenance;
+      setText(submittedDraft, "kept");
+      onDraftMentions?.(submittedRow);
+    };
     const mentions: MentionsToSend | undefined = selectedMentions
       ? {
           ...selectedMentions,
@@ -3456,14 +3470,7 @@ export function Composer({
             setMentionWaiting(false);
             selectedMentions.onAccepted();
           },
-          onRefused: () => {
-            setMentionWaiting(false);
-            /* Do not overwrite a next draft typed while the request was out. */
-            if (box.current?.value) return;
-            provenance.current = submittedProvenance;
-            setText(submittedDraft, "kept");
-            onDraftMentions?.(submittedRow);
-          },
+          onRefused: restoreUnsent,
           /* The turn may have been written: the chips go, the words stay gone. */
           onUnconfirmed: () => {
             setMentionWaiting(false);
@@ -3473,7 +3480,16 @@ export function Composer({
       : undefined;
     if (mentions) setMentionWaiting(true);
     setText("", "kept");
-    if (handoff) await live.stop();
+    if (handoff) {
+      try {
+        await live.stop();
+      } catch {
+        /* No Chat request exists to call an outcome callback: Live rejected
+           before `onSend`. It is therefore safe to offer these words again. */
+        restoreUnsent();
+        return;
+      }
+    }
     /* Typed here, by the reader: the one send that says so (`SendHow`). */
     onSend(question, { typed: true, ...(modality ? { modality } : {}), ...(mentions ? { mentions } : {}) });
     /* The question has gone and the answer arrives under the keys: let go of

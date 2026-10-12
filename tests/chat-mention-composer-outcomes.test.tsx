@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread, LibraryEntry } from "../src/types.js";
 import type { SendHow } from "../src/web/ChatPanel.js";
 import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
+import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 import { settleChat } from "./helpers/settle-chat.js";
 
 /** What the dictation hook was last told to call with new words. */
@@ -106,6 +107,7 @@ const { useChat } = await import("../src/web/useChat.js");
 let host: HTMLDivElement;
 let root: Root;
 let sent: { question: string; how: SendHow | undefined }[];
+let activeLive: LiveApi | undefined;
 
 const box = () => host.querySelector<HTMLTextAreaElement>("textarea.chat-input") as HTMLTextAreaElement;
 const chips = () => host.querySelector(".mention-chips");
@@ -134,6 +136,7 @@ function press(key: string): void {
 beforeEach(() => {
   forgetChatDrafts();
   dictateInto = undefined;
+  activeLive = undefined;
   sent = [];
   posts = [];
   reply = { frames: "" };
@@ -213,10 +216,34 @@ function Kept() {
     draftMentions: drafts.threadMentions(THREAD.id),
     onDraftMentions: (picked) => drafts.setThreadMentions(THREAD.id, picked),
     kind: "chat",
+    live: activeLive,
   });
 }
 
 describe("the row and the words, kept in step", () => {
+  it("restores and unlatches a mentioned question when the Live handoff fails before Chat sends it", async () => {
+    const live = {
+      phase: "live",
+      stop: vi.fn(() => Promise.reject(new Error("the Live channel closed during handoff"))),
+    } as unknown as LiveApi;
+    activeLive = live;
+    await act(async () => root.render(createElement(Kept)));
+    await type("compare with @jon");
+    press("Enter");
+    expect(box().value).toBe("compare with @Reply to Jones ");
+    press("Enter");
+    await settleChat();
+    expect(sent, "Chat was never called").toEqual([]);
+    expect(box().value, "the definitely-unsent words came back").toBe("compare with @Reply to Jones ");
+    expect(chips()?.textContent, "the definitely-unsent row came back").toContain("Reply to Jones");
+    /* The failed Live session no longer needs a handoff. A second Enter proves
+       the mention gate was released as well as the words being restored. */
+    live.phase = "failed";
+    press("Enter");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.how?.mentions?.slugs).toEqual(["reply-to-jones"]);
+  });
+
   it("moves an @Title's anchor when dictation writes before it, so × takes out exactly that title", async () => {
     await act(async () => root.render(createElement(Kept)));
     await type("compare with @jon");

@@ -396,6 +396,19 @@ Each stage gets a Sol code review, write-capable, then is committed and pushed.
     not reach chats on the reader's *other* articles that brought it in or quoted it.
   - That was already true of any answer that used `search_library`. Now a title snapshot is kept
     as well.
+- **Sol's second code review** (`261012d-round-2-code-review-sol.md`, fixes in `cb2eed61f`). Its
+  narrow re-check (`261012d-round-2-fix-check-sol.md`) found two P1s still open, fixed by an Opus
+  subagent with red-first tests:
+  - **R2-2:** an uncertain failure before `begin` in an open conversation left the composer
+    locked. `MentionsToSend.onUnconfirmed` now drops the submitted chips without restoring the text.
+  - **R2-3:** dictation moved the text without moving the chips' anchors, and a mode change lost
+    the chips while the `@Title` text stayed. Now every text change goes through one `setText`, and
+    the draft store keeps the picked mentions beside the text.
+  - Sol's check of those fixes: `261012d-round-3-fix-check-sol.md`.
+- **The full suite** caught three guards that had not heard of the new table. All three were mine
+  and are fixed: the destroy test now seeds a `chat_mentions` row as a deliberate `set null`
+  survivor, `chat-mention-limits.ts` is on the client's shared-module list, and `chat-mentions.ts`
+  is exempt from the paperwork rule, as `converse.ts` is.
 
 ## The simpler option passed over
 
