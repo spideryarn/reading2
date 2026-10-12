@@ -115,13 +115,13 @@ export function checkNextSteps(
       problems.push(checked);
       continue;
     }
-    const key = JSON.stringify(checked);
-    if (seen.has(key)) continue;
     /* One orange button, not three (GPT Sol's F1 on plan 261012f). */
     if (checked.kind === "chat" && steps.some((s) => s.kind === "chat")) {
       problems.push("only one chat step is shown");
       continue;
     }
+    const key = JSON.stringify(checked);
+    if (seen.has(key)) continue;
     if (steps.length === MAX_NEXT_STEPS) {
       problems.push(`only the first ${MAX_NEXT_STEPS} steps are shown`);
       break;

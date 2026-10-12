@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /var/tmp/spideryarn-worktrees/fba63vmt-chat-at-mention-articles
+
+  [private lane] spideryarn_test_261012134529_2098442c438b4bdab2ec9af7d80afaee in 6.2s, leased as spideryarn-test-lease-1798688, priced reader/researcher
+
+ Test Files  4 passed (4)
+      Tests  66 passed (66)
+   Start at  14:45:27
+   Duration  55.41s (transform 22.58s, setup 1.01s, import 33.19s, tests 12.63s, environment 1ms)
+
+  [private lane] dropped spideryarn_test_261012134529_2098442c438b4bdab2ec9af7d80afaee

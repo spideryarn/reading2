@@ -51,7 +51,7 @@
  * would be about right"*), and an older answer's steps would be stale.
  */
 import { Archive, MessageSquare, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { checkNextSteps } from "../next-steps.js";
 import type { ChatMessage, NextStep, ToolRun } from "../types.js";
 import { chipFor } from "./chat-commands.js";
@@ -140,18 +140,18 @@ export function GuideNextSteps({
   if (steps.length === 0) return null;
   return (
     <fieldset className="chat-suggest guide-next-steps">
-        {/* Seen, not only announced: readers missed an unlabelled row (plan 261012f). */}
-        <legend className="guide-next-steps-legend">Next steps</legend>
-        <ul>
-          {steps.map((step) => (
-            /* The same suggestion can recur in a later answer. Its search box
-               and CommandChip status belong to that answer, not merely to the
-               step's words, so the message id is part of the identity. */
-            <li key={`${message.id}:${JSON.stringify(step)}`}>
-              <Step step={step} slug={slug} blocks={blocks} commands={commands} onAsk={onAsk} onChat={onChat} />
-            </li>
-          ))}
-        </ul>
+      {/* Seen, not only announced: readers missed an unlabelled row (plan 261012f). */}
+      <legend className="guide-next-steps-legend">Next steps</legend>
+      <ul>
+        {steps.map((step) => (
+          /* The same suggestion can recur in a later answer. Its search box
+             and CommandChip status belong to that answer, not merely to the
+             step's words, so the message id is part of the identity. */
+          <li key={`${message.id}:${JSON.stringify(step)}`}>
+            <Step step={step} slug={slug} blocks={blocks} commands={commands} onAsk={onAsk} onChat={onChat} />
+          </li>
+        ))}
+      </ul>
     </fieldset>
   );
 }
@@ -212,14 +212,7 @@ function Step({
     /* What is on the button is what is sent, as with `ask`: the words in the
        model's face, after our own label. */
     case "chat":
-      return onChat === undefined ? null : (
-        <button type="button" className="guide-next-chat" onClick={() => onChat(step.words)}>
-          <MessageSquare size={14} aria-hidden="true" />
-          <span>
-            {STEP_WORDS.chat} <span className={voiceClass("ai")}>{step.words}</span>
-          </span>
-        </button>
-      );
+      return onChat === undefined ? null : <ChatStep words={step.words} onChat={onChat} />;
     /* `drawable` has checked both; `null` here only if the page changed
        between that and this, and then nothing rather than raw characters. */
     case "mode":
@@ -245,6 +238,32 @@ function Step({
       return never;
     }
   }
+}
+
+/**
+ * **One activation, one fresh Chat.** Navigation normally removes this button
+ * straight after the press, but two click events can arrive before React paints
+ * that navigation. The ref closes that synchronous window; `disabled` tells the
+ * reader the press was taken while the new conversation replaces the guide.
+ * Plan 261012f.
+ */
+function ChatStep({ words, onChat }: { words: string; onChat(words: string): void }) {
+  const sent = useRef(false);
+  const [disabled, setDisabled] = useState(false);
+  const send = () => {
+    if (sent.current) return;
+    sent.current = true;
+    setDisabled(true);
+    onChat(words);
+  };
+  return (
+    <button type="button" className="guide-next-chat" disabled={disabled} onClick={send}>
+      <MessageSquare size={14} aria-hidden="true" />
+      <span>
+        {STEP_WORDS.chat} <span className={voiceClass("ai")}>{words}</span>
+      </span>
+    </button>
+  );
 }
 
 /**

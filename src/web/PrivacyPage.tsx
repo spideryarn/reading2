@@ -723,9 +723,11 @@ export function PrivacyPage() {
           <strong className="tw:text-foreground">Delete permanently</strong> on the article’s own
           page does that. It erases the article and everything you did with it — your comments,
           notes, highlights, questions and chats, and everything the models made from it. There is
-          no undo and no copy we can bring back for you, which is why it asks twice. What it cannot
-          reach is a copy already downloaded to a device: a page or an image your browser or
-          somebody else’s has kept is out of our hands.
+          no undo and no copy we can bring back for you, which is why it asks twice. It does not
+          reach your chats on your other articles: if one of them brought this article in, or
+          quoted it, that conversation keeps its title and what was said, until you delete that
+          conversation too. Nor can it reach a copy already downloaded to a device: a page or an
+          image your browser or somebody else’s has kept is out of our hands.
         </p>
         <p>
           If you had shared an article and then archive it, it stops being listed anywhere public —

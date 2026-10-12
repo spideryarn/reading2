@@ -105,6 +105,12 @@ describe("the guide's prompt", () => {
     expect(lastOf(build("guide"))).toContain("not a summary of the piece");
   });
 
+  it("repeats the current 60-word limit beside the question, not the old one", () => {
+    const last = lastOf(build("guide"));
+    expect(last).toContain("under 60 words");
+    expect(last).not.toContain("under 100 words");
+  });
+
   it("asks why they are reading when they have not said, and invites About you once", () => {
     const guide = systemOf("guide");
     expect(guide).toMatch(/If they still have not said why they are reading it, ask that first/);

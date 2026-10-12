@@ -8,6 +8,7 @@
  * chip for the words in an editable box, share and archive go to Metadata.
  * None presses itself; a stored run is checked again before anything is drawn.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -95,7 +96,7 @@ describe("the guide's next steps", () => {
   });
 
   /* Plan 261012f: a content question goes to a fresh Chat, first and in orange. */
-  it("draws a chat step first, as the one Ask in Chat button, and a press starts a Chat with its words", () => {
+  it("draws a chat step first, as the one Ask in Chat button, and one activation starts one Chat", () => {
     paint(
       answer([
         offered([
@@ -109,9 +110,19 @@ describe("the guide's next steps", () => {
     expect(host.querySelector("li")?.querySelector("button.guide-next-chat")).toBe(chat);
     expect(host.querySelectorAll("button.guide-next-chat")).toHaveLength(1);
     expect(chats).toEqual([]);
-    act(() => chat?.click());
+    act(() => {
+      chat?.click();
+      chat?.click();
+    });
     expect(chats).toEqual(["Why does he think consciousness is not computation?"]);
     expect(sent).toEqual([]);
+    expect(chat?.disabled).toBe(true);
+  });
+
+  it("lets the full question wrap in a narrow band and has a quiet spent state", () => {
+    const css = readFileSync("src/web/styles/chat-actions.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).toMatch(/\.guide-next-chat\s*>\s*span\s*\{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*anywhere/s);
+    expect(css).toMatch(/\.guide-next-chat:disabled\s*\{[^}]*cursor:\s*default/s);
   });
 
   it("draws no chat step where nothing can start a Chat", () => {

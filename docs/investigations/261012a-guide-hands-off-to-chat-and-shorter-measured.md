@@ -16,12 +16,19 @@ asked for in under 60 words.
     drawn a `chat` step in any case.
   - **after**: the first wording ("under 60 words, in at most two short paragraphs"). 22 turns,
     $0.51, `next-steps-261012f-after.json`.
-  - **after2**: the wording that shipped — a concrete shape (at most three sentences, then one
-    question), the content answer capped at two sentences with no reading plan, and the 60 words
-    repeated under FORMAT. 22 turns, $0.49, `next-steps-261012f-after2.json`.
+  - **after2**: the system wording chosen for shipping — a concrete shape (at most three sentences,
+    then one question), the content answer capped at two sentences with no reading plan, and the 60
+    words repeated under FORMAT. 22 turns, $0.49, `next-steps-261012f-after2.json`.
 - `npx tsx evals/guide/run.ts --runs 1` (tools off, both fixture articles, the eight cases of
-  [261007a](261007a-the-guide-prompt-first-measurement.md)) on the shipped wording: 16 turns,
+  [261007a](261007a-the-guide-prompt-first-measurement.md)) on that system wording: 16 turns,
   $0.41, `run-…261012f-after.json` beside the previous run, `261011m-buttons-only.json`.
+
+Code review found that both after runs also received the guide's final per-turn reminder saying
+*under 100 words*, left over from the old prompt (`lengthLine` in `src/converse.ts`). The reviewed
+code now says *under 60 words* there too. These runs therefore measure the new system wording with
+a contradictory old reminder, not the final prompt byte for byte; their length result is
+conservative evidence for the change. **final** is the same eval on the reviewed prompt, byte for
+byte, reminder included: 22 turns, $0.48, `next-steps-261012f-final.json`.
 
 No control arm (the old prompt run twice): the effects below are a step change in a count, not a
 judgement between two similar texts, and the next-steps eval's earlier runs give the spread.
@@ -30,14 +37,14 @@ judgement between two similar texts, and the next-steps eval's earlier runs give
 
 The 20 turns common to all three arms of the next-steps eval:
 
-| | before | after | after2 (shipped) |
-|---|---|---|---|
-| median words, all answers | 105 | 94 | **66** |
-| median words, content questions | 104 | 97 | **43** |
-| median words, reading questions | 114 | 93 | **72** |
-| answers over 60 words | 20 / 20 | 19 / 20 | 12 / 20 |
-| content questions with a `chat` step | 0 / 6 | 6 / 6 | **6 / 6** |
-| reading questions with a `chat` step | 0 / 14 | 0 / 14 | **0 / 14** |
+| | before | after | after2 (new system wording) | final (shipped) |
+|---|---|---|---|---|
+| median words, all answers | 105 | 94 | 66 | **55** |
+| median words, content questions | 104 | 97 | 43 | **43** |
+| median words, reading questions | 114 | 93 | 72 | **58** |
+| answers over 60 words | 20 / 20 | 19 / 20 | 12 / 20 | 6 / 20 (none over 68) |
+| content questions with a `chat` step | 0 / 6 | 6 / 6 | 6 / 6 | **6 / 6** |
+| reading questions with a `chat` step | 0 / 14 | 0 / 14 | 0 / 14 | **0 / 14** |
 
 - **The hand-off works, and on the first wording.** Every content turn offered exactly one `chat`
   step, its words the reader's question with the author's name filled in ("Why does Anil Seth think
@@ -49,8 +56,9 @@ The 20 turns common to all three arms of the next-steps eval:
 - **The length needed a shape, not a number.** "Under 60 words" alone moved the median from 105 to
   94. Saying what an answer is (three sentences, then a question), that a content answer stops
   after two sentences, and repeating the number under FORMAT brought it to 66, and content answers
-  to 43. Reading answers still run a little over 60 (median 72); the eval scores over 80 as long
-  and 3 of 14 were.
+  to 43. The per-turn reminder still said 100 words in those runs; with it corrected (**final**)
+  the median is 55, reading answers 58, and no answer is over 68. The only failures left are the
+  two *search* turns below.
 - **The broader eval agrees**: median 64 words against 103 on the previous run (261011m), none over
   120. Its failures are the ones it had before: *first* fails a regex for "an introduction to the
   app" while both answers do introduce the bottom bar, *expert* has no inline button (the next

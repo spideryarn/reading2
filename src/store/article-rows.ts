@@ -29,6 +29,7 @@ import {
   articleRevisions,
   articles,
   blockIdentities,
+  chatMentions,
   chatMessages,
   chatThreads,
   citationFinds,
@@ -168,6 +169,21 @@ export const ARTICLE_TABLE_COVERAGE = {
   },
   chat_messages: {
     rollback: { exported: true, into: "chat.json" },
+    bundle: { exported: true, into: "augmentations/chat.json" },
+  },
+  /* The other articles a question brought into its conversation (plan
+     261012d § 5): the reference and the title snapshot, never the mentioned
+     article's text, nested under the question in chat.json. */
+  chat_mentions: {
+    rollback: {
+      exported: false,
+      why:
+        "The rollback's chat.json is pinned byte for byte against what the filesystem " +
+        "store wrote (tests/store-roundtrip.test.ts), and that store had no mentions: a " +
+        "relation table cannot ride in it as a field without changing that format. A " +
+        "mention is also a pointer to another article by its database id, which a rollback " +
+        "to data/<slug>/ has nothing to resolve against. The reader's zip carries them.",
+    },
     bundle: { exported: true, into: "augmentations/chat.json" },
   },
   search_runs: {
@@ -727,6 +743,11 @@ export interface ArticleRows {
    * so filtering to one thread leaves that thread's messages in order.
    */
   readonly chatMessages: readonly (typeof chatMessages.$inferSelect)[];
+  /**
+   * Every @-mention on every question, flat. Ordered by thread, question and
+   * position, so filtering to one question leaves its mentions in order.
+   */
+  readonly chatMentions: readonly (typeof chatMentions.$inferSelect)[];
   readonly searchRuns: readonly (typeof searchRuns.$inferSelect)[];
   readonly refereeCriteria: readonly (typeof refereeCriteria.$inferSelect)[];
   /**
@@ -929,6 +950,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(chatMessages)
     .where(eq(chatMessages.articleId, article.id))
     .orderBy(asc(chatMessages.threadId), asc(chatMessages.ordinal));
+  const mentions = await tx
+    .select()
+    .from(chatMentions)
+    .where(eq(chatMentions.articleId, article.id))
+    .orderBy(asc(chatMentions.threadId), asc(chatMentions.messageId), asc(chatMentions.position));
   const runs = await tx
     .select()
     .from(searchRuns)
@@ -1008,6 +1034,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     comments,
     chatThreads: threads,
     chatMessages: messages,
+    chatMentions: mentions,
     searchRuns: runs,
     refereeCriteria: criteria,
     refereePromises: promises,
@@ -1040,4 +1067,13 @@ export function messagesOfThread(
   threadId: string,
 ): readonly (typeof chatMessages.$inferSelect)[] {
   return rows.chatMessages.filter((message) => message.threadId === threadId);
+}
+
+/** One question's @-mentions, in the order it named them. */
+export function mentionsOfMessage(
+  rows: ArticleRows,
+  threadId: string,
+  messageId: string,
+): readonly (typeof chatMentions.$inferSelect)[] {
+  return rows.chatMentions.filter((m) => m.threadId === threadId && m.messageId === messageId);
 }

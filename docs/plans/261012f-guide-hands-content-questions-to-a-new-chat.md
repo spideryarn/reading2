@@ -138,3 +138,18 @@ new. Written up in
   so it would get a question it cannot answer. The words are shown in full on the button, the
   reader presses it, and it goes to Chat, which reads the same untrusted article anyway; the cap and
   the hostile case bound the rest.
+
+## Built, reviewed, seen
+
+- **GPT Sol's code review**: [261012f-code-review-sol.md](261012f-code-review-sol.md), **LAND WITH
+  FIXES**, fixed in the stage: a double press could mint two chats (now one latch and a disabled
+  button); the per-turn reminder (`lengthLine`) still said 100 words; a long unbroken question could
+  overflow; an exact duplicate chat step was dropped without saying so; chat-tools.md's limits. The
+  reminder fix got its own paid rerun (*final* in
+  [261012a](../investigations/261012a-guide-hands-off-to-chat-and-shorter-measured.md)): median 55
+  words, chat step on 6/6 content turns and 0/14 reading turns.
+- **In a browser** on the box (local dev, Noema essay): a reading question drew the *Next steps*
+  heading and no orange button; a content question drew a ~55-word answer and *Ask in Chat* first;
+  the press opened a new chat whose first message was the button's words, an answer streamed, and
+  the guide stayed pinned with its turns; at 390px the button wraps to four lines with no page
+  scroll. Screenshots `261012f-shot-*.png`.

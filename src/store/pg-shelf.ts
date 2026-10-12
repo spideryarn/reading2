@@ -488,11 +488,12 @@ const rawPgShelfStore: ShelfStore = {
    *
    * ## What survives, deliberately
    *
-   * The five `on delete set null` tables keep their rows with a null
-   * `article_id`: `ai_calls` and `ingest_events` because the ledger outlives
-   * everything, `article_visibility_changes` and `article_share_link_events`
-   * because takedown evidence about a document we no longer serve is exactly
-   * what a late complaint needs, and `realtime_sessions`. The `uploads` row survives too, with a stale `slug`
+   * Six kinds of reference survive: the five `article_id` columns on
+   * `ai_calls`, `ingest_events`, `article_visibility_changes`,
+   * `article_share_link_events` and `realtime_sessions` are set to null, and a
+   * `chat_mentions.mentioned_article_id` is set to null so the conversation
+   * keeps the title it was sent with. The first two are ledgers; the middle
+   * three are audit trails. The `uploads` row survives too, with a stale `slug`
    * and no foreign key at all — the column has no unique index, so it dangles
    * harmlessly. **The terminal `jobs` rows do not survive**: they carry the
    * attempt's own slug and URL, which is a live Retry button pointing at a

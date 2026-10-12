@@ -158,6 +158,7 @@ async function seed(
  */
 async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStateTable>> {
   const thread = mintId();
+  const message = mintId();
   const criterion = mintId();
   const q = (text: string, values: unknown[]) => pool.query(text, values);
   await q(
@@ -177,7 +178,12 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
   await q(
     `insert into spideryarn.chat_messages (article_id, thread_id, id, ordinal, role, text, status)
      values ($1, $2, $3, 0, 'user', 'my question', 'done')`,
-    [a.id, thread, mintId()],
+    [a.id, thread, message],
+  );
+  await q(
+    `insert into spideryarn.chat_mentions (article_id, thread_id, message_id, position, mentioned_article_id, title)
+     values ($1, $2, $3, 0, null, 'an article I brought in')`,
+    [a.id, thread, message],
   );
   await q(
     `insert into spideryarn.quiz_attempts (article_id, batch_id, question_id, question, answer, reply)
@@ -234,7 +240,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
     [owner, a.id, a.block],
   );
   return new Set<ReaderStateTable>([
-    "referee_criteria", "comments", "chat_threads", "chat_messages", "quiz_attempts", "referee_promises",
+    "referee_criteria", "comments", "chat_threads", "chat_mentions", "chat_messages", "quiz_attempts", "referee_promises",
     "referee_hidden_checks", "sources_claim_checks", "search_runs", "article_tags", "glossary_hidden_entries",
     "glossary_lookups", "citation_finds", "citation_investigations", "reading_time", "stale_notice_dismissals",
     "command_suggestion_dismissals", "link_summaries",

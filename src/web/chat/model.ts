@@ -17,7 +17,18 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { AnswerEffort, ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ThreadOrigin, ToolRun } from "../../types.js";
+import type {
+  AnswerEffort,
+  ChatMessage,
+  ChatThread,
+  ChatThreadView,
+  Citation,
+  LiveEngine,
+  MentionedArticleView,
+  ThreadKind,
+  ThreadOrigin,
+  ToolRun,
+} from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -585,6 +596,17 @@ export interface ChatState {
    * mind. See `Held`.
    */
   unnamed: ReadonlySet<string>;
+  /**
+   * **The articles each conversation brought in**, by the server's thread id
+   * (plan 261012d § 4) — for the "Also reading" line and the citation chips
+   * into those articles. Beside `base` rather than on its rows, because it is
+   * not part of the stored thread: the server resolves it on every read, and
+   * every rule that merges rows (`mergedArrival`, `underneath`) would have to
+   * learn about a field it does not own. Written by `load.succeeded` and
+   * `turn.began`, the two places the server says it; `useChat` lays it over
+   * the projection as `ChatThreadView.mentioned`.
+   */
+  mentioned: ReadonlyMap<string, readonly MentionedArticleView[]>;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
   /** The next `seq`. In the state so that the reducer stays a pure function. */
@@ -600,6 +622,7 @@ export function initialState(slug: string): ChatState {
     repairDrops: new Map(),
     loadPhase: "loading",
     unnamed: new Set(),
+    mentioned: new Map(),
     error: null,
     nextSeq: 0,
   };
@@ -679,7 +702,7 @@ export type ChatInput =
  * it cannot be missing from a path, because there are no other paths.
  */
 export type ChatResult =
-  | { type: "load.succeeded"; opId: OpId; threads: readonly ChatThread[] }
+  | { type: "load.succeeded"; opId: OpId; threads: readonly ChatThreadView[] }
   | { type: "load.failed"; opId: OpId; error: string }
   | { type: "rename.succeeded"; opId: OpId }
   | { type: "rename.failed"; opId: OpId; error: string }
@@ -703,8 +726,9 @@ export type ChatResult =
   /**
    * The turn is over and there is nothing to recover.
    *
-   * The `error` frame inside a 200, a request that never opened, a non-2xx that
-   * is not a 409. `text` is the partial answer where the server sent one back;
+   * The `error` frame inside a 200, a request that never opened, or an
+   * uncertain non-2xx. A mention request's definite 4xx is `turn.refused`
+   * instead. `text` is the partial answer where the server sent one back;
    * what arrived is kept, because the reader watched it appear.
    *
    * **`repair` is for the one case that keeps nothing**: a retry or an edit
@@ -740,7 +764,8 @@ export type ChatResult =
       recovery: { id: OpId; until: number };
     }
   /**
-   * A 409: the server refused a turn this client had already performed.
+   * A definite HTTP refusal: a 409, or a mention request rejected before its
+   * stream opened. The server did not write this turn.
    *
    * **Dropping the turn and registering the repair is one transition**, because
    * they are one decision — this conversation on screen is wrong, drop what made
@@ -853,6 +878,13 @@ export interface Begun {
    * in src/routes.ts.
    */
   attempt?: string;
+  /**
+   * **The other articles this conversation holds at this question** (plan
+   * 261012d § 4), resolved by the server from the stored thread on this very
+   * turn. Omitted when there are none — which, on a chat, is a fact rather
+   * than silence, so `turn.began` forgets any it held for the conversation.
+   */
+  mentioned?: MentionedArticleView[];
 }
 
 /**
@@ -989,7 +1021,7 @@ export type ChatCommand =
 
 /** Either this article's conversations, or why they are not here. */
 export type ThreadsOutcome =
-  | { ok: true; threads: ChatThread[] }
+  | { ok: true; threads: ChatThreadView[] }
   | { ok: false; error: string };
 
 /** Either the write stuck, or why it did not. */

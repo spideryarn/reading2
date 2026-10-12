@@ -1,5 +1,5 @@
 ---
-keywords: ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore
+keywords: mention @ another article compare bring in ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore
 ---
 
 ## In short
@@ -62,6 +62,15 @@ conversation says which AI model answered it, and how hard it was asked to think
 **Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or
 remove a tag, look a term up in the glossary, or show where the article first says something.
 Nothing happens until you press the button; Chat cannot do any of these itself.
+
+**Bringing in another of your articles.** Type <kbd>@</kbd> and start typing a title to pick one of
+your own articles, archived ones included; it goes into a **Bringing in** row above the box, and ×
+takes it out again. Once you send, that conversation has the whole of the other article to hand,
+and a line at the top says **Also reading**. When an answer relies on it, the short code shows that
+article's name with an arrow, and opens it at the paragraph. Up to three articles can be brought
+into one conversation, each up to about 120,000 characters (a long book chapter is more); a longer
+one is refused, and your question stays in the box. To compare with a file, add it to your shelf
+first, then bring it in once it is ready.
 
 **The guide.** The **Guide** row pinned at the top of the list, with a compass, is a conversation about how to read
 this article with Spideryarn, rather than about what it says. A new article opens on it when there

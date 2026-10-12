@@ -45,8 +45,9 @@ export interface AdminArticles {
  * **What a transfer deletes: the old owner's own words and activity on the
  * article** (D2 step 5), one entry per table, in the order the transfer
  * deletes them — `comments` first, because a comment can point at a Referee
- * criterion and that foreign key does not cascade; `chat_messages` before
- * their threads, so each is counted rather than taken by the cascade.
+ * criterion and that foreign key does not cascade; `chat_mentions` before
+ * their messages, and `chat_messages` before their threads, so each is
+ * counted rather than taken by a cascade.
  *
  * `ownWords` splits the kinds the way D3 needs: a starter article moves on a
  * voucher's claim only when the creator has **none of their own words** on it
@@ -61,6 +62,7 @@ export interface AdminArticles {
  */
 export const READER_STATE = [
   { table: "comments", label: "questions and notes", ownWords: true },
+  { table: "chat_mentions", label: "articles brought into chats", ownWords: false },
   { table: "chat_messages", label: "chat messages", ownWords: true },
   { table: "chat_threads", label: "chats", ownWords: true },
   { table: "quiz_attempts", label: "quiz answers", ownWords: true },

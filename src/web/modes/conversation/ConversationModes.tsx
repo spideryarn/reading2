@@ -1300,8 +1300,17 @@ export function ConversationBand({
        transcript. */
     const sendKind: ThreadKind = as ?? threads.find((t) => t.id === to)?.kind ?? kind;
     const origin = sendKind === "chat" ? pendingOrigin(to) : undefined;
+    /* The list's composer would otherwise unmount at once and take its picked
+       chips with it. A mentioned first question stays there until `begin`; a
+       pre-stream refusal restores its words in that same composer. */
+    const waitsForMentionBegin = to === null && sendKind === "chat" && how?.mentions !== undefined;
     const id = send(to, question, at, {
-      onThreadId: (corrected) => void setThread(corrected),
+      ...(waitsForMentionBegin
+        ? {
+            onBegun: (confirmed: string) => void setThread(confirmed),
+            onUnconfirmed: (local: string) => void setThread(local),
+          }
+        : { onThreadId: (corrected: string) => void setThread(corrected) }),
       ...((first || (origin && to)) ? {
         /* Data survives a mode change; URL navigation above does not. */
         onConfirmed: (confirmed: string) => {
@@ -1337,12 +1346,15 @@ export function ConversationBand({
       /* How the composer saw the words arrive, for every kind: stored on the
          question's row (report spya-z30x5n). */
       ...(how?.modality ? { modality: how.modality } : {}),
+      /* The articles picked with an `@`: a chat's alone, as the server
+         insists (plan 261012d). */
+      ...(sendKind === "chat" && how?.mentions ? { mentions: how.mentions } : {}),
     });
     /* Something has now been sent to it, so it is no longer a conversation
        the arrival rule may begin again — whatever is typed into its box
        afterwards, and whether or not this write ever lands. */
     drafts.submitted(id);
-    if (id !== to) void setThread(id);
+    if (id !== to && !waitsForMentionBegin) void setThread(id);
   };
   sendToRef.current = sendTo;
 
@@ -1438,16 +1450,11 @@ export function ConversationBand({
         if (resettingNow.current) return;
         heldOnList.current = null;
         /* `null` for the thread, so this mints a new one — and therefore this
-           mode's kind, not any open conversation's. */
-        const id = send(null, question, at, {
-          onThreadId: (corrected) => void setThread(corrected),
-          kind,
-          ...(onScreen ? { visible: onScreen() } : {}),
-          /* The list owns a real Composer too; keep the provenance it saw
-             instead of losing the second callback argument at this adapter. */
-          ...(how?.modality ? { modality: how.modality } : {}),
-        });
-        void setThread(id);
+           mode's kind, not any open conversation's. Through `sendTo`, rather
+           than a second copy of its wiring: a mentioned first question must
+           stay in this composer until `begin`, so a definite refusal can put
+           its words back beside its chips. */
+        sendTo(null, question, undefined, kind, how);
         /* **Not on a soft keyboard.** The send lets go of the keys there so
            the answer can be read (useVisualViewport.ts § `putKeyboardAway`),
            and a raised nonce would have the replacement composer take focus

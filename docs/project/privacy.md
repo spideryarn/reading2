@@ -396,7 +396,13 @@ with the article pointer set to null: `ai_calls` (the spend ledger outlives ever
 no content), `ingest_events` (the billing slot is **not** refunded — deleting does not give a slot
 back, [billing.md](billing.md)), `article_visibility_changes` (takedown evidence about a document we
 no longer serve, changed from `cascade` to `set null` *for* this feature), and `feedback` rows
-naming the slug. None of them holds the article's text — though the Sentry copy of a consented bug
+naming the slug. A fifth is not under the deleted article at all: a chat on **another** of the
+reader's articles that brought this one in by @-mention keeps its mention row, pointer nulled,
+with the title as it was when mentioned, so the conversation can say *No longer available*
+([261012d](../plans/261012d-chat-at-mention-your-own-articles.md)). That conversation is the
+reader's own, on an article they still have, and its answers may quote the deleted article — as
+any chat answer that used `search_library` already could. The page says so. None of the first
+four holds the article's text — though the Sentry copy of a consented bug
 report may, until Sentry's own retention ages it out (§ What a bug report carries). The page names
 that copy on its own, as the fourth thing an erasure cannot reach, rather than leaving it inside
 "our providers' own logs" — a whole article is not a log line. GPT Sol, 2026-09-13.

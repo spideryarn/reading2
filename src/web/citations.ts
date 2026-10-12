@@ -25,6 +25,7 @@
 import { ID_PATTERN, ID_PREFIX } from "../ids.js";
 import { citableText } from "../citable.js";
 import { webLinks } from "../urls.js";
+import type { MentionedArticleView } from "../types.js";
 
 /**
  * Whatever can answer "is this one of the article's blocks?".
@@ -38,8 +39,79 @@ export interface Known {
   has(id: string): boolean;
 }
 
-/** A run of prose, or a run of ids the model cited together. */
-export type Segment = { kind: "text"; text: string } | { kind: "cite"; ids: string[] };
+/**
+ * **Another of the reader's articles, brought into this conversation**, as a
+ * citation chip needs it: where to go and what to call it. `href` is built
+ * from the server's slug and never from anything the model wrote.
+ */
+export interface CrossSource {
+  slug: string;
+  title: string;
+  /** `/read/<slug>`, without the block; the chip adds `?at=`. */
+  href: string;
+}
+
+/**
+ * **Which ids in an answer belong to a mentioned article**, and which belong to
+ * more than one article and so to none.
+ *
+ * Sol's F1 on plan 261012d: a block id is unique within its article and not
+ * across them — an import can carry an existing `spya-…` id
+ * (docs/project/block-ids.md). So an id names an article only when exactly one
+ * of the open article and the mentioned ones has it; otherwise it stays text,
+ * because a chip that might open the wrong article is worse than none.
+ */
+export interface CrossArticles {
+  /** Ids found in exactly one mentioned article and not in the open one. */
+  byId: ReadonlyMap<string, CrossSource>;
+  /** Ids found in two or more of the open article and the mentioned ones. */
+  ambiguous: ReadonlySet<string>;
+}
+
+/** Nothing brought in: every id is the open article's or nobody's, as before. */
+export const NO_CROSS: CrossArticles = { byId: new Map(), ambiguous: new Set() };
+
+/**
+ * Build the map from the open article's blocks and the server's list of the
+ * articles this conversation brought in (`mentioned` on the thread). Only an
+ * **available** one is read — an unavailable one carries no slug and no ids,
+ * by construction (`MentionedArticleView` in src/types.ts).
+ *
+ * `hrefOf` is the router's `readHref`, passed in so this file stays DOM-free.
+ */
+export function crossArticles(
+  open: Known,
+  mentioned: readonly MentionedArticleView[] | undefined,
+  hrefOf: (slug: string) => string,
+): CrossArticles {
+  if (!mentioned || mentioned.length === 0) return NO_CROSS;
+  const byId = new Map<string, CrossSource>();
+  const ambiguous = new Set<string>();
+  for (const m of mentioned) {
+    if (!m.available) continue;
+    const source: CrossSource = { slug: m.slug, title: m.title, href: hrefOf(m.slug) };
+    for (const id of new Set(m.blockIds)) {
+      if (ambiguous.has(id)) continue;
+      const other = byId.get(id);
+      if (open.has(id) || (other && other.slug !== source.slug)) {
+        byId.delete(id);
+        ambiguous.add(id);
+        continue;
+      }
+      byId.set(id, source);
+    }
+  }
+  return { byId, ambiguous };
+}
+
+/**
+ * A run of prose, a run of the open article's ids the model cited together, or
+ * a run of one mentioned article's ids.
+ */
+export type Segment =
+  | { kind: "text"; text: string }
+  | { kind: "cite"; ids: string[] }
+  | { kind: "cross"; ids: string[]; source: CrossSource };
 
 /** A run of prose, or an address the model wants the reader to be able to press. */
 export type LinkRun =
@@ -145,12 +217,14 @@ const ID_SHAPED = /spya-[a-z0-9]{6}/g;
  *  - **Some are** — the usable ones come back as a citation and the rest are
  *    dropped. That loses a little of what the model literally said, chosen over
  *    printing a bogus id beside a working one, where it would read as a second
- *    link that happens to be broken.
+ *    link that happens to be broken. A run containing an ambiguous id is the
+ *    exception: the whole run remains text, because dropping a collision would
+ *    hide the fact that its source could not be established.
  *
  * Empty text segments are never emitted, so a paragraph that is nothing but a
  * citation does not come back with empty strings on either side of it.
  */
-export function splitCitations(para: string, known: Known): Segment[] {
+export function splitCitations(para: string, known: Known, cross: CrossArticles = NO_CROSS): Segment[] {
   const out: Segment[] = [];
   let last = 0;
   const push = (text: string) => {
@@ -160,10 +234,22 @@ export function splitCitations(para: string, known: Known): Segment[] {
   for (const match of para.matchAll(CITED)) {
     /* Deduplicated, because a model that writes `[spya-k3m9qt spya-k3m9qt]`
        would otherwise get two identical chips — and, since the chips are keyed
-       by id, two React children with the same key. */
+       by id, two React children with the same key.
+
+       An id more than one article has is not usable at all (`CrossArticles`),
+       not even as the open article's: which one the model meant is exactly
+       what nobody can tell. */
+    const shaped = match[0].match(ID_SHAPED) ?? [];
+    /* A collision is evidence that this whole citation run has no unambiguous
+       provenance. Keep the run exactly as the model wrote it, rather than
+       linking its other ids while silently deleting the colliding one. */
+    if (shaped.some((id) => cross.ambiguous.has(id))) continue;
     const usable = [
       ...new Set(
-        (match[0].match(ID_SHAPED) ?? []).filter((id) => ID_PATTERN.test(id) && known.has(id)),
+        shaped.filter(
+          (id) =>
+            ID_PATTERN.test(id) && !cross.ambiguous.has(id) && (known.has(id) || cross.byId.has(id)),
+        ),
       ),
     ];
     // Left where it is, and `last` deliberately not advanced — the run stays
@@ -171,7 +257,17 @@ export function splitCitations(para: string, known: Known): Segment[] {
     if (usable.length === 0) continue;
     push(para.slice(last, match.index));
     last = match.index + match[0].length;
-    out.push({ kind: "cite", ids: usable });
+    /* One run, split by article in the order each first appears: the open
+       article's ids as they always were, each mentioned article's as its own. */
+    const groups = new Map<string, Exclude<Segment, { kind: "text" }>>();
+    for (const id of usable) {
+      const source = known.has(id) ? undefined : cross.byId.get(id);
+      const key = source ? `x:${source.slug}` : "open";
+      const group = groups.get(key);
+      if (group) group.ids.push(id);
+      else groups.set(key, source ? { kind: "cross", ids: [id], source } : { kind: "cite", ids: [id] });
+    }
+    out.push(...groups.values());
   }
   push(para.slice(last));
   return out;

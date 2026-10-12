@@ -1,7 +1,7 @@
 ---
 reports: spya-skpxw2
 ending: awaiting
-comment: Yes, as one of your articles attached to a chat as a source, with claims you can check; not a file dropped into the model. Planned, not built: which shape, and a security go-ahead, are open.
+comment: Part built: type @ in Chat to bring in one of your articles, so an uploaded file can be brought in once it is an article. Attachments that belong to an article are still a question for you.
 ---
 
 # Chat attachments (PDFs etc.)
@@ -30,3 +30,21 @@ by `feedback-reporter.ts` (exit 0). Queue item `qi-ghnqkf5v`. No addenda.
 The plan, with the options weighed, is
 [261011v](../plans/261011v-chat-attachments.md). The question is
 [q-jzx20h](questions/q-jzx20h.md).
+
+**2026-10-12, Greg's answer (`spya-zake3w`), and what came of it.**
+
+> Let's keep things simple. Maybe it's local to that chat for now? (and indicates that) / Or
+> better still, maybe there's a way to add attachments to an article … if it's really complicated
+> we should discuss.
+
+- **Built, with his @-mention report `spya-a63vmt`.** Shape A′ arrives as an @-mention of one of
+  his own articles, local to that conversation and shown in it.
+  See [261012_1006-chat-at-mention-your-articles.md](261012_1006-chat-at-mention-your-articles.md)
+  and [261012d](../plans/261012d-chat-at-mention-your-own-articles.md).
+- **Still awaiting.** "Attachments to an article" needs a new kind of thing stored with the article,
+  whichever shape it takes. Opus and Sol both cut a stand-in ("Upload a file…" into the shelf),
+  because it is not what he asked for. q-jzx20h now asks which shape:
+  - a hidden article tied to this one;
+  - a text addendum;
+  - photos of scribbles;
+  - nothing.

@@ -40,7 +40,7 @@ import type {
   ChatAnchor,
   ThreadOrigin,
   ChatMessage,
-  ChatThread,
+  ChatThreadView,
   ComposerModality,
   LiveEngine,
   ThreadKind,
@@ -67,6 +67,7 @@ import {
   stopAnswer,
 } from "./chat/effects.js";
 import { useMadeFor } from "./lib/made-for.js";
+import type { MentionsToSend } from "./mentions.js";
 import { asOpId, isNamed, isSettled, writerOf } from "./chat/model.js";
 
 /* `mergedArrival`, `withoutEmpty` and `withServerIds` live in ./chat/model.ts,
@@ -146,6 +147,17 @@ export interface SendOptions {
    */
   onThreadId?: (id: string) => void;
   /**
+   * The server began the turn, whether or not it changed the optimistic thread
+   * id. Navigation-only: unlike `onConfirmed`, detached with the panel.
+   */
+  onBegun?: (id: string) => void;
+  /**
+   * A first turn ended before `begin` without a definite refusal. Its local
+   * failed thread, rather than the composer, owns the question now.
+   * Navigation-only: detached with the panel.
+   */
+  onUnconfirmed?: (id: string) => void;
+  /**
    * The passage this conversation is about — **only on the send that creates
    * the thread**. The server 409s an anchor for a thread that already has a
    * different one, rather than quietly ignoring it.
@@ -215,10 +227,25 @@ export interface SendOptions {
    * line. Omitted when empty. docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
    */
   visible?: readonly BlockId[];
+  /**
+   * **Other articles of the reader's, brought in with an @-mention** — the
+   * composer's "Bringing in" row, not the words in the box (plan 261012d § 1).
+   * A typed Chat's new question only: the server refuses it on a retry, an
+   * edit and any other kind, so `retry` and `edit` here have no such field.
+   * `onAccepted` runs once the server has begun the turn, which is when the
+   * row may empty; a refused question leaves it as it was, and one that ended
+   * before `begin` without a refusal empties it without its words.
+   */
+  mentions?: MentionsToSend;
 }
 
 export interface ChatApi {
-  threads: ChatThread[];
+  /**
+   * Each with `mentioned` laid over it where the conversation brought other
+   * articles in (`ChatState.mentioned`). A `ChatThreadView` is a `ChatThread`,
+   * so every reader of the plain shape still works.
+   */
+  threads: ChatThreadView[];
   /**
    * Has the first fetch come back?
    *
@@ -492,6 +519,18 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     controller.subscribe,
     controller.getSnapshot,
   );
+  /* `mentioned` laid over the projection, a new object only for a thread that
+     has some, so every other row keeps its identity. `ChatState.mentioned`. */
+  const withMentioned = useMemo(
+    (): readonly ChatThreadView[] =>
+      state.mentioned.size === 0
+        ? threads
+        : threads.map((t) => {
+            const mentioned = state.mentioned.get(t.id);
+            return mentioned ? { ...t, mentioned: [...mentioned] } : t;
+          }),
+    [threads, state.mentioned],
+  );
 
   /**
    * The one fetch that fills the list — an operation, which is the whole reason
@@ -520,7 +559,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     /* **And when this hook goes, its navigation callbacks go with it.** The controller
        outlives it on purpose — the stream still holds it, so a cancel waiting
        for the `begin` frame is still sent after the panel closed — but
-       `onThreadId` is the panel's own `setThread`, and calling that from a
+       the navigation callbacks are the panel's own state setters, and calling one from a
        conversation the reader has left reopens or repoints whatever they are
        looking at now. What the controller decides for itself survives; what it
        was doing on somebody else's behalf does not. Data-only draft
@@ -730,7 +769,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, origin, kind, help, typed, modality, sourceCommentId, visible } = opts;
+      const { onThreadId, onBegun, onUnconfirmed, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -840,11 +879,31 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
             ...(typed ? { typed: true as const } : {}),
             ...(modality ? { modality } : {}),
             ...(sourceCommentId ? { sourceCommentId } : {}),
+            /* The chips, as slugs. Never read from the question's text. */
+            ...(mentions && mentions.slugs.length > 0 ? { mentions: [...mentions.slugs] } : {}),
           },
         },
         onThreadId,
-        opts.onConfirmed,
+        /* The row empties when the server has begun the turn — the `begin`
+           frame comes after the route admitted every mention — and not before,
+           so a refused question keeps its articles for the next try. */
+        mentions && mentions.slugs.length > 0
+          ? (confirmed: string) => {
+              opts.onConfirmed?.(confirmed);
+              mentions.onAccepted();
+            }
+          : opts.onConfirmed,
         opts.onGone,
+        onBegun,
+        mentions?.onRefused,
+        /* An ended request with no refusal lets the composer go too, in any
+           thread: a follow-up has no navigation of its own to do it. */
+        mentions?.onUnconfirmed
+          ? (local: string) => {
+              mentions.onUnconfirmed?.();
+              onUnconfirmed?.(local);
+            }
+          : onUnconfirmed,
       );
       return id;
     },
@@ -1066,7 +1125,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     /* `ChatApi` promises a plain array and nothing mutates it — ChatPanel
        copies before it sorts. The projection is `readonly` so that the reducer
        cannot be handed something it might write to. */
-    threads: threads as ChatThread[],
+    threads: withMentioned as ChatThreadView[],
     /* Derived, not stored. "We have asked" is true of both the answers a load
        can come back with, and only `loading` is neither. */
     loaded: state.loadPhase !== "loading",

@@ -49,7 +49,7 @@ measured with scripted readers and a blind judge:
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.
 - [261012a](../investigations/261012a-guide-hands-off-to-chat-and-shorter-measured.md) — the guide
   hands a content question to a new Chat (6 of 6 content turns, none of 14 reading turns) and says
-  less: median 105 words to 66 on the next-steps eval, 103 to 64 on the broader one.
+  less: median 105 words to 55 on the next-steps eval, 103 to 64 on the broader one.
 - [261011a](../investigations/261011a-the-guide-offers-buttons-only-measured.md) — the guide told
   it never opens a mode itself: no answer claimed to have opened one (against 3 of 12 on the old
   prompt), and fewer inline mode buttons in the *expert* case; the eval's empty answers predate it.
