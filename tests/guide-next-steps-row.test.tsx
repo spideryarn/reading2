@@ -22,11 +22,12 @@ vi.mock("../src/web/router.js", async (importOriginal) => {
 });
 
 const { ChatCommands } = await import("../src/web/CommandChip.js");
-const { GuideNextSteps, STEP_WORDS } = await import("../src/web/GuideNextSteps.js");
+const { GuideNextSteps, STEP_WORDS, inDrawOrder } = await import("../src/web/GuideNextSteps.js");
 
 let host: HTMLDivElement;
 let root: Root;
 const sent: string[] = [];
+const chats: string[] = [];
 
 beforeEach(() => {
   host = document.createElement("div");
@@ -34,6 +35,7 @@ beforeEach(() => {
   root = createRoot(host);
   went.length = 0;
   sent.length = 0;
+  chats.length = 0;
 });
 
 afterEach(() => {
@@ -57,13 +59,23 @@ const answer = (tools: ToolRun[], over: Partial<ChatMessage> = {}): ChatMessage 
   ({ id: "spya-ans001", role: "assistant", text: "Start with the abstract.", createdAt: "2026-10-09T09:00:00.000Z", status: "done", tools, ...over }) as ChatMessage;
 const offered = (steps: unknown): ToolRun => ({ name: "offer_next_steps", label: "offered next steps", status: "done", steps } as ToolRun);
 
-function paint(message: ChatMessage | undefined, runners = spies()): ReturnType<typeof spies> {
+function paint(
+  message: ChatMessage | undefined,
+  runners = spies(),
+  onChat: ((w: string) => void) | null = (w) => chats.push(w),
+): ReturnType<typeof spies> {
   const executor: CommandExecutor = { runners, sources: { modes: MODES } };
   act(() => {
     root.render(
       createElement(ChatCommands, {
         executor,
-        children: createElement(GuideNextSteps, { slug: "a-piece", message, blocks: BLOCKS, onAsk: (w: string) => sent.push(w) }),
+        children: createElement(GuideNextSteps, {
+          slug: "a-piece",
+          message,
+          blocks: BLOCKS,
+          onAsk: (w: string) => sent.push(w),
+          onChat: onChat ?? undefined,
+        }),
       }),
     );
   });
@@ -82,6 +94,43 @@ describe("the guide's next steps", () => {
     expect(sent).toEqual(["Help me pick what to read closely"]);
   });
 
+  /* Plan 261012f: a content question goes to a fresh Chat, first and in orange. */
+  it("draws a chat step first, as the one Ask in Chat button, and a press starts a Chat with its words", () => {
+    paint(
+      answer([
+        offered([
+          { kind: "ask", words: "Where should I start?" },
+          { kind: "chat", words: "Why does he think consciousness is not computation?" },
+        ]),
+      ]),
+    );
+    const chat = host.querySelector<HTMLButtonElement>("button.guide-next-chat");
+    expect(chat?.textContent).toBe(`${STEP_WORDS.chat} Why does he think consciousness is not computation?`);
+    expect(host.querySelector("li")?.querySelector("button.guide-next-chat")).toBe(chat);
+    expect(host.querySelectorAll("button.guide-next-chat")).toHaveLength(1);
+    expect(chats).toEqual([]);
+    act(() => chat?.click());
+    expect(chats).toEqual(["Why does he think consciousness is not computation?"]);
+    expect(sent).toEqual([]);
+  });
+
+  it("draws no chat step where nothing can start a Chat", () => {
+    paint(answer([offered([{ kind: "chat", words: "Why?" }, { kind: "share" }])]), spies(), null);
+    expect(host.querySelector("button.guide-next-chat")).toBeNull();
+    expect(byText(STEP_WORDS.share)).toBeDefined();
+  });
+
+  it("heads the row Next steps, visibly", () => {
+    paint(answer([offered([{ kind: "share" }])]));
+    expect(host.querySelector("fieldset.guide-next-steps > legend")?.textContent).toBe("Next steps");
+  });
+
+  it("puts chat first and keeps the rest in the model's order", () => {
+    expect(
+      inDrawOrder([{ kind: "share" }, { kind: "ask", words: "a" }, { kind: "chat", words: "b" }]).map((s) => s.kind),
+    ).toEqual(["chat", "share", "ask"]);
+  });
+
   it("draws a mode as its chip, which opens only on a press", async () => {
     const runners = paint(answer([offered([{ kind: "mode", mode: "submode:summary:brief" }])]));
     await act(async () => {});
@@ -94,7 +143,7 @@ describe("the guide's next steps", () => {
 
   it("draws no group at all when every step is a mode this page will not open", () => {
     paint(answer([offered([{ kind: "mode", mode: "mode:debate" }])]));
-    expect(host.querySelector('[aria-label="Next steps"]')).toBeNull();
+    expect(host.querySelector("fieldset.guide-next-steps")).toBeNull();
   });
 
   it("draws nothing for a mode this page will not open, rather than its raw token", () => {

@@ -52,7 +52,9 @@ describe("web search", () => {
   it("is Chat's to do when the guide is asked about the world, and the guide says so", () => {
     const guide = flat(systemOf("guide"));
     expect(guide).toContain("Chat can do what you cannot: search the web and open a page");
-    expect(guide).toMatch(/offer Chat as one of your next steps/);
+    /* Since plan 261012f, as a chat step carrying their question, rather than Chat's list. */
+    expect(guide).toMatch(/offer a chat step carrying their question/);
+    expect(checkNextStep({ kind: "chat", words: "What have others said about it?" })).toEqual({ kind: "chat", words: "What have others said about it?" });
     expect(checkNextStep({ kind: "mode", mode: "mode:chat" }, guideModeKeys())).toEqual({
       kind: "mode",
       mode: "mode:chat",

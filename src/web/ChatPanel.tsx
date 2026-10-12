@@ -788,6 +788,10 @@ export function ChatPanel({
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
           articleTitle={articleTitle}
+          /* Only the guide offers it, and only Chat's band opens the guide, so
+             `onSendNew` mints a `chat` conversation here, never a guide turn:
+             `send(null, …)` with the band's kind (ConversationModes.tsx). */
+          onChatNew={open.kind === "guide" ? (question) => onSendNew(question) : undefined}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -1523,6 +1527,7 @@ export function Conversation({
   live,
   onStartLive,
   articleTitle,
+  onChatNew,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
@@ -1569,6 +1574,12 @@ export function Conversation({
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
+  /**
+   * **Begin a fresh Chat with this as its first question, and send it** — the
+   * guide's *Ask in Chat* step (GuideNextSteps.tsx, plan 261012f). Chat's band
+   * passes its list box's `onSendNew`; absent elsewhere.
+   */
+  onChatNew?: ((question: string) => void) | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   /* **The guide's greeting** (plan 261009i): drawn only by a conversation
@@ -2083,7 +2094,13 @@ export function Conversation({
             (GuideNextSteps.tsx, plan 261009u). Not while a turn is out: the
             buttons would be for the answer before it. */}
         {kind === "guide" && !busy && (
-          <GuideNextSteps slug={slug} message={thread.messages.at(-1)} blocks={blocks} onAsk={(q) => onSend(q)} />
+          <GuideNextSteps
+            slug={slug}
+            message={thread.messages.at(-1)}
+            blocks={blocks}
+            onAsk={(q) => onSend(q)}
+            onChat={onChatNew}
+          />
         )}
         {/* The spoken words still on their way to being saved, as the end of
             this same conversation. ./live/LiveTail.tsx. */}
