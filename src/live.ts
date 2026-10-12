@@ -449,8 +449,10 @@ export const SHOW_PASSAGE_TOOL = {
  * a prompt is one copy that will be updated.
  */
 export function liveTools(kind?: ThreadKind): unknown[] {
-  /* A guide is offered the typed guide's own tools (`toolsFor`): its article
-     only, no web — plan 261009i. Every other kind keeps the eight. */
+  /* A guide is offered `GUIDE_TOOLS`, its article only, no web — plan 261009i.
+     Not `toolsFor("guide")`: the typed guide adds `search_web` and its two
+     offers, none of which Live has (plan 261012g). Every other kind keeps the
+     eight. */
   return [
     SHOW_PASSAGE_TOOL,
     ...(kind === "guide" ? GUIDE_TOOLS : CHAT_TOOLS).map((t) => ({

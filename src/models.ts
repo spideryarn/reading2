@@ -966,8 +966,9 @@ export type Task =
    */
   | "dig-deeper-search"
   /**
-   * **`search_web`, a conversation's search subagent** — a forced Exa search
-   * on a small model that writes at most five `[title](url) — sentence` lines,
+   * **`search_web`, a conversation's search subagent** — a forced-search call
+   * through Exa on a small model that writes at most five
+   * `[title](url) — sentence` lines,
    * handed back to the guide as an ordinary tool result
    * (src/web-search-subagent.ts, plan 261012g). Its own job so the ledger shows
    * what a conversation's searches cost beside the answer they feed.

@@ -1186,7 +1186,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      (`link-summary`'s note) still buys about a thousand tokens of thinking;
      src/dig-deeper.ts § DIG_SEARCH_MAX_TOKENS is sized clear of it. */
   "dig-deeper-search": { effort: "low" },
-  /* Low: one search, then five lines from what came back. */
+  /* Low: one forced-search call, then five lines from what came back. */
   "web-search-subagent": { effort: "low" },
   "citation-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",

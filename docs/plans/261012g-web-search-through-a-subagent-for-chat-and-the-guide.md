@@ -3,7 +3,9 @@
 Owned by [plans.md](../project/plans.md). Queue item `qi-ht2wtjg8` (supersedes `qi-zvsky2aj`),
 session `fbvc6uzm-web-search-subagent`.
 
-**Status:** stages 1 and 2 done, 2026-10-12, on `dev`, not deployed; stage 3 is a question to Greg (q-madusw). Spikes done:
+**Status:** stages 1 and 2 are built in this worktree, 2026-10-12, not pushed or deployed; the
+stage-1 prompt was tightened in code review and still needs its repeat measurement before landing.
+Stage 3 is a question to Greg (q-madusw). Spikes done:
 [261012b](../investigations/261012b-web-search-subagent-spikes.md). GPT Sol's plan review:
 [261012g-plan-review-sol.md](261012g-plan-review-sol.md), *sound with fixes*; every finding was
 taken, and the one blocker (page-reading for the guide) became a question to Greg.
@@ -45,7 +47,7 @@ Two admin inputs, one piece of work. Both were proven Greg's (`feedback-reporter
 ```
  guide / Chat (Sonnet)                       search_web (ours)                  OpenRouter
  ─────────────────────                       ─────────────────                  ──────────
- calls search_web({query}) ───────────────▶  forced Exa search,  ────────────▶  Luna + Exa
+ calls search_web({query}) ───────────────▶  forced-search call, ────────────▶  Luna + Exa
                                              ≤5 results                        (one call, ~9 s)
                                              ◀──────── lines + annotations ────
                                              keep a line only if its URL came
@@ -71,10 +73,12 @@ Two admin inputs, one piece of work. Both were proven Greg's (`feedback-reporter
   - Registered in the seven places a job is: `AiJob`, the tier, `AI_JOB_WIRE`, the route table,
     effort, the cost category (*interactive request work*), and the model env override.
 - **What comes back to the caller**, built by us and not passed through from the model:
-  - each summary line is parsed. **It is kept only if its URL is one `collectSearchEvidence` kept**
-    (http(s) only, deduped). The title is the search's, not the model's. A line that fails is
-    dropped. If none survive, the result falls back to the annotations: title and URL only, with
-    no sentence.
+  - each summary line is parsed. **It is kept only if its URL identifies one
+    `collectSearchEvidence` kept** (http(s) only, deduped): exact, or differing only by a trailing
+    slash, query-parameter order or a known tracking parameter. We always return the annotation's
+    URL, never the model's spelling. The title is the search's, not the model's. A line that fails
+    is dropped. If none survive, the result falls back to the annotations: title, URL and up to
+    300 characters of the search's page extract.
   - The whole result is wrapped in `untrusted("web search results", …)`. The sentences are a
     model's paraphrase of strangers' pages, so they are a stranger's words for this purpose.
   - It ends with one line outside the fence. For a kind that has `read_web_page`, it says to call
@@ -87,7 +91,7 @@ Two admin inputs, one piece of work. Both were proven Greg's (`feedback-reporter
   `whereSearchCountCameFrom` witness), a timeout of 25 s, the provider refused. Each returns a short
   "the search did not run / found nothing; say so, do not answer from memory as if you had
   searched". The reader's stop (`ctx.signal`) aborts the call.
-- **Logging** (`src/log.ts`): host count, result count, ms, searches, model. **Never the query**,
+- **Logging** (`src/log.ts`): result counts, ms, searches, model and fixed failure classes. **Never the query**,
   the [chat-tools.ts](../../src/chat-tools.ts) rule.
 - **Label** for the run strip: `searched the web`. Detail: `N results`.
 - **Cost**: the call is made inside the chat route's `handleApi` collector, with the slug in the
@@ -98,8 +102,8 @@ Two admin inputs, one piece of work. Both were proven Greg's (`feedback-reporter
 
 ### Stage 1 — the guide searches through the subagent
 
-**Built 2026-10-12, on top of 261012f** (merged from its committed branch before it reached `dev`,
-so the measurement ran against the guide's real prompt). Measured in two runs of
+**First measured 2026-10-12, on top of 261012f** (merged from its committed branch before it
+reached `dev`, so the measurement ran against the guide's real prompt). Measured in two runs of
 `evals/chat-web-reach.ts --kind guide`: two articles, three how-to-read targets and two controls.
 Results: `evals/results/chat-web-reach-guide-search-web-261012g-*.json`.
 
@@ -113,11 +117,41 @@ Results: `evals/results/chat-web-reach-guide-search-web-261012g-*.json`.
 
 - **The 261011t failure is gone**: 7 of 7 turns that searched answered from the results, with
   links, and **none said it had not looked something up**.
-- **Against the bar set above**, "at least 5 of 6" targets searched, it did 7 of 12. Every miss
-  answered from the article where the article covers the question, and `search_web`'s own
-  description says not to search a question the article answers. That is the behaviour wanted, so
-  the bar was set wrong, not missed. It is recorded here rather than quietly lowered.
+- **It missed the bar set above.** Neither run reached "at least 5 of 6" targets searched: they
+  searched 3 of 6 and 4 of 6. The misses happened because `search_web` said not to search a
+  question the article answers, although an article's own byline and references are not outside
+  evidence about its author or what belongs beside it. Code review rejected the post-hoc claim
+  that the bar was wrong and changed the prompt and tool description to require search for all
+  three target classes, even when the piece gives its own account. That leans the way Greg's
+  2026-10-11 report did ("it's too strict and limiting to hobble the agent"), so it was taken.
+- **It also missed the guide's length rule.** All seven searching answers were 71–93 prose words,
+  against under 60. The revised prompt says that links and article pointers still count inside the
+  limit, and the eval now records word counts and an over-60 column so this cannot pass silently.
 - **Time**: a searching turn took 20–29 s, against 5–16 s for one that did not.
+
+**Re-measured after the code review's prompt**, two runs, `…-guide-search-web-261012g-sol-*.json`:
+
+| case | searched | over 60 words | mean words |
+|---|---|---|---|
+| `reception` | 4 of 4 | 4 of 4 | 79 |
+| `alongside` | 4 of 4 | 3 of 4 | 62 |
+| `author` | 4 of 4 | 4 of 4 | 78 |
+| `since` (control) | 0 of 4 | 4 of 4 | 70 |
+| `word` (control) | 0 of 4 | 1 of 4 | 54 |
+
+- **The bar is met**: 12 of 12 targets searched, 0 of 8 controls. Every searching answer linked
+  what it found, and none said it had not looked. Searching turns took 16–32 s.
+- **The length rule is not met, and not by search alone.** `since`, which never searches and is
+  261012f's own hand-off to Chat, runs 70 words on average and over 60 every time. So the guide as
+  a whole is not holding 261012f's new limit. A searching answer runs about ten words longer than
+  that, mostly its links. Session `fbes283p` (261012f's owner) pointed at the cause: the
+  hand-off's last sentence, "Then help with what you can…", invited a second paragraph. It is now
+  capped at one sentence.
+
+**After that cap**, one run, `…-guide-search-web-261012g-final-*.json`: targets 6 of 6 searched,
+controls 0 of 4; `since` fell from 70 to 44 words, and none was over 60. Searching answers stay
+about 75 words, with two or three links each. That is inside the 80-word slack 261012f's own eval
+allows, so it was left there.
 
 - `search_web` goes into `GUIDE_TYPED_TOOLS` (typed guide only). **Not `GUIDE_TOOLS`**, which Live
   is offered, and Live is its own item (`qi-vcza3y2f`). The guide's provider search stays `null`

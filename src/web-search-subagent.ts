@@ -2,8 +2,10 @@
  * **`search_web`: a conversation's web search, run by a subagent.**
  *
  * The model in the conversation calls `search_web({ query })`. This module
- * runs one forced Exa search on a small model (`web-search-subagent`, quick
- * tier). That model writes at most five `[title](url) — sentence` lines. What
+ * runs one forced-search model call on a small model (`web-search-subagent`,
+ * quick tier). The model may issue more than one Exa search request inside
+ * that call; two of the spike's six Luna calls did. It writes at most five
+ * `[title](url) — sentence` lines. What
  * goes back to the conversation is built here from those lines and from the
  * search's own annotations, and it arrives as an ordinary `tool` message.
  * Plan docs/plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md;
@@ -37,8 +39,14 @@
  * question in other words (src/chat-tools.ts § What may be logged).
  */
 
-import { type AiRequestBody, type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
-import { errorFields, log, since } from "./log.js";
+import {
+  type AiRequestBody,
+  type ChatJob,
+  type JsonCall,
+  ProviderRefused,
+  openRouterJson,
+} from "./ai-call.js";
+import { log, since } from "./log.js";
 import { type ModelPower, modelFor } from "./models.js";
 import { type Usage, collectSearchEvidence, whereSearchCountCameFrom } from "./openrouter-stream.js";
 import type { SearchEvidence } from "./types.js";
@@ -103,23 +111,68 @@ export interface WebResult {
   note: string;
 }
 
+/** Query parameters that identify a visit rather than a different page. */
+const TRACKING_PARAMETER = /^(?:utm_.+|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid)$/i;
+
+/**
+ * A conservative identity for matching the model's spelling back to a search
+ * annotation. The annotation's URL is always what we return. This only forgives
+ * the changes models routinely make while copying a result: a trailing slash,
+ * the order of query parameters, and known tracking parameters.
+ */
+function comparableUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+    for (const key of [...url.searchParams.keys()]) {
+      if (TRACKING_PARAMETER.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Exact first; a normalised match only when it identifies one searched URL. */
+function searchedEvidence(url: string, found: ReadonlyMap<string, SearchEvidence>): SearchEvidence | undefined {
+  const exact = found.get(url);
+  if (exact) return exact;
+  const comparable = comparableUrl(url);
+  if (comparable === null) return undefined;
+  let match: SearchEvidence | undefined;
+  for (const evidence of found.values()) {
+    if (comparableUrl(evidence.url) !== comparable) continue;
+    if (match !== undefined && match.url !== evidence.url) return undefined;
+    match = evidence;
+  }
+  return match;
+}
+
 /**
  * The subagent's lines, kept only where the link is one the search returned.
  *
  * The URL is matched up to `) —` rather than to the first `)`, so a Wikipedia
- * address with brackets in it survives. The title is always the search's.
+ * address with parentheses in it survives. The title is always the search's.
  */
 export function keptResults(text: string, found: ReadonlyMap<string, SearchEvidence>): WebResult[] {
   const kept: WebResult[] = [];
   const seen = new Set<string>();
   for (const line of text.split("\n")) {
-    const m = /\]\((https?:\/\/\S+?)\)\s*[—–-]+\s*(.+)$/.exec(line.trim());
+    /* Prefixes are deliberately ignored, so bullets and numbered lists both
+       work. The characters between the Markdown link and the dash forgive
+       emphasis and sentence punctuation, but never become part of the URL. */
+    const m = /\]\((https?:\/\/\S+?)\)(?:[*_~.,;:]+\s*)*\s*[—–-]+\s*(.+)$/.exec(line.trim());
     if (!m) continue;
-    const url = m[1]!;
-    const evidence = found.get(url);
-    if (!evidence || seen.has(url)) continue;
-    seen.add(url);
-    kept.push({ url, title: evidence.title ?? url, note: clip(m[2]!.trim(), MAX_SENTENCE_CHARS) });
+    const evidence = searchedEvidence(m[1]!, found);
+    if (!evidence || seen.has(evidence.url)) continue;
+    seen.add(evidence.url);
+    kept.push({
+      url: evidence.url,
+      title: evidence.title ?? evidence.url,
+      note: clip(m[2]!.trim(), MAX_SENTENCE_CHARS),
+    });
     if (kept.length === SEARCH_WEB_RESULTS) break;
   }
   return kept;
@@ -151,7 +204,7 @@ export interface SearchWebOptions {
   /** Whether this conversation can open a page, so the result may say how. */
   canReadPages: boolean;
   /** A test's stand-in for the gateway. */
-  call?: (body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
+  call?: (job: ChatJob, body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
   timeoutMs?: number;
 }
 
@@ -171,6 +224,14 @@ const failed = (detail: string, why: string): SearchWebOutcome => ({
     `not search just now; do not answer from memory as though you had searched.`,
 });
 
+/** Error names are free text too. Keep a fixed class only; never log the message or stack. */
+function failureKind(err: unknown): string {
+  if (err instanceof TypeError) return "TypeError";
+  if (err instanceof DOMException) return "DOMException";
+  if (err instanceof Error) return "Error";
+  return typeof err;
+}
+
 /** Run one search for the conversation. Never throws for a failed search; the reader's stop still aborts. */
 export async function searchWeb(query: unknown, opts: SearchWebOptions): Promise<SearchWebOutcome> {
   if (typeof query !== "string" || query.trim() === "") {
@@ -186,7 +247,7 @@ export async function searchWeb(query: unknown, opts: SearchWebOptions): Promise
     };
   }
 
-  const send = opts.call ?? ((body, options) => openRouterJson("web-search-subagent", body, options));
+  const send = opts.call ?? openRouterJson;
   const body = searchWebRequest(query.trim(), opts.power);
   const line = log("model").child({ tool: "search_web" });
   const started = Date.now();
@@ -195,7 +256,7 @@ export async function searchWeb(query: unknown, opts: SearchWebOptions): Promise
 
   let call: JsonCall;
   try {
-    call = await send(body, { signal });
+    call = await send("web-search-subagent", body, { signal });
   } catch (err) {
     /* The reader pressed stop, or the turn ran out of time. Said plainly and
        not thrown: `converse` checks its own signals after every tool, which is
@@ -210,16 +271,34 @@ export async function searchWeb(query: unknown, opts: SearchWebOptions): Promise
       line.warn({ model: body.model, ms, timedOut: true }, "search_web: hit its deadline");
       return failed("timed out", "it took too long");
     }
-    line.warn({ ...errorFields(err), model: body.model, ms }, "search_web: failed");
+    /* No `errorFields`: an upstream error may repeat the request body, and the
+       query is the reader's question in other words. */
+    line.warn({ failure: failureKind(err), model: body.model, ms }, "search_web: failed");
     return failed("failed", "something went wrong reaching the search service");
   }
 
   const used = call.answeredBy ?? body.model;
-  const answer = call.json as SearchAnswer | null;
-  const choice = answer?.choices?.[0];
-  const { searches, from } = whereSearchCountCameFrom(answer?.usage);
+  let choice: NonNullable<SearchAnswer["choices"]>[number] | undefined;
+  let searches: number | null;
+  let from: ReturnType<typeof whereSearchCountCameFrom>["from"];
   const found = new Map<string, SearchEvidence>();
-  collectSearchEvidence(choice?.message?.annotations, found);
+  try {
+    const answer = call.json as SearchAnswer | null;
+    choice = answer?.choices?.[0];
+    ({ searches, from } = whereSearchCountCameFrom(answer?.usage));
+    collectSearchEvidence(choice?.message?.annotations, found);
+    /* The assertion above describes the expected wire, not what crossed it. A
+       number here would otherwise throw later, outside the failure boundary. */
+    if (choice?.message?.content !== undefined && choice.message.content !== null && typeof choice.message.content !== "string") {
+      throw new TypeError("search answer content was not text");
+    }
+  } catch (err) {
+    line.warn(
+      { failure: failureKind(err), model: used, ms: since(started) },
+      "search_web: unreadable answer",
+    );
+    return failed("failed", "the search service returned an unreadable answer");
+  }
 
   if (!choice || searches === null || searches <= 0) {
     line.warn({ model: used, ms: since(started), searches, searchesFrom: from }, "search_web: no search ran");

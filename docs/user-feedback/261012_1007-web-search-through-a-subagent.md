@@ -26,16 +26,15 @@ feedback sweep does. Plan, reviews and measurements:
 What we did:
 
 - **Spikes.** OpenRouter has no search API of its own; search exists only inside a model call. A
-  small model running one forced Exa search and writing five lines, each a link and a sentence,
+  small model running one forced-search call through Exa and writing five lines, each a link and a sentence,
   took about 9 s and $0.007, with five results every time. Luna wrote no wrong link in 28; Haiku
   mistyped 1 in 30, so every link is now checked against what the search returned.
 - **`search_web`**, the subagent, as a tool the guide can call. Its results come back as an
   ordinary tool result, which is what makes guide search work at last (the old failure was the
-  results vanishing when the guide pressed its next-steps buttons first). Two searches a turn at
+  results vanishing when the guide pressed its next-steps buttons first). Two helper calls a turn at
   most.
-- **Chat** keeps its own search for now. It already searches, shows sources as chips and costs no
-  extra round, so it changes only if the comparison in 261012g § Stage 2 says the subagent is as
-  good, cheaper and not slower.
+- **Chat** keeps its own search. In the comparison the helper searched in the same places and cost
+  about 15% less, but every searching answer took 11 seconds longer and lost its source chips.
 
 Still open:
 

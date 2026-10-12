@@ -45,7 +45,7 @@ contract come from.
 ## In this doc
 
 - [§ What Greg asked for, and what is here](#what-greg-asked-for-and-what-is-here) — intent and the tool loop in one picture
-- [§ The ten, and the filter they had to pass](#the-ten-and-the-filter-they-had-to-pass) — adding or judging a tool
+- [§ The eleven, and the filter they had to pass](#the-eleven-and-the-filter-they-had-to-pass) — adding or judging a tool
 - [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
 - [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
 - [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) — `read_cited_work`, the PDF of a work the article cites
@@ -99,7 +99,7 @@ improved by work that is already planned, and the seam it goes behind is `librar
 in [`src/store/`](../../src/store/index.ts) — a store contract, so the semantic matcher lands there
 and this file does not change.
 
-## The ten, and the filter they had to pass
+## The eleven, and the filter they had to pass
 
 > **Does it send the reader somewhere they could not otherwise get to?**
 
@@ -131,7 +131,7 @@ badge that says it did research. It is [the anti-goal](vision.md#anti-goals) wit
 of it. `tests/chat-tools.test.ts` asserts no tool name matches `/summar/i`, which is a blunt check
 and is meant to be.
 
-### Web search is still OpenRouter's, and is not in that table
+### Provider web search is still OpenRouter's
 
 `openrouter:web_search` is a **server** tool: it runs inside the provider and comes back in the same
 response, so it costs no extra round trip. It is therefore offered in *every* round, including the
@@ -176,7 +176,7 @@ Since 2026-10-12 the typed guide has `search_web`, one of *our* tools
 ([`src/web-search-subagent.ts`](../../src/web-search-subagent.ts), plan
 [261012g](../plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md), the spikes
 [261012b](../investigations/261012b-web-search-subagent-spikes.md)). A small model (the quick tier,
-job `web-search-subagent`) runs a forced Exa search and writes at most five
+job `web-search-subagent`) runs one forced-search model call through Exa and writes at most five
 lines of a title, a link and a sentence. We keep a line only if its link is one the search returned, and take
 its title from the search. The guide gets them as an ordinary `tool` message, fenced. That message is
 replayed into the next round whatever else the guide called beside it, which is the whole fix.
@@ -185,13 +185,14 @@ replayed into the next round whatever else the guide called beside it, which is 
   the small model says the page says is still its account, and is fenced as a stranger's words.
 - **Its bounds**: two calls a turn (`SEARCH_WEB_PER_TURN`; a third is refused, not run) and a
   300-character query. See [§ Security](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers).
-- **What the guide searches for**: questions about *how to read* the piece — is it well regarded,
-  what to read alongside it, who the author is. A question about what the world says on the
-  subject goes to Chat.
+- **What the guide searches for**: outside evidence about *how to read* the piece — is the piece
+  well regarded, what to read alongside it, who the author is and how far to trust them. It
+  searches even when the piece gives its own account; a byline is not outside evidence. A
+  question about what the world says on the subject goes to Chat.
 - **No page-reading for the guide.** Whether it should open a result is a question to Greg; until
   then the result tells it only to link what it uses.
-- **Chat keeps OpenRouter's search** until the comparison in 261012g § Stage 2 says otherwise: the
-  citation chips and the single round are what the subagent would have to match.
+- **Chat keeps OpenRouter's search.** The comparison in 261012g § Stage 2 found the subagent about
+  15% cheaper, but 11 seconds slower on every searching answer and without Chat's citation chips.
 
 ## The links the prompt does not carry
 
@@ -1153,7 +1154,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 
 - **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
   reading, never a summary in its place; ask why they are reading if they have not said; invite
-  *About you* once; under 100 words; point to at most three places, by block id. It carries our
+  *About you* once; under 60 words; point to at most two places, by block id. It carries our
   words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
   [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
 - **How experienced the reader is**: none, a few or many other articles opened, in the last

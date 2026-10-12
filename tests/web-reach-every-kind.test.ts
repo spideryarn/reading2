@@ -54,7 +54,11 @@ describe("web search", () => {
 
   it("the guide searches for how to read the piece, and not for its subject", () => {
     const guide = flat(systemOf("guide"));
-    expect(guide).toContain("Use it for questions about how to read this piece that the web can answer");
+    expect(guide).toContain("ALWAYS use it when the reader asks for outside evidence about how to read this piece");
+    expect(guide).toContain("Search even when the piece gives its own answer");
+    expect(guide).toContain("A response to this piece is about the piece and belongs in your search");
+    expect(guide).toContain("search for outside evidence about this piece");
+    expect(guide).not.toContain("Chat is the place for the web");
     expect(guide).toMatch(/or gives you a page to read, do not search/);
   });
 
