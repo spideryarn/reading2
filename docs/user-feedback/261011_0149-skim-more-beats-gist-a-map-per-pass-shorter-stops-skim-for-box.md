@@ -1,7 +1,7 @@
 ---
 reports: spya-wu83xh
 ending: shipped
-comment: Shipped: a skim-for box (your purpose, edited in Skim), a map line per pass, shorter stops. Visitors seeing the map is q-t5xjqn; per-stop linking lines and a Skim-only focus are queued.
+comment: Shipped: a skim-for box (your purpose, edited in Skim), a map line per pass (visitors see it too, your A to q-t5xjqn), shorter stops. Per-stop linking lines and a Skim-only focus are queued.
 ---
 # Skim: More beats Gist, a map for each pass, shorter stops, and a skim-for box
 
@@ -44,9 +44,11 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   e.g. *"Starts with the meaning gap, then the Django test of transfer and its results, and ends on
   matching evaluation to purpose."* Rated blind: 37 of 48 clearly orient, none gives a finding away.
   A linking line on every stop was passed over (a stop can be reached from anywhere, and each line
-  beside a quote is another chance to give its finding away); queued as `qi-ky8x85rs`. For now only
-  the owner sees the map: showing it to visitors means editing the visitor allowlist, a security
-  defence, so that is your call in [q-t5xjqn](questions/q-t5xjqn.md).
+  beside a quote is another chance to give its finding away); queued as `qi-ky8x85rs`. At first
+  only the owner saw the map: showing it to visitors meant editing the visitor allowlist, a security
+  defence, so it was your call in [q-t5xjqn](questions/q-t5xjqn.md). You answered A on 2026-10-12,
+  and visitors see it too ([261012a](../plans/261012a-skim-pass-intros-cross-to-visitors.md),
+  `qi-ka756pt3`).
 - **Shorter stops.** Quotes over 60 words are marked long in the prompt, and Gist may take one,
   More two, only when no shorter quote carries the idea. Gist's median quote went from 50 words to
   about 40 and the long stops in Gist and More roughly halved, with Gist covering as many key ideas

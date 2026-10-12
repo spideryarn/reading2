@@ -1302,9 +1302,8 @@ describe("the artefacts a shared link carries", () => {
       },
       { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
     ],
-    /* `skim/13`'s pass intros (plan 261011r) are the owner's only for now:
-       whether a visitor gets them is a question for Greg, since adding them
-       is an edit to this allowlist. The key set below proves they stay out. */
+    /* `skim/13`'s pass intros (plan 261011r) cross since 2026-10-12, Greg's
+       "A" to q-t5xjqn (plan 261012a); a `null` entry crosses as `null`. */
     intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
     visible: [1, 2, 2],
     offered: 12,
@@ -2132,14 +2131,15 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
-   * **The route's stops and `offered`, and nothing else** — not who it was
+   * **The route's stops, its pass intros and `offered`, and nothing else** — not who it was
    * planned for (`profileHash`), and not the pipeline's counts and timings.
    * Asserted twice: the key set would pass a renamed `profileHash`, and the
    * string search would not.
    */
-  it("carries the route's stops and the offered count, and not who it was planned for", () => {
+  it("carries the route's stops, intros and offered count, and not who it was planned for", () => {
     expect(pathsUnder("skim")).toEqual(
       [
+        "intros",
         "offered",
         "stops",
         "stops[].again",
@@ -2162,6 +2162,9 @@ describe("the artefacts a shared link carries", () => {
         },
         { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
       ],
+      /* The map of each pass, read before its first stop: the model's text
+         about the piece, never about the reader (plan 261012a). */
+      intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
       offered: 12,
     });
     /* The cue-less stop crosses with no `cue` key, not an `undefined` one —

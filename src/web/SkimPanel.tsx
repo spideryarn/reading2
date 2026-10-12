@@ -889,7 +889,7 @@ export function SkimPanel({ access, view, away }: Props) {
     <>
       <p>{promise}</p>
       <p>{SKIM_CUE_EXPLAINED}</p>
-      {made?.intros?.some((i) => i !== null) && <p>{SKIM_INTRO_EXPLAINED}</p>}
+      {route?.intros?.some((i) => i !== null) && <p>{SKIM_INTRO_EXPLAINED}</p>}
       {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
@@ -978,8 +978,8 @@ export function SkimPanel({ access, view, away }: Props) {
           )}
 
           {/* The map of the pass being walked (`skim/13`, plan 261011r) —
-              owner only, as the visitor's route does not carry it. */}
-          {owner && routed && <PassIntro intro={passIntro(owner.skim, view.depth)} />}
+              a visitor's too, since 2026-10-12 (plan 261012a). */}
+          {routed && <PassIntro intro={passIntro(route, view.depth)} />}
 
           {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
 

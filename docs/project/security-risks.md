@@ -77,6 +77,7 @@ carrying R8. A qualification beside an id wins over those words.
 | [R17](#r17) | The Overseer key is readable from its same-user process environment | Low | merged into R2/R8 | none separately | — |
 | [R18](#r18) | At review time, a stray static server listened on every interface | Low | proposed | unverified since review | 5 min |
 | R19–R25 | security.md's known gaps, levelled ([below](#from-securitymds-known-gaps)) | Low–Medium | known | see each | — |
+| [R26](#r26) | From an AI app on the web, the administrator's agent can publish an article or take its private link with no press | Medium | accepted | none | — |
 
 ## Accepted
 
@@ -156,6 +157,20 @@ appendix on future security/hardening in overseer-direction, but ignore it for n
 ([security-map.md § The fleet dashboard](security-map.md#the-fleet-dashboard-which-is-a-different-product-on-the-same-box),
 [overseer-direction.md § Access](overseer-direction.md#access)). A token would not help while R8
 stands, so R8 is where to act.
+
+### R26
+
+**From an AI app on the web, the administrator's agent can publish an article or take its private
+link with no press.** Medium: it needs the agent to be misled (a hidden line in a page, email or
+document it reads), and the damage is bounded to the administrator's own articles, but a publish
+cannot be unseen. Decision: **accepted by Greg**, asked with that risk written out: *"C"*
+(2026-10-11, `spya-fsarqm`, q-pe52f6: drop the press for these two tools, on the admin account only),
+then *"A"* (2026-10-12, `spya-mre525`, q-hpwyf0: an unattended agent may build it, on the condition
+that it is admin-only, checked on the server, and nobody else loses the press). Where it lives and
+what still holds:
+[security-map.md § an AI app's token](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route),
+[security.md § Prompt injection](security.md#prompt-injection-and-what-the-fence-does-not-do).
+Undoing it is deleting the two `webAdmin` forms in `src/mcp/tools.ts`.
 
 ## Proposed
 

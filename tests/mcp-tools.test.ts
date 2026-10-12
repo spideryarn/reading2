@@ -15,11 +15,12 @@ import { Client as McpClient } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
 
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
 import { ApiError, makeApi, type TokenSource } from "../src/mcp/api.js";
 import { type Approver, defaultApprover, dialogText, type Operation, osascriptArgs, readDialogAnswer } from "../src/mcp/approve.js";
 import { buildServer } from "../src/mcp/server.js";
-import { INSTRUCTIONS, remoteTools, TOOLS, voucherId } from "../src/mcp/tools.js";
+import { INSTRUCTIONS, remoteTools, type Tool, TOOLS, voucherId } from "../src/mcp/tools.js";
 
 const SITE = "https://sy.test";
 const ACCESS = "SENTINEL-ACCESS-7f3a9c";
@@ -136,6 +137,7 @@ async function harness(
     userId: USER,
     email: "greg@example.com",
   }),
+  tools?: readonly Tool[],
 ) {
   const seen: Seen[] = [];
   const all = { ...DEFAULT_ROUTES, ...routes };
@@ -162,6 +164,7 @@ async function harness(
     api,
     ctx: { identity },
     approver,
+    ...(tools ? { tools } : {}),
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
@@ -1187,12 +1190,20 @@ describe("the remote server's tool list", () => {
 
   it("leaves out a new asking tool by default, and serves a declared remote form", () => {
     const base = TOOLS.find((t) => t.name === "whoami")!;
-    const asking = { ...base, name: "future_send", ask: async () => null };
+    const asking = {
+      name: "future_send",
+      title: base.title,
+      description: base.description,
+      input: base.input,
+      annotations: base.annotations,
+      handler: base.handler,
+      ask: async () => null,
+    } satisfies Tool;
     const declared = {
       ...asking,
       name: "future_edit",
       remote: { description: "Edits; the sending part is not here.", input: base.input },
-    };
+    } satisfies Tool;
     const served = remoteTools([base, asking, declared]);
     expect(served.map((t) => t.name)).toEqual(["whoami", "future_edit"]);
     expect(served[1]?.description).toBe("Edits; the sending part is not here.");
@@ -1200,5 +1211,118 @@ describe("the remote server's tool list", () => {
 
   it("says nothing on the remote about a dialog on this computer", () => {
     for (const t of remote) expect(t.description, t.name).not.toMatch(/dialog/i);
+  });
+});
+
+/* Plan 261012b (Greg's C on q-pe52f6, A on q-hpwyf0): on the web, an admin may
+   make an article public or take its private link without the press. Three
+   conditions bound it: admin only, checked on the server from the verified
+   identity; everybody else keeps the press exactly as today; and the email
+   tools stay off the web for everyone. */
+describe("the web's no-press form, for an admin only", () => {
+  const NO_PRESS = ["make_article_public", "create_private_link"];
+  const EMAIL = ["create_gift_voucher", "retry_gift_voucher_email"];
+  const admin = async () => ({ userId: ADMIN_USER_ID_LOCAL, email: "admin@example.com" });
+  const reader = async () => ({ userId: USER, email: "reader@example.com" });
+  const linkOff = {
+    "GET /api/article/on-tools/share-link": { body: { on: false } },
+    "POST /api/article/on-tools/share-link": { body: { on: true, key: KEY_NEW, since: "2026-10-12T00:00:00Z" } },
+  };
+
+  it("a verified non-admin id gets today's remote list, byte for byte: neither tool is offered", () => {
+    const today = remoteTools();
+    expect(remoteTools(TOOLS, { verifiedUserId: USER })).toEqual(today);
+    for (const name of NO_PRESS) expect(today.map((t) => t.name), name).not.toContain(name);
+  });
+
+  it("the Mac's tool definitions still require a press for both", () => {
+    for (const name of NO_PRESS) expect(TOOLS.find((t) => t.name === name)?.ask, name).toBeDefined();
+  });
+
+  it("the Mac's server still asks before either action, for an admin or anyone else", async () => {
+    for (const identity of [admin, reader]) {
+      for (const name of NO_PRESS) {
+        const approver = new StubApprover(false);
+        const h = await harness(linkOff, approver, undefined, identity);
+        const result = await h.call(name, { slug: "on-tools" });
+        expect(result.isError, name).toBe(false);
+        expect(approver.asked, name).toHaveLength(1);
+        expect(h.seen.filter((s) => s.method !== "GET"), name).toEqual([]);
+        expect(result.text, name).not.toContain(KEY_NEW);
+      }
+    }
+  });
+
+  it("an admin is offered both without ask, and still none of the email tools", () => {
+    const served = remoteTools(TOOLS, { verifiedUserId: ADMIN_USER_ID_LOCAL });
+    const names = served.map((t) => t.name);
+    for (const name of NO_PRESS) {
+      const t = served.find((s) => s.name === name);
+      expect(t, name).toBeDefined();
+      expect(t?.ask, name).toBeUndefined();
+      expect(t).not.toHaveProperty("remote");
+      expect(t).not.toHaveProperty("webAdmin");
+      expect(t?.description, name).not.toMatch(/dialog/i);
+      expect(t?.description, name).toMatch(/asked for it in this conversation/);
+    }
+    for (const name of EMAIL) expect(names, name).not.toContain(name);
+    expect(served.find((t) => t.name === "update_gift_voucher")?.input.shape).not.toHaveProperty("email");
+    /* Only the two Greg named: a tool gains this form by declaring it, never by default. */
+    expect(TOOLS.filter((t) => t.webAdmin).map((t) => t.name).sort()).toEqual([...NO_PRESS].sort());
+  });
+
+  it("served to someone who is not an admin, the no-press form refuses before any call reaches the site", async () => {
+    for (const name of NO_PRESS) {
+      const approver = new StubApprover(true);
+      const h = await harness(linkOff, approver, undefined, reader, remoteTools(TOOLS, { verifiedUserId: ADMIN_USER_ID_LOCAL }));
+      const result = await h.call(name, { slug: "on-tools" });
+      expect(result.isError, name).toBe(true);
+      expect(result.text, name).toMatch(/mcp-admin-only/);
+      expect(h.seen, name).toEqual([]);
+      expect(approver.asked, name).toEqual([]);
+    }
+  });
+
+  it("an admin's make_article_public publishes with no dialog and confirms rights", async () => {
+    const approver = new StubApprover(false);
+    const h = await harness({}, approver, undefined, admin, remoteTools(TOOLS, { verifiedUserId: ADMIN_USER_ID_LOCAL }));
+    const result = await h.call("make_article_public", { slug: "on-tools" });
+    expect(result.isError, result.text).toBe(false);
+    expect(approver.asked).toEqual([]);
+    expect(h.seen.filter((s) => s.method !== "GET").map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: "PUT", path: "/api/article/on-tools/visibility", body: { visibility: "public", rightsConfirmed: true } },
+    ]);
+  });
+
+  it("an admin's create_private_link reuses the approved action: an existing link is handed over, never replaced", async () => {
+    const approver = new StubApprover(false);
+    const h = await harness(
+      { "GET /api/article/on-tools/share-link": { body: { on: true, key: KEY_ON, since: "2026-10-01T00:00:00Z" } } },
+      approver,
+      undefined,
+      admin,
+      remoteTools(TOOLS, { verifiedUserId: ADMIN_USER_ID_LOCAL }),
+    );
+    const result = await h.call("create_private_link", { slug: "on-tools" });
+    expect(result.isError, result.text).toBe(false);
+    expect(approver.asked).toEqual([]);
+    expect(h.seen.filter((s) => s.method !== "GET")).toEqual([]);
+    expect(result.json()).toEqual({ link: `${SITE}/read/on-tools?key=${KEY_ON}`, since: "2026-10-01T00:00:00Z" });
+  });
+
+  it("an admin's create_private_link makes one, once, when none is on", async () => {
+    const h = await harness(
+      linkOff,
+      new StubApprover(false),
+      undefined,
+      admin,
+      remoteTools(TOOLS, { verifiedUserId: ADMIN_USER_ID_LOCAL }),
+    );
+    const result = await h.call("create_private_link", { slug: "on-tools" });
+    expect(result.isError, result.text).toBe(false);
+    expect(h.seen.filter((s) => s.method !== "GET").map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: "POST", path: "/api/article/on-tools/share-link", body: { rightsConfirmed: true, keepExisting: true } },
+    ]);
+    expect(result.json()).toEqual({ link: `${SITE}/read/on-tools?key=${KEY_NEW}`, since: "2026-10-12T00:00:00Z" });
   });
 });

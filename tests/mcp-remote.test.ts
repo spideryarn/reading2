@@ -19,7 +19,8 @@
  * - **Through the tools**: `list_articles` answers the administrator's own
  *   shelf and not somebody else's article (F9), via the very library route
  *   the web app calls; an admin tool reaches the admin namespace; the asking
- *   tools refuse with the page to use and write nothing (F8).
+ *   email-sending forms stay unavailable and write nothing (F8); the two
+ *   administrator no-press sharing tools reach only that administrator's routes.
  * - **Two overlapping requests** as two different people each get their own
  *   answer (F5: a fresh server, transport and identity per request).
  * - **The token stays at `/api/mcp`**: the same OAuth token on an ordinary
@@ -364,13 +365,15 @@ describe("the tools, through the SDK's client", () => {
   });
 
   /* Plan 261010i § D2: a tool that could only refuse here is not listed, so a
-     model does not plan around it; called anyway, it is unknown and writes nothing. */
-  it("the asking tools are not listed, and calling one anyway writes nothing", async () => {
+     model does not plan around it; called anyway, it is unknown and writes nothing.
+     Since 261012b the admin also has make_article_public and create_private_link
+     here (below); the email tools stay off for everyone. */
+  it("the email tools are not listed, and calling one anyway writes nothing", async () => {
     const client = await connect("admin-app");
     try {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name);
-      for (const name of ["make_article_public", "create_private_link", "create_gift_voucher", "retry_gift_voucher_email"]) {
+      for (const name of ["create_gift_voucher", "retry_gift_voucher_email"]) {
         expect(names, name).not.toContain(name);
       }
       expect(names).toContain("draft_author_gift");
@@ -382,9 +385,8 @@ describe("the tools, through the SDK's client", () => {
         const result = await client.callTool({ name, arguments: args }).catch((e: Error) => ({ isError: true, thrown: e.message }));
         expect(result.isError, name).toBe(true);
       };
-      await refused("make_article_public", { slug: mine.slug });
-      await refused("create_private_link", { slug: mine.slug });
       await refused("create_gift_voucher", { email: "someone@example.test", articles: 5, idempotency_key: `k-${RUN}` });
+      await refused("retry_gift_voucher_email", { voucherId: randomUUID() });
       await refused("update_gift_voucher", { id: randomUUID(), email: "someone@example.test" });
 
       /* The positive control (Sol's F4): the same tool without the address reaches its route. */
@@ -433,6 +435,45 @@ describe("the tools, through the SDK's client", () => {
       expect(client.getInstructions()).toMatch(/draft_author_gift/);
     } finally {
       await client.close();
+    }
+  });
+
+  /* Plan 261012b (Greg's C on q-pe52f6, A on q-hpwyf0): for the administrator,
+     no press. The routes still scope by owner, so somebody else's article stays as it was. */
+  it("the admin makes an article public and takes its private link, with no dialog; not somebody else's", async () => {
+    const own = await scratchArticleInPg(`test-mcp-remote-nopress-${RUN}`, { ownerId: ADMIN_USER_ID_LOCAL as OwnerId });
+    const client = await connect("admin-app");
+    try {
+      const { tools } = await client.listTools();
+      const names = tools.map((t) => t.name);
+      expect(names).toContain("make_article_public");
+      expect(names).toContain("create_private_link");
+
+      const link = await client.callTool({ name: "create_private_link", arguments: { slug: own.slug } });
+      expect(link.isError, textOf(link)).toBeFalsy();
+      const published = await client.callTool({ name: "make_article_public", arguments: { slug: own.slug } });
+      expect(published.isError, textOf(published)).toBeFalsy();
+
+      const [row] = await getDb()
+        .select({ visibility: articles.visibility, shareToken: articles.shareToken })
+        .from(articles)
+        .where(eq(articles.id, own.articleId));
+      expect(row?.visibility).toBe("public");
+      expect(row?.shareToken).toMatch(/^[A-Za-z0-9_-]{22}$/);
+      expect((JSON.parse(textOf(link)) as { link: string }).link).toContain(`key=${row?.shareToken}`);
+
+      for (const name of ["make_article_public", "create_private_link"]) {
+        const result = await client.callTool({ name, arguments: { slug: theirs.slug } });
+        expect(result.isError, name).toBe(true);
+      }
+      const [other] = await getDb()
+        .select({ visibility: articles.visibility, shareToken: articles.shareToken })
+        .from(articles)
+        .where(eq(articles.id, theirs.articleId));
+      expect(other).toEqual({ visibility: "private", shareToken: null });
+    } finally {
+      await client.close();
+      await own.remove();
     }
   });
 
