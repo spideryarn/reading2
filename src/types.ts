@@ -1519,8 +1519,8 @@ export interface Skim {
    * **One line per pass, read before its first stop** — Gist, More, Most;
    * `null` for a pass the route does not offer or whose intro was bad.
    * **Absent** on routes written before `skim/13`, which draw none.
-   * Owner only: the visitor's route (src/public/dto.ts § `publicSkim`) is built
-   * field by field and does not carry it. Plan 261011r.
+   * Plan 261011r. A visitor's route carries it too since 2026-10-12 (Greg's
+   * "A" to q-t5xjqn, plan 261012a; src/public/dto.ts § `publicSkim`).
    */
   intros?: SkimIntros;
   /**

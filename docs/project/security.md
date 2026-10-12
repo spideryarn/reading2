@@ -941,6 +941,20 @@ is fetched through `fetchDocument`, so it adds no SSRF. A hostile PDF can still 
 `read_web_page`, which is the send this section's next part describes. The hidden-text scan does not
 read PDFs ([security-map.md](security-map.md)).
 
+**The MCP server on the web lets this reach a publish, for the administrator** (since 2026-10-12,
+Greg's choice, plan
+[261012b](../plans/261012b-mcp-admin-publish-and-private-link-from-the-web-without-a-press.md)).
+An AI app signed in as the administrator at `/api/mcp` is offered `make_article_public` and
+`create_private_link` with no dialog, so whatever that app's model reads (a web page, an email, a
+document) can ask it to publish one of the administrator's articles or put an article's key into
+the conversation, and nothing outside the model stands in the way. Each tool's description says to
+act only on the person's own request in the conversation; like the fence above, that is a
+mitigation. What does hold: `isAdmin` on the verified token's id, checked when the list is built and
+again on every call, so no other account can reach it; the routes' owner scoping, so only the
+administrator's own articles; no email tool on the web for anyone; and the Mac's server keeps its
+dialog. Accepted as [R26](security-risks.md#r26); where it lives is in
+[security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
+
 ### A read tool can still send — the claim that was wrong here
 
 This section first said that "every one of these tools is a read", so nothing could be sent anywhere,

@@ -162,8 +162,22 @@ trusted custom token hooks can alter claims
 - **The tools run through `handleApi`** with a verifier that accepts one random per-request token
   and nothing else, so every route's own owner scoping and admin gate applies as it does to the local
   server. No OAuth token is forwarded anywhere.
-- **The tools that send mail, publish or hand over a private link refuse here**: their approval is
-  a dialog on the owner's Mac, which a server cannot show.
+- **The tools that send mail refuse here**: their approval is a dialog on the owner's Mac, which a
+  server cannot show.
+- **Publishing and the private link run here without a press, for the administrator only** (since
+  2026-10-12; Greg chose it, *"C"* on q-pe52f6, and let an unattended agent build it, *"A"* on
+  q-hpwyf0). `make_article_public` and `create_private_link` are listed only when `isAdmin` is true
+  of the verified token's id, and each call checks `isAdmin` again before it reads or writes
+  anything. The web route refuses every other account today; if it is later opened to them, these
+  tools stay omitted. The Mac's server keeps the dialog for everyone. **Here a model's own decision
+  can publish an article or put its key in a conversation**, so a
+  hidden line in a page or email the agent reads can do it for the administrator's articles. The
+  tool descriptions tell the model not to act on such text; that is a mitigation, not a defence
+  ([security.md § Prompt injection](security.md#prompt-injection-and-what-the-fence-does-not-do)).
+  The routes' own owner scoping still applies, so nobody else's article can be touched. Risk
+  [R26](security-risks.md#r26); plan
+  [261012b](../plans/261012b-mcp-admin-publish-and-private-link-from-the-web-without-a-press.md);
+  held by `tests/mcp-tools.test.ts` and `tests/mcp-remote.test.ts`.
 
 **What this cannot stop, and needs Greg's decision before switching on:** at Supabase itself the token is an
 ordinary sign-in to the account. Supabase's Auth API (`PUT /auth/v1/user`, the MFA endpoints) does
@@ -384,7 +398,9 @@ callers of the read, and `tests/voucher-starter.test.ts` the rest.
 none is on, and hands it to the AI app that called it, where it stays in that conversation and in
 whatever the app or its agent keeps. Greg accepted that (2026-10-07). It is the owner's own route
 with the owner's own session, and **a dialog on the owner's screen approves every call**, naming
-the article; the model cannot answer it. An existing link is handed over, never replaced: the
+the article; the model cannot answer it. **Except from an AI app on the web, for the administrator
+only** (since 2026-10-12, Greg's choice): there no dialog asks, and the model decides
+([§ an AI app's token](#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route)). An existing link is handed over, never replaced: the
 route's `keepExisting` decides under the row lock. `tests/share-link-token-stays-home.test.ts`
 pins `src/mcp/tools.ts` as the one client outside the browser that asks for the key.
 
@@ -589,6 +605,22 @@ What crosses, and what does not:
   `tests/public-visibility-pg.test.ts` reads the real response for both.
 
 The public shelf's eight columns (`/read/public`) are a separate allowlist and were not changed.
+
+**`PublicSkim` gained `intros` on 2026-10-12.** Each Skim pass opens with one or two AI-written
+sentences that map the walk (`skim/13`). The question put to Greg was whether a visitor gets them as
+well as the owner ([q-t5xjqn](../user-feedback/questions/q-t5xjqn.md)):
+
+> A
+>
+> — Greg, 2026-10-12
+
+That is the say-so for this one field and nothing else on the route. It crosses through `opt`,
+absent on an older route, each entry plain text or `null`, drawn as a text node. It is on the same
+footing as the stops' `cue`, which already crossed: the intro's prompt holds the cue's rules and
+adds *"Never address or mention the reader"*. `profileHash` and `dropped` (its `badIntro` and
+`movedIntro` with it) still do not cross, and `tests/public-dto.test.ts` and
+`tests/public-visibility-pg.test.ts` assert both
+([261012a](../plans/261012a-skim-pass-intros-cross-to-visitors.md)).
 
 ## The fleet dashboard, which is a different product on the same box
 

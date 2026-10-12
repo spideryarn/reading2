@@ -1,7 +1,7 @@
 ---
 reports: spya-cwb56b
 ending: shipped
-comment: An agent can now draft a gift for any article on your shelf; your Send makes the private link. You chose C on q-pe52f6; who may build it is asked in q-hpwyf0.
+comment: An agent can now draft a gift for any article on your shelf; your Send makes the private link. From ChatGPT or Claude on the web, your admin account can also make an article public or take its private link without a press (your C, then A).
 ---
 # MCP: draft a gift for any article on your shelf, and Send makes the link
 
@@ -44,8 +44,23 @@ one. Now:
 ## Deferred, each queued
 
 - **Making an article public, or handing over its private link, from a web app**: a change to a
-  safety catch, so it is a question for you: `q-pe52f6`, queue item `qi-jpw55yrq`.
+  safety catch, so it was a question for you: `q-pe52f6`, queue item `qi-jpw55yrq`. Answered and
+  built, below.
 - **Reading an article through MCP** (`get_article`), so an agent writes the suggested email from
   Spideryarn's copy and can compare essays already on the shelf: `qi-qf6g25gq`.
 - **`look_up_author` on an existing draft**, with Sol's question whether an agent's paid lookup
   should need a press of yours at all: `qi-sxcqvptg`.
+
+## Then: publish and the private link from the web, admin only (2026-10-12)
+
+Greg chose C on `q-pe52f6` (`spya-fsarqm`: drop the press for these two tools, on his admin account
+only) and A on `q-hpwyf0` (`spya-mre525`: an unattended agent may build it, on three conditions).
+Queue item `qi-qwe2hyjf`, superseding `qi-jpw55yrq`. Plan and both GPT Sol reviews:
+[261012b](../plans/261012b-mcp-admin-publish-and-private-link-from-the-web-without-a-press.md).
+
+- From ChatGPT or Claude on the web, signed in as an admin, `make_article_public` and
+  `create_private_link` are offered and run with no dialog. `isAdmin` is checked on the server from
+  the verified token, when the tool list is built and again on every call.
+- Everyone else, and the Mac app for everyone, keeps the press exactly as before; tests hold both.
+- The tools that send email stay off the web for everyone.
+- security-map.md, security.md and security-risks.md (R26, accepted) changed in the same commit.

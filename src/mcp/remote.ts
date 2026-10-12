@@ -60,6 +60,11 @@
  * one ever be reached (Sol F8: a remote request served during Mac development
  * must refuse too).
  *
+ * **Except two, for the administrator** (plan 261012b; Greg's C on q-pe52f6
+ * and A on q-hpwyf0): `make_article_public` and `create_private_link` are
+ * served to an admin without the press, re-checking `isAdmin` on every call.
+ * Nothing that sends email is.
+ *
  * **Not imported by the local server.** scripts/spideryarn-mcp.ts must not
  * pull in src/routes.ts, and this file is reached only from there; it takes
  * `handleApi` as an argument rather than importing it, which also keeps
@@ -85,7 +90,7 @@ import {
 import { siteOrigin } from "../site-origin.js";
 import { type Api, ApiError, type HttpMethod } from "./api.js";
 import { type Approver, CannotAsk } from "./approve.js";
-import { remoteTools } from "./tools.js";
+import { remoteTools, TOOLS } from "./tools.js";
 import { buildServer } from "./server.js";
 
 export const MCP_PATH = "/api/mcp";
@@ -214,8 +219,11 @@ async function serveMcp(r: RemoteMcpRequest): Promise<void> {
     api: inProcessApi(who.claims, r.handleApi, lifetime.signal),
     ctx: { identity: async () => ({ userId: who.userId, email: who.email }) },
     approver: REMOTE_APPROVER,
-    /* Without the tools that could only refuse here (261010i § D2). */
-    tools: remoteTools(),
+    /* Without the tools that could only refuse here (261010i § D2); with the
+       admin's two no-press tools (261012b), decided from the verified id. The
+       gate refuses everyone else today, so this id is always an admin's here;
+       it is passed explicitly so opening the route to readers keeps their press. */
+    tools: remoteTools(TOOLS, { verifiedUserId: who.userId }),
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

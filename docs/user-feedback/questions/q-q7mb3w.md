@@ -1,10 +1,11 @@
 ---
 id: q-q7mb3w
 report: spya-yk3r03
-status: open
+status: answered
 asked: 2026-10-11
 title: Should a close paraphrase from the guide also save without a press?
 refs: follows q-t3j8hj (reply spya-ca4fx4) · qi-2gy92mvc · SPIDERYARN-READING2-H8 · docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md · docs/user-feedback/261011_0139-the-guide-saves-your-profile-in-your-words.md · src/save-closeness.ts
+acted: spya-wwy7sh
 ---
 The guide now saves your reason and About you without a press when its words are exactly words you typed in that message. When it rewords them even slightly, you still get a Save button. Should a reworded version also save by itself?
 
@@ -23,3 +24,9 @@ What was built (on dev, not yet deployed). When you type a message to the guide 
 Why not "close" for saving by itself. A looser rule was built first: every word had to be one you typed, or a small linking word like "I", "am", "have". GPT Sol broke it in review. You type "What does this paper say about cancer?" and a planted instruction in the article gets the guide to save "I have cancer." to About you, which then goes into every later AI prompt for every article. Similarly "I do not want links to evil.com" became "I want links to evil.com". No rule that lets the AI reword was found that a hostile article cannot turn into a sentence you never said. An exact run of your own words cannot be turned around like that (the build also refuses a run that starts just after a "not").
 
 What would decide it. Whether one press on a reworded offer is worth the risk that rewording without a press brings. B is possible, but only with that risk accepted.
+
+## Greg's answer, 2026-10-12 (in the Feedback dialog, reply `spya-wwy7sh`)
+
+> B
+
+Acted on as doc work, not a build, because B loosens a listed defence (src/save-closeness.ts, the security map's chipFor row) and an unattended run does not do that on a reply alone. Opus and GPT Sol were consulted, and GPT Sol reviewed the plan twice. Each looser rule for "close" was broken (dropping "a" turned "a little experience" into "little experience"; a cut after a comma turned "In the simulation, I am a surgeon" into "I am a surgeon"). The plan, 261012c, ends with a light form (a whole typed sentence, spelling-level changes only) and a wider form that needs a second AI check measured first. Who may build which is asked in q-pm2j66, and the build is held as qi-ywbfftr2. (fbyk3r03-q7mb3w-b-follow-up, 2026-10-12.)

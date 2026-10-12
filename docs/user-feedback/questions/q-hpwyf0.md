@@ -1,9 +1,10 @@
 ---
 id: q-hpwyf0
 report: spya-cwb56b
-status: open
+status: answered
 asked: 2026-10-11
 title: May an unattended agent build C, letting ChatGPT or Claude on the web make your articles public without your press?
+acted: spya-mre525
 refs: follows q-pe52f6 (reply spya-fsarqm) · qi-jpw55yrq (the build, held) · docs/plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md · docs/user-feedback/261010_1737-mcp-draft-a-gift-for-any-article-send-makes-the-link.md · SPIDERYARN-READING2-GX · docs/project/security-map.md
 ---
 You chose C on q-pe52f6: from ChatGPT or Claude on the web, on your admin account only, the agent may make an article public or hand over its private link without a press of yours. Nothing is built yet, because this removes a safety catch, and an agent working with nobody watching may not remove one on a reply alone. So the question is only who may build it.
@@ -27,3 +28,9 @@ Why ask again. Our feedback rules say an unattended agent does not loosen a secu
 What C means in practice. From ChatGPT or Claude on the web, signed in as you, an agent could make any of your articles public, or give itself a private link to one, in the middle of a conversation. It would also be the one saying you have the right to share that article, which today only your press can say. Readers who are not admins see no change.
 
 What would decide it: whether you are content for the change to be built and reviewed without you watching, given that it is limited to your account by a server-side check.
+
+Greg's reply, 2026-10-12 (spya-mre525, in the Feedback dialog):
+
+> A
+
+Acted on by queue item qi-qwe2hyjf, 2026-10-12: built by an unattended agent on the three conditions, with GPT Sol reviewing the plan and the code. From ChatGPT or Claude on the web, on an admin account, make_article_public and create_private_link now run without a press; isAdmin is checked on the server when the list is built and again on every call; every other account, and the Mac app for everyone, keeps the press; the security notes changed in the same commit (risk R26). Plan: docs/plans/261012b-mcp-admin-publish-and-private-link-from-the-web-without-a-press.md.

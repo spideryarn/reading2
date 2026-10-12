@@ -542,13 +542,15 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
  * **The Skim route, rebuilt stop by stop** — since 2026-09-29
  * (SPIDERYARN-READING2-56).
  *
- * Five fields of a stop and `offered`, and nothing else: `profileHash` is
+ * Five fields of a stop, the pass `intros` and `offered`, and nothing else: `profileHash` is
  * who the route was planned for and never crosses, and the rest of the
  * document is pipeline provenance. `cue` is optional on a stored stop (routes
  * before `trajectory/5` have none), so it goes through `opt`; so is `again`
  * (absent before `skim/9`, and on any stop carried nowhere). `again` is which
  * passes the stop is walked in — the route itself, so without it a visitor
- * would walk a different pass from the owner (plan 261003l, Sol F4).
+ * would walk a different pass from the owner (plan 261003l, Sol F4). `intros`
+ * is optional too (absent before `skim/13`) and crosses since 2026-10-12, on
+ * Greg's say-so (q-t5xjqn, plan 261012a).
  * src/public-types.ts § `PublicSkim` is the argument for each.
  */
 function publicSkim(skim: Skim): PublicSkim {
@@ -562,6 +564,7 @@ function publicSkim(skim: Skim): PublicSkim {
         ...opt(stop, "again"),
       }),
     ),
+    ...opt(skim, "intros"),
     offered: skim.offered,
   };
 }
