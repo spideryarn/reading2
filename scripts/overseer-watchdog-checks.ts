@@ -30,6 +30,7 @@ import { openReadinessStore, readinessDirExists, readinessDirFromEnv } from "../
 import { readinessVerdict } from "../tools/fleet/readiness-verdict.js";
 import { readinessRunnerPath, type Reading } from "../tools/fleet/readiness.js";
 import { storeRoot } from "../tools/overseer/store.js";
+import { NOT_RELEASE_PATHS } from "./changelog/release-paths.js";
 import { SESSION_ROLE_ENV } from "./gjd-remote-tmux.js";
 
 export type CheckState = "ok" | "unhealthy" | "unknown";
@@ -212,11 +213,29 @@ export type TrunkRead =
       kind: "known";
       mainSha: string;
       devSha: string;
-      /** How many commits `origin/main..origin/dev` holds. */
+      /** How many commits `origin/main..origin/dev` holds, bookkeeping included. */
       undeployed: number;
-      /** The one with the oldest committer time, or null when there are none. */
+      /** How many of those are changelog bookkeeping only — see {@link isChangelogBookkeeping}. */
+      bookkeeping: number;
+      /**
+       * The non-bookkeeping one with the oldest committer time, or null when
+       * there are none.
+       */
       oldestUndeployed: { sha: string; committedAtMs: number } | null;
     };
+
+/**
+ * **A commit that only records a deploy is not undeployed work.**
+ * `npm run changelog:promote` commits the deploy record to dev after every
+ * deploy, and that commit reaches production only with the next release — so
+ * counting it made every quiet 12 hours an alarm (2026-10-12). The files are
+ * the changelog's own two, the same list the deploy gate already says is not a
+ * release (`NOT_RELEASE_PATHS`). A commit with no path list — a merge, an empty
+ * commit — is counted: this only ever drops a commit it can show is bookkeeping.
+ */
+export function isChangelogBookkeeping(paths: readonly string[]): boolean {
+  return paths.length > 0 && paths.every((p) => NOT_RELEASE_PATHS.includes(p));
+}
 
 function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): { ok: true; out: string } | { ok: false; why: string } {
   const ran = spawnSync("git", args, {
@@ -232,7 +251,9 @@ function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): { ok: tru
   });
   if (ran.error !== undefined) return { ok: false, why: `git ${args[0]}: ${ran.error.message}` };
   if (ran.status !== 0) return { ok: false, why: `git ${args[0]}: ${ran.stderr.trim().split("\n").slice(-1)[0] ?? `exit ${String(ran.status)}`}` };
-  return { ok: true, out: ran.stdout.trim() };
+  // Preserve path bytes in log output; trimming can turn a different filename
+  // ending in spaces into one of the excluded changelog paths.
+  return { ok: true, out: ran.stdout };
 }
 
 /**
@@ -254,20 +275,33 @@ export function readTrunk(cwd: string = process.cwd()): TrunkRead {
   if (!main.ok) return { kind: "unknown", why: main.why };
   const dev = git(cwd, ["rev-parse", "--verify", "origin/dev^{commit}"]);
   if (!dev.ok) return { kind: "unknown", why: dev.why };
-  const log = git(cwd, ["log", "--format=%H %ct", `${main.out}..${dev.out}`]);
+  const mainSha = main.out.trim();
+  const devSha = dev.out.trim();
+  // Each commit as NUL, "<sha> <committer time>", then the paths it changed,
+  // one per line — the framing release-paths.ts § releaseCommits reads. Merges
+  // print no paths. Quoted paths cannot match the exclusions; both are counted.
+  const log = git(cwd, ["log", "--format=%x00%H %ct", "--name-only", "--no-renames", `${mainSha}..${devSha}`]);
   if (!log.ok) return { kind: "unknown", why: log.why };
 
   let oldest: { sha: string; committedAtMs: number } | null = null;
   let undeployed = 0;
-  for (const line of log.out.split("\n")) {
-    if (line === "") continue;
-    const match = /^([0-9a-f]{40}) (\d+)$/.exec(line);
-    if (match === null) return { kind: "unknown", why: `git log printed a line this does not understand: ${JSON.stringify(line.slice(0, 80))}` };
+  let bookkeeping = 0;
+  for (const chunk of log.out.split("\0")) {
+    // Only empty lines are framing. Whitespace-only filenames are real paths.
+    const lines = chunk.split("\n").filter((l) => l !== "");
+    const header = lines.shift();
+    if (header === undefined) continue;
+    const match = /^([0-9a-f]{40}) (\d+)$/.exec(header);
+    if (match === null) return { kind: "unknown", why: `git log printed a line this does not understand: ${JSON.stringify(header.slice(0, 80))}` };
     undeployed += 1;
+    if (isChangelogBookkeeping(lines)) {
+      bookkeeping += 1;
+      continue;
+    }
     const committedAtMs = Number(match[2]) * 1000;
     if (oldest === null || committedAtMs < oldest.committedAtMs) oldest = { sha: match[1] ?? "", committedAtMs };
   }
-  return { kind: "known", mainSha: main.out, devSha: dev.out, undeployed, oldestUndeployed: oldest };
+  return { kind: "known", mainSha, devSha, undeployed, bookkeeping, oldestUndeployed: oldest };
 }
 
 /** What the readiness loop's records say about dev, or why they could not be read. */
@@ -454,12 +488,17 @@ export function assessDeployLag(
   // reading as ok; a head the loop has not reached yet does not.
   const quiet: CheckState = streak.kind === "unknown" ? "unknown" : "ok";
   if (trunk.oldestUndeployed === null) {
-    return check(quiet, `production (origin/main ${trunk.mainSha.slice(0, 9)}) has everything on dev. ${readiness}`);
+    const except =
+      trunk.bookkeeping === 0
+        ? ""
+        : ` but ${trunk.bookkeeping} changelog bookkeeping commit(s), which touch only changelog files and are not counted`;
+    return check(quiet, `production (origin/main ${trunk.mainSha.slice(0, 9)}) has everything on dev${except}. ${readiness}`);
   }
   const lagMs = nowMs - trunk.oldestUndeployed.committedAtMs;
+  const leftOut = trunk.bookkeeping === 0 ? "" : ` (${trunk.bookkeeping} of them changelog bookkeeping, not counted)`;
   const behind =
-    `production is ${hours(lagMs)} hours behind dev: ${trunk.undeployed} commit(s) on origin/dev are not on origin/main, ` +
-    `the oldest ${trunk.oldestUndeployed.sha.slice(0, 9)} committed ${new Date(trunk.oldestUndeployed.committedAtMs).toISOString()}`;
+    `production is ${hours(lagMs)} hours behind dev: ${trunk.undeployed} commit(s) on origin/dev are not on origin/main${leftOut}, ` +
+    `the oldest counted ${trunk.oldestUndeployed.sha.slice(0, 9)} committed ${new Date(trunk.oldestUndeployed.committedAtMs).toISOString()}`;
   if (lagMs <= maxLagMs) return check(quiet, `${behind}. ${readiness}`);
   return check(
     "unhealthy",

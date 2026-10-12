@@ -9,7 +9,7 @@
  * that cannot be asked, a fetch that failed, an unreadable readiness record.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -291,11 +291,12 @@ describe("readinessStreak", () => {
 
 /* ------------------------------------------------------------------ */
 
-const knownTrunk = (oldestAgoMs: number | null, undeployed = 3): TrunkRead => ({
+const knownTrunk = (oldestAgoMs: number | null, undeployed = 3, bookkeeping = 0): TrunkRead => ({
   kind: "known",
   mainSha: SHA_A,
   devSha: SHA_C,
-  undeployed: oldestAgoMs === null ? 0 : undeployed,
+  undeployed: (oldestAgoMs === null ? 0 : undeployed) + bookkeeping,
+  bookkeeping,
   oldestUndeployed: oldestAgoMs === null ? null : { sha: SHA_B, committedAtMs: NOW - oldestAgoMs },
 });
 const ready: ReadinessStreak = { kind: "known", head: { kind: "ready" }, lastReady: null };
@@ -332,7 +333,9 @@ describe("assessDeployLag", () => {
 
   it("does not report ok with unreadable readiness, even when production caught up", () => {
     for (const lag of [null, HOUR]) {
-      expect(assessDeployLag(knownTrunk(lag), { kind: "unknown", why: "corrupt store" }, NOW).state).toBe("unknown");
+      for (const bookkeeping of [0, 1]) {
+        expect(assessDeployLag(knownTrunk(lag, 3, bookkeeping), { kind: "unknown", why: "corrupt store" }, NOW).state).toBe("unknown");
+      }
     }
   });
 
@@ -347,6 +350,23 @@ describe("assessDeployLag", () => {
   it("rounds a red lower bound down so it does not overstate the evidence", () => {
     const streak: ReadinessStreak = { kind: "known", head: { kind: "red", why: "failed", sinceMs: NOW - 14.9 * HOUR }, lastReady: null };
     expect(assessDeployLag(knownTrunk(20 * HOUR), streak, NOW).detail).toContain("at least 14 hours");
+  });
+
+  it("is ok when the only undeployed commits are changelog bookkeeping, and says so", () => {
+    // 2026-10-12: `changelog:promote` commits the deploy record after every
+    // deploy, and that commit is not deployed until the next release.
+    const check = assessDeployLag(knownTrunk(null, 0, 1), ready, NOW);
+    expect(check.state).toBe("ok");
+    expect(check.detail).toContain("1 changelog bookkeeping commit(s)");
+    expect(check.detail).toContain("not counted");
+    expect(check.detail).toContain("touch only changelog files");
+  });
+
+  it("names the bookkeeping it left out when there is real lag too", () => {
+    const check = assessDeployLag(knownTrunk(20 * HOUR, 2, 1), ready, NOW);
+    expect(check.state).toBe("unhealthy");
+    expect(check.detail).toContain("3 commit(s) on origin/dev are not on origin/main");
+    expect(check.detail).toContain("1 of them changelog bookkeeping, not counted");
   });
 
   it("is unknown, never ok, when git could not say", () => {
@@ -417,6 +437,85 @@ describe("readTrunk, against real git", () => {
     if (trunk.kind !== "known") return;
     expect(trunk.undeployed).toBe(2);
     expect(trunk.oldestUndeployed?.committedAtMs).toBe(Date.parse("2026-10-07T19:00:00Z"));
+  });
+
+  function commitFiles(work: string, files: Record<string, string>, message: string, date: string): void {
+    for (const [file, body] of Object.entries(files)) {
+      mkdirSync(join(work, file, ".."), { recursive: true });
+      writeFileSync(join(work, file), body);
+      git(work, ["add", "--", file]);
+    }
+    git(work, ["commit", "--quiet", "-m", message], date);
+  }
+
+  it("does not count a commit that only records a deploy in the changelog files", () => {
+    const { clone, work } = setup();
+    git(work, ["checkout", "--quiet", "-b", "dev"]);
+    // What `changelog:promote` writes after every deploy (e.g. 378ca6cbe).
+    commitFiles(
+      work,
+      { "src/web/changelog-pending.json": "null\n", "src/web/changelog-versions.ndjson": "{}\n" },
+      "Changelog: record the production deploy",
+      "2026-10-07T19:00:00Z",
+    );
+    git(work, ["push", "--quiet", "origin", "dev"]);
+    expect(readTrunk(clone)).toMatchObject({ kind: "known", undeployed: 1, bookkeeping: 1, oldestUndeployed: null });
+
+    // A real commit after it is what the lag is measured from.
+    commitFiles(work, { "src/a.ts": "x\n" }, "real work", "2026-10-08T09:00:00Z");
+    git(work, ["push", "--quiet", "origin", "dev"]);
+    const trunk = readTrunk(clone);
+    expect(trunk).toMatchObject({ kind: "known", undeployed: 2, bookkeeping: 1 });
+    if (trunk.kind === "known") expect(trunk.oldestUndeployed?.committedAtMs).toBe(Date.parse("2026-10-08T09:00:00Z"));
+  });
+
+  it("counts a commit that touches a changelog file and anything else", () => {
+    const { clone, work } = setup();
+    git(work, ["checkout", "--quiet", "-b", "dev"]);
+    commitFiles(work, { "src/web/changelog-pending.json": "null\n", "src/b.ts": "y\n" }, "mixed", "2026-10-07T19:00:00Z");
+    git(work, ["push", "--quiet", "origin", "dev"]);
+    const trunk = readTrunk(clone);
+    expect(trunk).toMatchObject({ kind: "known", undeployed: 1, bookkeeping: 0 });
+    if (trunk.kind === "known") expect(trunk.oldestUndeployed?.committedAtMs).toBe(Date.parse("2026-10-07T19:00:00Z"));
+  });
+
+  it.each([" ", "\u00a0", "src/web/changelog-versions.ndjson ", "src/a\nfile.ts", 'src/a"file.ts'])
+    ("counts a mixed commit with an unusual path %j", (path) => {
+      const { clone, work } = setup();
+      git(work, ["checkout", "--quiet", "-b", "dev"]);
+      // Include a filename Git prints unquoted but JS considers whitespace.
+      git(clone, ["config", "core.quotePath", "false"]);
+      commitFiles(work, { "src/web/changelog-pending.json": "null\n", [path]: "real\n" }, "mixed", "2026-10-07T19:00:00Z");
+      git(work, ["push", "--quiet", "origin", "dev"]);
+      const trunk = readTrunk(clone);
+      expect(trunk).toMatchObject({ kind: "known", undeployed: 1, bookkeeping: 0 });
+      if (trunk.kind === "known") expect(trunk.oldestUndeployed?.committedAtMs).toBe(Date.parse("2026-10-07T19:00:00Z"));
+    });
+
+  it("counts a merge of bookkeeping commits even with log.diffMerges configured", () => {
+    const { clone, work } = setup();
+    git(work, ["checkout", "--quiet", "-b", "notes"]);
+    commitFiles(work, { "src/web/changelog-pending.json": "null\n" }, "notes", "2026-10-08T09:00:00Z");
+    git(work, ["checkout", "--quiet", "-b", "dev", "main"]);
+    git(work, ["merge", "--quiet", "--no-ff", "notes", "-m", "merge notes"], "2026-10-07T19:00:00Z");
+    git(work, ["push", "--quiet", "origin", "dev"]);
+    git(clone, ["config", "log.diffMerges", "first-parent"]);
+    const trunk = readTrunk(clone);
+    expect(trunk).toMatchObject({ kind: "known", undeployed: 2, bookkeeping: 1 });
+    if (trunk.kind === "known") expect(trunk.oldestUndeployed?.committedAtMs).toBe(Date.parse("2026-10-07T19:00:00Z"));
+  });
+
+  it("counts a real file renamed into a changelog path", () => {
+    const { clone, work } = setup();
+    // Establish the old path on main, so only the rename is undeployed.
+    commitFiles(work, { "src/real.ts": "real\n" }, "real work", "2026-10-06T09:00:00Z");
+    git(work, ["push", "--quiet", "origin", "main"]);
+    git(work, ["checkout", "--quiet", "-b", "dev"]);
+    mkdirSync(join(work, "src/web"), { recursive: true });
+    git(work, ["mv", "src/real.ts", "src/web/changelog-pending.json"]);
+    git(work, ["commit", "--quiet", "-m", "rename"], "2026-10-07T19:00:00Z");
+    git(work, ["push", "--quiet", "origin", "dev"]);
+    expect(readTrunk(clone)).toMatchObject({ kind: "known", undeployed: 1, bookkeeping: 0 });
   });
 
   it("refreshes both tracking refs even if remote.origin.fetch only maps main", () => {
