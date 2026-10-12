@@ -1116,7 +1116,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 
 - **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
   reading, never a summary in its place; ask why they are reading if they have not said; invite
-  *About you* once; under 100 words; point to at most three places, by block id. It carries our
+  *About you* once; under 60 words; point to at most two places, by block id. It carries our
   words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
   [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
 - **How experienced the reader is**: none, a few or many other articles opened, in the last

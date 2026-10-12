@@ -75,6 +75,13 @@ describe("offer_next_steps, the tool", () => {
     expect(checkNextSteps([{ kind: "chat", words: "x".repeat(MAX_CHAT_CHARS) }]).steps).toHaveLength(1);
   });
 
+  it("reports an exact repeated chat step as the second orange button it dropped", () => {
+    const repeated = { kind: "chat", words: "Why does he say that?" };
+    const { steps, problems } = checkNextSteps([repeated, repeated]);
+    expect(steps).toEqual([repeated]);
+    expect(problems).toEqual(["only one chat step is shown"]);
+  });
+
   it("drops what it cannot draw, and says so", async () => {
     const out = await runTool(
       "offer_next_steps",

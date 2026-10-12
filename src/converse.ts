@@ -2479,7 +2479,7 @@ function lengthLine(kind: ThreadKind, opening = false): string {
   /* The guide's, by the same lever: its rules sit ahead of a whole article,
      and the one most worth repeating is the anti-goal. */
   if (kind === "guide")
-    return "As HOW TO GUIDE THEM says: short, under 100 words, one question at most and it comes last. About their reading, not a summary of the piece. A mode button only as printed beside the mode; you cannot act yourself, the button is the offer.";
+    return "As HOW TO GUIDE THEM says: short, under 60 words, one question at most and it comes last. About their reading, not a summary of the piece. A mode button only as printed beside the mode; you cannot act yourself, the button is the offer.";
   if (kind !== "chat") return "";
   return "Keep it brief, as WHAT IT MUST NOT DO says: most answers need fewer than 300 words, unless they ask for more.";
 }
