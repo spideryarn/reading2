@@ -588,6 +588,9 @@ import { inputFingerprint as sourcesClaimsFingerprint } from "./sources-claims.j
    src/types.ts § LEARN_STANCES. */
 import { LEARN_STANCES, NONE_YET_AS_NULL_HEADER } from "./types.js";
 import type { Article, CommentAnchor, HighlightColour, PublicCopyFound, ResetResponse } from "./types.js";
+import type { ChatThreadView } from "./types.js";
+import { MENTIONS_MAX_PER_QUESTION } from "./chat-mention-limits.js";
+import { admitMentions, mentionView, resolveMentions, resolveThreadMentions } from "./chat-mentions.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -3227,6 +3230,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     modality,
     sourceCommentId,
     visible,
+    mentions,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **A stance is a legacy field: validated, then dropped.** Until 2026-10-02
@@ -3368,6 +3372,25 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       throw httpError(400, `visible may name at most ${MAX_VISIBLE_BLOCKS} blocks`);
     }
   }
+  /* **Other articles of the reader's, brought in with an @-mention** — a
+     list of slugs, on a new question only. A retry re-asks a stored question
+     and an edit rewrites one, and both keep the articles that question was
+     sent with (they read them back from the store, below), so either carrying
+     a list is refused rather than ignored: copying `visible`'s rule would have
+     let an edit through (GPT Sol's F4 on plan 261012d). Shape here, before
+     anything is read; ownership, the open article, readability and size in
+     `admitMentions`, after the thread's kind is known. */
+  if (mentions !== undefined) {
+    if (wantsRetry || wantsEdit) {
+      throw httpError(400, "Articles can only be brought in with a new question");
+    }
+    if (!Array.isArray(mentions) || !mentions.every((m) => isSlug(m))) {
+      throw httpError(400, "mentions must be a list of article slugs");
+    }
+    if (mentions.length > MENTIONS_MAX_PER_QUESTION) {
+      throw httpError(400, `You can bring in at most ${MENTIONS_MAX_PER_QUESTION} articles with one question.`);
+    }
+  }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
@@ -3396,6 +3419,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (visible !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
     throw httpError(400, "visible only applies to a chat");
   }
+  /* **Typed Chat only**, by the thread's kind, as `visible` above. */
+  if (mentions !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
+    throw httpError(400, "Other articles can only be brought into a chat");
+  }
   /* `storedKind` was read outside `inTurnOrder`. If two first turns carrying the
      same optimistic id arrive together, the other one can create a Learn
      thread after that read. Make chat explicit on the authoritative store write
@@ -3406,7 +3433,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   /* An origin is chat-only as well (checked below), so it makes chat explicit
      here for the same reason. */
   const beginKind = !wantsRetry && !wantsEdit
-    ? (wantedKind ?? (visible !== undefined || origin !== undefined ? "chat" : undefined))
+    ? (wantedKind ??
+      (visible !== undefined || origin !== undefined || mentions !== undefined ? "chat" : undefined))
     : undefined;
   const cap = longInput ? MAX_LEARN_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
@@ -3555,6 +3583,15 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   ) {
     throw httpError(400, "origin.blockId is not a block of this article");
   }
+  /* Each mentioned article checked before anything is written: the reader's
+     own (another reader's slug is "not found"), not this one, readable, under
+     the cap, and the conversation not full. A refusal is a 400 whose words the
+     composer shows, and the draft is kept. The reads are handed on so this
+     turn's resolver does not read the same articles twice. */
+  const admitted =
+    mentions !== undefined && (mentions as string[]).length > 0
+      ? await admitMentions(slug, threadId, mentions as string[])
+      : null;
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
@@ -3693,6 +3730,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
                the user row; `withTurn` puts it there for retries to inherit. */
             ...(help === true ? { help: true as const } : {}),
             ...(isComposerModality(modality) ? { modality } : {}),
+            ...(admitted ? { mentions: admitted.mentions } : {}),
           });
   });
   const { thread, reply, user } = begun;
@@ -3713,6 +3751,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      another: the row above saying one thing and the answer below it being to
      something else, with nothing on screen to show the two had parted. */
   const asked = user.text;
+  /* **The articles this conversation holds at this question, from the stored
+     thread** — the same resolver on a send, a retry and an edit, so a retry
+     keeps what its question was sent with and an edit of a later question
+     cannot drop an earlier one's. Re-checked against the current owner and
+     the cap on every turn. Typed Chat only. Read before the headers go out,
+     so a failure here is an ordinary JSON error, like `loadArticle` above. */
+  const mentioned =
+    thread.kind === "chat"
+      ? await resolveMentions(slug, thread, user.id, admitted ? { reads: admitted.reads } : {})
+      : [];
   const key = `${slug}/${thread.id}/${reply.id}`;
   const attempt = randomUUID();
   const stop = new AbortController();
@@ -3835,6 +3883,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          pressed on rather than whatever is under the id when it arrives. See
          `Live.attempt`. */
       attempt,
+      /* The articles brought in, as the panel may show and link them: a slug
+         and block ids only while one is available. Omitted when there are
+         none. */
+      ...(mentioned.length > 0 ? { mentioned: mentioned.map(mentionView) } : {}),
     });
 
     /* Read once for the whole turn: the joined string for the prompt, and its
@@ -3935,6 +3987,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          Sol's review of docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md,
          finding 1. */
       help: user.help === true,
+      /* From the stored thread via `resolveMentions` above, never the body. */
+      mentions: mentioned,
       signal: stop.signal,
     })) {
       if (event.type === "delta") {
@@ -12751,7 +12805,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         send(res, 200, { threads: threads.map(summarise) });
         return;
       }
-      send(res, 200, { threads });
+      /* **The articles each conversation brought in**, through the same
+         resolver a turn uses, so the panel's "Also reading" line and its
+         citation chips agree with what the model was given. Only on the full
+         list, and only on threads that have any. */
+      const mentioned = await resolveThreadMentions(slug);
+      const views: ChatThreadView[] = threads.map((t) => {
+        const list = mentioned.get(t.id);
+        return list && list.length > 0 ? { ...t, mentioned: list.map(mentionView) } : t;
+      });
+      send(res, 200, { threads: views });
     },
   },
 

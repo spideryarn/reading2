@@ -64,6 +64,7 @@ import { and, asc, eq, gt, gte, isNull, lt, notInArray, or, sql } from "drizzle-
 
 import {
   CHAT_SWEPT,
+  ChatTurnRefused,
   requireTail,
   titleFrom,
   withDeleteFrom,
@@ -87,7 +88,15 @@ import type {
 import { storedThreadKind } from "../types.js";
 import { originColumns, originFromColumns } from "../thread-origin.js";
 import { splitHint } from "../recall-hint.js";
-import { MissingAttempt, type ChatStore, type HintOpened, type SweepOptions } from "./contracts.js";
+import {
+  MissingAttempt,
+  type ChatStore,
+  type HintOpened,
+  type MentionRow,
+  type SweepOptions,
+} from "./contracts.js";
+import { heldMentionKeys, insertMentions, mentionKey, mentionRows } from "./pg-chat-mentions.js";
+import { MENTIONS_MAX_PER_THREAD, MENTIONS_THREAD_FULL } from "../chat-mention-limits.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
@@ -405,6 +414,10 @@ const rawPgChatStore: ChatStore = {
     return threadsFor(await articleIdForOwned(slug));
   },
 
+  async mentions(slug: string, threadId?: string): Promise<MentionRow[]> {
+    return mentionRows(await articleIdForOwned(slug), threadId);
+  },
+
   async begin(slug, turn, now = () => new Date().toISOString()) {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
@@ -429,6 +442,20 @@ const rawPgChatStore: ChatStore = {
           // Only the reply carries an attempt: the question is already written.
           messageRow(articleId, thread.id, reply, base + 1, attempt),
         ]);
+      /* **The articles this question brings in**, under the question row
+         just written, in this transaction: a turn and its mentions land
+         together or not at all. The thread limit is decided here, against
+         what the locked thread already holds, as well as by the route (which
+         gives the sentence first but reads outside this lock). A mention of
+         an article the thread already holds takes no new place. Plan
+         docs/plans/261012d-chat-at-mention-your-own-articles.md § 2. */
+      const mentions = turn.mentions ?? [];
+      if (mentions.length > 0) {
+        const held = await heldMentionKeys(tx, articleId, thread.id);
+        for (const m of mentions) held.add(mentionKey(m.articleId, m.title));
+        if (held.size > MENTIONS_MAX_PER_THREAD) throw new ChatTurnRefused(MENTIONS_THREAD_FULL);
+        await insertMentions(tx, articleId, thread.id, user.id, mentions);
+      }
       return { thread, user, reply, attempt };
     }, READ_COMMITTED);
 

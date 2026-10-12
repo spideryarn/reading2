@@ -450,6 +450,18 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         status: "done",
       });
     },
+    /* After its question, which it hangs off. It points at this same article,
+       because the key must name a real one and this is the one the walk has. */
+    chat_mentions: async () => {
+      await db.insert(schema.chatMentions).values({
+        articleId: ARTICLE_ID,
+        threadId: "spya-cvt234",
+        messageId: "spya-cvu234",
+        position: 0,
+        mentionedArticleId: ARTICLE_ID,
+        title: sentinel("chat_mentions"),
+      });
+    },
     search_runs: async () => {
       await db.insert(schema.searchRuns).values({
         articleId: ARTICLE_ID,
@@ -796,6 +808,10 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   chat_messages: {
     threadId: "Each message is nested inside its thread in chat.json, so the key would be noise.",
   },
+  chat_mentions: {
+    threadId: "Each mention is nested inside its question, inside its thread, in chat.json.",
+    messageId: "Each mention is nested inside the question that made it, in chat.json.",
+  },
   search_runs: {},
   referee_criteria: {},
   referee_promises: {},
@@ -841,6 +857,10 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   chat_threads: (parsed) => listAt(parsed, "threads"),
   chat_messages: (parsed) =>
     listAt(parsed, "threads").flatMap((thread) => listAt(thread, "messages")),
+  chat_mentions: (parsed) =>
+    listAt(parsed, "threads")
+      .flatMap((thread) => listAt(thread, "messages"))
+      .flatMap((message) => listAt(message, "mentions")),
   search_runs: (parsed) => listAt(parsed, "runs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_promises: (parsed) => [at(parsed, "run")],

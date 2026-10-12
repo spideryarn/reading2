@@ -1178,6 +1178,32 @@ export type HintOpened =
   | { ok: true; hintOpenedAt: string }
   | { ok: false; reason: "no-such-message" | "not-a-recall-answer" | "hint-changed" };
 
+/** One article named by one question, as `begin` is handed it. */
+export interface MentionToStore {
+  /** `articles.id` — resolved owner-scoped by the route, never a slug. */
+  readonly articleId: string;
+  /** The title the reader saw when they picked it. */
+  readonly title: string;
+}
+
+/** A stored mention, in conversation order. */
+export interface MentionRow {
+  readonly threadId: string;
+  readonly messageId: string;
+  /** The question's place in its thread. */
+  readonly ordinal: number;
+  /** Order within the question. */
+  readonly position: number;
+  /** Null when the mentioned article was deleted (`on delete set null`). */
+  readonly mentionedArticleId: string | null;
+  readonly title: string;
+  /**
+   * The mentioned article's slug **if it is still the current owner's**, else
+   * null. See the header of src/store/pg-chat-mentions.ts.
+   */
+  readonly ownedSlug: string | null;
+}
+
 export interface ChatStore {
   load(slug: string): Promise<ChatThread[]>;
 
@@ -1214,9 +1240,27 @@ export interface ChatStore {
        * `withEdit` already hand back. See `ChatMessage.help`.
        */
       help?: true;
+      /**
+       * Other articles of the reader's this question brings into the
+       * conversation — already resolved owner-scoped by the route, by id. Written
+       * as `chat_mentions` rows under the **user** message, in the same
+       * transaction. `retry` and `edit` take none: a question keeps what it was
+       * sent with. Refused with `ChatTurnRefused` when the thread would then
+       * hold more than `MENTIONS_MAX_PER_THREAD` distinct articles.
+       */
+      mentions?: readonly MentionToStore[];
     },
     now?: () => string,
   ): Promise<Turn>;
+
+  /**
+   * **Every @-mention stored on this article's conversations**, or on one of
+   * them, in conversation order. The mentioned article's slug is filled in
+   * only while it is still the current owner's — `mentionRows` in
+   * src/store/pg-chat-mentions.ts. Read by `resolveMentions`
+   * (src/chat-mentions.ts), the one place that decides availability.
+   */
+  mentions(slug: string, threadId?: string): Promise<MentionRow[]>;
 
   /**
    * Patch one message in place. **Never appends**, and bumps the thread's

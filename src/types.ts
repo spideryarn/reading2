@@ -4646,6 +4646,49 @@ export interface ChatThread {
 }
 
 /**
+ * **Why an article brought into a conversation is not in it any more.**
+ *
+ * - `deleted`: the article was deleted, so its mention row lost the link.
+ * - `not-owned`: it exists but is no longer this reader's (transferred).
+ * - `not-processed`: it is minimal, or has no published revision to read.
+ * - `too-long`: a re-extraction took it past `MENTION_MAX_CHARS`.
+ *
+ * Plan docs/plans/261012d-chat-at-mention-your-own-articles.md § 3.
+ */
+export type MentionUnavailableReason = "deleted" | "not-owned" | "not-processed" | "too-long";
+
+/**
+ * **One article brought into a conversation, as the panel is told about it** —
+ * on the thread GET (`ChatThreadView.mentioned`) and the stream's `begin`
+ * frame. From `resolveMentions` (src/chat-mentions.ts), which re-checks the
+ * current owner on every read.
+ *
+ * A union rather than optional fields: an unavailable mention carries its
+ * stored title and **nothing else** — no slug and no block ids, because a
+ * transferred article's slug and ids are now somebody else's. The client's
+ * cross-article citation chips are built only from the available ones, so a
+ * model's bracket can only ever select among ids this list names.
+ */
+export type MentionedArticleView =
+  | {
+      available: true;
+      /** The title as it was when the reader mentioned it. */
+      title: string;
+      /** For `/read/<slug>?at=<id>`. The server's, never the model's. */
+      slug: string;
+      /** Every block id of the article, for the client's citation map. */
+      blockIds: string[];
+    }
+  | { available: false; title: string; reason: MentionUnavailableReason };
+
+/**
+ * A thread as the full `GET /api/chat/:slug` sends it: the stored thread, plus
+ * the articles brought into it, when there are any. A wire shape only — the
+ * store never reads or writes `mentioned`, which is resolved per request.
+ */
+export type ChatThreadView = ChatThread & { mentioned?: MentionedArticleView[] };
+
+/**
  * A thread without its transcript — what the *reading* view is given.
  *
  * The reading view needs to draw a mark for every anchored conversation and say
