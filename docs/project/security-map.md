@@ -604,6 +604,22 @@ What crosses, and what does not:
 
 The public shelf's eight columns (`/read/public`) are a separate allowlist and were not changed.
 
+**`PublicSkim` gained `intros` on 2026-10-12.** Each Skim pass opens with one or two AI-written
+sentences that map the walk (`skim/13`). The question put to Greg was whether a visitor gets them as
+well as the owner ([q-t5xjqn](../user-feedback/questions/q-t5xjqn.md)):
+
+> A
+>
+> — Greg, 2026-10-12
+
+That is the say-so for this one field and nothing else on the route. It crosses through `opt`,
+absent on an older route, each entry plain text or `null`, drawn as a text node. It is on the same
+footing as the stops' `cue`, which already crossed: the intro's prompt holds the cue's rules and
+adds *"Never address or mention the reader"*. `profileHash` and `dropped` (its `badIntro` and
+`movedIntro` with it) still do not cross, and `tests/public-dto.test.ts` and
+`tests/public-visibility-pg.test.ts` assert both
+([261012a](../plans/261012a-skim-pass-intros-cross-to-visitors.md)).
+
 ## The fleet dashboard, which is a different product on the same box
 
 `tools/fleet/` is the agent dashboard on port 8787, not Spideryarn, and its threat model is its own:

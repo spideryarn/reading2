@@ -1,0 +1,264 @@
+diff --git a/src/public-types.ts b/src/public-types.ts
+index bcc277dbf..6609e7ae8 100644
+--- a/src/public-types.ts
++++ b/src/public-types.ts
+@@ -87,6 +87,7 @@ import type {
+   SearchHit,
+   SearchKind,
+   TimelineEvent,
++  SkimIntros,
+   SkimStop,
+   Tree,
+   Tweet,
+@@ -583,6 +584,12 @@ export interface PublicTimeline {
+  * the stop is walked in again (`skim/9`, plan 261003l — without it a visitor
+  * would walk a different pass from the owner).
+  *
++ * **`intros` crosses** since 2026-10-12 — the map of each pass, read before
++ * its first stop (`skim/13`, plan 261011r): plain text about the piece, or
++ * `null`, and absent on a route from before it. Greg's "A" to q-t5xjqn, the
++ * say-so this allowlist needs (plan 261012a). Its prompt holds the cue's rules
++ * and adds *"Never address or mention the reader"* (src/skim.ts, section 4).
++ *
+  * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
+  * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this
+  * route"*), so a visitor is shown it and stripping it would make that sentence
+@@ -595,13 +602,14 @@ export interface PublicTimeline {
+  * `generator`, `slug`, `sourceHash`, `visible`, `dropped`, `generatedAt`,
+  * `elapsedMs`.
+  *
+- * The cues *may* have been shaped by the owner's profile and their *why I'm
++ * The cues and intros *may* have been shaped by the owner's profile and their *why I'm
+  * reading this*, exactly as the glossary, ideas, quotes, tweets and sketch may;
+  * `PROFILE_RULES` (src/profile.ts) forbids a sentence about the reader, and
+  * /features/public-readable-sharing tells the author so.
+  */
+ export interface PublicSkim {
+   stops: SkimStop[];
++  intros?: SkimIntros;
+   offered: number;
+ }
+ 
+diff --git a/src/public/dto.ts b/src/public/dto.ts
+index edfe63950..6e6013f5e 100644
+--- a/src/public/dto.ts
++++ b/src/public/dto.ts
+@@ -542,13 +542,15 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
+  * **The Skim route, rebuilt stop by stop** — since 2026-09-29
+  * (SPIDERYARN-READING2-56).
+  *
+- * Five fields of a stop and `offered`, and nothing else: `profileHash` is
++ * Five fields of a stop, the pass `intros` and `offered`, and nothing else: `profileHash` is
+  * who the route was planned for and never crosses, and the rest of the
+  * document is pipeline provenance. `cue` is optional on a stored stop (routes
+  * before `trajectory/5` have none), so it goes through `opt`; so is `again`
+  * (absent before `skim/9`, and on any stop carried nowhere). `again` is which
+  * passes the stop is walked in — the route itself, so without it a visitor
+- * would walk a different pass from the owner (plan 261003l, Sol F4).
++ * would walk a different pass from the owner (plan 261003l, Sol F4). `intros`
++ * is optional too (absent before `skim/13`) and crosses since 2026-10-12, on
++ * Greg's say-so (q-t5xjqn, plan 261012a).
+  * src/public-types.ts § `PublicSkim` is the argument for each.
+  */
+ function publicSkim(skim: Skim): PublicSkim {
+@@ -562,6 +564,7 @@ function publicSkim(skim: Skim): PublicSkim {
+         ...opt(stop, "again"),
+       }),
+     ),
++    ...opt(skim, "intros"),
+     offered: skim.offered,
+   };
+ }
+diff --git a/src/types.ts b/src/types.ts
+index 3471fc426..16a1f47de 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1519,8 +1519,8 @@ export interface Skim {
+    * **One line per pass, read before its first stop** — Gist, More, Most;
+    * `null` for a pass the route does not offer or whose intro was bad.
+    * **Absent** on routes written before `skim/13`, which draw none.
+-   * Owner only: the visitor's route (src/public/dto.ts § `publicSkim`) is built
+-   * field by field and does not carry it. Plan 261011r.
++   * Plan 261011r. A visitor's route carries it too since 2026-10-12 (Greg's
++   * "A" to q-t5xjqn, plan 261012a; src/public/dto.ts § `publicSkim`).
+    */
+   intros?: SkimIntros;
+   /**
+diff --git a/src/web/SkimPanel.tsx b/src/web/SkimPanel.tsx
+index 02458a604..565c6a061 100644
+--- a/src/web/SkimPanel.tsx
++++ b/src/web/SkimPanel.tsx
+@@ -889,7 +889,7 @@ export function SkimPanel({ access, view, away }: Props) {
+     <>
+       <p>{promise}</p>
+       <p>{SKIM_CUE_EXPLAINED}</p>
+-      {made?.intros?.some((i) => i !== null) && <p>{SKIM_INTRO_EXPLAINED}</p>}
++      {route?.intros?.some((i) => i !== null) && <p>{SKIM_INTRO_EXPLAINED}</p>}
+       {pips && <p>{pipsLegend(pips)}</p>}
+       {coverage && <p>{coverage}</p>}
+       {made && (
+@@ -978,8 +978,8 @@ export function SkimPanel({ access, view, away }: Props) {
+           )}
+ 
+           {/* The map of the pass being walked (`skim/13`, plan 261011r) —
+-              owner only, as the visitor's route does not carry it. */}
+-          {owner && routed && <PassIntro intro={passIntro(owner.skim, view.depth)} />}
++              a visitor's too, since 2026-10-12 (plan 261012a). */}
++          {routed && <PassIntro intro={passIntro(route, view.depth)} />}
+ 
+           {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
+ 
+diff --git a/src/web/help/pages/modes/skim.md b/src/web/help/pages/modes/skim.md
+index 373e37517..687aba5a7 100644
+--- a/src/web/help/pages/modes/skim.md
++++ b/src/web/help/pages/modes/skim.md
+@@ -28,9 +28,8 @@ route; visitors to a shared article can walk one already planned.
+ - <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop
+   to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a
+   pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.
+-- On your own articles, a line above the stops, written by AI, maps the pass you are on: what it
+-  goes through, and in what order, so the jumps between passages make sense. It never says what the
+-  piece found.
++- A line above the stops, written by AI, maps the pass you are on: what it goes through, and in
++  what order, so the jumps between passages make sense. It never says what the piece found.
+ - Some stops have a short question above the quote, written by AI, to read it with: what the quote
+   refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on
+   its own has none.
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index 2762a3626..e7248bc60 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -1302,9 +1302,8 @@ describe("the artefacts a shared link carries", () => {
+       },
+       { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
+     ],
+-    /* `skim/13`'s pass intros (plan 261011r) are the owner's only for now:
+-       whether a visitor gets them is a question for Greg, since adding them
+-       is an edit to this allowlist. The key set below proves they stay out. */
++    /* `skim/13`'s pass intros (plan 261011r) cross since 2026-10-12, Greg's
++       "A" to q-t5xjqn (plan 261012a); a `null` entry crosses as `null`. */
+     intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
+     visible: [1, 2, 2],
+     offered: 12,
+@@ -2132,14 +2131,15 @@ describe("the artefacts a shared link carries", () => {
+   });
+ 
+   /**
+-   * **The route's stops and `offered`, and nothing else** — not who it was
++   * **The route's stops, its pass intros and `offered`, and nothing else** — not who it was
+    * planned for (`profileHash`), and not the pipeline's counts and timings.
+    * Asserted twice: the key set would pass a renamed `profileHash`, and the
+    * string search would not.
+    */
+-  it("carries the route's stops and the offered count, and not who it was planned for", () => {
++  it("carries the route's stops, intros and offered count, and not who it was planned for", () => {
+     expect(pathsUnder("skim")).toEqual(
+       [
++        "intros",
+         "offered",
+         "stops",
+         "stops[].again",
+@@ -2162,6 +2162,9 @@ describe("the artefacts a shared link carries", () => {
+         },
+         { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
+       ],
++      /* The map of each pass, read before its first stop: the model's text
++         about the piece, never about the reader (plan 261012a). */
++      intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
+       offered: 12,
+     });
+     /* The cue-less stop crosses with no `cue` key, not an `undefined` one —
+diff --git a/tests/public-visibility-pg.test.ts b/tests/public-visibility-pg.test.ts
+index 72433eaf2..c0a3aaca4 100644
+--- a/tests/public-visibility-pg.test.ts
++++ b/tests/public-visibility-pg.test.ts
+@@ -110,6 +110,8 @@ const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure."
+ const PUBLIC_TWEET = "The first post of the thread.";
+ /** A stored Skim stop's cue — on the wire once published, never before. */
+ const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
++/** A stored Skim pass intro — the same, since 2026-10-12 (plan 261012a). */
++const PUBLIC_INTRO = "Starts with what a measurement would have to show, then the test it is put to.";
+ /** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
+ const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
+ const PUBLIC_WORK = "Consciousness as integrated information";
+@@ -245,6 +247,7 @@ const ARTEFACTS: {
+     sourceHash: "abc",
+     profileHash: PRIVATE_PROFILE_HASH,
+     stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
++    intros: [PUBLIC_INTRO, null, null],
+     visible: [1, 1, 1],
+     offered: 4,
+     dropped: {
+@@ -837,7 +840,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
+        Skim is on this row too, and must not be readable either. */
+     /* The FAQ's question and the cited work's title joined the same day. */
+     /* And the Debate's claim quotation, since plan 260929c stage 4. */
+-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_RECEPTION_QUOTE]) {
++    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_INTRO, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_RECEPTION_QUOTE]) {
+       expect(r.text, canary).not.toContain(canary);
+     }
+   });
+@@ -1125,7 +1128,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
+    * **The stored Skim route, since 2026-09-29** — the bug was a visitor
+    * to a public article with a built route being refused it
+    * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
+-   * planned for does not, and neither does the pipeline around it. Read off a
++   * planned for does not, and neither does the pipeline around it. The pass
++   * intros cross since 2026-10-12 (plan 261012a). Read off a
+    * real row, because the question is whether the public `select` fetches the
+    * column at all — a DTO test only ever sees what it was handed.
+    */
+@@ -1135,9 +1139,12 @@ describe("sharing one article", { timeout: 60_000 }, () => {
+     const body = r.body as { skim?: Record<string, unknown> };
+     expect(body.skim).toEqual({
+       stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
++      /* The pass intros, since 2026-10-12 (Greg's "A" to q-t5xjqn, plan 261012a). */
++      intros: [PUBLIC_INTRO, null, null],
+       offered: 4,
+     });
+     expect(r.text).toContain(PUBLIC_CUE);
++    expect(r.text).toContain(PUBLIC_INTRO);
+     expect(JSON.stringify(body.skim)).not.toContain("profileHash");
+     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
+   });
+diff --git a/tests/skim-purpose-line.test.tsx b/tests/skim-purpose-line.test.tsx
+index ef5e1b7e3..c5e45bc63 100644
+--- a/tests/skim-purpose-line.test.tsx
++++ b/tests/skim-purpose-line.test.tsx
+@@ -17,6 +17,7 @@ import { act, createElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type { Job, Skim } from "../src/types.js";
++import type { PublicSkim } from "../src/public-types.js";
+ import type { UseSkim } from "../src/web/useSkim.js";
+ import type { SkimView } from "../src/web/modes/skim/SkimMode.js";
+ import { profileGeneration } from "../src/web/profile-saved.js";
+@@ -64,7 +65,7 @@ vi.mock("../src/web/lib/api.js", async () => {
+   return { ...real, apiFetch, fetchOk: apiFetch };
+ });
+ 
+-const { SkimPanel } = await import("../src/web/SkimPanel.js");
++const { SkimPanel, SKIM_INTRO_EXPLAINED } = await import("../src/web/SkimPanel.js");
+ 
+ /* ------------------------------------------------------------- the harness -- */
+ 
+@@ -293,6 +294,19 @@ describe("the purpose line in Skim", () => {
+     expect(host.querySelector(".skim-intro")).toBeNull();
+   });
+ 
++  it("draws a visitor's intro too, and its (i) says what the line is (Greg's A to q-t5xjqn, plan 261012a)", async () => {
++    const route: PublicSkim = { stops: ROUTE.stops, offered: ROUTE.offered, intros: ["Starts with the claim.", null, null] };
++    await act(async () =>
++      root.render(createElement(SkimPanel, { access: { kind: "visitor", route }, view: VIEW, away: false })),
++    );
++    expect(host.querySelector(".skim-intro")?.textContent).toBe("Starts with the claim.");
++    const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
++    await act(async () => info.click());
++    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(SKIM_INTRO_EXPLAINED);
++    /* Nothing of the owner's: no purpose line, no question. */
++    expect(line()).toBeNull();
++  });
++
+   it("does not ask in the empty state, where the automatic run plans a route (Sol F6)", async () => {
+     await drawOwner(owner({ status: "none", skim: null }));
+     expect(line()).toBeNull();
