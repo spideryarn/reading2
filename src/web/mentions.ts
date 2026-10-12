@@ -95,23 +95,56 @@ export function mentionCandidates(
 }
 
 /**
- * The rows for what has been typed after the `@`: titles containing it, any
- * case, not one already picked, at most `MENTION_ROWS`.
+ * **A title or a search, as the two are compared**: any case, accents taken
+ * off, hyphens and underscores read as spaces, runs of space as one. So a
+ * reader typing a slug — `@john-von` — finds "John von Neumann", and `@godel`
+ * finds "Gödel".
+ */
+export function matchForm(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * How well a title (in `matchForm`) matches a search: 0 when it starts with
+ * it, 1 when a word in it does, 2 when it is only somewhere inside, null when
+ * it is not there at all.
+ */
+function matchRank(title: string, needle: string): 0 | 1 | 2 | null {
+  if (title.startsWith(needle)) return 0;
+  let rank: 2 | null = null;
+  for (let i = title.indexOf(needle); i >= 0; i = title.indexOf(needle, i + 1)) {
+    if (!/[\p{L}\p{N}]/u.test(title[i - 1] ?? "")) return 1;
+    rank = 2;
+  }
+  return rank;
+}
+
+/**
+ * The rows for what has been typed after the `@`, not one already picked, at
+ * most `MENTION_ROWS`. **A title that starts with the search comes first, then
+ * one with a word that does, then any that has it somewhere**; within each,
+ * the candidates' own order, most recently opened first. Without it, "@do"
+ * filled the rows with "How to Do Great Work" and never reached "Dodo".
  */
 export function mentionOptions(
   candidates: readonly MentionCandidate[],
   query: string,
   picked: readonly PickedMention[],
 ): MentionCandidate[] {
-  const needle = query.trim().toLowerCase();
-  const out: MentionCandidate[] = [];
+  const needle = matchForm(query);
+  const tiers: MentionCandidate[][] = [[], [], []];
   for (const c of candidates) {
     if (picked.some((p) => p.slug === c.slug)) continue;
-    if (needle !== "" && !c.title.toLowerCase().includes(needle)) continue;
-    out.push(c);
-    if (out.length === MENTION_ROWS) break;
+    const rank = needle === "" ? 0 : matchRank(matchForm(c.title), needle);
+    if (rank !== null) tiers[rank]?.push(c);
   }
-  return out;
+  return tiers.flat().slice(0, MENTION_ROWS);
 }
 
 /** An `@` being typed: where it is, and what follows it up to the caret. */
@@ -158,9 +191,31 @@ export function withMention(
   caret: number,
   title: string,
 ): { value: string; caret: number } {
-  const insert = `@${shortTitle(title)} `;
+  const insert = mentionText(title);
   const after = value.slice(caret).replace(/^ /, "");
   return { value: value.slice(0, trigger.at) + insert + after, caret: trigger.at + insert.length };
+}
+
+/** What picking `title` writes into the box: `@Short title `, trailing space and all. */
+export function mentionText(title: string): string {
+  return `@${shortTitle(title)} `;
+}
+
+/**
+ * The box once a chip is taken out: the first `inserted` (`mentionText`) still
+ * there word for word is removed, and the caret moves with the text after it.
+ * Null when the reader has changed it — then their words are theirs, and stay.
+ */
+export function withoutMention(
+  value: string,
+  inserted: string,
+  caret: number,
+): { value: string; caret: number } | null {
+  const at = value.indexOf(inserted);
+  if (at < 0) return null;
+  const end = at + inserted.length;
+  const next = caret <= at ? caret : caret >= end ? caret - inserted.length : at;
+  return { value: value.slice(0, at) + value.slice(end), caret: next };
 }
 
 /** Why a pick is refused, or null. One sentence, ours. */

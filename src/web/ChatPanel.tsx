@@ -3439,6 +3439,16 @@ export function Composer({
     onDraft(next.value);
     caretTo.current = next.caret;
   };
+  /* **Taking a chip out** takes its `@Title ` out of the box too, if the
+     reader has not changed it; edited words are left alone. */
+  const unpick = (slugToRemove: string) => {
+    const next = mention.remove(slugToRemove, value, box.current?.selectionStart ?? value.length);
+    if (!next) return;
+    provenance.current = afterChange(provenance.current, next.value, "keyboard");
+    setValue(next.value);
+    onDraft(next.value);
+    caretTo.current = next.caret;
+  };
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the caret moves once the picked title is in the box
   useLayoutEffect(() => {
     const el = box.current;
@@ -3468,7 +3478,7 @@ export function Composer({
         void submit();
       }}
     >
-      <MentionChips picked={mention.picked} onRemove={mention.remove} />
+      <MentionChips picked={mention.picked} onRemove={unpick} />
       <textarea
         ref={box}
         className="chat-input"

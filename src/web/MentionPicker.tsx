@@ -23,18 +23,20 @@
  */
 import { autoUpdate, flip, FloatingPortal, offset, shift, size, useFloating } from "@floating-ui/react";
 import { X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import {
   loadMentionCandidates,
   type MentionCandidate,
   type MentionsToSend,
   mentionOptions,
+  mentionText,
   mentionTrigger,
   type PickedMention,
   pickRefusal,
   shortTitle,
   withMention,
+  withoutMention,
 } from "./mentions.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
 
@@ -62,7 +64,12 @@ export interface MentionPickerState {
   hover(index: number): void;
   /** Pick row `index`: the box's next text and caret, or null if nothing was picked. */
   pick(index: number, value: string, caret: number): { value: string; caret: number } | null;
-  remove(slug: string): void;
+  /**
+   * Take an article out of the row, and its `@Title ` out of the box if the
+   * text is still as the pick wrote it: the box's next text and caret, or null
+   * when the text stays as it is.
+   */
+  remove(slug: string, value: string, caret: number): { value: string; caret: number } | null;
   /** The row as a send carries it, or undefined when it is empty. */
   toSend(): MentionsToSend | undefined;
 }
@@ -121,7 +128,11 @@ export function useMentionPicker(enabled: boolean, slug: string, value: string):
     return next;
   };
 
-  const remove = useCallback((slug_: string) => setPicked((p) => p.filter((m) => m.slug !== slug_)), []);
+  const remove = (slug_: string, text: string, at: number) => {
+    const gone = picked.find((m) => m.slug === slug_);
+    setPicked((p) => p.filter((m) => m.slug !== slug_));
+    return gone ? withoutMention(text, mentionText(gone.title), at) : null;
+  };
 
   const toSend = (): MentionsToSend | undefined => {
     if (!enabled || picked.length === 0) return undefined;
@@ -212,8 +223,10 @@ export function MentionPicker({
       offset(4),
       flip({ padding: 8 }),
       shift({ padding: 8 }),
-      /* No wider than the box, and no taller than the room there is — on a
-         phone, the strip between the keyboard and the top. */
+      /* As wide as the box — but no narrower than `.mention-picker`'s
+         min-width, so a phone's narrow box still shows a title — and no taller
+         than the room there is: on a phone, the strip between the keyboard
+         and the top. */
       size({
         padding: 8,
         apply({ rects, availableHeight, elements }) {

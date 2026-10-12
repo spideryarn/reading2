@@ -1307,6 +1307,10 @@ svg.band-waiting-ghost { flex: none; }
    TagEditor's list is. Its width and height are Floating UI's `size`. */
 .mention-picker {
   z-index: 110;
+  /* The box's width, set by Floating UI's `size` (MentionPicker.tsx), but
+     never narrower than this: on a 390px phone the box is ~160px and a title
+     will not fit. `shift` keeps the wider list on screen. */
+  min-width: min(20rem, calc(100vw - 2rem));
   display: flex;
   flex-direction: column;
   overflow: auto;

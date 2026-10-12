@@ -58,6 +58,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { Composer } = await import("../src/web/ChatPanel.js");
+const { mentionOptions, withoutMention } = await import("../src/web/mentions.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -145,7 +146,7 @@ describe("the @ list", () => {
 
   it("picks on Enter rather than sending, and puts the article in the row", async () => {
     paint();
-    await type("compare with @rep");
+    await type("compare with @smi");
     const e = press("Enter");
     expect(e.defaultPrevented).toBe(true);
     expect(sent).toEqual([]);
@@ -270,5 +271,93 @@ describe("the @ list", () => {
     press("Enter");
     expect(sent).toHaveLength(1);
     expect(sent[0]?.how?.mentions).toBeUndefined();
+  });
+});
+
+describe("which rows an @ search shows, and in what order", () => {
+  const cand = (slug: string, title: string, seen: string) => ({ slug, title, archived: false, seen });
+  const titles = (query: string, list: ReturnType<typeof cand>[]) =>
+    mentionOptions(list, query, []).map((o) => o.title);
+
+  it("puts a title that starts with the search first, then a word that does, then anywhere", () => {
+    /* The browser pass's list, newest first: Dodo was ninth, so off the list. */
+    const list = [
+      cand("docx", "DOCX demo", "2026-10-12T10:00:00.000Z"),
+      cand("weekend", "I could do that in a weekend!", "2026-10-12T09:00:00.000Z"),
+      cand("random", "Random notes", "2026-10-12T08:00:00.000Z"),
+      ...[1, 2, 3, 4, 5].map((n) => cand(`great-${n}`, "How to Do Great Work", `2026-10-11T0${n}:00:00.000Z`)),
+      cand("dodo", "Dodo", "2026-10-01T10:00:00.000Z"),
+    ];
+    expect(titles("do", list)).toEqual([
+      "DOCX demo",
+      "Dodo",
+      "I could do that in a weekend!",
+      "How to Do Great Work",
+      "How to Do Great Work",
+      "How to Do Great Work",
+      "How to Do Great Work",
+      "How to Do Great Work",
+    ]);
+    /* Newest first within a tier, but a title starting with it beats a word, and a word beats anywhere. */
+    const ants = [
+      cand("banana", "Banana", "2026-10-12T10:00:00.000Z"),
+      cand("the-ants", "The ants", "2026-10-11T10:00:00.000Z"),
+      cand("anthology", "Anthology", "2026-10-10T10:00:00.000Z"),
+    ];
+    expect(titles("an", ants)).toEqual(["Anthology", "The ants", "Banana"]);
+  });
+
+  it("matches a slug-style search, any case, accents and all", () => {
+    const list = [
+      cand("jvn", "John von Neumann", "2026-10-12T10:00:00.000Z"),
+      cand("godel", "Gödel's proof", "2026-10-11T10:00:00.000Z"),
+      cand("snake", "a_snake_case title", "2026-10-10T10:00:00.000Z"),
+    ];
+    expect(titles("john-von", list)).toEqual(["John von Neumann"]);
+    expect(titles("JOHN_VON  neu", list)).toEqual(["John von Neumann"]);
+    expect(titles("godel", list)).toEqual(["Gödel's proof"]);
+    expect(titles("snake case", list)).toEqual(["a_snake_case title"]);
+  });
+});
+
+describe("taking an @Title back out", () => {
+  it("removes the inserted text as it was written, and moves the caret with it", () => {
+    expect(withoutMention("compare @Dodo with this", "@Dodo ", 23)).toEqual({ value: "compare with this", caret: 17 });
+    /* Caret before it: unmoved. */
+    expect(withoutMention("compare @Dodo with this", "@Dodo ", 3)).toEqual({ value: "compare with this", caret: 3 });
+    /* Caret inside it: to where it was. */
+    expect(withoutMention("compare @Dodo with this", "@Dodo ", 10)).toEqual({ value: "compare with this", caret: 8 });
+  });
+
+  it("leaves text the reader has edited alone", () => {
+    expect(withoutMention("compare @Dodos with this", "@Dodo ", 5)).toBeNull();
+  });
+});
+
+describe("the @ list, more", () => {
+  it("keeps the list open for a hyphenated, slug-style search", async () => {
+    paint();
+    await type("compare with @reply-to");
+    expect(options().map((o) => o.querySelector(".mention-picker-title")?.textContent)).toEqual(["Reply to Jones"]);
+  });
+
+  it("takes the @Title out of the box when its chip is removed", async () => {
+    paint();
+    await type("compare with @jon");
+    press("Enter");
+    expect(box().value).toBe("compare with @Reply to Jones ");
+    act(() => host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click());
+    expect(box().value).toBe("compare with ");
+    expect(host.querySelector(".mention-chips")).toBeNull();
+  });
+
+  it("leaves an edited @Title in the box when its chip is removed", async () => {
+    paint();
+    await type("compare with @jon");
+    press("Enter");
+    await type("compare with @Reply to J. please");
+    act(() => host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click());
+    expect(box().value).toBe("compare with @Reply to J. please");
+    expect(host.querySelector(".mention-chips")).toBeNull();
   });
 });
