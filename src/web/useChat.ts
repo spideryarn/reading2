@@ -233,7 +233,8 @@ export interface SendOptions {
    * A typed Chat's new question only: the server refuses it on a retry, an
    * edit and any other kind, so `retry` and `edit` here have no such field.
    * `onAccepted` runs once the server has begun the turn, which is when the
-   * row may empty; a refused question leaves it as it was.
+   * row may empty; a refused question leaves it as it was, and one that ended
+   * before `begin` without a refusal empties it without its words.
    */
   mentions?: MentionsToSend;
 }
@@ -895,7 +896,14 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         opts.onGone,
         onBegun,
         mentions?.onRefused,
-        onUnconfirmed,
+        /* An ended request with no refusal lets the composer go too, in any
+           thread: a follow-up has no navigation of its own to do it. */
+        mentions?.onUnconfirmed
+          ? (local: string) => {
+              mentions.onUnconfirmed?.();
+              onUnconfirmed?.(local);
+            }
+          : onUnconfirmed,
       );
       return id;
     },

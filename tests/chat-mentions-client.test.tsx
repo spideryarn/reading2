@@ -41,6 +41,8 @@ let posts: Record<string, unknown>[] = [];
 let threads: ChatThreadView[] = [];
 /** What the next POST answers: a stream with these frames, or a refusal. */
 let reply: { frames: string } | { status: number; error: string };
+/** How many times an uncertain outcome let the composer's row go. */
+let rowLetGo = 0;
 
 function Harness() {
   chat = useChat(SLUG);
@@ -73,6 +75,7 @@ beforeEach(() => {
   posts = [];
   threads = [];
   reply = { frames: "" };
+  rowLetGo = 0;
   answer = (_url, init) => {
     if ((init?.method ?? "GET") === "GET") return Promise.resolve(json({ threads }));
     posts.push(init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {});
@@ -161,12 +164,19 @@ describe("mentions on the wire", () => {
         onUnconfirmed: (id) => {
           unconfirmed = id;
         },
-        mentions: { slugs: [SLUG], onAccepted: () => {}, onRefused: () => refused++ },
+        mentions: {
+          slugs: [SLUG],
+          onAccepted: () => {},
+          onRefused: () => refused++,
+          onUnconfirmed: () => rowLetGo++,
+        },
       }) ?? "";
     });
     await settleChat();
     expect(refused).toBe(0);
     expect(unconfirmed).toBe(sentTo);
+    /* And the composer is told, which a follow-up's needs: it has no navigation to do it. */
+    expect(rowLetGo).toBe(1);
   });
 
   it("does not make a pre-header network loss resendable either", async () => {
@@ -181,12 +191,19 @@ describe("mentions on the wire", () => {
         onUnconfirmed: (id) => {
           unconfirmed = id;
         },
-        mentions: { slugs: [SLUG], onAccepted: () => {}, onRefused: () => refused++ },
+        mentions: {
+          slugs: [SLUG],
+          onAccepted: () => {},
+          onRefused: () => refused++,
+          onUnconfirmed: () => rowLetGo++,
+        },
       }) ?? "";
     });
     await settleChat();
     expect(refused).toBe(0);
     expect(unconfirmed).toBe(sentTo);
+    /* And the composer is told, which a follow-up's needs: it has no navigation to do it. */
+    expect(rowLetGo).toBe(1);
   });
 
   it("reports begin even when the server accepts the optimistic thread id", async () => {

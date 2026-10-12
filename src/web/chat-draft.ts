@@ -18,7 +18,7 @@
  * the page, and the next reader found these words in their box on the same
  * slug. `forgetOnReaderChange`, at the bottom of this file.
  *
- * ## The four things it holds (and, since 2026-10-05, a pending origin: see `ChatDrafts.origin`)
+ * ## The four things it holds (and, since 2026-10-05, a pending origin: see `ChatDrafts.origin`; since 2026-10-12, a Chat box's "Bringing in" row beside its words: `ChatDrafts.threadMentions`)
  *
  * - **A Chat conversation's unsent words**, by conversation id. Written by the
  *   panel's composer and by the floating dialog's (its conversation arm, not
@@ -44,6 +44,7 @@
  * from the words or from a missing row, and once revoked it stays revoked.
  */
 import type { LearnKind, ThreadOrigin } from "../types.js";
+import type { PickedMention } from "./mentions.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
 
 export interface ChatDrafts {
@@ -68,6 +69,16 @@ export interface ChatDrafts {
   /** A conversation's unsent words. `undefined` is "never written", `""` is "cleared". */
   thread(id: string): string | undefined;
   setThread(id: string, text: string): void;
+  /**
+   * **A Chat conversation's "Bringing in" row**, beside its words (plan
+   * 261012d): the chips, not the text, are what is sent, so words kept without
+   * them came back as an `@Title` that sent nothing. `[]` when none was kept —
+   * which is every draft written before rows were. Moved and dropped with the
+   * words; the composer checks each anchor against the words when it takes
+   * the row back (`restoredMentions`, mentions.ts).
+   */
+  threadMentions(id: string): readonly PickedMention[];
+  setThreadMentions(id: string, picked: readonly PickedMention[]): void;
   /** The conversation is gone — closed unused, or deleted: forget everything under its id. */
   dropThread(id: string): void;
   /** Carry a conversation's words and local identity to the one begun in its place. */
@@ -82,6 +93,9 @@ export interface ChatDrafts {
   /** The box under Chat's list. */
   list(): string;
   setList(text: string): void;
+  /** Its "Bringing in" row, as `threadMentions`. */
+  listMentions(): readonly PickedMention[];
+  setListMentions(picked: readonly PickedMention[]): void;
 
   /** Recall's, Tutorial's or Explore's unsent words. */
   learn(kind: LearnKind): string;
@@ -112,6 +126,7 @@ export interface ChatDrafts {
 
 export function createChatDrafts(): ChatDrafts {
   const threads = new Map<string, string>();
+  const threadRows = new Map<string, readonly PickedMention[]>();
   const origins = new Map<string, ThreadOrigin>();
   const fresh = new Set<string>();
   /* Kept so that `markFresh` after `submitted` is refused rather than trusted
@@ -119,6 +134,7 @@ export function createChatDrafts(): ChatDrafts {
      order wrong must not be able to undo it. */
   const spent = new Set<string>();
   let list = "";
+  let listRow: readonly PickedMention[] = [];
   const learnDrafts = new Map<LearnKind, string>();
   let destination: string | null | undefined;
   let guide: string | undefined;
@@ -131,8 +147,13 @@ export function createChatDrafts(): ChatDrafts {
     setThread(id, text) {
       threads.set(id, text);
     },
+    threadMentions: (id) => threadRows.get(id) ?? [],
+    setThreadMentions(id, picked) {
+      threadRows.set(id, picked);
+    },
     dropThread(id) {
       threads.delete(id);
+      threadRows.delete(id);
       fresh.delete(id);
       origins.delete(id);
       if (guide === id) guide = undefined;
@@ -141,6 +162,9 @@ export function createChatDrafts(): ChatDrafts {
       const text = threads.get(from);
       if (text !== undefined) threads.set(to, text);
       threads.delete(from);
+      const row = threadRows.get(from);
+      if (row !== undefined) threadRows.set(to, row);
+      threadRows.delete(from);
       fresh.delete(from);
       const origin = origins.get(from);
       if (origin !== undefined) origins.set(to, origin);
@@ -165,6 +189,10 @@ export function createChatDrafts(): ChatDrafts {
     list: () => list,
     setList(text) {
       list = text;
+    },
+    listMentions: () => listRow,
+    setListMentions(picked) {
+      listRow = picked;
     },
     learn: (kind) => learnDrafts.get(kind) ?? "",
     setLearn(kind, text) {

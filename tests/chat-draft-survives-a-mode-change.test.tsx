@@ -102,7 +102,7 @@ vi.mock("../src/web/live/useLive.js", () => ({
 const START = () => {};
 const STOP = () => Promise.resolve();
 
-const calls: { url: string; method: string }[] = [];
+const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
 /** What the list GET answers with. */
 let stored: ChatThread[] = [];
 /** Whether the list GET fails. */
@@ -120,7 +120,15 @@ vi.mock("../src/web/lib/api.js", async () => {
     ...real,
     apiFetch: (url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
-      calls.push({ url: String(url), method });
+      calls.push({
+        url: String(url),
+        method,
+        ...(typeof init?.body === "string" ? { body: JSON.parse(init.body) as Record<string, unknown> } : {}),
+      });
+      /* The `@` list's two reads: one article to bring in. */
+      if (String(url).startsWith("/api/library")) {
+        return Promise.resolve(json({ articles: String(url).includes("archived=1") ? [] : [JONES] }));
+      }
       if (method === "DELETE") {
         return Promise.resolve(json(deleteStatus === 200 ? {} : { error: "a 500" }, deleteStatus));
       }
@@ -137,6 +145,22 @@ const { ConversationBand, LearnBand } = await import(
 
 const SLUG = "a-piece";
 const AT = "2026-10-04T09:00:00.000Z";
+/** Another of the reader's articles, for the `@` list. */
+const JONES = {
+  slug: "reply-to-jones",
+  title: "Reply to Jones",
+  addedAt: AT,
+  lastOpenedAt: AT,
+  words: 100,
+  minutes: 1,
+  blocks: 3,
+  parts: 1,
+  sections: 1,
+  comments: 0,
+  sourceReusable: true,
+  opens: 1,
+  has: { arc: false, tweets: false, glossary: false },
+};
 
 function thread(id: string, kind: ChatThread["kind"], title: string): ChatThread {
   return {
@@ -296,6 +320,13 @@ async function type(text: string): Promise<void> {
   });
 }
 
+/** Enter in the box: a pick while the `@` list is open, a send otherwise. */
+async function enter(): Promise<void> {
+  await act(async () => {
+    box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  });
+}
+
 async function press(title: string): Promise<void> {
   const button = host.querySelector<HTMLButtonElement>(`button[title="${title}"]`);
   if (!button) throw new Error(`no "${title}" button`);
@@ -335,6 +366,26 @@ describe("Chat keeps an unsent question while another mode is open", () => {
     expect(open()).toBeNull();
     expect(box().value).toBe("something new entirely");
   });
+
+  /* The chips, not the words, are what is sent: an `@Title` back without its
+     chip sent nothing (Sol's round 2 on plan 261012d, R2-3). */
+  for (const where of ["in a conversation", "under the list"] as const) {
+    it(`with its "Bringing in" row, ${where}, which is then sent`, async () => {
+      stored = [A];
+      await arrive("chat", where === "in a conversation" ? `?thread=${A.id}` : "");
+      await type("compare with @jon");
+      await settle();
+      await enter();
+      expect(box().value).toBe("compare with @Reply to Jones ");
+      await go("structure");
+      await go("chat");
+      expect(box().value).toBe("compare with @Reply to Jones ");
+      expect(host.querySelector(".mention-chips")?.textContent).toContain("Reply to Jones");
+      await enter();
+      await settle();
+      expect(posts().at(-1)?.body?.mentions).toEqual(["reply-to-jones"]);
+    });
+  }
 
   it("in a new conversation nothing was ever sent to: one conversation, the words, nothing sent", async () => {
     await arrive("chat");

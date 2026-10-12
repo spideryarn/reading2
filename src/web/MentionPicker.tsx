@@ -35,6 +35,7 @@ import {
   mentionTrigger,
   type PickedMention,
   pickRefusal,
+  restoredMentions,
   shortTitle,
   withMention,
   withoutMention,
@@ -80,9 +81,16 @@ export interface MentionPickerState {
 /**
  * The picker's state, for one composer. `enabled` is false for every kind but
  * typed Chat — the guide, Learn and the rest never open it, and send nothing.
+ * `kept` is the row kept with the draft the box starts from, taken back only
+ * where it still matches the words (`restoredMentions`).
  */
-export function useMentionPicker(enabled: boolean, slug: string, value: string): MentionPickerState {
-  const [picked, setPicked] = useState<PickedMention[]>([]);
+export function useMentionPicker(
+  enabled: boolean,
+  slug: string,
+  value: string,
+  kept: readonly PickedMention[] = [],
+): MentionPickerState {
+  const [picked, setPicked] = useState<PickedMention[]>(() => restoredMentions(kept, value));
   /* `null` while the box does not have focus, which is what closes the list on blur. */
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
@@ -160,11 +168,9 @@ export function useMentionPicker(enabled: boolean, slug: string, value: string):
   const toSend = (): MentionsToSend | undefined => {
     if (!enabled || picked.length === 0) return undefined;
     const slugs = picked.map((m) => m.slug);
-    return {
-      slugs,
-      /* Only those sent: one picked while the question was on its way stays. */
-      onAccepted: () => setPicked((p) => p.filter((m) => !slugs.includes(m.slug))),
-    };
+    /* Only those sent: one picked while the question was on its way stays. */
+    const drop = () => setPicked((p) => p.filter((m) => !slugs.includes(m.slug)));
+    return { slugs, onAccepted: drop, onUnconfirmed: drop };
   };
 
   return {

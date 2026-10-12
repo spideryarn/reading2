@@ -63,6 +63,13 @@ export interface MentionsToSend {
   onAccepted(): void;
   /** The server refused before `begin`; restore the submitted draft if its composer still owns it. */
   onRefused?(): void;
+  /**
+   * The request ended before `begin` without a refusal — an empty stream, a
+   * lost network — so the turn may have been written. Let the box go and drop
+   * these chips, but do not put the words back: a re-send would be a
+   * duplicate. Called with the send's own `onUnconfirmed`, for every thread.
+   */
+  onUnconfirmed?(): void;
 }
 
 /**
@@ -255,6 +262,21 @@ export function afterMentionEdit(
     return { ...mention, insertedAt: null };
   }
   return movedAt === at ? mention : { ...mention, insertedAt: movedAt };
+}
+
+/**
+ * **A row kept with a draft (chat-draft.ts), as a box drawn again takes it
+ * back**: each chip whose `@Title` is still where it was written, and each the
+ * reader had already edited the title of (no anchor to check). One whose
+ * anchor no longer matches the words is dropped — its words, or the chip,
+ * would otherwise be wrong.
+ */
+export function restoredMentions(picked: readonly PickedMention[], text: string): PickedMention[] {
+  return picked.filter((m) => {
+    if (m.insertedAt === null) return true;
+    const inserted = mentionText(m.title);
+    return text.slice(m.insertedAt, m.insertedAt + inserted.length) === inserted;
+  });
 }
 
 /** Why a pick is refused, or null. One sentence, ours. */

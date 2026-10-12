@@ -63,6 +63,7 @@ import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from 
 
 import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
 import { Composer, Conversation, type SendHow } from "./ChatPanel.js";
+import type { PickedMention } from "./mentions.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { answerOpening } from "../answer-opening.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
@@ -375,6 +376,16 @@ export function ChatDialog({
       else setDraftState({ target: draftTarget, text });
     },
     [draftTarget, threadTarget, drafts],
+  );
+  /* The conversation's "Bringing in" row is kept beside its words, so it
+     crosses to and from the panel with them (Composer § `draftMentions`). A
+     passage draft's lives as long as its box, as its words do here. */
+  const draftMentions = threadTarget !== null ? drafts.threadMentions(threadTarget) : undefined;
+  const setDraftMentions = useCallback(
+    (picked: readonly PickedMention[]) => {
+      if (threadTarget !== null) drafts.setThreadMentions(threadTarget, picked);
+    },
+    [threadTarget, drafts],
   );
   const focused = useRef(0);
 
@@ -1335,6 +1346,8 @@ export function ChatDialog({
             focused={focused}
             draft={draft}
             onDraft={setDraft}
+            draftMentions={draftMentions}
+            onDraftMentions={setDraftMentions}
             visible={!collapsed}
             /* The card's height is its content's; the corner and the dock have
                the panel's. Said here, not left to a stylesheet, because the

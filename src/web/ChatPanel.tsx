@@ -155,7 +155,7 @@ import { dictationReporter } from "./dictation-report.js";
 import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
 import { crossArticles, type CrossArticles } from "./citations.js";
 import { MentionChips, MentionPicker, useMentionPicker } from "./MentionPicker.js";
-import type { MentionsToSend } from "./mentions.js";
+import type { MentionsToSend, PickedMention } from "./mentions.js";
 import { readHref } from "./router.js";
 import { Link } from "./Link.js";
 
@@ -794,6 +794,13 @@ export function ChatPanel({
           focused={focused}
           draft={draftFor(open.id)}
           onDraft={(text) => setDraftFor(open.id, text)}
+          /* Only typed Chat's box has a row; Learn's words are kept by kind. */
+          {...(open.kind === "chat"
+            ? {
+                draftMentions: drafts.threadMentions(open.id),
+                onDraftMentions: (picked: readonly PickedMention[]) => drafts.setThreadMentions(open.id, picked),
+              }
+            : {})}
           /* The OPEN conversation's kind, not the mode's. Each mode opens only
              its own kind (plan 261001m; Chat lists the others since 2026-10-05
              and still does not open them), so the two agree on every path the
@@ -917,6 +924,8 @@ export function ChatPanel({
               focused={listFocused}
               draft={drafts.list()}
               onDraft={(text) => drafts.setList(text)}
+              draftMentions={drafts.listMentions()}
+              onDraftMentions={(picked) => drafts.setListMentions(picked)}
               placeholder="Ask something new…"
               kind={kind}
               live={kind === "chat" ? shownLive : undefined}
@@ -924,7 +933,9 @@ export function ChatPanel({
                 const id = onStartLive(null);
                 if (id) {
                   drafts.setThread(id, drafts.list());
+                  drafts.setThreadMentions(id, drafts.listMentions());
                   drafts.setList("");
+                  drafts.setListMentions([]);
                 }
               } : undefined}
             />
@@ -1531,6 +1542,8 @@ export function Conversation({
   focused,
   draft,
   onDraft,
+  draftMentions,
+  onDraftMentions,
   kind,
   visible = true,
   sized = "fixed",
@@ -1564,6 +1577,9 @@ export function Conversation({
   /** Whatever was left in the box last time this conversation was open. */
   draft: string;
   onDraft(text: string): void;
+  /** Its "Bringing in" row, kept beside `draft` — see Composer. */
+  draftMentions?: readonly PickedMention[] | undefined;
+  onDraftMentions?: ((picked: readonly PickedMention[]) => void) | undefined;
   /**
    * **This conversation's** kind — see the call site in `ChatPanel`.
    *
@@ -2198,6 +2214,8 @@ export function Conversation({
         focused={focused}
         draft={draft}
         onDraft={onDraft}
+        draftMentions={draftMentions}
+        onDraftMentions={onDraftMentions}
         kind={kind}
         {...(live ? { live } : {})}
         {...(onStartLive ? { onStartLive } : {})}
@@ -3147,6 +3165,8 @@ export function Composer({
   focused,
   draft,
   onDraft,
+  draftMentions,
+  onDraftMentions,
   placeholder,
   kind = "chat",
   live,
@@ -3175,6 +3195,15 @@ export function Composer({
   focused: { current: number };
   draft: string;
   onDraft(text: string): void;
+  /**
+   * **The "Bringing in" row kept beside `draft`**, and where to keep it
+   * (chat-draft.ts § `threadMentions`). Read once on mount like the words, and
+   * written whenever the row changes — never with the chips of a question on
+   * its way, which are not the draft's. A box without them starts with an
+   * empty row and keeps nothing.
+   */
+  draftMentions?: readonly PickedMention[] | undefined;
+  onDraftMentions?: ((picked: readonly PickedMention[]) => void) | undefined;
   /**
    * What the empty box says, when "Ask about this article…" would be a lie
    * about where the question is going — the box under the thread list starts a
@@ -3231,7 +3260,37 @@ export function Composer({
   const short = useMedia(SHORT_VIEWPORT);
   const size = useMemo(() => boxSize(learn, short), [learn, short]);
   const box = useRef<HTMLTextAreaElement>(null);
-  const mention = useMentionPicker(kind === "chat" && !mentionWaiting, slug, value);
+  const mention = useMentionPicker(kind === "chat" && !mentionWaiting, slug, value, draftMentions);
+  /* The row is kept beside the words, so a box drawn again — after a mode
+     change, or in the dialog — has its chips; an `@Title` back without its
+     chip sent nothing (Sol's round 2, R2-3). Not the chips of a question on
+     its way: they are that question's, and go with its outcome. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: written when the row changes; the callback is a fresh closure each render
+  useEffect(() => {
+    onDraftMentions?.(mentionWaiting ? [] : mention.picked);
+  }, [mention.picked, mentionWaiting]);
+
+  /**
+   * **Every change to the box's words goes through here** — a key, dictation,
+   * a pick, a chip taken out, Escape, a send and a refused send's return — so
+   * the picker's remembered `@Title` positions follow the words. Dictation
+   * changing them behind its back left an anchor pointing at the wrong place,
+   * and × then took out the wrong text or none (Sol's round 2, R2-3).
+   *
+   * `anchors: "kept"` is for a change the anchors already account for: a pick
+   * or a chip taken out, which move them themselves, and a sent question's
+   * words leaving and coming back as they were, whose chips are still that
+   * question's. `before` is the words as last set, not as last drawn — two
+   * dictated phrases can land before React draws the first.
+   */
+  const latestText = useRef(value);
+  const setText = (next: string, anchors: "move" | "kept" = "move") => {
+    if (anchors === "move") mention.edit(latestText.current, next);
+    latestText.current = next;
+    setValue(next);
+    // Kept above this component so the words survive it; see `drafts` in ChatPanel.
+    onDraft(next);
+  };
 
   /**
    * Take focus when a new conversation has just been started.
@@ -3299,8 +3358,7 @@ export function Composer({
     value,
     onChange: (next) => {
       provenance.current = afterChange(provenance.current, next, "dictation");
-      setValue(next);
-      onDraft(next);
+      setText(next);
     },
     box,
     context: { kind: "article", slug },
@@ -3390,6 +3448,7 @@ export function Composer({
     /* Read at the press, before a Live handoff can wait. A later pick belongs
        to the next draft and `onAccepted` deliberately removes only these. */
     const selectedMentions = mention.toSend();
+    const submittedRow = mention.picked;
     const mentions: MentionsToSend | undefined = selectedMentions
       ? {
           ...selectedMentions,
@@ -3402,14 +3461,18 @@ export function Composer({
             /* Do not overwrite a next draft typed while the request was out. */
             if (box.current?.value) return;
             provenance.current = submittedProvenance;
-            setValue(submittedDraft);
-            onDraft(submittedDraft);
+            setText(submittedDraft, "kept");
+            onDraftMentions?.(submittedRow);
+          },
+          /* The turn may have been written: the chips go, the words stay gone. */
+          onUnconfirmed: () => {
+            setMentionWaiting(false);
+            selectedMentions.onUnconfirmed?.();
           },
         }
       : undefined;
     if (mentions) setMentionWaiting(true);
-    setValue("");
-    onDraft("");
+    setText("", "kept");
     if (handoff) await live.stop();
     /* Typed here, by the reader: the one send that says so (`SendHow`). */
     onSend(question, { typed: true, ...(modality ? { modality } : {}), ...(mentions ? { mentions } : {}) });
@@ -3435,8 +3498,7 @@ export function Composer({
     const next = mention.pick(index, value, el?.selectionStart ?? value.length);
     if (!next) return;
     provenance.current = afterChange(provenance.current, next.value, "keyboard");
-    setValue(next.value);
-    onDraft(next.value);
+    setText(next.value, "kept");
     caretTo.current = next.caret;
   };
   /* **Taking a chip out** takes its `@Title ` out of the box too, if the
@@ -3445,8 +3507,7 @@ export function Composer({
     const next = mention.remove(slugToRemove, value, box.current?.selectionStart ?? value.length);
     if (!next) return;
     provenance.current = afterChange(provenance.current, next.value, "keyboard");
-    setValue(next.value);
-    onDraft(next.value);
+    setText(next.value, "kept");
     caretTo.current = next.caret;
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the caret moves once the picked title is in the box
@@ -3508,12 +3569,8 @@ export function Composer({
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
-          mention.edit(value, e.target.value);
           provenance.current = afterChange(provenance.current, e.target.value, "keyboard");
-          setValue(e.target.value);
-          // Kept above this component so the words survive it; see `drafts`
-          // in ChatPanel.
-          onDraft(e.target.value);
+          setText(e.target.value);
           mention.track(e.target);
         }}
         /* Where the caret is decides whether an `@` is being typed. */
@@ -3572,8 +3629,7 @@ export function Composer({
             if (onStop) onStop();
             else if (value !== "") {
               provenance.current = freshProvenance("");
-              setValue("");
-              onDraft("");
+              setText("");
             }
             else box.current?.blur();
           }
