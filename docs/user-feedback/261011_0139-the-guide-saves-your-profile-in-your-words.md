@@ -1,7 +1,7 @@
 ---
 reports: spya-yk3r03
 ending: shipped
-comment: The guide updates your profile and reason; your exact typed words now save by themselves with an Undo, and a reworded offer still has a Save button. Whether rewording should save by itself too is q-q7mb3w.
+comment: The guide updates your profile and reason; your exact typed words save by themselves with an Undo. You chose B (rewording saves by itself too) on q-q7mb3w; who may build it, and how wide, is q-pm2j66.
 ---
 # The guide saves your profile in your words
 
@@ -24,3 +24,8 @@ that is word for word what the reader typed in that message (About you: what it 
 words) saves itself with an Undo; anything reworded keeps its button. The prompt still asks for
 "quite close", with one sentence added. A looser "close" rule for saving without a press was built
 first and broken in review, so the remaining choice is Greg's: [q-q7mb3w](questions/q-q7mb3w.md).
+
+**2026-10-12**: Greg answered B on q-q7mb3w (`spya-wwy7sh`): close rewording may save by itself too.
+That loosens a defence, so it is planned, not built:
+[261012c](../plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md),
+with the build held as `qi-ywbfftr2` on [q-pm2j66](questions/q-pm2j66.md).
