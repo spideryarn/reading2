@@ -64,6 +64,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-c77zuq": "shipped",
   "spya-c7807j": "shipped",
   "spya-c8x66d": "shipped",
+  "spya-c8z66b": "awaiting",
   "spya-caue42": "shipped",
   "spya-cbfwx2": "shipped",
   "spya-cfbp0q": "shipped",
@@ -391,6 +392,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-s5mzkd": "shipped",
   "spya-s660yh": "shipped",
   "spya-s6qhzv": "shipped",
+  "spya-s8pf4r": "shipped",
   "spya-s9fhmw": "shipped",
   "spya-safz04": "shipped",
   "spya-saz0yw": "shipped",
@@ -588,6 +590,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
   "spya-zz4z4c": "shipped",
+  "spya-zzvm6e": "shipped",
 };
 
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
@@ -602,6 +605,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",
   "spya-bzwzfw": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-c2qmbg": "Shipped: Citations and Debate are one mode, now called Sources (your answer B), renamed all the way down, with Bibliography, Reception and Claims, out of Experimental. Old links still land.",
+  "spya-c8z66b": "Two choices first: a figure alongside a quote stop or a stop of its own, and chosen by the model or by a rule. Asked in q-z27hq2; queued as qi-r4rvhyqw.",
   "spya-caue42": "Shipped: Reception and Claims, and the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Visitors to a shared article see the claims, not your checks (your answer A).",
   "spya-cfbp0q": "Pasting \"Name <email>\" into a voucher's address box now keeps the address and fills an empty name. Several vouchers to one person always added up; a test now holds it, and the form says when an address already has gifts.",
   "spya-cnbv8f": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
@@ -659,6 +663,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-qxufp9": "Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.",
   "spya-rbp55k": "The line is said once above the list now. A chat's summary shows wherever Ask in chat has an item to put it on; Summary's paragraph and Quotes, Timeline and FAQ are still queued.",
   "spya-s6qhzv": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
+  "spya-s8pf4r": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",
   "spya-sbj3yk": "Both sentences now say what happened, and arXiv papers find their DOI, so Attention gets its Cited by list. Since 11 October a piece with no DOI is also looked up at OpenAlex by title and authors, strictly checked.",
   "spya-skpxw2": "Part built: type @ in Chat to bring in one of your articles, so an uploaded file can be brought in once it is an article. Attachments that belong to an article are still a question for you.",
   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",
@@ -706,4 +711,5 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
   "spya-zux9w6": "The citation, glossary and quote cards now each end in Open in Sources / Glossary / Quotes. Cards on comments, chat anchors and search-style highlights are queued as their own piece of work.",
   "spya-zz4z4c": "Every \"older version of the article\" notice now has an × that holds until that thing is made again. Quiz's is left: there no answer can be marked, and the notice is the only thing saying why.",
+  "spya-zzvm6e": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",
 };

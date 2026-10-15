@@ -119,8 +119,9 @@ here. The question file (`q-fp8tqr`) asks; the research doc has the evidence.
    tests gained a two-file drop and an import with no address. Browser check (Sonnet, Playwright,
    own dev server, 1440 and 390 wide): the sentence, no Retry, the control, a PDF chosen and added
    through to `/add/upload/<id>`, and two dropped files refused, all as intended; no layout
-   problems. Browser check in a Sonnet subagent on the add page with a URL that
-   403s.
+   problems. Full `npm test`: 1,982 files green; the one red file was this plan's own test, run
+   while the review fixes were half-written. It is green on the committed code, with the 29 other
+   files that touch the upload picker, the add page or the sentences (842 tests).
 2. Bookkeeping: research doc, question file for Part 2, the user-feedback note, Sentry statuses.
 
 ## Not done here, and why
