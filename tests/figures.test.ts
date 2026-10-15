@@ -104,6 +104,92 @@ describe("figuresOf", () => {
     expect(figureName(got[3]!)).toBe("Table 2");
   });
 
+  it("counts a table drawn as a picture as a table, by its caption (spya-s8pf4r)", () => {
+    const blocks = [
+      block("figure", "media", "<figure><img src=a><figcaption>Table 1. Absolute values</figcaption></figure>"),
+      block("figure", "media", '<figure data-spya-pdf-figure="r:3:1"><figcaption>Table 4: Hyperparameters</figcaption></figure>'),
+      block("p", "media", "<p><img src=c></p>"),
+      block("p", "caption", "<p>Supplementary Table S2. Doses.</p>", "Supplementary Table S2. Doses."),
+      block("figure", "media", "<figure><img src=f><figcaption>TABLE IV. Results</figcaption></figure>"),
+      block("figure", "media", "<figure><img src=g><figcaption>Extended Data Table 2 | Cohort</figcaption></figure>"),
+      block("figure", "media", "<figure><img src=d><figcaption>Figure 1. A table of results is shown</figcaption></figure>"),
+      block("figure", "media", "<figure><img src=e><figcaption>Tables and chairs at the venue</figcaption></figure>"),
+    ];
+    expect(figuresOf(blocks).map((f) => [f.kind, f.ordinal])).toEqual([
+      ["table", 1],
+      ["table", 2],
+      ["table", 3],
+      ["table", 4],
+      ["table", 5],
+      ["figure", 1],
+      ["figure", 2],
+    ]);
+  });
+
+  it("leaves a table's caption above it to the table, not to a picture before it (Sol, 261015b)", () => {
+    const blocks = [
+      block("p", "media", "<p><img src=a></p>"),
+      block("p", "caption", "<p>Table 1. Doses.</p>", "Table 1. Doses."),
+      block("table", "other", "<table><tr><td>1</td></tr></table>"),
+    ];
+    expect(figuresOf(blocks).map((f) => [f.kind, f.caption])).toEqual([
+      ["figure", null],
+      ["table", "Table 1. Doses."],
+    ]);
+  });
+
+  it("does not reserve an image's table caption when the following table takes its own caption", () => {
+    const blocks = [
+      block("p", "media", "<p><img src=a></p>"),
+      block("p", "caption", "<p>Table 1. Picture.</p>", "Table 1. Picture."),
+      block("table", "other", "<table><tr><td>2</td></tr></table>"),
+      block("p", "caption", "<p>Table 2. Native.</p>", "Table 2. Native."),
+      block("table", "other", "<table><caption>Table 3. Own.</caption><tr><td>3</td></tr></table>"),
+      block("p", "media", "<p><img src=b></p>"),
+      block("p", "caption", "<p>Table 4. Picture.</p>", "Table 4. Picture."),
+      block(
+        "figure",
+        "media",
+        "<figure><figcaption>Table 5. Own.</figcaption><table><tr><td>5</td></tr></table></figure>",
+      ),
+    ];
+    expect(figuresOf(blocks).map((f) => [f.kind, f.caption, f.ordinal])).toEqual([
+      ["table", "Table 1. Picture.", 1],
+      ["table", "Table 2. Native.", 2],
+      ["table", "Table 3. Own.", 3],
+      ["table", "Table 4. Picture.", 4],
+      ["table", "Table 5. Own.", 5],
+    ]);
+  });
+
+  it("reserves each caption through a run of native tables without claiming one twice", () => {
+    const blocks = [
+      block("p", "media", "<p><img src=a></p>"),
+      block("p", "caption", "<p>Table 1. First native.</p>", "Table 1. First native."),
+      block("table", "other", "<table><tr><td>1</td></tr></table>"),
+      block("p", "caption", "<p>Table 2. Second native.</p>", "Table 2. Second native."),
+      block("table", "other", "<table><tr><td>2</td></tr></table>"),
+    ];
+    expect(figuresOf(blocks).map((f) => [f.kind, f.caption, f.ordinal])).toEqual([
+      ["figure", null, 1],
+      ["table", "Table 1. First native.", 1],
+      ["table", "Table 2. Second native.", 2],
+    ]);
+  });
+
+  it("recognises the complete Roman numeral alphabet in picture-table captions", () => {
+    const blocks = [
+      block("figure", "media", "<figure><img src=c><figcaption>Table C. Results.</figcaption></figure>"),
+      block("figure", "media", "<figure><img src=d><figcaption>Table D. Results.</figcaption></figure>"),
+      block("figure", "media", "<figure><img src=m><figcaption>Table M. Results.</figcaption></figure>"),
+    ];
+    expect(figuresOf(blocks).map((f) => [f.kind, f.ordinal])).toEqual([
+      ["table", 1],
+      ["table", 2],
+      ["table", 3],
+    ]);
+  });
+
   it("does not hand one caption to two figures", () => {
     const blocks = [
       block("p", "media", "<p><img src=a></p>"),

@@ -74,6 +74,11 @@ beside it only when there is more than one. A screen reader hears it as one phra
 and that is how a reader finds the part to open. The mark is part of the row, not a button of its
 own: the row is already the jump, and the figure itself is one step further in Skim's Figures walk.
 
+**In an unread title's ink, at 14px**, since 2026-10-15. It was 12px in the faintest ink, and Greg,
+on a paper whose two parts both carried one, asked us to *"indicate where there are
+figures/tables/etc in Structure mode somehow"* (`spya-zzvm6e`): there, and not seen —
+[plan 261015b](../plans/261015b-figures-follow-ups-tables-as-pictures-louder-structure-marks.md).
+
 What counts as a figure is [`src/figures.ts`](../../src/figures.ts), read off the stored blocks with
 no model call. The rows are counted **by row index** (`startRow`/`endRow`), never by comparing ids —
 [block-ids.md](block-ids.md). The mark is drawn by one component,

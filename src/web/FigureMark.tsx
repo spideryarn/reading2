@@ -55,7 +55,7 @@ export function FigureMark({
     <span className="fig-mark" role="img" aria-label={name}>
       {present.map(({ kind, Icon }) => (
         <span key={kind} className="fig-mark-kind" data-kind={kind} aria-hidden="true">
-          <Icon size={12} />
+          <Icon size={14} />
           {counts[kind] > 1 ? <span className="fig-mark-n">{counts[kind]}</span> : null}
         </span>
       ))}
