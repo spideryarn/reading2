@@ -1510,8 +1510,12 @@ export function documentHadTooLittleText(
  * check that its visitor is not a bot"* is what the page itself tells a person.
  * The provider is on the error and in the log's diagnostic.
  *
- * **"an HTML file", not "a web page"**, which could be heard as a browser's
- * archive format this app does not take. And the futility of another go is
+ * **A PDF, and the site's own first.** Until 2026-10-15 it also offered "an
+ * HTML file", but no browser offers a plain one by that name: Safari saves a
+ * Web Archive and Chrome's single file is MHTML, neither of which this app
+ * takes. A journal's Download PDF is the publisher's typeset file, and a page
+ * saved as a PDF works from every browser (GPT Sol's review of 261015a,
+ * finding 3; `[fetch-refused]` says the same). And the futility of another go is
  * tied to the stored copy, because that is the true reason: Retry never
  * re-runs the fetch. GPT Sol, 2026-10-06.
  */
@@ -1531,8 +1535,9 @@ export function documentIsABotCheck(origin: DocumentOrigin): ReaderFacingFailure
     message:
       "The site answered with a check that its visitor is not a bot, instead of the page " +
       "itself, and this app cannot pass that check. Another go here would read the same stored " +
-      "copy of that check. If the page opens in your own browser, save it from there as a PDF " +
-      "or an HTML file and upload that file. [jb-bot-check]",
+      "copy of that check. If the page opens in your own browser, use its Download PDF button " +
+      "if it has one. Otherwise, save the page from there as a PDF. Then upload that file. " +
+      "[jb-bot-check]",
   };
 }
 
@@ -2414,7 +2419,8 @@ const FETCH_FAILED: Record<Exclude<FetchFailureCode, "http-error">, ReaderFacing
     message:
       "The site refused to give this app the page. Sites that turn away automated readers " +
       "answer this way, and this one will most likely answer the same again. If the page opens " +
-      "in your browser, save it as a PDF and upload the file. [fetch-refused]",
+      "in your browser, use its Download PDF button if it has one. Otherwise, save the page as " +
+      "a PDF. Then upload that file. [fetch-refused]",
   },
   "not-found": {
     kind: "blocked",
@@ -2527,6 +2533,41 @@ export function fetchFailed(code: FetchFailureCode, status: number | null): Read
   const refused =
     typeof status === "number" && status >= 400 && status < 500 && status !== 408 && status !== 425;
   return refused ? FETCH_DECLINED : FETCH_INCOMPLETE;
+}
+
+/**
+ * **The import failures whose sentence tells the reader to upload a file
+ * instead**, by code. The add page reads it to draw an upload control under
+ * such a failure (`UploadInstead` in src/web/AddPage.tsx), so the reader can do
+ * what the sentence says from where they are standing rather than going back
+ * to the shelf to find its File button. Greg's report `spya-x5e966`:
+ * docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md.
+ *
+ * Explicit rather than derived from the prose, and held to the prose in both
+ * directions by tests/suggests-upload.test.ts: a code here whose sentence stops
+ * saying upload, or a fetch sentence that starts saying it without its code
+ * here, goes red.
+ */
+export const SUGGESTS_UPLOAD: ReadonlySet<string> = new Set([
+  "fetch-address",
+  "fetch-scheme",
+  "fetch-private",
+  "fetch-certificate",
+  "fetch-redirects",
+  "fetch-login",
+  "fetch-refused",
+  "fetch-type",
+  "fetch-empty",
+  "fetch-declined",
+  "fetch-incomplete",
+  "fetch-paper-missing",
+  "jb-bot-check",
+]);
+
+/** Whether a stored failure message is one of `SUGGESTS_UPLOAD`'s. */
+export function failureSuggestsUpload(message: string | undefined): boolean {
+  const code = message === undefined ? null : codeOfMessage(message);
+  return code !== null && SUGGESTS_UPLOAD.has(code);
 }
 
 /**

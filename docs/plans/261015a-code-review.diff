@@ -1,0 +1,644 @@
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index 490857410..4abac6170 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -2373,6 +2373,18 @@ answered that it has no such document, so the reader is told to check the link o
+ PDF and upload it, not that their page does not exist
+ ([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
+ 
++**Where a sentence says to upload the file instead, the add page offers the upload** (since
++2026-10-15). A site that turns the app away will usually let the reader's own browser through, and
++the sentence says to use the page's Download PDF, or save it as a PDF, and upload that. Under such
++a failed import the add page draws the shelf's own picker, one file at a time
++([`UploadInstead.tsx`](../../src/web/UploadInstead.tsx)), so the reader need not go back to the
++shelf to find its File button. Which failures count is `SUGGESTS_UPLOAD` in
++[`src/messages.ts`](../../src/messages.ts), held to the sentences in both directions by
++`tests/suggests-upload.test.ts`. What the upload makes is a separate article with no address; the
++failed job stays on the shelf. Getting the page without the reader saving anything (an open-access
++copy, a bookmarklet, an extension) is Greg's call:
++[261015a](../plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md).
++
+ ## The one security check
+ 
+ `isSlug` in [`src/ingest.ts`](../../src/ingest.ts) is a path-traversal guard, not a tidiness check.
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index a966f17c2..8c171956f 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -441,6 +441,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-tnqt2t": "shipped",
+   "spya-tpmde9": "shipped",
+   "spya-tqk7au": "shipped",
++  "spya-tqsw3u": "awaiting",
+   "spya-trg9kz": "shipped",
+   "spya-trkk64": "shipped",
+   "spya-try2v7": "shipped",
+@@ -513,6 +514,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-x0rfs2": "shipped",
+   "spya-x38nge": "shipped",
+   "spya-x4zut6": "shipped",
++  "spya-x5e966": "awaiting",
+   "spya-x6qjbn": "declined",
+   "spya-x896vu": "shipped",
+   "spya-x9taw3": "shipped",
+@@ -667,6 +669,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-t9qu3v": "The hang wasn't reproduced, so the three ways Send could do nothing are closed instead: Send now works while the microphone is on, and a send gives up after a minute. And an unsent report now survives a reload.",
+   "spya-tfp3zw": "The Feedback dialog is bigger again on a large window (56rem wide from 1280px, taller from 900px), and in a Needs a decision thread Send reply is green and Defer for now red.",
+   "spya-thpsnd": "Shipped: Reception and Claims, and the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Visitors to a shared article see the claims, not your checks (your answer A).",
++  "spya-tqsw3u": "A refused import now says to use the page's Download PDF, and the add page has an Upload button right under it. Finding a free copy, or taking the page from your browser, is a question for you (q-fp8tqr).",
+   "spya-tsd470": "Hovering a reference entry now lists every paragraph that cites it, each a jump. A work cited directly in the text more than three times is found only three times so far; that fix is queued.",
+   "spya-tv6wn5": "Dig deeper is gone and Ask in chat stands in its place, on the hover cards too, and now on Ideas. A chat started from an item has a \"Back to …\" line that opens the mode on that item.",
+   "spya-u6h6q8": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
+@@ -684,6 +687,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-wu83xh": "Shipped: a skim-for box (your purpose, edited in Skim), a map line per pass (visitors see it too, your A to q-t5xjqn), shorter stops. Per-stop linking lines and a Skim-only focus are queued.",
+   "spya-x0rfs2": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
+   "spya-x38nge": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
++  "spya-x5e966": "A refused import now says to use the page's Download PDF, and the add page has an Upload button right under it. Finding a free copy, or taking the page from your browser, is a question for you (q-fp8tqr).",
+   "spya-x6qjbn": "There's no clean-up prompt to tweak, and the transcriber ignores a paragraph instruction (tested). You chose to leave dictation as one paragraph rather than add a second step (q-a0qp3x, A).",
+   "spya-xasbd3": "The bar shows at most four suggestions, each can be dismissed for good with × or Delete, the list folds to one line, and on an empty box Guide is the first row.",
+   "spya-xcmg2d": "Help's Ask box has the same microphone as every other box. Every mode's Help page now opens with a short \"why care, what for, how it works\", then a picture of it in use. Annotated pictures skipped, as you suggested.",
+diff --git a/src/feedback-questions.generated.ts b/src/feedback-questions.generated.ts
+index f3f1c9912..c925df669 100644
+--- a/src/feedback-questions.generated.ts
++++ b/src/feedback-questions.generated.ts
+@@ -24,6 +24,7 @@ export const FEEDBACK_QUESTION_STATUS: Readonly<Record<string, FeedbackQuestionS
+   "q-f6ub8e": "answered",
+   "q-fkq30v": "answered",
+   "q-fneq6t": "answered",
++  "q-fp8tqr": "open",
+   "q-hbg65m": "answered",
+   "q-hhbddw": "answered",
+   "q-hpwyf0": "answered",
+@@ -65,6 +66,7 @@ export const FEEDBACK_OPEN_QUESTIONS: readonly CompiledFeedbackQuestion[] = [
+   { id: "q-jzx20h", title: "Attachments to an article: what should one be, now that you can @-mention your articles in chat?", report: "spya-skpxw2", asked: "2026-10-11", body: "Built from your answer: in Chat, type @ and pick any of your own articles (on the shelf, archived, or ones you made public). It comes into that conversation whole, a line at the top says so, and the answer's references to it are buttons that open it at the passage. So a file you upload the ordinary way can already be brought into a chat once it is ready.\n\nNot built: \"attachments to an article\", your better-still. Every version of it needs a new kind of thing stored with the article, so I am asking which one, rather than guessing. What would you use it for first?\n\nA. An attachment is a document tied to this article. You upload it from the article (or from its chat). It becomes a hidden article of its own: not on your shelf, no slot, deleted along with its parent. It is listed first when you type @ in that article's chats, under \"Attached to this article\". Chat can quote it and link to the passage, like any article. About a few days' work.\n\nB. A text addendum. You paste or dictate notes onto the article, and chat can @-mention them and cite them. The cheapest, and enough for \"my scribbles\" if they are typed. It does not take files.\n\nC. Photos or scans of handwritten scribbles, read as pictures. Needs a model that reads images, and a spending limit on chat, which it does not have yet. Much bigger; later.\n\nD. Nothing more for now: upload as an ordinary article, then @-mention it.\n\nRecommended: B if your scribbles are mostly typed notes, A if they are mostly files (PDFs, drafts). Either way, one risk carries over from before: a private draft that chat can read, in a chat that can also fetch web pages, could in principle be leaked a little at a time by a hostile web page. That is the same today for your notes and the article itself.\n\nOne smaller thing: you wrote \"including archived and public\". I took \"public\" to mean your own articles that you have made public. Chat cannot read other people's public articles, and letting it would widen what a hostile article could put in front of the model. If you meant other people's, say so and I will ask that separately.\n\nDetails\n\nYour reply, 12 October:\n\n> I was thinking it would be a way to upload my scribbles or similar or some other addendum to the current article. Let's keep things simple. Maybe it's local to that chat for now? (and indicates that) / Or better still, maybe there's a way to add attachments to an article, and this uploading them to a Chat would be one way. I don't have a clear sense of what we'd use this for yet, so if it's really complicated we should discuss. But it feels like it should be straightforward enough. / And ideally then I could @-mention any attachment to the current article in a chat.\n\nEarlier question, 11 October: A, attach one of your articles to a chat as a source (recommended); B, a file kept only with the conversation, with web access cut; C, A now and B later; D, neither. Your reply above chose A's direction, which is what was built.\n\nWhat you asked, on 11 October: \"It would be nice if the various chat modes could accept attachments, PDFs, etc. There may be protections that you need to put in place to make this secure, or if you think it's a terrible idea (e.g. because of complexity/security/etc), push back.\"\n\nThe @-mention route is built; attachments that belong to an article are not. Opus and GPT Sol were asked separately and came to the same view, and GPT Sol then reviewed the plan.\n\nWhy not simply put the file into the conversation, the way ChatGPT does? When chat was first built it deliberately left attachments out. Chat here is defensible only because every claim points back to a passage you can open, and a file pasted into the model has no passages. Answers about it would be confident claims with no way to check them, which is one of the anti-goals in vision.md. It is also costly: a PDF sent whole is several thousand tokens a page on every turn, and chat has no spending limit per reader today.\n\nWhy turning the file into an article fixes that. An article has stable passage ids. The private storage, export and permanent delete you already have cover it, and chat can already search your other articles. The shipped @-mention work added saying \"this one\" and made a claim about another article a button. A would reuse both for a document attached to this article.\n\nWhy B is bigger. Your own draft is the most valuable thing a hostile web page could try to steal. Chat can fetch web pages and run web searches, and a page can try to make it put your words into a web address. A length limit only slows that down. Note that your articles are already private to you, so B is not about privacy from other readers. It is about keeping a file off your shelf, and away from the web, inside one conversation.\n\nWhat you see with the shipped @-mention: a **Bringing in** chip above the box before sending, then an **Also reading** line at the top of the conversation. If the source later becomes unavailable, that line keeps its title and says **No longer available**. Citations open an available source at the passage. A would reuse that behaviour for an attachment.\n\nDeferred, whichever you choose, each to be queued separately:\n- attaching a freshly uploaded file automatically when it is ready, instead of coming back to pick it;\n- a cheaper \"reference\" import, priced like a minimal paper and readable while a PDF is still being transcribed (a price, so yours);\n- the Learn, Tutorial, Explore, guide and referee chats;\n- images and screenshots;\n- a spending limit on chat." },
+   { id: "q-madusw", title: "Should a web page or search result be kept in a Chat, and may the guide open pages?", report: "spya-vc6uzm", asked: "2026-10-12", body: "Guide search now works, through a small search helper as you suggested. Two things are left for you.\n\n1. You asked for a web page or search result to be \"loaded into the Chat's context\". Today Chat reads a page you paste, but only for that one answer. How should a page stay in a conversation?\n\n1A. Add it to your shelf, then bring it in like an @-mentioned article. A \"Bring into this chat\" button sits on each link in a search result, and on a pasted address. Pressing it imports the page like the Add box does, then puts it in the box as a mention. From then on Chat has the whole page for the rest of the conversation, and can point to its passages. Costs: one article slot for each page (admins are exempt), and a short wait while it imports (seconds for a web page, minutes for a PDF). Reuses everything the @-mention work built.\n\n1B. Keep the page in this conversation only, not on the shelf. No slot is used and there is no import wait. But it means a second way of storing text, with nothing to point back to: an answer could not cite a passage in it. This is the shape we turned down for attachments on 11 October.\n\n1C. Not now. A pasted address keeps working for one answer, and links in earlier answers can be opened again.\n\nRecommendation: 1A.\n\n2. Should the guide (the \"how should I read this?\" conversation) also be able to open one of its search results and read the whole page, as Chat can? 2A: yes. 2B: no, it links the results and Chat reads pages. Recommendation: 2B for now. The guide's job is how to read the piece, and its search results already say what each page says. Each conversation's list of tools is one of our security checks, so this is yours to decide.\n\nDetails\n\nWhat you asked. On 12 October you replied to q-w26r6u: make guide search work, perhaps with a helper that runs the search and hands back links and a summary. In the same sweep, report #579 asked to drop addresses into Chat, or ask for web searches, and have one or more results loaded into the Chat's context, so you could ask where the article sits in the wider literature.\n\nWhat was built. A tool called search_web. A small, cheap model (GPT Luna) is required to search Exa, then writes up to five lines: a title, a link and a sentence on what the page says. We keep only links the search really returned (the cheaper Haiku mistyped 1 link in 30 in the trial). The guide gets the lines as an ordinary tool result. That is what fixes the old bug: before, the search's results vanished when the guide pressed its next-steps buttons before writing anything. It is limited to two calls per answer; a call cost about seven tenths of a cent at the median in the trial. The guide searches only on questions about how to read the piece: is it well regarded, what to read alongside it, who the author is. Questions about the subject itself go to Chat, which the guide now hands them to with a button.\n\nChat. Chat already searches the web with OpenRouter's own search, and shows the sources as chips under its answer. We tried it with the new helper instead: it searched in the same places and cost about 15% less, but each answer that searched took 11 seconds longer and lost its source chips. So Chat keeps its own search.\n\nOn question 1. The @-mention work (also from your 12 October reports) brings one of your shelf articles into a conversation whole, so the model can quote it and point at its passages. By design only you can bring something in, by pressing; a model or a web page cannot. 1A uses exactly that path. A page on your shelf also shows up in your library searches later, which may be welcome or clutter.\n\nOn question 2. Opening a page means the guide could fetch any address a search result or the article hands it. Chat has done this safely for weeks, behind the same checks. The guide was deliberately kept to the article's own tools when it was built, and your reply asked for search, not page-reading, so it was not added without asking." },
+   { id: "q-pm2j66", title: "May an unattended agent build B, the guide saving a lightly reworded sentence of yours without a press?", report: "spya-yk3r03", asked: "2026-10-12", body: "You chose B on q-q7mb3w: the guide may save a rewording of what you typed to About you or Why you're reading, without your press. Nothing is built yet, because this loosens a safety catch, and an agent working with nobody watching may not loosen one on a reply alone. Working it out, the only rewording a fixed rule can safely allow is very light. Real rewording would need a second AI to check it, and that check has to be tested before anyone builds it.\n\nA. Yes, the light form, by an unattended agent. It saves one whole sentence you typed about yourself, changed only in spelling: \"I'm\" to \"I am\", a capital, a full stop, and \"Preparing for\" in place of \"it's for\" in a reason. No word is added or dropped. Gives up: it saves only a little more than today, so \"not an ML specialist\" for your \"not an ML person\" still needs your press.\n\nB. A, and also test the wider form without building it. An agent tries a second AI check that sees only your sentence and the proposed words, never the article. It runs that check against attacks and against real close rewordings, and brings you the numbers. You then decide whether to build it. Gives up: an agent's time and some AI cost for the test.\n\nC. Build the light form only in a session you are watching.\n\nD. Drop it, and keep exact words only, as built now.\n\nRecommended: B. The light form adds almost no risk beyond the exact-words rule you already accepted, so it can be built unattended. The test shows whether the rewording you actually asked for can be made safe enough, before anyone is asked to build it.\n\nDetails\n\nBackground. On 9 October the guide learned to offer to save two things you tell it: why you are reading this article, and something about yourself (About you, on your profile). About you goes into every later AI prompt on every article, so whatever lands there shapes every later answer. Since 11 October (q-t3j8hj, reply A), an offer saves itself if it is word for word what you typed in that message. Anything reworded shows a card with a Save button. On q-q7mb3w you chose B: a close rewording may save itself too, accepting that a planted instruction in an article could then save a sentence about you that you never said.\n\nWhy ask again. Our feedback rules say an unattended agent does not loosen a safety catch even on your reply. You were asked the same about the exact-words rule (q-t3j8hj) and about the ChatGPT publishing tools (q-hpwyf0), and answered A both times.\n\nWhy the fixed rule ended up so light. Opus and GPT Sol tried to break each rule for \"close\". A rule that only checks the words are yours fails. \"I'm reading this because my mother has cancer\" can become \"I have cancer\". The next version allowed small edits: dropping \"a\" or \"the\", or starting partway through a sentence. GPT Sol broke that too. \"I have a little experience with statistics\" became \"I have little experience\". \"In the simulation, I am a surgeon\" became \"I am a surgeon\". Small words, commas and where a sentence is cut all carry meaning. So the light form changes spelling only, and takes whole sentences only.\n\nWhat the light form also does. It only saves from a statement about yourself that you typed, not a question or a request. It never saves anything with a link, an address, quotation marks, or words like \"ignore\" or \"instructions\". For About you, the sentence must start with \"I\" and must not contain \"you\". It is only ever added at the end of About you, never rewrites it. A reason is saved by itself only if you have no reason yet. The card says \"Saved, reworded\", shows your own sentence under it, and has an Undo. The exact-words rule gets the same refusals, which only makes it stricter. The security notes are updated in the same change, rating the risk Medium. GPT Sol reviews the code.\n\nWhat is left. A planted instruction in an article can choose which of your own sentences from that message gets saved. A sentence can lose its context. If you typed \"Let's role-play. I am a surgeon.\", \"I am a surgeon.\" could be saved. The exact-words rule on dev can do that today, and the light form does not make it worse.\n\nThe wider form, in B. GPT Sol designed it and judged it \"a fallible semantic check, not a provenance guarantee\". It also said the details of that second AI are the safety catch itself and are not defined yet, so it should be measured before anyone is asked to build it, watched or not.\n\nWhat would decide it. Whether the light form is worth having on its own. And whether you want the wider form tested, at some AI cost, to see if the rewording you asked for can be made safe enough." },
++  { id: "q-fp8tqr", title: "When a site turns Spideryarn away, should we look for a free copy, or take the page from your browser?", report: "spya-x5e966", asked: "2026-10-15", body: "Short version: the cell.com article you tried turned our server away, though your browser got through. I have made the way round easier. When an import fails like this, the add page now has an Upload button right under the message, and the message suggests the site's own Download PDF. The bigger fixes each need your decision. Which should we pursue next?\n\nA. Look for a free copy automatically (recommended first step: measure it, not build it yet). That article is open access, and a free full text exists. When a site refuses us, we would look the paper up in the catalogues we already use (Crossref, OpenAlex) and import the free copy instead. The catch: for this paper the only copy our server can read is Europe PMC's XML feed. So it needs a converter for that format and a new outside service (Europe PMC). We would build the address ourselves from the paper's id rather than follow a link a catalogue gave us. It only helps papers with a free copy, and sometimes that copy is the author's manuscript rather than the published version, which we would say. First step: try twenty real refused links and count how many it would have saved. About an hour; nothing built.\n\nB. A bookmarklet. A bookmark you click while on the page, which sends the page your browser is showing to Spideryarn. This is how Instapaper got round paywalls, and it works on any site you can read. The catch: some sites' security settings block bookmarklets, and that is untested. It is fiddly to install on an iPhone. And it cannot simply send the page to us, because the app deliberately refuses requests from other sites. The bookmarklet would open a Spideryarn window and hand the page to it, and that window uploads it. First step: a prototype tried on cell.com in Chrome, Firefox and Safari.\n\nC. A browser extension. Readwise Reader and Zotero do this; it is the most reliable. The catch: the most work, store review on each browser, and a second piece of software to keep up. It need only ask to see the tab you click it on, not every site.\n\nD. Nothing more for now. Downloading the PDF and using the new Upload button is the answer.\n\nRecommendation: A's measurement now, since it costs an hour and decides whether A is worth building. Then B, if A saves few links. Not recommended at all: paying a scraping service to solve the human check for us. That is getting round the publisher's check rather than reading what you can read.\n\nDetails\n\nWhat you reported, 15 October: importing https://www.cell.com/fulltext/S1364-6613(15)00180-1 failed with \"The site refused to give this app the page\". You could open it in your browser after a human check. You asked what we can do going forwards: a browser extension, or something else. You sent a shorter repeat later the same evening (spya-tqsw3u), from the article itself once it was on your shelf.\n\nWhat we found. cell.com answers our server with \"forbidden\" (403). Every other public copy turns us away too: the PDF link, PubMed Central (a reCAPTCHA page) and Europe PMC's site (403). The article is Mental Imagery: Functional Mechanisms and Clinical Applications, Trends in Cognitive Sciences 2015, CC BY. Only Europe PMC's programming interface hands our server the full text, and it comes as XML in the format journals use (JATS), which Spideryarn cannot read yet.\n\nWhat other tools do. The tools that get past these checks all take the page from your own browser, where you have already passed the check: the Readwise Reader extension, Zotero's Connector, Instapaper's bookmarklet. The ones that fetch from their own servers hit the same wall we do. Raindrop.io refuses to take the page from your browser on privacy grounds, because the page can carry whatever your browser showed, signed-in details included.\n\nWhat was built (on dev, not yet deployed). The failure message now says: use the page's Download PDF button if it has one, otherwise save the page as a PDF, then upload that file. The add page shows an Upload button under that message, for every failure whose message suggests uploading. Previously you had to go back to the shelf to find the File button.\n\nWhat would decide it. A: whether the twenty-link sample finds free copies for a good share of refused papers. B and C: how often you, or readers, hit walls on pages that are not papers (news sites, blogs), where no free copy exists to find." },
+ ];
+ 
+ /** Each open question's replies an agent has acted on, by id. The server only: never sent. */
+@@ -73,4 +75,5 @@ export const FEEDBACK_QUESTION_ACTED: Readonly<Record<string, readonly string[]>
+   "q-jzx20h": ["spya-zake3w"],
+   "q-madusw": [],
+   "q-pm2j66": [],
++  "q-fp8tqr": [],
+ };
+diff --git a/src/messages.ts b/src/messages.ts
+index 1158f4d45..213f6c8d9 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -1510,8 +1510,12 @@ export function documentHadTooLittleText(
+  * check that its visitor is not a bot"* is what the page itself tells a person.
+  * The provider is on the error and in the log's diagnostic.
+  *
+- * **"an HTML file", not "a web page"**, which could be heard as a browser's
+- * archive format this app does not take. And the futility of another go is
++ * **A PDF, and the site's own first.** Until 2026-10-15 it also offered "an
++ * HTML file", but no browser offers a plain one by that name: Safari saves a
++ * Web Archive and Chrome's single file is MHTML, neither of which this app
++ * takes. A journal's Download PDF is the publisher's typeset file, and a page
++ * saved as a PDF works from every browser (GPT Sol's review of 261015a,
++ * finding 3; `[fetch-refused]` says the same). And the futility of another go is
+  * tied to the stored copy, because that is the true reason: Retry never
+  * re-runs the fetch. GPT Sol, 2026-10-06.
+  */
+@@ -1531,8 +1535,9 @@ export function documentIsABotCheck(origin: DocumentOrigin): ReaderFacingFailure
+     message:
+       "The site answered with a check that its visitor is not a bot, instead of the page " +
+       "itself, and this app cannot pass that check. Another go here would read the same stored " +
+-      "copy of that check. If the page opens in your own browser, save it from there as a PDF " +
+-      "or an HTML file and upload that file. [jb-bot-check]",
++      "copy of that check. If the page opens in your own browser, use its Download PDF button " +
++      "if it has one. Otherwise, save the page from there as a PDF. Then upload that file. " +
++      "[jb-bot-check]",
+   };
+ }
+ 
+@@ -2414,7 +2419,8 @@ const FETCH_FAILED: Record<Exclude<FetchFailureCode, "http-error">, ReaderFacing
+     message:
+       "The site refused to give this app the page. Sites that turn away automated readers " +
+       "answer this way, and this one will most likely answer the same again. If the page opens " +
+-      "in your browser, save it as a PDF and upload the file. [fetch-refused]",
++      "in your browser, use its Download PDF button if it has one. Otherwise, save the page as " +
++      "a PDF. Then upload that file. [fetch-refused]",
+   },
+   "not-found": {
+     kind: "blocked",
+@@ -2529,6 +2535,41 @@ export function fetchFailed(code: FetchFailureCode, status: number | null): Read
+   return refused ? FETCH_DECLINED : FETCH_INCOMPLETE;
+ }
+ 
++/**
++ * **The import failures whose sentence tells the reader to upload a file
++ * instead**, by code. The add page reads it to draw an upload control under
++ * such a failure (`UploadInstead` in src/web/AddPage.tsx), so the reader can do
++ * what the sentence says from where they are standing rather than going back
++ * to the shelf to find its File button. Greg's report `spya-x5e966`:
++ * docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md.
++ *
++ * Explicit rather than derived from the prose, and held to the prose in both
++ * directions by tests/suggests-upload.test.ts: a code here whose sentence stops
++ * saying upload, or a fetch sentence that starts saying it without its code
++ * here, goes red.
++ */
++export const SUGGESTS_UPLOAD: ReadonlySet<string> = new Set([
++  "fetch-address",
++  "fetch-scheme",
++  "fetch-private",
++  "fetch-certificate",
++  "fetch-redirects",
++  "fetch-login",
++  "fetch-refused",
++  "fetch-type",
++  "fetch-empty",
++  "fetch-declined",
++  "fetch-incomplete",
++  "fetch-paper-missing",
++  "jb-bot-check",
++]);
++
++/** Whether a stored failure message is one of `SUGGESTS_UPLOAD`'s. */
++export function failureSuggestsUpload(message: string | undefined): boolean {
++  const code = message === undefined ? null : codeOfMessage(message);
++  return code !== null && SUGGESTS_UPLOAD.has(code);
++}
++
+ /**
+  * The bytes are neither a PDF nor a web page, whatever the file is called.
+  *
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index e5dba2683..bc7133b62 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -52,11 +52,12 @@ import { Link } from "./Link.js";
+ import { JobCard } from "./AddArticle.js";
+ import { normaliseUrl, slugFromUrl } from "../ingest.js";
+ import { formatBytes } from "../uploads.js";
+-import { KEEP_A_TAB_OPEN } from "../job-state.js";
++import { isImportJob, KEEP_A_TAB_OPEN } from "../job-state.js";
+ import {
+   ADDING_SENDS_TEXT_AWAY,
+   codeOfMessage,
+   DIRECT_ADD_SENT_TEXT_AWAY,
++  failureSuggestsUpload,
+   UPLOAD_STILL_ARRIVING,
+   ADD_IMPORT_LOST,
+   PUBLIC_COPY_EXPLAIN,
+@@ -68,6 +69,7 @@ import {
+ } from "../messages.js";
+ import { pageTitle, useDocumentTitle } from "./page-title.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
++import { UploadInstead } from "./UploadInstead.js";
+ import { LIBRARY_HREF, navigate, readHref } from "./router.js";
+ import type { Job } from "../types.js";
+ import { type PublicCopyFound, useJobs } from "./useJobs.js";
+@@ -1758,6 +1760,17 @@ export function AddPage({
+         />
+       )}
+ 
++      {/* **The way round the sentence above names, where the reader is.** Only
++          under an import from an address that failed with a sentence telling
++          them to upload the file instead (`SUGGESTS_UPLOAD`,
++          src/messages.ts); src/web/UploadInstead.tsx. */}
++      {job?.status === "error" &&
++        isImportJob(job) &&
++        job.url !== undefined &&
++        failureSuggestsUpload(job.error) && (
++        <UploadInstead />
++      )}
++
+       {/* **The tab is the worker, said where somebody is watching it work.**
+           `pump` in src/jobs.ts returns immediately on Vercel, so the only
+           thing calling `/advance` in production is this page. The shelf's box
+diff --git a/src/web/UploadPicker.tsx b/src/web/UploadPicker.tsx
+index 852c91371..86c7f4c68 100644
+--- a/src/web/UploadPicker.tsx
++++ b/src/web/UploadPicker.tsx
+@@ -71,6 +71,10 @@ import { useUpload } from "./useUpload.js";
+  */
+ const LIMITS_ID = "upload-limits";
+ 
++/** What a `single` picker says to two or more files. */
++export const ONE_FILE_HERE =
++  "One file at a time here. To add several at once, use the File button on the shelf.";
++
+ /** The three pieces this component draws and the caller places. */
+ export interface UploadSlots {
+   /** The control that opens the file dialog. Belongs on the URL row, beside Add. */
+@@ -94,7 +98,17 @@ export interface UploadSlots {
+ 
+ export function UploadPicker({
+   children,
++  single = false,
+ }: {
++  /**
++   * **One file, for one article.** Set by `UploadInstead` on a failed add
++   * page, where the control is the way round *this* article's failure: several
++   * files picked or dropped there would start the shelf's minimal batch import
++   * instead (metadata only, no navigation), which is not what the reader is
++   * standing there to do. So it takes one file and says so for more (GPT Sol's
++   * plan review of 261015a, finding 2).
++   */
++  single?: boolean;
+   /**
+    * Everything inside the drop target, given the pieces to place.
+    *
+@@ -176,6 +190,12 @@ export function UploadPicker({
+        commit, like a drop: there is no single file for Add to send. Ahead of
+        the busy check, because the batch has its own queue and a single
+        transfer in flight does not stand in its way. One file is unchanged. */
++    if (files.length > 1 && single) {
++      setChosen(null);
++      file.current = null;
++      setProblem(ONE_FILE_HERE);
++      return false;
++    }
+     if (files.length > 1) {
+       setChosen(null);
+       setProblem(null);
+@@ -273,8 +293,9 @@ export function UploadPicker({
+         ref={input}
+         type="file"
+         accept={UPLOAD_ACCEPT}
+-        /* Several at once go to the batch — see `take`. */
+-        multiple
++        /* Several at once go to the batch — see `take` — except in a
++           `single` picker, which refuses them. */
++        multiple={!single}
+         className="tw:hidden"
+         onChange={(e) => {
+           take(e.target.files);
+@@ -290,7 +311,11 @@ export function UploadPicker({
+         /* The words the dashed box used to say. They were the only thing
+            advertising that dropping works at all, so they move to the title of
+            the control that replaced it rather than disappearing. */
+-        title="Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
++        title={
++          single
++            ? "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box."
++            : "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
++        }
+         /* **The caps, for somebody who cannot see the caption.** The line under
+            this row states them; this is what makes a screen reader read it out
+            as part of the control rather than as a stray paragraph after it.
+diff --git a/src/web/UploadInstead.tsx b/src/web/UploadInstead.tsx
+new file mode 100644
+index 000000000..587abf9e5
+--- /dev/null
++++ b/src/web/UploadInstead.tsx
+@@ -0,0 +1,43 @@
++/**
++ * **Upload the file instead, from the page that just said to.**
++ *
++ * A site that refuses this app (`[fetch-refused]`), or answers with a check that
++ * its visitor is not a bot (`[jb-bot-check]`), will usually let the reader's own
++ * browser through, and the failure sentence tells them to save the page or the
++ * site's PDF and upload it. Until 2026-10-15 the add page they were standing on
++ * had no way to do that: the File button is on the shelf. Greg's report
++ * `spya-x5e966`, and the plan:
++ * docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md.
++ *
++ * **The shelf's own picker, whole.** `UploadPicker` hands back its File
++ * button, its status row (refusals, the caps, the progress bar) and a commit,
++ * and owns the drop target; committing hands the file to `uploadEngine` and
++ * navigates to `/add/upload/<id>` exactly as the shelf's Add does. Nothing here
++ * uploads anything of its own. The caller decides when to draw it, from
++ * `failureSuggestsUpload` in src/messages.ts.
++ */
++import { Button } from "@/components/ui/button";
++import { UploadPicker } from "./UploadPicker.js";
++
++export function UploadInstead() {
++  return (
++    <UploadPicker single>
++      {(slots) => (
++        <section aria-label="Upload a file instead" className="tw:mt-3">
++          <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
++            Saved the page or its PDF? Upload it here.
++          </p>
++          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
++            {slots.pdfButton}
++            {slots.chosen && (
++              <Button type="button" onClick={slots.commit}>
++                Add
++              </Button>
++            )}
++          </div>
++          {slots.uploadStatus}
++        </section>
++      )}
++    </UploadPicker>
++  );
++}
+diff --git a/tests/suggests-upload.test.ts b/tests/suggests-upload.test.ts
+new file mode 100644
+index 000000000..af73324b5
+--- /dev/null
++++ b/tests/suggests-upload.test.ts
+@@ -0,0 +1,78 @@
++/**
++ * **`SUGGESTS_UPLOAD` and the sentences it stands for cannot drift apart.**
++ *
++ * The add page draws an upload control under a failed import whose code is in
++ * the set (src/web/AddPage.tsx § `UploadInstead`). A code in the set whose
++ * sentence no longer says upload would offer a control the sentence does not
++ * explain; a sentence that says upload without its code in the set would tell
++ * the reader to do something the page gives them no way to do from there.
++ * docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md.
++ */
++import { describe, expect, it } from "vitest";
++import type { FetchFailureCode } from "../src/fetch.js";
++import {
++  codeOfMessage,
++  documentIsABotCheck,
++  FETCH_PAPER_MISSING,
++  failureSuggestsUpload,
++  fetchFailed,
++  SUGGESTS_UPLOAD,
++} from "../src/messages.js";
++
++/** A `Record` over the union, so a new code is a red typecheck here. */
++const ALL: Record<FetchFailureCode, true> = {
++  "invalid-url": true,
++  "unsupported-scheme": true,
++  "blocked-address": true,
++  dns: true,
++  connection: true,
++  certificate: true,
++  timeout: true,
++  "too-many-redirects": true,
++  unauthorized: true,
++  forbidden: true,
++  "not-found": true,
++  "rate-limited": true,
++  "server-error": true,
++  "http-error": true,
++  "too-large": true,
++  "unsupported-type": true,
++  empty: true,
++};
++
++/** Every sentence an import from an address can fail with that names a way round. */
++const SENTENCES: string[] = [
++  ...(Object.keys(ALL) as FetchFailureCode[]).flatMap((code) =>
++    code === "http-error"
++      ? [fetchFailed(code, 403).message, fetchFailed(code, 500).message]
++      : [fetchFailed(code, null).message],
++  ),
++  FETCH_PAPER_MISSING.message,
++  documentIsABotCheck("url").message,
++];
++
++const saysUpload = (message: string) => /\bupload/i.test(message);
++
++describe("SUGGESTS_UPLOAD", () => {
++  for (const message of SENTENCES) {
++    const code = codeOfMessage(message);
++    it(`[${code}] is in the set exactly when its sentence says upload`, () => {
++      expect(code).not.toBeNull();
++      expect(SUGGESTS_UPLOAD.has(code as string)).toBe(saysUpload(message));
++    });
++  }
++
++  it("names no code that none of those sentences carries", () => {
++    const carried = new Set(SENTENCES.map(codeOfMessage));
++    expect([...SUGGESTS_UPLOAD].filter((code) => !carried.has(code))).toEqual([]);
++  });
++
++  it("is read off a stored message's bracketed code, and nothing else", () => {
++    expect(failureSuggestsUpload(fetchFailed("forbidden", 403).message)).toBe(true);
++    expect(failureSuggestsUpload(documentIsABotCheck("url").message)).toBe(true);
++    expect(failureSuggestsUpload(fetchFailed("timeout", null).message)).toBe(false);
++    expect(failureSuggestsUpload(documentIsABotCheck("upload").message)).toBe(false);
++    expect(failureSuggestsUpload("Something went wrong, upload it. [jb-made-up]")).toBe(false);
++    expect(failureSuggestsUpload(undefined)).toBe(false);
++  });
++});
+diff --git a/tests/add-page-upload-instead.test.tsx b/tests/add-page-upload-instead.test.tsx
+new file mode 100644
+index 000000000..07debf969
+--- /dev/null
++++ b/tests/add-page-upload-instead.test.tsx
+@@ -0,0 +1,222 @@
++// @vitest-environment jsdom
++/**
++ * **A failed import whose sentence says to upload the file offers the upload
++ * where the reader is** — src/web/UploadInstead.tsx, wired into
++ * src/web/AddPage.tsx under `failureSuggestsUpload`.
++ * docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md.
++ *
++ *  - a site that refused the app (`[fetch-refused]`) gets the control; a
++ *    timeout, whose sentence says to try again, and a running import do not;
++ *  - choosing a file and pressing Add hands it to the shelf's own upload
++ *    engine and goes to `/add/upload/<id>`, as the shelf's Add does.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { Job } from "../src/types.js";
++import type { UseJobs } from "../src/web/useJobs.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/* jsdom's storages are shadowed by Node's own globals here (tests/add-page-purpose.test.tsx). */
++for (const name of ["localStorage", "sessionStorage"] as const) {
++  const held = new Map<string, string>();
++  Object.defineProperty(window, name, {
++    configurable: true,
++    value: {
++      getItem: (key: string) => held.get(key) ?? null,
++      setItem: (key: string, value: string) => void held.set(key, value),
++      removeItem: (key: string) => void held.delete(key),
++      clear: () => held.clear(),
++    },
++  });
++}
++
++let jobs: Job[] = [];
++let addResult: Job | null = null;
++const queue: UseJobs = {
++  get jobs() {
++    return jobs;
++  },
++  loaded: true,
++  error: null,
++  driverFailures: {},
++  lastFailure: () => null,
++  add: async () => addResult,
++  addUpload: async () => null,
++  run: async () => null,
++  reset: async () => null,
++  cancel: async () => {},
++  retry: async () => null,
++  forget: async () => {},
++};
++vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => queue, useJobSession: () => {} }));
++vi.mock("../src/web/useUpload.js", () => ({ useUpload: () => null }));
++
++const sent: string[] = [];
++vi.mock("../src/web/uploadEngine.js", () => ({
++  uploadEngine: {
++    retry: () => {},
++    cancel: () => {},
++    forget: () => {},
++    send: async (file: File) => {
++      sent.push(file.name);
++      return "up-1";
++    },
++  },
++}));
++
++/** Every file handed to the shelf's minimal batch import, which this control must never start. */
++const batched: string[] = [];
++vi.mock("../src/web/batchUpload.js", async (importActual) => {
++  const actual = await importActual<typeof import("../src/web/batchUpload.js")>();
++  return {
++    ...actual,
++    batchUpload: {
++      ...actual.batchUpload,
++      add: (files: File[]) => {
++        batched.push(...files.map((f) => f.name));
++      },
++    },
++  };
++});
++
++const navigations: string[] = [];
++vi.mock("../src/web/router.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/router.js")>()),
++  navigate: (href: string) => {
++    navigations.push(href);
++  },
++}));
++
++const json = (body: unknown, init: ResponseInit = { status: 200 }) =>
++  new Response(JSON.stringify(body), { ...init, headers: { "content-type": "application/json", ...init.headers } });
++
++vi.mock("../src/web/lib/api.js", async (importActual) => {
++  const actual = await importActual<typeof import("../src/web/lib/api.js")>();
++  return {
++    ...actual,
++    apiFetch: async (input: string) => {
++      if (input === "/api/reader") return json({ autoModes: true });
++      if (input.startsWith("/api/reader?slug=")) return json({ autoModes: true, purpose: null, purposeFailed: false });
++      return json({ error: "No article" }, { status: 404 });
++    },
++    leavingFetch: () => Promise.resolve(),
++  };
++});
++
++const { AddPage, resetAddPurposeForTests } = await import("../src/web/AddPage.js");
++const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
++const { resetShareAtAddForTests } = await import("../src/web/add-share.js");
++const { addUploadHref } = await import("../src/web/router.js");
++const { fetchFailed } = await import("../src/messages.js");
++const { ONE_FILE_HERE } = await import("../src/web/UploadPicker.js");
++
++const URL = "https://www.cell.com/fulltext/S1364-6613(15)00180-1";
++
++/** An import: `fetch` among its steps is what `isImportJob` asks. A mode job carries a `url` too. */
++const makeJob = (status: Job["status"], error?: string, step = "fetch"): Job =>
++  ({
++    id: "job-1",
++    slug: "a-paper",
++    url: URL,
++    status,
++    steps: [{ name: step, status: status === "error" ? "error" : "pending" }],
++    ...(error ? { error } : {}),
++  }) as unknown as Job;
++
++let host: HTMLDivElement;
++let root: Root;
++
++async function show(job: Job): Promise<void> {
++  addResult = job;
++  jobs = [job];
++  act(() => root.render(createElement(AddPage, { source: { kind: "url", url: URL } })));
++  for (let i = 0; i < 3; i++) {
++    await act(async () => {
++      await vi.advanceTimersByTimeAsync(0);
++    });
++  }
++}
++
++const control = () => host.querySelector('section[aria-label="Upload a file instead"]');
++
++beforeEach(() => {
++  vi.useFakeTimers();
++  resetAutoModesSettingForTests();
++  resetAddPurposeForTests();
++  resetShareAtAddForTests();
++  window.sessionStorage.clear();
++  jobs = [];
++  addResult = null;
++  sent.length = 0;
++  batched.length = 0;
++  navigations.length = 0;
++  host = document.createElement("div");
++  document.body.appendChild(host);
++  root = createRoot(host);
++});
++
++afterEach(async () => {
++  act(() => root.unmount());
++  await vi.advanceTimersByTimeAsync(0);
++  host.remove();
++  vi.useRealTimers();
++});
++
++describe("Upload a file instead, on the add page", () => {
++  it("is offered under a site that refused the app", async () => {
++    await show(makeJob("error", fetchFailed("forbidden", 403).message));
++    expect(control()).not.toBeNull();
++  });
++
++  it("is not offered under a failure whose sentence says to try again", async () => {
++    await show(makeJob("error", fetchFailed("timeout", null).message));
++    expect(control()).toBeNull();
++  });
++
++  it("is not offered while the import is still going", async () => {
++    await show(makeJob("running"));
++    expect(control()).toBeNull();
++  });
++
++  it("is not offered under a mode job that failed the same way", async () => {
++    await show(makeJob("error", fetchFailed("forbidden", 403).message, "summary"));
++    expect(control()).toBeNull();
++  });
++
++  it("takes one file, and says so to two rather than starting the shelf's batch", async () => {
++    await show(makeJob("error", fetchFailed("forbidden", 403).message));
++    const input = control()?.querySelector<HTMLInputElement>('input[type="file"]');
++    if (!input) throw new Error("no file input");
++    expect(input.multiple).toBe(false);
++    const files = ["a.pdf", "b.pdf"].map((name) => new File(["%PDF-1.7\n"], name, { type: "application/pdf" }));
++    Object.defineProperty(input, "files", { configurable: true, value: files });
++    act(() => {
++      input.dispatchEvent(new Event("change", { bubbles: true }));
++    });
++    expect(control()?.textContent).toContain(ONE_FILE_HERE);
++    expect(sent).toEqual([]);
++    expect(batched).toEqual([]);
++  });
++
++  it("hands the chosen file to the upload engine and goes to its add page", async () => {
++    await show(makeJob("error", fetchFailed("forbidden", 403).message));
++    const input = control()?.querySelector<HTMLInputElement>('input[type="file"]');
++    if (!input) throw new Error("no file input");
++    const file = new File(["%PDF-1.7\n"], "mental-imagery.pdf", { type: "application/pdf" });
++    Object.defineProperty(input, "files", { configurable: true, value: [file] });
++    act(() => {
++      input.dispatchEvent(new Event("change", { bubbles: true }));
++    });
++    const add = [...(control()?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.trim() === "Add");
++    if (!add) throw new Error("no Add button after choosing a file");
++    await act(async () => {
++      add.click();
++      await vi.advanceTimersByTimeAsync(0);
++    });
++    expect(sent).toEqual(["mental-imagery.pdf"]);
++    expect(navigations).toContain(addUploadHref("up-1"));
++  });
++});
