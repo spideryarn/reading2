@@ -60,7 +60,13 @@ const AUTHORS: Author[] = [
   { name: "A Fifth Author", affiliations: [] },
 ];
 
-/** The antikythera facts: its byline, its site name, 11,688 words, 9 parts, 31 sections. */
+/**
+ * The antikythera facts: its byline, its site name, 11,688 words, 9 parts, 31
+ * sections — and, since the counts went behind *Show counts* (plan 261015c),
+ * a journal and a publication date, so the line drawn on arrival is still long
+ * enough for the old rule to push it sideways. A static render cannot press
+ * the button, and the line it draws shut is the one a phone reader sees first.
+ */
 function article(siteName: string, authors?: Author[]): Article {
   const nodes: Record<string, TreeNode> = {
     n0: { id: "n0", depth: 0, parent: null, children: [], range: ["spya-aaaaaa", "spya-aaaaaa"], title: "Antikythera mechanism" },
@@ -79,6 +85,8 @@ function article(siteName: string, authors?: Author[]): Article {
       title: "Antikythera mechanism",
       byline: "Contributors to Wikimedia projects",
       siteName,
+      journal: "Journal for the History of Astronomy",
+      publishedAt: "2024-05-31",
       ...(authors ? { authors } : {}),
     },
     blocks: [
@@ -148,11 +156,11 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
       const broken = await look(page("Wikimedia Foundation, Inc.", OLD_RULE));
       expect(broken.texts).toEqual([
         "Contributors to Wikimedia projects",
+        "Journal for the History of Astronomy",
         "Wikimedia Foundation, Inc.",
-        "11,688 words",
+        /* The day in the browser's own locale, which headless Chrome may not share. */
+        expect.stringMatching(/^Published .*2024$/),
         "~49 min",
-        "9 parts",
-        "31 sections",
       ]);
       expect(broken.scrollWidth, "the fixture no longer reproduces the overflow").toBeGreaterThan(WIDTH);
 
@@ -160,14 +168,15 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
       expect(fixed.scrollWidth, "the facts line pushes the page sideways").toBeLessThanOrEqual(WIDTH);
       for (const right of fixed.rights) expect(right).toBeLessThanOrEqual(WIDTH);
       /* Plan 260929d's guarantee: "9 / parts" never splits across a wrap. */
-      expect(fixed.lines.slice(1), "a fact split across a line break").toEqual([1, 1, 1, 1, 1]);
+      expect(fixed.lines.slice(1), "a fact split across a line break").toEqual([1, 1, 1, 1]);
 
       /* A multi-word fact wider than the whole column wraps at its spaces
          rather than overflowing — what `nowrap` could not do. */
       const long = await look(page("The Proceedings of the National Academy of Sciences of the United States of America"));
       expect(long.scrollWidth, "a long site name pushes the page sideways").toBeLessThanOrEqual(WIDTH);
       for (const right of long.rights) expect(right).toBeLessThanOrEqual(WIDTH);
-      expect(long.lines[1], "the long site name was clipped instead of wrapping").toBeGreaterThan(1);
+      /* Third: byline, journal, then the site. */
+      expect(long.lines[2], "the long site name was clipped instead of wrapping").toBeGreaterThan(1);
 
       /* The other shape of the first fact is an author list: nested spans and
          an interactive "+ N more". Exercise the owner's linked version, since
@@ -178,7 +187,7 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
       expect(authored.lines[0], "the author list did not exercise wrapping").toBeGreaterThan(1);
       expect(authored.scrollWidth, "an author list pushes the page sideways").toBeLessThanOrEqual(WIDTH);
       for (const right of authored.rights) expect(right).toBeLessThanOrEqual(WIDTH);
-      expect(authored.lines.slice(1), "a fact after the author list split across a line break").toEqual([1, 1, 1, 1, 1]);
+      expect(authored.lines.slice(1), "a fact after the author list split across a line break").toEqual([1, 1, 1, 1]);
     } finally {
       await browser.close().catch(() => {});
     }

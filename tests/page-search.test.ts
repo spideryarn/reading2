@@ -28,6 +28,7 @@ function section(
 
 const PAGE: SearchableSection[] = [
   section("In one sentence"),
+  section("Why you're reading", { keywords: "purpose reason goal intent aim background about you profile" }),
   section("Authors", { keywords: "names writers byline who wrote it affiliations", aside: "2" }),
   section("At a glance", {
     keywords: "words read time reading duration long blocks parts sections levels length size count statistics",
@@ -37,7 +38,7 @@ const PAGE: SearchableSection[] = [
     keywords: "anyone everybody readers signed in account permission public link privacy visible who can read",
   }),
   section("Your reading", {
-    keywords: "purpose reason goal notes comments questions annotations highlights bookmarks progress left off",
+    keywords: "notes comments questions annotations highlights bookmarks progress left off",
   }),
   section("Technical details", {
     keywords: "address url source original stored storage location link fingerprint hash slug id revision",

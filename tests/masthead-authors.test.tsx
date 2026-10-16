@@ -158,8 +158,8 @@ describe("the masthead's authors", () => {
   it("keeps the line's separators between its own items only, not between names", async () => {
     await mount(article({ byline: "x", authors: FIVE, siteName: "Nature" }), true);
     const items = [...facts().children].map((el) => el.tagName);
-    /* authors · site · words · min · parts · sections */
-    expect(items).toEqual(["SPAN", "SPAN", "SPAN", "SPAN", "SPAN", "SPAN"]);
+    /* authors · site · min, then the Show counts button (the counts are shut, plan 261015c) */
+    expect(items).toEqual(["SPAN", "SPAN", "SPAN", "BUTTON"]);
     /* jsdom applies no stylesheet, so the separator rule is read from the file:
        a descendant `.facts span + span` would put a dot before every name. */
     const css = readFileSync(path.join(process.cwd(), "src/web/styles/shell.css"), "utf8");

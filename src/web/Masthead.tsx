@@ -48,7 +48,7 @@
  * the horizontal axis, so it stays put when the table scrolls sideways). What
  * stays with you as you read is the spine and the arc column, not this.
  */
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Archive, ExternalLink, FileQuestion, Globe, Link2, Lock, Undo2, Upload } from "lucide-react";
 import {
   SHARING_BADGE,
@@ -77,7 +77,7 @@ import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
    not come off `meta` and so never passes through `webSource`. */
 import { hostOf, isWebUrl } from "../urls.js";
 import { Link } from "./Link.js";
-import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, journalBesideSite, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, readHref } from "./router.js";
 import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
@@ -87,6 +87,7 @@ import { FoldAllButton, FrontMatterButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
+import { publishedLabel } from "./relative-time.js";
 
 interface Props {
   article: Article;
@@ -141,6 +142,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
   // same arithmetic and two copies of it would drift.
   const stats = useMemo(() => articleStats(article), [article]);
   const root = tree.nodes[tree.rootId];
+  const [countsOpen, setCountsOpen] = useState(false);
 
   /**
    * Where this article came from — `null` when there is no web address for it.
@@ -225,10 +227,17 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
   ) : (
     meta.byline
   );
+  /* **Where and when it was published**, after the site, in the order both
+     Metadata pages print them — Greg, 2026-10-15 (`spya-u7yfns`): *"Please
+     include the publication date at the top of the article along with the
+     other metadata"*. `publishedLabel` reads an owner's `publishedAt` and a
+     visitor's `published` alike, since this component is handed either. UI
+     face: a fact about the piece is nobody's sentence (fonts.md). Plan 261015c. */
   const facts = [
     byline,
+    journalBesideSite(meta.journal, meta.siteName),
     meta.siteName,
-    `${stats.words.toLocaleString()} words`,
+    publishedLabel(meta),
     /* **The one fact here with a card**, because it is the one that is an
        estimate — ReadTimeCard.tsx. Focusable so a keyboard and a finger reach
        what a pointer does; it is not a button because pressing it does
@@ -251,8 +260,20 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
         {`~${stats.minutes} min`}
       </span>
     </Tooltip>,
-    `${stats.parts} parts`,
-    `${stats.sections} sections`,
+    /* **The counts, shut until asked for** — the same report: *"maybe hide
+       some of the less-likely-to-be-useful metadata behind a
+       default-collapsed section"*. Nobody decides whether to read a piece
+       on its count of parts; the read time above is the word count already
+       turned into the answer. All three stay on Metadata's *At a glance*.
+       Shut on every load, as the byline blocks are: remembering it would be
+       state kept for a cosmetic choice. */
+    ...(countsOpen
+      ? [
+          `${stats.words.toLocaleString()} words`,
+          `${stats.parts} parts`,
+          `${stats.sections} sections`,
+        ]
+      : []),
   ].filter(Boolean) as ReactNode[];
 
   return (
@@ -313,6 +334,8 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
             // biome-ignore lint/suspicious/noArrayIndexKey: static line, rebuilt whole, no child state
             <span key={i}>{f}</span>
           ))}
+          {/* First of the line's three buttons, next to the counts it shows. */}
+          <CountsButton open={countsOpen} onToggle={() => setCountsOpen((o) => !o)} />
           {/* Beside the count of sections it acts on. A button, not a span,
               so `.facts > span + span` draws no dot before it, and it renders
               nothing on an article with no heading to fold. FoldToggle.tsx;
@@ -368,6 +391,38 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
         {root?.gist && <p className="root-gist">{root.gist}</p>}
       </div>
     </div>
+  );
+}
+
+/**
+ * **Show the word, part and section counts on the facts line, or put them
+ * away** — the line's own kind of control, a dotted word drawn like Fold all
+ * and *Show authors and details* beside it (FoldToggle.tsx; controls.md §
+ * Controls that do the same job look the same). Named *counts* so it cannot be
+ * mistaken for the authors button's *details*. Plan 261015c.
+ */
+function CountsButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const label = open ? "Hide counts" : "Show counts";
+  return (
+    <Tooltip
+      placement="bottom"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head={label}
+          what="How many words, parts and sections the article has."
+          how={
+            open
+              ? "Puts them away again. The read time stays."
+              : "Put away when an article opens. Metadata's At a glance has them too."
+          }
+        />
+      }
+    >
+      <button type="button" className="counts-toggle" aria-expanded={open} onClick={onToggle}>
+        {label}
+      </button>
+    </Tooltip>
   );
 }
 

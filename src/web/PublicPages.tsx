@@ -30,7 +30,7 @@ import { Dock } from "./Dock.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref, TAKEDOWN_HREF, type ArticleView } from "./router.js";
-import { publishedOf } from "./relative-time.js";
+import { publishedLabel } from "./relative-time.js";
 import { journalBesideSite, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -133,12 +133,14 @@ export function PublicMetadataPage({
      only to a year. Never the owner's `publishedAt`, which is not sent. In the
      order the owner's page prints them. */
   const shared: PublicMeta = meta;
-  const published = publishedOf({ publishedAt: shared.published, publishedYear: shared.publishedYear })?.label;
+  /* The two visitor fields by name: `publishedLabel` would also read a
+     `publishedAt`, and the payload is a cast, so this page says which. */
+  const published = publishedLabel({ published: shared.published, publishedYear: shared.publishedYear });
   const facts = [
     shared.byline,
     journalBesideSite(shared.journal, shared.siteName),
     shared.siteName,
-    published ? `Published ${published}` : undefined,
+    published,
     shared.lang,
   ].filter(Boolean) as string[];
 

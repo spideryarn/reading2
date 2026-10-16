@@ -111,6 +111,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   through the same store as a fold, display only. What counts, what it leaves showing on purpose,
   and why `?at=` never names a hidden row:
   [261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md).
+- **The masthead's facts line** — byline, journal, site, *Published …* and the read time, in the
+  order the Metadata page prints them; the word, part and section counts wait behind *Show
+  counts*, shut on every load:
+  [261015c](../plans/261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead.md).
 
 ### The modes in the band
 

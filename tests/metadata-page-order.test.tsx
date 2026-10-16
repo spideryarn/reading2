@@ -208,6 +208,23 @@ describe("what the page puts first", () => {
     expect(order.indexOf("In one sentence")).toBeLessThan(order.indexOf("At a glance"));
   });
 
+  /**
+   * **Why you're reading, second, directly under In one sentence** — Greg,
+   * 2026-10-15 (`spya-ejzr4b`): *"Move "Why you're reading" further up in
+   * Metadata"*. It was the first card inside *Your reading*, sixth down; the
+   * box and the read-only *About you* beside it moved out together.
+   * docs/plans/261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead.md.
+   */
+  it("asks why you are reading directly under the one sentence", async () => {
+    await mount();
+    const order = sections();
+
+    expect(order.slice(0, 2)).toEqual(["In one sentence", "Why you're reading"]);
+    const box = host.querySelector("#article-purpose");
+    expect(box, "the purpose box is not on the page").toBeTruthy();
+    expect(box?.closest("[data-section]")?.getAttribute("data-section")).toBe("Why you're reading");
+  });
+
   it("offers the sharing switch above the reader's own notes", async () => {
     await mount();
     const order = sections();

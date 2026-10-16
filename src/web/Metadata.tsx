@@ -278,7 +278,7 @@ import { TagEditor } from "./TagEditor.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
-import { howLong, publishedOf, relativeAgo, timeAgo } from "./relative-time.js";
+import { howLong, publishedLabel, relativeAgo, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
@@ -829,16 +829,17 @@ export function Metadata({
   /* **Where and when it was published** (Greg, 2026-10-03, spya-pcz6a3). The
      journal is the registry's name for where the piece appeared, left out when
      the site already says it; the day is the publisher's own calendar day,
-     printed by the same `publishedOf` the shelf sorts on, so the two cannot
-     disagree about what counts as a date. A paper the registry dates only to
-     a year prints the year alone, `Published 2011` (plan 261004h). */
+     printed by `publishedLabel` over the same `publishedOf` the shelf sorts
+     on, so the two cannot disagree about what counts as a date — and the
+     reading view's masthead prints it the same way since 2026-10-15. A paper
+     the registry dates only to a year prints the year alone, `Published 2011`
+     (plan 261004h). */
   const journal = journalBesideSite(meta.journal, meta.siteName);
-  const published = publishedOf(meta)?.label;
   const facts = [
     ["byline", meta.authors ? undefined : meta.byline],
     ["journal", journal],
     ["site", meta.siteName],
-    ["published", published ? `Published ${published}` : undefined],
+    ["published", publishedLabel(meta)],
     ["language", meta.lang],
   ].filter(([, fact]) => Boolean(fact)) as [string, string][];
   const fetchedShown = fetchedIsShown(meta.fetchedAt);
@@ -1125,6 +1126,63 @@ export function Metadata({
           </Section>
         )}
 
+        {/* ------------------------------------------ 2¼. why you're reading --
+            **Directly under the one sentence since 2026-10-15** — Greg
+            (`spya-ejzr4b`): *"Move "Why you're reading" further up in
+            Metadata"*. It was the first card inside *Your reading*, sixth
+            section down, under At a glance, the PDF note and Access & sharing.
+            Its own section rather than *Your reading* moved whole, because
+            Comments and Where you left off were not asked about and would have
+            climbed above Authors with it. Under *In one sentence*, not above
+            it: that sits under the title by Greg's own request (see its
+            comment). docs/plans/261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead.md. */}
+        <Section
+          label="Why you're reading"
+          keywords="purpose reason goal intent aim background about you profile what you want"
+        >
+          {/* The per-article half of the reader profile. The global half is
+              read-only here with a link to /profile, because a global value
+              edited inside one article's page is a global value nobody can
+              find — Greg, 2026-08-26. docs/project/reader-profile.md.
+
+              It writes, as the tags above it do. The docstring at the top
+              still holds: nothing here is *generated* and nothing is a model
+              call. This is the reader's own words. */}
+          <div className={`${CARD} tw:p-4`}>
+            <ProfileBox
+              id="article-purpose"
+              article={slug}
+              label="Why you're reading this one"
+              placeholder="e.g. I want the evidence, not the history"
+              hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
+              value={purpose.draft}
+              onChange={purpose.setDraft}
+              onCommit={purpose.commit}
+              max={MAX_PURPOSE_CHARS}
+              disabled={purpose.saved === null}
+              rows={2}
+              save={purpose.state}
+              inFlight={purpose.inFlight}
+            />
+
+            {/* The global half, shown rather than edited. A reader looking at
+                "why is this glossary written like this" needs both answers, and
+                sending them to another page for one of them is the way to make
+                sure they never see it. */}
+            <div className="tw:mt-4 tw:border-t tw:border-border tw:pt-3">
+              <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3">
+                <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
+                  About you
+                </span>
+                <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight-text">
+                  Edit on your profile →
+                </Link>
+              </div>
+              <AboutYou profile={provenance?.profile ?? null} failed={provenanceFailed} />
+            </div>
+          </div>
+        </Section>
+
         {/* ------------------------------------------------------ 2½. authors --
             Who wrote it and where they work, one per line — Greg, 2026-09-29:
             *"At the very least, display them in the Metadata section."* Only
@@ -1252,10 +1310,10 @@ export function Metadata({
             Access & Sharing up."* It was below it, under a section of pipeline
             rows that has now gone to the foot of the page.
 
-            The order it lands in is: what this article is (the three sections
-            above), then the decision about who can read it (this), then the
-            reader's own work on it, then the machinery and the controls at the
-            foot. The previous arrangement had the one irreversible control on
+            The order it lands in is: what this article is (the sections
+            above, with *Why you're reading* second since 2026-10-15), then the
+            decision about who can read it (this), then the reader's own work
+            on it, then the machinery and the controls at the foot. The previous arrangement had the one irreversible control on
             the page — a public link cannot be un-rung (messages.ts §
             SHARING_CANNOT_UNRING) — below two screenfuls of notes and file
             paths. Export moved to the foot on 2026-10-01; it no longer sits
@@ -1291,54 +1349,13 @@ export function Metadata({
         />
 
         {/* ------------------------------------------------ 6. your reading --
-            Reader state, and the only section on the page that is about you
-            rather than about the article. */}
+            Reader state: your comments and where you left off. *Why you're
+            reading* was the first card here until 2026-10-15, and is now its
+            own section under *In one sentence*. */}
         <Section
           label="Your reading"
-          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off resume continue position"
+          keywords="notes comments questions annotations highlights bookmarks progress left off resume continue position"
         >
-          {/* The per-article half of the reader profile. The global half is
-              read-only here with a link to /profile, because a global value
-              edited inside one article's page is a global value nobody can
-              find — Greg, 2026-08-26. docs/project/reader-profile.md.
-
-              This is the first thing on this page that writes anything. The
-              docstring at the top still holds: nothing here is *generated* and
-              nothing is a model call. This is the reader's own words. */}
-          <div className={`${CARD} tw:mb-3 tw:p-4`}>
-            <ProfileBox
-              id="article-purpose"
-              article={slug}
-              label="Why you're reading this one"
-              placeholder="e.g. I want the evidence, not the history"
-              hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
-              value={purpose.draft}
-              onChange={purpose.setDraft}
-              onCommit={purpose.commit}
-              max={MAX_PURPOSE_CHARS}
-              disabled={purpose.saved === null}
-              rows={2}
-              save={purpose.state}
-              inFlight={purpose.inFlight}
-            />
-
-            {/* The global half, shown rather than edited. A reader looking at
-                "why is this glossary written like this" needs both answers, and
-                sending them to another page for one of them is the way to make
-                sure they never see it. */}
-            <div className="tw:mt-4 tw:border-t tw:border-border tw:pt-3">
-              <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3">
-                <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
-                  About you
-                </span>
-                <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight-text">
-                  Edit on your profile →
-                </Link>
-              </div>
-              <AboutYou profile={provenance?.profile ?? null} failed={provenanceFailed} />
-            </div>
-          </div>
-
           <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
             <Row icon={MessageCircle} label="Comments">
               <Questions

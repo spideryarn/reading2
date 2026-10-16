@@ -187,6 +187,30 @@ export function publishedOf(piece: {
 }
 
 /**
+ * **"Published 31 May 2024", or `undefined`**, from an owner's `Meta` or a
+ * visitor's `PublicMeta` alike.
+ *
+ * The two name the day differently on purpose (public-types.ts §
+ * `PublicMeta.published`): the owner's `publishedAt` is the publisher's own
+ * string, the visitor's `published` is its calendar day alone. The reading
+ * view's masthead is handed either under one type, so this reads whichever is
+ * there. One spelling for the masthead and both Metadata pages, so the three
+ * cannot print a date differently. The word stays: a bare `2011` beside a word
+ * count reads as a number. Plan 261015c.
+ */
+export function publishedLabel(meta: {
+  publishedAt?: string | undefined;
+  published?: string | undefined;
+  publishedYear?: number | undefined;
+}): string | undefined {
+  const label = publishedOf({
+    publishedAt: meta.publishedAt ?? meta.published,
+    publishedYear: meta.publishedYear,
+  })?.label;
+  return label ? `Published ${label}` : undefined;
+}
+
+/**
  * `640ms`, `6.1s`, `1m 12s` — a duration in the unit a person would have used.
  *
  * The other half of this file's job: `timeAgo` says *when*, this says *how
