@@ -128,6 +128,7 @@ import { media } from "./media.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 import { PrivateCopy, type PrivateCopyFacts } from "./PublicChrome.js";
 import { Excerpt } from "./Excerpt.js";
+import { useFollowRow } from "./list-step.js";
 
 /**
  * **Whose searches these are, and therefore what may be done to them.**
@@ -1743,6 +1744,18 @@ function Results({
   const switchedOn = asksTheServer(matcher) ? runs.filter((r) => active.includes(r.id)) : [];
   const waiting = switchedOn.filter((r) => r.status === "pending");
 
+  /* **The open row follows into view** when it changes — by ← / →
+     (keyboard.md § ← / → in Search) above all, since a press already has the
+     row on screen — and again when a band that stepped aside comes back:
+     list-step.ts § `useFollowRow`, Quotes' rule. Compared as a value rather
+     than built into a selector, so a key needs no escaping. Above the early
+     returns, as hooks must be. */
+  const listRef = useFollowRow<HTMLUListElement>(openKey, (list, key) =>
+    [...list.children].find(
+      (el): el is HTMLElement => el instanceof HTMLElement && el.dataset.hitKey === key,
+    ),
+  );
+
   /* Sixth state, and it is new with the ticks: searches exist, none is on. The
      article is unmarked and that is *correct*, so this says why rather than
      saying "nothing matched" — which would be a lie about an article nobody has
@@ -1916,7 +1929,7 @@ function Results({
         <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
       )}
       <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={400}>
-        <ul className="srch-hits">
+        <ul className="srch-hits" ref={listRef}>
           {found.map((f) => (
             <Hit
               key={f.key}
@@ -2043,6 +2056,11 @@ function HitCard({
           </>
         )}
         <b>{pct}% in</b> — how far through the article this passage sits, first word to last.
+        {/* The keys that step these rows — tooltips.md § A shortcut is named
+            on its card. The row's words have no card of their own (Greg,
+            2026-09-12), so this is the row's. */}
+        <br />
+        While reading, press ← or → for the previous or next passage.
       </p>
     </>
   );
@@ -2139,6 +2157,7 @@ function Hit({
   return (
     <li
       className={`srch-hit${open ? " on" : ""}`}
+      data-hit-key={found.key}
       /* The row wears its search's hue: a left edge, and the dot in the gutter.
          Both from one custom property, so a slot that somehow does not resolve
          leaves the row plainly uncoloured rather than half-coloured. On the

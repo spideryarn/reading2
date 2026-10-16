@@ -237,6 +237,7 @@ import { useModeFlashOwnership } from "./mode-flash.js";
 import { proseFound, railFound, selectPassages } from "./passages.js";
 import { quoteAlphaByBlock } from "../spine-marks.js";
 import { stepQuote } from "../QuotesPanel.js";
+import { stepByKey } from "../list-step.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
 /** A module constant for `NO_QUOTES`'s reason: the visitor's Skim band keys memos on it by identity. */
@@ -838,10 +839,14 @@ export function Reader({
     (blockId: BlockId, aim?: JumpAim) => {
       jumpTo(blockId, aim);
       if (!bandCovers) return;
-      rememberBandFocus();
+      /* Only on the way out, as `bandStepsAside` does: a ← / → step while the
+         band is already away (Quotes, Search) would otherwise replace the
+         control the band should hand focus back to with whatever is focused
+         now, which is outside the band (GPT Sol, plan 261015d, F2). */
+      if (!bandAway) rememberBandFocus();
       setBandAway(true);
     },
-    [jumpTo, bandCovers, rememberBandFocus],
+    [jumpTo, bandCovers, bandAway, rememberBandFocus],
   );
   /* **The Diagram walking the picture**: plain `jumpTo`, which does not step
      the band aside, and with the step's `ended` put in `jumpTo`'s third
@@ -2044,6 +2049,26 @@ export function Reader({
     [steppableQuotes, selectedQuote, goToQuote, bandJump],
   );
   const quoteStepKeys = mode === "quotes" ? quoteKeys : null;
+  /* …and the results while Search is the mode — Greg, 2026-10-15
+     (spya-b4vfq5): *"left/right keys should move between search results in
+     Search mode"*. `found` is the list the band shows, in its order and under
+     its bar, and a step does what a press on the row does (SearchMode.tsx §
+     `onOpen`): open it, and jump the way the band's own links jump. The rule is
+     Quotes', list-step.ts § `stepByKey`. A step pushes `?at=` as the press
+     does and as Quotes' keys do — each is a deliberate jump, which
+     url-state.md lets push; the plan says why not a second, quieter path.
+     keyboard.md § ← / → in Search. */
+  const searchKeys = useCallback(
+    (dir: -1 | 1) => {
+      const next = stepByKey(found, (f) => f.key, openHit, dir);
+      if (!next) return false;
+      setOpenHit(next.key);
+      bandJump(next.blockId);
+      return true;
+    },
+    [found, openHit, bandJump],
+  );
+  const searchStepKeys = mode === "search" ? searchKeys : null;
   /* **The card on a quote in the prose** (ProseHoverCard.tsx § `QuoteCard`).
      Its ‹ › walk **down the page**, in document order, where the band and the
      keys walk the band's list. The two agree in the default order and in
@@ -2075,7 +2100,7 @@ export function Reader({
     article.blocks,
     geometry.leafDepth,
     !drawerOpen,
-    skimKeys ?? quizStepKeys ?? quoteStepKeys,
+    skimKeys ?? quizStepKeys ?? quoteStepKeys ?? searchStepKeys,
     /* …and the lowest-level sections while Structure is the mode — the unit
        `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
        keyboard.md § ← / → in Structure. */

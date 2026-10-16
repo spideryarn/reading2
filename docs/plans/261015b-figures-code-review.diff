@@ -1,0 +1,141 @@
+diff --git a/src/figures.ts b/src/figures.ts
+index 661fdb6a3..b29bdf51e 100644
+--- a/src/figures.ts
++++ b/src/figures.ts
+@@ -94,6 +94,18 @@ function onlyLettering(html: string): boolean {
+   });
+ }
+ 
++/**
++ * **A table drawn as a picture is still a table.** A PDF's table the model
++ * could not copy cell by cell arrives as a picture, and some journals publish
++ * theirs as images; the markup says *figure*, the author's caption says
++ * *"Table 1."*, and a reader asking for the tables means it (Greg,
++ * spya-s8pf4r: *"Do we include Tables as well as Figures in Skim mode?"*).
++ * The number is required, so *"Tables and chairs…"* stays a figure; on
++ * purpose that also misses a bare letter (*"Table A"*) and Roman numerals
++ * beyond L, which a corpus has not shown us yet.
++ */
++const TABLE_CAPTION = /^((supplementary|supplemental|extended data)\s+)?table\s+([a-z]?\d+[a-z]?|[ivxl]+)\b/i;
++
+ /** The article's figures, tables and media, in reading order. */
+ export function figuresOf(blocks: readonly Block[]): Figure[] {
+   const out: Figure[] = [];
+@@ -101,10 +113,12 @@ export function figuresOf(blocks: readonly Block[]): Figure[] {
+   const claimed = new Set<number>();
+   for (let i = 0; i < blocks.length; i++) {
+     const block = blocks[i]!;
+-    const kind = figureKindOf(block);
+-    if (kind === null) continue;
++    const drawn = figureKindOf(block);
++    if (drawn === null) continue;
++    const caption = captionOf(blocks, i, claimed);
++    const kind = drawn === "figure" && caption !== null && TABLE_CAPTION.test(caption) ? "table" : drawn;
+     counts[kind] += 1;
+-    out.push({ blockId: block.id, row: i, kind, caption: captionOf(blocks, i, claimed), ordinal: counts[kind] });
++    out.push({ blockId: block.id, row: i, kind, caption, ordinal: counts[kind] });
+   }
+   return out;
+ }
+@@ -123,6 +137,10 @@ function captionOf(blocks: readonly Block[], i: number, claimed: Set<number>): s
+   for (const j of [i + 1, i - 1]) {
+     const near = blocks[j];
+     if (near?.kind === "caption" && !claimed.has(j) && near.text.trim()) {
++      /* A table's caption sits above it: one between a picture and a table
++         of data is the table's, not the picture's (GPT Sol, 261015b review). */
++      const next = blocks[j + 1];
++      if (j === i + 1 && next && TABLE_CAPTION.test(near.text.trim()) && figureKindOf(next) === "table") continue;
+       claimed.add(j);
+       return near.text.trim();
+     }
+diff --git a/src/web/FigureMark.tsx b/src/web/FigureMark.tsx
+index a0ae315ca..e7425e092 100644
+--- a/src/web/FigureMark.tsx
++++ b/src/web/FigureMark.tsx
+@@ -55,7 +55,7 @@ export function FigureMark({
+     <span className="fig-mark" role="img" aria-label={name}>
+       {present.map(({ kind, Icon }) => (
+         <span key={kind} className="fig-mark-kind" data-kind={kind} aria-hidden="true">
+-          <Icon size={12} />
++          <Icon size={14} />
+           {counts[kind] > 1 ? <span className="fig-mark-n">{counts[kind]}</span> : null}
+         </span>
+       ))}
+diff --git a/src/web/styles/structure-mode.css b/src/web/styles/structure-mode.css
+index f239008b0..1eddd6dd6 100644
+--- a/src/web/styles/structure-mode.css
++++ b/src/web/styles/structure-mode.css
+@@ -415,8 +415,14 @@
+    its count never part, and the whole mark drops to the next line as one piece
+    if the title fills the row. Its own colour, face and style, so a read row's
+    faint title, a part's weight and a supplement's italic do not reach it: it is
+-   chrome beside the title, one step quieter than it. The icons inherit
+-   `currentColor` (icons.md § Rules). */
++   chrome beside the title. The icons inherit `currentColor` (icons.md § Rules).
++
++   **In `--ink-soft` and 14px, not `--ink-faint` and 12px**, since 2026-10-15:
++   at the first size Greg looked at a paper with three figures in Structure and
++   asked us to *"indicate where there are figures/tables/etc in Structure mode
++   somehow"* (spya-zzvm6e) — they were there, a faint grey speck after the
++   title, and read as noise. Now the ink of an unread row's title, so the eye
++   finds it, and the size of the icons on Skim's Figures rows. */
+ .fig-mark {
+   display: inline-flex;
+   align-items: center;
+@@ -424,9 +430,9 @@
+   margin-left: 0.4em;
+   vertical-align: -0.1em;
+   white-space: nowrap;
+-  color: var(--ink-faint);
++  color: var(--ink-soft);
+   font-family: var(--font-ui);
+-  font-size: 0.75rem;
++  font-size: 0.8rem;
+   font-style: normal;
+   font-weight: 400;
+   line-height: 1;
+diff --git a/tests/figures.test.ts b/tests/figures.test.ts
+index f72793621..b41544020 100644
+--- a/tests/figures.test.ts
++++ b/tests/figures.test.ts
+@@ -104,6 +104,40 @@ describe("figuresOf", () => {
+     expect(figureName(got[3]!)).toBe("Table 2");
+   });
+ 
++  it("counts a table drawn as a picture as a table, by its caption (spya-s8pf4r)", () => {
++    const blocks = [
++      block("figure", "media", "<figure><img src=a><figcaption>Table 1. Absolute values</figcaption></figure>"),
++      block("figure", "media", '<figure data-spya-pdf-figure="r:3:1"><figcaption>Table 4: Hyperparameters</figcaption></figure>'),
++      block("p", "media", "<p><img src=c></p>"),
++      block("p", "caption", "<p>Supplementary Table S2. Doses.</p>", "Supplementary Table S2. Doses."),
++      block("figure", "media", "<figure><img src=f><figcaption>TABLE IV. Results</figcaption></figure>"),
++      block("figure", "media", "<figure><img src=g><figcaption>Extended Data Table 2 \| Cohort</figcaption></figure>"),
++      block("figure", "media", "<figure><img src=d><figcaption>Figure 1. A table of results is shown</figcaption></figure>"),
++      block("figure", "media", "<figure><img src=e><figcaption>Tables and chairs at the venue</figcaption></figure>"),
++    ];
++    expect(figuresOf(blocks).map((f) => [f.kind, f.ordinal])).toEqual([
++      ["table", 1],
++      ["table", 2],
++      ["table", 3],
++      ["table", 4],
++      ["table", 5],
++      ["figure", 1],
++      ["figure", 2],
++    ]);
++  });
++
++  it("leaves a table's caption above it to the table, not to a picture before it (Sol, 261015b)", () => {
++    const blocks = [
++      block("p", "media", "<p><img src=a></p>"),
++      block("p", "caption", "<p>Table 1. Doses.</p>", "Table 1. Doses."),
++      block("table", "other", "<table><tr><td>1</td></tr></table>"),
++    ];
++    expect(figuresOf(blocks).map((f) => [f.kind, f.caption])).toEqual([
++      ["figure", null],
++      ["table", "Table 1. Doses."],
++    ]);
++  });
++
+   it("does not hand one caption to two figures", () => {
+     const blocks = [
+       block("p", "media", "<p><img src=a></p>"),

@@ -663,6 +663,14 @@ nothing stored. What it is like to use:
   *Route*. A visitor gets the chip too, but only where a route was stored — a public article with
   none has no Skim band for a visitor.
 
+**Tables are stops too, including a table drawn as a picture**, since 2026-10-15 (Greg,
+`spya-s8pf4r`: *"Do we include Tables as well as Figures in Skim mode?"*;
+[plan 261015b](../plans/261015b-figures-follow-ups-tables-as-pictures-louder-structure-marks.md)).
+A `<table>` always was; a picture whose caption starts *"Table N"* — a PDF table the model could not
+copy cell by cell, a journal's table published as an image — was counted as a figure until then.
+**Figures inside the Gist · More · Most route** (Greg, `spya-c8z66b`) are not built; the plan
+says why and what has to be decided first.
+
 How it is built: the band chooses between **two walks**, each a component with its own hook — the
 route's (`useSkimMode`, now inside `RouteWalk`) and
 [`modes/skim/FiguresWalk.tsx`](../../src/web/modes/skim/FiguresWalk.tsx) — on `?depth=`

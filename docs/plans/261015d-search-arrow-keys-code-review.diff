@@ -1,0 +1,586 @@
+diff --git a/src/web/QuotesPanel.tsx b/src/web/QuotesPanel.tsx
+index 8616f0ed6..72f2ddfae 100644
+--- a/src/web/QuotesPanel.tsx
++++ b/src/web/QuotesPanel.tsx
+@@ -81,6 +81,7 @@ import { BandWaiting } from "./BandWaiting.js";
+ import { StaleNotice } from "./StaleNotice.js";
+ import { useStaleNotice } from "./useStaleNotices.js";
+ import { Excerpt } from "./Excerpt.js";
++import { stepByKey, useFollowRow } from "./list-step.js";
+ 
+ /**
+  * **The owner's half of this panel** — the read's status, the job choosing the
+@@ -620,7 +621,8 @@ export function barToReveal(
+  *
+  * `listed` is `markedQuotes`' list — what the panel shows and the prose
+  * outlines — so "next" is the next row the reader can see, in whatever order
+- * they chose. Three rules, all Skim's (skim-route.ts):
++ * they chose. Three rules, all Skim's (skim-route.ts), and Search's too — the
++ * rule itself is list-step.ts § `stepByKey`:
+  *
+  * - **Nothing selected, or a selection the list no longer shows** → the first,
+  *   whichever way.
+@@ -634,9 +636,7 @@ export function stepQuote(
+   currentId: string | null,
+   dir: -1 | 1,
+ ): Quote | null {
+-  const at = currentId === null ? -1 : listed.findIndex((q) => q.id === currentId);
+-  if (at === -1) return listed[0] ?? null;
+-  return listed[Math.max(0, at + dir)] ?? null;
++  return stepByKey(listed, (q) => q.id, currentId, dir);
+ }
+ 
+ /** One number to put on a row, with the name of what it is. */
+@@ -750,26 +750,13 @@ export function QuotesPanel({
+     yours?.blocks ?? [],
+   );
+ 
+-  /**
+-   * **The selected row follows into view** when the selection changes — by
+-   * ‹ ›, by ← / →, or by the prose card's *Open in Quotes* — so the reader can
+-   * see which row they are on. A row already fully in view is left alone.
+-   * **The list's own `scrollTop`, never `scrollIntoView`**, which scrolls every
+-   * scrollable ancestor too, the page included (OutlinePanel.tsx says the same).
+-   * Not on every render: a reader who scrolls the list by hand keeps their
+-   * place until the selection moves.
+-   */
++  /* **The selected row follows into view** when the selection changes — by
++     ‹ ›, by ← / →, or by the prose card's *Open in Quotes* — and again when a
++     band that stepped aside comes back: list-step.ts § `useFollowRow`. */
+   const listRef = useRef<HTMLDivElement>(null);
+-  useLayoutEffect(() => {
+-    const list = listRef.current;
+-    if (!list || quoteId === null || list.clientHeight <= 0) return;
+-    const row = list.querySelector<HTMLElement>(`[data-quote-row="${CSS.escape(quoteId)}"]`);
+-    if (!row) return;
+-    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+-    const bottom = top + row.offsetHeight;
+-    const inView = top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight;
+-    if (!inView) list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+-  }, [quoteId]);
++  useFollowRow(listRef, quoteId, (list, id) =>
++    list.querySelector<HTMLElement>(`[data-quote-row="${CSS.escape(id)}"]`),
++  );
+   /* From the LIST, not from the owner hook — so the sentence appears for a
+      visitor as well, which is what makes "the reader is told" true rather than
+      true for whoever happens to own the article. */
+diff --git a/src/web/SearchPanel.tsx b/src/web/SearchPanel.tsx
+index 96a0d8e16..2d483d05f 100644
+--- a/src/web/SearchPanel.tsx
++++ b/src/web/SearchPanel.tsx
+@@ -128,6 +128,7 @@ import { media } from "./media.js";
+ import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
+ import { PrivateCopy, type PrivateCopyFacts } from "./PublicChrome.js";
+ import { Excerpt } from "./Excerpt.js";
++import { useFollowRow } from "./list-step.js";
+ 
+ /**
+  * **Whose searches these are, and therefore what may be done to them.**
+@@ -1743,6 +1744,19 @@ function Results({
+   const switchedOn = asksTheServer(matcher) ? runs.filter((r) => active.includes(r.id)) : [];
+   const waiting = switchedOn.filter((r) => r.status === "pending");
+ 
++  /* **The open row follows into view** when it changes — by ← / →
++     (keyboard.md § ← / → in Search) above all, since a press already has the
++     row on screen — and again when a band that stepped aside comes back:
++     list-step.ts § `useFollowRow`, Quotes' rule. Compared as a value rather
++     than built into a selector, so a key needs no escaping. Above the early
++     returns, as hooks must be. */
++  const listRef = useRef<HTMLUListElement>(null);
++  useFollowRow(listRef, openKey, (list, key) =>
++    [...list.children].find(
++      (el): el is HTMLElement => el instanceof HTMLElement && el.dataset.hitKey === key,
++    ),
++  );
++
+   /* Sixth state, and it is new with the ticks: searches exist, none is on. The
+      article is unmarked and that is *correct*, so this says why rather than
+      saying "nothing matched" — which would be a lie about an article nobody has
+@@ -1916,7 +1930,7 @@ function Results({
+         <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
+       )}
+       <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={400}>
+-        <ul className="srch-hits">
++        <ul className="srch-hits" ref={listRef}>
+           {found.map((f) => (
+             <Hit
+               key={f.key}
+@@ -2043,6 +2057,11 @@ function HitCard({
+           </>
+         )}
+         <b>{pct}% in</b> — how far through the article this passage sits, first word to last.
++        {/* The keys that step these rows — tooltips.md § A shortcut is named
++            on its card. The row's words have no card of their own (Greg,
++            2026-09-12), so this is the row's. */}
++        <br />
++        While reading, press ← or → for the previous or next passage.
+       </p>
+     </>
+   );
+@@ -2139,6 +2158,7 @@ function Hit({
+   return (
+     <li
+       className={`srch-hit${open ? " on" : ""}`}
++      data-hit-key={found.key}
+       /* The row wears its search's hue: a left edge, and the dot in the gutter.
+          Both from one custom property, so a slot that somehow does not resolve
+          leaves the row plainly uncoloured rather than half-coloured. On the
+diff --git a/src/web/help/pages/keyboard.md b/src/web/help/pages/keyboard.md
+index cd541b151..cd097fa32 100644
+--- a/src/web/help/pages/keyboard.md
++++ b/src/web/help/pages/keyboard.md
+@@ -44,8 +44,8 @@ related: touch, jumping-around
+   away, and again to open it.
+ - <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the pointer
+   over the spine. Holding a key down does not repeat, so every step lands somewhere you can read.
+-- <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and
+-  Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
++- <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes,
++  Search’s matches and Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
+   normally does.
+ - In an article, the first <kbd>Tab</kbd> shows **Skip to modes**. Press <kbd>Enter</kbd> to reach
+   the mode switch in the bottom bar. Focus lands on the open mode, or the first mode button if the
+diff --git a/src/web/help/pages/modes/search.md b/src/web/help/pages/modes/search.md
+index f13229415..a3f52c5dd 100644
+--- a/src/web/help/pages/modes/search.md
++++ b/src/web/help/pages/modes/search.md
+@@ -48,6 +48,9 @@ runs through the whole piece — see [Reading the spine](/help/spine).
+ Tick several searches to show them together; click a search’s words to show only that one. **↺**
+ puts the question back in the box to ask again.
+ 
++Press a match in the list to jump to it in the text. <kbd>←</kbd> <kbd>→</kbd> while reading step
++from match to match in the list’s order, but not while you are typing in the box.
++
+ Each match has a score out of 100. It is the AI’s judgement of its own answer, not a measurement, so
+ read a high score as “worth a look” rather than “certain”. **prioritised**, the default, hides weak
+ matches from the list *and* the text; if you expected more marks, move the **confidence** slider
+diff --git a/src/web/list-step.ts b/src/web/list-step.ts
+new file mode 100644
+index 000000000..60482dee2
+--- /dev/null
++++ b/src/web/list-step.ts
+@@ -0,0 +1,108 @@
++/**
++ * **A list the keys step through, and the band's own scroller following it.**
++ *
++ * Shared by the modes whose ← / → walk a list in the band — Quotes and Search
++ * (docs/project/keyboard.md § ← / → in Quotes, § ← / → in Search). The rules
++ * are pure, so they are tested without a browser: tests/list-step.test.ts.
++ */
++import { type RefObject, useLayoutEffect, useRef } from "react";
++
++/**
++ * The item a ← / → press goes to, from the one whose key is `current`.
++ *
++ * - **Nothing current, or a current item the list no longer shows** → the
++ *   first, whichever way.
++ * - **← on the first goes to the first again**: the page may be anywhere, and
++ *   "you are already on it" is no answer to a reader asking to be taken there
++ *   (SPIDERYARN-READING2-4K).
++ * - **→ on the last is `null`**, and so is an empty list — no wrap, so the key
++ *   goes back to the browser.
++ *
++ * `listed` is the list as the band shows it, in the reader's order and under
++ * any bar, so "next" is the next row they can see — at the moment of the press,
++ * if a streaming list has grown or reordered since the last one.
++ */
++export function stepByKey<T>(
++  listed: readonly T[],
++  keyOf: (item: T) => string,
++  current: string | null,
++  dir: -1 | 1,
++): T | null {
++  const at = current === null ? -1 : listed.findIndex((item) => keyOf(item) === current);
++  if (at === -1) return listed[0] ?? null;
++  return listed[Math.max(0, at + dir)] ?? null;
++}
++
++/**
++ * **The selected row follows into view in its list** — by ‹ ›, by ← / →, or by
++ * anything else that selects — so the reader can see which row they are on.
++ *
++ * - A row already fully in view is left alone, and it runs only when the
++ *   selection changes, so a reader who scrolls the list by hand keeps their
++ *   place until then. A streaming list that pushes the selected row away is
++ *   not chased: the next press brings its row into view.
++ * - **And again when the list comes back into view**, since a hidden list
++ *   measures nothing: on a narrow window a step that jumps the article steps
++ *   the band aside, and the reader returns to it later (Reader.tsx §
++ *   `bandJump`) — OutlinePanel.tsx's `ResizeObserver`, for the same reason.
++ * - The list's own `scrollTop`, never `scrollIntoView`, which scrolls every
++ *   scrollable ancestor too, the page included.
++ */
++export function useFollowRow<E extends HTMLElement>(
++  listRef: RefObject<E | null>,
++  selected: string | null,
++  find: (list: E, key: string) => HTMLElement | null | undefined,
++): void {
++  const finder = useRef(find);
++  finder.current = find;
++  useLayoutEffect(() => {
++    const list = listRef.current;
++    if (!list || selected === null) return;
++    const follow = () => {
++      const row = finder.current(list, selected);
++      if (!row) return;
++      const to = followScrollTop(list, row);
++      if (to !== null) list.scrollTop = to;
++    };
++    follow();
++    if (typeof ResizeObserver === "undefined") return;
++    let shown = list.clientHeight > 0;
++    const watch = new ResizeObserver(() => {
++      const now = list.clientHeight > 0;
++      if (now && !shown) follow();
++      shown = now;
++    });
++    watch.observe(list);
++    return () => watch.disconnect();
++  }, [listRef, selected]);
++}
++
++/**
++ * **Where a scrolled list's `scrollTop` should go so `row` is in view**, or
++ * `null` when it already is, or when the list is hidden and measures nothing.
++ */
++export function followScrollTop(list: HTMLElement, row: HTMLElement): number | null {
++  if (list.clientHeight <= 0) return null;
++  const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
++  return scrollTopFor(list.scrollTop, list.clientHeight, top, row.offsetHeight);
++}
++
++/**
++ * `followScrollTop`'s arithmetic over plain numbers, `top` in the list's own
++ * coordinates. A row out of view goes a third of the way down, **but never so
++ * far that a row which fits is cut at the foot**; a row taller than the list
++ * starts at its top. The rule OutlinePanel.tsx § follow arrived at (GPT Sol's
++ * plan review, 261003k, F2), which keeps its own copy only because its fisheye
++ * wraps more around it.
++ */
++export function scrollTopFor(
++  scrollTop: number,
++  height: number,
++  top: number,
++  rowHeight: number,
++): number | null {
++  const bottom = top + rowHeight;
++  if (top >= scrollTop && bottom <= scrollTop + height) return null;
++  const third = top - height / 3;
++  return Math.max(0, Math.min(top, Math.max(third, bottom - height)));
++}
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index bd94c619e..f192dde7b 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -237,6 +237,7 @@ import { useModeFlashOwnership } from "./mode-flash.js";
+ import { proseFound, railFound, selectPassages } from "./passages.js";
+ import { quoteAlphaByBlock } from "../spine-marks.js";
+ import { stepQuote } from "../QuotesPanel.js";
++import { stepByKey } from "../list-step.js";
+ import type { OnRenamed } from "../TitleEditor.js";
+ 
+ /** A module constant for `NO_QUOTES`'s reason: the visitor's Skim band keys memos on it by identity. */
+@@ -838,10 +839,14 @@ export function Reader({
+     (blockId: BlockId, aim?: JumpAim) => {
+       jumpTo(blockId, aim);
+       if (!bandCovers) return;
+-      rememberBandFocus();
++      /* Only on the way out, as `bandStepsAside` does: a ← / → step while the
++         band is already away (Quotes, Search) would otherwise replace the
++         control the band should hand focus back to with whatever is focused
++         now, which is outside the band (GPT Sol, plan 261015d, F2). */
++      if (!bandAway) rememberBandFocus();
+       setBandAway(true);
+     },
+-    [jumpTo, bandCovers, rememberBandFocus],
++    [jumpTo, bandCovers, bandAway, rememberBandFocus],
+   );
+   /* **The Diagram walking the picture**: plain `jumpTo`, which does not step
+      the band aside, and with the step's `ended` put in `jumpTo`'s third
+@@ -2044,6 +2049,26 @@ export function Reader({
+     [steppableQuotes, selectedQuote, goToQuote, bandJump],
+   );
+   const quoteStepKeys = mode === "quotes" ? quoteKeys : null;
++  /* …and the results while Search is the mode — Greg, 2026-10-15
++     (spya-b4vfq5): *"left/right keys should move between search results in
++     Search mode"*. `found` is the list the band shows, in its order and under
++     its bar, and a step does what a press on the row does (SearchMode.tsx §
++     `onOpen`): open it, and jump the way the band's own links jump. The rule is
++     Quotes', list-step.ts § `stepByKey`. A step pushes `?at=` as the press
++     does and as Quotes' keys do — each is a deliberate jump, which
++     url-state.md lets push; the plan says why not a second, quieter path.
++     keyboard.md § ← / → in Search. */
++  const searchKeys = useCallback(
++    (dir: -1 | 1) => {
++      const next = stepByKey(found, (f) => f.key, openHit, dir);
++      if (!next) return false;
++      setOpenHit(next.key);
++      bandJump(next.blockId);
++      return true;
++    },
++    [found, openHit, bandJump],
++  );
++  const searchStepKeys = mode === "search" ? searchKeys : null;
+   /* **The card on a quote in the prose** (ProseHoverCard.tsx § `QuoteCard`).
+      Its ‹ › walk **down the page**, in document order, where the band and the
+      keys walk the band's list. The two agree in the default order and in
+@@ -2075,7 +2100,7 @@ export function Reader({
+     article.blocks,
+     geometry.leafDepth,
+     !drawerOpen,
+-    skimKeys ?? quizStepKeys ?? quoteStepKeys,
++    skimKeys ?? quizStepKeys ?? quoteStepKeys ?? searchStepKeys,
+     /* …and the lowest-level sections while Structure is the mode — the unit
+        `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
+        keyboard.md § ← / → in Structure. */
+diff --git a/tests/list-step.test.ts b/tests/list-step.test.ts
+new file mode 100644
+index 000000000..458841221
+--- /dev/null
++++ b/tests/list-step.test.ts
+@@ -0,0 +1,179 @@
++// @vitest-environment jsdom
++/**
++ * **What a list the keys step through shares** — src/web/list-step.ts, used by
++ * Quotes and Search (docs/plans/261015d-search-arrow-keys-step-the-results.md).
++ * `stepQuote`'s own cases are in tests/quotes-step.test.ts.
++ */
++import { act, createElement, useRef } from "react";
++import { createRoot } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { scrollTopFor, stepByKey, useFollowRow } from "../src/web/list-step.js";
++
++/* A Search results list in the order the band shows it — *confidence* here,
++   so the keys must not walk it in the article's order. */
++const LISTED = [
++  { key: "r:b9:0", at: 0.9 },
++  { key: "r:b2:0", at: 0.2 },
++  { key: "r:b5:0", at: 0.5 },
++];
++const step = (current: string | null, dir: -1 | 1) =>
++  stepByKey(LISTED, (f) => f.key, current, dir)?.key ?? null;
++
++describe("stepByKey", () => {
++  it("walks the list in the order it is shown, not the article's", () => {
++    expect(step("r:b9:0", 1)).toBe("r:b2:0");
++    expect(step("r:b2:0", 1)).toBe("r:b5:0");
++    expect(step("r:b5:0", -1)).toBe("r:b2:0");
++  });
++
++  it("starts at the first, whichever way, when nothing is open", () => {
++    expect(step(null, 1)).toBe("r:b9:0");
++    expect(step(null, -1)).toBe("r:b9:0");
++  });
++
++  it("treats an open row the list no longer shows as nothing open", () => {
++    /* The bar hid it, or a matcher switch replaced the list. */
++    expect(step("r:gone:0", 1)).toBe("r:b9:0");
++  });
++
++  it("goes to the first again on ← from the first", () => {
++    expect(step("r:b9:0", -1)).toBe("r:b9:0");
++  });
++
++  it("takes nothing on → from the last, and from an empty list", () => {
++    expect(step("r:b5:0", 1)).toBeNull();
++    expect(stepByKey([], String, null, 1)).toBeNull();
++  });
++});
++
++describe("scrollTopFor", () => {
++  /* A 300px list scrolled to 100, so rows from 100 to 400 are in view. */
++  it("leaves a row that is wholly in view alone", () => {
++    expect(scrollTopFor(100, 300, 100, 50)).toBeNull();
++    expect(scrollTopFor(100, 300, 350, 50)).toBeNull();
++  });
++
++  it("puts a row above or below the view a third of the way down", () => {
++    expect(scrollTopFor(500, 300, 200, 30)).toBe(100);
++    expect(scrollTopFor(0, 300, 600, 30)).toBe(500);
++  });
++
++  it("never cuts a row that fits at the list's foot", () => {
++    /* A 250px row a third of the way down a 300px list would lose its last
++       50px; it goes to the foot instead. */
++    expect(scrollTopFor(0, 300, 600, 250)).toBe(550);
++  });
++
++  it("starts a row taller than the list at its top", () => {
++    expect(scrollTopFor(0, 300, 600, 400)).toBe(600);
++  });
++
++  it("never goes above the top", () => {
++    expect(scrollTopFor(200, 300, 50, 30)).toBe(0);
++  });
++});
++
++/* ------------------------------------------------------------ useFollowRow -- */
++
++/** jsdom lays nothing out, so each list says its own height and each row its place. */
++let height = 300;
++let observers: Array<() => void> = [];
++const RealResizeObserver = globalThis.ResizeObserver;
++
++beforeEach(() => {
++  height = 300;
++  observers = [];
++  globalThis.ResizeObserver = class {
++    private readonly fire: () => void;
++    constructor(cb: ResizeObserverCallback) {
++      this.fire = () => cb([], this as unknown as ResizeObserver);
++    }
++    observe() {
++      observers.push(this.fire);
++    }
++    unobserve() {}
++    disconnect() {
++      observers = observers.filter((f) => f !== this.fire);
++    }
++  } as unknown as typeof ResizeObserver;
++});
++afterEach(() => {
++  globalThis.ResizeObserver = RealResizeObserver;
++  document.body.innerHTML = "";
++});
++
++/** Rows 40px tall, one under the other, from the list's top. */
++function List({ selected }: { selected: string | null }) {
++  const ref = useRef<HTMLUListElement>(null);
++  useFollowRow(ref, selected, (list, key) =>
++    [...list.children].find(
++      (el): el is HTMLElement => el instanceof HTMLElement && el.dataset.k === key,
++    ),
++  );
++  return createElement(
++    "ul",
++    {
++      ref: (el: HTMLUListElement | null) => {
++        ref.current = el;
++        if (!el) return;
++        Object.defineProperty(el, "clientHeight", { configurable: true, get: () => height });
++        el.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
++      },
++    },
++    Array.from({ length: 30 }, (_, i) =>
++      createElement("li", {
++        key: i,
++        "data-k": `row-${i}`,
++        ref: (el: HTMLLIElement | null) => {
++          if (!el) return;
++          Object.defineProperty(el, "offsetHeight", { configurable: true, get: () => 40 });
++          /* Where the row sits on screen: its place in the list less the
++             list's own scroll. */
++          el.getBoundingClientRect = () =>
++            ({ top: i * 40 - (el.parentElement?.scrollTop ?? 0) }) as DOMRect;
++        },
++      }),
++    ),
++  );
++}
++
++describe("useFollowRow", () => {
++  async function mount(selected: string | null) {
++    const host = document.createElement("div");
++    document.body.append(host);
++    const root = createRoot(host);
++    await act(async () => root.render(createElement(List, { selected })));
++    const list = host.querySelector("ul") as HTMLUListElement;
++    return {
++      list,
++      rerender: (next: string | null) => act(async () => root.render(createElement(List, { selected: next }))),
++    };
++  }
++
++  it("brings a selected row below the view into it", async () => {
++    const { list } = await mount("row-20");
++    /* Row 20 is at 800–840; a third of the way down a 300px list. */
++    expect(list.scrollTop).toBe(700);
++  });
++
++  it("leaves the list alone when the selected row is already in view", async () => {
++    const { list, rerender } = await mount(null);
++    list.scrollTop = 0;
++    await rerender("row-2");
++    expect(list.scrollTop).toBe(0);
++  });
++
++  it("follows when a hidden list comes back into view", async () => {
++    /* On a narrow window a step steps the band aside: the list is hidden, so
++       the selection changes while it measures nothing. */
++    height = 0;
++    const { list, rerender } = await mount(null);
++    await rerender("row-20");
++    expect(list.scrollTop, "a hidden list was scrolled").toBe(0);
++    height = 300;
++    await act(async () => {
++      for (const fire of observers) fire();
++    });
++    expect(list.scrollTop, "the list did not follow on coming back").toBe(700);
++  });
++});
+diff --git a/tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx b/tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx
+index e99d73c59..b312937b3 100644
+--- a/tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx
++++ b/tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx
+@@ -758,7 +758,26 @@ async function readingSession(strict: boolean): Promise<void> {
+   const rows = [...host.querySelectorAll<HTMLButtonElement>(".srch-hit-btn")];
+   expect(rows, "the literal matcher found nothing to list").toHaveLength(1);
+   agree("search, request pending", [P_FIND], []);
+-  /* Search opens nothing by itself; the reader presses a row. */
++  /* ---- ← / → step the results while Search is the mode (plan 261015d,
++     spya-b4vfq5) — but **not from the search box**, where they move the
++     caret. Pressed in the box first, so a handler that ignored the guard
++     would ring the row here. */
++  const box = host.querySelector<HTMLInputElement>(".srch-input");
++  expect(box, "the words matcher's box").not.toBeNull();
++  await arrow("ArrowRight", box!);
++  agree("search, → in the search box", [P_FIND], []);
++  /* On the page, → opens the first row exactly as a press on it does: the
++     phrase is ringed and the row is lit. */
++  await arrow("ArrowRight");
++  agree("search, after →", [P_FIND], [P_FIND]);
++  expect(
++    host.querySelector(".srch-hit.on .srch-hit-btn"),
++    "→ did not light the row it stepped to",
++  ).toBe(rows[0]);
++  /* → on the last row takes nothing; the open row stays open. */
++  await arrow("ArrowRight");
++  agree("search, → at the last", [P_FIND], [P_FIND]);
++  /* And a press on the row is the same state the key reached. */
+   await act(async () => rows[0]!.click());
+   await settle();
+   agree("search, a row pressed", [P_FIND], [P_FIND]);
+@@ -832,12 +851,6 @@ async function readingSession(strict: boolean): Promise<void> {
+      says where the reader is. A second → is the end of the list and takes
+      nothing. Through the whole composition because the wiring is the claim —
+      `Reader` handing `useArrowNav` the quotes' handler in this mode only. */
+-  const arrow = async (key: "ArrowLeft" | "ArrowRight"): Promise<void> => {
+-    await act(async () => {
+-      window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+-    });
+-    await settle();
+-  };
+   await arrow("ArrowRight");
+   agree("quotes, after →", [P_QUOTE], [P_QUOTE]);
+   expect(host.querySelector(".quotes-step-at")?.textContent, "the stepper's position").toBe(
+@@ -857,6 +870,20 @@ async function readingSession(strict: boolean): Promise<void> {
+   agree("plain, having just left quotes mode", [], []);
+ }
+ 
++/**
++ * An arrow key, on the page or on one element. `useArrowNav` listens on
++ * `window`, so a key pressed on an element bubbles up to it carrying that
++ * element as its target — which is what its typing guard reads.
++ */
++async function arrow(key: "ArrowLeft" | "ArrowRight", on?: HTMLElement): Promise<void> {
++  await act(async () => {
++    const e = new KeyboardEvent("keydown", { key, bubbles: true });
++    if (on) on.dispatchEvent(e);
++    else window.dispatchEvent(e);
++  });
++  await settle();
++}
++
+ /** Press one of Referee's sub-mode chips by its label. */
+ async function viewChip(label: string): Promise<void> {
+   const chip = [...host.querySelectorAll<HTMLButtonElement>(".ref-view-btn")].find(

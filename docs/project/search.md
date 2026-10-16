@@ -678,6 +678,9 @@ was a real loss on a wide screen and it was the deal the band is — until the g
 were removed on 2026-09-29
 ([granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view)).
 
+**← / → step the results list** while the band is open (since 2026-10-15), and a step is a press on
+a result's row: [keyboard.md § ← / → in Search](keyboard.md#-in-search).
+
 ## The bottom bar
 
 The bar had **two** dimmed placeholders for this, side by side: `Search` and `Highlights`. They are

@@ -27,8 +27,9 @@ export interface Figure {
   row: number;
   kind: FigureKind;
   /**
-   * The author's caption — its own `<figcaption>`, else the caption paragraph
-   * beside it — or `null` when it has none, and the row says *"Table 2"*.
+   * The author's caption — its own `<figcaption>` / table `<caption>`, else the
+   * caption paragraph beside it — or `null` when it has none, and the row says
+   * *"Table 2"*.
    */
   caption: string | null;
   /** 1-based, among figures of the same kind: *"Figure 3"* when there is no caption. */
@@ -39,7 +40,7 @@ const PICTURE = /<(img|svg|picture|canvas)\b/i;
 const TABLE = /<table\b/i;
 const PLAYER = /<(video|audio|iframe)\b/i;
 const IMG = /<img\b[^>]*>/gi;
-const FIGCAPTION = /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i;
+const OWN_CAPTION = /<(?:figcaption|caption)\b[^>]*>([\s\S]*?)<\/(?:figcaption|caption)>/i;
 
 /**
  * **An image shorter than this is lettering, not a figure.** Paul Graham's
@@ -94,6 +95,17 @@ function onlyLettering(html: string): boolean {
   });
 }
 
+/**
+ * **A table drawn as a picture is still a table.** A PDF's table the model
+ * could not copy cell by cell arrives as a picture, and some journals publish
+ * theirs as images; the markup says *figure*, the author's caption says
+ * *"Table 1."*, and a reader asking for the tables means it (Greg,
+ * spya-s8pf4r: *"Do we include Tables as well as Figures in Skim mode?"*).
+ * The number is required, so *"Tables and chairs…"* stays a figure; on
+ * purpose that also misses a bare letter (*"Table A"*).
+ */
+const TABLE_CAPTION = /^(?:(?:supplementary|supplemental|extended data)\s+)?table\s+(?:[a-z]?\d+[a-z]?|[ivxlcdm]+)\b/i;
+
 /** The article's figures, tables and media, in reading order. */
 export function figuresOf(blocks: readonly Block[]): Figure[] {
   const out: Figure[] = [];
@@ -101,33 +113,70 @@ export function figuresOf(blocks: readonly Block[]): Figure[] {
   const claimed = new Set<number>();
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!;
-    const kind = figureKindOf(block);
-    if (kind === null) continue;
+    const drawn = figureKindOf(block);
+    if (drawn === null) continue;
+    const caption = captionOf(blocks, i, claimed);
+    const kind = drawn === "figure" && caption !== null && TABLE_CAPTION.test(caption) ? "table" : drawn;
     counts[kind] += 1;
-    out.push({ blockId: block.id, row: i, kind, caption: captionOf(blocks, i, claimed), ordinal: counts[kind] });
+    out.push({ blockId: block.id, row: i, kind, caption, ordinal: counts[kind] });
   }
   return out;
 }
 
 /**
- * **The figure's caption**: its own `<figcaption>`, else a caption paragraph
- * straight after it, else one straight before it (a table's is usually above)
- * that no figure before has already taken.
+ * **The figure's caption**: its own `<figcaption>` / table `<caption>`, else a
+ * caption paragraph straight after it, else one straight before it (a table's
+ * is usually above) that no figure before has already taken.
  */
 function captionOf(blocks: readonly Block[], i: number, claimed: Set<number>): string | null {
-  const own = FIGCAPTION.exec(blocks[i]!.html);
-  if (own) {
-    const text = textOf(own[1]!);
-    if (text) return text;
-  }
+  const own = ownCaptionOf(blocks[i]!);
+  if (own !== null) return own;
   for (const j of [i + 1, i - 1]) {
     const near = blocks[j];
     if (near?.kind === "caption" && !claimed.has(j) && near.text.trim()) {
+      /* A table's caption sits above it: one between a picture and a table
+         of data is the table's, not the picture's — but only if that table
+         will really take it rather than its own or a following caption. */
+      if (j === i + 1 && TABLE_CAPTION.test(near.text.trim()) && tableClaimsCaptionBefore(blocks, j + 1, claimed)) {
+        continue;
+      }
       claimed.add(j);
       return near.text.trim();
     }
   }
   return null;
+}
+
+/** A non-empty caption nested in the figure/table block itself. */
+function ownCaptionOf(block: Block): string | null {
+  const own = OWN_CAPTION.exec(block.html);
+  if (!own) return null;
+  return textOf(own[1]!) || null;
+}
+
+/**
+ * Whether this table will fall back to the caption immediately before it.
+ * Look through runs of `caption → table`: a following caption is unavailable
+ * when that next table genuinely needs it, but not when the next table has a
+ * caption of its own. The recursion only moves forward, one table at a time.
+ */
+function tableClaimsCaptionBefore(blocks: readonly Block[], i: number, claimed: Set<number>): boolean {
+  const block = blocks[i];
+  if (!block || figureKindOf(block) !== "table" || ownCaptionOf(block) !== null) return false;
+
+  const afterIndex = i + 1;
+  const after = blocks[afterIndex];
+  if (after?.kind === "caption" && !claimed.has(afterIndex)) {
+    const text = after.text.trim();
+    if (text) {
+      const reservedForNext = TABLE_CAPTION.test(text) && tableClaimsCaptionBefore(blocks, afterIndex + 1, claimed);
+      if (!reservedForNext) return false;
+    }
+  }
+
+  const beforeIndex = i - 1;
+  const before = blocks[beforeIndex];
+  return before?.kind === "caption" && !claimed.has(beforeIndex) && Boolean(before.text.trim());
 }
 
 /** A fragment's text: tags out, the entities the sanitizer writes decoded, space collapsed. */
