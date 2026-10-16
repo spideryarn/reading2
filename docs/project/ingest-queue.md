@@ -2373,6 +2373,18 @@ answered that it has no such document, so the reader is told to check the link o
 PDF and upload it, not that their page does not exist
 ([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
 
+**Where a sentence says to upload the file instead, the add page offers the upload** (since
+2026-10-15). A site that turns the app away will usually let the reader's own browser through, and
+the sentence says to use the page's Download PDF, or save it as a PDF, and upload that. Under such
+a failed import the add page draws the shelf's own picker, one file at a time
+([`UploadInstead.tsx`](../../src/web/UploadInstead.tsx)), so the reader need not go back to the
+shelf to find its File button. Which failures count is `SUGGESTS_UPLOAD` in
+[`src/messages.ts`](../../src/messages.ts), held to the sentences in both directions by
+`tests/suggests-upload.test.ts`. What the upload makes is a separate article with no address; the
+failed job stays on the shelf. Getting the page without the reader saving anything (an open-access
+copy, a bookmarklet, an extension) is Greg's call:
+[261015a](../plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md).
+
 ## The one security check
 
 `isSlug` in [`src/ingest.ts`](../../src/ingest.ts) is a path-traversal guard, not a tidiness check.

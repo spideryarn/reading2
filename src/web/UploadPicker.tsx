@@ -71,6 +71,10 @@ import { useUpload } from "./useUpload.js";
  */
 const LIMITS_ID = "upload-limits";
 
+/** What a `single` picker says to two or more files. */
+export const ONE_FILE_HERE =
+  "One file at a time here. To add several at once, use the File button on the shelf.";
+
 /** The three pieces this component draws and the caller places. */
 export interface UploadSlots {
   /** The control that opens the file dialog. Belongs on the URL row, beside Add. */
@@ -94,7 +98,17 @@ export interface UploadSlots {
 
 export function UploadPicker({
   children,
+  single = false,
 }: {
+  /**
+   * **One file, for one article.** Set by `UploadInstead` on a failed add
+   * page, where the control is the way round *this* article's failure: several
+   * files picked or dropped there would start the shelf's minimal batch import
+   * instead (metadata only, no navigation), which is not what the reader is
+   * standing there to do. So it takes one file and says so for more (GPT Sol's
+   * plan review of 261015a, finding 2).
+   */
+  single?: boolean;
   /**
    * Everything inside the drop target, given the pieces to place.
    *
@@ -176,6 +190,12 @@ export function UploadPicker({
        commit, like a drop: there is no single file for Add to send. Ahead of
        the busy check, because the batch has its own queue and a single
        transfer in flight does not stand in its way. One file is unchanged. */
+    if (files.length > 1 && single) {
+      setChosen(null);
+      file.current = null;
+      setProblem(ONE_FILE_HERE);
+      return false;
+    }
     if (files.length > 1) {
       setChosen(null);
       setProblem(null);
@@ -200,6 +220,13 @@ export function UploadPicker({
     const chose = files[0] as File;
     const picked: ChosenFile = { name: chose.name, type: chose.type, size: chose.size };
     const wrong = uploadProblem(picked);
+    /* A terminal transfer is only a row the reader has not dismissed yet. A
+       valid new choice replaces it. Clear it now, before `chosen` and
+       `transfer` can coexist: otherwise the row names the new file while an
+       old granting failure is still shown above it, and its X both forgets the
+       old transfer and discards the new choice. An active transfer returned at
+       the `busy` guard above. */
+    if (!wrong && transfer) uploadEngine.forget();
     setProblem(wrong);
     setChosen(wrong ? null : picked);
     file.current = wrong ? null : chose;
@@ -273,8 +300,9 @@ export function UploadPicker({
         ref={input}
         type="file"
         accept={UPLOAD_ACCEPT}
-        /* Several at once go to the batch — see `take`. */
-        multiple
+        /* Several at once go to the batch — see `take` — except in a
+           `single` picker, which refuses them. */
+        multiple={!single}
         className="tw:hidden"
         onChange={(e) => {
           take(e.target.files);
@@ -290,7 +318,11 @@ export function UploadPicker({
         /* The words the dashed box used to say. They were the only thing
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
-        title="Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
+        title={
+          single
+            ? "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box."
+            : "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
+        }
         /* **The caps, for somebody who cannot see the caption.** The line under
            this row states them; this is what makes a screen reader read it out
            as part of the control rather than as a stray paragraph after it.
@@ -381,6 +413,7 @@ export function UploadPicker({
                   navigate(addUploadHref(transfer.uploadId));
                 }}
               >
+                {single && transfer ? "Another upload: " : null}
                 {transfer?.filename}
               </a>
             )}

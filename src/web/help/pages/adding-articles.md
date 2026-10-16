@@ -28,8 +28,9 @@ whatever that last stage produced and brings the article in as far as it got.
 When it goes wrong, the message says why. What to try:
 
 - **Not enough readable text** usually means a login wall, a paywall, an error page, or a page that
-  fills itself in with scripts. Trying again gets the same page. Instead, open it in your browser,
-  save the page as HTML, and upload that file.
+  fills itself in with scripts. Trying again gets the same page. Instead, open it in your browser.
+  Use the site's **Download PDF** button if it has one; otherwise save the page as a PDF. Then
+  upload that file.
 - **A PDF that is locked, damaged, too big or too long**: upload a copy without the password, a
   smaller file, or just the part you want.
 - **A stage stopped part way**: press **Retry**. It skips the stages that already worked.

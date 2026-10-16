@@ -415,8 +415,14 @@
    its count never part, and the whole mark drops to the next line as one piece
    if the title fills the row. Its own colour, face and style, so a read row's
    faint title, a part's weight and a supplement's italic do not reach it: it is
-   chrome beside the title, one step quieter than it. The icons inherit
-   `currentColor` (icons.md § Rules). */
+   chrome beside the title. The icons inherit `currentColor` (icons.md § Rules).
+
+   **In `--ink-soft` and 14px, not `--ink-faint` and 12px**, since 2026-10-15:
+   at the first size Greg looked at a paper with three figures in Structure and
+   asked us to *"indicate where there are figures/tables/etc in Structure mode
+   somehow"* (spya-zzvm6e) — they were there, a faint grey speck after the
+   title, and read as noise. Now the ink of an unread row's title, so the eye
+   finds it, and the size of the icons on Skim's Figures rows. */
 .fig-mark {
   display: inline-flex;
   align-items: center;
@@ -424,9 +430,9 @@
   margin-left: 0.4em;
   vertical-align: -0.1em;
   white-space: nowrap;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-style: normal;
   font-weight: 400;
   line-height: 1;

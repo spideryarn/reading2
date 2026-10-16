@@ -52,11 +52,12 @@ import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
 import { formatBytes } from "../uploads.js";
-import { KEEP_A_TAB_OPEN } from "../job-state.js";
+import { isImportJob, KEEP_A_TAB_OPEN } from "../job-state.js";
 import {
   ADDING_SENDS_TEXT_AWAY,
   codeOfMessage,
   DIRECT_ADD_SENT_TEXT_AWAY,
+  failureSuggestsUpload,
   UPLOAD_STILL_ARRIVING,
   ADD_IMPORT_LOST,
   PUBLIC_COPY_EXPLAIN,
@@ -68,6 +69,7 @@ import {
 } from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { QuotaNotice } from "./QuotaNotice.js";
+import { UploadInstead } from "./UploadInstead.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { type PublicCopyFound, useJobs } from "./useJobs.js";
@@ -1756,6 +1758,17 @@ export function AddPage({
             setStarted({ id: replacement.id, source: wanted, reader: readerId, job: replacement })
           }
         />
+      )}
+
+      {/* **The way round the sentence above names, where the reader is.** Only
+          under an import from an address that failed with a sentence telling
+          them to upload the file instead (`SUGGESTS_UPLOAD`,
+          src/messages.ts); src/web/UploadInstead.tsx. */}
+      {job?.status === "error" &&
+        isImportJob(job) &&
+        job.url !== undefined &&
+        failureSuggestsUpload(job.error) && (
+        <UploadInstead />
       )}
 
       {/* **The tab is the worker, said where somebody is watching it work.**
