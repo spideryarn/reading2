@@ -228,7 +228,7 @@ const BLOCKS: Block[] = [
   },
   para(P_IDEA, `${IDEA_QUOTE}, and that is the whole of the evidence.`),
   para(P_TIME, `${TIME_QUOTE} and finished before the summer.`),
-  para(P_FIND, `A ${FIND} subgroup was named after the fact.`),
+  para(P_FIND, `A ${FIND} subgroup was named after the fact; another ${FIND} check followed.`),
   para(P_CRIT, `There was ${CRIT_QUOTE} at any point.`),
   para(P_CLAIM, `Even so, ${CLAIM_QUOTE} of the participants.`),
   para(P_QUOTE, `${KEPT_QUOTE}; there is no other kind.`),
@@ -756,10 +756,38 @@ async function readingSession(strict: boolean): Promise<void> {
   expect(heldSearch.made, "the saved-run GET was never made — nothing is pending").toBe(true);
   expect(heldSearch.settled, "the held reply landed before the reader had left Search").toBe(false);
   const rows = [...host.querySelectorAll<HTMLButtonElement>(".srch-hit-btn")];
-  expect(rows, "the literal matcher found nothing to list").toHaveLength(1);
+  expect(rows, "the literal matcher did not list both occurrences").toHaveLength(2);
   agree("search, request pending", [P_FIND], []);
-  /* Search opens nothing by itself; the reader presses a row. */
-  await act(async () => rows[0]!.click());
+  /* ---- ← / → step the results while Search is the mode (plan 261015d,
+     spya-b4vfq5) — but **not from the search box**, where they move the
+     caret. Pressed in the box first, so a handler that ignored the guard
+     would ring the row here. */
+  const box = host.querySelector<HTMLInputElement>(".srch-input");
+  expect(box, "the words matcher's box").not.toBeNull();
+  await arrow("ArrowRight", box!);
+  agree("search, → in the search box", [P_FIND], []);
+  /* On the page, → opens the first row exactly as a press on it does: the
+     phrase is ringed and the row is lit. */
+  await arrow("ArrowRight");
+  agree("search, after →", [P_FIND], [P_FIND]);
+  expect(
+    host.querySelector(".srch-hit.on .srch-hit-btn"),
+    "→ did not light the row it stepped to",
+  ).toBe(rows[0]);
+  /* The next press moves through the displayed list, rather than merely
+     repeating the first-row behaviour that the helper test cannot wire up. */
+  await arrow("ArrowRight");
+  agree("search, after a second →", [P_FIND], [P_FIND]);
+  expect(
+    host.querySelector(".srch-hit.on .srch-hit-btn"),
+    "the second → did not light the second row",
+  ).toBe(rows[1]);
+  /* → on the last row takes nothing; the second row stays open. */
+  await arrow("ArrowRight");
+  agree("search, → at the last", [P_FIND], [P_FIND]);
+  expect(host.querySelector(".srch-hit.on .srch-hit-btn")).toBe(rows[1]);
+  /* And a press on the row is the same state the key reached. */
+  await act(async () => rows[1]!.click());
   await settle();
   agree("search, a row pressed", [P_FIND], [P_FIND]);
 
@@ -832,12 +860,6 @@ async function readingSession(strict: boolean): Promise<void> {
      says where the reader is. A second → is the end of the list and takes
      nothing. Through the whole composition because the wiring is the claim —
      `Reader` handing `useArrowNav` the quotes' handler in this mode only. */
-  const arrow = async (key: "ArrowLeft" | "ArrowRight"): Promise<void> => {
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
-    });
-    await settle();
-  };
   await arrow("ArrowRight");
   agree("quotes, after →", [P_QUOTE], [P_QUOTE]);
   expect(host.querySelector(".quotes-step-at")?.textContent, "the stepper's position").toBe(
@@ -855,6 +877,20 @@ async function readingSession(strict: boolean): Promise<void> {
   await press(MODE_LABEL.plain);
   expect(onScreen(KEPT_QUOTE), "the prose went with the band").toBe(true);
   agree("plain, having just left quotes mode", [], []);
+}
+
+/**
+ * An arrow key, on the page or on one element. `useArrowNav` listens on
+ * `window`, so a key pressed on an element bubbles up to it carrying that
+ * element as its target — which is what its typing guard reads.
+ */
+async function arrow(key: "ArrowLeft" | "ArrowRight", on?: HTMLElement): Promise<void> {
+  await act(async () => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true });
+    if (on) on.dispatchEvent(e);
+    else window.dispatchEvent(e);
+  });
+  await settle();
 }
 
 /** Press one of Referee's sub-mode chips by its label. */

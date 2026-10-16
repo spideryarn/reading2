@@ -48,7 +48,7 @@
  * agreeing is that both call `markedQuotes` below.
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
-import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { ChevronLeft, ChevronRight, Info, Pencil, Quote as QuoteIcon, RotateCcw } from "lucide-react";
 import type { BlockId, Job, Quote, QuoteDrops, Quotes, QuoteStroke, QuoteTier } from "../types.js";
 import { quotesAppendOnOffer, quotesFindMoreOffered } from "./find-more.js";
@@ -81,6 +81,7 @@ import { BandWaiting } from "./BandWaiting.js";
 import { StaleNotice } from "./StaleNotice.js";
 import { useStaleNotice } from "./useStaleNotices.js";
 import { Excerpt } from "./Excerpt.js";
+import { stepByKey, useFollowRow } from "./list-step.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -620,7 +621,8 @@ export function barToReveal(
  *
  * `listed` is `markedQuotes`' list — what the panel shows and the prose
  * outlines — so "next" is the next row the reader can see, in whatever order
- * they chose. Three rules, all Skim's (skim-route.ts):
+ * they chose. Three rules, all Skim's (skim-route.ts), and Search's too — the
+ * rule itself is list-step.ts § `stepByKey`:
  *
  * - **Nothing selected, or a selection the list no longer shows** → the first,
  *   whichever way.
@@ -634,9 +636,7 @@ export function stepQuote(
   currentId: string | null,
   dir: -1 | 1,
 ): Quote | null {
-  const at = currentId === null ? -1 : listed.findIndex((q) => q.id === currentId);
-  if (at === -1) return listed[0] ?? null;
-  return listed[Math.max(0, at + dir)] ?? null;
+  return stepByKey(listed, (q) => q.id, currentId, dir);
 }
 
 /** One number to put on a row, with the name of what it is. */
@@ -750,26 +750,12 @@ export function QuotesPanel({
     yours?.blocks ?? [],
   );
 
-  /**
-   * **The selected row follows into view** when the selection changes — by
-   * ‹ ›, by ← / →, or by the prose card's *Open in Quotes* — so the reader can
-   * see which row they are on. A row already fully in view is left alone.
-   * **The list's own `scrollTop`, never `scrollIntoView`**, which scrolls every
-   * scrollable ancestor too, the page included (OutlinePanel.tsx says the same).
-   * Not on every render: a reader who scrolls the list by hand keeps their
-   * place until the selection moves.
-   */
-  const listRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list || quoteId === null || list.clientHeight <= 0) return;
-    const row = list.querySelector<HTMLElement>(`[data-quote-row="${CSS.escape(quoteId)}"]`);
-    if (!row) return;
-    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
-    const bottom = top + row.offsetHeight;
-    const inView = top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight;
-    if (!inView) list.scrollTop = Math.max(0, top - list.clientHeight / 3);
-  }, [quoteId]);
+  /* **The selected row follows into view** when the selection changes — by
+     ‹ ›, by ← / →, or by the prose card's *Open in Quotes* — and again when a
+     band that stepped aside comes back: list-step.ts § `useFollowRow`. */
+  const listRef = useFollowRow<HTMLDivElement>(quoteId, (list, id) =>
+    list.querySelector<HTMLElement>(`[data-quote-row="${CSS.escape(id)}"]`),
+  );
   /* From the LIST, not from the owner hook — so the sentence appears for a
      visitor as well, which is what makes "the reader is told" true rather than
      true for whoever happens to own the article. */

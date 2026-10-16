@@ -1,4 +1,4 @@
-# Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz, Quotes and Structure
+# Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz, Quotes, Search and Structure
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
@@ -6,7 +6,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.tsx`](../../src/web/reader/Reader.tsx)), [`key-chord.ts`](../../src/web/key-chord.ts) (the ⌘ chords), [`TermJump.tsx`](../../src/web/TermJump.tsx) (G), [`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx) (`/`); tests [`keynav.test.ts`](../../tests/keynav.test.ts), [`keynav-horizontal.test.ts`](../../tests/keynav-horizontal.test.ts).
 
-**Which sections are live.** Live: ← / → in Skim, Quiz, Quotes and Structure; the five rules; the chords (⌘-K, ⌘-Enter, ⌘⌥T); G; `/`; Tab. History (the gist columns went on 2026-09-29): the pointer's stride and aim, `L1 / L2`.
+**Which sections are live.** Live: ← / → in Skim, Quiz, Quotes, Search and Structure; the five rules; the chords (⌘-K, ⌘-Enter, ⌘⌥T); G; `/`; Tab. History (the gist columns went on 2026-09-29): the pointer's stride and aim, `L1 / L2`.
 
 - [§ Why the pointer, and not a mode](#why-the-pointer-and-not-a-mode) — the stride-by-pointer design (history)
 - [§ What each zone means](#what-each-zone-means) — pointer zones (history)
@@ -14,6 +14,7 @@ Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.t
 - [§ ← / → in Skim](#-in-skim) — the stop-stepping seam, and how a mode hands `useArrowNav` a handler
 - [§ ← / → in Quiz](#-in-quiz) — Previous/Next, and the refusals that keep a draft
 - [§ ← / → in Quotes](#-in-quotes) — `stepQuote` and the band's order
+- [§ ← / → in Search](#-in-search) — the results list, and what a step shares with a press on a row
 - [§ ← / → in Structure](#-in-structure) — `acrossDepth`, and why ↑ / ↓ left the list
 - [§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything) — column tinting (history)
 - [§ Five rules, each with a reason](#five-rules-each-with-a-reason) — auto-repeat, a widget that handled the key, rapid presses, a keypress's URL
@@ -29,8 +30,8 @@ Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.t
 > **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
 > steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
 > stepped a section, and a focused row in Structure's list stepped the list. **← / → step
-> Skim's stops, Quiz's questions, Quotes' quotes (since 2026-10-02) and Structure's lowest-level
-> sections** (all four further down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
+> Skim's stops, Quiz's questions, Quotes' quotes (since 2026-10-02), Search's results (since
+> 2026-10-15) and Structure's lowest-level sections** (all five further down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
 > mode, removed on 2026-09-29
 > ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); everything here about
 > columns, the pointer's level, the aim and the `L1 / L2` buttons is history.
@@ -297,6 +298,39 @@ pointer-only: a quote mark is not a tab stop, and making forty of them into tab 
 worse than the gap. Quotes mode is the keyboard's way through.
 `tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx` (the Quotes arm) pins the wiring;
 the plan is [261002h](../plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md).
+
+## ← / → in Search
+
+> left/right keys should move between search results in Search mode
+>
+> — Greg, 2026-10-15, spya-b4vfq5
+
+**While Search is the mode, ← / → step its results, in the band's own order** — *document*,
+*confidence* or *prioritised*, and only the rows the prioritised bar lets through, because that is
+the list on screen: `found` in `Reader`, the one `Found[]` the band draws and the prose is marked
+from. Both matchers, and a visitor's list as well as an owner's. Quotes' seam and Quotes' rules —
+`stepByKey` in [`list-step.ts`](../../src/web/list-step.ts), `stepQuote` is the same function: nothing
+open goes to the first, ← on the first goes to the first again, → on the last takes nothing, no
+wrap. A list that is still streaming is stepped as it stands at the press.
+
+**A step is a press on the row**: it opens the row (`openHit` — the row lit, the phrase ringed) and
+jumps the way the band's links jump (`bandJump`), so on a narrow window a covering band steps aside.
+That jump pushes `?at=` as the press's does and as Quotes' keys do, which
+[url-state.md](url-state.md#position-replaces-history-deliberate-acts-push) allows a deliberate act.
+GPT Sol's plan review asked for a quieter path that writes no history; a second jump that differs
+from the press only in that was passed over, so the four list-stepping modes stay alike.
+
+**The keys go nowhere from the search box**, the confidence slider or a row's tick — `isTyping`,
+above every handler. With the colour popover or a score's card open by the pointer, focus is still
+on the row's control, outside the popover, so ← / → step behind it: as in Quotes, deliberately.
+
+**The open row follows into view in the band** (`useFollowRow`, Quotes' too), and again when a band
+that stepped aside comes back, since a hidden list measures nothing. The score's card says *While
+reading, press ← or →* ([tooltips.md](tooltips.md#a-shortcut-is-named-on-its-card)).
+
+`tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx` (the Search arm) pins the wiring
+and the search box; `tests/list-step.test.ts` the order and the follow. The plan is
+[261015d](../plans/261015d-search-arrow-keys-step-the-results.md).
 
 ## ← / → in Structure
 

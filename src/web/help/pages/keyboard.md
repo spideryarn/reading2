@@ -44,8 +44,8 @@ related: touch, jumping-around
   away, and again to open it.
 - <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the pointer
   over the spine. Holding a key down does not repeat, so every step lands somewhere you can read.
-- <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and
-  Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
+- <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes,
+  Search’s matches and Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
   normally does.
 - In an article, the first <kbd>Tab</kbd> shows **Skip to modes**. Press <kbd>Enter</kbd> to reach
   the mode switch in the bottom bar. Focus lands on the open mode, or the first mode button if the

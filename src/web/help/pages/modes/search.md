@@ -48,6 +48,9 @@ runs through the whole piece — see [Reading the spine](/help/spine).
 Tick several searches to show them together; click a search’s words to show only that one. **↺**
 puts the question back in the box to ask again.
 
+Press a match in the list to jump to it in the text. <kbd>←</kbd> <kbd>→</kbd> while reading step
+from match to match in the list’s order, but not while you are typing in the box.
+
 Each match has a score out of 100. It is the AI’s judgement of its own answer, not a measurement, so
 read a high score as “worth a look” rather than “certain”. **prioritised**, the default, hides weak
 matches from the list *and* the text; if you expected more marks, move the **confidence** slider
