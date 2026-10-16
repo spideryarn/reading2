@@ -44,7 +44,7 @@
  *
  * The same command compiles `docs/user-feedback/questions/q-*.md`, one
  * question a file, into src/feedback-questions.generated.ts: every question id
- * with its status, and the title, report, date and body of the open ones. An
+ * with its status, and the title, report, repeats, date and body of the open ones. An
  * admin's Earlier tab shows the open ones, and Greg replies there. **A question
  * file that does not parse fails this command and the test**; it is never
  * left out quietly, because a question nobody sees is the failure the files

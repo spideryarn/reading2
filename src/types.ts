@@ -8072,7 +8072,7 @@ export type AdminEarlierFeedbackShow = (typeof ADMIN_EARLIER_FEEDBACK_SHOWS)[num
 
 /**
  * **One of an admin's own earlier reports** — `GET /api/admin/feedback/earlier`.
- * The six fields every reader's list has, and four only this route sends.
+ * The fields every reader's list has, plus the admin-only fields below.
  * `shipped` is not among them: `status` says it.
  */
 export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
@@ -8142,8 +8142,9 @@ export interface AdminFeedbackQuestionAnswer {
  * `GET /api/admin/feedback/earlier?questions=3`. An agent wrote `title` and
  * `body` (a file under docs/user-feedback/questions/, compiled into the
  * server): plain text, to be drawn as text with its line breaks kept. The
- * file's `refs` line is for agents and is never here, and its `acted` ids
- * reach the browser only as `state` and as which list each reply is in.
+ * file's `refs` line is for agents and is never here; its `repeats` reach only
+ * report rows as `asked`; and its `acted` ids reach the browser only as
+ * `state` and as which list each reply is in.
  * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
  */
 export interface AdminFeedbackQuestion {

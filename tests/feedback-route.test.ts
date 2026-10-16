@@ -729,7 +729,7 @@ describe("GET /api/admin/feedback/earlier", () => {
     expect(Buffer.byteLength(JSON.stringify(sent.reports))).toBeLessThanOrEqual(FEEDBACK_LIST_BYTES);
   });
 
-  it("answers the admin's own list: eleven fields a report, the comment from the note, never cached", async () => {
+  it("answers the admin's own list with the note's comment and no store-only fields, never cached", async () => {
     statusAnswer = {
       reports: [
         {

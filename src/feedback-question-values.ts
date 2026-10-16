@@ -109,8 +109,9 @@ export interface CompiledFeedbackQuestion {
   report: string | null;
   /**
    * The reports folded into `report`'s note as repeats of it, which this
-   * question answers too (`repeats:`, plan 261016a). Server only, like
-   * `report`: never sent, only read by `askedReports`. Empty when `report` is null.
+   * question answers too (`repeats:`, plan 261016a). It stays server-only and
+   * is read only by `askedReports`; unlike `report`, it does not select the
+   * report drawn in the question's thread. Empty when `report` is null.
    */
   repeats: readonly string[];
   /** `yyyy-mm-dd`. */

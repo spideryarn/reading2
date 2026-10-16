@@ -8895,8 +8895,9 @@ async function fileFeedback(
  * the store, so a question about another reader's report sends `report: null`
  * and another admin's reply or deferral is never this one's. Only the open
  * ones: an answered question is not sent, whatever a store hands back. Each is
- * picked field by field; the file's `refs` was never compiled, and its `acted`
- * ids leave only as the state and as which list each reply is in.
+ * picked field by field; the file's `refs` was never compiled, its `repeats`
+ * leave only as report rows' `asked`, and its `acted` ids leave only as the
+ * state and as which list each reply is in.
  *
  * `shape` 1 is the answer before 261008i, for a request without
  * `questions=2` or `questions=3`: a tab loaded before the deploy keeps
