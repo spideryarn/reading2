@@ -404,7 +404,9 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   same on the row, for a phone
   ([261009m](../plans/261009m-needs-a-decision-pager-steps-only-through-waiting-threads.md)). The
   pills are hidden meanwhile, because on a phone with the keyboard up they cost three
-  lines. Below the contents, and only there, are the waiting reports **no open question is about**,
+  lines. Below the contents, and only there, are the waiting reports **no open question is about**
+  — neither as its report nor in its `repeats:`, which the server sends as each row's `asked`
+  ([261016a](../plans/261016a-a-repeat-folded-into-a-note-is-covered-by-the-question-about-that-note.md)) —
   under *Waiting, but no question written yet*, saying there is nothing to answer for them;
   `feedback-questions.ts` lists the same reports for the sweep to write one. A waiting report that
   has a question is inside its thread and nowhere else in this view, which is the bug fixed.

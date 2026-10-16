@@ -358,10 +358,41 @@ describe("a question file", () => {
       asked: "2026-10-07",
       title: "Should the box take longer reports?",
       refs: "qi-8qvg5gwv docs/plans/261007b.md",
+      repeats: [],
       acted: ["spya-bbbbbb", "spya-cccccc"],
       body: "The background.\n\nA. Leave it.\nB. Raise it.",
     });
-    expect(parse(file(HEADER.replace("spya-aaaaaa", "none")))).toMatchObject({ report: null, acted: [] });
+    expect(parse(file(HEADER.replace("spya-aaaaaa", "none")))).toMatchObject({ report: null, repeats: [], acted: [] });
+  });
+
+  /* qi-7j8d72p9, plan 261016a: the reports folded into this one's note as
+     repeats, which the question answers too. */
+  it("reads repeats, and refuses a duplicate, the report itself, a non-id, or repeats of no report", () => {
+    expect(parse(file(`${HEADER}\nrepeats: spya-bbbbbb, spya-cccccc`))).toMatchObject({
+      report: "spya-aaaaaa",
+      repeats: ["spya-bbbbbb", "spya-cccccc"],
+    });
+    expect(parse(file(`${HEADER}\nrepeats: spya-bbbbbb, spya-bbbbbb`))).toMatch(/repeats/);
+    expect(parse(file(`${HEADER}\nrepeats: spya-aaaaaa`))).toMatch(/repeats/);
+    expect(parse(file(`${HEADER}\nrepeats: 581`))).toMatch(/repeats/);
+    for (const empty of ["", "spya-bbbbbb,", ",spya-bbbbbb", "spya-bbbbbb,,spya-cccccc"]) {
+      expect(parse(file(`${HEADER}\nrepeats: ${empty}`)), JSON.stringify(empty)).toMatch(/repeats/);
+    }
+    expect(parse(file(`${HEADER.replace("spya-aaaaaa", "none")}\nrepeats: spya-bbbbbb`))).toMatch(/repeats/);
+  });
+
+  it("compiles an open question's repeats for the server, and an answered one's not at all", () => {
+    const answered = HEADER.replace("q-k3m9qt", "q-answrd")
+      .replace("status: open", "status: answered")
+      .replace("spya-aaaaaa", "spya-dddddd");
+    const { questions } = compileQuestions([
+      { name: "q-k3m9qt.md", text: file(`${HEADER}\nrepeats: spya-bbbbbb`) },
+      { name: "q-answrd.md", text: file(`${answered}\nrepeats: spya-eeeeee`) },
+    ]);
+    const text = renderQuestionsModule(questions);
+    expect(text).toContain('report: "spya-aaaaaa", repeats: ["spya-bbbbbb"], asked:');
+    expect(text).not.toContain("spya-dddddd");
+    expect(text).not.toContain("spya-eeeeee");
   });
 
   it("refuses a bad id, and an id that is not the file's name", () => {
@@ -464,7 +495,7 @@ describe("the committed questions", () => {
     expect(open.length, "the positive control: there is at least one open question").toBeGreaterThan(0);
     for (const question of open) {
       expect(feedbackQuestionStatus(question.id)).toBe("open");
-      expect(Object.keys(question).sort()).toEqual(["asked", "body", "id", "report", "title"]);
+      expect(Object.keys(question).sort()).toEqual(["asked", "body", "id", "repeats", "report", "title"]);
     }
     expect(Object.keys(FEEDBACK_QUESTION_STATUS).length).toBeGreaterThanOrEqual(open.length);
     expect(feedbackQuestionStatus("q-zzzzzz")).toBeNull();
@@ -481,6 +512,27 @@ describe("the committed questions", () => {
       if (header === null || typeof header === "string" || header.reports.length !== 1) continue;
       expect(question.report, `${question.id} should name the report in ${noteName}`).toBe(header.reports[0]);
     }
+  });
+
+  /* qi-7j8d72p9, plan 261016a: a repeat folded into the note an open
+     question is about is in its `repeats:`, or the repeat shows as waiting
+     with no question. This is where forgetting it goes red. */
+  it("names in an open question's repeats every other report of its source note that waits", () => {
+    const { questions } = compileQuestions(readQuestionFiles());
+    let checked = 0;
+    for (const question of questions.filter((one) => one.status === "open" && one.report !== null)) {
+      const noteName = /docs\/user-feedback\/([^ ·]+\.md)/.exec(question.refs ?? "")?.[1];
+      if (!noteName) continue;
+      const header = parseNoteHeader(readFileSync(path.join(NOTES_DIR, noteName), "utf8"));
+      if (header === null || typeof header === "string" || header.ending !== "awaiting") continue;
+      if (!header.reports.includes(question.report ?? "")) continue;
+      checked += header.reports.length > 1 ? 1 : 0;
+      expect(
+        [question.report, ...question.repeats].sort(),
+        `${question.id} is about ${noteName}: name its other reports in repeats:`,
+      ).toEqual([...header.reports].sort());
+    }
+    expect(checked, "the positive control: q-fp8tqr's note names two reports").toBeGreaterThan(0);
   });
 
   it("has no live work left in the retired waiting list", () => {

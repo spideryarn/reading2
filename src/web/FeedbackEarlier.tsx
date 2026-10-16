@@ -270,7 +270,10 @@ function isAdminEarlierFeedbackPage(
     /* No key at all is a server from before 261010o: none, and no box
        (`withAddendaKnown`). A key is a list of exactly-shaped addenda, ids no
        two share, or the whole answer fails. */
-    (!Object.hasOwn(report, "addenda") || areAddenda(report.addenda))
+    (!Object.hasOwn(report, "addenda") || areAddenda(report.addenda)) &&
+    /* No key is a server from before 261016a: not asked. A key is a boolean,
+       or the whole answer fails: "false" would be truthy and hide a row. */
+    (!Object.hasOwn(report, "asked") || typeof report.asked === "boolean")
   )) return false;
   const reports = envelope.reports as unknown as AdminWireReport[];
   if (new Set(reports.map((report) => report.id)).size !== reports.length) return false;
@@ -294,8 +297,14 @@ function areAddenda(value: unknown): value is AdminFeedbackAddendum[] {
   );
 }
 
-/** A report as the admin route may send it: `addenda` absent from a server before 261010o. */
-type AdminWireReport = Omit<AdminEarlierFeedback, "addenda"> & { addenda?: AdminFeedbackAddendum[] };
+/**
+ * A report as the admin route may send it: `addenda` absent from a server
+ * before 261010o, `asked` from one before 261016a.
+ */
+type AdminWireReport = Omit<AdminEarlierFeedback, "addenda" | "asked"> & {
+  addenda?: AdminFeedbackAddendum[];
+  asked?: boolean;
+};
 type AdminWirePage = Omit<AdminThreadsPage, "reports"> & { reports: AdminWireReport[] };
 
 /**
@@ -305,9 +314,12 @@ type AdminWirePage = Omit<AdminThreadsPage, "reports"> & { reports: AdminWireRep
  */
 export type AdminRowReport = Omit<AdminEarlierFeedback, "addenda"> & { addenda: AdminFeedbackAddendum[] | null };
 
-/** The checked answer, with an absent `addenda` made the explicit null the rows read. */
+/** The checked answer, with an absent `addenda` made the explicit null the rows read, and an absent `asked` false. */
 function withAddendaKnown(page: AdminWirePage): AdminThreadsPage {
-  return { ...page, reports: page.reports.map((report) => ({ ...report, addenda: report.addenda ?? null })) };
+  return {
+    ...page,
+    reports: page.reports.map((report) => ({ ...report, addenda: report.addenda ?? null, asked: report.asked ?? false })),
+  };
 }
 
 /** A reply POST's whole receipt: one stored answer and no server-only sibling fields. */
@@ -1835,9 +1847,11 @@ export function EarlierList({
              261008i § The bug): a waiting report with an open question is
              inside that thread, with its reply box. What is left waits on a
              question nobody has written yet, and says so, so a row here never
-             looks like something to answer that cannot be. */
+             looks like something to answer that cannot be. A report the
+             server says is `asked` is a thread's too, as a repeat folded into
+             its note (spya-tqsw3u, plan 261016a), and is not left here. */
           const linked = new Set((questions ?? []).flatMap((question) => question.report?.id ?? []));
-          const orphans = reports.filter((report) => !linked.has(report.id));
+          const orphans = reports.filter((report) => !linked.has(report.id) && !report.asked);
           if (orphans.length === 0) {
             return (questions ?? []).length === 0 ? (
               <p className="fb-earlier-status">Nothing needs a decision from you.</p>

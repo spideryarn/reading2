@@ -1,6 +1,7 @@
 ---
 id: q-fp8tqr
 report: spya-x5e966
+repeats: spya-tqsw3u
 status: open
 asked: 2026-10-15
 title: When a site turns Spideryarn away, should we look for a free copy, or take the page from your browser?

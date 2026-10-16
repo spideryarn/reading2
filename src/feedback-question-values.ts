@@ -107,7 +107,26 @@ export interface CompiledFeedbackQuestion {
   title: string;
   /** The `spya-` id of the report it is about, or null. Looked up owner-scoped before anything is sent. */
   report: string | null;
+  /**
+   * The reports folded into `report`'s note as repeats of it, which this
+   * question answers too (`repeats:`, plan 261016a). Server only, like
+   * `report`: never sent, only read by `askedReports`. Empty when `report` is null.
+   */
+  repeats: readonly string[];
   /** `yyyy-mm-dd`. */
   asked: string;
   body: string;
+}
+
+/**
+ * **The reports these questions ask about**: each one's `report` and its
+ * `repeats`. Hand it the open ones; it does not filter. What the sweep's
+ * listing and the admin rows' `asked` both read, so the two cannot disagree on
+ * which waiting report still has no question (plan 261016a). Nothing is
+ * worked out from the notes: a question names a report, not a note.
+ */
+export function askedReports(
+  questions: readonly Pick<CompiledFeedbackQuestion, "report" | "repeats">[],
+): Set<string> {
+  return new Set(questions.flatMap((question) => (question.report === null ? [] : [question.report, ...question.repeats])));
 }

@@ -12,7 +12,14 @@
 import { describe, expect, it } from "vitest";
 
 import { CannotTell } from "../scripts/feedback-reporter.js";
-import { parseQuestionFile, type QuestionFile } from "../scripts/feedback-endings.js";
+import {
+  compileEndings,
+  compileQuestions,
+  parseQuestionFile,
+  type QuestionFile,
+  readNotes,
+  readQuestionFiles,
+} from "../scripts/feedback-endings.js";
 import {
   type AnswerRow,
   ANSWERS_DEPLOYED_SQL,
@@ -33,14 +40,14 @@ import {
   waitingWithoutQuestion,
 } from "../scripts/feedback-questions.js";
 import { ADMIN_USER_ID_PROD } from "../src/admin.js";
-import { isFeedbackQuestionId } from "../src/feedback-question-values.js";
+import { askedReports, isFeedbackQuestionId } from "../src/feedback-question-values.js";
 
 /* Minted per run: a literal here collided with tests/uploads-api.test.ts in
    tests/fixture-ids.test.ts (2026-10-07). Nothing here inserts it. */
 const STRANGER = crypto.randomUUID();
 
 function question(id: string, over: Partial<QuestionFile> = {}): QuestionFile {
-  return { id, report: null, status: "open", asked: "2026-10-07", title: `About ${id}`, acted: [], body: "The body.", ...over };
+  return { id, report: null, repeats: [], status: "open", asked: "2026-10-07", title: `About ${id}`, acted: [], body: "The body.", ...over };
 }
 
 function row(id: string, questionId: string, over: Partial<AnswerRow> = {}): AnswerRow {
@@ -64,6 +71,7 @@ const file = (one: QuestionFile) => ({
     `status: ${one.status}`,
     `asked: ${one.asked}`,
     `title: ${one.title}`,
+    ...(one.repeats.length > 0 ? [`repeats: ${one.repeats.join(", ")}`] : []),
     ...(one.acted.length > 0 ? [`acted: ${one.acted.join(", ")}`] : []),
     "---",
     one.body,
@@ -428,6 +436,36 @@ describe("the listing and the command line", () => {
     expect(renderIncompleteSplits([])).toEqual(["Every split report has a note for each of its parts."]);
     expect(renderIncompleteSplits(["spya-eeeeee"]).join("\n")).toContain("spya-eeeeee");
   });
+
+  /* qi-7j8d72p9, plan 261016a: a repeat folded into one note (spya-tqsw3u,
+     beside spya-x5e966) is asked by the question that names it in
+     `repeats:`. Nothing is worked out from the notes: a question names a
+     report, not a note (Sol's plan reviews). */
+  it("counts a report named in an open question's repeats as asked, and an answered one's not", () => {
+    const endings = new Map<string, "shipped" | "declined" | "awaiting">([
+      ["spya-aaaaaa", "awaiting"],
+      ["spya-bbbbbb", "awaiting"],
+      ["spya-cccccc", "awaiting"],
+      ["spya-dddddd", "awaiting"],
+    ]);
+    const asked = [
+      question("q-aaaaaa", { report: "spya-aaaaaa", repeats: ["spya-bbbbbb"] }),
+      question("q-cccccc", { report: "spya-cccccc", repeats: ["spya-dddddd"], status: "answered" }),
+    ];
+    expect(waitingWithoutQuestion(endings, asked)).toEqual(["spya-cccccc", "spya-dddddd"]);
+    /* It is handed the open ones; it does not filter. */
+    expect([...askedReports(asked)].sort()).toEqual(["spya-aaaaaa", "spya-bbbbbb", "spya-cccccc", "spya-dddddd"]);
+    expect(renderWaitingWithoutQuestion(["spya-cccccc"]).join("\n")).toContain("repeats:");
+    /* Sol's third plan review, F2: the listing says why a repeat is covered. */
+    expect(renderOpenQuestions(asked).join("\n")).toContain("about spya-aaaaaa and its repeat spya-bbbbbb");
+  });
+
+  it("leaves spya-tqsw3u, a repeat of spya-x5e966, off the committed listing", () => {
+    const notes = compileEndings(readNotes());
+    const { questions } = compileQuestions(readQuestionFiles());
+    expect(waitingWithoutQuestion(notes.endings, questions)).not.toContain("spya-tqsw3u");
+  });
+
 
   it("reads --answers, --new <title>, --show <id>, and nothing as the listing; anything else is refused", () => {
     expect(parseCommand([])).toEqual({ kind: "list" });

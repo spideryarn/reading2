@@ -8085,6 +8085,13 @@ export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
    * plain text, to be drawn as text, at most `MAX_FEEDBACK_COMMENT_CHARS`.
    */
   comment: string | null;
+  /**
+   * **An open question asks about it**: names it as its report, or in
+   * `repeats:` (plan 261016a). Under *Needs a decision* such a row is not drawn
+   * as waiting with no question written. Absent from a server before 261016a,
+   * which the dialog reads as false.
+   */
+  asked: boolean;
   /** ISO: when an admin pressed Ignore on it, or null. What the row says when there is no comment. */
   ignoredAt: string | null;
   /**

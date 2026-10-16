@@ -222,7 +222,7 @@ import {
   isFeedbackShipped,
   shippedFeedbackIds,
 } from "./feedback-ending.js";
-import { feedbackQuestionActed, feedbackQuestionStatus, openFeedbackQuestions } from "./feedback-question.js";
+import { feedbackQuestionActed, feedbackQuestionStatus, isReportAsked, openFeedbackQuestions } from "./feedback-question.js";
 import { isFeedbackQuestionId, questionState } from "./feedback-question-values.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
@@ -10356,6 +10356,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           number,
           status,
           comment: feedbackComment(id),
+          /* An open question names it, or names it in `repeats:` (plan
+             261016a): not "waiting, no question written yet". Rows and
+             counts are left alone; the client checks one against the other. */
+          asked: isReportAsked(id),
           ignoredAt,
           addenda: addenda.map(({ id: addendumId, body: words, createdAt: added }) => ({
             id: addendumId,

@@ -177,9 +177,9 @@ vi.mock("../src/feedback-questions.generated.js", () => ({
     "q-dddddd": "answered",
   },
   FEEDBACK_OPEN_QUESTIONS: [
-    { id: "q-aaaaaa", title: "One switch or two?", report: "spya-wa1t00", asked: "2026-10-05", body: "Background.\n\nA. One.\nB. Two." },
-    { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
-    { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
+    { id: "q-aaaaaa", title: "One switch or two?", report: "spya-wa1t00", repeats: ["spya-rep3at"], asked: "2026-10-05", body: "Background.\n\nA. One.\nB. Two." },
+    { id: "q-bbbbbb", title: "A question about nothing filed", report: null, repeats: [], asked: "2026-10-06", body: "Stands alone." },
+    { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", repeats: [], asked: "2026-10-07", body: "The body says it all." },
   ],
   /* q-bbbbbb's first replies have been acted on (plans 261008i and 261010h). */
   FEEDBACK_QUESTION_ACTED: {
@@ -729,7 +729,7 @@ describe("GET /api/admin/feedback/earlier", () => {
     expect(Buffer.byteLength(JSON.stringify(sent.reports))).toBeLessThanOrEqual(FEEDBACK_LIST_BYTES);
   });
 
-  it("answers the admin's own list: ten fields a report, the comment from the note, never cached", async () => {
+  it("answers the admin's own list: eleven fields a report, the comment from the note, never cached", async () => {
     statusAnswer = {
       reports: [
         {
@@ -759,11 +759,12 @@ describe("GET /api/admin/feedback/earlier", () => {
           number: 212,
           status: "aside",
           comment: "Set aside: the browser gives us no way to do this.",
+          asked: false,
           ignoredAt: null,
           addenda: [],
         },
-        { ...row("spya-k3m9qt", 211, "shipped"), comment: null },
-        { ...row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }), comment: null },
+        { ...row("spya-k3m9qt", 211, "shipped"), comment: null, asked: false },
+        { ...row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }), comment: null, asked: false },
       ],
       more: true,
       /* Report counts, and the four sum to All. */
@@ -784,6 +785,29 @@ describe("GET /api/admin/feedback/earlier", () => {
       },
     ]);
     expect(listed, "the plain list is not read as well").toEqual([]);
+  });
+
+  /* qi-7j8d72p9, plan 261016a: each row says whether an open question covers
+     it — names it, or names the report whose note it was folded into — so
+     the dialog does not draw it as "no question written yet". Rows and
+     counts are untouched: the client checks `more` against them. */
+  it("marks each row an open question covers as asked, under every filter, and moves no row or count", async () => {
+    for (const show of ["waiting", "all"]) {
+      statusAnswer = {
+        reports: [row("spya-rep3at", 581, "waiting"), row("spya-wa1t00", 580, "waiting"), row("spya-0rphan", 579, "waiting")],
+        more: false,
+        counts: { open: 0, waiting: 3, aside: 0, shipped: 0 },
+      };
+      const reply = await get(`${PATH}?show=${show}&questions=3`);
+      expect(reply.status).toBe(200);
+      const sent = reply.body as { reports: { id: string; asked: boolean }[]; counts: { waiting: number } };
+      expect(sent.reports.map(({ id, asked }) => [id, asked])).toEqual([
+        ["spya-rep3at", true],
+        ["spya-wa1t00", true],
+        ["spya-0rphan", false],
+      ]);
+      expect(sent.counts.waiting).toBe(3);
+    }
   });
 
   /* Plan 261010o: each report carries its addenda, three fields each, and

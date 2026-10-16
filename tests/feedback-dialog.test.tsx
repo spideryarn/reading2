@@ -2160,6 +2160,8 @@ describe("the Earlier tab", () => {
       ["a comment over the cap", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], comment: "x".repeat(241) }, ...ADMIN_REPORTS.reports.slice(1)] }],
       ["more rows of a status than its count", { ...ADMIN_REPORTS, counts: { all: 5, open: 2, waiting: 1, aside: 1, shipped: 1 } }],
       ["a mark that is not a time", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], ignoredAt: "yesterday" }, ...ADMIN_REPORTS.reports.slice(1)] }],
+      /* Truthy, so drawn as covered and hidden, if it were let through (plan 261016a). */
+      ["an asked that is not true or false", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], asked: "false" }, ...ADMIN_REPORTS.reports.slice(1)] }],
     ])("refuses an admin answer with %s: the failure sentence and Try again, no rows", async (_case, body) => {
       asAdmin = true;
       listAnswer = answerBy({ waiting: only(ADMIN_REPORTS, "waiting"), all: body });
@@ -2748,6 +2750,25 @@ describe("the Earlier tab", () => {
         expect(rows.map((li) => li.querySelector(".fb-earlier-number")?.textContent)).toEqual(["#210"]);
         expect(rows.every((li) => li.closest(".fb-orphans") !== null)).toBe(true);
         expect(panelOf("Earlier").querySelector(".fb-orphans")?.textContent).toMatch(/no question/i);
+      });
+
+      /* qi-7j8d72p9, plan 261016a: spya-tqsw3u, Greg's repeat of a report
+         folded into its note, sat under "no question written yet" though the
+         question about that note was right above it. The server now says so
+         (`asked`); a row without the key, from an older server, is drawn as
+         before. */
+      it("draws no report the server says a question covers under the no-question heading", async () => {
+        const repeat = { ...base, id: "spya-r3peat", number: 211, status: "waiting", body: "Again.", asked: true };
+        const orphan = { ...base, id: "spya-a6b2c3", number: 210, status: "waiting", body: "Fewer modes, please." };
+        await openWaiting(WITH_QUESTIONS, {
+          reports: [repeat, orphan],
+          more: false,
+          counts: { ...ADMIN_COUNTS, all: 6, waiting: 2 },
+          questions: [Q1, Q2],
+        });
+        const visible = (el: Element) => !el.closest("[hidden]");
+        const rows = [...panelOf("Earlier").querySelectorAll<HTMLElement>(".fb-orphans .fb-earlier-list > li")].filter(visible);
+        expect(rows.map((li) => li.querySelector(".fb-earlier-number")?.textContent)).toEqual(["#210"]);
       });
 
       it("draws the threads before the reports no question is about, and no report at all while a thread is open", async () => {

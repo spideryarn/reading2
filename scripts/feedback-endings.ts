@@ -336,7 +336,7 @@ export function renderModule(
 
 /* ------------------------------------------------------------ questions -- */
 
-const QUESTION_FIELDS = new Set(["id", "report", "status", "asked", "title", "refs", "acted"]);
+const QUESTION_FIELDS = new Set(["id", "report", "repeats", "status", "asked", "title", "refs", "acted"]);
 const QUESTION_REQUIRED = ["id", "report", "status", "asked", "title"] as const;
 
 /** One question file, whole: what the dialog shows and what only agents read. */
@@ -356,12 +356,32 @@ function isCalendarDay(value: string): boolean {
 }
 
 /**
+ * **`repeats:`, the reports folded into `report`'s note as repeats of it**
+ * (plan 261016a): absent is none. Present, it is report ids and nothing else —
+ * no empty piece, none twice, never `report` itself, never under
+ * `report: none` — because a line that parses to nothing would look recorded
+ * and cover nobody (Sol's third plan review, F1).
+ */
+function parseRepeats(value: string | undefined, report: string): string[] | string {
+  if (value === undefined) return [];
+  if (report === "none") return "repeats needs a report: a repeat of `none` is a repeat of nothing";
+  const repeats = value.split(",").map((one) => one.trim());
+  if (repeats.some((one) => !isSpideryarnId(one))) {
+    return `repeats must be report ids separated by commas, not ${JSON.stringify(value)}`;
+  }
+  if (new Set(repeats).size !== repeats.length) return `repeats names a report more than once: ${value}`;
+  if (repeats.includes(report)) return `repeats names the question's own report: ${report}`;
+  return repeats;
+}
+
+/**
  * **One question file, or a sentence saying what is wrong with it.** Never
  * null: unlike a note, a file in `questions/` with no header is a mistake.
  *
  *     ---
  *     id: q-k3m9qt
  *     report: spya-n8cuqq
+ *     repeats: spya-p4ctw2
  *     status: open
  *     asked: 2026-10-07
  *     title: Should Feedback take fifteen minutes of speech?
@@ -370,8 +390,8 @@ function isCalendarDay(value: string): boolean {
  *     ---
  *     The background, each option on its own lettered line, the recommendation.
  *
- * `id` is the file's name. `report` is one report id or `none`. `refs` and
- * `acted` are optional. The body is plain text: the dialog draws it as text
+ * `id` is the file's name. `report` is one report id or `none`. `repeats`,
+ * `refs` and `acted` are optional. The body is plain text: the dialog draws it as text
  * with its line breaks, and renders no markdown.
  */
 export function parseQuestionFile(name: string, text: string): QuestionFile | string {
@@ -407,6 +427,8 @@ export function parseQuestionFile(name: string, text: string): QuestionFile | st
     .filter((one) => one !== "");
   const notAnswers = acted.filter((one) => !isSpideryarnId(one));
   if (notAnswers.length > 0) return `acted names something that is not an answer id: ${notAnswers.join(", ")}`;
+  const repeats = parseRepeats(fields.get("repeats"), named);
+  if (typeof repeats === "string") return repeats;
   const body = read.rest.trim();
   if (body === "") return "the body says nothing: a question needs its background and options";
   if (body.length > MAX_FEEDBACK_QUESTION_BODY_CHARS) {
@@ -421,6 +443,7 @@ export function parseQuestionFile(name: string, text: string): QuestionFile | st
   return {
     id,
     report: named === "none" ? null : named,
+    repeats,
     status,
     asked,
     title,
@@ -485,8 +508,8 @@ export function renderQuestionsModule(questions: readonly QuestionFile[]): strin
     "/** The open ones, oldest first, as an admin's Earlier tab shows them. */",
     "export const FEEDBACK_OPEN_QUESTIONS: readonly CompiledFeedbackQuestion[] = [",
     ...open.map(
-      ({ id, title, report, asked, body }) =>
-        `  { id: "${id}", title: ${JSON.stringify(title)}, report: ${report === null ? "null" : `"${report}"`}, asked: "${asked}", body: ${JSON.stringify(body)} },`,
+      ({ id, title, report, repeats, asked, body }) =>
+        `  { id: "${id}", title: ${JSON.stringify(title)}, report: ${report === null ? "null" : `"${report}"`}, repeats: [${repeats.map((one) => `"${one}"`).join(", ")}], asked: "${asked}", body: ${JSON.stringify(body)} },`,
     ),
     "];",
     "",

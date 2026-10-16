@@ -57,6 +57,7 @@ import type { QueryResultRow } from "pg";
 import { isAdmin } from "../src/admin.js";
 import type { FeedbackEnding } from "../src/feedback-ending-values.js";
 import {
+  askedReports,
   isFeedbackQuestionId,
   MAX_FEEDBACK_QUESTION_TITLE_CHARS,
   mintFeedbackQuestionId,
@@ -449,7 +450,11 @@ export function renderOpenQuestions(questions: readonly QuestionFile[]): string[
       [
         question.id,
         question.asked,
-        question.report === null ? "about no report" : `about ${question.report}`,
+        question.report === null
+          ? "about no report"
+          : question.repeats.length === 0
+            ? `about ${question.report}`
+            : `about ${question.report} and its repeat${question.repeats.length === 1 ? "" : "s"} ${question.repeats.join(", ")}`,
         question.title,
         ...(question.acted.length > 0 ? [`acted on ${question.acted.length} reply(ies)`] : []),
       ].join("  ·  "),
@@ -462,16 +467,15 @@ export function renderOpenQuestions(questions: readonly QuestionFile[]): string[
  * him anything.** The admin's *Needs a decision* view draws these under a
  * heading that says no question has been written yet, and this listing is
  * where the sweep finds them to write one. Until 2026-10-08 they were drawn as
- * rows with nothing to press (`spya-u6h6q8`, plan 261008i § The bug). Ids
+ * rows with nothing to press (`spya-u6h6q8`, plan 261008i § The bug). A
+ * report an open question names in `repeats:` is asked (plan 261016a). Ids
  * sorted, so the output is stable.
  */
 export function waitingWithoutQuestion(
   endings: ReadonlyMap<string, FeedbackEnding>,
   questions: readonly QuestionFile[],
 ): string[] {
-  const asked = new Set(
-    questions.filter((question) => question.status === "open").flatMap((question) => question.report ?? []),
-  );
+  const asked = askedReports(questions.filter((question) => question.status === "open"));
   return [...endings]
     .filter(([id, ending]) => ending === "awaiting" && !asked.has(id))
     .map(([id]) => id)
@@ -497,7 +501,10 @@ export function renderWaitingWithoutQuestion(ids: readonly string[]): string[] {
   if (ids.length === 0) return ["Every report waiting on Greg has an open question."];
   return [
     `${ids.length} report(s) wait on Greg with no open question: Greg sees them under Needs a decision with nothing to answer.`,
-    ...ids.map((id) => `${id}  ·  write its question (--new), or correct its note's ending`),
+    ...ids.map(
+      (id) =>
+        `${id}  ·  write its question (--new), add it to \`repeats:\` of the question that already answers it, or correct its note's ending`,
+    ),
   ];
 }
 

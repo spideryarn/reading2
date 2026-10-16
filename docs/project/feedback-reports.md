@@ -346,7 +346,8 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
    `overseer-queue.ts list` and these notes, and open what matches. Before dispatch, put both
    reports in one entry. If its owner is already live, use `SendMessage` to ask it to include the
    new report id in its final note's `reports:` header; if delivery fails, leave the repeat
-   unresolved.
+   unresolved. If that note already has an open question, add the repeat to the question's
+   `repeats:` line too (§ To ask), or Greg sees it as waiting with no question.
 2. **One `gjd-remote` session per report**, not a background subagent — so that each report is a
    real Claude session on the box, which Greg can open a tab on with `gjd-remote resume-all` or
    steer through Claude Code remote control while it runs
@@ -533,6 +534,12 @@ What the report asked and when, what was done, what each option means, and what 
 
 - `id` is the file's name. `report` is the one report it is about, or `none`: a question need not
   be about a report. `title` is one line, at most 120 characters, a plain question.
+- `repeats` (optional, comma-separated) names the other reports in that report's note, folded in
+  as repeats of it, which the question answers too. Without it each repeat is listed as waiting
+  with no question, by the script and in Greg's dialog, since a question names a report and not a
+  note ([261016a](../plans/261016a-a-repeat-folded-into-a-note-is-covered-by-the-question-about-that-note.md)).
+  `tests/feedback-endings.test.ts` fails while an open question's `refs` names an awaiting note
+  whose other reports are not in it. Not allowed under `report: none`; never sent to the browser.
 - `refs` is for agents (the queue item, plan, note and Sentry short id) and **is never sent to the
   browser**. `acted` is added later (below).
 - **The body is plain text, at most 6,000 characters, shown exactly as written with its line
@@ -572,9 +579,10 @@ there is nothing to act on. The same provenance rule holds, and the same "not de
 before the deploy that creates that table.
 
 **The plain listing** (`npx tsx scripts/feedback-questions.ts`) also names any report whose note
-says `awaiting` with no open question asking about it: Greg sees those as *Waiting, but no question
-written yet* under the *Needs a decision* thread view, with nothing to answer, so write the question,
-or correct the note. And any split report with a
+says `awaiting` with no open question asking about it, as its `report` or in its `repeats`: Greg
+sees those as *Waiting, but no question written yet* under the *Needs a decision* thread view, with
+nothing to answer, so write the question, add it to the `repeats:` of the question that already
+answers it, or correct the note. And any split report with a
 part no note covers yet: name the report in the note that covers it, or write the note.
 `--show q-xxxxxx` prints one question's file, `refs:` included, which is how a question Greg names
 in a terminal is found.

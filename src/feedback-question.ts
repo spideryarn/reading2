@@ -7,7 +7,7 @@
  * production a question exists once the commit carrying its file is deployed.
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */
-import type { CompiledFeedbackQuestion, FeedbackQuestionStatus } from "./feedback-question-values.js";
+import { askedReports, type CompiledFeedbackQuestion, type FeedbackQuestionStatus } from "./feedback-question-values.js";
 import {
   FEEDBACK_OPEN_QUESTIONS,
   FEEDBACK_QUESTION_ACTED,
@@ -26,6 +26,18 @@ export function feedbackQuestionActed(id: string): readonly string[] {
 /** Every open question, oldest first: what an admin's Earlier tab lists. */
 export function openFeedbackQuestions(): readonly CompiledFeedbackQuestion[] {
   return FEEDBACK_OPEN_QUESTIONS;
+}
+
+/** Every report an open question asks about, `repeats:` included (plan 261016a): computed once. */
+const ASKED = askedReports(FEEDBACK_OPEN_QUESTIONS);
+
+/**
+ * **Does an open question ask about this report?** — so the admin's *Needs a
+ * decision* view does not draw it as waiting with no question. Keyed by bare
+ * id, with the endings' known limit (src/feedback-ending.ts).
+ */
+export function isReportAsked(reportId: string): boolean {
+  return ASKED.has(reportId);
 }
 
 /**
