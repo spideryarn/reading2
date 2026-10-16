@@ -222,7 +222,11 @@ describe("what the page puts first", () => {
     expect(order.slice(0, 2)).toEqual(["In one sentence", "Why you're reading"]);
     const box = host.querySelector("#article-purpose");
     expect(box, "the purpose box is not on the page").toBeTruthy();
-    expect(box?.closest("[data-section]")?.getAttribute("data-section")).toBe("Why you're reading");
+    const why = box?.closest("[data-section]");
+    expect(why?.getAttribute("data-section")).toBe("Why you're reading");
+    expect(why?.textContent).toContain("About you");
+    const yourReading = host.querySelector('[data-section="Your reading"]');
+    expect(yourReading?.textContent).not.toContain("About you");
   });
 
   it("offers the sharing switch above the reader's own notes", async () => {

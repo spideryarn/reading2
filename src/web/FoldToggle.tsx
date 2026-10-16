@@ -66,8 +66,9 @@ export function FoldToggle({ id }: { id: BlockId }) {
 
 /**
  * **Fold every section, or open them all** — on the masthead's facts line,
- * beside the count of sections it acts on. Absent when the article has no
- * heading with anything under it.
+ * after *Show counts* (the count of sections went behind that on 2026-10-15,
+ * plan 261015c). Absent when the article has no heading with anything under
+ * it.
  */
 export function FoldAllButton() {
   const { folded, foldable } = useFold();

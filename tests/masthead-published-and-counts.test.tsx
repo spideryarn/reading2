@@ -90,16 +90,21 @@ const countsButton = () =>
 describe("when and where it was published", () => {
   it("prints the journal and the day for an owner", async () => {
     await mount(
-      article({ siteName: "PubMed Central", journal: "Nature Reviews Neuroscience", publishedAt: "2024-05-31T09:00:00Z" }),
+      article({
+        byline: "Ada Lovelace",
+        siteName: "PubMed Central",
+        journal: "Nature Reviews Neuroscience",
+        publishedAt: "2024-05-31T09:00:00Z",
+      }),
       true,
     );
     /* In the order both Metadata pages print them: byline, journal, site,
        date — then the read time. */
     const spans = [...host.querySelectorAll(".facts > span")].map((el) => el.textContent);
     /* The day in the reader's own locale, as metadata-origin.test.tsx reads it. */
-    expect(spans.slice(0, 2)).toEqual(["Nature Reviews Neuroscience", "PubMed Central"]);
-    expect(spans[2]).toMatch(/^Published (31 May|May 31),? 2024$/);
-    expect(spans[3]).toMatch(/^~\d+ min$/);
+    expect(spans.slice(0, 3)).toEqual(["Ada Lovelace", "Nature Reviews Neuroscience", "PubMed Central"]);
+    expect(spans[3]).toMatch(/^Published (31 May|May 31),? 2024$/);
+    expect(spans[4]).toMatch(/^~\d+ min$/);
   });
 
   it("prints the journal and the day for a visitor, whose meta says `published`", async () => {
@@ -136,6 +141,10 @@ describe("the counts, shut until asked for", () => {
     const button = countsButton();
     expect(button?.textContent).toBe("Show counts");
     expect(button?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => button?.focus());
+    expect(document.querySelector(".tooltip.tip-soon")?.textContent).toContain(
+      "The Metadata page has them too.",
+    );
 
     await act(async () => button?.click());
     expect(facts()).toMatch(/2 words/);

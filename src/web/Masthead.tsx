@@ -227,8 +227,8 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
   ) : (
     meta.byline
   );
-  /* **Where and when it was published**, after the site, in the order both
-     Metadata pages print them — Greg, 2026-10-15 (`spya-u7yfns`): *"Please
+  /* **Where and when it was published**, in the order both Metadata pages
+     print the facts — Greg, 2026-10-15 (`spya-u7yfns`): *"Please
      include the publication date at the top of the article along with the
      other metadata"*. `publishedLabel` reads an owner's `publishedAt` and a
      visitor's `published` alike, since this component is handed either. UI
@@ -264,7 +264,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
        some of the less-likely-to-be-useful metadata behind a
        default-collapsed section"*. Nobody decides whether to read a piece
        on its count of parts; the read time above is the word count already
-       turned into the answer. All three stay on Metadata's *At a glance*.
+       turned into the answer. All three stay on the Metadata page.
        Shut on every load, as the byline blocks are: remembering it would be
        state kept for a cosmetic choice. */
     ...(countsOpen
@@ -336,8 +336,8 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
           ))}
           {/* First of the line's three buttons, next to the counts it shows. */}
           <CountsButton open={countsOpen} onToggle={() => setCountsOpen((o) => !o)} />
-          {/* Beside the count of sections it acts on. A button, not a span,
-              so `.facts > span + span` draws no dot before it, and it renders
+          {/* The article-wide folding control. A button, not a span, so
+              `.facts > span + span` draws no dot before it, and it renders
               nothing on an article with no heading to fold. FoldToggle.tsx;
               plan 261002e. */}
           <FoldAllButton />
@@ -414,7 +414,7 @@ function CountsButton({ open, onToggle }: { open: boolean; onToggle: () => void 
           how={
             open
               ? "Puts them away again. The read time stays."
-              : "Put away when an article opens. Metadata's At a glance has them too."
+              : "Put away when an article opens. The Metadata page has them too."
           }
         />
       }

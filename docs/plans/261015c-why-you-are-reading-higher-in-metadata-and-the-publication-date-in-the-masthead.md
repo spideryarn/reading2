@@ -97,6 +97,17 @@ Ada Lovelace, Bob Smith · Nature Reviews Neuroscience · PubMed Central · Publ
 Plan review: [GPT Sol](261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead-plan-review-sol.md),
 approve with changes. Findings 1 and 3 taken; 2 and 4 answered above.
 
+Code review: [GPT Sol](261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead-code-review-sol.md),
+approve with changes. It fixed the tooltip's wording for visitors (whose Metadata page has no *At
+a glance*), widened the two order tests, and corrected stale comments; the last stale comment, in
+FoldToggle.tsx, I fixed. Its finding 3 is left open on purpose: the three facts-line buttons
+(two of them older than this plan) lack a finger-sized target, and the fix has to treat them as
+one group. Queued as `qi-ratx9etm`.
+
+Browser check (Playwright, a Sonnet subagent, 1440 and 390 px): all passed, no console errors.
+Shots `261015c-shot-*.png`. It noted that a wrapped facts line can start with "·"; that is the
+line's existing separator rule, unchanged here.
+
 ## Not doing
 
 - No persisted open/shut state. No change to the visitor's Metadata page beyond the shared helper.
