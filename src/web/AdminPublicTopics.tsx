@@ -82,6 +82,7 @@ export function AdminPublicTopics() {
       {status && (
         <p className="tw:mb-3 tw:text-sm tw:text-foreground" data-tip={status.rethoughtAt ? exactly(status.rethoughtAt) : undefined}>
           {statusSentence(status, ago ?? null)}
+          {status.rethoughtAt && <span className="tw:sr-only"> ({exactly(status.rethoughtAt)})</span>}
         </p>
       )}
       <div className="tw:flex tw:flex-wrap tw:gap-2">

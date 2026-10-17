@@ -208,3 +208,17 @@ showed on one of those while disabled either, because of its `pointer-events: no
 
 **Out of scope, asked:** an article's own `title`s —
 [q-z2c269](../user-feedback/questions/q-z2c269.md).
+
+**After a full-suite run.** Seventeen tests mock `Tooltip.js` wholesale, and `useDelegatedCard`
+read `DELAY` from it, so hovering a card in those tests threw. `DELAY` now lives in
+`src/web/tooltip-delay.ts`, and Tooltip.tsx re-exports it for the tests that time a Tooltip.
+
+**Code review 2** ([prompt](261017g-native-title-tooltips-code-review-2-prompt.md),
+[answer](261017g-native-title-tooltips-code-review-2-sol.md)): approve, with five fixes Sol made
+and I checked. (1) The tip card's Escape could win over the Dock drawer's, which registers its
+listener only when it opens, so the card now yields while `.dock-scrim` exists; there is a test with
+the two together. (2) Below 731px the home wordmark's letters are hidden, so the link had no name;
+it has an `aria-label` now. (3, 4) Some admin facts and the shelf's question count lived only in a
+tip on something that cannot take focus; they now have `sr-only` copies. (5) Two tests that had
+become vacuous (shelf-table-row-card, quiz-in-prose) now check for `data-tip` as well, and Sol showed
+each one failing under a deliberate break.

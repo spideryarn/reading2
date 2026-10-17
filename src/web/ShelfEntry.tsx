@@ -379,6 +379,7 @@ export function ShelfCard({
           >
             <MessageCircle size={13} />
             {entry.comments}
+            <span className="tw:sr-only"> question{entry.comments === 1 ? "" : "s"} asked about this article</span>
           </span>
         )}
         <Tooltip content={<Details entry={entry} />} placement="top">

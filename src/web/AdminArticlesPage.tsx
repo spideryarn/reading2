@@ -369,6 +369,7 @@ export function AdminArticlesPage() {
                   </td>
                   <td className={`${CELL} tw:whitespace-nowrap`} data-tip={exactly(a.createdAt)}>
                     {readableDate(a.createdAt) ?? a.createdAt}
+                    <span className="tw:sr-only"> ({exactly(a.createdAt)})</span>
                   </td>
                   <td className={CELL}>{a.visibility === "public" ? "Public" : "Private"}</td>
                   <td className={CELL}>{a.processing === "minimal" ? "Abstract only" : "In full"}</td>

@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SiteNav } from "../src/web/SiteBits.js";
 import { SiteFooter } from "../src/web/SiteFooter.js";
+import { HomeLogo } from "../src/web/HomeLogo.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,6 +51,15 @@ function hover(el: Element) {
     el.dispatchEvent(e);
   });
 }
+
+it("names the corner home link even when its letters are hidden on a narrow screen", () => {
+  act(() => root.render(<HomeLogo />));
+  const home = host.querySelector("a.logo-home");
+  expect(home).not.toBeNull();
+  // narrow-window.css hides .logo-text at 731px; the spider has alt="".
+  // The link therefore needs a name independent of those letters and its tip.
+  expect(home?.getAttribute("aria-label")).toBe("Spideryarn, back to the library");
+});
 
 describe("the top bar", () => {
   it("draws the spider inside the home link, and the link animates it", () => {

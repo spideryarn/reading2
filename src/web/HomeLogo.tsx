@@ -130,6 +130,7 @@ export function HomeLogo() {
     <Link
       href={LIBRARY_HREF}
       className={cn("logo", "logo-home", anim.className)}
+      aria-label="Spideryarn, back to the library"
       /* Two lines rather than an em dash chain: the second is for the one
          reader in a hundred who wants to know which copy they have, and it
          should not push the sentence that matters onto a second line by
@@ -144,9 +145,9 @@ export function HomeLogo() {
       data-tip={libraryHomeTitle()}
       {...anim.handlers}
     >
-      {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
-          name, and a screen reader reading it twice is how a decorative image
-          becomes noise. The link's own text is the accessible name. */}
+      {/* The spider is decorative. The link's label survives below 731px,
+          where narrow-window.css hides the letters as well as their name
+          from the accessibility tree. */}
       <LogoMark />
       {/* `.logo-text` is this copy's own wrapper — it is what the 731px query
           hides — and the letters inside it are the shared ones

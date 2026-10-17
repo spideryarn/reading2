@@ -266,11 +266,12 @@ export function useDelegatedCard(spec: DelegatedCardSpec): {
        261010s). A card that is showing takes the press for itself, so the
        dialog, editor or outer card behind it waits for the next one; a card
        still waiting out its delay is cancelled and the press goes on, because
-       the reader cannot see it. On `window` in the capture phase with
-       `stopImmediatePropagation`, so it is decided before the hover cards'
-       document listeners (useHoverCard.ts) and `useEscapeToClose`'s window
-       one hear it. The Dock's drawer listens there too and was registered
-       first, so it still wins its own race (Dock.tsx).
+       the reader cannot see it. On window capture with
+       `stopImmediatePropagation`, before an outer hover card's document
+       listener (useHoverCard.ts). The Dock drawer has higher priority but
+       registers its window listener only when it opens, after this one may
+       have mounted. Yield explicitly while its scrim exists: registration
+       order does not express which surface is in front.
 
        **An open native `<dialog>` outranks it**, as it does every surface here
        (useEscapeToClose.ts): its Escape is the platform's own close request,
@@ -284,7 +285,7 @@ export function useDelegatedCard(spec: DelegatedCardSpec): {
         return;
       }
       controls.close();
-      if (document.querySelector("dialog[open]") === null) e.stopImmediatePropagation();
+      if (document.querySelector("dialog[open], .dock-scrim") === null) e.stopImmediatePropagation();
     };
 
     document.addEventListener("pointerover", over);

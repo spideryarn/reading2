@@ -201,6 +201,10 @@ function BuildStampLine() {
     >
       Built {ago ?? "at an unknown time"}
       {commit ? ` · ${shortCommit(commit)}` : ""}
+      <span className="tw:sr-only">
+        {builtAt ? ` · Compiled ${exactly(builtAt)}` : ""}
+        {commit ? ` · commit ${commit}` : ""}
+      </span>
     </p>
   );
 }

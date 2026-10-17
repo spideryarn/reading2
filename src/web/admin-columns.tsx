@@ -78,7 +78,12 @@ export const ADMIN_CHIP_ORDER = [
  */
 function When({ iso, now, absent }: { iso: string | undefined; now: number; absent: string }) {
   const ago = timeAgo(iso, now);
-  if (!ago) return <span data-tip={absent}>—</span>;
+  if (!ago) return (
+    <span data-tip={absent}>
+      <span aria-hidden="true">—</span>
+      <span className="tw:sr-only">{absent}</span>
+    </span>
+  );
   const exact = exactly(iso) ?? absent;
   return (
     <span data-tip={exact}>
@@ -113,7 +118,12 @@ function When({ iso, now, absent }: { iso: string | undefined; now: number; abse
 function Spend({ user }: { user: AdminUser }) {
   const period = `over ${user.spendMonth} (UTC)`;
   if (user.spendCalls === 0) {
-    return <span data-tip={`No model calls recorded ${period}`}>—</span>;
+    return (
+      <span data-tip={`No model calls recorded ${period}`}>
+        <span aria-hidden="true">—</span>
+        <span className="tw:sr-only">No model calls recorded {period}</span>
+      </span>
+    );
   }
   return (
     <div className="tw:min-w-0">

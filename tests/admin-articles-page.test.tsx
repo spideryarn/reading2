@@ -188,6 +188,16 @@ describe("/admin/articles", () => {
     expect(matchesFilter(mine!, "  ")).toBe(true);
   });
 
+  it("keeps the exact creation time readable without hovering a date cell", async () => {
+    await mount();
+    const cell = rowFor("alice@example.test")?.querySelector("td[data-tip]");
+    const exact = new Date("2026-10-10T10:00:00Z").toLocaleString(undefined, {
+      dateStyle: "medium", timeStyle: "short",
+    });
+    expect(cell?.getAttribute("data-tip")).toBe(exact);
+    expect(cell?.querySelector(".tw\\:sr-only")?.textContent).toContain(exact);
+  });
+
   it("confirms with the counts and the privacy, reads the preview again, sends {to, expectedFrom}, and re-reads the list", async () => {
     await mount();
     await openFor("alice@example.test");

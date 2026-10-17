@@ -100,6 +100,7 @@ const { DockQuickSearch } = await import("../src/web/DockQuickSearch.js");
 const { useHoverCard } = await import("../src/web/useHoverCard.js");
 const { HOVER_DELAY } = await import("../src/web/useHoverCard.js");
 const { EXPERIMENTAL_OFF } = await import("./helpers/experimental-fixtures.js");
+const { TipCard } = await import("../src/web/TipCard.js");
 
 const BLOCK = "spya-k3m9qt" as BlockId;
 const DRAFT = "this is the half-typed annotation";
@@ -342,7 +343,7 @@ describe("pair 2 — Annotate is behind the floating chat", () => {
    the prose hover card, which is T2 and stopped nothing until this stage. */
 
 /** The prose, a card over it, and whichever dialog is behind. */
-function CardOver({ behind }: { behind: ReactNode }) {
+function CardOver({ behind, children }: { behind: ReactNode; children?: ReactNode }) {
   const { shown, anchorProps } = useHoverCard<{ id: string }>({
     selector: "mark.term",
     read: (el) => {
@@ -364,7 +365,7 @@ function CardOver({ behind }: { behind: ReactNode }) {
       {shown && (
         <div {...anchorProps}>
           <div className="tooltip prose-card hover-card" data-card={shown.data.id}>
-            {shown.data.id}
+            {children ?? shown.data.id}
           </div>
         </div>
       )}
@@ -399,6 +400,31 @@ function tapTheTerm(): void {
 }
 
 const cardIsOpen = (): boolean => document.querySelector("[data-card]") !== null;
+
+it("closes a nested tip before its real hover card and the comment behind both", () => {
+  vi.useFakeTimers();
+  paint(<>
+    <CardOver behind={comment()}>
+      <button type="button" data-tip="inside the hover card">action</button>
+    </CardOver>
+    <TipCard />
+  </>);
+  tapTheTerm();
+  expect(cardIsOpen()).toBe(true);
+  act(() => {
+    host.querySelector("[data-card] button")?.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+  });
+  act(() => { vi.advanceTimersByTime(500); });
+  expect(document.querySelectorAll(".tooltip-anchor")).toHaveLength(2);
+  pressEscape();
+  act(() => { vi.advanceTimersByTime(200); });
+  expect(document.querySelectorAll(".tooltip-anchor")).toHaveLength(1);
+  expect(cardIsOpen()).toBe(true);
+  expect(closed).toEqual([]);
+  pressEscape();
+  expect(cardIsOpen()).toBe(false);
+  expect(closed).toEqual([]);
+});
 
 describe("pairs 3, 4, 5 — a hover card in front of each of the three dialogs", () => {
   for (const subject of SUBJECTS) {
@@ -792,6 +818,22 @@ function drawer(): ReactNode {
 }
 
 describe("pairs 9, 10, 11 — the Dock drawer in front of each of the three dialogs", () => {
+  it("the drawer still owns Escape when the page-wide tip mounted before it", () => {
+    vi.useFakeTimers();
+    // main.tsx mounts TipCard once; an article's Dock arrives later.
+    paint(<TipCard key="tips" />);
+    paint(<><TipCard key="tips" />{drawer()}</>);
+    const close = host.querySelector<HTMLButtonElement>(".dock-close");
+    expect(close).not.toBeNull();
+    act(() => {
+      close?.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+    });
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(document.querySelector(".tooltip-anchor")?.textContent).toContain("Close (Esc)");
+    pressEscape();
+    expect(closed).toEqual(["drawer"]);
+  });
+
   for (const subject of SUBJECTS) {
     it(`closes the drawer alone, over ${subject.name}`, () => {
       paint(
