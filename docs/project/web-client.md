@@ -208,6 +208,11 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   `applyThreshold`** — "show the items above this score". The FAQ, the Glossary and
   Citations use the component; Quotes, Search and Debate draw the same row for themselves, and
   share only `applyThreshold`.
+- **`src/web/StopRange.tsx` § `StopRange`, with `src/web/threshold.ts` § `thresholdStops`** — the
+  range input inside every numeric threshold slider (the five above bar Debate's word levels): it
+  moves only to the values that change the list and ticks each one under the track. A new
+  threshold slider uses it rather than a bare `<input type="range">`
+  ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
   the URL.
 - **`src/web/lib/SidewaysScrollBox.tsx` § `SidewaysScrollBox`, `useScrollBox`** — the box a wide

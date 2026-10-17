@@ -69,6 +69,7 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
+import { StopRange } from "./StopRange.js";
 import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
 import {
   aiProvenance,
@@ -1215,7 +1216,8 @@ function RankBar({
  *   catching itself in.
  *
  * A native `<input type="range">` rather than anything built: draggable,
- * arrow-key steppable, announced by screen readers and touch-friendly for free.
+ * announced by screen readers and touch-friendly for free — `StopRange`, which
+ * every numeric threshold slider shares since 2026-10-17 (plan 261017f).
  */
 function BarSlider({
   quotes,
@@ -1266,27 +1268,27 @@ function BarSlider({
           </button>
         )}
       </div>
-      {/* **The track is an INDEX into `stops`, not the score itself.** A range
-          input needs a uniform step, and this list's scores are not uniformly
-          spaced — so the thumb walks the positions and the value is read out of
-          the array. That is what makes every drag change the list, and it is
-          why `?bar=` still carries the score rather than the index: an index is
-          meaningless against a re-run list, where a score is still a score. */}
-      <input
+      {/* **The track is the score itself, 0 to the top stop**, and the thumb
+          moves only between `stops` (StopRange). Until 2026-10-17 it was an
+          index into `stops`, which jumped as this does but spaced the stops
+          evenly, so a tick under it could not say where the scores bunch —
+          and Greg asked for ticks that show *"where within the spectrum such
+          thresholds are"* (plan 261017f). `step="any"` because these scores
+          are not on a grid; the snap is what keeps the thumb on one. */}
+      <StopRange
         id="quotes-bar"
-        className="gloss-gate-range"
-        type="range"
         min={0}
-        max={Math.max(stops.length - 1, 0)}
-        step={1}
-        value={Math.max(stops.indexOf(bar), 0)}
+        max={stops[stops.length - 1] ?? 0}
+        step="any"
+        value={bar}
+        stops={stops}
         title="How high a quote has to score to stay on screen: the higher of the model's two judgments, so either reason is enough. Every stop is a score this list actually contains — left shows everything, right shows only the top-scored."
         /* The thumb's position is a number nobody can hear. This is what makes
            it audible, and it is the count rather than the score because the
            count is what the reader is aiming at. **"showing", not
            "promoting"** — an unscored quote is shown without being promoted. */
-        aria-valuetext={`${bar.toFixed(2)}, showing ${count} quotes`}
-        onChange={(e) => onBar(stops[Number.parseInt(e.target.value, 10)] ?? 0)}
+        valueText={`${bar.toFixed(2)}, showing ${count} quotes`}
+        onChange={onBar}
       />
       {/* Always, never conditionally: present wherever the slider is, absent
           wherever it is not. A line that is sometimes missing for a *different*

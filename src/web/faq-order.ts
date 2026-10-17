@@ -45,8 +45,10 @@ import type { FaqQuestion } from "../types.js";
 import {
   applyThreshold,
   canThreshold,
+  floorToGateStep,
   hiddenNote,
   thresholdMax,
+  thresholdStops,
   type ThresholdResult,
 } from "./threshold.js";
 
@@ -140,6 +142,11 @@ export function visibleQuestions<Q extends Scored>(questions: readonly Q[], bar:
 /** The slider's rendered maximum. threshold.ts § thresholdMax. */
 export function barMax(questions: readonly Scored[], bar: number): number {
   return thresholdMax(questions, bar, priorityOf);
+}
+
+/** The bars that change the list — threshold.ts § thresholdStops. */
+export function barStops(questions: readonly Scored[]): number[] {
+  return thresholdStops(questions, priorityOf, floorToGateStep);
 }
 
 /**
