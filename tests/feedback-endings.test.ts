@@ -532,7 +532,7 @@ describe("the committed questions", () => {
         `${question.id} is about ${noteName}: name its other reports in repeats:`,
       ).toEqual([...header.reports].sort());
     }
-    expect(checked, "the positive control: q-fp8tqr's note names two reports").toBeGreaterThan(0);
+    expect(checked, "the positive control: the cell.com note names two reports (q-emrf2p since 2026-10-17, q-fp8tqr before)").toBeGreaterThan(0);
   });
 
   it("has no live work left in the retired waiting list", () => {

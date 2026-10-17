@@ -2940,6 +2940,184 @@ describe("the Earlier tab", () => {
         expect(said()).toBe("");
       });
 
+      /* spya-bvzavw (Greg, 2026-10-17): "add Next/Previous buttons at the bottom
+         of the box as well (since often that's where I am when I finish
+         responding)". Plan 261017c § 1: the footer, outside the scroller. */
+      describe("the pager again, at the foot of the dialog", () => {
+        const foot = () => {
+          const found = host.querySelector<HTMLElement>(".fb-actions:not([hidden])");
+          if (!found) throw new Error("no footer showing");
+          return found;
+        };
+
+        it("is in the footer while a thread shows, beside Close, and steps from there", async () => {
+          await openThread();
+          expect([...foot().querySelectorAll("button")].map((b) => b.textContent?.trim())).toEqual([
+            "Close",
+            "‹ Previous",
+            "Next ›",
+          ]);
+          expect(unavailable(button(foot(), "‹ Previous"))).toBe(true);
+          expect(button(foot(), "Next ›").title).toBe("Next thread that needs a decision");
+          click(button(foot(), "Next ›"));
+          expect(showing()).toBe("q-bbbbbb");
+          expect(unavailable(button(foot(), "Next ›"))).toBe(true);
+          click(button(foot(), "‹ Previous"));
+          expect(showing()).toBe("q-aaaaaa");
+          /* The top row is still there: "as well". */
+          expect(hasButton(thread(), "Next ›")).toBe(true);
+        });
+
+        it("says an end pressed at the foot at the foot, not at the top", async () => {
+          await openThread();
+          click(button(foot(), "‹ Previous"));
+          expect(foot().querySelector(".fb-thread-end")?.textContent).toBe("No earlier thread needs a decision");
+          expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("");
+        });
+
+        /* GPT Sol, 261017c F2 and F5: focus stays on the footer, after the new
+           thread, so the foot's copy says which thread it opened; and the two
+           navs are told apart by name. */
+        it("says which thread a footer press opened, and names its nav apart from the top's", async () => {
+          await openThread();
+          const navs = [...host.querySelectorAll<HTMLElement>("nav.fb-thread-nav")].map((n) => n.getAttribute("aria-label"));
+          expect(navs).toEqual(["Threads", "Threads, at the foot"]);
+          const heard = () => foot().querySelector('.sr-only[role="status"]')?.textContent;
+          expect(heard()).toBe("");
+          click(button(foot(), "Next ›"));
+          expect(heard()).toBe(`Showing: ${Q2.title}`);
+          /* A press at the top is not the foot's to announce. */
+          click(button(thread(), "‹ Previous"));
+          expect(heard()).toBe("");
+          expect(thread().querySelector(".sr-only")).toBeNull();
+        });
+
+        it("takes the footer's success announcement away when that thread is replied to or deferred", async () => {
+          await openThread();
+          const heard = () => foot().querySelector('.sr-only[role="status"]')?.textContent;
+
+          click(button(foot(), "Next ›"));
+          expect(heard()).toBe(`Showing: ${Q2.title}`);
+          typeReply("decided");
+          answer = stored(201);
+          click(button(thread(), "Send reply"));
+          await settle();
+          expect(heard()).toBe("");
+
+          click(button(foot(), "‹ Previous"));
+          expect(heard()).toBe(`Showing: ${Q1.title}`);
+          answer = deferral();
+          click(button(thread(), "Defer for now"));
+          await settle();
+          expect(heard()).toBe("");
+        });
+
+        it("does not revive a top-pager end sentence after a newer read with the same stops", async () => {
+          await openThread();
+          click(button(thread(), "‹ Previous"));
+          expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("No earlier thread needs a decision");
+
+          /* The thread is retained while the dialog is shut and the next
+             opening reads a fresh copy of the same questions. */
+          reopen();
+          click(tab("Earlier"));
+          await settle();
+          expect(showing()).toBe("q-aaaaaa");
+          expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("");
+        });
+
+        /* Plan 261017c § 3 and F3: a finger's 40px target on the footer's buttons and both pagers'. */
+        it("gives every footer and pager button a finger's target", async () => {
+          await openThread();
+          for (const name of ["Close", "‹ Previous", "Next ›"]) {
+            expect(button(foot(), name).classList.contains("tap-target"), name).toBe(true);
+          }
+          for (const name of ["‹ Previous", "Next ›"]) {
+            expect(button(thread(), name).classList.contains("tap-target"), name).toBe(true);
+          }
+          click(tab("Write"));
+          for (const name of ["Cancel", "Send"]) {
+            expect(button(foot(), name).classList.contains("tap-target"), name).toBe(true);
+          }
+        });
+
+        /* F4: the footer's pager and the thread are drawn on the same condition,
+           including while a reopened dialog's read is still out. */
+        it("shows the footer's pager exactly when the thread itself shows", async () => {
+          await openThread();
+          const agree = () => {
+            const shown = !(questionsBox()?.hidden ?? true) && panelOf("Earlier").querySelector(".fb-thread") !== null;
+            expect(hasButton(foot(), "Next ›")).toBe(shown);
+            return shown;
+          };
+          expect(agree()).toBe(true);
+          listAnswer = () => new Promise<Response>(() => {});
+          reopen();
+          click(tab("Earlier"));
+          agree();
+        });
+
+        it("is not there on the contents, nor on Write", async () => {
+          await openWaiting();
+          expect(hasButton(foot(), "Next ›")).toBe(false);
+          click(row("q-aaaaaa"));
+          expect(hasButton(foot(), "Next ›")).toBe(true);
+          click(tab("Write"));
+          expect(hasButton(foot(), "Next ›")).toBe(false);
+          expect(host.querySelector(".fb-actions .fb-thread-nav")?.closest("[hidden]")).not.toBeNull();
+        });
+
+        /* Plan 261017c § 2: Next from the foot of a long thread lands at the top of the next. */
+        it("opens each thread at its top", async () => {
+          await openWaiting();
+          const panel = panelOf("Earlier");
+          let top = 400;
+          Object.defineProperty(panel, "scrollTop", {
+            configurable: true,
+            get: () => top,
+            set: (value: number) => {
+              top = value;
+            },
+          });
+          click(row("q-aaaaaa"));
+          expect(top).toBe(0);
+          top = 400;
+          click(button(foot(), "Next ›"));
+          expect(showing()).toBe("q-bbbbbb");
+          expect(top).toBe(0);
+          /* Not on a re-render of the same thread: typing keeps the place. */
+          top = 400;
+          typeReply("thinking");
+          expect(top).toBe(400);
+
+          /* A hidden panel is not scrolled for an id change. When that changed
+             thread is actually revealed, it starts at the top. (The synthetic
+             press reaches the hidden copy solely to exercise that transition.) */
+          click(button(foot(), "‹ Previous"));
+          top = 400;
+          click(tab("Write"));
+          const hiddenFoot = host.querySelector<HTMLElement>('.fb-actions[hidden] .fb-foot-pager');
+          if (!hiddenFoot) throw new Error("no hidden footer pager");
+          click(button(hiddenFoot, "Next ›"));
+          expect(showing()).toBe("q-bbbbbb");
+          expect(top).toBe(400);
+          click(tab("Earlier"));
+          expect(top).toBe(0);
+
+          /* F1 was declined deliberately: hiding or reopening the same thread
+             keeps the reader's place, just as it keeps the draft. */
+          top = 400;
+          click(tab("Write"));
+          click(tab("Earlier"));
+          expect(top).toBe(400);
+          reopen();
+          click(tab("Earlier"));
+          await settle();
+          expect(showing()).toBe("q-bbbbbb");
+          expect(top).toBe(400);
+        });
+      });
+
       it("takes an end sentence away when the showing thread stops needing a decision", async () => {
         await openThread();
         click(button(thread(), "‹ Previous"));

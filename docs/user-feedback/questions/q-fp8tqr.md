@@ -2,7 +2,8 @@
 id: q-fp8tqr
 report: spya-x5e966
 repeats: spya-tqsw3u
-status: open
+status: answered
+acted: spya-wm83gt
 asked: 2026-10-15
 title: When a site turns Spideryarn away, should we look for a free copy, or take the page from your browser?
 refs: SPIDERYARN-READING2-J0 · SPIDERYARN-READING2-J2 · spya-tqsw3u · docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md · docs/research/261015a-getting-a-page-behind-a-bot-check-extensions-bookmarklets-open-access-copies.md · docs/user-feedback/261015_1711-cell-com-refused-the-app-a-better-way-round-and-a-question.md
@@ -30,3 +31,9 @@ What other tools do. The tools that get past these checks all take the page from
 What was built (on dev, not yet deployed). The failure message now says: use the page's Download PDF button if it has one, otherwise save the page as a PDF, then upload that file. The add page shows an Upload button under that message, for every failure whose message suggests uploading. Previously you had to go back to the shelf to find the File button.
 
 What would decide it. A: whether the twenty-link sample finds free copies for a good share of refused papers. B and C: how often you, or readers, hit walls on pages that are not papers (news sites, blogs), where no free copy exists to find.
+
+Greg's reply, 2026-10-17 (spya-wm83gt):
+
+> A and/or B as you see fit. Look for a way that's clean and good for the user.
+
+Acted on in docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md: B built as a bookmarklet that saves the page for upload; A measured (6 of 29 refused links recovered) and, since it needs an edit to the fetch defence, asked again in q-emrf2p.

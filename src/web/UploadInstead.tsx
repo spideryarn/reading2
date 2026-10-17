@@ -17,6 +17,7 @@
  * `failureSuggestsUpload` in src/messages.ts.
  */
 import { Button } from "@/components/ui/button";
+import { SavePageBookmarklet } from "./SavePageBookmarklet.js";
 import { UploadPicker } from "./UploadPicker.js";
 
 export function UploadInstead() {
@@ -36,6 +37,7 @@ export function UploadInstead() {
             )}
           </div>
           {slots.uploadStatus}
+          <SavePageBookmarklet />
         </section>
       )}
     </UploadPicker>

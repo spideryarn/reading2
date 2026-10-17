@@ -1,0 +1,21 @@
+/* Measurement only. For each sample DOI: Europe PMC search → pmcid, isOpenAccess;
+   then fullTextXML for it; and OpenAlex's repository locations, for a sense of "green" copies. */
+import fs from "node:fs";
+const rows = JSON.parse(fs.readFileSync(process.argv[2]!, "utf8")) as Record<string, any>[];
+for (const r of rows) {
+  const q = encodeURIComponent(`DOI:"${r.doi}"`);
+  const s = (await (await fetch(`https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=${q}&format=json&resultType=lite`)).json()) as any;
+  const hit = s.resultList?.result?.[0];
+  r.epmcPmcid = hit?.pmcid ?? null;
+  r.epmcOa = hit?.isOpenAccess ?? null;
+  if (r.epmcPmcid) {
+    const x = await fetch(`https://www.ebi.ac.uk/europepmc/webservices/rest/${r.epmcPmcid}/fullTextXML`);
+    const t = await x.text();
+    r.epmcXml = x.status === 200 && /<body[\s>]/.test(t) ? "full" : `${x.status}`;
+  }
+  const w = (await (await fetch(`https://api.openalex.org/works/doi:${r.doi}?select=locations,ids&mailto=greg@gregdetre.com`)).json()) as any;
+  r.oaIds = Object.keys(w.ids ?? {}).join(",");
+  r.repos = (w.locations ?? []).filter((l: any) => l.is_oa && l.source?.type === "repository").map((l: any) => l.source?.display_name).join(" | ");
+  console.log([r.fetch, r.oaStatus, r.epmcPmcid, r.epmcOa, r.epmcXml ?? "", r.arxiv ? "arxiv" : "", r.repos, r.url].join("\t"));
+}
+fs.writeFileSync(process.argv[3]!, JSON.stringify(rows, null, 1));

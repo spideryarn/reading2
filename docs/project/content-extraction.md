@@ -401,7 +401,11 @@ slot rather than spending it, since only `done` charges
 - **`ChallengePage`** — the document is a site's **bot check**, not the page behind it, since
   2026-10-06. The first two ask whether there is an article and how much of one; this asks what the
   page *is*, and it is answered only by markup the check's own software wrote for its own script:
-  a registry in [`src/challenge-page.ts`](../../src/challenge-page.ts), with one entry, Anubis.
+  a registry in [`src/challenge-page.ts`](../../src/challenge-page.ts), with three entries: Anubis,
+  and since 2026-10-17 AWS WAF (IEEE) and a page titled *"Client Challenge"* (Springer, JSTOR; its
+  vendor is not confirmed). Those two are under the floor and were refused already, but with the
+  floor's or `ReadabilityRefused`'s sentence, which sends the reader to the address rather than to
+  Upload ([261017b](../plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md)).
   hal.science's check explains itself in 1,034 characters of prose, twice the floor, and was
   published as an article titled *"Making sure you're not a bot!"*. **The entry reads two shapes of
   that page**, since the same day: the challenge written into the page (the element

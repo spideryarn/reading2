@@ -400,7 +400,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   it is one of those threads (otherwise just how many need one), and *‹ Previous* / *Next ›*, which
   step **only through the threads that need a decision** (and the one showing, so *Next* still works
   from a thread just answered or deferred); replied and deferred threads are reached from the
-  contents. At an end a button is `aria-disabled` with a `title`, and pressed anyway it says the
+  contents. The pager is drawn again in the dialog's footer while a thread shows (below). At an end a button is `aria-disabled` with a `title`, and pressed anyway it says the
   same on the row, for a phone
   ([261009m](../plans/261009m-needs-a-decision-pager-steps-only-through-waiting-threads.md)). The
   pills are hidden meanwhile, because on a phone with the keyboard up they cost three
@@ -488,6 +488,17 @@ is up to 46rem wide rather than 34rem, and on a window at least 760px tall at le
 **In a thread, Send reply is green and Defer for now red** (`spya-zjsqe6`): `--positive` and
 `--danger`, on the text and border only, since a wash behind took Light under 4.5:1. Bring back and
 the addendum box's send stay neutral. `tests/feedback-dialog-styles.test.ts` holds the cascade.
+
+**The pager again at the foot, and Send told apart from Close** (`spya-bvzavw`, Greg, 2026-10-17:
+*"add Next/Previous buttons at the bottom of the box as well (since often that's where I am when I
+finish responding)"*, and *"In the bottom right of Feedback/Write, the "Send" button submits. But in
+the bottom-right of Needs-Input, the Close button effectively cancels"*). While a thread shows,
+Earlier's footer reads *Close · ‹ Previous · Next ›*: the same pager as the thread's top row
+(`ThreadPager`, drawn twice, each copy saying its own end sentence), outside the scroller, so the
+bottom-right moves you on rather than shutting the dialog. Opening a thread, by any route, scrolls
+the panel to its top. Write's *Send* is `--positive` green like *Send reply*; *Cancel* and *Close*
+stay grey. The app's convention of the way out to the left of the action is kept
+([261017c](../plans/261017c-feedback-needs-a-decision-pager-at-the-foot-and-send-vs-close.md)).
 
 
 ### Adding to an earlier report, since 2026-10-10

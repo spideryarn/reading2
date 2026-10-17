@@ -1,0 +1,23 @@
+/* Measurement only. What IEEE answers, with and without an HTML Accept header, three times each:
+   status, final URL, content type, body bytes, sha256, and the WAF header. Then the same address
+   through our own fetchDocument. Run from the repo root:
+   npx tsx docs/investigations/261017a-evidence/ieee-status.ts */
+import { createHash } from "node:crypto";
+import { fetchDocument, USER_AGENT } from "../../../src/fetch.ts";
+
+const url = "https://ieeexplore.ieee.org/document/9069875";
+const ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8";
+const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex").slice(0, 16);
+
+for (const [label, headers] of [
+  ["accept-html", { "User-Agent": USER_AGENT, Accept: ACCEPT }],
+  ["no-accept", { "User-Agent": USER_AGENT }],
+] as const) {
+  for (let i = 1; i <= 3; i++) {
+    const r = await fetch(url, { headers, redirect: "follow" });
+    const b = new Uint8Array(await r.arrayBuffer());
+    console.log([label, i, r.status, r.url, r.headers.get("content-type"), b.byteLength, sha(b), r.headers.get("x-amzn-waf-action")].join("\t"));
+  }
+}
+const d = await fetchDocument(url, { attempts: 1 });
+console.log(["fetchDocument", d.kind, d.finalUrl ?? "", d.bytes.byteLength, sha(d.bytes)].join("\t"));
