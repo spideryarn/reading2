@@ -36,19 +36,20 @@
  * one trigger per block, hundreds of them, so one panel rather than a Floating
  * UI instance each — and Greg asked for a rich card where it had a `title`
  * (spya-mn3ruw). A second delegated-card file would have been a copy of the
- * hover intent, detach and dismiss logic below; `READING_LINE` is the one
- * branch that differs, plus where the card is placed (`referenceFor`).
+ * hover intent, detach and dismiss logic; `READING_LINE` is the one
+ * branch that differs, plus where the card is placed (`referenceFor`). That
+ * logic has lived in useDelegatedCard.tsx since 2026-10-17, shared with
+ * TipCard.tsx, and this file keeps only what is its own.
  * docs/plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md.
  *
- * **And every control in the gutter** (`GUTTER_CONTROL`, since 2026-10-02):
+ * **The gutter's controls were here from 2026-10-02 to 2026-10-17**:
  * the mark, the permalink, chat, the bookmark, the "?" and the "…". Each had a
  * native `title`, which reads as no tooltip at all — Greg (spya-jc0vm6): *"Make
  * sure they all have tooltips"*. Each now carries its one sentence in
- * `data-tip`, and the card draws it, re-reading it if it changes while open
- * (the permalink's *Copied*, the "…" turning into ✕). It adds no
- * `aria-describedby` there, because the sentence is the control's own name,
- * near enough, and would be read twice.
- * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
+ * `data-tip` (docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
+ * When every native `title` in the app became a `data-tip`, the attribute
+ * stopped being the gutter's, and its card moved to TipCard.tsx, which draws
+ * every `[data-tip]` on every page (plan 261017g).
  *
  * **And Marginalia's notes** (`MARG_NOTE`, since 2026-10-02): each shut line
  * and question carries `data-marg-tip`, a key into marginalia/tips.ts, and the
@@ -57,26 +58,24 @@
  * A column of dozens of notes, so the same reason as the gutter.
  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
-import {
-  FloatingArrow,
-  FloatingPortal,
-  arrow,
-  autoUpdate,
-  flip,
-  offset,
-  shift,
-  useFloating,
-  useTransitionStyles,
-} from "@floating-ui/react";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
-import { BlockLinkContext, type BlockLinkEntry, type BlockLinkIndex } from "./block-link-index.js";
+import {
+  BLOCK_CARD_TRIGGERS,
+  BlockLinkContext,
+  CONTROL_SHAPED,
+  MARG_NOTE,
+  READING_LINE,
+  type BlockLinkEntry,
+  type BlockLinkIndex,
+} from "./block-link-index.js";
 import { BlockExcerpt } from "./Excerpt.js";
 import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
 import type { Section } from "./position.js";
 import { SAFE_ID, spentWords } from "./reading-time.js";
-import { ControlTip, TipNote } from "./Tooltip.js";
+import { ControlTip } from "./Tooltip.js";
+import { useDelegatedCard } from "./useDelegatedCard.js";
 import type { ReadingTimeFor } from "./useReadingTime.js";
 import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
 
@@ -152,20 +151,11 @@ export function BlockLinkProvider({
   );
 }
 
-/** `Tooltip.tsx`'s delays, so this card feels like every other one. */
-const DELAY = { open: 240, close: 90 } as const;
-/* A block link, or a cross-reference mark in the prose. The second is only a
+/* The triggers — block links, cross-reference marks, the reading-time line and
+   Marginalia's notes — are named in block-link-index.ts, where TipCard.tsx can
+   read them without importing this card. A cross-reference mark is only a
    candidate: `contentFor` asks the resolver, which checks the nonce, and a
    forged one gets no card. */
-/** The gutter's reading-time line (BlockGutter.tsx, gutter.css § reading time). */
-const READING_LINE = ".blk-gutter > span.blk-read";
-/** A control in the gutter (BlockGutter.tsx), whose words are its `data-tip`. */
-const GUTTER_CONTROL = ".blk-gutter > button[data-tip], .blk-gutter > a[data-tip]";
-/** A note in Marginalia's column (MarginaliaColumn.tsx), whose card is `MARG_TIPS[data-marg-tip]`. */
-const MARG_NOTE = ".marg-note [data-marg-tip]";
-const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}, ${MARG_NOTE}`;
-/** The ones that are not links, and draw a control's card rather than a passage's preview. */
-const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}, ${MARG_NOTE}`;
 
 /**
  * **`ReadingCard` — what the reading-time line is, and how long you have spent
@@ -212,7 +202,7 @@ function ReadingCard({ id, timeFor }: { id: BlockId | null; timeFor: ReadingTime
  * with the strip (a frozen `clientY` would not follow, `contextElement` or
  * not). Sol, plan review of 261001r.
  */
-function referenceFor(el: HTMLElement, clientY: number | undefined) {
+function referenceFor(el: Element, clientY: number | undefined) {
   if (clientY === undefined || !el.matches(READING_LINE)) return el;
   const offset = clientY - el.getBoundingClientRect().top;
   return {
@@ -227,7 +217,7 @@ function referenceFor(el: HTMLElement, clientY: number | undefined) {
 
 /** What the card draws for one link, or null when it would have nothing to say. */
 function contentFor(
-  el: HTMLElement,
+  el: Element,
   index: BlockLinkIndex,
   resolveXref: XrefResolver | undefined,
   readingTimeFor: ReadingTimeFor | undefined,
@@ -236,10 +226,6 @@ function contentFor(
     const row = el.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
     const id = row !== null && SAFE_ID.test(row) ? (row as BlockId) : null;
     return <ReadingCard key={id ?? ""} id={id} timeFor={readingTimeFor} />;
-  }
-  if (el.matches(GUTTER_CONTROL)) {
-    const tip = el.getAttribute("data-tip")?.trim() ?? "";
-    return tip === "" ? null : <TipNote>{tip}</TipNote>;
   }
   if (el.matches(MARG_NOTE)) {
     const key = el.getAttribute("data-marg-tip");
@@ -286,16 +272,6 @@ function contentFor(
   );
 }
 
-/** Does this focused element show a focus ring — i.e. did a keyboard put it there? */
-function focusVisible(el: Element): boolean {
-  try {
-    return el.matches(":focus-visible");
-  } catch {
-    // An engine that cannot answer (jsdom): open, which is what a keyboard wants.
-    return true;
-  }
-}
-
 function BlockLinkCard({
   index,
   resolveXref,
@@ -305,106 +281,16 @@ function BlockLinkCard({
   resolveXref: XrefResolver | undefined;
   readingTimeFor: ReadingTimeFor | undefined;
 }) {
-  const [shown, setShown] = useState<{ el: HTMLElement; content: ReactNode } | null>(null);
-  const cardId = useId();
-  const arrowRef = useRef<SVGSVGElement>(null);
-  const currentRef = useRef<HTMLElement | null>(null);
-  const indexRef = useRef(index);
-  indexRef.current = index;
-  const resolveRef = useRef(resolveXref);
-  resolveRef.current = resolveXref;
-  const readingRef = useRef(readingTimeFor);
-  readingRef.current = readingTimeFor;
-  /** Whether the open card was opened by a press rather than a hover or focus — see `press`. */
-  const tappedRef = useRef(false);
-
-  const { refs, floatingStyles, context, isPositioned } = useFloating({
-    open: shown !== null,
-    placement: "top",
-    whileElementsMounted: autoUpdate,
-    middleware: [
-      offset(10),
-      flip({ padding: 10, fallbackAxisSideDirection: "end" }),
-      shift({ padding: 10 }),
-      arrow({ element: arrowRef, padding: 8 }),
-    ],
-  });
-  const { isMounted, styles } = useTransitionStyles(context, {
-    duration: { open: 120, close: 80 },
-    initial: { opacity: 0, transform: "scale(0.97)" },
-  });
-
-  /* The card is the open link's description, and only the open link's. Set on
-     the element rather than rendered, because the links belong to fifteen
-     panels and none of them knows the card exists. Added to and taken from a
-     list, so a description the link already had survives. */
-  useEffect(() => {
-    const el = shown?.el;
+  const { card, controls, open } = useDelegatedCard({
+    selector: BLOCK_CARD_TRIGGERS,
+    contentFor: (el) => contentFor(el, index, resolveXref, readingTimeFor),
+    referenceFor,
     /* Not on a trigger hidden from assistive technology — the reading-time
-       line is decoration, and nothing about reading time is announced — nor
-       on a gutter control, whose card says its own name again. */
-    if (!el || el.getAttribute("aria-hidden") === "true" || el.matches(GUTTER_CONTROL)) return;
-    const had = el.getAttribute("aria-describedby");
-    el.setAttribute("aria-describedby", had ? `${had} ${cardId}` : cardId);
-    return () => {
-      if (had) el.setAttribute("aria-describedby", had);
-      else el.removeAttribute("aria-describedby");
-    };
-  }, [shown, cardId]);
-
-  /* React can remove a hovered link without sending `pointerout` — closing a
-     dialog and replacing a streamed answer both do it. Floating UI otherwise
-     keeps the detached node as its reference and leaves the card at its last
-     coordinates. Observe only while a card is open, and dismiss only the card
-     whose own anchor disappeared. */
-  useEffect(() => {
-    const el = shown?.el;
-    if (!el) return;
-    const closeIfDetached = () => {
-      if (el.isConnected || currentRef.current !== el) return;
-      currentRef.current = null;
-      setShown((open) => (open?.el === el ? null : open));
-    };
-    closeIfDetached();
-    const observer = new MutationObserver(closeIfDetached);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    /* **A gutter control's words can change under an open card** — the
-       permalink says *Copied*, the "…" becomes ✕ — on the same element, so
-       nothing above would notice. Re-read them, and only the open one's. */
-    const reword = new MutationObserver(() => {
-      if (currentRef.current !== el) return;
-      const content = contentFor(el, indexRef.current, resolveRef.current, readingRef.current);
-      if (content === null) {
-        currentRef.current = null;
-        setShown(null);
-      } else {
-        setShown({ el, content });
-      }
-    });
-    if (el.matches(GUTTER_CONTROL)) reword.observe(el, { attributes: true, attributeFilter: ["data-tip"] });
-    return () => {
-      observer.disconnect();
-      reword.disconnect();
-    };
-  }, [shown]);
-
-  /* **A card a press opened goes on the next scroll** (touch.md, the rule the
-     spine and the glossary keep): no finger is resting on the line, so it would
-     ride with the paragraph to the edge of the screen. A hovered card is held by
-     the pointer and is left alone. Capture, because a scroll does not bubble.
-     Plan 261003c. */
-  useEffect(() => {
-    const el = shown?.el;
-    if (!el || !tappedRef.current) return;
-    const close = () => {
-      if (currentRef.current !== el) return;
-      currentRef.current = null;
-      tappedRef.current = false;
-      setShown(null);
-    };
-    document.addEventListener("scroll", close, { capture: true, passive: true });
-    return () => document.removeEventListener("scroll", close, { capture: true });
-  }, [shown]);
+       line is decoration, and nothing about reading time is announced. (The
+       hook skips an `aria-hidden` trigger itself; said here so the reason is
+       beside the card it is about.) */
+    cardClass: (el) => (el.matches(CONTROL_SHAPED) ? "tip-soon" : "tip-cite"),
+  });
 
   /* A new article/index can change the words under an anchor even if React
      preserves that node. Refresh the open card from the new source; the real
@@ -412,186 +298,44 @@ function BlockLinkCard({
      when its source changes. The cross-references are a source too: a mark
      whose links were replaced may now resolve elsewhere, or nowhere. */
   useEffect(() => {
-    const el = currentRef.current;
-    if (!el) return;
-    const content = contentFor(el, index, resolveXref, readingTimeFor);
-    if (content === null) {
-      currentRef.current = null;
-      setShown(null);
-    } else {
-      setShown({ el, content });
-    }
-  }, [index, resolveXref, readingTimeFor]);
+    controls.refresh();
+  }, [controls, index, resolveXref, readingTimeFor]);
 
-  /* Delegated on the document: the links are in every panel and come and go
-     with them, and one listener pair costs the same however many there are.
-     Hysteresis as in useHoverCard.ts: `pending` is the link an open timer is
-     armed for, `current` the one showing. */
+  /* **A card a press opened goes on the next scroll** (touch.md, the rule the
+     spine and the glossary keep): no finger is resting on the line, so it would
+     ride with the paragraph to the edge of the screen. A hovered card is held by
+     the pointer and is left alone. Capture, because a scroll does not bubble.
+     Plan 261003c. */
   useEffect(() => {
-    let openTimer: ReturnType<typeof setTimeout> | undefined;
-    let closeTimer: ReturnType<typeof setTimeout> | undefined;
-    let pending: HTMLElement | null = null;
-
-    const shut = () => {
-      currentRef.current = null;
-      tappedRef.current = false;
-      setShown(null);
-    };
+    if (!open || !controls.pressed()) return;
     const close = () => {
-      clearTimeout(openTimer);
-      pending = null;
-      clearTimeout(closeTimer);
-      if (currentRef.current) closeTimer = setTimeout(shut, DELAY.close);
+      if (controls.current() === open) controls.close();
     };
-    const show = (el: HTMLElement, clientY?: number) => {
-      pending = null;
-      tappedRef.current = false;
-      if (!el.isConnected) return shut();
-      const content = contentFor(el, indexRef.current, resolveRef.current, readingRef.current);
-      if (content === null) return shut();
-      currentRef.current = el;
-      // Before the state, so the reference exists when the panel mounts.
-      refs.setPositionReference(referenceFor(el, clientY));
-      setShown({ el, content });
-    };
-    const arm = (el: HTMLElement, wait: number, clientY: number) => {
-      clearTimeout(closeTimer);
-      if (el === currentRef.current) {
-        /* The reading strip is a paragraph tall. Leaving it for the table cell
-           schedules a close, and re-entering before that delay expires keeps
-           the same card open; move its virtual reference to this new entry
-           height instead of leaving the arrow at the old one. A link's real
-           element reference is unchanged, as before. */
-        if (el.matches(READING_LINE)) refs.setPositionReference(referenceFor(el, clientY));
-        return;
-      }
-      if (el === pending) return;
-      clearTimeout(openTimer);
-      pending = el;
-      openTimer = setTimeout(() => show(el, clientY), wait);
-    };
+    document.addEventListener("scroll", close, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", close, { capture: true });
+  }, [open, controls]);
 
-    const hit = (target: EventTarget | null) =>
-      (target as Element | null)?.closest?.(SELECTOR) as HTMLElement | null;
-
-    const over = (e: PointerEvent) => {
-      /* A finger fires `pointerover` too, on the tap that follows the link. No
-         card for it: the flash and the return chip are the confirmation, and a
-         card left behind over the panel would be one more thing to dismiss. */
-      if (e.pointerType === "touch") return close();
-      const el = hit(e.target);
-      if (el) arm(el, currentRef.current ? 0 : DELAY.open, e.clientY);
-      else close();
-    };
-    const out = (e: PointerEvent) => {
-      const el = hit(e.target);
-      if (!el) return;
-      const to = e.relatedTarget as Node | null;
-      if (to && el.contains(to)) return;
-      close();
-    };
-    /* **A press on the reading-time line opens its card** — the one way a finger
-       can, since nothing hovers on a touch screen (Greg, spya-vskqfn; plan
-       261003c). The line does nothing when pressed, so there is no second tap
-       to commit and no need to ask what made the press: a mouse's click on a
-       line whose card is already open changes nothing, and on one whose card
-       is still waiting out its delay it opens it a moment early. That is also
-       why the iPad's mislabelled click (`mouse` for a finger, WebKit 282988)
-       cannot touch it. A lift fires `pointerout` before the click and schedules
-       a close (touch.md § a lift fires the hover events); `show` comes after,
-       and clearing the timer is what keeps the card up. Opened this way, it
-       goes on the next scroll, for no finger is resting on it — the effect
-       below. The next tap anywhere closes it through `over`. */
-    const press = (e: MouseEvent) => {
-      const el = hit(e.target);
-      if (!el?.matches(READING_LINE)) return;
-      clearTimeout(openTimer);
-      clearTimeout(closeTimer);
-      pending = null;
-      if (el === currentRef.current) return;
-      show(el, e.clientY);
-      tappedRef.current = currentRef.current === el;
-    };
-    const focusIn = (e: FocusEvent) => {
-      const el = hit(e.target);
-      if (!el || !focusVisible(el)) return;
-      clearTimeout(openTimer);
-      clearTimeout(closeTimer);
-      show(el);
-    };
-    const focusOut = (e: FocusEvent) => {
-      if (hit(e.target)) close();
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && (currentRef.current || pending)) {
-        clearTimeout(openTimer);
-        pending = null;
-        clearTimeout(closeTimer);
-        shut();
-      }
-    };
-
-    document.addEventListener("pointerover", over);
-    document.addEventListener("pointerout", out);
-    document.addEventListener("click", press);
-    document.addEventListener("focusin", focusIn);
-    document.addEventListener("focusout", focusOut);
-    document.addEventListener("keydown", key);
-    return () => {
-      clearTimeout(openTimer);
-      clearTimeout(closeTimer);
-      currentRef.current = null;
-      document.removeEventListener("pointerover", over);
-      document.removeEventListener("pointerout", out);
-      document.removeEventListener("click", press);
-      document.removeEventListener("focusin", focusIn);
-      document.removeEventListener("focusout", focusOut);
-      document.removeEventListener("keydown", key);
-    };
-  }, [refs]);
-
+  /* **A press on the reading-time line opens its card** — the one way a finger
+     can, since nothing hovers on a touch screen (Greg, spya-vskqfn; plan
+     261003c). The line does nothing when pressed, so there is no second tap
+     to commit and no need to ask what made the press: a mouse's click on a
+     line whose card is already open changes nothing, and on one whose card
+     is still waiting out its delay it opens it a moment early. That is also
+     why the iPad's mislabelled click (`mouse` for a finger, WebKit 282988)
+     cannot touch it. A lift fires `pointerout` before the click and schedules
+     a close (touch.md § a lift fires the hover events); `openNow` comes after,
+     and cancels it, which is what keeps the card up. Opened this way, it
+     goes on the next scroll, for no finger is resting on it — the effect
+     above. The next tap anywhere closes it through the hook's `pointerover`. */
   useEffect(() => {
-    if (!shown) refs.setPositionReference(null);
-  }, [refs, shown]);
+    const press = (e: MouseEvent) => {
+      const el = (e.target as Element | null)?.closest?.(READING_LINE);
+      if (!el) return;
+      controls.openNow(el, e.clientY, el === controls.current() ? controls.pressed() : true);
+    };
+    document.addEventListener("click", press);
+    return () => document.removeEventListener("click", press);
+  }, [controls]);
 
-  /* What the card last said, so it can fade out saying it rather than blank. */
-  const last = useRef(shown);
-  if (shown) last.current = shown;
-  const drawn = last.current;
-
-  if (!isMounted || !drawn) return null;
-  /* A native modal dialog lives in the browser's top layer. A portal under
-     `<body>` cannot paint above it at any z-index, so keep the card inside the
-     open dialog when its own anchor is there. Outside a dialog, FloatingPortal
-     retains its ordinary body root. */
-  const portalRoot = drawn.el.closest<HTMLDialogElement>("dialog[open]") ?? undefined;
-  return (
-    <FloatingPortal root={portalRoot}>
-      <div
-        ref={refs.setFloating}
-        id={cardId}
-        role="tooltip"
-        className="tooltip-anchor"
-        style={{ ...floatingStyles, visibility: isPositioned ? "visible" : "hidden" }}
-      >
-        {/* A control-shaped card (ControlTip) wants `.tip-soon`'s width and
-            paragraphs; a link's preview wants `.tip-cite`'s. */}
-        <div className={`tooltip ${drawn.el.matches(CONTROL_SHAPED) ? "tip-soon" : "tip-cite"}`} style={styles}>
-          {drawn.content}
-          {/* fill and stroke are props, not CSS — Tooltip.tsx says why. */}
-          <FloatingArrow
-            ref={arrowRef}
-            context={context}
-            className="tooltip-arrow"
-            width={12}
-            height={6}
-            tipRadius={1}
-            fill="var(--surface-raised)"
-            stroke="var(--rule-strong)"
-            strokeWidth={1}
-          />
-        </div>
-      </div>
-    </FloatingPortal>
-  );
+  return card;
 }

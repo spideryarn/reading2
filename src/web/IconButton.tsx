@@ -70,12 +70,11 @@ export function IconButton({
    */
   disabled?: boolean;
   /**
-   * Whether to set the native `title`. Pass `false` when a `<Tooltip>` already
-   * describes this button: two tooltips on one control is the OS's slow grey
-   * box racing ours, and `title` is the one that wins the wait.
-   * docs/project/tooltips.md says at length why it is a regression rather than
-   * a shortcut — but it stays the default, because a button with neither is a
-   * button called "".
+   * Whether hovering says the label, in the page-wide card (TipCard.tsx; a
+   * native `title` until 2026-10-17). Pass `false` when a `<Tooltip>` already
+   * describes this button, which has a card of its own and wants no second.
+   * It stays the default, because an icon with no words on hover is a glyph
+   * the reader has to guess.
    */
   titled?: boolean;
   /**
@@ -114,10 +113,13 @@ export function IconButton({
           : onClick
       }
       aria-disabled={disabled || undefined}
-      // Both, and they are not the same thing: `title` is the hover tooltip a
-      // sighted reader gets, `aria-label` is the name a screen reader reads.
-      // An icon-only button with neither is a button called "".
-      title={titled ? label : undefined}
+      /* Both, and they are not the same thing: `data-tip` is the hover card a
+         sighted reader gets (TipCard.tsx — a native `title` until 2026-10-17,
+         plan 261017g), `aria-label` is the name a screen reader reads. An
+         icon-only button with neither is a button called "". The card is not
+         also its description: it says the name again. */
+      data-tip={titled ? label : undefined}
+      data-tip-describes={titled ? "off" : undefined}
       aria-label={label}
       /* A fixed 28px square rather than `p-1.5` round a 14px glyph. Same
          reason as the shelf's view toggle (ShelfControls.tsx): a stated size

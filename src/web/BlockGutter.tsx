@@ -572,6 +572,7 @@ export function BlockGutter({
             setOpen(false);
             onOpenComment(first.id);
           }}
+          data-tip-describes="off"
           data-tip={markTitle(notesBy, comments?.length ?? 1)}
           aria-label={markName(notesBy, comments?.length ?? 1)}
         >
@@ -601,13 +602,16 @@ export function BlockGutter({
         className={`blk-permalink${copyState === "failed" ? " failed" : ""}`}
         href={blockHref(id, linkBase)}
         /* The tooltip Greg asked for, carrying the full id. **`data-tip`, read
-           by the reading view's one delegated card** (BlockLinkCard.tsx §
-           `GUTTER_CONTROL`), since 2026-10-02: not the Tooltip component,
+           by the app's one delegated card** (TipCard.tsx; the reading view's
+           BlockLinkCard.tsx drew it from 2026-10-02 to 2026-10-17): not the Tooltip component,
            which is a Floating UI instance per trigger on an article that can
            run to several hundred blocks, and no longer a native `title`, which
            shows after a second in the browser's own style and read as no
            tooltip at all (spya-jc0vm6, *"Make sure they all have tooltips"*).
-           Every control in this column does the same. */
+           Every control in this column does the same, and each says
+           `data-tip-describes="off"`: its sentence is its own name, near
+           enough, and would be read twice. */
+        data-tip-describes="off"
         data-tip={
           copyState === "copied"
             ? `Copied — ${id}`
@@ -669,6 +673,7 @@ export function BlockGutter({
              Comments button wears. Greg, spya-vj7wv0: "change the comment icon
              to a chat icon (because that's really what it is)". The words
              already said chat. docs/project/icons.md § A chat is two bubbles. */
+          data-tip-describes="off"
           data-tip={
             chatCount
               ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
@@ -751,6 +756,7 @@ export function BlockGutter({
               announce(stored ? "Bookmarked this paragraph." : "Bookmark not confirmed.");
             });
           }}
+          data-tip-describes="off"
           data-tip="Bookmark this paragraph, and comment if you like (no AI)"
           aria-label="Bookmark this paragraph"
         >
@@ -767,6 +773,7 @@ export function BlockGutter({
             setOpen(false);
             onHelp(id);
           }}
+          data-tip-describes="off"
           data-tip="Ask the AI for help with this paragraph"
           aria-label="Ask the AI for help"
         >
@@ -829,6 +836,7 @@ export function BlockGutter({
             if (e.detail === 0) goTo.current = open ? "more" : "head";
             setOpen((was) => !was);
           }}
+          data-tip-describes="off"
           data-tip={open ? "Close paragraph controls" : "More for this paragraph"}
           aria-label={open ? "Close paragraph controls" : "More for this paragraph"}
         >

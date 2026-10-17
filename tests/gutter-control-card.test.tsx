@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * **Every control in the prose gutter has a house tooltip** — the reading
- * view's one delegated card (src/web/BlockLinkCard.tsx), never a native
+ * **Every control in the prose gutter has a house tooltip** — the app's one
+ * delegated `data-tip` card (src/web/TipCard.tsx; the reading view's
+ * BlockLinkCard.tsx drew it until 2026-10-17, plan 261017g), never a native
  * `title`.
  *
  * Greg, 2026-10-02 (spya-jc0vm6), on the icons beside a block: *"Make sure
@@ -13,7 +14,9 @@
  * Mouse hover and keyboard focus open it; a finger does not, because a tap on
  * a gutter control does the thing. The card adds no `aria-describedby`: its
  * words are the control's own `aria-label`, near enough, and would be read
- * twice. docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
+ * twice — each control says `data-tip-describes="off"`. Mounted beside the
+ * reading view's card, as main.tsx and Reader have them, so a test would see
+ * two cards opening at once. docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -21,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Comment } from "../src/types.js";
 import { BlockGutter } from "../src/web/BlockGutter.js";
 import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
+import { TipCard } from "../src/web/TipCard.js";
 
 class FakeResizeObserver {
   observe() {}
@@ -70,6 +74,7 @@ function paint(comments?: Comment[]): void {
           onJump={() => {}}
           announce={() => {}}
         />
+        <TipCard />
       </BlockLinkProvider>,
     ),
   );

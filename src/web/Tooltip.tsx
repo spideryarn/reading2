@@ -425,7 +425,10 @@ export function Tooltip({
     <>
       {/* `ref` last: it must win over any `ref` already in children.props,
           which the merged one already includes. */}
-      {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
+      {/* `data-tooltip-trigger` tells the page-wide `data-tip` card (TipCard.tsx)
+          that this element has a card of its own, so a stray `data-tip` on it
+          cannot open a second one (plan 261017g). */}
+      {cloneElement(children, { ...merged, "aria-describedby": describedBy, "data-tooltip-trigger": "" })}
       {isMounted && (
         <FloatingPortal>
           <FocusReach on={interactive !== undefined} context={context}>

@@ -11,6 +11,7 @@ import { sweepDictations } from "./dictation-keep.js";
 import { startAppearance } from "./appearance.js";
 import { watchForDeploy } from "./stale-shell.js";
 import { OfflineStrip } from "./OfflineStrip.js";
+import { TipCard } from "./TipCard.js";
 import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
 // styles.css inside `@layer app` — importing the two side by side would
@@ -250,6 +251,9 @@ createRoot(document.getElementById("root")!).render(
             the reading view does, and a reader who cannot reach the server is
             precisely the reader most likely to be looking at one of them. */}
         <OfflineStrip />
+        {/* Outside `App` for the same reason: every page's `data-tip`s, the
+            landing page's and admin's included (TipCard.tsx). */}
+        <TipCard />
       </NuqsAdapter>
     </LucideProvider>
   </StrictMode>,
