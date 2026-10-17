@@ -310,3 +310,29 @@ checked in the browser first.
 
 - 2026-10-18: prior-work check; the reported article read from production (read-only); code
   mapped; plan written.
+
+## The plan review
+
+GPT Sol, read-only, 2026-10-18 ([the review](261018a-plan-review-sol.md)), verdict *revise before
+build*. No P0. Every finding was checked against the code; all are accepted, and they bind the
+stages above where they differ from the text there.
+
+| | Sev | Finding | Outcome |
+|---|---|---|---|
+| F1 | P1 | `hashBlocks` hashes `id, text, role, treatment`; the classifier also reads `kind`, `level`, `words`, so a re-extraction that turns a paragraph into a heading would leave `matter` claiming to be current | Accepted: `matterInputHash` over ordered `[id, text, kind, level, words]`, versioned, for both `sourceHash` and the stamp. `hashBlocks` is not widened |
+| F2 | P1 | A draft copies the published revision's columns; a failed reclassification would leave the old stretches to be trusted | Accepted: the column is `carry` in `REVISION_CARRY_POLICY`; the article read returns `matter` only when its shape is valid, every id resolves and `sourceHash` equals the current blocks' hash, else the fallback; a failure is stored as `{ status: "unavailable", sourceHash, version }` |
+| F3 | P1 | The checks let the model fold prose: short articles where the windows overlap, text past 200 characters unseen, a `section` under any heading, and `references`/`contents` lifting the caps on the model's own say-so | Accepted. A discriminated answer (`type: "range" \| "section"`). A `section` only under a heading whose full text matches a closed label set for its kind, contents in the opening and back matter in the trailing part. Caps independent of `kinds`. The opening and close windows never overlap and each is at most 40% of the article. Kind-compatible evidence checked against the full stored text where a cheap test exists (labels, DOI and date prefixes, an email, a name from `meta`). Adversarial cases in the eval |
+| F4 | P1 | Heading list and answer not bounded | Accepted: caps on heading count and characters, output tokens and stretches; the authors pass's untrusted-data instruction; malformed or extra output refused. Stub text comes only from the closed kinds and fixed copy; counts from blocks |
+| F5 | P1 | With a stub, "row visible" and "block's words visible" are different facts; `isFolded` means both, for marginalia, on-screen sampling, the spine, scroll and block chat | Accepted: two predicates, `isRowHidden` and `isContentHidden`; every `isFolded` consumer audited and chosen deliberately; `isFoldedAway` stays a real fold's |
+| F6 | P1 | `visibleFrom` answering the stub's id would reopen the stretch on a reload, because `scrollToBlock` reveals what it is sent to | Accepted: the reading position keeps mapping to the first block after the stretch, as today; explicit jumps still reveal |
+| F7 | P1 | A stored `title` stretch collides with the masthead echo, which is never revealed | Accepted: echo ids are subtracted from stretches before choosing the stub; an echo-only stretch is dropped |
+| F8 | P2 | `sectionEnds` is private to a React module | Accepted: a pure `sectionRanges` shared by `matter.ts` and `fold.ts` |
+| F9 | P2 | Structure decoration: index containment in one stretch, and the measuring copies must match | Accepted |
+| F10 | P2 | The argument against `Block.role` was overstated | Accepted; the § Stage 2 reasoning is replaced by: a stretch is a range-level, multi-kind judgement while `role` is one per block; model policy is `treatment`'s, not `role`'s; a separate artefact avoids a stamp over a hash that contains its own output; failure and staleness fall back without rewriting block data |
+
+**Its simpler version** — today's byline rule plus exact authored labels (*Abstract*, *Keywords*,
+*Contents*, *Acknowledgements*, *Funding*, *References*, *Bibliography*) with positional
+evidence, and no model call — **joins the eval as a second baseline.** If it matches the
+classifier with no prose folded, it is built instead, and the model call is not. Its point on the
+critical path is taken too: whether `matter` is in `DEFAULT_INGEST_STEPS` or a successor job is
+decided in Stage 2 from how long it takes against what the reader waits for already.
