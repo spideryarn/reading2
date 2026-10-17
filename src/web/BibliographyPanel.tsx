@@ -684,10 +684,11 @@ export const BIBLIOGRAPHY_NONE = "We found no works this piece cites.";
    row said what we have not read. The band and the hover card (ProseHoverCard.tsx
    § CiteCard) both draw these strings, so the two surfaces cannot drift.
 
-   **Since 2026-10-11 the plain case is said once, above the list**, not on
-   every row (Greg, 2026-10-10, spya-rbp55k: *"it warms "we have not read this
-   work, just the piece that cites it" over and over and over again. It doesn't
-   really add much"*; plan 261011c). Once 261003j kept `why` off a row nothing
+   **Since 2026-10-11 the plain case is said once**, not on every row (Greg,
+   2026-10-10, spya-rbp55k: *"it warms "we have not read this work, just the
+   piece that cites it" over and over and over again. It doesn't really add
+   much"*; plan 261011c) — above the list until 2026-10-17, in the band's (i)
+   since (spya-m53cdk, plan 261017h). Once 261003j kept `why` off a row nothing
    checked, that line stood beside a title and an author and qualified nothing.
    A row still says what it is when something HAS been read, or a page found. */
 
@@ -707,7 +708,7 @@ export function showsWhy(work: Pick<ShownWork, "lookup">, keptAnswerShown = fals
   return assessedOf(work) !== null || keptAnswerShown;
 }
 
-/** Said once, above the list: true of every row until something has read its work. */
+/** Said once, in the band's (i): true of every row until something has read its work. */
 export const CITE_LIST_NOT_READ =
   "Unless a row says otherwise, we have read none of these works, only the article that cites them.";
 
@@ -755,7 +756,7 @@ export function citeReadUnreadable(host: string): string {
 /**
  * **Which line a row says.** A lookup, when there is one, says what it read;
  * otherwise `linkFrom` decides between the found page's line and `null`:
- * nothing read and nothing found, which the band says once above the list
+ * nothing read and nothing found, which the band says once, in its (i)
  * (`CITE_LIST_NOT_READ`) and the hover card leaves unsaid. Total over both
  * unions, as `sourceOf` is. The band and the hover card both call this.
  */
@@ -990,6 +991,11 @@ export function BibliographyPanel({
   const about =
     ready && all.length > 0 ? (
       <>
+        {/* What we have read, first — in the (i) rather than above the list
+            since 2026-10-17, for the room (Greg, spya-m53cdk: *"we can hide
+            this (...) behind an information-tooltip"*). Still only while a
+            visible row relies on it (plan 261011c). */}
+        {showListReadNote && <p>{CITE_LIST_NOT_READ}</p>}
         {bibliography.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
@@ -1103,10 +1109,6 @@ export function BibliographyPanel({
               260929c. */}
 
           {all.length === 0 && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE}</p>}
-
-          {/* Once, not on every row, and only while a visible row needs the
-              default (plan 261011c). */}
-          {showListReadNote && <p className="gloss-quiet cite-list-read">{CITE_LIST_NOT_READ}</p>}
 
           {all.length > 0 && (
             <div className="tl-scroll">

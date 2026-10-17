@@ -542,7 +542,7 @@ describe("a page that only names this piece", () => {
     expect(RECEPTION_TITLE_ONLY).toBe("Names this piece by its title only");
     expect(titleOnlyHead()).toBe(RECEPTION_TITLE_ONLY);
     expect(host.querySelectorAll("section.rcp-title-only .rcp-item")).toHaveLength(1);
-    expect(text()).not.toContain("hidden by this threshold");
+    expect(text()).not.toContain("hidden. Drag left");
   });
 
   /* The decoy that set the old default (260906b): a page about a different
@@ -2215,12 +2215,12 @@ describe("Claims, and the relevance bar", () => {
   });
 
   /* A bar speaks only when it hides something (plan 261003o, step 8):
-     *"Nothing is hidden by this threshold."* is gone. */
+     *"Nothing hidden."* is gone. */
   it("hides nothing until the reader moves it, and says nothing while it hides nothing", () => {
     paint(owner({ reception: judged() }), "claims");
     expect(host.querySelector(".rcp-rel .gloss-gate-value")?.textContent).toBe("bears loosely · 3 of 3 judged");
     expect(host.querySelector(".rcp-rel .gloss-gate-note")).toBeNull();
-    expect(text()).not.toContain("Nothing is hidden by this threshold.");
+    expect(text()).not.toContain("Nothing hidden.");
     expect(host.querySelector(".rcp-rel .gloss-gate-reset")).toBeNull();
   });
 
@@ -2254,7 +2254,7 @@ describe("Claims, and the relevance bar", () => {
        cleared "bears directly". */
     expect(host.querySelector(".rcp-rel .gloss-gate-value")?.textContent).toBe("bears directly · 1 of 3 judged");
     expect(host.querySelector(".rcp-rel .gloss-gate-note")?.textContent).toBe(
-      "2 answers to its claims are hidden by this threshold. Drag the slider left to show them.",
+      "2 answers to its claims hidden. Drag left to show them.",
     );
     /* The claim's own count is the rows under it, and so is the segment's. */
     expect(host.querySelector(".rcp-group-count")?.textContent).toBe("2");
@@ -2285,7 +2285,7 @@ describe("Claims, and the relevance bar", () => {
     expect(host.querySelector(".rcp-rel .gloss-gate-value")?.textContent).toBe("bears directly · 0 of 2 judged");
     const note = host.querySelector(".rcp-rel .gloss-gate-note")?.textContent ?? "";
     expect(note).not.toMatch(/^All /);
-    expect(note).toBe("2 answers to its claims are hidden by this threshold. Drag the slider left to show them.");
+    expect(note).toBe("2 answers to its claims hidden. Drag left to show them.");
   });
 
   /* **GPT Sol's F2 on plan 261003o.** Every row at one level does not make the
@@ -2305,7 +2305,7 @@ describe("Claims, and the relevance bar", () => {
     paint(owner({ reception: allPartly }), "claims", "prioritised", new Map(), { relevance: "directly" });
     expect(host.querySelectorAll(".rcp-item")).toHaveLength(0);
     expect(host.querySelector(".rcp-rel")).not.toBeNull();
-    expect(host.querySelector(".rcp-rel .gloss-gate-note")?.textContent).toMatch(/^All 2 answers to its claims are hidden/);
+    expect(host.querySelector(".rcp-rel .gloss-gate-note")?.textContent).toMatch(/^All 2 answers to its claims hidden/);
     /* A list the reader's own setting emptied is not a search that found nothing. */
     expect(host.querySelector(".rcp-empty")).toBeNull();
     expect(text()).not.toContain(SOURCES_CLAIMS_NONE);

@@ -161,6 +161,14 @@ export interface ThresholdNoun {
  *    exactly the place this feature has to be honest.
  *  - **"the rest"**, which named the second group. That group is gone.
  *
+ * **Short enough for one line** at the band's width, since 2026-10-17: it was
+ * *"38 citations are hidden by this threshold. Drag the slider left to show
+ * them."*, which wrapped to two and made the threshold row 84px at 1440 and
+ * 101px at 390, room taken from the list (spya-m53cdk, plan 261017h, where
+ * Greg asked for the repetitive and the not-very-informative to go). The words
+ * cut were the ones the slider beside it already says: *this threshold*, *the
+ * slider*. The line itself stays, for the reason above.
+ *
  * One sentence parameterised by its noun rather than one copy per panel: copies
  * of one sentence are how panels come to disagree. The original plan expected
  * the copy to stay beside each panel on the grounds that it differed; after
@@ -171,15 +179,14 @@ export interface ThresholdNoun {
  * threshold note is not a failure.
  */
 export function hiddenNote(hidden: number, total: number, noun: ThresholdNoun): string {
-  if (hidden === 0) return "Nothing is hidden by this threshold.";
-  const subject =
-    hidden === 1 ? `1 ${noun.one} is` : `${hidden} ${noun.many} are`;
+  if (hidden === 0) return "Nothing hidden.";
+  const subject = hidden === 1 ? `1 ${noun.one}` : `${hidden} ${noun.many}`;
   /* "All" only when it is telling the reader something the count does not
-     already: with one hidden thing, "All 1 term is hidden" is not English and
-     "1 term is hidden" is the same fact. */
+     already: with one hidden thing, "All 1 term hidden" is not English and
+     "1 term hidden" is the same fact. */
   const all = hidden === total && hidden > 1 ? "All " : "";
   const them = hidden === 1 ? "it" : "them";
-  return `${all}${subject} hidden by this threshold. Drag the slider left to show ${them}.`;
+  return `${all}${subject} hidden. Drag left to show ${them}.`;
 }
 
 /* ------------------------------------------------------------ the track --

@@ -291,7 +291,7 @@ describe("the Glossary's threshold row", () => {
       valueText: "0.10, showing 2 of 3 terms",
       shown: "0.10 · 2 of 3",
       ticks: [0.028, 0.278, 1],
-      note: "1 term is hidden by this threshold. Drag the slider left to show it.",
+      note: "1 term hidden. Drag left to show it.",
       reset: null,
     });
   });
@@ -305,7 +305,7 @@ describe("the Glossary's threshold row", () => {
       value: "0.5",
       valueText: "0.50, showing 1 of 3 terms",
       shown: "0.50 · 1 of 3",
-      note: "2 terms are hidden by this threshold. Drag the slider left to show them.",
+      note: "2 terms hidden. Drag left to show them.",
       reset: { type: "button", title: "Back to 0.10", label: "Reset the threshold to 0.10", icon: true },
     });
   });
@@ -313,12 +313,12 @@ describe("the Glossary's threshold row", () => {
   it("a value past the data's top stretches the track to hold it, and says everything is hidden", async () => {
     await drawGlossary(0.9);
     expect(rowAsDrawn()).toMatchObject({ max: "0.9", value: "0.9", shown: "0.90 · 0 of 3" });
-    expect(rowAsDrawn().note).toBe("All 3 terms are hidden by this threshold. Drag the slider left to show them.");
+    expect(rowAsDrawn().note).toBe("All 3 terms hidden. Drag left to show them.");
   });
 
   it("nothing hidden still has a foot line", async () => {
     await drawGlossary(0);
-    expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing is hidden by this threshold." });
+    expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing hidden." });
   });
 
   it("a drag lands on the nearest value that changes the list, and the reset calls back with null", async () => {
@@ -364,7 +364,7 @@ describe("Citations' threshold row", () => {
       valueText: "0.25, showing 2 of 3 citations",
       shown: "0.25 · 2 of 3",
       ticks: [0.25, 0.625, 1],
-      note: "1 citation is hidden by this threshold. Drag the slider left to show it.",
+      note: "1 citation hidden. Drag left to show it.",
       reset: null,
     });
   });
@@ -377,7 +377,7 @@ describe("Citations' threshold row", () => {
       value: "0.6",
       valueText: "0.60, showing 1 of 3 citations",
       shown: "0.60 · 1 of 3",
-      note: "2 citations are hidden by this threshold. Drag the slider left to show them.",
+      note: "2 citations hidden. Drag left to show them.",
       reset: { type: "button", title: "Back to 0.25", label: "Reset the threshold to 0.25", icon: true },
     });
   });
@@ -385,12 +385,12 @@ describe("Citations' threshold row", () => {
   it("a value past the data's top stretches the track to hold it, and says everything is hidden", async () => {
     await drawBibliography(0.95);
     expect(rowAsDrawn()).toMatchObject({ max: "0.95", value: "0.95", shown: "0.95 · 0 of 3" });
-    expect(rowAsDrawn().note).toBe("All 3 citations are hidden by this threshold. Drag the slider left to show them.");
+    expect(rowAsDrawn().note).toBe("All 3 citations hidden. Drag left to show them.");
   });
 
   it("nothing hidden still has a foot line", async () => {
     await drawBibliography(0);
-    expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing is hidden by this threshold." });
+    expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing hidden." });
   });
 
   it("a drag lands on the nearest value that changes the list, and the reset calls back with null", async () => {

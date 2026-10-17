@@ -84,10 +84,9 @@ defaults rest on — is listed at the end, in [§ What is still open](#what-is-s
  │  ▇▇▇        ├───────────────────────┤                            │   │
  │  ▇▇▇▇▇      │ bar 0·60 · 12 of 14   │      ↑ the wash and the    │   │
  │  ▇▇         │ ────────●──────────   │        ┃ border — the SAME │ ▍ │
- │  ▇▇▇▇▇▇     │ 2 quotes are hidden   │        marks a search hit  │   │
- │             │ by this threshold.    │        draws, because it   │   │
- │             │ Drag the slider left  │        IS one              │   │
- │             │ to show them.         │                            │   │
+ │  ▇▇▇▇▇▇     │ 2 quotes hidden. Drag │        marks a search hit  │   │
+ │             │ left to show them.    │        draws, because it   │   │
+ │             │                       │        IS one              │   │
  │             ├───────────────────────┤                            │   │
  │             │ ✧ 2 suggestions were  │                            │   │
  │             │   dropped because the │                            │   │

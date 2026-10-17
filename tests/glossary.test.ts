@@ -796,7 +796,7 @@ describe("prioritised order", () => {
       [hard, alsoHard],
     ]) {
       expect(sortEntries(whole, "prioritised")).toEqual(whole);
-      expect(noteFor(whole, PRIORITY_GATE)).toBe("Nothing is hidden by this threshold.");
+      expect(noteFor(whole, PRIORITY_GATE)).toBe("Nothing hidden.");
     }
   });
 
@@ -868,7 +868,7 @@ describe("the threshold slider", () => {
     // so — this is the state that used to collapse into one unheaded group.
     expect(names(0.7)).toEqual(["bare"]);
     expect(noteFor(list, 0.7)).toBe(
-      "3 terms are hidden by this threshold. Drag the slider left to show them.",
+      "3 terms hidden. Drag left to show them.",
     );
   });
 
@@ -879,7 +879,7 @@ describe("the threshold slider", () => {
       sortEntries(list, "prioritised", PRIORITY_GATE),
     );
     expect(noteFor(list, PRIORITY_GATE)).toBe(
-      "1 term is hidden by this threshold. Drag the slider left to show it.",
+      "1 term hidden. Drag left to show it.",
     );
   });
 
@@ -926,18 +926,18 @@ describe("the threshold slider", () => {
        only at the two ends. The copy is asserted verbatim: it is the reader's
        one route back, and "clears" is deliberately not in it. */
     expect(noteFor(list, 0.3)).toBe(
-      "1 term is hidden by this threshold. Drag the slider left to show it.",
+      "1 term hidden. Drag left to show it.",
     );
     expect(noteFor(list, 0.9)).toBe(
-      "3 terms are hidden by this threshold. Drag the slider left to show them.",
+      "3 terms hidden. Drag left to show them.",
     );
-    expect(noteFor([hard, mid], 0.01)).toBe("Nothing is hidden by this threshold.");
+    expect(noteFor([hard, mid], 0.01)).toBe("Nothing hidden.");
     expect(noteFor([hard, mid], 0.9)).toBe(
-      "All 2 terms are hidden by this threshold. Drag the slider left to show them.",
+      "All 2 terms hidden. Drag left to show them.",
     );
     // Nothing to hide in a list with nothing in it, and it says so rather than
     // going quiet — the panel does not draw a slider there anyway.
-    expect(noteFor([], 0.3)).toBe("Nothing is hidden by this threshold.");
+    expect(noteFor([], 0.3)).toBe("Nothing hidden.");
   });
 
   it("offers the order only when some position of the bar would hide something", () => {

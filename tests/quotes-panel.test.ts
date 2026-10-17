@@ -312,14 +312,14 @@ describe("barNote", () => {
   it("says how many are hidden, in every state", () => {
     const list = [q("a", 0.9), q("b", 0.2)];
     expect(noteFor(list, 0.5)).toBe(
-      "1 quote is hidden by this threshold. Drag the slider left to show it.",
+      "1 quote hidden. Drag left to show it.",
     );
-    expect(noteFor(list, 0.2)).toBe("Nothing is hidden by this threshold.");
+    expect(noteFor(list, 0.2)).toBe("Nothing hidden.");
     expect(noteFor(list, 1)).toBe(
-      "All 2 quotes are hidden by this threshold. Drag the slider left to show them.",
+      "All 2 quotes hidden. Drag left to show them.",
     );
     expect(noteFor([q("a", 0.9), q("b", 0.2), q("c", 0.1)], 0.5)).toBe(
-      "2 quotes are hidden by this threshold. Drag the slider left to show them.",
+      "2 quotes hidden. Drag left to show them.",
     );
   });
 

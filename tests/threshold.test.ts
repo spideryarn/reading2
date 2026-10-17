@@ -83,7 +83,7 @@ describe("applyThreshold", () => {
     expect(out.visible).toHaveLength(3);
     expect(out.hiddenCount).toBe(0);
     expect(out.unscoredCount).toBe(3);
-    expect(hiddenNote(out.hiddenCount, 3, TERM)).toBe("Nothing is hidden by this threshold.");
+    expect(hiddenNote(out.hiddenCount, 3, TERM)).toBe("Nothing hidden.");
   });
 
   it("can hide every scored item and still show the unscored ones", () => {
@@ -117,7 +117,7 @@ describe("hiddenNote", () => {
      **"the rest"**, because that group is gone. */
   it("says how many are hidden, and how to get them back", () => {
     expect(hiddenNote(18, 40, TERM)).toBe(
-      "18 terms are hidden by this threshold. Drag the slider left to show them.",
+      "18 terms hidden. Drag left to show them.",
     );
   });
 
@@ -126,7 +126,7 @@ describe("hiddenNote", () => {
        has stopped hiding anything looks exactly like a slider that has stopped
        working, and the difference has to be in words. No way back is offered
        because there is nothing to come back. */
-    expect(hiddenNote(0, 40, TERM)).toBe("Nothing is hidden by this threshold.");
+    expect(hiddenNote(0, 40, TERM)).toBe("Nothing hidden.");
   });
 
   it("names the all-hidden case as all of them", () => {
@@ -134,22 +134,22 @@ describe("hiddenNote", () => {
        and *you have hidden it all*, and those want opposite things done about
        them. This is the sentence that tells them apart. */
     expect(hiddenNote(18, 18, TERM)).toBe(
-      "All 18 terms are hidden by this threshold. Drag the slider left to show them.",
+      "All 18 terms hidden. Drag left to show them.",
     );
   });
 
   it("handles the singular in both the noun and the pronoun", () => {
     expect(hiddenNote(1, 5, TERM)).toBe(
-      "1 term is hidden by this threshold. Drag the slider left to show it.",
+      "1 term hidden. Drag left to show it.",
     );
-    // "All 1 term is hidden" is not English, so the count carries it alone.
+    // "All 1 term hidden" is not English, so the count carries it alone.
     expect(hiddenNote(1, 1, QUOTE)).toBe(
-      "1 quote is hidden by this threshold. Drag the slider left to show it.",
+      "1 quote hidden. Drag left to show it.",
     );
   });
 
   it("takes its noun from the caller, because the panels count different things", () => {
-    expect(hiddenNote(3, 9, QUOTE)).toMatch(/^3 quotes are hidden/);
+    expect(hiddenNote(3, 9, QUOTE)).toMatch(/^3 quotes hidden/);
   });
 
   it("never says 'clears' and never says 'the rest'", () => {
