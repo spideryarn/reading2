@@ -1638,10 +1638,7 @@ export function Conversation({
       kind === "chat"
         ? {
             openSlug: slug,
-            into: {
-              add: (article) => bringInTo.current?.add(article) ?? BOX_GONE,
-              refusal: () => bringInTo.current?.refusal() ?? BOX_GONE_BEFORE,
-            },
+            into: bringVia(bringInTo),
           }
         : undefined,
     [kind, slug],
@@ -2942,6 +2939,19 @@ const MENTION_WAITING = "Wait a moment for your question to go, then bring this 
 /** Said if the conversation's box is not on screen to take the article. */
 const BOX_GONE = "Open this conversation's box to bring it in; the page is on your shelf now.";
 const BOX_GONE_BEFORE = "Open this conversation's box before bringing the page in.";
+
+/**
+ * **The buttons under an answer reach the box through this**, and only a
+ * missing box is a refusal: `null` is the box's yes, so it must pass through
+ * rather than fall to a default (`?? BOX_GONE` refused every press — the
+ * browser pass, plan 261017e).
+ */
+export function bringVia(seam: { readonly current: BringIn | null }): BringIn {
+  return {
+    add: (article) => (seam.current ? seam.current.add(article) : BOX_GONE),
+    refusal: () => (seam.current ? seam.current.refusal() : BOX_GONE_BEFORE),
+  };
+}
 
 /** An address short enough for a button: its host and the start of its path. */
 function shortAddress(url: string): string {

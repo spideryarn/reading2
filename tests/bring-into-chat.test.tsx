@@ -63,7 +63,7 @@ vi.mock("../src/web/useJobs.js", async () => {
   };
 });
 
-const { Composer } = await import("../src/web/ChatPanel.js");
+const { Composer, bringVia } = await import("../src/web/ChatPanel.js");
 const { BringIntoChat } = await import("../src/web/BringIntoChat.js");
 const { noteReader } = await import("../src/web/lib/reader-change.js");
 const { withMentionAtEnd } = await import("../src/web/mentions.js");
@@ -351,5 +351,41 @@ describe("an address in the draft", () => {
     root = createRoot(host);
     paint("chat", "see https://b.example/other");
     expect(host.querySelector(".bring-in-pasted .bring-in-button")).not.toBeNull();
+  });
+});
+
+describe("the hand-over from an answer's buttons to the box", () => {
+  it("passes the box's yes through, and refuses only when there is no box", () => {
+    const seam = { current: null } as MutableRefObject<BringIn | null>;
+    const via = bringVia(seam);
+    expect(via.refusal()).toMatch(/box/);
+    expect(via.add({ slug: "s", title: "S" })).toMatch(/box/);
+    seam.current = { add: () => null, refusal: () => null };
+    expect(via.refusal()).toBeNull();
+    expect(via.add({ slug: "s", title: "S" })).toBeNull();
+    seam.current = { add: () => "full", refusal: () => "full" };
+    expect(via.refusal()).toBe("full");
+  });
+
+  it("sends on the first Enter after an article is brought in", async () => {
+    paint("chat", "compare with");
+    await act(async () => {
+      box().focus();
+      box().setSelectionRange(box().value.length, box().value.length);
+      box().dispatchEvent(new Event("select", { bubbles: true }));
+    });
+    hand("smith-2024", "Smith 2024, Replication");
+    /* The reader comes back to the box after pressing, caret at the end, and
+       presses Enter before the shelf list (asked for by an `@` the box sees)
+       has arrived. */
+    act(() => {
+      box().blur();
+      box().setSelectionRange(box().value.length, box().value.length);
+      box().focus();
+    });
+    act(() => {
+      box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    expect(sent.map((s) => s.question)).toEqual(["compare with @Smith 2024, Replication"]);
   });
 });

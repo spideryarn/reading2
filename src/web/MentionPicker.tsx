@@ -125,7 +125,13 @@ export function useMentionPicker(
   const listId = useId();
 
   const trigger = enabled && caret !== null ? mentionTrigger(value, caret) : null;
-  const live = trigger !== null && trigger.at !== dismissedAt ? trigger : null;
+  /* **An `@` a chip in the row wrote is never a search.** A pick also
+     dismisses its own, but that lasts only while the caret stays on it; an
+     article brought in from a button (plan 261017e) lands while the caret is
+     elsewhere, and the reader's first Enter on coming back closed a list they
+     could not see instead of sending (the browser pass). */
+  const chipWrote = trigger !== null && picked.some((m) => m.insertedAt === trigger.at);
+  const live = trigger !== null && trigger.at !== dismissedAt && !chipWrote ? trigger : null;
   /* A dismissal lasts as long as its `@` does. */
   useEffect(() => {
     if (trigger === null && dismissedAt !== null) setDismissedAt(null);
