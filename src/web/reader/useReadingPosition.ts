@@ -134,11 +134,29 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
     laidOut.current = { layoutKey, at };
     if (was === null) return; // arrival: the restore effect above owns it
     if (was.layoutKey === layoutKey) return; // nothing reflowed
-    /* A centred arrival belongs to the geometry it landed in. End that logical
-       hold even when there is no `?at=` to re-anchor below: the page can reflow
-       without emitting a scroll event, and the old block must not stay current. */
-    clearArrivalAnchor();
-    if (was.at !== at) return; // the address moved too — not ours
+    if (was.at !== at) {
+      /* The address moved too — not ours. A centred arrival belonged to the
+         geometry it landed in, and the restore effect is taking the reader
+         elsewhere, so its hold ends here. */
+      clearArrivalAnchor();
+      return;
+    }
+    /* **A centred arrival the reader has not left is put back where it
+       landed**, centred again, and goes on holding — not left to the section
+       `?at=` names, whose start can be a screen or more above it. Found on a
+       Skim figure stop deep in a long section: the controls bar appearing after
+       a `?stop=` link's arrival re-anchored to the section's start and left the
+       figure below the window (plan 261017d). The arrival is the finer truth
+       while it holds, as `positionToWrite` already treats it. Until then this
+       ended the hold and re-anchored to `?at=`, because a reflow moves the
+       block off the centre without a scroll event; re-centring it keeps that
+       true. */
+    const held = arrivalAnchor();
+    if (held !== null) {
+      abandonScroll();
+      scrollToBlock(held.id, "auto", undefined, { align: "centre", passage: held.passage });
+      return;
+    }
     if (at === null) return; // nothing to hold at the top
     abandonScroll();
     scrollToBlock(at, "auto");

@@ -404,7 +404,39 @@ describe("a reflow under a reader who is staying put", () => {
     expect(atNow()).toBeNull();
   });
 
-  it("ends a centred arrival even when there is no ?at= to re-anchor", async () => {
+  /**
+   * **A centred arrival is put back where it landed, not at its section's
+   * start.** Found on a Skim figure stop (plan 261017d): a `?stop=` link
+   * centred a figure deep in a long section, `?at=` was written as that
+   * section's start, and the controls bar then appeared — a layout change with
+   * the address unchanged — so the re-anchor scrolled the section's start to
+   * the top and left the figure 1,200px below the window. The arrival is the
+   * finer truth while it holds, as `positionToWrite` already says; the reflow
+   * re-centres it and the hold goes on.
+   */
+  it("re-centres a held arrival deep in a section, rather than going to the section's start", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(12)}`);
+    render("portrait");
+    await settle();
+
+    /* Block 20 is in § The middle bit (12–23), centred exactly, so the arrival
+       makes no scroll event that could end the hold for another reason. */
+    scrollY = 20 * PORTRAIT - (window.innerHeight - PORTRAIT) / 2;
+    scrollToBlock(block(20), "smooth", undefined, { align: "centre" });
+    expect(arrivalAnchor()).toEqual({ id: block(20), passage: undefined });
+
+    rowHeight = LANDSCAPE;
+    render("landscape");
+
+    expect(scrollY).toBe(20 * LANDSCAPE - (window.innerHeight - LANDSCAPE) / 2);
+    /* An instant move settles, and takes the hold again, on its next frame. */
+    await measureFrame();
+    expect(arrivalAnchor()).toEqual({ id: block(20), passage: undefined });
+    await settle();
+    expect(atNow()).toBe(block(12));
+  });
+
+  it("re-centres a held arrival when there is no ?at= either", async () => {
     history.replaceState(null, "", "/read/x");
     render("portrait");
     await settle();
@@ -417,6 +449,26 @@ describe("a reflow under a reader who is staying put", () => {
 
     rowHeight = LANDSCAPE;
     render("landscape");
+    expect(scrollY).toBe(12 * LANDSCAPE - (window.innerHeight - LANDSCAPE) / 2);
+    await measureFrame();
+    expect(arrivalAnchor()).toEqual({ id: block(12), passage: undefined });
+  });
+
+  it("still leaves the move to the restore effect, and ends the hold, when ?at= changed as well", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(12)}`);
+    render("portrait");
+    await settle();
+    scrollY = 20 * PORTRAIT - (window.innerHeight - PORTRAIT) / 2;
+    scrollToBlock(block(20), "smooth", undefined, { align: "centre" });
+    expect(arrivalAnchor()).not.toBeNull();
+
+    history.replaceState(null, "", `/read/x?at=${block(24)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    await settle();
+
+    expect(scrollY).toBe(24 * LANDSCAPE);
     expect(arrivalAnchor()).toBeNull();
   });
 });
