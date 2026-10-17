@@ -28,6 +28,7 @@ import {
   faqOrderParam,
   modeParam,
   orderParam,
+  barParam,
   confParam,
   parseAsBit,
   parseAsBlockId,
@@ -340,6 +341,17 @@ describe("Sources' sub-mode, and Reception's order", () => {
     /* Debate's key until 2026-10-09: an old link still wins over a restore. */
     expect(NEVER_REMEMBERED).toContain("debate");
     expect(REMEMBERED).not.toContain("name");
+  });
+});
+
+describe("quotes mode parameters", () => {
+  it("round-trips an exact bar stop so a reload keeps the same visible list", () => {
+    /* Quotes uses the model's raw scores as stops. Two distinct scores may be
+       inside one hundredth, so rounding the URL can make snapToStop choose a
+       different stop after reload. */
+    for (const stop of [0, 0.624, 0.625, 1]) {
+      expect(barParam.parse(barParam.serialize(stop))).toBe(stop);
+    }
   });
 });
 

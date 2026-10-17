@@ -168,13 +168,17 @@ async function mount(search: string, extra: Record<string, unknown> = {}): Promi
  * what `fireEvent.change` does, written out because this repo has no
  * testing-library.
  */
-async function dragGateTo(value: number): Promise<void> {
+async function dragGateTo(value: number, landsOn: number): Promise<void> {
   const slider = document.getElementById("gloss-gate") as HTMLInputElement | null;
   expect(slider, "the threshold slider must be on screen to be dragged").not.toBeNull();
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  /* A finger on it first, so the change is a drag, which lands on the nearest
+     value that changes the list — `landsOn` (StopRange.tsx, plan 261017f). */
   await act(async () => {
+    slider!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     setter.call(slider, String(value));
     slider!.dispatchEvent(new Event("input", { bubbles: true }));
+    slider!.dispatchEvent(new Event("pointerup", { bubbles: true }));
   });
 
   /* **Wait for the address, or leave a timer behind.** `gateParam` is
@@ -191,7 +195,7 @@ async function dragGateTo(value: number): Promise<void> {
      Polled rather than slept through, so nothing here depends on the debounce
      staying at 200ms. */
   await vi.waitFor(() => {
-    expect(param("gate")).toBe(value.toFixed(2));
+    expect(param("gate")).toBe(landsOn.toFixed(2));
   });
 }
 
@@ -203,7 +207,7 @@ describe("a term the threshold hides stops being the open one", () => {
     expect(document.body.textContent).toContain("What rare means here.");
 
     marks = [];
-    await dragGateTo(0.5);
+    await dragGateTo(0.5, 0.64);
 
     /* The row has gone, and so has the emphasis the article draws from it. */
     expect(document.body.textContent).not.toContain("What rare means here.");
@@ -233,7 +237,7 @@ describe("a term the threshold hides stops being the open one", () => {
        so a reader adjusting the bar does not lose their place. */
     await mount(`?mode=glossary&sort=prioritised&gate=0.01&term=${HARD.id}`);
     expect(selection).toBe(HARD.id);
-    await dragGateTo(0.5);
+    await dragGateTo(0.5, 0.64);
     await settle();
     expect(selection).toBe(HARD.id);
     expect(param("term")).toBe(HARD.id);

@@ -59,6 +59,7 @@ import { OrderGroup } from "./OrderGroup.js";
 import {
   availableOrders,
   barMax,
+  barStops,
   effectiveOrder,
   FAQ_BAR_DEFAULT,
   type FaqOrder,
@@ -389,6 +390,7 @@ function FaqBarSlider({
       id="faq-bar"
       value={bar}
       max={barMax(questions, bar)}
+      stops={barStops(questions)}
       defaultValue={FAQ_BAR_DEFAULT}
       moved={moved}
       visible={visible.length}

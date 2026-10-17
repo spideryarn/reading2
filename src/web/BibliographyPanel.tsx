@@ -87,6 +87,7 @@ import {
   canThreshold,
   hiddenNote,
   thresholdMax,
+  thresholdStops,
   thresholdTop,
   type ThresholdResult,
 } from "./threshold.js";
@@ -378,6 +379,11 @@ export function barTop(works: readonly ShownWork[]): number {
 /** The track's maximum: the data's top, the current bar, and one step at least. */
 export function barMax(works: readonly ShownWork[], bar: number): number {
   return thresholdMax(works, bar, priorityOf);
+}
+
+/** The bars that change the list — threshold.ts § thresholdStops. */
+export function barStops(works: readonly ShownWork[]): number[] {
+  return thresholdStops(works, priorityOf, floorToGateStep);
 }
 
 /**
@@ -1231,6 +1237,7 @@ function BarSlider({
       id="cite-bar"
       value={bar}
       max={barMax(works, bar)}
+      stops={barStops(works)}
       defaultValue={CITATION_BAR_DEFAULT}
       moved={moved}
       visible={visible.length}

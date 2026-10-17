@@ -110,7 +110,8 @@ import {
   MIN_FIND_CHARS,
   PRIORITY_CONF,
 } from "./search-hits.js";
-import { hiddenNote } from "./threshold.js";
+import { StopRange } from "./StopRange.js";
+import { hiddenNote, thresholdStops } from "./threshold.js";
 import { asksTheServer, type HitOrder, kindFor, type Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -278,8 +279,8 @@ interface Props {
   onOrder(next: HitOrder): void;
   /**
    * The same results *before* the prioritised bar, so the slider has a
-   * denominator and a track that ends where the data does. `found` is what
-   * survives; this is what there was.
+   * denominator and its stops (every confidence a hit carries). `found` is
+   * what survives; this is what there was.
    */
   all: Found[];
   /** Where the bar is, resolved — `?conf=` or `PRIORITY_CONF`. */
@@ -1605,16 +1606,17 @@ function confNote(hidden: number, total: number): string {
  *   the whole reason `?conf=` is in the same unit rather than a 0–1 fraction;
  * - **the count is on screen**, `3 of 11`, which is the only feedback a drag
  *   that happens to move nobody still gives;
- * - **the track ends where the data does** (`confMax`), so no part of it is
- *   dead;
+ * - **no part of the track is dead**: the thumb moves only between the
+ *   confidences the hits carry, each ticked under the track (`StopRange`,
+ *   plan 261017f). The track itself is a fixed 0–100, said beside `max`;
  * - **it says how many it has hidden** (`hiddenNote`), in every state including
  *   none and all — the same foot line every other threshold mode prints
  *   (threshold.ts);
  * - **it can be put back** without the reader having to remember the default.
  *
  * A native `<input type="range">` for the reasons the glossary's is one:
- * draggable, arrow-key steppable, announced, touch-friendly, and `accent-color`
- * is the whole of the styling.
+ * draggable, announced, touch-friendly, and `accent-color` is the whole of the
+ * styling — `StopRange`, which every numeric threshold slider shares.
  */
 function ConfSlider({
   all,
@@ -1657,10 +1659,8 @@ function ConfSlider({
           </button>
         )}
       </div>
-      <input
+      <StopRange
         id="srch-gate"
-        className="gloss-gate-range"
-        type="range"
         min={0}
         /* A fixed 0–100, deliberately unlike the glossary's `gateMax`. Ending
            the track at the data's own top makes sense for a product of two
@@ -1672,11 +1672,15 @@ function ConfSlider({
         max={100}
         step={CONF_STEP}
         value={gate}
+        /* Every confidence a hit carries, so the thumb jumps between the
+           values that change the list and a new hit streaming in adds a tick
+           without moving anything (plan 261017f). */
+        stops={thresholdStops(all, (f) => f.confidence, Math.floor)}
         title="How sure the model has to be for a passage to stay on screen. Left keeps more, right keeps fewer. Hidden passages lose their marks in the article too."
         /* A thumb position is a number nobody can hear, and the count is what
            the reader is actually aiming at. */
-        aria-valuetext={`${gate} out of 100, showing ${count} passages`}
-        onChange={(e) => onGate(Number.parseInt(e.target.value, 10))}
+        valueText={`${gate} out of 100, showing ${count} passages`}
+        onChange={onGate}
       />
       {/* Only when the bar is hiding something. It used to be printed always,
           "Nothing is hidden by this threshold." included; Greg, 2026-10-03
@@ -1714,8 +1718,8 @@ function Results({
   onOrder(next: HitOrder): void;
   /**
    * The same results *before* the prioritised bar, so the slider has a
-   * denominator and a track that ends where the data does. `found` is what
-   * survives; this is what there was.
+   * denominator and its stops (every confidence a hit carries). `found` is
+   * what survives; this is what there was.
    */
   all: Found[];
   /** Where the bar is, resolved — `?conf=` or `PRIORITY_CONF`. */
