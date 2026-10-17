@@ -26,16 +26,22 @@
  * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md
  * § Stage 2.
  *
+ * **Since `skim/14` a stop may be a figure** (plan 261017d): the functions
+ * below walk `WalkStop`s — `walkOf` merges the route's quote stops and its
+ * figure stops — and name a stop by its `key`, a quote's id or a figure's
+ * block id, which is what `?stop=` holds.
+ *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client) is where the other rules below were first specified.
  */
-import { DEPTHS, offeredDepths, passCount, passRoute, walkedIn } from "../skim-passes.js";
-import type { Block, BlockId, SkimDepth, SkimStop } from "../types.js";
+import { DEPTHS, offeredDepths, type Passable, passCount, passRoute, walkedIn, type WalkStop, walkOf } from "../skim-passes.js";
+import type { Block, BlockId, SkimDepth } from "../types.js";
 
 /* The pass definitions are shared with the server's growth rule (src/skim.ts
    § `passSizes`), so they live in src/skim-passes.ts; re-exported here for the
    client's existing imports. */
-export { DEPTHS, offeredDepths, passCount, passRoute, walkedIn };
+export { DEPTHS, offeredDepths, passCount, passRoute, walkedIn, walkOf };
+export type { WalkStop };
 
 /** What the depth control calls each pass — the Opus arbiter's labels. */
 export const DEPTH_LABEL: Record<SkimDepth, string> = {
@@ -52,7 +58,7 @@ export interface DepthChoice {
 }
 
 /** Each pass the route offers, shallowest first — the depth chips (SkimPanel.tsx § `SkimParts`). */
-export function depthChoices(stops: readonly SkimStop[]): DepthChoice[] {
+export function depthChoices(stops: readonly Passable[]): DepthChoice[] {
   return offeredDepths(stops).map((d) => ({ depth: d, label: DEPTH_LABEL[d], count: passCount(stops, d) }));
 }
 
@@ -65,7 +71,7 @@ export function depthChoices(stops: readonly SkimStop[]): DepthChoice[] {
  * route with no third pass was asking to go as deep as the route goes.
  */
 export function effectiveDepth(
-  stops: readonly SkimStop[],
+  stops: readonly Passable[],
   asked: SkimDepth | null,
 ): SkimDepth | null {
   const offered = offeredDepths(stops);
@@ -79,8 +85,8 @@ export function effectiveDepth(
 /** Where the reader is: the pass drawn, its stops, and the one stood at. */
 export interface Location {
   depth: SkimDepth | null;
-  route: SkimStop[];
-  current: SkimStop | null;
+  route: WalkStop[];
+  current: WalkStop | null;
 }
 
 /**
@@ -100,11 +106,11 @@ export interface Location {
  *    or a link from before a rebuild.
  */
 export function locate(
-  stops: readonly SkimStop[],
+  stops: readonly WalkStop[],
   askedDepth: SkimDepth | null,
   askedStop: string | null,
 ): Location {
-  const named = askedStop === null ? undefined : stops.find((s) => s.quoteId === askedStop);
+  const named = askedStop === null ? undefined : stops.find((s) => s.key === askedStop);
   const depth = named
     ? askedDepth !== null && walkedIn(stops, named, askedDepth)
       ? askedDepth
@@ -121,14 +127,14 @@ export function locate(
  * A current stop that is not on this pass steps to the first.
  */
 export function stepStop(
-  route: readonly SkimStop[],
+  route: readonly WalkStop[],
   from: string | null,
   dir: -1 | 1,
 ): string | null {
   if (route.length === 0) return null;
-  const i = route.findIndex((s) => s.quoteId === from);
-  if (i === -1) return route[0]!.quoteId;
-  return route[i + dir]?.quoteId ?? null;
+  const i = route.findIndex((s) => s.key === from);
+  if (i === -1) return route[0]!.key;
+  return route[i + dir]?.key ?? null;
 }
 
 /**
@@ -143,8 +149,8 @@ export function stepStop(
  * changes the pass and does not move (SkimMode.tsx § `changeDepth`). `null` for
  * a pass with no stops.
  */
-export function firstStopOf(stops: readonly SkimStop[], depth: SkimDepth): string | null {
-  return passRoute(stops, depth)[0]?.quoteId ?? null;
+export function firstStopOf(stops: readonly WalkStop[], depth: SkimDepth): string | null {
+  return passRoute(stops, depth)[0]?.key ?? null;
 }
 
 /**
@@ -163,18 +169,18 @@ export function firstStopOf(stops: readonly SkimStop[], depth: SkimDepth): strin
  * `null` for a route with no stops on this pass.
  */
 export type Door =
-  | { kind: "next"; quoteId: string }
+  | { kind: "next"; key: string }
   | { kind: "end"; deeper: { depth: SkimDepth; first: string } | null };
 
 export function doorAfter(
-  stops: readonly SkimStop[],
+  stops: readonly WalkStop[],
   depth: SkimDepth,
   current: string | null,
 ): Door | null {
   const route = passRoute(stops, depth);
   if (route.length === 0) return null;
   const next = stepStop(route, current, 1);
-  if (next !== null) return { kind: "next", quoteId: next };
+  if (next !== null) return { kind: "next", key: next };
   const d = offeredDepths(stops).find((x) => x > depth);
   const deeperFirst = d === undefined ? null : firstStopOf(stops, d);
   return {

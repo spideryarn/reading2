@@ -1305,6 +1305,9 @@ describe("the artefacts a shared link carries", () => {
     /* `skim/13`'s pass intros (plan 261011r) cross since 2026-10-12, Greg's
        "A" to q-t5xjqn (plan 261012a); a `null` entry crosses as `null`. */
     intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
+    /* `skim/14`'s figure stops (plan 261017d) do not cross: `figures` is
+       default-absent here, and letting them is Greg's decision, not built. */
+    figures: [{ blockId: "spya-figur1" as BlockId, depth: 1, cue: "Why the figure is on the walk.", after: "spya-quote1" }],
     visible: [1, 2, 2],
     offered: 12,
     dropped: {
@@ -2174,6 +2177,8 @@ describe("the artefacts a shared link carries", () => {
     const json = JSON.stringify(built);
     expect(json).not.toContain("profileHash");
     expect(json).not.toContain("profile-of-a-person");
+    /* Figure stops stay the owner's until Greg says otherwise (plan 261017d § Not built). */
+    expect(json).not.toContain("Why the figure is on the walk.");
   });
 
   /** The questions and the article's passages, and not our checking's tally. */

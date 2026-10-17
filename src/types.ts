@@ -1397,6 +1397,32 @@ export interface SkimStop {
 }
 
 /**
+ * **A figure the route stops at, between quotes** — since `skim/14`. Greg,
+ * 2026-10-17 (`spya-zrfpc0`, reply to q-z27hq2): *"I was thinking 1B, perhaps
+ * with some kind of commentary or cue to make it easier to see why the figure
+ * is being included."* A stop of its own, walked in one pass (`depth`, never
+ * carried), counted in that pass's length as walked, placed in the one route
+ * order straight after the quote stop `after` names (`null`: before the
+ * first). Kept in `Skim.figures`, beside `stops` rather than in it, so that
+ * `stops` stays quote-only for every reader of it — the public DTO above all,
+ * which does not carry figures (src/public/dto.ts § `publicSkim`).
+ * `walkOf` (src/skim-passes.ts) merges the two into the walk.
+ * docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md.
+ */
+export interface SkimFigureStop {
+  /** The figure's block — src/figures.ts § `figuresOf`. */
+  blockId: BlockId;
+  depth: SkimDepth;
+  /**
+   * Why this figure is on the walk and what to look at in it — never what it
+   * shows the result to be. `null` when the model's was missing or bad.
+   */
+  cue: string | null;
+  /** The quote stop it follows, by quote id — its place in the route order. `null`: before every quote. */
+  after: string | null;
+}
+
+/**
  * What preprocessing or validation threw away or repaired. Counts only — never
  * a quote or a role. A dropped stop looks exactly like one the model never
  * offered, which is why they ride on the artefact and in the log.
@@ -1481,6 +1507,24 @@ export interface SkimDrops {
    * since `skim/13` (GPT Sol, plan review F3). Absent before, read it as 0.
    */
   movedIntro?: number;
+  /**
+   * **Figure stops** (`skim/14`, plan 261017d), all absent before it — read as
+   * 0. Dropped: a label naming no offered figure, or a malformed entry
+   * (`unknownFigure`); a figure named twice, the shallowest then the earliest
+   * kept (`duplicateFigure`); an `after` naming a quote that is not on the
+   * route (`figureAnchorGone`); a depth no quote stop is first placed at
+   * (`figureNoPass`); past `FIGURE_CAPS` in route order (`overFigureCap`);
+   * one that left its pass no shorter than the next (`figureShrink`). Kept
+   * with a `null` cue: none given (`noFigureCue`) or a bad one (`badFigureCue`).
+   */
+  unknownFigure?: number;
+  duplicateFigure?: number;
+  figureAnchorGone?: number;
+  figureNoPass?: number;
+  overFigureCap?: number;
+  figureShrink?: number;
+  noFigureCue?: number;
+  badFigureCue?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
@@ -1515,6 +1559,12 @@ export interface Skim {
   profileHash: string | null;
   /** **The array order is the route.** Each pass walks its own and carried stops in this order (see `SkimDepth`). */
   stops: SkimStop[];
+  /**
+   * **The figures the route stops at** (`skim/14`), each placed after a quote
+   * stop of `stops`. **Absent** on routes written before it, and `[]` when the
+   * model chose none. Never crosses to a visitor (src/public/dto.ts).
+   */
+  figures?: SkimFigureStop[];
   /**
    * **One line per pass, read before its first stop** — Gist, More, Most;
    * `null` for a pass the route does not offer or whose intro was bad.

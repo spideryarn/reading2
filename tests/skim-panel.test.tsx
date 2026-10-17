@@ -432,9 +432,9 @@ function view(over: Partial<SkimView> = {}): SkimView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
-      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
-      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { key: Q[2]!, figure: null, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { key: Q[0]!, figure: null, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { key: Q[3]!, figure: null, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
     ],
     position: 2,
     card: null,
@@ -559,7 +559,7 @@ describe("the panel", () => {
       owner(),
       view({
         rows: [
-          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null, blockId: null },
+          { key: Q[0]!, figure: null, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null, blockId: null },
         ],
       }),
     );
@@ -594,8 +594,8 @@ describe("the panel", () => {
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null, blockId: null },
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
+        { key: Q[2]!, figure: null, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null, blockId: null },
+        { key: Q[3]!, figure: null, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
       ],
       position: 1,
     });
@@ -613,7 +613,8 @@ describe("the panel", () => {
     const mixed = view({
       rows: [
         {
-          quoteId: Q[2]!,
+          key: Q[2]!,
+          figure: null,
           n: 1,
           place: [
             { title: "Results", voice: "author" },
@@ -629,7 +630,7 @@ describe("the panel", () => {
           blockId: null,
         },
         // The same text in other voices is still the same place: said, not drawn.
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
+        { key: Q[3]!, figure: null, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
       ],
       position: 1,
     });
@@ -866,7 +867,7 @@ describe("the panel", () => {
       depth: 3,
       /* Most walks only its own stop (260929e), so the count must come from the
          whole route, not from the rows drawn. */
-      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null }],
+      rows: [{ key: Q[1]!, figure: null, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */
