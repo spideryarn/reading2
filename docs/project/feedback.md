@@ -400,7 +400,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   it is one of those threads (otherwise just how many need one), and *‹ Previous* / *Next ›*, which
   step **only through the threads that need a decision** (and the one showing, so *Next* still works
   from a thread just answered or deferred); replied and deferred threads are reached from the
-  contents. The pager is drawn again in the dialog's footer while a thread shows (below). At an end a button is `aria-disabled` with a `title`, and pressed anyway it says the
+  contents. The pager is drawn again in the dialog's footer while a thread shows (below). At an end a button is `aria-disabled` with a tip (`data-tip`, our card), and pressed anyway it says the
   same on the row, for a phone
   ([261009m](../plans/261009m-needs-a-decision-pager-steps-only-through-waiting-threads.md)). The
   pills are hidden meanwhile, because on a phone with the keyboard up they cost three
