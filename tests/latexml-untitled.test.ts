@@ -81,6 +81,15 @@ describe("runExtract on the reported page", () => {
     expect(out.meta.title).toBe(slug);
   });
 
+  it("does not trust the guessed title when the same LaTeXML document is uploaded without an address", async () => {
+    const selected = await runExtract({ html: UNTITLED, url: null, slug, titleFromOpening: async () => REAL });
+    expect(selected.meta.title).toBe(REAL);
+    expect(selected.extractedHtml).toContain(`<title>${REAL}</title>`);
+    const fallback = await runExtract({ html: UNTITLED, url: null, slug, titleFromOpening: async () => null });
+    expect(fallback.meta.title).toBe(slug);
+    expect(fallback.extractedHtml).not.toContain("Indicator Properties</title>");
+  });
+
   it("an ordinary page's <title> is not second-guessed: the opening is not asked", async () => {
     const titleFromOpening = vi.fn(async () => "Something Else");
     const html = UNTITLED.replace(

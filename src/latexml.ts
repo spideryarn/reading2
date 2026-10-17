@@ -140,6 +140,18 @@ export function prepareLatexml(doc: Document): LatexmlStats {
  */
 export function latexmlUntitled(doc: Document): boolean {
   if (!hasLatexmlSource(doc)) return false;
+  return untitledLatexmlMarkup(doc);
+}
+
+/**
+ * The markup half of `latexmlUntitled`, without the source-address proof.
+ *
+ * An uploaded HTML file has no address. Its extraction and metadata readers
+ * may use this weaker signal only to distrust a guessed `<title>`; it must not
+ * opt a page into LaTeXML's structural rewrites. An upload can already choose
+ * any title, so declining this one grants the file no new capability.
+ */
+export function untitledLatexmlMarkup(doc: Document): boolean {
   const roots = Array.from(doc.querySelectorAll(DOCUMENT));
   return roots.length > 0 && roots.every((root) => root.querySelector(".ltx_title_document") === null);
 }

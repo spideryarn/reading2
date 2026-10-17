@@ -22,7 +22,10 @@ async function main(): Promise<void> {
     html,
     url: "https://arxiv.org/html/2308.08708",
     slug: "eval",
-    titleFromOpening: async (records) => ((opening = [...records]), null),
+    titleFromOpening: async (records) => {
+      opening = [...records];
+      return null;
+    },
   });
   const renumber = (rs: Rec[]) => rs.map((r, i) => ({ ...r, id: `r${i + 1}` }));
   const above = (...lines: string[]) => renumber([...lines.map((text) => ({ id: "x", text })), ...opening]);

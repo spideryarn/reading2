@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import { CHAT_REASONING } from "../src/ai-call.js";
 import type { OpeningRecord } from "../src/front-matter-authors.js";
-import { type OpeningTitleGateway, openingTitleReader, readOpeningTitle, titlePrintedIn } from "../src/opening-title.js";
+import {
+  MAX_RECORDS,
+  type OpeningTitleGateway,
+  openingTitleReader,
+  readOpeningTitle,
+  titlePrintedIn,
+} from "../src/opening-title.js";
 
 const REAL = "Consciousness in Artificial Intelligence: Insights from the Science of Consciousness";
 const records: OpeningRecord[] = [
@@ -40,6 +46,27 @@ describe("titlePrintedIn", () => {
     expect(titlePrintedIn(records, { id: "r2", title: "in" })).toBeNull();
     expect(titlePrintedIn(records, { id: "r2", title: "*" })).toBeNull();
   });
+
+  it("treats an astral Unicode letter as one word character at either boundary", () => {
+    const letter = "\u{10400}"; // DESERET CAPITAL LETTER LONG I, Unicode category Letter.
+    expect(titlePrintedIn([{ id: "r1", text: `${letter}Title` }], { id: "r1", title: "Title" })).toBeNull();
+    expect(titlePrintedIn([{ id: "r1", text: `Title${letter}` }], { id: "r1", title: "Title" })).toBeNull();
+  });
+
+  it("counts Unicode code points for the title length limits", () => {
+    const short = "\u{10400}\u{10401}";
+    expect(titlePrintedIn([{ id: "r1", text: short }], { id: "r1", title: short })).toBeNull();
+    const long = "\u{10400}".repeat(151);
+    expect(titlePrintedIn([{ id: "r1", text: long }], { id: "r1", title: long })).toBe(long);
+  });
+
+  it("refuses an ill-formed answer that ends halfway through an astral character", () => {
+    expect(titlePrintedIn([{ id: "r1", text: "AB\u{10400}C" }], { id: "r1", title: "AB\ud801" })).toBeNull();
+  });
+
+  it("keeps looking when an earlier occurrence is not on whole-word boundaries", () => {
+    expect(titlePrintedIn([{ id: "r1", text: "NotATitle; Title" }], { id: "r1", title: "Title" })).toBe("Title");
+  });
 });
 
 describe("readOpeningTitle", () => {
@@ -58,6 +85,21 @@ describe("readOpeningTitle", () => {
       throw new Error("no call expected");
     };
     expect((await readOpeningTitle([], { gateway })).title).toBeNull();
+  });
+
+  it("accepts answers only from the same record cap the model was shown", async () => {
+    const many = Array.from({ length: MAX_RECORDS + 1 }, (_, i) => ({ id: `r${i + 1}`, text: `Record ${i + 1} title` }));
+    const gateway: OpeningTitleGateway = async (_job, request) => {
+      const shown = ((request.messages as { content: string }[])[1]?.content) ?? "";
+      expect(shown).toContain(`"id":"r${MAX_RECORDS}"`);
+      expect(shown).not.toContain(`"id":"r${MAX_RECORDS + 1}"`);
+      return answering(JSON.stringify({ id: `r${MAX_RECORDS + 1}`, title: `Record ${MAX_RECORDS + 1} title` }))(
+        "opening-title",
+        request,
+        {},
+      );
+    };
+    expect((await readOpeningTitle(many, { gateway })).title).toBeNull();
   });
 });
 

@@ -102,6 +102,34 @@ export function parseOpeningTitleAnswer(body: unknown): { id: string; title: str
 const WORDISH = /[\p{L}\p{M}\p{N}]/u;
 const collapse = (s: string) => s.replace(/\s+/gu, " ").trim();
 
+/** The Unicode code point beginning at a UTF-16 index. */
+function codePointAt(s: string, index: number): string | undefined {
+  const point = s.codePointAt(index);
+  return point === undefined ? undefined : String.fromCodePoint(point);
+}
+
+/** The Unicode code point ending at a UTF-16 index. */
+function codePointBefore(s: string, index: number): string | undefined {
+  if (index <= 0) return undefined;
+  let start = index - 1;
+  const last = s.charCodeAt(start);
+  if (last >= 0xdc00 && last <= 0xdfff && start > 0) {
+    const first = s.charCodeAt(start - 1);
+    if (first >= 0xd800 && first <= 0xdbff) start -= 1;
+  }
+  return s.slice(start, index);
+}
+
+/** Unicode code points, or `null` when a string contains a lone UTF-16 surrogate. */
+function unicodeCodePoints(s: string): string[] | null {
+  const points = [...s];
+  for (const point of points) {
+    const unit = point.charCodeAt(0);
+    if (point.length === 1 && unit >= 0xd800 && unit <= 0xdfff) return null;
+  }
+  return points;
+}
+
 /**
  * **The answer as the page prints it, or `null`**: a run of whole words in the
  * record it names, from the records the model was shown. Returned as the
@@ -111,15 +139,18 @@ const collapse = (s: string) => s.replace(/\s+/gu, " ").trim();
 export function titlePrintedIn(records: readonly OpeningRecord[], answer: { id: string; title: string }): string | null {
   const record = records.slice(0, MAX_RECORDS).find((r) => r.id === answer.id);
   const wanted = collapse(answer.title);
-  if (!record || wanted.length < MIN_TITLE_CHARS || wanted.length > MAX_TITLE_CHARS) return null;
+  const wantedPoints = unicodeCodePoints(wanted);
+  if (!record || wantedPoints === null || wantedPoints.length < MIN_TITLE_CHARS || wantedPoints.length > MAX_TITLE_CHARS) return null;
   if (!WORDISH.test(wanted)) return null;
   const text = collapse(record.text);
   for (let at = text.indexOf(wanted); at !== -1; at = text.indexOf(wanted, at + 1)) {
-    const before = text[at - 1];
-    const after = text[at + wanted.length];
+    const before = codePointBefore(text, at);
+    const after = codePointAt(text, at + wanted.length);
+    const first = wantedPoints[0]!;
+    const last = wantedPoints[wantedPoints.length - 1]!;
     /* Whole words: `nsciousness in AI` is not printed as a title. */
-    const startsAWord = before === undefined || !WORDISH.test(before) || !WORDISH.test(wanted[0]!);
-    const endsAWord = after === undefined || !WORDISH.test(after) || !WORDISH.test(wanted[wanted.length - 1]!);
+    const startsAWord = before === undefined || !WORDISH.test(before) || !WORDISH.test(first);
+    const endsAWord = after === undefined || !WORDISH.test(after) || !WORDISH.test(last);
     if (startsAWord && endsAWord) return text.slice(at, at + wanted.length);
   }
   return null;
@@ -164,8 +195,8 @@ export type OpeningTitleReader = (records: readonly OpeningRecord[]) => Promise<
 
 /**
  * **The pipeline's reader**: a refusal or a failed call is logged and is
- * `null`, so the import goes on with the slug; an abort is re-thrown. The log
- * line carries a fixed sentence, never a word of the page.
+ * `null`, so the import goes on with a placeholder; an abort is re-thrown. The
+ * log line carries a fixed sentence, never a word of the page.
  */
 export function openingTitleReader(
   ctx: { slug: string; signal: AbortSignal },
@@ -181,7 +212,7 @@ export function openingTitleReader(
       if (ctx.signal.aborted) throw err;
       log("pipeline").warn(
         { slug: ctx.slug, step: "extract", ...errorFields(err) },
-        `extract ${ctx.slug}: the opening-title call was no help; the title is the slug`,
+        `extract ${ctx.slug}: the opening-title call was no help; a placeholder title will be used`,
       );
       return null;
     }

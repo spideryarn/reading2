@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { removePlatformFurniture } from "./furniture.js";
-import { latexmlAuthorNames, latexmlUntitled, prepareLatexml } from "./latexml.js";
+import { latexmlAuthorNames, latexmlUntitled, prepareLatexml, untitledLatexmlMarkup } from "./latexml.js";
 import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
@@ -512,8 +512,11 @@ function readingArm(
      into one row per author (src/latexml.ts § 6). `metaAuthors` still reads the
      `<meta>` tags where it always has, below, and falls back to these names. */
   const titleBlockNames = latexmlAuthorNames(dom.window.document);
-  /* And whether it has a title of its own, before anything rewrites it. */
-  const untitled = latexmlUntitled(dom.window.document);
+  /* Whether it has a title of its own, before anything rewrites it. A fetched
+     page needs source-address proof. An upload has no address and
+     may use the weaker markup signal only to distrust its own title; the
+     source-gated LaTeXML rewrites above remain source-gated. */
+  const untitled = url === null ? untitledLatexmlMarkup(dom.window.document) : latexmlUntitled(dom.window.document);
   /* And what the page hides from its reader, before `prepareDocument` un-hides
      collapsed sections for Readability: the opening below leaves it out. */
   markHidden(dom.window.document);
@@ -1319,7 +1322,8 @@ export async function runExtract(opts: {
    * What reads the title off the page's opening when the page's `<title>` is
    * known not to be it: a LaTeXML paper with no title of its own
    * (src/opening-title.ts, plan 261017a). Import hands in the cheap model's;
-   * absent, or no answer, the title is the slug.
+   * absent, or no answer, the title is the paper's arXiv id where available,
+   * else the slug.
    */
   titleFromOpening?: OpeningTitleReader;
 }): Promise<ExtractResult> {
