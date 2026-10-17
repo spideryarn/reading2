@@ -7,7 +7,8 @@ related: mode-quotes, mode-structure
 
 Skim picks out a handful of passages which, read on their own, give you a good sense of what the
 piece is about. Think of it as an alternative to a summary that keeps you in the article: every stop
-is a passage from the article, in place, sometimes with a short question to read it with. Along the way it
+is a passage from the article, or one of its figures, in place, sometimes with a short question to
+read it with. Along the way it
 shows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.
 Go round quickly with a few stops, then again in more detail, then again in more.
 
@@ -33,6 +34,10 @@ route; visitors to a shared article can walk one already planned.
 - Some stops have a short question above the quote, written by AI, to read it with: what the quote
   refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on
   its own has none.
+- On a paper with figures, a stop can be a figure or a table instead of a passage, where looking at
+  it helps with the passages around it. Its row shows the caption, and a line above it, written by
+  AI, says why it is there and what to look at — never what it shows the result to be. Stepping to
+  it brings the figure into view. Visitors to a shared article walk the passages only.
 - A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.
   When a route has any, small dots under each stop’s number show which passes it is in, shallowest
   first: more than one filled, and you may have read it already.

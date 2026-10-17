@@ -597,7 +597,7 @@ describe("the door, walking figures", () => {
  */
 describe("a figure stop on the route", () => {
   const FIGURE_CUE = "How is the landscape divided? Look at the category names.";
-  const withFigure = (after: string | null, depth: 1 | 2 = 1) => ({
+  const withFigure = (after: string, depth: 1 | 2 = 1) => ({
     ...SKIM_BODY,
     skim: { ...ROUTE, figures: [{ blockId: FIG, depth, cue: FIGURE_CUE, after }] },
   });
@@ -656,14 +656,17 @@ describe("a figure stop on the route", () => {
     expect(jumps.at(-1)).toEqual({ id: FIG, passage: null });
   });
 
-  it("Figures → a pass that starts with a figure lands on the figure, counted on the chip (Sol F2)", async () => {
-    skimBody = withFigure(null, 2);
+  it("is counted on its pass's chip while the Figures walk is drawn, and a switch into the pass walks it (Sol F2)", async () => {
+    skimBody = withFigure(Q[1]!, 2);
     history.replaceState(null, "", "/read/figs?mode=skim&depth=figures&stop=" + TAB);
     await mount();
     expect(chipText()).toEqual(["Gist2", "More2", "Figures2"]);
     await act(async () => chip("More").click());
     await settled();
-    expect([param("depth"), param("stop")]).toEqual(["2", FIG]);
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[1]]);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("Stop 1 of 2");
+    await act(async () => void control!.step(1));
+    await settled();
     expect(control?.blockId).toBe(FIG);
   });
 

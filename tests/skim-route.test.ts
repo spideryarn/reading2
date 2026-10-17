@@ -333,12 +333,12 @@ describe("where a stop sits in the article", () => {
 
 /**
  * **Figure stops** (plan 261017d; Greg's 1B to q-z27hq2): a figure is a stop of
- * its own, between quotes, walked in one pass and counted in its length.
- * Stored beside the quotes (`Skim.figures`) and merged into one walk by
- * `walkOf`, keyed by its block id.
+ * its own, met straight after the quote it follows, in that quote's pass, and
+ * counted in its length. Stored beside the quotes (`Skim.figures`) and merged
+ * into one walk by `walkOf`, keyed by its block id.
  */
 describe("a route with figures", () => {
-  const fig = (blockId: string, depth: 1 | 2 | 3, after: string | null): SkimFigureStop => ({
+  const fig = (blockId: string, depth: 1 | 2 | 3, after: string): SkimFigureStop => ({
     blockId: blockId as BlockId,
     depth,
     cue: null,
@@ -346,17 +346,18 @@ describe("a route with figures", () => {
   });
   const keys = (stops: readonly WalkStop[]) => stops.map((s) => s.key);
 
-  it("places each figure straight after its anchor, and an unanchored one first", () => {
-    const walk = walkOf(ROUTE, [fig("F1", 1, "d"), fig("F0", 3, null), fig("F2", 2, "d")]);
-    expect(keys(walk)).toEqual(["F0", "a", "b", "c", "d", "F1", "F2", "e", "f", "g", "h"]);
+  it("places each figure straight after the quote it follows", () => {
+    const walk = walkOf(ROUTE, [fig("F1", 1, "d"), fig("F3", 3, "b"), fig("F2", 2, "f")]);
+    expect(keys(walk)).toEqual(["a", "b", "F3", "c", "d", "F1", "e", "f", "F2", "g", "h"]);
     expect(walk.find((s) => s.key === "F1")?.kind).toBe("figure");
   });
 
-  it("walks a figure in its own pass, counted in that pass's length, and never carried", () => {
-    const walk = walkOf(ROUTE, [fig("F1", 1, "d"), fig("F2", 2, "d")]);
-    expect(keys(passRoute(walk, 1))).toEqual(["a", "d", "F1", "g"]);
-    expect(keys(passRoute(walk, 2))).toEqual(["c", "F2", "f"]);
-    expect([passCount(walk, 1), passCount(walk, 2), passCount(walk, 3)]).toEqual([4, 3, 3]);
+  it("walks a figure in its quote's pass, counted in that pass's length, and never carried", () => {
+    const walk = walkOf(SHARED, [fig("F1", 1, "a"), fig("F2", 2, "f")]);
+    /* `a` is carried into More (`SHARED`); its figure is not. */
+    expect(keys(passRoute(walk, 1))).toEqual(["a", "F1", "d", "g"]);
+    expect(keys(passRoute(walk, 2))).toEqual(["a", "c", "f", "F2"]);
+    expect([passCount(walk, 1), passCount(walk, 2), passCount(walk, 3)]).toEqual([4, 4, 4]);
   });
 
   it("never makes a pass: a figure at a depth no quote is at is left out", () => {
@@ -384,10 +385,11 @@ describe("a route with figures", () => {
     expect(doorAfterWalk(walk, 1, "d")).toEqual({ kind: "next", key: "F1" });
   });
 
-  it("can be the first stop of a pass, which a change of pass lands on", () => {
-    const walk = walkOf(ROUTE, [fig("F0", 2, null)]);
-    expect(firstStopOfWalk(walk, 2)).toBe("F0");
-    expect(doorAfterWalk(walk, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "F0" } });
+  it("can end a pass, and the door after it offers the next pass", () => {
+    const walk = walkOf(ROUTE, [fig("F9", 1, "g")]);
+    expect(doorAfterWalk(walk, 1, "g")).toEqual({ kind: "next", key: "F9" });
+    expect(doorAfterWalk(walk, 1, "F9")).toEqual({ kind: "end", deeper: { depth: 2, first: "c" } });
+    expect(firstStopOfWalk(walk, 2)).toBe("c");
   });
 
   it("leaves a route with no figures walking exactly as before", () => {

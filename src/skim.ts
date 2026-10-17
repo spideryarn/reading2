@@ -301,11 +301,12 @@ export const ANSWER_TOKENS =
   MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 80) / 3) +
   /* Since `skim/14`: a figure entry per offered figure — its label, depth,
      anchor and a cue at the cap — for the same reason as the stops. */
-  MAX_FIGURES_OFFERED * Math.ceil((MAX_CUE_CHARS + 80) / 3);
+  MAX_FIGURES_OFFERED * Math.ceil((MAX_CUE_CHARS + 60) / 3);
 
 /**
- * **How many figures each pass may walk: Gist 1, More 2, Most 3** — over the
- * cap a figure is dropped in route order (`overFigureCap`). Numbers to measure,
+ * **How many figures each pass may walk: Gist 1, More 2, Most 3** — a figure's
+ * pass is its quote's (`validateFigures`); over the cap it is dropped in route
+ * order (`overFigureCap`). Numbers to measure,
  * like `targetsFor`, not product constants: Gist is three to five quote stops,
  * and two pictures among them would be a different walk. Plan 261017d.
  */
@@ -1173,18 +1174,29 @@ export function growthFailure(
  * deepest unchanged, so every cap still holds. A route that already grows is
  * returned as it was. Whatever no choice can fix — one stop at each depth
  * over nine quotes — is left for `growthFailure`, and the job fails as before.
+ *
+ * **And the figures, since `skim/14`** (plan 261017d): `figures` is how many
+ * figure stops each pass walks, and a plan must grow with them as well as
+ * without them, so a Gist figure that would tie More is met by a stop carried
+ * into More rather than by losing the figure — Greg's rule above, the deeper
+ * pass getting longer. When no plan does both, the quotes alone decide, and
+ * `trimFigures` drops figures afterwards. Measured: without this, a third of
+ * the figures the model chose were trimmed
+ * (docs/investigations/261017b-skim-figures-as-stops-measured.md).
  */
 export function growPasses(
   stops: readonly SkimStop[],
   quotes: readonly Quote[],
   dropped: SkimDrops,
+  figures: readonly [number, number, number] = [0, 0, 0],
 ): SkimStop[] {
   const route = stops.map((s): SkimStop => ({ ...s, ...(s.again ? { again: [...s.again] } : {}) }));
   const q = quotes.length;
-  if (growthFailure(passSizes(route), q) === null) return route;
+  if (grows(passSizes(route), q, figures)) return route;
   const own = (d: SkimDepth) => route.reduce((n, s) => (s.depth === d ? n + 1 : n), 0);
   const carried = (d: SkimDepth) => route.reduce((n, s) => (s.again?.includes(d) ? n + 1 : n), 0);
-  const plan = repairSizes({ own: [own(1), own(2), own(3)], carried: [carried(2), carried(3)] }, q);
+  const now = { own: [own(1), own(2), own(3)], carried: [carried(2), carried(3)] } as const;
+  const plan = repairSizes(now, q, figures) ?? repairSizes(now, q);
   if (plan === null) return route;
 
   /* The priority the prompt shows (`priorityOf`); none is the lowest, as `collapseQuotes` ranks it. */
@@ -1235,6 +1247,17 @@ export interface SizePlan {
 }
 
 /**
+ * **The passes grow, walked with the figures and without them** —
+ * `growthFailure` twice. A pass with no quote of its own walks no figure
+ * (`walkOf`), so a figure count there adds nothing.
+ */
+function grows(sizes: readonly [number, number, number], offered: number, figures: readonly [number, number, number]): boolean {
+  if (growthFailure(sizes, offered) !== null) return false;
+  const withFigures = sizes.map((w, i) => (w > 0 ? w + figures[i]! : 0)) as [number, number, number];
+  return growthFailure(withFigures, offered) === null;
+}
+
+/**
  * **The best reachable pass sizes, or `null` when none grows** — the search
  * behind `growPasses`, over counts alone. `own` is each depth's own stops and
  * `carried` the stops carried into More and into Most now. A move goes one
@@ -1248,6 +1271,8 @@ export interface SizePlan {
 export function repairSizes(
   now: { own: readonly [number, number, number]; carried: readonly [number, number] },
   offered: number,
+  /** Figure stops per pass (`skim/14`), which the sizes must also grow with — `grows`. */
+  figures: readonly [number, number, number] = [0, 0, 0],
 ): SizePlan | null {
   const [g, m, o] = now.own;
   let best: { plan: SizePlan; rank: [number, number, number] } | null = null;
@@ -1269,7 +1294,7 @@ export function repairSizes(
       for (let c2 = 0; c2 <= top2; c2++) {
         for (let c3 = 0; c3 <= top3; c3++) {
           const sizes: [number, number, number] = [g2, m2 > 0 ? m2 + c2 : 0, o2 > 0 ? o2 + c3 : 0];
-          if (growthFailure(sizes, offered) !== null) continue;
+          if (!grows(sizes, offered, figures)) continue;
           const drops = Math.max(0, now.carried[0] - c2) + Math.max(0, now.carried[1] - c3);
           const adds = Math.max(0, c2 - now.carried[0]) + Math.max(0, c3 - now.carried[1]);
           const rank: [number, number, number] = [moves, drops, adds];
@@ -1329,30 +1354,36 @@ export function introsOf(
 
 interface RawFigure {
   figure?: unknown;
-  depth?: unknown;
   after?: unknown;
   cue?: unknown;
 }
 
 /**
  * **The figure stops, from whatever the model wrote** (`skim/14`, plan
- * 261017d), read once the quote route is final, so a pass and an anchor are
+ * 261017d), read once the quote route is final, so an anchor and its pass are
  * the route's own. `raw` has its labels mapped back already
- * (`fromFigureLabels`): `figure` a block id, `after` a quote id or `""`. In
- * this order:
+ * (`fromFigureLabels`): `figure` a block id, `after` a quote id.
  *
- * 1. not an object, a `figure` that is not an offered figure's block, a depth
- *    outside 1–3, an `after` that is not a string, or a block id that is also
- *    a quote's id on the route → dropped (`unknownFigure`);
- * 2. an `after` naming a quote not on the route → dropped
+ * **A figure is walked in the pass of the quote it follows** — that quote's
+ * own `depth` — and nowhere else. The model names the quote and the pass
+ * follows from it. Measured, a figure with a depth of its own was anchored to
+ * a quote walked in another pass about half the time (15 of 35, then 18 of
+ * 31 after a wording asking it not to), and so met beside stops it had
+ * nothing to do with, two figures sometimes stacked together; the pairing of
+ * figure with quote was usually right, and the depth was what broke it
+ * (docs/investigations/261017b-skim-figures-as-stops-measured.md). In this
+ * order:
+ *
+ * 1. not an object, a `figure` that is not an offered figure's block or is a
+ *    quote's id on the route → dropped (`unknownFigure`);
+ * 2. an `after` that names no quote on the route → dropped
  *    (`figureAnchorGone`): placing it elsewhere would put it beside a passage
- *    the model did not choose (GPT Sol, plan review F3). `""` is before the
- *    first stop;
- * 3. a figure named twice → the shallowest, then the earliest (`duplicateFigure`);
- * 4. a depth no quote stop is first placed at → dropped (`figureNoPass`): a
- *    figure never makes a pass;
- * 5. `FIGURE_CAPS`, per pass, in route order → `overFigureCap`;
- * 6. the cue, as a quote's (`cueOf`), **the figure kept**: none given is
+ *    the model did not choose (GPT Sol, plan review F3);
+ * 3. a figure named twice, or a second figure after one quote → the
+ *    shallowest, then the earliest, kept (`duplicateFigure`), so no two
+ *    figures are ever met side by side;
+ * 4. `FIGURE_CAPS`, per pass, in route order → `overFigureCap`;
+ * 5. the cue, as a quote's (`cueOf`), **the figure kept**: none given is
  *    `noFigureCue`, a bad one `badFigureCue`, and either is `null`. The
  *    prompt asks for one on every figure, but a figure with its caption is
  *    still worth the stop.
@@ -1369,45 +1400,45 @@ export function validateFigures(
     dropped[key] = (dropped[key] ?? 0) + 1;
   };
   const figures = new Set<string>(offered.map((f) => f.blockId));
-  const onRoute = new Set(stops.map((s) => s.quoteId));
+  const depthOf = new Map(stops.map((s) => [s.quoteId, s.depth]));
   const read: SkimFigureStop[] = [];
   /* Counted only on the figures that are kept, after every drop below. */
   const cueFault = new Map<SkimFigureStop, CueRead["kind"]>();
   for (const item of raw) {
     const r = (item && typeof item === "object" ? item : {}) as RawFigure;
     const blockId = typeof r.figure === "string" ? r.figure.trim() : "";
-    if (!figures.has(blockId) || onRoute.has(blockId) || !isDepth(r.depth) || typeof r.after !== "string") {
+    if (!figures.has(blockId) || depthOf.has(blockId)) {
       count("unknownFigure");
       continue;
     }
-    const after = r.after.trim() === "" ? null : r.after.trim();
-    if (after !== null && !onRoute.has(after)) {
+    const after = typeof r.after === "string" ? r.after.trim() : "";
+    const depth = depthOf.get(after);
+    if (depth === undefined) {
       count("figureAnchorGone");
       continue;
     }
     const cueRead = cueOf(r.cue);
-    const stop = { blockId: blockId as BlockId, depth: r.depth, cue: cueRead.kind === "cue" ? cueRead.cue : null, after };
+    const stop = { blockId: blockId as BlockId, depth, cue: cueRead.kind === "cue" ? cueRead.cue : null, after };
     cueFault.set(stop, cueRead.kind);
     read.push(stop);
   }
-  /* 3 — of a figure named twice, the shallowest, then the earliest. */
-  const best = new Map<string, SkimFigureStop>();
-  for (const f of read) {
-    const held = best.get(f.blockId);
-    if (!held || f.depth < held.depth) best.set(f.blockId, f);
-  }
-  const once = read.filter((f) => best.get(f.blockId) === f);
+  /* 3 — one entry per figure and one figure per quote: of those sharing
+     either, the shallowest, then the earliest. */
+  const winners = (key: (f: SkimFigureStop) => string) => {
+    const best = new Map<string, SkimFigureStop>();
+    for (const f of read) {
+      const held = best.get(key(f));
+      if (!held || f.depth < held.depth) best.set(key(f), f);
+    }
+    return new Set(best.values());
+  };
+  const perFigure = winners((f) => f.blockId);
+  const perQuote = winners((f) => f.after);
+  const once = read.filter((f) => perFigure.has(f) && perQuote.has(f));
   for (let i = once.length; i < read.length; i++) count("duplicateFigure");
-  /* 4 — only a pass the quotes offer. */
-  const passes = new Set(offeredDepths(stops));
-  const placed = once.filter((f) => {
-    if (passes.has(f.depth)) return true;
-    count("figureNoPass");
-    return false;
-  });
-  /* 5 — the caps, in route order: the order of the walk, not of the answer. */
-  const order = new Map(walkOf(stops, placed).map((s, i) => [s.key, i]));
-  const byRoute = [...placed].sort((a, b) => order.get(a.blockId)! - order.get(b.blockId)!);
+  /* 4 — the caps, in route order: the order of the walk, not of the answer. */
+  const order = new Map(walkOf(stops, once).map((s, i) => [s.key, i]));
+  const byRoute = [...once].sort((a, b) => order.get(a.blockId)! - order.get(b.blockId)!);
   const used: Record<SkimDepth, number> = { 1: 0, 2: 0, 3: 0 };
   const kept = new Set<SkimFigureStop>();
   for (const f of byRoute) {
@@ -1418,8 +1449,7 @@ export function validateFigures(
     used[f.depth]++;
     kept.add(f);
   }
-  /* Stored in the order the model gave them, which is the order among figures sharing an anchor. */
-  const out = placed.filter((f) => kept.has(f));
+  const out = once.filter((f) => kept.has(f));
   for (const f of out) {
     if (cueFault.get(f) === "none") count("noFigureCue");
     if (cueFault.get(f) === "bad") count("badFigureCue");
@@ -1508,7 +1538,13 @@ export function buildSkim(
   }
   const d = opts.dropped;
   const validated = validateRoute(parsed.stops, opts.quotes, d);
-  const stops = growPasses(validated, opts.quotes, d);
+  /* The figures the model chose, read once against the route before its
+     repair only to count them per pass, so the repair can make room for them
+     (`growPasses`); read for real against the final route below. */
+  const rawFigures = Array.isArray(parsed.figures) ? parsed.figures : [];
+  const planned = validateFigures(rawFigures, opts.figures, validated, emptyDrops());
+  const perPass = ([1, 2, 3] as const).map((depth) => planned.filter((f) => f.depth === depth).length);
+  const stops = growPasses(validated, opts.quotes, d, perPass as [number, number, number]);
   /* The passes whose own stops the repair changed: the model's intro for
      them describes a walk that is no longer the one drawn (GPT Sol, plan
      review F3). `growPasses` keeps the order, so index pairs them. */
@@ -1541,12 +1577,7 @@ export function buildSkim(
      lets `trimFigures` promise to end (GPT Sol, plan review F4). An answer
      with no `figures` array is read as none: they are extras, and a failed
      route over a missing list would throw away a good walk of the quotes. */
-  const figures = trimFigures(
-    stops,
-    validateFigures(Array.isArray(parsed.figures) ? parsed.figures : [], opts.figures, stops, d),
-    opts.quotes.length,
-    d,
-  );
+  const figures = trimFigures(stops, validateFigures(rawFigures, opts.figures, stops, d), opts.quotes.length, d);
   return {
     version: PROMPT_VERSION,
     generator: generatorFor(opts.power),
@@ -1811,19 +1842,19 @@ WHAT YOU DECIDE
    place, never to have one. A route with no figures is a good answer when
    none does, and "figures": [] is how to say so.
 
-   DEPTH: the one pass the figure is walked in. GIST walks at most 1 figure,
-   MORE at most 2, MOST at most 3. A figure is walked in that pass only: it
-   has no "again". Put a figure only in a pass that has quotes of its own.
+   WHERE: a figure follows one quote on your route: the quote whose
+   paragraph names it, or the quote whose point it shows. "after" is that
+   quote's label. The reader meets the figure straight after that quote, in
+   that quote's own pass (its depth) and in no other pass: a figure has no
+   depth or "again" of its own. So to put a figure in MOST, choose a MOST
+   quote for it. If no quote on your route is about what the figure shows,
+   leave the figure out. At most one figure follows any one quote. GIST walks
+   at most 1 figure, MORE at most 2, MOST at most 3.
 
    A FIGURE IS A STOP. It is not counted in the quote targets, but the reader
    walks it, so with it every deeper pass must still walk more stops than the
-   one before. If a figure would make a pass as long as the next one, put it
-   in the deeper pass instead, or leave it out.
-
-   WHERE: "after" is the label of the quote it comes straight after in your
-   route, or "" to put it before the first stop. Put it beside the quote
-   whose paragraph names it, or the quote whose point it shows, and give it
-   the depth of a pass that quote is walked in.
+   one before. If a figure would make a pass as long as the next one, follow
+   a quote of the deeper pass with it instead, or leave it out.
 
    A CUE FOR EVERY FIGURE: one or two complete sentences, at most
    ${MAX_CUE_CHARS} characters, read just before the figure. A caption says
@@ -1837,6 +1868,9 @@ WHAT YOU DECIDE
    GOOD: "Which groups are being compared? Read the labels on the bars first."
    BAD, it gives the finding away: "Shows that imagery strength predicts
    recall."
+   BAD, it opens with a statement about the subject: "Frogs can regrow a
+   lost leg. Look at the three stages drawn here." Name what to look at;
+   leave what is true to the article.
    BAD, it refers to another stop: "The data behind the previous quote."
 
 RULES
@@ -1855,7 +1889,7 @@ RULES
 OUTPUT
 
 JSON only, no prose, no code fence. The "stops" array order IS the route of
-the quotes, and each figure goes in it straight after its "after":
+the quotes, and each figure is met straight after its "after" quote:
 
 {"stops": [
   {"quote": "Q7", "depth": 1, "again": [2], "cue": "..."},
@@ -1863,7 +1897,7 @@ the quotes, and each figure goes in it straight after its "after":
   {"quote": "Q12", "depth": 2, "again": [], "cue": "..."}
 ],
  "figures": [
-  {"figure": "F2", "depth": 1, "after": "Q7", "cue": "..."}
+  {"figure": "F2", "after": "Q7", "cue": "..."}
 ],
  "intros": {"gist": "...", "more": "...", "most": "..."}}
 
@@ -2031,7 +2065,6 @@ export function fromLabels(stops: readonly unknown[], quotes: readonly Quote[]):
  * to its block id and `after` from `Q7` to its quote id. A label naming
  * nothing is left as written, and `validateFigures` drops the entry — an
  * unknown figure as `unknownFigure`, an unknown anchor as `figureAnchorGone`.
- * `""` stays `""`, before the first stop.
  */
 export function fromFigureLabels(
   figures: readonly unknown[],
@@ -2044,7 +2077,7 @@ export function fromFigureLabels(
     if (!f || typeof f !== "object") return f;
     const r = f as RawFigure;
     const figure = typeof r.figure === "string" ? (byFigure.get(r.figure.trim()) ?? r.figure) : r.figure;
-    const after = typeof r.after === "string" && r.after.trim() !== "" ? (byQuote.get(r.after.trim()) ?? r.after) : r.after;
+    const after = typeof r.after === "string" ? (byQuote.get(r.after.trim()) ?? r.after) : r.after;
     return { ...r, figure, after };
   });
 }
@@ -2081,17 +2114,16 @@ export const SKIM_OUTPUT_SCHEMA = {
         },
       },
     },
-    /* `skim/14`. `after` is a Q-label or `""`, never absent — the comma trap
-       again; `validateFigures` reads it. */
+    /* `skim/14`. `after` is the Q-label of the quote it follows, which also
+       gives its pass; `validateFigures` reads it. */
     figures: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["figure", "depth", "after", "cue"],
+        required: ["figure", "after", "cue"],
         properties: {
           figure: { type: "string" },
-          depth: { type: "integer", enum: [1, 2, 3] },
           after: { type: "string" },
           cue: { type: "string" },
         },

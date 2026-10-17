@@ -35,8 +35,8 @@ export type WalkStop =
 
 /**
  * **The route as it is walked: the quote stops in their order, each figure
- * straight after the quote its `after` names** (`null`: before the first
- * quote), figures anchored to one quote in their stored order.
+ * straight after the quote its `after` names**, and walked in that quote's
+ * own pass (src/types.ts § `SkimFigureStop`).
  *
  * Belt and braces, since the server already refuses all of these (src/skim.ts
  * § `validateFigures`): a figure is left out when its anchor is not on the
@@ -58,10 +58,10 @@ export function walkOf(stops: readonly SkimStop[], figures?: readonly SkimFigure
   if (!figures || figures.length === 0) return quotes;
   const onRoute = new Set(stops.map((s) => s.quoteId));
   const offered = new Set(offeredDepths(stops));
-  const after = new Map<string | null, WalkStop[]>();
+  const after = new Map<string, WalkStop[]>();
   const placed = new Set<string>();
   for (const figure of figures) {
-    if (figure.after !== null && !onRoute.has(figure.after)) continue;
+    if (!onRoute.has(figure.after)) continue;
     if (!offered.has(figure.depth)) continue;
     if (onRoute.has(figure.blockId) || placed.has(figure.blockId)) continue;
     placed.add(figure.blockId);
@@ -69,7 +69,7 @@ export function walkOf(stops: readonly SkimStop[], figures?: readonly SkimFigure
     list.push({ kind: "figure", key: figure.blockId, depth: figure.depth, stop: figure });
     after.set(figure.after, list);
   }
-  return [...(after.get(null) ?? []), ...quotes.flatMap((q) => [q, ...(after.get(q.key) ?? [])])];
+  return quotes.flatMap((q) => [q, ...(after.get(q.key) ?? [])]);
 }
 
 /** `walkedIn`, with the offered depths already in hand — one scan per pass, not per stop. */

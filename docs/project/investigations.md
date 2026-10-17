@@ -44,6 +44,10 @@ measured with scripted readers and a blind judge:
   More beats Gist by carrying, not by shrinking Gist; a 90-word length rule that moved nothing and a
   marked 60-word one that halved the long stops; the new Gist preferred blind 10–3 against a 3–2
   control; and the pass intros rated, with no giveaways.
+- [261017b](../investigations/261017b-skim-figures-as-stops-measured.md) — `skim/14`: figures as
+  stops of their own, in four rounds: a figure with its own depth sat beside the wrong stops half the
+  time, walking it in its quote's pass fixed that, and making room for it in the pass sizes stopped
+  a third of them being trimmed; the quotes held, and a judge control for the intros.
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.

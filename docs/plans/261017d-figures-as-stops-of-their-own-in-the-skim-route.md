@@ -258,6 +258,28 @@ finding taken; what changed:
     old against new, as 261011b did, with no preference for the old by more than its margin there.
   - Recorded: failures, every drop count, tokens, cost, latency.
 
+## After the eval: a figure is walked in its quote's pass
+
+[docs/investigations/261017b-skim-figures-as-stops-measured.md](../investigations/261017b-skim-figures-as-stops-measured.md).
+Measured with a depth of its own, a figure was anchored to a quote walked in **another** pass about
+half the time: 15 of 35 figures in round 1, and 18 of 31 in round 2 after a wording that asked the
+model not to. In its own pass such a figure was met beside stops it had nothing to do with, and twice
+two tables were stacked with no quote between them. The pairing of figure with quote was usually
+the right one; the separate depth was what broke it. So decision 3 and the anchor change:
+
+- **A figure has no depth of its own: it is walked in the pass of the quote it follows** (that
+  quote's own `depth`, never one it is carried into). The answer's figure entry is `{figure, after,
+  cue}`; `validateFigures` derives the depth. To put a figure in Most, the model follows a Most quote
+  with it. *"Meet them together"* is now structural rather than asked for.
+- **At most one figure follows a quote** (`duplicateFigure` counts the second), so two figures are
+  never met side by side.
+- **`after` always names a quote**: `""` (before the first stop) went, and with it a figure that is
+  stop 1 of a pass. `SkimFigureStop.after` is a `string`. `figureNoPass` went too: a quote's own pass
+  is always offered.
+
+*Simpler option passed over:* keep the depth and drop every figure whose anchor is outside its pass
+— half the figures, most of them well chosen.
+
 ## Stages
 
 1. **The walk generalised** — `WalkStop`, `walkOf`, the generic pass functions, `skim-route.ts` on

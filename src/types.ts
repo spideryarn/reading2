@@ -1400,10 +1400,10 @@ export interface SkimStop {
  * **A figure the route stops at, between quotes** — since `skim/14`. Greg,
  * 2026-10-17 (`spya-zrfpc0`, reply to q-z27hq2): *"I was thinking 1B, perhaps
  * with some kind of commentary or cue to make it easier to see why the figure
- * is being included."* A stop of its own, walked in one pass (`depth`, never
- * carried), counted in that pass's length as walked, placed in the one route
- * order straight after the quote stop `after` names (`null`: before the
- * first). Kept in `Skim.figures`, beside `stops` rather than in it, so that
+ * is being included."* A stop of its own, met straight after the quote stop
+ * `after` names, in that quote's own pass (`depth`) and no other — never
+ * carried — and counted in that pass's length as walked. At most one figure
+ * follows a quote. Kept in `Skim.figures`, beside `stops` rather than in it, so that
  * `stops` stays quote-only for every reader of it — the public DTO above all,
  * which does not carry figures (src/public/dto.ts § `publicSkim`).
  * `walkOf` (src/skim-passes.ts) merges the two into the walk.
@@ -1412,14 +1412,15 @@ export interface SkimStop {
 export interface SkimFigureStop {
   /** The figure's block — src/figures.ts § `figuresOf`. */
   blockId: BlockId;
+  /** The pass it is walked in: its quote's own `depth`. */
   depth: SkimDepth;
   /**
    * Why this figure is on the walk and what to look at in it — never what it
    * shows the result to be. `null` when the model's was missing or bad.
    */
   cue: string | null;
-  /** The quote stop it follows, by quote id — its place in the route order. `null`: before every quote. */
-  after: string | null;
+  /** The quote stop it follows, by quote id — its place in the route order and its pass. */
+  after: string;
 }
 
 /**
@@ -1510,17 +1511,16 @@ export interface SkimDrops {
   /**
    * **Figure stops** (`skim/14`, plan 261017d), all absent before it — read as
    * 0. Dropped: a label naming no offered figure, or a malformed entry
-   * (`unknownFigure`); a figure named twice, the shallowest then the earliest
-   * kept (`duplicateFigure`); an `after` naming a quote that is not on the
-   * route (`figureAnchorGone`); a depth no quote stop is first placed at
-   * (`figureNoPass`); past `FIGURE_CAPS` in route order (`overFigureCap`);
+   * (`unknownFigure`); a figure named twice, or a second figure after one
+   * quote, the shallowest then the earliest kept (`duplicateFigure`); an
+   * `after` naming no quote on the route (`figureAnchorGone`); past
+   * `FIGURE_CAPS` in route order (`overFigureCap`);
    * one that left its pass no shorter than the next (`figureShrink`). Kept
    * with a `null` cue: none given (`noFigureCue`) or a bad one (`badFigureCue`).
    */
   unknownFigure?: number;
   duplicateFigure?: number;
   figureAnchorGone?: number;
-  figureNoPass?: number;
   overFigureCap?: number;
   figureShrink?: number;
   noFigureCue?: number;

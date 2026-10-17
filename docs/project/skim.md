@@ -52,6 +52,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
   [`modes/skim/SkimMode.tsx`](../../src/web/modes/skim/SkimMode.tsx) ·
   [`modes/skim/FiguresWalk.tsx`](../../src/web/modes/skim/FiguresWalk.tsx) (the *Figures* walk) ·
   [`modes/skim/walk.ts`](../../src/web/modes/skim/walk.ts) (what the two walks share) ·
+  [`skim-passes.ts`](../../src/skim-passes.ts) (which stops a pass walks, figures included) ·
   [`useSkim.ts`](../../src/web/useSkim.ts) ·
   [`skim-route.ts`](../../src/web/skim-route.ts) · [`skim.css`](../../src/web/styles/skim.css) ·
   tests: [`skim.test.ts`](../../tests/skim.test.ts), [`skim-route.test.ts`](../../tests/skim-route.test.ts),
@@ -740,6 +741,49 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   *Plan it again* and an ×.
 - Routes planned before `skim/13` keep their walk and have no intros until planned again; the
   version stales them silently.
+
+**A figure can be a stop of its own, between quotes** — `skim/14`, 2026-10-17
+([plan 261017d](../plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md), measured in
+[261017b](../investigations/261017b-skim-figures-as-stops-measured.md)):
+
+> Perhaps we should also have the option to include some figures along with quotes in the main
+> Gist/More/Most Skim trajectories (as the LLM sees fit)
+>
+> — Greg, 2026-10-15 (`spya-c8z66b`)
+
+> I was thinking 1B, perhaps with some kind of commentary or cue to make it easier to see why the
+> figure is being included. Use your judgment. / 2A
+>
+> — Greg, 2026-10-17 (`spya-zrfpc0`, reply to [q-z27hq2](../user-feedback/questions/q-z27hq2.md))
+
+- **The model chooses them.** The step is given the article's figures (`figuresOf`, outside the
+  abstract, at most 30): each one's name with the author's own number (*Figure 2*, *Table S1*), its
+  section, its caption, and which quotes come from a paragraph that names it — worked out in code,
+  as the Ideas' *carries* are. Section 5 of the prompt says when a figure earns a stop (the design, a
+  main result, a model drawn out; never a decorative one) and that a route with none is a good
+  answer.
+- **A figure follows one quote, and is walked in that quote's pass.** The answer's `figures` list
+  names the quote each follows (`after`); its pass is that quote's own `depth`, never one the quote
+  is carried into, and at most one figure follows a quote, so two are never met side by side. A
+  first version gave a figure a depth of its own, and half the figures were anchored to a quote in
+  another pass, met beside stops they had nothing to do with.
+- **A figure counts in its pass's length as walked**: *Stop k of N* and the chips include it, and so
+  does the growth rule. The quote targets are unchanged. The repair (`growPasses`) plans with the
+  figures, so a Gist figure that would tie More gets a stop carried into More rather than being
+  dropped — Greg's *"the more detailed sub-modes get longer"* again; `trimFigures` is the backstop.
+  At most 1 figure in Gist, 2 in More, 3 in Most (`FIGURE_CAPS`).
+- **Every figure has a cue** — what to look at and why, never what it shows the result to be — in
+  the model's face above the row, and under the door. A quote's cue stays optional. The row shows
+  the figure's icon and its caption, cut as a quote is; stepping to it centres the figure and
+  flashes the whole block, as the *Figures* walk does. Its `?stop=` is the figure's block id, the
+  value the *Figures* walk uses.
+- **Stored beside the quotes, not among them**: `Skim.figures`, merged into one walk by `walkOf`
+  ([`src/skim-passes.ts`](../../src/skim-passes.ts)), so `stops` stays quote-only for everything
+  that reads it. **A visitor walks no figures**: the public DTO is a listed defence and was not
+  edited, so the intros map the quotes only and never mention a figure. Letting figure stops cross
+  is asked of Greg in the feedback note.
+- The input hash covers the figures, so a `skim/14` route is stale when they change; older routes
+  have no figures until planned again, and are only outdated, which is not announced.
 
 ### What we tried for v2
 

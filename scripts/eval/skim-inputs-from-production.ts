@@ -9,8 +9,10 @@
  * **It writes nothing to any database.** The same path as
  * scripts/feedback-reporter.ts: `.env.prod` through `productionClient`, one
  * `begin read only` transaction, rolled back, and a `Target:` line. It reads
- * the current revision's tree, Quotes and Ideas and its blocks in order,
- * leaving out each block's HTML, which no Skim input uses.
+ * the current revision's tree, Quotes and Ideas and its blocks in order, with
+ * each block's HTML since `skim/14`: the route is offered the article's
+ * figures, and `figuresOf` finds them in the markup (plan 261017d). Until then
+ * the HTML was left out, which no Skim input used.
  *
  * The file holds a reader's article. Write it to a scratch directory, not into
  * the repository.
@@ -39,16 +41,15 @@ try {
     throw new Error(`"${slug}" lacks a tree, Quotes or Ideas (tree ${!!row.tree}, quotes ${!!row.quotes}, ideas ${!!row.ideas})`);
   }
   const blocks = await client.query(
-    `select block_id as id, tag, kind, level, text, words, gistable, role, treatment
+    `select block_id as id, tag, kind, level, text, html, words, gistable, role, treatment
        from spideryarn.revision_blocks where revision_id = $1 order by ordinal`,
     [row.id],
   );
   await client.query("rollback");
   /* Postgres hands back `null` for an unset column; a `Block`'s optional keys are absent, not null. */
-  const cleaned = blocks.rows.map((b: Record<string, unknown>) => ({
-    ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== null)),
-    html: "",
-  }));
+  const cleaned = blocks.rows.map((b: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(b).filter(([, v]) => v !== null)),
+  );
   writeFileSync(out, JSON.stringify({ slug, blocks: cleaned, tree: row.tree, quotes: row.quotes, ideas: row.ideas }));
   console.log(`${slug}: ${cleaned.length} blocks → ${out}`);
 } finally {
