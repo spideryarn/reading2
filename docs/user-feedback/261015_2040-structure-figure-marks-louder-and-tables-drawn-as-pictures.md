@@ -34,6 +34,6 @@ GPT Sol's plan and code reviews beside it.
   it. That is fixed too, and a table's own `<caption>` now counts.
 
 The third report from the same minute, figures inside the Gist · More · Most route (`spya-c8z66b`),
-is [261015_2040-figures-in-the-skim-route-awaiting.md](261015_2040-figures-in-the-skim-route-awaiting.md).
+is [261015_2040-figures-in-the-skim-route.md](261015_2040-figures-in-the-skim-route.md).
 
 Sentry: `SPIDERYARN-READING2-J6` and `-J7` set to resolved by this session, 2026-10-15.
