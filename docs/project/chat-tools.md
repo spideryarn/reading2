@@ -190,8 +190,12 @@ replayed into the next round whatever else the guide called beside it, which is 
   well regarded, what to read alongside it, who the author is and how far to trust them. It
   searches even when the piece gives its own account; a byline is not outside evidence. A
   question about what the world says on the subject goes to Chat.
-- **No page-reading for the guide.** Whether it should open a result is a question to Greg; until
-  then the result tells it only to link what it uses.
+- **No page-reading for the guide, yet.** Greg said yes to it on 2026-10-17 (2A on q-madusw). The
+  plan limits it to addresses the guide was handed — a search result, the reader's own words, the
+  article's links — and one read a turn
+  ([261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2a-the-guide-may-open-a-page-planned-asked-not-built)).
+  It edits a listed defence, so whether an unattended agent may build it is q-g492eq. Until then
+  the result tells it only to link what it uses.
 - **Chat keeps OpenRouter's search.** The comparison in 261012g § Stage 2 found the subagent about
   15% cheaper, but 11 seconds slower on every searching answer and without Chat's citation chips.
 
@@ -717,6 +721,16 @@ changing it:
   maps an id to its article only when exactly one article (open or mentioned) holds it. An id two of
   them share stays plain text. The chip is `CrossArticleRef`, not `BlockRef`, and its href is built
   from the slug the server listed, never from the model's text.
+- **A web page comes in the same way** (since 2026-10-17, plan
+  [261017e](../plans/261017e-bring-a-web-page-into-chat.md); Greg's 1A on q-madusw). *Bring into
+  this chat* sits on each *From the web* row under an answer and under the box for each address in
+  the draft ([`BringIntoChat.tsx`](../../src/web/BringIntoChat.tsx)). A press imports the page as
+  the Add box does (`POST /api/jobs { url, ownCopy: true }`: a slot, or free if it is on the shelf
+  already), and when the import job is done it puts the article in the "Bringing in" row with its
+  `@Title`. Nothing is sent by the press. So a page is kept in a conversation only as one of the
+  reader's articles, with block ids the model can cite; a second store for pages, with nothing to
+  point back to, was declined (q-madusw 1B, and 261011v's shape B). `ownCopy` because a public
+  copy of somebody else's would otherwise be offered, and Chat reads only the reader's own.
 
 ## Security: a tool result is data, and one of them is a stranger's
 
@@ -1189,6 +1203,20 @@ shown a button, not a token. A token that was drawn as text is copied as text.
 > and also how to read this article given their needs.
 >
 > — Greg, 2026-10-06 (`spya-tddvg2`)
+
+> Re guide: our approach should be that it prefers to hand off substantive work (e.g. by offering
+> to create new Chat threads), but that it's not hobbled by lack of tools/capability/access if it
+> tries to do things
+>
+> — Greg, 2026-10-17, reply `spya-eqtvhz` to q-madusw
+
+**That is the guide's rule for what it does and what it may reach for.** Substantive work about
+the subject goes to Chat, offered as a button (*Ask in Chat*, below); but when the guide does try
+something, a missing tool or a refusal should not be what stops it. So a question about adding a
+capability to the guide starts from yes, and what is weighed is the boundary, not whether the guide
+should be able to. The first case is page-reading, planned in
+[261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2a-the-guide-may-open-a-page-planned-asked-not-built)
+and asked of Greg as q-g492eq, because the tool list is a defence.
 
 **Built 2026-10-07** ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)).
 A thread kind of its own, `guide`, one per article (`chat_threads_one_guide`), opened in Chat's band

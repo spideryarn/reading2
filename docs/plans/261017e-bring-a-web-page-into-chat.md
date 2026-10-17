@@ -1,7 +1,7 @@
 # Bring a web page into Chat, and whether the guide may open pages
 
-**Status:** planned, 2026-10-17. Stage 1 (1A) is to be built; stage 2 (2A) is planned here in full and
-asked of Greg, not built.
+**Status:** stage 1 (1A) built on `dev`, 2026-10-17 (§ What landed). Stage 2 (2A) is planned here
+in full and asked of Greg as [q-g492eq](../user-feedback/questions/q-g492eq.md), not built.
 **Why:** Greg's reply `spya-eqtvhz` (2026-10-17 13:08 UTC) to
 [q-madusw](../user-feedback/questions/q-madusw.md), about report `spya-vc6uzm`
 (`SPIDERYARN-READING2-HY`), queue item `qi-jbfehgss`:
@@ -224,3 +224,36 @@ answered (`acted: spya-eqtvhz`), since the 2A follow-up is a different question.
   - Sol confirmed: waiting for the import job's `done` is right (the stand-in revision publishes
     with it, and `admitMentions` accepts it); `ownCopy: true` is right; 1A edits no listed
     defence.
+- **Sol code review** ([prompt](261017e-code-review-prompt.md), [diff](261017e-code-review.diff),
+  [answer](261017e-code-review-sol.md)), write-capable: *no P0*, and it fixed what it found
+  (`f3bd4ca26`). Checked and kept:
+  - two buttons for one address (or two quick presses) could POST twice: every button for an
+    address now shares the tab's record and is woken by it, and a press on a stale `offer` joins
+    the import in flight instead of starting another;
+  - an import could start, and spend a slot, with the row already full or a question with chips on
+    its way: `BringIn.refusal()` is asked before the POST;
+  - the row is read at its last write everywhere in `useMentionPicker` (pick, add, remove, edit,
+    send), not only in `add`, so a chip taken out and an import finishing in one render cannot
+    bring the chip back;
+  - a free repeat of an unread paper (`processing: "minimal"`) would have made a chip the send
+    then refused: it now says to open it and choose *Read this*;
+  - a finished job is written into the record, so a job that later leaves the engine's list does
+    not turn *Added* back into *Adding…*;
+  - the composer clears the seam only if it still owns it.
+  - One change after it: the source buttons' accessible name starts with the visible words
+    (*Bring into this chat: Title*), so a voice command that says what is on the button finds it.
+
+## What landed
+
+- **Stage 1**: `0d10b7ea2` (the feature), `f3bd4ca26` (Sol's fixes). Files:
+  [`src/web/bring-in.ts`](../../src/web/bring-in.ts), [`src/web/BringIntoChat.tsx`](../../src/web/BringIntoChat.tsx),
+  `useMentionPicker().add` / `addRefusal` in [`MentionPicker.tsx`](../../src/web/MentionPicker.tsx),
+  `withMentionAtEnd` in [`mentions.ts`](../../src/web/mentions.ts), and in
+  [`ChatPanel.tsx`](../../src/web/ChatPanel.tsx) the composer's hand-over (`bringIn`, registered on
+  `Conversation`'s `bringInTo` ref), its pasted-address row, and `WebSources`' buttons. Tests:
+  `tests/bring-in.test.ts`, `tests/bring-into-chat.test.tsx`; each guard was seen to fail with its
+  line removed (`ownCopy`, the guide's box, the row read at render, the reader-change fence).
+- **Departure from § Stage 1**: a free repeat looks its title up on the shelf the `@` list reads,
+  rather than falling back to the host — which also tells an unread paper apart (Sol).
+- **Stage 2**: not built; asked as q-g492eq. Greg's principle is in
+  [chat-tools.md § The guide](../project/chat-tools.md#the-guide).
