@@ -192,6 +192,43 @@ describe("savePageForSpideryarn", () => {
     expect(html).toContain(`href="http://[bad"`);
   });
 
+  it("does not split commas inside srcset URLs, and resolves the other candidates", async () => {
+    const { saved } = await save(
+      article(
+        "",
+        `<picture><source srcset="data:image/png;base64,AAAA 1x, //cdn.example.com/two.png 2x">` +
+          `<img src="fallback.png" srcset="figures/a,b.png 640w, figures/c.png 1280w">` +
+          `<source srcset="figures/a b.png 1x"></picture>`,
+      ),
+      at,
+    );
+    const html = await text(saved.blobs[0]!);
+    expect(html).toContain(
+      `srcset="data:image/png;base64,AAAA 1x, https://cdn.example.com/two.png 2x"`,
+    );
+    expect(html).toContain(
+      `srcset="https://www.cell.com/article/S0092/figures/a,b.png 640w, ` +
+        `https://www.cell.com/article/S0092/figures/c.png 1280w"`,
+    );
+    expect(html).toContain(`srcset="https://www.cell.com/article/S0092/figures/a%C2%A0b.png 1x"`);
+  });
+
+  it("resolves HTML and SVG address attributes, but leaves local fragments local", async () => {
+    const { saved } = await save(
+      article(
+        `<link rel="preload" href="styles/site.css">`,
+        `<map><area href="chapters/two.html" shape="rect" coords="0,0,10,10"></map>` +
+          `<svg><use href="#local"></use><use xlink:href="icons.svg#external"></use></svg>`,
+      ),
+      at,
+    );
+    const html = await text(saved.blobs[0]!);
+    expect(html).toContain(`href="https://www.cell.com/article/S0092/styles/site.css"`);
+    expect(html).toContain(`href="https://www.cell.com/article/S0092/chapters/two.html"`);
+    expect(html).toContain(`<use href="#local"></use>`);
+    expect(html).toContain(`xlink:href="https://www.cell.com/article/S0092/icons.svg#external"`);
+  });
+
   it("removes what may be a credential, and only that", async () => {
     const { saved } = await save(
       article(
@@ -203,11 +240,14 @@ describe("savePageForSpideryarn", () => {
           `<script type="application/ld+json">{"@type":"ScholarlyArticle","name":"kept3"}</script>`,
         `<form><input type="hidden" name="authenticity_token" value="secret4">` +
           `<input type="password" value="secret5"><input name="email" value="secret6">` +
-          `<input type="search" value="secret7"><input type="checkbox" id="sn-1" checked></form>`,
+          `<input type="search" value="secret7"><input type="checkbox" id="sn-1" checked>` +
+          `<input type="submit" value="Search"><input type="button" value="Show note">` +
+          `<input type="image" alt="Find" value="image-secret"></form>`,
       ),
     );
     const html = await text(saved.blobs[0]!);
     for (let i = 1; i <= 11; i++) expect(html).not.toContain(`secret${i}`);
+    expect(html).not.toContain("image-secret");
     expect(html).toContain(`<meta name="description" content="kept">`);
     expect(html).toContain("kept2");
     expect(html).toContain(`<script type="application/ld+json">`);
@@ -215,6 +255,9 @@ describe("savePageForSpideryarn", () => {
     /* The value-less inputs stay, and so does the checkbox, untouched. */
     expect(html).toContain(`<input name="email">`);
     expect(html).toContain(`<input type="checkbox" id="sn-1" checked="">`);
+    expect(html).toContain(`<input type="submit" value="Search">`);
+    expect(html).toContain(`<input type="button" value="Show note">`);
+    expect(html).toContain(`<input type="image" alt="Find">`);
     expect(html).toContain("The cells were cultured");
   });
 

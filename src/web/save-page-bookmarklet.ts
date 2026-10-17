@@ -30,14 +30,14 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
  *
  * 1. **Every address made absolute, and no `<base>`.** An upload has no
  *    address of its own, so a relative image would have nothing to resolve
- *    against. Each `src`, `href`, `poster`, `data-src` and `srcset` candidate
- *    in the copy is resolved against the live page's `document.baseURI` (which
- *    is absolute whatever the page's own `<base>` says) and written back, and
- *    every `<base>` is removed. Not a single `<base>` instead: with one, the
- *    reader resolves an in-page `#fn1` against it too, and a footnote link
- *    would point at the publisher. So an `href` starting `#` is left exactly as
- *    written, as are `javascript:`, `data:` and `mailto:` addresses and any
- *    the URL parser refuses.
+ *    against. Each `src`, `href`, `xlink:href`, `poster`, `data-src` and
+ *    `srcset` candidate in the copy is resolved against the live page's
+ *    `document.baseURI` (which is absolute whatever the page's own `<base>`
+ *    says) and written back, and every `<base>` is removed. Not a single
+ *    `<base>` instead: with one, the reader resolves an in-page `#fn1` against
+ *    it too, and a footnote link would point at the publisher. So an `href`
+ *    starting `#` is left exactly as written, as are `javascript:`, `data:`
+ *    and `mailto:` addresses and any the URL parser refuses.
  * 2. One `<meta charset="utf-8">`, first in `<head>`, every other charset
  *    declaration removed: the file is UTF-8 because a `Blob` of a string always
  *    is, and a page that said `iso-8859-1` would otherwise be decoded by its own
@@ -48,7 +48,8 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
  *      TeX, src/maths-import.ts) and `application/ld+json` (metadata). Other
  *      data scripts go too, since a JSON blob is where a page keeps its session;
  *    - hidden and password inputs; every other input's `value`, except a
- *      checkbox or radio, which carry Tufte-style sidenotes (src/notes.ts);
+ *      checkbox or radio, which carry Tufte-style sidenotes (src/notes.ts),
+ *      and button/submit/reset values, which are visible labels;
  *    - `<meta>` named as a CSRF token, by exact name.
  *    Frames (video embeds the sanitiser keeps), `<noscript>` (lazy images'
  *    fallbacks), `<textarea>` and `<select>` (visible text) stay. The page as
@@ -73,26 +74,70 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
       return value;
     }
   };
-  const addressed = copy.querySelectorAll("[src], [href], [poster], [data-src], [srcset]");
+  const srcsetAbsolute = (value: string): string => {
+    const isSpace = (char: string): boolean =>
+      char === " " || char === "\t" || char === "\n" || char === "\f" || char === "\r";
+    let rewritten = "";
+    let at = 0;
+    while (at < value.length) {
+      const leading = value.charAt(at);
+      if (isSpace(leading) || leading === ",") {
+        rewritten += leading;
+        at++;
+        continue;
+      }
+
+      let url = "";
+      while (at < value.length && !isSpace(value.charAt(at))) {
+        url += value.charAt(at++);
+      }
+
+      /* A comma inside a URL is data, not a separator. Only trailing commas
+         end a candidate without a descriptor; a descriptor's comma is read
+         below. This is the distinction `split(",")` loses for both data: URLs
+         and ordinary filenames such as `figure,a.png`. */
+      let trailingCommas = "";
+      while (url.charAt(url.length - 1) === ",") {
+        url = url.slice(0, -1);
+        trailingCommas += ",";
+      }
+      rewritten += absolute(url) + trailingCommas;
+      if (trailingCommas !== "") continue;
+
+      /* Descriptors run to a comma, except for commas inside parentheses. We
+         preserve them byte for byte; only the candidate URL is ours to edit. */
+      let parentheses = 0;
+      while (at < value.length) {
+        const char = value.charAt(at);
+        if (char === "(") parentheses++;
+        else if (char === ")" && parentheses > 0) parentheses--;
+        if (char === "," && parentheses === 0) break;
+        rewritten += char;
+        at++;
+      }
+    }
+    return rewritten;
+  };
+  /* Inspect attributes rather than selecting `[xlink\:href]`: qualified SVG
+     attributes are namespace-sensitive in selector engines, while
+     `getAttribute("xlink:href")` is the interoperable DOM spelling. */
+  const addressed = copy.querySelectorAll("*");
   for (let i = 0; i < addressed.length; i++) {
     const el = addressed[i]!;
-    const names = ["src", "href", "poster", "data-src"];
+    const names = ["src", "href", "poster", "data-src", "xlink:href"];
     for (let n = 0; n < names.length; n++) {
       const value = el.getAttribute(names[n]!);
       if (value === null) continue;
-      if (names[n] === "href" && value.trim().charAt(0) === "#") continue;
+      if (
+        (names[n] === "href" || names[n] === "xlink:href") &&
+        value.trim().charAt(0) === "#"
+      ) {
+        continue;
+      }
       el.setAttribute(names[n]!, absolute(value));
     }
     const srcset = el.getAttribute("srcset");
-    if (srcset !== null) {
-      const candidates = srcset.split(",");
-      for (let c = 0; c < candidates.length; c++) {
-        const parts = candidates[c]!.trim().split(/\s+/);
-        if (parts[0]) parts[0] = absolute(parts[0]);
-        candidates[c] = parts.join(" ");
-      }
-      el.setAttribute("srcset", candidates.join(", "));
-    }
+    if (srcset !== null) el.setAttribute("srcset", srcsetAbsolute(srcset));
   }
   const charsets = copy.querySelectorAll("meta[charset], meta[http-equiv]");
   for (let i = 0; i < charsets.length; i++) {
@@ -116,11 +161,14 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
     if (type.indexOf("math/") !== 0 && type !== "application/ld+json") scripts[i]!.remove();
   }
   const inputs = copy.querySelectorAll("input");
+  const labelledButtons = ["button", "submit", "reset"];
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i]!;
     const type = (input.getAttribute("type") || "text").trim().toLowerCase();
     if (type === "hidden" || type === "password") input.remove();
-    else if (type !== "checkbox" && type !== "radio") input.removeAttribute("value");
+    else if (type !== "checkbox" && type !== "radio" && labelledButtons.indexOf(type) === -1) {
+      input.removeAttribute("value");
+    }
   }
   const tokenNames = ["csrf-token", "csrf-param", "csrf_token", "_csrf", "xsrf-token", "x-csrf-token"];
   const metas = copy.querySelectorAll("meta[name]");

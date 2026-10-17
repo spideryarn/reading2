@@ -24,9 +24,11 @@ browser's bookmarks bar (on a computer; phones and tablets usually have no bookm
 article's page, click the bookmark, then upload the file it saved.
 
 It saves the page as you see it, so anything personal on it, such as your name in the site's menu,
-comes too; it leaves out the page's scripts and what you have typed into its boxes. The file itself
-is kept for you alone, even if you share the article. Its pictures may not come through, because
-they are fetched from the same site that turned us away.
+can come too. It leaves out executable scripts, hidden and password fields, and values in ordinary
+text inputs, but text in an editor on the page can still come with it. The saved source file stays
+private even if you share the article; anything Spideryarn extracts into the article is part of
+what you share. Pictures may not come through, because they are fetched from the same site that
+turned us away.
 
 While an article is coming in, you see each stage tick past. **Keep a Spideryarn tab open until it
 finishes**: the work is driven by your browser, and if you close every tab it pauses until you come

@@ -200,6 +200,22 @@ fixed made-up base, so an uploaded copy with no address is recognised too.
   bookmarklet click on a CSP-strict page (Chrome and Firefox run bookmarklets despite page CSP, by
   their own carve-outs; Safari untested), which Greg is asked to try once.
 
+- **Seen working end to end** (Sonnet subagent, Playwright on the box, own dev server, 2026-10-17):
+  on the refused cell.com add page the sentence, the Upload control and the link are drawn; the
+  link's `href` is the `javascript:` URL; a click saves nothing and says to drag it; at phone width
+  with touch there is no link and the Upload control stays. The link's own source, run on a PLOS
+  article, saved a 2.3 MB file (doctype, the charset first, no `<base>`, no script, all 62 images
+  absolute, 92 `#` links as written); uploaded through that add page, it came in as the article in
+  about 15 seconds, headings, authors and date right, an in-page `#sec010` link staying in-page.
+  On Nature, 0.7 MB, only the ld+json script left. **Not seen**: whether the images loaded, and a
+  real drag into Firefox's or Safari's bookmarks.
+- **The imported PLOS article starts with some of the site's furniture** (a list of section links,
+  a stray "x", the authors twice). Measured rather than guessed: `readArticle` gives the saved file
+  the same text with or without its address, and PLOS fetched by our server starts with much the
+  same furniture ("Loading metrics", the "x"); what the saved copy adds is the section list the
+  site's scripts build. So it is mostly an existing PLOS extraction weakness, not this feature's,
+  and not followed up here.
+
 ### Stage 3: the write-up and the bookkeeping
 
 - **A new question for Greg**, since what is left is a different question from q-fp8tqr: (1) build
@@ -229,6 +245,30 @@ papers; R2-4 made the IEEE status reproducible ([`ieee-status.txt`](../investiga
 R2-5 says image retention on a real walled page is unverified, and that the fallback can fail even
 for the owner; R2-6 replaced `isPhone` with the primary pointer. Two rounds are done, so discovery
 on the plan is closed; the code review is next.
+
+## GPT Sol's code review, 2026-10-17
+
+[261017b-code-review-sol.md](261017b-code-review-sol.md), on `be8f2b5a6` and `d85827faf`, verdict
+*SHIP AFTER FIXES (MADE)*. Four findings, all fixed by the reviewer red first, read and re-run
+here: **C1** (P1) `srcset.split(",")` broke `data:` URLs and filenames with commas, now parsed the
+way the HTML spec splits candidates; **C2** (P1) relative SVG `xlink:href` was not made absolute;
+**C3** (P1) button, submit and reset inputs lost their visible labels; **C4** (P3) Help claimed
+typed text was always left out, though an on-page editor's text can come with the page. It also
+**built production and ran the minified bookmarklet out of the bundle**: still self-contained, and
+it saves the file. Nothing found in the recognisers, the refusal order, the upload with no address,
+the React link, the pointer gate, the size cap or the filename. It could not launch Chrome in its
+sandbox, nor reach the local database for `npm test`.
+
+## Stage 3, done
+
+- [q-emrf2p](../user-feedback/questions/q-emrf2p.md) asks Greg: build A (recommended: not now),
+  and let a saved page keep its address (recommended: yes), both defence edits; and asks him to
+  try the bookmarklet on cell.com once deployed.
+- [q-fp8tqr](../user-feedback/questions/q-fp8tqr.md) answered (`acted: spya-wm83gt`); the note
+  [261015_1711](../user-feedback/261015_1711-cell-com-refused-the-app-a-better-way-round-and-a-question.md)
+  stays *awaiting*, now on q-emrf2p, with this run's paragraph. `tests/feedback-endings.test.ts`
+  used q-fp8tqr by name as the positive control for a two-report note; its message now names
+  q-emrf2p, which carries both reports.
 
 ## The spike
 
