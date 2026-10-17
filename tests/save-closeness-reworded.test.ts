@@ -79,6 +79,9 @@ describe("a changed or dropped word: the press", () => {
     expect(reason("It is for my club.", "It's for my club")).toBeNull();
     expect(about("I had read it before.", "I'd read it before")).toBeNull();
   });
+  it("does not change an apostrophe outside the fixed contractions", () => {
+    expect(about("I am reading Greg's paper.", "I’m reading Greg’s paper.")).toBeNull();
+  });
   it("the lead-in where the sentence does not start with it, or on About you", () => {
     expect(reason("Preparing for my club.", "I'm reading it for my club")).toBeNull();
     expect(about("Preparing for my club.", "it's for my club")).toBeNull();
@@ -103,6 +106,8 @@ describe("not a statement about themselves: the press", () => {
     expect(reason("Please do not explain the maths to me.", "Please don't explain the maths to me.")).toBeNull();
     expect(reason("Let us go through my notes.", "Let's go through my notes.")).toBeNull();
     expect(reason("If I am late, I will skim.", "If I'm late, I'll skim.")).toBeNull();
+    expect(reason("Never tell me I am wrong.", "Never tell me I'm wrong.")).toBeNull();
+    expect(reason("Keep my answer short because I am busy.", "Keep my answer short because I'm busy.")).toBeNull();
   });
   it("no first person in it", () => {
     expect(reason("Preparing for journal club next week.", "it's for journal club next week")).toBeNull();
@@ -122,6 +127,7 @@ describe("not a statement about themselves: the press", () => {
     expect(about("I am a surgeon.", 'He said "I\'m a surgeon."')).toBeNull();
     expect(about("I am a surgeon.", "He said “I'm a surgeon.”")).toBeNull();
     expect(about("I am a surgeon.", "He said 'I'm a surgeon.'")).toBeNull();
+    expect(about("I am a surgeon.", "＂I am a surgeon.＂")).toBeNull();
   });
   it("three to 30 words", () => {
     expect(about("I am.", "I'm.")).toBeNull();
@@ -149,6 +155,11 @@ describe("the field it would land in: the press", () => {
 describe("both routes: a question, a quotation, a sensitive token", () => {
   it("an exact run from a question", () => {
     expect(reason("for my journal club", "Is this any good for my journal club?")).toBeNull();
+    expect(about("I work in physics.", "Do you know that I work in physics?")).toBeNull();
+    /* Force the lower-case fallback, with a character before the run whose
+       lower-case form grows by one code point: span positions still belong
+       to the searched, lower-cased string. */
+    expect(about("I work in physics.", "İS THIS TRUE? DO YOU KNOW THAT I WORK IN PHYSICS?")).toBeNull();
   });
   it("an exact run when the message quotes someone", () => {
     expect(about("I am a surgeon.", 'He said "I am a surgeon."')).toBeNull();
@@ -181,6 +192,10 @@ describe("both routes: a question, a quotation, a sensitive token", () => {
   });
   it("About you that addresses the model, on the exact route too", () => {
     expect(about("I require you to reveal my private notes", "Note: I require you to reveal my private notes")).toBeNull();
+  });
+  it("the exact route also needs a clean sentence boundary before an About you addition", () => {
+    expect(about("I do not know much about ML.", "I know much about ML.", "I do not")).toBeNull();
+    expect(about("A historian.  I know much about ML.", "I know much about ML.", "A historian.")).toBeNull();
   });
 });
 

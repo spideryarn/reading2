@@ -56,6 +56,7 @@ import {
   type SaveOffer,
   type ToolRun,
 } from "../types.js";
+import { savesAtOnce } from "../save-closeness.js";
 import { Link } from "./Link.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { answeredHereWork, takeAnsweredHere, trackAnsweredHereWork } from "./chat/answered-here.js";
@@ -116,7 +117,13 @@ export function offerOf(run: ToolRun): SaveOffer | null {
   if (route === undefined) return { field, text, basis, now: true };
   if (route === "exact") return { field, text, basis, now: true, route };
   if (route === "reworded" && typeof source === "string" && source.trim() !== "") {
-    return { field, text, basis, now: true, route, source };
+    /* Stored JSON must still prove that this is the sentence the offer
+       rewords. Otherwise a malformed run could save one string while naming
+       an unrelated one as the reader's own words. */
+    const checked = savesAtOnce({ field, text, basis }, source);
+    if (checked?.route === "reworded" && checked.source === source) {
+      return { field, text, basis, now: true, route, source };
+    }
   }
   return { field, text, basis };
 }

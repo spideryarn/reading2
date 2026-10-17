@@ -713,6 +713,7 @@ describe("the guide's offer to save", () => {
       it.each([
         ["no sentence of theirs", { ...REWORDED, source: undefined }],
         ["an empty sentence", { ...REWORDED, source: "  " }],
+        ["a sentence unrelated to the offered words", { ...REWORDED, source: "I am a surgeon." }],
         ["a route it does not know", { ...REWORDED, route: "wide" }],
       ])("waits for the press with %s", async (_what, offer) => {
         await watch([offer as Offer]);

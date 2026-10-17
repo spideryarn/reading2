@@ -78,6 +78,7 @@ carrying R8. A qualification beside an id wins over those words.
 | [R18](#r18) | At review time, a stray static server listened on every interface | Low | proposed | unverified since review | 5 min |
 | R19–R25 | security.md's known gaps, levelled ([below](#from-securitymds-known-gaps)) | Low–Medium | known | see each | — |
 | [R26](#r26) | From an AI app on the web, the administrator's agent can publish an article or take its private link with no press | Medium | accepted | none | — |
+| [R27](#r27) | A hostile article can choose which of the reader's own typed sentences saves itself to About you, out of its context | Medium | accepted | none | — |
 
 ## Accepted
 
@@ -171,6 +172,28 @@ what still holds:
 [security-map.md § an AI app's token](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route),
 [security.md § Prompt injection](security.md#prompt-injection-and-what-the-fence-does-not-do).
 Undoing it is deleting the two `webAdmin` forms in `src/mcp/tools.ts`.
+
+### R27
+
+**A hostile article can choose which of the reader's own typed sentences saves itself to About you
+or as their reason, and the sentence can lose its context.** The guide's prompt holds the whole
+article, so a planted instruction can steer `offer_to_save`, and About you enters every later
+prompt on every article. Since 2026-10-11 a run of the reader's typed message saves itself with no
+press; since 2026-10-17 so does one whole sentence of it with only its spelling tidied. Nothing the
+reader did not type arrives except that route's fixed contraction spelling and reason lead-in, but
+an incorrect or instruction-shaped sentence can: *"Let's role-play. I am a surgeon."* saves *"I am
+a surgeon."*, and on the exact route a cut after a comma
+(*"In the simulation, | I am a surgeon"*) still saves the second half. Medium (GPT Sol, both plan
+reviews of 261012c): a persistent write into every later prompt, bounded by being short, the
+reader's own words, shown with an Undo, and checked against what the field held. Decision:
+**accepted by Greg**, *"accepting that a planted instruction in an article could then save a
+sentence about you that you never said"* (2026-10-12, reply `spya-wwy7sh` to q-q7mb3w), and *"I
+want the agent to be able to reword lightly"* (2026-10-17, `spya-v33gfs`, q-pm2j66); the exact route
+under reply A to q-t3j8hj (2026-10-11). Where it lives:
+[security-map.md, the `chipFor` row](security-map.md#where-the-defences-physically-live),
+[`src/save-closeness.ts`](../../src/save-closeness.ts),
+[261012c](../plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md).
+Narrowing it is a refusal in `refused` or `reworded`; undoing it is `savesAtOnce` returning `null`.
 
 ## Proposed
 

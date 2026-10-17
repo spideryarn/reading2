@@ -63,7 +63,9 @@ no box: the reader answers below,
 guide offers their reason, and anything new for *About you*, in close to their own words, as a card
 they press to save, with an Undo; since
 [261011s](../plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md)
-an offer that is word for word what they typed saves itself, with the same Undo), and there is no dialog; on a phone
+an offer that is word for word what they typed saves itself, with the same Undo, and since
+[261012c](../plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md) so
+does one whole sentence of theirs with only its spelling tidied), and there is no dialog; on a phone
 the dialog stays ([url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default),
 [plan 261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4).
 

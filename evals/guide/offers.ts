@@ -290,7 +290,7 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
       answer: result.text,
     });
     console.log(
-      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown ? "" : " NO-STEPS"} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.now === true ? "NOW" : "press", o.text]))}`,
+      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown ? "" : " NO-STEPS"} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.now !== true ? "press" : o.route === "reworded" ? "NOW-reworded" : "NOW", o.text]))}`,
     );
   }
 }

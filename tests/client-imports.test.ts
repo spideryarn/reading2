@@ -77,6 +77,12 @@ const SHARED = new Set([
      them and the picker stops offering past them, so the two cannot disagree.
      Imports nothing. Plan 261012d. */
   "chat-mention-limits.js",
+  /* Whether the guide's offer to save is the reader's own words, exact or
+     lightly reworded — the chat tool decides with it, and the card checks a
+     stored reworded offer's source again before saving it or showing it as
+     the reader's, so the two cannot disagree. Imports `types.js` (types only)
+     and nothing else. Plan 261012c. */
+  "save-closeness.js",
   /* Which influence a Citations row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`

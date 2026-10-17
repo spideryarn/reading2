@@ -35,9 +35,10 @@
  * case, the closing full stop, and for a reason a lead-in (*it's for* →
  * *Preparing for*). No word added, dropped or swapped: Opus and GPT Sol broke
  * every looser rule, because articles, commas and where a sentence is cut
- * carry meaning too. Every reworded save is a string the exact route would
- * save with a contraction spelled differently, so its risk is the exact
- * route's, which Greg accepted. tests/save-closeness-reworded.test.ts.
+ * carry meaning too. Apart from the reason's fixed lead-in, every reworded
+ * save is a string the exact route would save with a contraction spelled
+ * differently, so its risk is the exact route's, which Greg accepted.
+ * tests/save-closeness-reworded.test.ts.
  *
  * **Both routes refuse** (`refused`): a message that quotes anyone, any link,
  * address, markup or invisible character, words about the model's own
@@ -113,7 +114,7 @@ const IN_WORD_APOSTROPHE = /(?<=[\p{L}\p{N}])['’](?=[\p{L}\p{N}])/gu;
 
 /** Any quotation mark: straight or curly, guillemets, low quotes; an in-word apostrophe is not one. */
 function quotes(message: string): boolean {
-  return /["'“”‘’‚‛„‟«»‹›]/u.test(message.replace(IN_WORD_APOSTROPHE, ""));
+  return /["'“”‘’‚‛„‟«»‹›]/u.test(message.normalize("NFKC").replace(IN_WORD_APOSTROPHE, ""));
 }
 
 /** Words that speak of the model's own machinery rather than of the reader. */
@@ -178,7 +179,7 @@ function containsQuotedRun(run: string, message: string): boolean {
  *
  * Try the characters as written first. The case-insensitive fallback is only
  * for NFKC-stable text: Unicode lowercasing otherwise makes compatibility
- * symbols such as `K` compare equal to `K`, although our store preserves the
+ * symbols such as `K` compare equal to `K`, although our store preserves the
  * symbol. Exact compatibility characters still take the first path.
  */
 function quoted(words: string, typed: string): boolean {
@@ -198,21 +199,21 @@ const CONTRACTIONS: Readonly<Record<string, string>> = {
   "isn't": "is not", "aren't": "are not", "wasn't": "was not",
 };
 const CONTRACTION = new RegExp(
-  `(?<![\\p{L}\\p{N}'])(?:${Object.keys(CONTRACTIONS).join("|")})(?![\\p{L}\\p{N}'])`,
+  `(?<![\\p{L}\\p{N}'’])(?:${Object.keys(CONTRACTIONS).map((word) => word.replaceAll("'", "['’]")).join("|")})(?![\\p{L}\\p{N}'’])`,
   "giu",
 );
 
 /** Every contraction in the table spelled out, a capital first letter kept a capital. */
 function expanded(text: string): string {
   return text.replace(CONTRACTION, (found) => {
-    const out = CONTRACTIONS[found.toLowerCase()] ?? found;
+    const out = CONTRACTIONS[found.toLowerCase().replace(/’/gu, "'")] ?? found;
     return /^\p{Lu}/u.test(found) ? out.charAt(0).toUpperCase() + out.slice(1) : out;
   });
 }
 
-/** A sentence's words without its closing marks, curly apostrophes made straight. */
+/** A sentence's words without its closing marks. */
 function core(text: string): string {
-  return text.replace(/[.!?…]+$/u, "").trimEnd().replace(/’/gu, "'");
+  return text.replace(/[.!?…]+$/u, "").trimEnd();
 }
 
 /** The same text, with only the first letter's case free to differ. */
@@ -224,10 +225,22 @@ function sameButFirstCase(a: string, b: string): boolean {
 const NOT_A_STATEMENT: ReadonlySet<string> = new Set(["let", "please", "if", "imagine", "pretend", "suppose", "don"]);
 /** At least one of these as a word: a statement about the reader. */
 const FIRST_PERSON: ReadonlySet<string> = new Set(["i", "my", "me", "we", "our"]);
+/** A subject that can open a first-person statement, rather than an imperative containing *me* or *my*. */
+const FIRST_PERSON_START = /^(?:i(?:['’](?:m|ve|ll))?|my|we|our)$/iu;
 
 /** The reason's lead-ins: what the reader typed, and what the guide may write in its place. */
-const TYPED_LEAD_IN = /^(?:(?:it's|it is|this is) )?for (.+)$/iu;
+const TYPED_LEAD_IN = /^(?:(?:it['’]s|it is|this is) )?for (.+)$/iu;
 const OFFERED_LEAD_IN = /^(?:preparing|reading this|reading) for (.+)$/iu;
+
+/** The core of a whole first-person statement admissible for this field. */
+function statementCore(field: SaveOffer["field"], source: string): string | null {
+  const terms = wordsOf(source);
+  if (isQuestion(source) || NOT_A_STATEMENT.has(terms[0] ?? "")) return null;
+  if (!terms.some((word) => FIRST_PERSON.has(word))) return null;
+  const text = core(source);
+  if (field === "profile" && !/^i(?:['’](?:m|ve|ll))?$/iu.test(text.split(" ")[0] ?? "")) return null;
+  return text;
+}
 
 /**
  * **The sentence of `typed` that `words` lightly rewords**, or `null`: one
@@ -245,11 +258,8 @@ function reworded(field: SaveOffer["field"], words: string, typed: string): stri
   if (count < MIN_WORDS || count > 30 || offer.length > 240) return null;
   for (const [start, end] of sentenceSpans(message)) {
     const source = message.slice(start, end);
-    const words = wordsOf(source);
-    if (isQuestion(source) || NOT_A_STATEMENT.has(words[0] ?? "")) continue;
-    if (!words.some((word) => FIRST_PERSON.has(word))) continue;
-    const typedCore = core(source);
-    if (field === "profile" && !/^i(?:'m|'ve|'ll)?$/iu.test(typedCore.split(" ")[0] ?? "")) continue;
+    const typedCore = statementCore(field, source);
+    if (typedCore === null) continue;
     if (field === "purpose") {
       const typedLead = TYPED_LEAD_IN.exec(typedCore);
       const offeredLead = OFFERED_LEAD_IN.exec(said);
@@ -258,6 +268,7 @@ function reworded(field: SaveOffer["field"], words: string, typed: string): stri
         continue;
       }
     }
+    if (!FIRST_PERSON_START.test(typedCore.split(" ")[0] ?? "")) continue;
     if (sameButFirstCase(expanded(typedCore), expanded(said))) return source;
   }
   return null;
@@ -273,7 +284,7 @@ function reworded(field: SaveOffer["field"], words: string, typed: string): stri
  * saved, a light rewording of one of its sentences (`reworded`). About you is
  * the whole new text, so it must be **what it held, unchanged, then the
  * reader's words**: a save at once only adds at the end, and anything that
- * rewrites or drops what was there waits for the press. A reworded addition
+ * rewrites or drops what was there waits for the press. Any About you addition
  * also needs a clean join: what it held ends a sentence, then one space or one
  * line break. Both routes refuse what `refused` names first.
  */
@@ -284,15 +295,18 @@ export function savesAtOnce(offer: Pick<SaveOffer, "field" | "text" | "basis">, 
   if (field === "profile" && basis !== null) {
     if (!text.startsWith(basis)) return null;
     added = text.slice(basis.length);
-    /* Always a separate addition: punctuation can join tokens too (`evil.` + `com`). */
-    if (!/^\s/u.test(added)) return null;
+    /* Both routes append one new sentence at one clean separator. Without
+       this, an exact run can complete an unfinished basis (`I do not` +
+       `know much`), while folded whitespace admits joins the card never
+       promised. */
+    if (!/[.!?]$/u.test(basis) || !/^[ \n]\S/u.test(added)) return null;
+    added = added.slice(1);
   }
   if (refused(field, added, typed)) return null;
   if (quoted(added, typed)) return { route: "exact" };
   /* Reworded: a reason only into an empty field; About you only after a whole sentence. */
   if (basis !== null) {
-    if (field === "purpose" || !/[.!?]$/u.test(basis) || !/^[ \n]\S/u.test(added)) return null;
-    added = added.slice(1);
+    if (field === "purpose") return null;
   }
   const source = reworded(field, added, typed);
   return source === null ? null : { route: "reworded", source };

@@ -1,7 +1,7 @@
 ---
 reports: spya-yk3r03
 ending: shipped
-comment: The guide updates your profile and reason; your exact typed words save by themselves with an Undo. You chose B (rewording saves by itself too) on q-q7mb3w; who may build it, and how wide, is q-pm2j66.
+comment: The guide updates your profile and reason; your exact typed words, or one whole sentence of them with only the spelling tidied, save by themselves with an Undo. Whether to give it more room to reword is q-tz5az8.
 ---
 # The guide saves your profile in your words
 
@@ -29,3 +29,15 @@ first and broken in review, so the remaining choice is Greg's: [q-q7mb3w](questi
 That loosens a defence, so it is planned, not built:
 [261012c](../plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md),
 with the build held as `qi-ywbfftr2` on [q-pm2j66](questions/q-pm2j66.md).
+
+**2026-10-17**: Greg answered q-pm2j66 (`spya-v33gfs`): *"A or B is fine. I think we're
+overthinking this. I want the agent to be able to reword lightly, and for you to tell me if there's
+good reason to allow it more discretion (I'm open to that)"*. The light form is **shipped** on
+`dev` (queue item `qi-mr3tgs7w`, superseding `qi-ywbfftr2`; commits `50ece5f11` the rule,
+`f81ac6bc4` the card): one whole sentence the reader typed, changed only in spelling, saves itself
+as *lightly reworded* with their sentence shown beside it and an Undo; both routes refuse quotation
+marks, questions, links, meta words and an About you addition saying *you*. Security notes:
+security-map.md's `chipFor` row and risk R27 (Medium, accepted). Measured in
+[261009c](../investigations/261009c-the-guide-s-offers-to-save-measured.md): 11 of 14 offers save
+themselves, from 9. Whether to allow more discretion is [q-tz5az8](questions/q-tz5az8.md), with a
+recommendation not to yet.
