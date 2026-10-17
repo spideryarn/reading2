@@ -459,6 +459,12 @@ details.fb-threads-group > summary { cursor: pointer; }
 /* One thread on its own: the way back and the pager above it. */
 .fb-thread { display: flex; flex-direction: column; gap: 0.5rem; }
 .fb-thread-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+/* A wrapped second row's invisible 40px targets must not reach back over the
+   clickable row above it. At the supported 12px root, an .fb-copy is about
+   23px tall, leaving 17px of target outside its box; 18px keeps the two clear. */
+@media (any-pointer: coarse) {
+  .fb-thread-nav { row-gap: max(0.4rem, 18px); }
+}
 .fb-thread-place { margin-inline: auto; font-size: 0.76rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 /* Said when an end is pressed anyway: a phone has no hover to show the title. */
 .fb-thread-end { flex-basis: 100%; margin: 0; text-align: end; font-size: 0.76rem; color: var(--ink-soft); }
@@ -734,6 +740,9 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-actions {
   display: flex;
   justify-content: flex-end;
+  /* From the top, not stretched: when an end's sentence wraps under the
+     footer's pager (261017c), a stretch drew Close 53px tall beside it. */
+  align-items: flex-start;
   gap: 0.5rem;
   padding-top: 0.6rem;
   /* `--rule-strong`, not `--rule`. `--rule` is `--border` (oklch 0.27) and the

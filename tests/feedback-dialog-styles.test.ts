@@ -171,5 +171,24 @@ describe("Write's Send, told apart from Close", () => {
     expectUnconditional(".fb-send:not(:disabled):hover", "color", "var(--positive)");
     expectUnconditional(".fb-send:not(:disabled):hover", "border-color", "currentColor");
     expect(declared(CSS, ".fb-cancel", "color")).toEqual(["var(--ink-soft)"]);
+    expect(declared(CSS, ".fb-cancel", "border-color")).toEqual([]);
+    expect(declared(CSS, ".fb-send:disabled", "color")).toEqual([]);
+    expect(declared(CSS, ".fb-send:disabled", "border-color")).toEqual([]);
+  });
+
+  it("keeps the pager's 40px touch targets apart when its flex row wraps", () => {
+    const coarse = mediaBlock(CSS, "(any-pointer: coarse)", ".fb-thread-nav");
+    expect(declared(coarse, ".fb-thread-nav", "row-gap")).toEqual(["max(0.4rem, 18px)"]);
+  });
+
+  it("has no other stylesheet owner for the two footer button hooks", () => {
+    for (const hook of ["fb-send", "fb-cancel"]) {
+      expect(
+        readerSheets()
+          .filter(({ css }) => new RegExp(`\\.${hook}\\b`).test(stripComments(css)))
+          .map(({ path }) => path),
+        hook,
+      ).toEqual(["src/web/styles/feedback.css"]);
+    }
   });
 });

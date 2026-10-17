@@ -94,3 +94,18 @@ feedback.md § Questions for an admin (where the pager is) and § the dialog's b
   `threadShowing` plus a loaded list, which with the footer hidden off Earlier is the condition
   `EarlierThreads` uses; a test now holds the two together, including while a reopened read is out.
 - **F5, two nav landmarks:** named apart, *Threads* and *Threads, at the foot*, tested.
+
+## GPT Sol's code review, and the browser check
+
+[261017c-code-review-sol.md](261017c-code-review-sol.md): *approve*, with three fixes it made in
+the worktree, read and kept. Stale end and *Showing:* sentences are cleared when a copy is hidden or
+the thread stops needing a decision. The scroll reset waits until the thread is on screen, so paging
+while Earlier is hidden does not move it, and a reopened same thread keeps its place. And under a
+coarse pointer a wrapped pager row is 18px apart, so the 40px targets do not reach over the row
+above.
+
+A Sonnet browser run (Playwright, the box, 1280×900 and 390×740, local data with five waiting
+threads) found the footer on one row at both sizes, Next stepping and starting at the top, the end
+sentences in the footer, and Send green with Cancel and Close grey. It found one flaw: with an end
+sentence showing, the footer's default stretch drew Close 53px tall. Fixed with
+`align-items: flex-start` on `.fb-actions`.

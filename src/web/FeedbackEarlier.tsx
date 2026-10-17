@@ -1552,12 +1552,15 @@ function ThreadPager({
   showing,
   replies,
   announce = false,
+  active = true,
 }: {
   pager: PagerStops;
   showing: string;
   replies: QuestionReplies;
   /** Say which thread a press opened, for the foot's copy: its focus stays in the footer, after the new thread (GPT Sol, 261017c F2). */
   announce?: boolean;
+  /** Whether this copy is visible: hidden copies forget words they must not announce on returning. */
+  active?: boolean;
 }) {
   const at = stops.findIndex((one) => one.id === showing);
   const previous = at > 0 ? stops[at - 1] : undefined;
@@ -1574,6 +1577,7 @@ function ThreadPager({
     times: number;
   } | null>(null);
   const said =
+    active &&
     refused !== null &&
     refused.pagerKey === pagerKey &&
     (refused.which === "previous" ? previous : next) === undefined
@@ -1582,11 +1586,32 @@ function ThreadPager({
   /* The key check above hides stale words in the changing render; clearing
      afterwards prevents them reviving if a later read restores an old shape. */
   useEffect(() => {
-    setRefused((was) => (was !== null && was.pagerKey !== pagerKey ? null : was));
-  }, [pagerKey]);
+    setRefused((was) => (was !== null && (!active || was.pagerKey !== pagerKey) ? null : was));
+  }, [active, pagerKey]);
   /* Which thread this copy's own press opened, said only while it is the one showing. */
   const [went, setWent] = useState<{ id: string; title: string } | null>(null);
-  const arrived = announce && went !== null && went.id === showing ? went : null;
+  const showingQuestion = stops.find((one) => one.id === showing);
+  const showingDeciding = deciding.has(showing);
+  const arrived =
+    announce &&
+    active &&
+    went !== null &&
+    went.id === showing &&
+    showingDeciding &&
+    showingQuestion?.title === went.title
+      ? went
+      : null;
+  /* A success sentence belongs to the navigation that produced it. A reply,
+     deferral, later read or another copy's navigation makes it stale; clearing
+     after the changing render also prevents a later Bring back reviving it. */
+  useEffect(() => {
+    setWent((was) =>
+      was !== null &&
+      (!active || was.id !== showing || !showingDeciding || showingQuestion?.title !== was.title)
+        ? null
+        : was,
+    );
+  }, [active, showing, showingDeciding, showingQuestion?.title]);
   return (
     <>
       {/* **`aria-disabled`, not `disabled`, and a `title`** (261009m § 4): a
@@ -1610,6 +1635,7 @@ function ThreadPager({
           onClick={() => {
             if (to === undefined) {
               setRefused((was) => ({ pagerKey, which, times: (was?.times ?? 0) + 1 }));
+              setWent(null);
               return;
             }
             /* A refusal belongs to this visit. Without clearing it here,
@@ -1663,10 +1689,15 @@ function ThreadView({
      the foot of a long thread landed half-way down the next. Keyed on the id,
      so typing or a send re-rendering this thread keeps the reader's place. */
   const top = useRef<HTMLDivElement>(null);
+  const scrolledTo = useRef<string | null>(null);
   useLayoutEffect(() => {
+    if (!active || scrolledTo.current === question.id) return;
     const scroller = top.current?.closest(".fb-scroll");
-    if (scroller) scroller.scrollTop = 0;
-  }, [question.id]);
+    if (scroller) {
+      scroller.scrollTop = 0;
+      scrolledTo.current = question.id;
+    }
+  }, [active, question.id]);
   return (
     <div className="fb-thread" ref={top}>
       <nav className="fb-thread-nav" aria-label="Threads">
@@ -1680,7 +1711,7 @@ function ThreadView({
               ? "No threads need a decision now"
               : `${deciding.size} need${deciding.size === 1 ? "s" : ""} a decision`}
         </span>
-        <ThreadPager pager={{ stops, deciding }} showing={question.id} replies={replies} />
+        <ThreadPager pager={{ stops, deciding }} showing={question.id} replies={replies} active={active} />
       </nav>
       <article className="fb-question" data-question={question.id} data-state={question.state}>
         <p className="fb-earlier-meta">
@@ -1818,16 +1849,25 @@ export function ThreadFootPager({
   questions,
   liveQuestions,
   replies,
+  active,
 }: {
   questions: ThreadQuestion[];
   liveQuestions: ThreadQuestion[] | null;
   replies: QuestionReplies;
+  /** Whether the Earlier footer is on screen. */
+  active: boolean;
 }) {
   if (replies.openId === null) return null;
   const live = new Set((liveQuestions ?? []).map((question) => question.id));
   return (
     <nav className="fb-thread-nav fb-foot-pager" aria-label="Threads, at the foot">
-      <ThreadPager pager={pagerStops(questions, live, replies.openId)} showing={replies.openId} replies={replies} announce />
+      <ThreadPager
+        pager={pagerStops(questions, live, replies.openId)}
+        showing={replies.openId}
+        replies={replies}
+        announce
+        active={active}
+      />
     </nav>
   );
 }

@@ -1559,7 +1559,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               is once a reply is written; and so the bottom-right moves you on
               rather than shutting the dialog (spya-bvzavw, plan 261017c). */}
           {threadOpen && earlier.kind === "loaded" && questions !== null ? (
-            <ThreadFootPager questions={questions} liveQuestions={liveQuestions} replies={replies} />
+            <ThreadFootPager
+              questions={questions}
+              liveQuestions={liveQuestions}
+              replies={replies}
+              active={open && view === "earlier"}
+            />
           ) : null}
         </div>
 

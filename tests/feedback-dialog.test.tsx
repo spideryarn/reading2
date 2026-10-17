@@ -2992,6 +2992,40 @@ describe("the Earlier tab", () => {
           expect(thread().querySelector(".sr-only")).toBeNull();
         });
 
+        it("takes the footer's success announcement away when that thread is replied to or deferred", async () => {
+          await openThread();
+          const heard = () => foot().querySelector('.sr-only[role="status"]')?.textContent;
+
+          click(button(foot(), "Next ›"));
+          expect(heard()).toBe(`Showing: ${Q2.title}`);
+          typeReply("decided");
+          answer = stored(201);
+          click(button(thread(), "Send reply"));
+          await settle();
+          expect(heard()).toBe("");
+
+          click(button(foot(), "‹ Previous"));
+          expect(heard()).toBe(`Showing: ${Q1.title}`);
+          answer = deferral();
+          click(button(thread(), "Defer for now"));
+          await settle();
+          expect(heard()).toBe("");
+        });
+
+        it("does not revive a top-pager end sentence after a newer read with the same stops", async () => {
+          await openThread();
+          click(button(thread(), "‹ Previous"));
+          expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("No earlier thread needs a decision");
+
+          /* The thread is retained while the dialog is shut and the next
+             opening reads a fresh copy of the same questions. */
+          reopen();
+          click(tab("Earlier"));
+          await settle();
+          expect(showing()).toBe("q-aaaaaa");
+          expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("");
+        });
+
         /* Plan 261017c § 3 and F3: a finger's 40px target on the footer's buttons and both pagers'. */
         it("gives every footer and pager button a finger's target", async () => {
           await openThread();
@@ -3054,6 +3088,32 @@ describe("the Earlier tab", () => {
           /* Not on a re-render of the same thread: typing keeps the place. */
           top = 400;
           typeReply("thinking");
+          expect(top).toBe(400);
+
+          /* A hidden panel is not scrolled for an id change. When that changed
+             thread is actually revealed, it starts at the top. (The synthetic
+             press reaches the hidden copy solely to exercise that transition.) */
+          click(button(foot(), "‹ Previous"));
+          top = 400;
+          click(tab("Write"));
+          const hiddenFoot = host.querySelector<HTMLElement>('.fb-actions[hidden] .fb-foot-pager');
+          if (!hiddenFoot) throw new Error("no hidden footer pager");
+          click(button(hiddenFoot, "Next ›"));
+          expect(showing()).toBe("q-bbbbbb");
+          expect(top).toBe(400);
+          click(tab("Earlier"));
+          expect(top).toBe(0);
+
+          /* F1 was declined deliberately: hiding or reopening the same thread
+             keeps the reader's place, just as it keeps the draft. */
+          top = 400;
+          click(tab("Write"));
+          click(tab("Earlier"));
+          expect(top).toBe(400);
+          reopen();
+          click(tab("Earlier"));
+          await settle();
+          expect(showing()).toBe("q-bbbbbb");
           expect(top).toBe(400);
         });
       });
