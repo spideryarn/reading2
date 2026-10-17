@@ -1,0 +1,13 @@
+{
+  "fixture": "springer-client-challenge",
+  "file": "springer_client_challenge.html",
+  "note": "NOT AN ARTICLE — a page titled 'Client Challenge', which is what a link.springer.com article address answered src/fetch.ts's fetchDocument with on 2026-10-17. JSTOR answered with the byte-identical page (the same sha256), so it is one fixture for both. Its vendor is not confirmed. 209 characters of it read as article text, so it was refused by the capability floor, whose sentence sends the reader back to the address, until src/challenge-page.ts recognised the stylesheet in its /_fs-ch-<token>/ asset directory beside the div#loading-error[role=alert] its own script reveals. NO EDIT TO THE BYTES: the page echoes no IP address and carries no personal data; the token in its asset path is the server's. docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md.",
+  "mustContain": [],
+  "mustNotContain": [
+    {
+      "text": "A required part of this site",
+      "why": "the check's own error message, which its script reveals when its code cannot load"
+    }
+  ],
+  "notAnArticle": true
+}

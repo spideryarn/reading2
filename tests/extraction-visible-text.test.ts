@@ -349,10 +349,27 @@ describe("over the committed fixtures", () => {
      * empty, which is why it needed a recogniser rather than the floor
      * (src/challenge-page.ts) — and it is still well under an article's 2,000.
      * **And a fourth the same day**: `winehq-anubis`, an older version of the
-     * same check, with 1,254 characters of visible text.
+     * same check, with 1,254 characters of visible text. **And two more on
+     * 2026-10-17**: `ieee-aws-waf` and `springer-client-challenge`, bot checks.
+     * Springer's has a few hundred characters; **IEEE's has none at all**,
+     * because every word of it is inside a `<noscript>`, so it is named in
+     * `EMPTY` and held to exactly that rather than to a floor.
      */
-    const NOT_ARTICLES = new Set(["medium-about", "pmc-article", "hal-anubis", "winehq-anubis"]);
+    const EMPTY = new Set(["ieee-aws-waf"]);
+    const NOT_ARTICLES = new Set([
+      "medium-about",
+      "pmc-article",
+      "hal-anubis",
+      "winehq-anubis",
+      "ieee-aws-waf",
+      "springer-client-challenge",
+    ]);
     for (const { name, text } of texts) {
+      if (EMPTY.has(name)) {
+        /* Its manifest carries no needles for exactly this reason. */
+        expect(text, `${name}: expected no visible text`).toBe("");
+        continue;
+      }
       /* Substantial, because "" satisfies every `mustNotContain` there is —
          which is the failure this whole check exists to make impossible. */
       expect(text.length, `${name}: barely any text`).toBeGreaterThan(

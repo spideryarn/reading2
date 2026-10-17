@@ -238,5 +238,17 @@
     "bytes": 99102,
     "url": "https://lemire.me/blog/2026/10/06/linking-node-js-with-mold/",
     "capturedAt": "2026-10-07"
+  },
+  "ieee-aws-waf": {
+    "sha256": "e33f6bc83eacbc4812672111252c3d293004a05bd3e700f8611f66f54a05d24b",
+    "bytes": 2058,
+    "url": "https://ieeexplore.ieee.org/document/9069875",
+    "capturedAt": "2026-10-17"
+  },
+  "springer-client-challenge": {
+    "sha256": "32ed63159c77e21ee19ca1b9aa3213ccf0218eb59539560b132a8e68ef0e18ea",
+    "bytes": 3038,
+    "url": "https://link.springer.com/article/10.1007/s10648-015-9348-9",
+    "capturedAt": "2026-10-17"
   }
 }

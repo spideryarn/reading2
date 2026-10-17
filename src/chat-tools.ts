@@ -74,6 +74,7 @@ import { Readability } from "@mozilla/readability";
 /* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
    `articleLinks` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
+import { latexmlUntitled } from "./latexml.js";
 import type {
   Block,
   ChatThread,
@@ -1411,6 +1412,18 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
        the piece lives. */
     const { JSDOM } = jsdom();
     const dom = new JSDOM(doc.text, { url: doc.url });
+    /* Before Readability mutates the document. On an untitled LaTeXML paper
+       its parsed title is LaTeXML's numbered-part fallback, not the work. An
+       explicit bibliographic or social title remains a page declaration. */
+    const untitledLatexml = latexmlUntitled(dom.window.document);
+    const declaredTitle = [
+      'meta[name="citation_title"]',
+      'meta[property="og:title"]',
+      'meta[name="twitter:title"]',
+      'meta[property="twitter:title"]',
+    ]
+      .map((selector) => dom.window.document.querySelector(selector)?.getAttribute("content")?.trim())
+      .find((value): value is string => Boolean(value));
     const parsed = new Readability(dom.window.document).parse();
     const body = parsed?.textContent?.trim();
     if (!body) {
@@ -1420,7 +1433,7 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
         content: `${host} loaded, but there was no article text to extract — it may be a landing page, a paywall, or a page that builds itself with JavaScript.`,
       };
     }
-    const title = parsed?.title?.trim();
+    const title = declaredTitle ?? (untitledLatexml ? undefined : parsed?.title?.trim());
     log("model").info(
       { tool: "read_web_page", host, status: doc.status, chars: body.length, ms: since(started) },
       "chat tool: read a web page",

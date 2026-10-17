@@ -126,10 +126,12 @@ const DETAILED = new Set(["ar5iv-attention", "wiki-gdp-table", "plos-biology", "
 const WALLS = ["medium-about", "pmc-article"];
 
 /**
- * The two that are long enough to clear the floor, and are refused by their own
- * markup instead: one Anubis page of each shape src/challenge-page.ts reads.
+ * The bot checks refused by their own markup (src/challenge-page.ts): one
+ * Anubis page of each shape, both long enough to clear the floor, and since
+ * 2026-10-17 IEEE's AWS WAF page and the "Client Challenge", which are under it
+ * but are reported as the bot checks they are.
  */
-const CHALLENGES = ["hal-anubis", "winehq-anubis"];
+const CHALLENGES = ["hal-anubis", "winehq-anubis", "ieee-aws-waf", "springer-client-challenge"];
 
 /**
  * **A digest, so "byte-identical" is a comparison of bytes rather than of
@@ -170,7 +172,7 @@ async function armOf(html: string, url: string, slug: string, keepHtml: boolean)
 }
 
 /**
- * **Both arms of all 39 fixtures, run once and in sequence.**
+ * **Both arms of all 41 fixtures, run once and in sequence.**
  *
  * Sequence is required rather than tidy: `withProtectionDisabled` is module
  * state, so two extractions in flight at once in different arms would see each
@@ -794,7 +796,7 @@ describe("rule B's boundary — 25 points of weight, and not one paragraph paid 
  * The corpus residual, both arms.
  * ------------------------------------------------------------------ */
 
-describe("the residual — what this pass does to the other 35 fixtures", CORPUS_TIMEOUT, () => {
+describe("the residual — what this pass does to the other 37 fixtures", CORPUS_TIMEOUT, () => {
   /**
    * **Both arms are run.** The first draft's spike did not: for a zero-stamp
    * fixture it assigned the treatment result *from* the control and compared
@@ -806,8 +808,9 @@ describe("the residual — what this pass does to the other 35 fixtures", CORPUS
     const corpus = await CORPUS;
     /* 39 since 2026-10-07: the two reader-comment fixtures joined. Both
        extract without a protection stamp, so they move the comparison from
-       twenty-nine to thirty-one. */
-    expect(corpus.size).toBe(39);
+       twenty-nine to thirty-one. 41 since 2026-10-17: two bot checks
+       (261017b), both refused, so the comparison stays at thirty-one. */
+    expect(corpus.size).toBe(41);
     const stamped = [...corpus].filter(([, r]) => r.kind === "extracted" && Object.keys(r.on.kept).length > 0);
     expect(stamped.map(([n]) => n).sort()).toEqual([
       "ar5iv-attention",
@@ -821,7 +824,7 @@ describe("the residual — what this pass does to the other 35 fixtures", CORPUS
      * was three stamped, two refused and thirty compared. The 30 was right and
      * its arithmetic was not. Rule C added Quanta (below), so it became four
      * stamped and twenty-nine compared; the two reader-comment fixtures make
-     * that thirty-one now. Four other fixtures are refused in both arms.
+     * that thirty-one now. Six other fixtures are refused in both arms.
      */
     expect(stamped).toHaveLength(4);
   });
@@ -887,8 +890,8 @@ describe("the residual — what this pass does to the other 35 fixtures", CORPUS
       expect(r.onRefusal, name).toBeInstanceOf(ChallengePage);
       expect(r.offRefusal, name).toBeInstanceOf(ChallengePage);
     }
-    expect(CHALLENGES).toHaveLength(2);
-    /* And those four are every refusal in the corpus. */
+    expect(CHALLENGES).toHaveLength(4);
+    /* And those six are every refusal in the corpus. */
     const refused = [...corpus].filter(([, r]) => r.kind === "refused").map(([n]) => n);
     expect(refused.sort()).toEqual([...WALLS, ...CHALLENGES].sort());
   });

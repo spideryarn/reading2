@@ -1,7 +1,7 @@
 ---
 reports: spya-x5e966, spya-tqsw3u
 ending: awaiting
-comment: A refused import now says to use the page's Download PDF, and the add page has an Upload button right under it. Finding a free copy, or taking the page from your browser, is a question for you (q-fp8tqr).
+comment: A failed import now offers a Save for Spideryarn bookmarklet that saves the page for you to upload. A free copy found automatically, and a saved page keeping its address, are a question for you (q-emrf2p).
 ---
 # cell.com refused the app: a better way round now, and a question about the bigger fixes
 
@@ -30,8 +30,9 @@ research:
 
 (#581 says the same, without the bot-check sentence and the Sonnet line.)
 
-**Ending: Awaiting Greg**, on [q-fp8tqr](questions/q-fp8tqr.md), with the small part shipped on
-`dev` and not deployed.
+**Ending: Awaiting Greg**, on [q-emrf2p](questions/q-emrf2p.md) since 2026-10-17 (before that
+[q-fp8tqr](questions/q-fp8tqr.md), now answered), with what is built shipped on `dev` and not
+deployed.
 
 What we did:
 
@@ -45,3 +46,18 @@ What we did:
   control under any failed import whose sentence says to upload.
 - **Asked**: whether to measure and then build an automatic open-access copy, a bookmarklet, or an
   extension.
+
+**After Greg's reply** (`spya-wm83gt`, 2026-10-17, to q-fp8tqr: *"A and/or B as you see fit. Look
+for a way that's clean and good for the user."*), queue item `qi-q62g96s9`, plan
+[261017b](../plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md):
+
+- **Measured A** ([investigation 261017a](../investigations/261017a-which-refused-paper-links-have-a-free-copy-the-server-can-read.md)):
+  of 37 sample links from walled publishers, 29 refused us, and Europe PMC's API recovered 6.
+  Building it edits the fetch defence, so it is asked again, in q-emrf2p.
+- **Built B** as a bookmarklet that saves the page as rendered to a `.html` file for the Upload
+  control on the failed add page, rather than a window handoff, which these sites' opener policy
+  can silently break. Seen working end to end on PLOS through a local server.
+- **Fixed on the way**: IEEE's AWS WAF and Springer and JSTOR's "Client Challenge" pages are now
+  refused as bot checks (`[jb-bot-check]`, with the Upload button), not as too little text.
+- **Asked** (q-emrf2p): build A; and let a saved page keep its address, which is an upload-path
+  change.

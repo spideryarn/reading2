@@ -1,0 +1,7 @@
+You are re-reviewing a plan, read-only, for the Spideryarn repo (this working tree). Do not edit files.
+
+Round 2. Your round-1 review is docs/plans/261017b-plan-review-sol.md (verdict REWORK, F1–F9). The plan (untracked) docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md and the investigation (untracked) docs/investigations/261017a-which-refused-paper-links-have-a-free-copy-the-server-can-read.md were revised to take all nine; the plan's "GPT Sol's plan review" section maps them. Evidence: docs/investigations/261017a-evidence/.
+
+Check: is each of F1–F9 actually resolved by the revised text (say which are not, and why)? Did the revisions introduce anything new that is wrong — in particular the elements the bookmarklet removes (could removing <iframe>, <input>, <textarea>, <select> or token-ish <meta> delete article content a reader needs, e.g. an embedded figure or a code sample?), the alert-and-stop size check, the click-prevention on the install link (does preventing click break drag-to-install in Chrome, Firefox or Safari?), and the isPhone cut. Note: Stage 1 is already being built in parallel; findings on it are still welcome.
+
+Severity: P0 data loss/exploitable security/service unusable; P1 user-visible wrong behaviour or authoritative contract violated; P2 design risk; P3 prose. Mark established or reasoned. Refuse only on an established P0/P1. Numbered findings with IDs R2-1, R2-2…, evidence file:line, fix. End with APPROVE, APPROVE WITH CHANGES, or REWORK.

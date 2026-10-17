@@ -180,6 +180,7 @@ import {
   SKETCH_OUTPUT_SCHEMA,
 } from "./sketch.js";
 import { frontMatterAuthorsReader } from "./front-matter-authors.js";
+import { openingTitleReader } from "./opening-title.js";
 import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
@@ -2930,6 +2931,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
                cheap call and held to its words (plan 261010d). Not called when
                the page's meta tags already give an affiliation. */
             frontMatterAuthors: frontMatterAuthorsReader(ctx),
+            /* A paper's title read off its opening, held to its words, when
+               its `<title>` is known to be LaTeXML's guess (plan 261017a).
+               Not held across re-extraction the way `stepTitleTidier` holds a
+               tidy: a title printed on the page is not proof that an earlier
+               choice was right (GPT Sol, plan review, P1). */
+            titleFromOpening: openingTitleReader(ctx),
           });
           /* **The audit line for the named pre-Readability removers.**
              `removePlatformFurniture` and `removeReaderComments` delete an

@@ -1,0 +1,18 @@
+You are reviewing a plan, read-only, for the Spideryarn repo (this working tree, base commit: run `git log -1 --format=%H origin/dev` — the plan is not committed yet). Do not edit files.
+
+Untracked files that are the candidate (a pathspec will not show them):
+- docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md (the plan)
+- docs/investigations/261017a-which-refused-paper-links-have-a-free-copy-the-server-can-read.md (the measurement; read it as a reviewer of its conclusions, not only of the plan)
+- docs/investigations/261017a-evidence/ (probe.ts, epmc.ts, sample.tsv, results2.json, and the three captured challenge pages springer.html, jstor.html, ieee-fd.html)
+
+Context: Greg asked "A and/or B as you see fit. Look for a way that's clean and good for the user." (A = find a free copy automatically; B = a bookmarklet). This run may NOT edit a defence listed in docs/project/security-map.md § Where the defences physically live (src/fetch.ts, the upload path, the API's refusal of cross-site requests); those are written up for Greg instead. Previous plan and question: docs/plans/261015a-…md, docs/user-feedback/questions/q-fp8tqr.md, docs/research/261015a-…md.
+
+Check the plan against the code: src/challenge-page.ts and tests/extract-challenge-page.test.ts (the registry and its rules: markup not wording, both halves required, uploaded copies with no base), docs/plans/261006f-other-bot-check-walls-that-clear-the-floor.md (the precedent, including its review findings), src/extract.ts (refusalFor, capabilityFloor), src/messages.ts (SUGGESTS_UPLOAD, jb-bot-check), src/web/UploadInstead.tsx, src/web/UploadPicker.tsx, src/fetch.ts (uploadedDocumentKind, sniffKind, cameFromAnUpload), docs/project/content-extraction.md § Stage 2 and the document with no address, src/assets.ts (how images in an upload are treated), src/sanitize-policy.ts (what happens to a <base> element in an uploaded page), docs/project/security-map.md.
+
+Attack independently first: is the measurement's conclusion about A sound (sample, counting, what "readable" means)? Is deciding against the postMessage handoff on the spike's evidence right, or is there a handoff design immune to COOP that needs no defence edit? Does the bookmarklet-saves-a-file design actually work through stage 1 and 2 (sniffing, the <base> it adds, scripts stripped, what the sanitiser and assets step then do with absolute image URLs from a walled host, size)? Any security consequence of the app rendering a javascript: href, or of a captured page carrying the reader's signed-in details into their own upload? Are the two recogniser entries narrow enough (false positives on a real article) and do they meet the registry's own rules? Is anything here actually an edit to a listed defence? A simpler design?
+
+My own suspicions, worth less, spend most of the run elsewhere: (1) whether `<base href>` survives the sanitiser / is honoured by JSDOM with no document URL; (2) whether hiding the bookmarklet on touch devices is the right cut; (3) whether a 202-then-page AWS WAF answer even reaches stage 2 in production as it did in my probe.
+
+Severity scale, by consequence: P0 data loss / exploitable security / service unusable; P1 user-visible wrong behaviour or an authoritative contract violated; P2 design or maintainability risk with no wrong behaviour today; P3 prose. Mark each finding established (direct evidence: file:line, a run) or reasoned. Refuse only on an established P0/P1.
+
+Write your answer as a numbered list of findings (ID F1, F2, …), each with severity, established/reasoned, the evidence (file:line), and the fix. End with a one-line verdict: APPROVE, APPROVE WITH CHANGES, or REWORK.

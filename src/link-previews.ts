@@ -78,6 +78,7 @@ import {
 import { FetchFailure, fetchDocument, type FetchFailureCode } from "./fetch.js";
 import { plainTitle } from "./html.js";
 import { jsdom } from "./jsdom-lazy.js";
+import { latexmlUntitled } from "./latexml.js";
 import { log, since } from "./log.js";
 import { fetchAllowanceStore, linkPreviewStore, loadArticle } from "./store/index.js";
 import type { CachedPreview, PreviewToStore, RatePolicy } from "./store/contracts.js";
@@ -297,12 +298,14 @@ export function extractPreview(html: string, url: string): Extracted | null {
 
   /* Plain text, not the page's markup — an `og:title` can carry `<i>` as
      readily as a search result can. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
-  const rawTitle =
-    metaContent(doc, [
-      'meta[property="og:title"]',
-      'meta[name="twitter:title"]',
-      'meta[property="twitter:title"]',
-    ]) ?? doc.title;
+  const declaredTitle = metaContent(doc, [
+    'meta[property="og:title"]',
+    'meta[name="twitter:title"]',
+    'meta[property="twitter:title"]',
+  ]);
+  /* LaTeXML fills `<title>` from a numbered part when a paper has no document
+     title. Keep an explicit social title, but do not put that guess on a card. */
+  const rawTitle = declaredTitle ?? (latexmlUntitled(doc) ? "" : doc.title);
   const title = tidy(plainTitle(rawTitle), MAX_TITLE_CHARS);
   const siteName = tidy(metaContent(doc, ['meta[property="og:site_name"]']), MAX_SITE_CHARS);
   const description = tidy(

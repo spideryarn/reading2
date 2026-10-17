@@ -210,6 +210,17 @@ export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: st
     url: "https://xenaproject.wordpress.com/2026/10/01/to-grieve-or-not-to-grieve/" },
   { name: "lemire-wordpress-comments", file: "lemire_wordpress_comments.html", slot: "—",
     url: "https://lemire.me/blog/2026/10/06/linking-node-js-with-mold/" },
+  /* **Two more bot checks, 2026-10-17, and neither is an article**: IEEE's
+     AWS WAF page and the "Client Challenge" Springer and JSTOR answer with
+     (byte-identical, so one fixture). Both are under the floor and were refused
+     before, but with sentences that send the reader back to the address; now
+     src/challenge-page.ts names them, and the reader is offered Upload —
+     docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md.
+     Bytes unedited. */
+  { name: "ieee-aws-waf", file: "ieee_aws_waf.html", slot: "—",
+    url: "https://ieeexplore.ieee.org/document/9069875" },
+  { name: "springer-client-challenge", file: "springer_client_challenge.html", slot: "—",
+    url: "https://link.springer.com/article/10.1007/s10648-015-9348-9" },
 ];
 
 /** Every committed fixture, for an eval whose denominator is not `CORPUS`'s. */
