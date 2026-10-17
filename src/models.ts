@@ -516,6 +516,15 @@ export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
 export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What reads a paper's title off its opening** when the page's `<title>` is
+ * known not to be it (src/opening-title.ts, plan 261017a). The authors pass's
+ * model, on its route, for its reason: the same opening records go to the same
+ * upstream, and the answer is held to the page by code. Its own constant,
+ * though the string is the same: the two jobs were chosen separately.
+ */
+export const OPENING_TITLE_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -1026,6 +1035,9 @@ export type NonTaskAiJob =
   /* **Any web page's authors and affiliations, off the top of the page** —
      src/front-matter-authors.ts, on `FRONT_MATTER_AUTHORS_MODEL` below. */
   | "front-matter-authors"
+  /* **A paper's title, off its opening**, when its `<title>` is known not to
+     be it — src/opening-title.ts, on `OPENING_TITLE_MODEL` below. */
+  | "opening-title"
   /* **A conversation's one-line gist**, written after each answer —
      src/chat-gist.ts, on `CHAT_GIST_MODEL` below. */
   | "chat-gist"
@@ -1592,6 +1604,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "title-tidy": "chat",
   /* A strict JSON schema back, on chat/completions. src/front-matter-authors.ts. */
   "front-matter-authors": "chat",
+  /* A strict JSON schema back, on chat/completions. src/opening-title.ts. */
+  "opening-title": "chat",
   /* A strict JSON schema back, on chat/completions. src/chat-gist.ts. */
   "chat-gist": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
@@ -1860,6 +1874,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "reading-difficulty", id: READING_DIFFICULTY_MODEL, provider: "openrouter" },
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "front-matter-authors", id: FRONT_MATTER_AUTHORS_MODEL, provider: "openrouter" },
+  { job: "opening-title", id: OPENING_TITLE_MODEL, provider: "openrouter" },
   { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },

@@ -86,6 +86,16 @@ describe("readPaperText", () => {
     });
   });
 
+  it("does not return LaTeXML's guessed title for an untitled arXiv HTML paper", async () => {
+    const source = await readFile(new URL("./fixtures/latexml/untitled-2308-08708v3.html", import.meta.url), "utf8");
+    const url = "https://arxiv.org/html/2308.08708";
+    const { impl } = scripted({ [url]: html(source) });
+    const got = await readPaperText(url, seams(impl));
+    if (got.kind !== "read") throw new Error(`unreadable: ${got.why}`);
+    expect(got.title).toBeUndefined();
+    expect(got.text).toMatch(/Consciousness in Artificial Intelligence:\s+Insights from the Science of Consciousness/);
+  });
+
   it("follows citation_pdf_url once and prefers the PDF's text layer, keeping the page's meta", async () => {
     const bytes = new Uint8Array(await readFile(EASY));
     const { impl, calls } = scripted({

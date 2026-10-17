@@ -23,6 +23,8 @@
  *
  * See docs/project/chat-tools.md.
  */
+import { readFileSync } from "node:fs";
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHAT_TOOLS,
@@ -856,6 +858,26 @@ describe("read_web_page will not fetch the article the reader has open", () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+});
+
+describe("read_web_page title", () => {
+  it("does not tell chat that LaTeXML's guessed <title> is the paper's title", async () => {
+    const url = "https://arxiv.org/html/2308.08708";
+    const html = readFileSync(new URL("./fixtures/latexml/untitled-2308-08708v3.html", import.meta.url), "utf8");
+    dns.lookup.mockResolvedValue([{ address: "151.101.131.42", family: 4 }]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } })),
+    );
+    const out = await runTool("read_web_page", { url }, {
+      slug: "example",
+      meta: { title: "A piece" } as Meta,
+      blocks: [],
+      power: "standard",
+    });
+    expect(out.content).not.toContain("TITLE: 1Indicator Properties");
+    expect(out.content).toMatch(/Consciousness in Artificial Intelligence:\s+Insights from the Science of Consciousness/);
   });
 });
 

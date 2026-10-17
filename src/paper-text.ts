@@ -47,6 +47,7 @@ import { Readability } from "@mozilla/readability";
 
 import { FetchFailure, type FetchedDocument, type FetchFailureCode, type FetchOptions, fetchDocument } from "./fetch.js";
 import { jsdom } from "./jsdom-lazy.js";
+import { latexmlUntitled, untitledLatexmlMarkup } from "./latexml.js";
 import { log, since } from "./log.js";
 import type { PaperUnreadableReason } from "./messages.js";
 import { arxivIdOf } from "./paper-sources.js";
@@ -507,9 +508,10 @@ export async function readPaperText(url: string, opts: ReadPaperOptions = {}): P
 }
 
 /**
- * **An HTML document already in hand — its scholarly meta tags, its own
- * `<title>` and description, and Readability's text** — with no fetch and no
- * model. For the bulk import's metadata step (src/paper-metadata.ts §
+ * **An HTML document already in hand — its scholarly meta tags, trustworthy
+ * own `<title>`, description, and Readability's text** — with no fetch and no
+ * model. An untitled LaTeXML upload's fallback `<title>` is deliberately not
+ * trustworthy. For the bulk import's metadata step (src/paper-metadata.ts §
  * `extractHtmlMetadata`), which reads an uploaded web page the way
  * `readPaperText` reads a fetched one: the same `metaFrom` and the same
  * Readability, so there is one HTML reader here rather than two.
@@ -527,10 +529,14 @@ export function htmlDocumentText(html: string): {
   const { JSDOM } = jsdom();
   const dom = new JSDOM(html);
   const document = dom.window.document;
+  /* An upload has no source address, so this is deliberately the markup-only
+     half of `latexmlUntitled`. It only withholds a title known to be LaTeXML's
+     guess; it does not enable any of LaTeXML's structural rewrites. */
+  const untitledLatexml = untitledLatexmlMarkup(document);
   /* `about:blank` cannot be a base for anything relative, so only an absolute
      `citation_pdf_url` survives — and it is not read here either way. */
   const meta = metaFrom(document, "about:blank");
-  const ownTitle = normaliseWhitespace(document.title ?? "") || undefined;
+  const ownTitle = untitledLatexml ? undefined : (normaliseWhitespace(document.title ?? "") || undefined);
   const description = Array.from(document.querySelectorAll("meta"))
     .filter((el) => {
       const name = (el.getAttribute("name") ?? el.getAttribute("property") ?? "").trim().toLowerCase();
@@ -539,7 +545,7 @@ export function htmlDocumentText(html: string): {
     .map((el) => normaliseWhitespace(el.getAttribute("content") ?? ""))
     .find((content) => content !== "");
   /* After the meta reads: Readability rewrites the document it is given. */
-  const page = pageText(document, meta);
+  const page = pageText(document, meta, untitledLatexml);
   const title = meta.title ?? ownTitle ?? page?.title;
   return {
     meta,
@@ -550,10 +556,18 @@ export function htmlDocumentText(html: string): {
 }
 
 /** Readability's text and title, the same parser stage 2 and `readWebPage` use. `null` when the page has no text. */
-function pageText(document: Document, meta: PaperMeta): { text: string; words: number; title?: string } | null {
+function pageText(
+  document: Document,
+  meta: PaperMeta,
+  ignoreGuessedTitle = false,
+): { text: string; words: number; title?: string } | null {
+  /* Asked before Readability mutates the document. A fetched LaTeXML page has
+     address provenance; the uploaded-file caller supplies the weaker markup
+     signal explicitly. A real citation_title remains authoritative below. */
+  const untitledLatexml = ignoreGuessedTitle || latexmlUntitled(document);
   const parsed = new Readability(document).parse();
   const text = normaliseWhitespace(parsed?.textContent ?? "");
   if (!text) return null;
-  const title = meta.title ?? (parsed?.title?.trim() || undefined);
+  const title = meta.title ?? (untitledLatexml ? undefined : (parsed?.title?.trim() || undefined));
   return { text, words: countWords(text), ...(title ? { title } : {}) };
 }

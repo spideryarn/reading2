@@ -17,6 +17,7 @@ import { collectSpend } from "../src/ai-spend.js";
 import { CHAT_REASONING } from "../src/ai-call.js";
 import { PAPER_METADATA_MODEL } from "../src/models.js";
 import { firstPagesText } from "../src/pdf.js";
+import { htmlDocumentText } from "../src/paper-text.js";
 import {
   MAX_ABSTRACT_CHARS,
   MAX_AUTHOR_CHARS,
@@ -471,6 +472,25 @@ describe("extractHtmlMetadata", () => {
       doi: "10.1000/xyz123",
       abstract: null,
     });
+  });
+
+  it("does not present an uploaded untitled LaTeXML document's guessed <title> as its page title", async () => {
+    const html = fs.readFileSync(path.join(ROOT, "tests/fixtures/latexml/untitled-2308-08708v3.html"), "utf8");
+    const page = htmlDocumentText(html);
+    expect(page.title).toBeUndefined();
+
+    let sent = "";
+    const gateway: MetadataGateway = async (_job, request) => {
+      sent = ((request.messages as { content: string }[])[1]?.content) ?? "";
+      return {
+        json: body({ ...good, title: "Consciousness in Artificial Intelligence: Insights from the Science of Consciousness" }),
+        answeredBy: PAPER_METADATA_MODEL,
+        generationId: null,
+      };
+    };
+    await extractHtmlMetadata(html, { gateway });
+    expect(sent).not.toContain("Page title: 1Indicator Properties");
+    expect(sent).toMatch(/Consciousness in Artificial Intelligence:\s+Insights from the Science of Consciousness/);
   });
 });
 

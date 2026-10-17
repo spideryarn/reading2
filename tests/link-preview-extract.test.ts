@@ -21,6 +21,8 @@
  *
  * No network and no store: `extractPreview` takes a string.
  */
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { extractPreview, saneParagraph } from "../src/link-previews.js";
@@ -83,6 +85,11 @@ describe("what a page says about itself", () => {
     /* No `og:site_name` means no site name. It is never guessed from the host,
        because the card already prints the host one line up. */
     expect(found?.page.siteName).toBeUndefined();
+  });
+
+  it("does not show LaTeXML's guessed <title> for an untitled arXiv paper", () => {
+    const html = readFileSync(new URL("./fixtures/latexml/untitled-2308-08708v3.html", import.meta.url), "utf8");
+    expect(extractPreview(html, "https://arxiv.org/html/2308.08708")).toBeNull();
   });
 
   it("counts the destination's words", () => {
