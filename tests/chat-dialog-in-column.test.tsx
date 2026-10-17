@@ -572,7 +572,7 @@ describe("a move between the card, the dock and the corner keeps what the reader
   it("keeps an open question editor and what was typed into it", () => {
     draw(THREAD, inCard());
     const pencil = [...panel().querySelectorAll<HTMLButtonElement>("button")].find(
-      (b) => b.title === "Rewrite this question",
+      (b) => b.getAttribute("data-tip") === "Rewrite this question",
     );
     if (!pencil) throw new Error("no pencil on the question — the test would prove nothing");
     act(() => pencil.click());

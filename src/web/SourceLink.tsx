@@ -132,14 +132,15 @@ export function SourceLink({
   slug,
   children,
   className,
-  title,
+  tip,
   fragment,
 }: {
   slug: string;
   children: React.ReactNode;
   /** Replaces the default link styling — most callers put this in a sentence. */
   className?: string;
-  title?: string;
+  /** The words on hover, in the page-wide card (TipCard.tsx) — a native `title` until 2026-10-17. */
+  tip?: string;
   /**
    * **Where in the document to open**, as a URL fragment without the `#` —
    * `page=7` for a PDF.
@@ -233,7 +234,7 @@ export function SourceLink({
           className ??
           "tw:cursor-pointer tw:underline tw:bg-transparent tw:border-0 tw:p-0 tw:text-inherit"
         }
-        {...(title === undefined ? {} : { title })}
+        data-tip={tip}
       >
         {children}
       </button>

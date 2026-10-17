@@ -168,4 +168,43 @@ by spreading an object of props built elsewhere. The repo has neither today (gre
 
 ## Results
 
-(Filled in as the stages land.)
+**Stage 1** (34c48075b): `useDelegatedCard.tsx` lifted out of BlockLinkCard; `TipCard.tsx` in
+`main.tsx`; the gutter's six controls moved to it with `data-tip-describes="off"`; `IconButton`
+writes `data-tip`. GPT Sol's code review of it
+([261017g-native-title-tooltips-code-review-1-sol.md](261017g-native-title-tooltips-code-review-1-sol.md))
+found five things, all checked and all fixed in stage 2's commit:
+
+1. Escape closed the tip *and* the surface behind it. Now a showing tip takes the press for itself
+   (window capture, `stopImmediatePropagation`); one still waiting out its delay is cancelled and
+   the press goes on; an open native `<dialog>` keeps it.
+2. A disabled `Tooltip` still blocked a `data-tip` fallback, and a `data-tip` *inside* a trigger
+   could open a second card. Tooltip triggers are now a `WeakSet` (`TOOLTIP_TRIGGERS`), only while
+   enabled, checked up the target's ancestors. A set, not the `data-tooltip-trigger` attribute
+   first tried, because that changed every trigger's markup and
+   `tests/mode-surface-changes-no-markup.test.tsx` rightly caught it.
+3. A second tap on an open reading-time line re-opened it instead of closing it: the press handler
+   now leaves an open line alone, as before the refactor. `tests/reading-time-card.test.tsx` has the
+   case, seen red against the stage-1 handler.
+4. The guard missed `{...{...{title}}}` and `{...{["title"]: x}}`: both now caught, both in the
+   self-test.
+5. The cost-chart exception covered the whole file; it now covers only a `<title>` under
+   `tips === "native" &&`.
+
+**Stage 2** (the sweep): every native `title` in `src/web` became `data-tip`, by five subagents
+over disjoint files — about 190 sites, the seven spreads among them. Prop renames where a
+component's `title` existed only to become a tooltip: `ThresholdSlider`, `ArmedDelete`, `StopBar`
+and `SourceLink` (`tip`). `aria-label` added where the `title` had been an icon button's only
+name; `data-tip-describes="off"` where the label and the tip are the same words; `sr-only` copies
+where a span's tip was the only place a fact lived (an exact timestamp in admin, a failed
+search's error, a tweet's over-limit count). `Button`'s and `Link`'s types refuse `title`.
+Chat's thread-row card joins its lines with blank lines, so they are paragraphs; a single newline
+inside a paragraph is a line break (`pre-line`), as it was in a `title`.
+
+**Disabled controls.** Search's *find* moved from `disabled` to `aria-disabled` (its `ask` already
+refused when not ready), because its card is the only place that says *why* it will not run. Every
+other disabled control with a tip is either a raw `<button>`, which current browsers still send
+hover events to, or a shadcn `Button` whose tip only says what it does — and a native `title` never
+showed on one of those while disabled either, because of its `pointer-events: none`.
+
+**Out of scope, asked:** an article's own `title`s —
+[q-z2c269](../user-feedback/questions/q-z2c269.md).

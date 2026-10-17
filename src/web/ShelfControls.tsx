@@ -195,12 +195,13 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      // Both: `title` is the hover hint, `aria-pressed` + `aria-label` are what
+      // Both: `data-tip` is the hover hint (TipCard.tsx), `aria-pressed` + `aria-label` are what
       // a screen reader gets. `aria-pressed` is what makes this read as state
       // rather than as a button that does something unrelated.
       aria-pressed={pressed}
       aria-label={describe}
-      title={describe}
+      data-tip={describe}
+      data-tip-describes="off"
       // The same pill the sort chips wear, from the one place that spells it —
       // see `chipClass` in lib/DataTable.tsx on why it is not written twice.
       className={chipClass(pressed)}

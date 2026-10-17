@@ -1037,7 +1037,7 @@ export function Metadata({
                  a file in this repository to a reader who has no copy of it.
                  What is left is the consequence, which is the part they can do
                  something about. */
-              title="Nothing has been stored at this address, so the page is showing our built-in example article. Nothing below is about yours."
+              data-tip="Nothing has been stored at this address, so the page is showing our built-in example article. Nothing below is about yours."
             >
               fixture
             </span>
@@ -2836,7 +2836,7 @@ function TopActions({
           data-top-action="archive"
           onClick={() => void set(!archived)}
           disabled={busy}
-          title={
+          data-tip={
             archived
               ? "Back onto the shelf."
               : "Off the shelf, and reversible. You stay here and can carry on reading."
@@ -2851,7 +2851,7 @@ function TopActions({
         type="button"
         data-top-action="share"
         onClick={onShare}
-        title="Takes you to Access & sharing below, which asks before anything goes public."
+        data-tip="Takes you to Access & sharing below, which asks before anything goes public."
         className={QUIET_BUTTON}
       >
         <Globe size={14} />

@@ -76,14 +76,14 @@ describe("the top bar", () => {
     vi.stubGlobal("__SPIDERYARN_BUILD_TIME__", "2026-09-07T09:49:03Z");
     act(() => root.render(<SiteNav here="features" signedIn />));
     const home = host.querySelector('a[aria-label="Spideryarn Reading, home"]');
-    expect(home?.getAttribute("title")).toContain("back to the library");
-    expect(home?.getAttribute("title")).toContain("39282f8");
+    expect(home?.getAttribute("data-tip")).toContain("back to the library");
+    expect(home?.getAttribute("data-tip")).toContain("39282f8");
   });
 
   it("does not describe a signed-out home link as the reader's library", () => {
     act(() => root.render(<SiteNav here="features" signedIn={false} />));
     const home = host.querySelector('a[aria-label="Spideryarn Reading, home"]');
-    expect(home?.getAttribute("title")).toBeNull();
+    expect(home?.getAttribute("data-tip")).toBeNull();
   });
 });
 

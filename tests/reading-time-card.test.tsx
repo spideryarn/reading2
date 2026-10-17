@@ -281,6 +281,27 @@ describe("a tap on the reading-time line", () => {
     expect(card()).toBeNull();
   });
 
+  /* The second tap on the same line is "the next tap anywhere" too. When the
+     card's machinery moved into useDelegatedCard.tsx a press on the open line
+     re-opened it, cancelling the close that tap's own `pointerover` had armed
+     (GPT Sol, code review 1 of 261017g). */
+  it("closes when the same line is tapped again", async () => {
+    const line = paint(2);
+    await act(async () => finger(line));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).not.toBeNull();
+    await act(async () => finger(line));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).toBeNull();
+  });
+
   /* A mouse can click inside the 240ms hover delay; the delayed hover open
      must not then overwrite the click's card and its close-on-scroll. GPT Sol,
      plan review of 261003c. */

@@ -93,7 +93,7 @@ describe("the number", () => {
        figure as tooltip)". Plan 261002b stage 3. */
     const drawn = cellFor(user({ spendNanos: 3_141_600_000 }));
     expect(drawn).toContain(">$3<");
-    expect(drawn).toMatch(/title="\$3\.1416 — 42 model call\(s\) over 2026-09 \(UTC\)"/);
+    expect(drawn).toMatch(/data-tip="\$3\.1416 — 42 model call\(s\) over 2026-09 \(UTC\)"/);
   });
 
   it("draws <$1 rather than a free-looking $0 for a cost under fifty cents", () => {

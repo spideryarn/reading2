@@ -63,13 +63,10 @@ import {
   type Placement,
 } from "@floating-ui/react";
 
-/**
- * Long enough that crossing the rail on the way somewhere else doesn't fire a
- * dozen tooltips; short enough that pausing on a band feels like an answer
- * rather than a wait. Closing is quick but not instant, so a wobble of the
- * mouse between two adjacent bands doesn't blink the panel out and back.
- */
-export const DELAY = { open: 240, close: 90 } as const;
+import { DELAY } from "./tooltip-delay.js";
+
+/* Re-exported: the tests that time a Tooltip import it from here. */
+export { DELAY };
 
 /**
  * Groups tooltips so that once one is open, its neighbours open *instantly*
@@ -79,6 +76,15 @@ export const DELAY = { open: 240, close: 90 } as const;
  * up through context.
  */
 export const TooltipGroup = FloatingDelayGroup;
+
+/** Every element that is an enabled `Tooltip`'s trigger right now — see `Tooltip`. */
+export const TOOLTIP_TRIGGERS = new WeakSet<Element>();
+
+/** Whether this element, or one it sits in, is an enabled `Tooltip`'s trigger. */
+export function insideTooltipTrigger(el: Element): boolean {
+  for (let at: Element | null = el; at; at = at.parentElement) if (TOOLTIP_TRIGGERS.has(at)) return true;
+  return false;
+}
 
 interface BaseProps {
   /** The panel's contents. Rendered only while open. */
@@ -349,6 +355,20 @@ export function Tooltip({
   const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref;
   const ref = useMergeRefs<HTMLElement>([refs.setReference, childRef ?? null]);
 
+  /* **This element has a card of its own**, so the page-wide `data-tip` card
+     (TipCard.tsx) leaves it, and anything inside it, alone — a stray `data-tip`
+     cannot open a second card. Only while this one can open: a disabled
+     Tooltip leaves its trigger to a `data-tip` fallback. A set rather than an
+     attribute, so no trigger's markup changes (plan 261017g). */
+  const trigger = context.elements.domReference;
+  useEffect(() => {
+    if (!enabled || !trigger) return;
+    TOOLTIP_TRIGGERS.add(trigger);
+    return () => {
+      TOOLTIP_TRIGGERS.delete(trigger);
+    };
+  }, [enabled, trigger]);
+
   /**
    * **A trigger that already describes itself keeps that description, and gains
    * the card's rather than losing it.**
@@ -425,10 +445,7 @@ export function Tooltip({
     <>
       {/* `ref` last: it must win over any `ref` already in children.props,
           which the merged one already includes. */}
-      {/* `data-tooltip-trigger` tells the page-wide `data-tip` card (TipCard.tsx)
-          that this element has a card of its own, so a stray `data-tip` on it
-          cannot open a second one (plan 261017g). */}
-      {cloneElement(children, { ...merged, "aria-describedby": describedBy, "data-tooltip-trigger": "" })}
+      {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
       {isMounted && (
         <FloatingPortal>
           <FocusReach on={interactive !== undefined} context={context}>

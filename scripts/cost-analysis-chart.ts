@@ -36,6 +36,7 @@ export interface ChartModule {
     data: DaySeries;
     colourKeys: readonly string[];
     label: string;
+    tips: "card" | "native";
   }) => React.ReactNode;
 }
 
@@ -72,6 +73,8 @@ export async function dayChartMarkup(
       data: daySeriesOf(analysis),
       colourKeys: CATEGORY_COLOUR_ORDER,
       label: `Recorded amount per UTC day by category, ${analysis.window.label}`,
+      /* A standalone file with no card to draw a `data-tip`: the SVG `<title>`. */
+      tips: "native",
     }),
   );
   return { markup, tokens: charts.CHART_TOKENS };

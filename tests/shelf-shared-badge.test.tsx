@@ -166,7 +166,7 @@ describe("the card", () => {
     /* The sentence, not merely the word: a chip saying "Shared" and nothing
        else leaves the owner to guess whether it means *shared with me* or
        *shared by me*. It is the owner's own card's sentence, reused. */
-    expect(badges()[0]?.title).toContain("Anyone can read this without signing in");
+    expect(badges()[0]?.getAttribute("data-tip")).toContain("Anyone can read this without signing in");
   });
 
   it("says nothing whatever about a private one", () => {

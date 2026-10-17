@@ -409,7 +409,8 @@ export function SortChips<T>({
               onClick={(e) => toggleSort(table, column.id, e.shiftKey)}
               aria-pressed={sorted !== false}
               aria-label={describe}
-              title={describe}
+              data-tip={describe}
+              data-tip-describes="off"
               className={chipClass(sorted !== false)}
             >
               {meta.label}
@@ -777,7 +778,7 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
               ? `${shown}, ${directionLabel(table, header.column.id, sorted === "desc")}. Activate to reverse, shift-activate to add another key.`
               : `${shown} — ${meta.hint}. Activate to sort by it.`
           }
-          title={meta.hint}
+          data-tip={meta.hint}
           className={`tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:bg-transparent tw:p-0 tw:text-xs tw:font-medium ${
             sorted ? "tw:text-highlight-text" : "tw:text-muted-foreground tw:hover:text-foreground"
           }`}

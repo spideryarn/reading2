@@ -312,7 +312,7 @@ export function JobProgress({
           type="button"
           variant="outline"
           size="sm"
-          title="Run it again, skipping the stages that already worked"
+          data-tip="Run it again, skipping the stages that already worked"
           /* The visible word first, then what it is about — see `about`. */
           aria-label={about ? `Retry — ${about}` : undefined}
           aria-describedby={describedBy}
@@ -396,7 +396,7 @@ function Band({
         variant="ghost"
         size="xs"
         className="tw:ml-auto"
-        title="Stop this job"
+        data-tip="Stop this job"
         disabled={job.cancelling === true}
         onClick={() => onCancel(job.id)}
       >

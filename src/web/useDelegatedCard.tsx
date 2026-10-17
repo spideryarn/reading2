@@ -37,7 +37,7 @@ import {
 } from "@floating-ui/react";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { isImeComposing } from "./key-chord.js";
-import { DELAY } from "./Tooltip.js";
+import { DELAY } from "./tooltip-delay.js";
 
 export interface DelegatedCardSpec {
   /** What counts as a trigger; matched with `closest` from the event's target. */
@@ -261,28 +261,37 @@ export function useDelegatedCard(spec: DelegatedCardSpec): {
     const focusOut = (e: FocusEvent) => {
       if (hit(e.target)) close();
     };
-    /* **Escape shuts the card.** It goes on to whatever else listens — a
-       dialog, an editor — as it always has for the gutter's cards, *except*
-       where the card's trigger sits inside another card the pointer can enter
-       (`Tooltip`'s `interactive`). There the press is this card's alone: one
-       Escape, one surface (tests/one-escape-closes-one-surface.test.tsx, plan
-       261010s). Capture, so it is decided before Floating UI's own document
-       listener for the outer card hears it. Never a press an input method is
-       using to dismiss its candidates. */
+    /* **Escape shuts the card, and only the card** — one press, one surface
+       (tests/one-escape-closes-one-surface.test.tsx, plans 260906f and
+       261010s). A card that is showing takes the press for itself, so the
+       dialog, editor or outer card behind it waits for the next one; a card
+       still waiting out its delay is cancelled and the press goes on, because
+       the reader cannot see it. On `window` in the capture phase with
+       `stopImmediatePropagation`, so it is decided before the hover cards'
+       document listeners (useHoverCard.ts) and `useEscapeToClose`'s window
+       one hear it. The Dock's drawer listens there too and was registered
+       first, so it still wins its own race (Dock.tsx).
+
+       **An open native `<dialog>` outranks it**, as it does every surface here
+       (useEscapeToClose.ts): its Escape is the platform's own close request,
+       which no listener can stop, so taking the press would close the dialog
+       anyway and leave its other listeners unheard. The card closes and the
+       press goes on. Never a press an input method is using. */
     const key = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || isImeComposing(e)) return;
-      const el = currentRef.current ?? pending.current;
-      if (!el) return;
-      const nested = el.closest(".tooltip-anchor") !== null;
+      if (!currentRef.current) {
+        if (pending.current) controls.close();
+        return;
+      }
       controls.close();
-      if (nested) e.stopPropagation();
+      if (document.querySelector("dialog[open]") === null) e.stopImmediatePropagation();
     };
 
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerout", out);
     document.addEventListener("focusin", focusIn);
     document.addEventListener("focusout", focusOut);
-    document.addEventListener("keydown", key, { capture: true });
+    window.addEventListener("keydown", key, { capture: true });
     return () => {
       clearTimeout(openTimer.current);
       clearTimeout(closeTimer.current);
@@ -291,7 +300,7 @@ export function useDelegatedCard(spec: DelegatedCardSpec): {
       document.removeEventListener("pointerout", out);
       document.removeEventListener("focusin", focusIn);
       document.removeEventListener("focusout", focusOut);
-      document.removeEventListener("keydown", key, { capture: true });
+      window.removeEventListener("keydown", key, { capture: true });
     };
   }, [controls]);
 

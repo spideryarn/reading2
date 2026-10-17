@@ -495,7 +495,7 @@ function IdeaRow({
                  have not checked is worse than a label that says less,
                  especially in the one field whose whole job is provenance.
                  GPT Sol, 2026-08-27. */
-              title="The model's own comparison, not something quoted from the article."
+              data-tip="The model's own comparison, not something quoted from the article."
             >
               <p className="gloss-part-label">One way to picture it</p>
               <p className="gloss-part-text">{idea.analogy}</p>

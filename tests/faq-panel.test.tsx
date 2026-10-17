@@ -456,7 +456,7 @@ describe("the prioritised order", () => {
   it("puts an unscored question after the scored ones, and never hides it", async () => {
     await draw(owner({ faq: artefact([ISOLATED, ...SCORED]) }), { bar: 0.5 });
     expect(questionsShown()).toEqual([BROAD.question, ISOLATED.question]);
-    expect(row(ISOLATED.id).title).toMatch(/Not scored/);
+    expect(row(ISOLATED.id).getAttribute("data-tip")).toMatch(/Not scored/);
   });
 
   it("draws a list from before faq/4 exactly as before for both owner and visitor", async () => {

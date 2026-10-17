@@ -366,8 +366,8 @@ describe("Your angles", () => {
     expect(line?.classList.contains("voice-ai")).toBe(true);
     expect(gisted?.getAttribute("aria-label")).toBe(`${RECEPTION_OPEN_ANGLE_CHAT}: ${LENS.lens}`);
     expect(gisted?.getAttribute("aria-describedby")).toBe(line?.id);
-    expect(gisted?.title).toMatch(/AI's summary/);
-    expect(gisted?.title).toMatch(/1 question so far/);
+    expect(gisted?.getAttribute("data-tip")).toMatch(/AI's summary/);
+    expect(gisted?.getAttribute("data-tip")).toMatch(/1 question so far/);
     /* The shared gist clamp has to clip as well as count lines. Without this,
        a long angle summary can paint into the next row in a narrow band. */
     const css = readFileSync("src/web/styles/origin-chat.css", "utf8");

@@ -683,7 +683,8 @@ export function ChatPanel({
             <button
               type="button"
               className="chat-back tap-target"
-              title="All conversations"
+              data-tip="All conversations"
+              data-tip-describes="off"
               aria-label="All conversations"
               onClick={() => void leave()}
             >
@@ -733,8 +734,8 @@ export function ChatPanel({
               <ArmedDelete
                 key={open.id}
                 onDelete={() => onDelete(open.id)}
-                title="Start over — delete this conversation"
-                armedTitle="Press again to delete this conversation and start over"
+                tip="Start over — delete this conversation"
+                armedTip="Press again to delete this conversation and start over"
               />
             )
           ) : open ? (
@@ -750,7 +751,9 @@ export function ChatPanel({
             <button
               type="button"
               className="chat-icon"
-              title="Start a new conversation"
+              data-tip="Start a new conversation"
+              data-tip-describes="off"
+              aria-label="Start a new conversation"
               onClick={onNew}
             >
               <MessageSquarePlus size={14} />
@@ -970,15 +973,15 @@ export function ChatPanel({
  */
 function ArmedDelete({
   onDelete,
-  title = "Delete this conversation",
-  armedTitle = "Press again to delete this conversation",
+  tip = "Delete this conversation",
+  armedTip = "Press again to delete this conversation",
   size = 14,
   buttonRef,
 }: {
   onDelete(): void;
   /** What the button says at rest, and once armed. Learn calls it Start over. */
-  title?: string;
-  armedTitle?: string;
+  tip?: string;
+  armedTip?: string;
   /** The bin's size: 14 in a header, 12 beside a question's pencil. */
   size?: number;
   /** Lets a row hand focus somewhere stable before this button disappears. */
@@ -996,7 +999,9 @@ function ArmedDelete({
       ref={buttonRef}
       type="button"
       className={`chat-icon danger${armed ? " armed" : ""}`}
-      title={armed ? armedTitle : title}
+      data-tip={armed ? armedTip : tip}
+      data-tip-describes="off"
+      aria-label={armed ? armedTip : tip}
       onClick={() => (armed ? onDelete() : setArmed(true))}
     >
       <Trash2 size={size} aria-hidden="true" />
@@ -1005,7 +1010,7 @@ function ArmedDelete({
 }
 
 /** The exact second-press warning: the answer is named separately from later rows. */
-function deleteFromArmedTitle(discards: number): string {
+function deleteFromArmedTip(discards: number): string {
   if (discards === 0) return "Press again to delete this question";
   if (discards === 1) return "Press again to delete this question and its answer";
   const trailing = discards - 1;
@@ -1017,7 +1022,7 @@ function focusBeforePrune(button: HTMLButtonElement | null): void {
   const row = button?.closest(".chat-turn.you");
   let previous = row?.previousElementSibling ?? null;
   while (previous) {
-    const target = previous.querySelector<HTMLButtonElement>('button[title="Rewrite this question"]');
+    const target = previous.querySelector<HTMLButtonElement>('button[data-tip="Rewrite this question"]');
     if (target) {
       target.focus();
       return;
@@ -1222,15 +1227,16 @@ function ThreadList({
                     className="chat-thread-open"
                     /* The title in full and the timestamps exactly — not the
                        preview line, which is a hint rather than something to read
-                       here, and which the row has already cut. A `title` attribute
-                       rather than the Tooltip component, because this one is plain
-                       text over several lines and wants the browser's own delay:
-                       a tooltip that appears the instant the pointer crosses a
-                       list is a list you cannot read. A Learn row says first
-                       where the press goes, since it leaves Chat. */
-                    title={
+                       here, and which the row has already cut. A `data-tip`
+                       (TipCard.tsx) rather than the Tooltip component, because
+                       this one is plain text over several lines and the card
+                       keeps its own delay: a tooltip that appears the instant the
+                       pointer crosses a list is a list you cannot read. A Learn
+                       row says first where the press goes, since it leaves
+                       Chat. */
+                    data-tip={
                       view
-                        ? `Open in ${MODE_LABEL.learn} › ${LEARN_SUB_MODES[view].label}\n${describe(t)}`
+                        ? `Open in ${MODE_LABEL.learn} › ${LEARN_SUB_MODES[view].label}\n\n${describe(t)}`
                         : describe(t)
                     }
                     onClick={() => (view ? onOpenLearn?.(view, t.id) : onOpen(t.id))}
@@ -1269,7 +1275,9 @@ function ThreadList({
                       <button
                         type="button"
                         className="chat-icon"
-                        title="Rename this conversation"
+                        data-tip="Rename this conversation"
+                        data-tip-describes="off"
+                        aria-label="Rename this conversation"
                         onClick={() => setRenaming(t.id)}
                       >
                         <Pencil size={12} />
@@ -1277,7 +1285,9 @@ function ThreadList({
                       <button
                         type="button"
                         className="chat-icon danger"
-                        title="Delete this conversation"
+                        data-tip="Delete this conversation"
+                        data-tip-describes="off"
+                        aria-label="Delete this conversation"
                         onClick={() => onDelete(t.id)}
                       >
                         <Trash2 size={12} />
@@ -1321,7 +1331,7 @@ function GuideRow({
       <button
         type="button"
         className="chat-thread-open"
-        title={t && t.messages.length > 0 ? describe(t) : "Your guide to reading this piece, and to Spideryarn"}
+        data-tip={t && t.messages.length > 0 ? describe(t) : "Your guide to reading this piece, and to Spideryarn"}
         onClick={guide.onOpen}
       >
         <span className="chat-thread-title">{GUIDE_LABEL}</span>
@@ -1356,7 +1366,7 @@ function GuideRow({
  * A button, and the card is controlled (`usePressToggle`, as every band's (i)
  * is), so a finger's tap opens it and the keyboard can reach it; hover and
  * focus open it too. A sibling of the row's own button and not inside it, so
- * pressing the icon never opens the row, and the card and the row's `title`
+ * pressing the icon never opens the row, and the card and the row's `data-tip`
  * are never both on screen. The quote takes the face of whoever wrote it:
  * the author's for the article's words, the reader's for an angle they typed
  * (`ThreadSource.voice`).
@@ -1368,7 +1378,7 @@ function GuideRow({
  * control that takes you into a mode does (docs/project/icons.md). The
  * item's name is the article's or a model's words, so it is in the author's
  * face as the list's tooltip draws it (`ThreadSourceMark`), and it is clipped
- * by CSS on one line: the whole sentence is the button's name and title.
+ * by CSS on one line: the whole sentence is the button's name and tip.
  *
  * Not drawn in the floating chat beside a mode (`ChatDialog`): that one was
  * opened from the item's own mark, so the item is already on screen.
@@ -1381,7 +1391,8 @@ function OriginBack({ origin, onBack }: { origin: ThreadOrigin; onBack(origin: T
       type="button"
       className="chat-origin-back tap-target"
       aria-label={back.text}
-      title={back.text}
+      data-tip={back.text}
+      data-tip-describes="off"
       onClick={() => onBack(origin)}
     >
       <Icon size={13} aria-hidden="true" />
@@ -1467,18 +1478,18 @@ function lastSaid(t: ChatThread): { text: string; role: ChatMessage["role"] } | 
 /**
  * The row's hover tooltip: the title in full, and the timestamps exactly.
  *
- * Newlines in a `title` attribute are honoured by every browser we care about,
- * and this is the one place the *exact* timestamps live — the row prints "3
+ * A blank line starts a new paragraph on the card (TipCard.tsx), and this is
+ * the one place the *exact* timestamps live — the row prints "3
  * days ago" because that is the question a reader is asking, and the tooltip
  * keeps the answer they occasionally need instead.
  */
 function describe(t: ChatThread): string {
-  const lines = [rowTitle(t), "", `Started ${exactly(t.createdAt) ?? "at some point"}`];
+  const lines = [rowTitle(t), `Started ${exactly(t.createdAt) ?? "at some point"}`];
   /* Only worth a line of its own once the two differ. A conversation with one
      question in it would otherwise print the same timestamp twice. */
   if (t.updatedAt !== t.createdAt) lines.push(`Last message ${exactly(t.updatedAt) ?? "unknown"}`);
   lines.push(turns(t));
-  return lines.join("\n");
+  return lines.join("\n\n");
 }
 
 function RenameRow({
@@ -1515,10 +1526,10 @@ function RenameRow({
           if (e.key === "Escape") onCancel();
         }}
       />
-      <button type="button" className="chat-icon" title="Save" onClick={() => onDone(value)}>
+      <button type="button" className="chat-icon" data-tip="Save" data-tip-describes="off" aria-label="Save" onClick={() => onDone(value)}>
         <Check size={12} />
       </button>
-      <button type="button" className="chat-icon" title="Cancel" onClick={onCancel}>
+      <button type="button" className="chat-icon" data-tip="Cancel" data-tip-describes="off" aria-label="Cancel" onClick={onCancel}>
         <X size={12} />
       </button>
     </div>
@@ -2161,7 +2172,8 @@ export function Conversation({
                 type="button"
                 className="chat-icon chat-step"
                 aria-label="To the first message"
-                title="To the first message"
+                data-tip="To the first message"
+                data-tip-describes="off"
                 disabled={!steps.up}
                 onClick={() => step("top")}
               >
@@ -2171,7 +2183,8 @@ export function Conversation({
                 type="button"
                 className="chat-icon chat-step"
                 aria-label="Previous message"
-                title="Previous message"
+                data-tip="Previous message"
+                data-tip-describes="off"
                 disabled={!steps.up}
                 onClick={() => step(-1)}
               >
@@ -2181,7 +2194,8 @@ export function Conversation({
                 type="button"
                 className="chat-icon chat-step"
                 aria-label="Next message"
-                title="Next message"
+                data-tip="Next message"
+                data-tip-describes="off"
                 disabled={!steps.down}
                 onClick={() => step(1)}
               >
@@ -2190,7 +2204,7 @@ export function Conversation({
             </>
           )}
           {away && (
-            <button type="button" className="chat-to-bottom" onClick={toBottom} title="Jump to the latest">
+            <button type="button" className="chat-to-bottom" onClick={toBottom} data-tip="Jump to the latest">
               <ArrowDown size={13} /> Latest
             </button>
           )}
@@ -2539,7 +2553,7 @@ export function Turn({
           /* The only trace that this conversation once went elsewhere. Without
              it, a reader coming back to a thread they edited reads answers that
              do not quite match the questions and has no way to know why. */
-          <span className="chat-edited" title="You rewrote this question">
+          <span className="chat-edited" data-tip="You rewrote this question">
             edited
           </span>
         )}
@@ -2567,7 +2581,9 @@ export function Turn({
               ref={pencil}
               type="button"
               className="chat-icon"
-              title="Rewrite this question"
+              data-tip="Rewrite this question"
+              data-tip-describes="off"
+              aria-label="Rewrite this question"
               onClick={() => onEditing(true)}
             >
               <Pencil size={12} />
@@ -2579,8 +2595,8 @@ export function Turn({
               <ArmedDelete
                 buttonRef={remove}
                 size={12}
-                title="Delete this question and everything after it"
-                armedTitle={deleteFromArmedTitle(discards)}
+                tip="Delete this question and everything after it"
+                armedTip={deleteFromArmedTip(discards)}
                 onDelete={() => {
                   /* The optimistic prune unmounts this focused row. Put the
                      caret on the preceding question's pencil first: that row
@@ -2743,7 +2759,9 @@ export function Turn({
             <button
               type="button"
               className="chat-icon"
-              title="Answer again"
+              data-tip="Answer again"
+              data-tip-describes="off"
+              aria-label="Answer again"
               onClick={() => onRetry(message.id)}
             >
               <RotateCcw size={12} />
@@ -2960,7 +2978,8 @@ function CopyAnswer({ text }: { text: string }) {
     <button
       type="button"
       className="chat-icon"
-      title={
+      aria-label="Copy this answer"
+      data-tip={
         state === "failed"
           ? "Your browser would not allow the copy — an insecure connection is the usual reason"
           : "Copy this answer"
@@ -3076,7 +3095,8 @@ function EditQuestion({
         <button
           type="button"
           className="chat-icon"
-          title={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
+          data-tip={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
+          aria-label="Ask again"
           /* `aria-disabled`, not `disabled`, so a press still reaches `ask` and
              can say why it was refused — the composer's Send does the same. */
           aria-disabled={!canAsk || undefined}
@@ -3084,7 +3104,7 @@ function EditQuestion({
         >
           <Check size={12} />
         </button>
-        <button type="button" className="chat-icon" title="Cancel (Esc)" onClick={onCancel}>
+        <button type="button" className="chat-icon" data-tip="Cancel (Esc)" aria-label="Cancel" onClick={onCancel}>
           <X size={12} />
         </button>
       </div>
@@ -3677,7 +3697,7 @@ export function Composer({
           round Send keeps them apart, and the keys say so. */}
       {mention.shown && <MentionPicker anchor={box.current} state={mention} onPick={choose} />}
       {onStop ? (
-        <button key="stop" type="button" className="chat-send stop" onClick={onStop} title="Stop (Esc)">
+        <button key="stop" type="button" className="chat-send stop" onClick={onStop} data-tip="Stop (Esc)" aria-label="Stop">
           <Square size={14} fill="currentColor" />
         </button>
       ) : (

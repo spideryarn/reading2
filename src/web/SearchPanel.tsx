@@ -807,7 +807,7 @@ const Box = forwardRef<
             tabIndex={0}
             className={`srch-mode summ-view-btn${matcher === "words" ? " on" : ""}`}
             onClick={(e) => switchTo("words", e.detail > 0)}
-            title="Match the letters you type. Instant, and free."
+            data-tip="Match the letters you type. Instant, and free."
           >
             <Type size={12} /> words
           </button>
@@ -822,7 +822,7 @@ const Box = forwardRef<
             /* Quick and meaning were two buttons until 2026-10-12 (plan
                261012e): now one, which asks the quick search as you pause and
                replaces each settled answer with the thorough one. */
-            title="Describe what you are looking for: a fast first pass in about a second, then a thorough search that replaces it."
+            data-tip="Describe what you are looking for: a fast first pass in about a second, then a thorough search that replaces it."
           >
             <Sparkles size={12} /> meaning
           </button>
@@ -840,12 +840,17 @@ const Box = forwardRef<
             variant="outline"
             size="sm"
             className="srch-go"
-            disabled={!ready}
-            /* Checked again here, not only through `disabled`: `disabled`
-               lands on the next render, and the handler is what a press
-               actually reaches. The Enter key above asks the same `ready`. */
+            /* `aria-disabled`, not `disabled`, because the card is what says
+               *why* it will not run — "Waiting for your saved searches", "Already
+               searching for this" — and the house Button drops pointer events
+               when natively disabled, and a disabled button takes no focus
+               (IconButton.tsx § `disabled`; plan 261017g). So the refusal is
+               the handler's: `ask` checks `ready` first, which it did anyway,
+               because `disabled` lands on the next render and the handler is
+               what a press actually reaches. The Enter key asks the same. */
+            aria-disabled={!ready || undefined}
             onClick={ask}
-            title={
+            data-tip={
               !loaded
                 ? "Waiting for your saved searches to load"
                 : repeat
@@ -960,7 +965,7 @@ function Thorough({
         className="srch-upgrading"
         role="status"
         aria-label="Thorough search running"
-        title="A thorough search for these words is running. It will replace this quick search when it finishes."
+        data-tip="A thorough search for these words is running. It will replace this quick search when it finishes."
       >
         <span className="srch-upgrading-word" aria-hidden>thorough</span>
         <LoaderCircle size={11} className="srch-spin" aria-hidden />
@@ -972,7 +977,7 @@ function Thorough({
       type="button"
       className="srch-thorough"
       disabled={running}
-      title={
+      data-tip={
         running
           ? "Already running the thorough search for this"
           : "Run the thorough (meaning) search for these words: exact quotes and reasons, usually about ten seconds. It replaces this quick search."
@@ -986,7 +991,7 @@ function Thorough({
   );
 }
 
-function retryTitle(run: SearchRun, alreadyRunning: boolean): string {
+function retryTip(run: SearchRun, alreadyRunning: boolean): string {
   if (alreadyRunning) return "Already searching for this question";
   return run.error ?? "This search failed. Try it again.";
 }
@@ -1127,7 +1132,7 @@ function Saved({
                   type="checkbox"
                   checked={checked}
                   aria-label={`Also mark: ${run.criterion}`}
-                  title="Mark this search as well as the ones already showing"
+                  data-tip="Mark this search as well as the ones already showing"
                   onChange={(e) => onToggle(run.id, e.target.checked)}
                 />
               </label>
@@ -1141,7 +1146,7 @@ function Saved({
               <button
                 type="button"
                 className="srch-saved-body"
-                title={`${run.criterion}\n\nMark only this search`}
+                data-tip={`${run.criterion}\n\nMark only this search`}
                 onClick={() => onSolo(run.id)}
               >
                 {/* **The colour key** — Greg, `spya-fwcwun`, 2026-10-03: *"it's
@@ -1163,7 +1168,7 @@ function Saved({
                   {run.kind === "quick" && (
                     <span
                       className="srch-saved-kind"
-                      title="A quick search: every paragraph scored by a fast model. Whole paragraphs, no reasons."
+                      data-tip="A quick search: every paragraph scored by a fast model. Whole paragraphs, no reasons."
                     >
                       <Zap size={10} aria-hidden /> quick
                     </span>
@@ -1196,7 +1201,7 @@ function Saved({
                              same shape as the empty state two screens up, where
                              the true half of a sentence carries a false half
                              along with it (docs/project/copy.md). */
-                          title={STALE_ROW + (own ? ` ${STALE_ASK_AGAIN}` : "")}
+                          data-tip={STALE_ROW + (own ? ` ${STALE_ASK_AGAIN}` : "")}
                         >
                           <AlertTriangle size={11} /> older version
                         </span>
@@ -1230,14 +1235,16 @@ function Saved({
                     type="button"
                     className="srch-icon"
                     disabled={retryAlreadyRunning}
-                    title={retryTitle(run, retryAlreadyRunning)}
+                    data-tip={retryTip(run, retryAlreadyRunning)}
+                    aria-label="Try this search again"
                     onClick={() => own.onRetry(run.id)}
                   >
                     <AlertTriangle size={13} />
                   </button>
                 ) : (
-                  <span className="srch-icon srch-icon-dead" title={run.error ?? "This search failed."}>
+                  <span className="srch-icon srch-icon-dead" data-tip={run.error ?? "This search failed."}>
                     <AlertTriangle size={13} />
+                    <span className="tw:sr-only">{run.error ?? "This search failed."}</span>
                   </span>
                 ))}
               {/* Fourth control on a row that already had three, in a band
@@ -1284,7 +1291,9 @@ function Saved({
                   <button
                     type="button"
                     className="srch-icon"
-                    title="Put this question back in the box"
+                    data-tip="Put this question back in the box"
+                    data-tip-describes="off"
+                    aria-label="Put this question back in the box"
                     onClick={() => onReuse(run.criterion)}
                   >
                     <RotateCcw size={13} />
@@ -1292,7 +1301,9 @@ function Saved({
                   <button
                     type="button"
                     className="srch-icon danger"
-                    title="Delete this search"
+                    data-tip="Delete this search"
+                    data-tip-describes="off"
+                    aria-label="Delete this search"
                     onClick={() => own.onDelete(run.id)}
                   >
                     <Trash2 size={13} />
@@ -1546,7 +1557,7 @@ function SortBar({
             className={`srch-sort-btn${order === "document" ? " on" : ""}`}
             aria-pressed={order === "document"}
             onClick={() => onOrder("document")}
-            title="In the order they appear in the article"
+            data-tip="In the order they appear in the article"
           >
             by place
           </button>
@@ -1555,7 +1566,7 @@ function SortBar({
             className={`srch-sort-btn${order === "confidence" ? " on" : ""}`}
             aria-pressed={order === "confidence"}
             onClick={() => onOrder("confidence")}
-            title="Strongest matches first — the model's own judgment about its answers"
+            data-tip="Strongest matches first — the model's own judgment about its answers"
           >
             by confidence
           </button>
@@ -1564,7 +1575,7 @@ function SortBar({
             className={`srch-sort-btn${order === "prioritised" ? " on" : ""}`}
             aria-pressed={order === "prioritised"}
             onClick={() => onOrder("prioritised")}
-            title="In the order they appear in the article, with the weakest matches hidden — and hidden from the article too, not just from this list"
+            data-tip="In the order they appear in the article, with the weakest matches hidden — and hidden from the article too, not just from this list"
           >
             prioritised
           </button>
@@ -1649,7 +1660,7 @@ function ConfSlider({
           <button
             type="button"
             className="gloss-gate-reset"
-            title={`Back to ${PRIORITY_CONF}`}
+            data-tip={`Back to ${PRIORITY_CONF}`}
             aria-label={`Reset the threshold to ${PRIORITY_CONF}`}
             onClick={() => onGate(null)}
           >
@@ -1672,7 +1683,7 @@ function ConfSlider({
         max={100}
         step={CONF_STEP}
         value={gate}
-        title="How sure the model has to be for a passage to stay on screen. Left keeps more, right keeps fewer. Hidden passages lose their marks in the article too."
+        data-tip="How sure the model has to be for a passage to stay on screen. Left keeps more, right keeps fewer. Hidden passages lose their marks in the article too."
         /* A thumb position is a number nobody can hear, and the count is what
            the reader is actually aiming at. */
         aria-valuetext={`${gate} out of 100, showing ${count} passages`}
@@ -2351,7 +2362,7 @@ function ColourPicker({
         type="button"
         ref={refs.setReference}
         className="srch-icon"
-        title="Change this search's colour"
+        data-tip="Change this search's colour"
         aria-label={`Change the colour of: ${criterion}`}
         {...getReferenceProps()}
       >

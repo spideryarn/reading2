@@ -204,7 +204,7 @@ describe("the hint under searches that all failed", () => {
   it.each([false, true])("does not turn a likely refusal into a certain one (mixed: %s)", async (mixed) => {
     const refused = failed(BROKE, "who paid for it", providerHttpFailure(403).message);
     await open(mixed ? [RETRYABLE, refused] : [refused]);
-    expect(host.querySelector(".srch-icon-dead")?.getAttribute("title")).toContain("most likely");
+    expect(host.querySelector(".srch-icon-dead")?.getAttribute("data-tip")).toContain("most likely");
     expect(retryButtons()).toBe(mixed ? 1 : 0);
     expect(hint()).not.toContain("would fail the same way");
     expect(hint()).toContain("only marks the failure");

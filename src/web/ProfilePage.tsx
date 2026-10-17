@@ -435,12 +435,12 @@ export function ProfilePage() {
               >
                 <span className="tw:text-muted-foreground">{m.task}</span>
                 {/* The name, then the two things that qualify it, both faint.
-                    `title` carries the exact string sent, because the name on
+                    `data-tip` carries the exact string sent, because the name on
                     screen is deliberately not that string — src/models.ts § the
                     third spelling. */}
                 <span
                   className="tw:font-mono tw:text-xs tw:text-foreground"
-                  title={`${m.id} · via ${ownLabel(PROVIDER_LABEL, m.provider) ?? m.provider}${m.wire ? ` · ${ownLabel(WIRE_LABEL, m.wire) ?? m.wire} API` : ""}`}
+                  data-tip={`${m.id} · via ${ownLabel(PROVIDER_LABEL, m.provider) ?? m.provider}${m.wire ? ` · ${ownLabel(WIRE_LABEL, m.wire) ?? m.wire} API` : ""}`}
                 >
                   {m.model}
                   {m.effort && <span className="tw:text-ink-faint"> · {m.effort}</span>}

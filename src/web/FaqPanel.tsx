@@ -323,7 +323,7 @@ function OrderBar({
               type="button"
               className={`gloss-sort-btn${order === key ? " on" : ""}`}
               aria-pressed={order === key}
-              title={ORDER_BUTTON[key].title}
+              data-tip={ORDER_BUTTON[key].title}
               onClick={() => onOrder(key)}
             >
               {ORDER_BUTTON[key].label}
@@ -394,7 +394,7 @@ function FaqBarSlider({
       visible={visible.length}
       total={questions.length}
       noun="questions"
-      title="How high a question has to score to stay on screen: its centrality × (1 − its difficulty), so central, approachable questions score highest. Left shows more, right fewer."
+      tip="How high a question has to score to stay on screen: its centrality × (1 − its difficulty), so central, approachable questions score highest. Left shows more, right fewer."
       note={faqNote(hiddenCount, questions.length)}
       onChange={onBar}
     />
@@ -419,7 +419,7 @@ function QuestionRow({
     <li
       className="tl-item faq-item"
       data-faq-id={question.id}
-      {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
+      data-tip={unscored ? "Not scored for prioritising — shown regardless of the threshold" : undefined}
     >
       <div className="faq-question-row">
         <h2 className="faq-question">{question.question}</h2>

@@ -621,7 +621,7 @@ export function AnnotateDialog({
             type="button"
             className="annotate-close close-x"
             onClick={close}
-            title="Close (Esc)"
+            data-tip="Close (Esc)"
             aria-label="Close"
           >
             <X size={15} />
@@ -716,7 +716,7 @@ export function AnnotateDialog({
               className="annotate-ask-ai"
               disabled={waiting}
               onClick={() => press(true)}
-              title="Save this, and open a conversation about it"
+              data-tip="Save this, and open a conversation about it"
             >
               Ask AI
             </button>
@@ -787,7 +787,7 @@ function CopyQuote({ text, onCopyPressed }: { text: string; onCopyPressed(): voi
       <button
         type="button"
         className="annotate-copy"
-        title={
+        data-tip={
           said === "failed"
             ? "Your browser would not allow the copy — an insecure connection is the usual reason"
             : "Copy the passage"

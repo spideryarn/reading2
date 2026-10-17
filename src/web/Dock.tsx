@@ -2395,7 +2395,7 @@ export function Dock({
                  focus, and gives it back. */
               ref={closeRef}
               onClick={() => drawer.onPanel(null)}
-              title="Close (Esc)"
+              data-tip="Close (Esc)"
               aria-label="Close"
             >
               <X size={14} />

@@ -324,7 +324,7 @@ export function MentionChips({
       <span className="mention-chips-label">Bringing in</span>
       {picked.map((m) => (
         <span key={m.slug} className="mention-chip">
-          <span className={voiceClass(articleTitleVoice(m.titleOverridden))} title={m.title}>
+          <span className={voiceClass(articleTitleVoice(m.titleOverridden))} data-tip={m.title}>
             {shortTitle(m.title)}
           </span>
           <button

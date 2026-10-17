@@ -172,8 +172,30 @@ describe("TipCard", () => {
       </Tooltip>,
     );
     hover(host.querySelector("button")!);
-    expect(host.querySelector("button")!.hasAttribute("data-tooltip-trigger")).toBe(true);
     expect([...document.querySelectorAll(".tooltip-anchor")].some((c) => c.textContent?.includes("a stray data-tip"))).toBe(false);
+  });
+
+  it("gives no second card to a data-tip inside a Tooltip's trigger", () => {
+    paint(
+      <Tooltip content="the Tooltip's card">
+        <button>
+          <span data-tip="a stray data-tip">x</span>
+        </button>
+      </Tooltip>,
+    );
+    hover(host.querySelector("span[data-tip]")!);
+    expect([...document.querySelectorAll(".tooltip-anchor")].some((c) => c.textContent?.includes("a stray data-tip"))).toBe(false);
+  });
+
+  it("draws the data-tip of a disabled Tooltip's trigger, which has no card of its own", () => {
+    paint(
+      <Tooltip content="the Tooltip's card" enabled={false}>
+        <button data-tip="the fallback">x</button>
+      </Tooltip>,
+    );
+    const button = host.querySelector("button")!;
+    hover(button);
+    expect(card()?.textContent).toContain("the fallback");
   });
 
   it("gives no card to a data-tip inside a block link, whose card is BlockLinkCard's", () => {
@@ -190,9 +212,10 @@ describe("TipCard", () => {
     expect(card()?.textContent).toContain("the outer words");
   });
 
-  it("closes on Escape, and lets the press go on to whatever else listens", () => {
+  it("takes an Escape for itself while it shows — one press, one surface", () => {
     const heard = vi.fn();
     window.addEventListener("keydown", heard);
+    document.addEventListener("keydown", heard, { capture: true });
     paint(<button data-tip="Delete this search">x</button>);
     hover(host.querySelector("button")!);
     act(() => {
@@ -202,23 +225,52 @@ describe("TipCard", () => {
       vi.advanceTimersByTime(AFTER_THE_DELAY);
     });
     expect(card()).toBeNull();
+    expect(heard).not.toHaveBeenCalled();
+    /* And the next press is somebody else's: both listeners hear it. */
+    act(() => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(heard).toHaveBeenCalledTimes(2);
+    window.removeEventListener("keydown", heard);
+    document.removeEventListener("keydown", heard, { capture: true });
+  });
+
+  it("lets an Escape go on while its card is only waiting out the delay, and cancels it", () => {
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard);
+    paint(<button data-tip="Delete this search">x</button>);
+    act(() => {
+      host.querySelector("button")!.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    });
+    act(() => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    act(() => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
     expect(heard).toHaveBeenCalledTimes(1);
+    expect(card()).toBeNull();
     window.removeEventListener("keydown", heard);
   });
 
-  it("keeps an Escape for itself when its trigger is inside another card — one press, one surface", () => {
+  it("yields an Escape to an open native dialog, and closes", () => {
     const heard = vi.fn();
     window.addEventListener("keydown", heard);
     paint(
-      <div className="tooltip-anchor" data-outer>
-        <button data-tip="inside an interactive card">x</button>
-      </div>,
+      <dialog open>
+        <button data-tip="inside a dialog">x</button>
+      </dialog>,
     );
     hover(host.querySelector("button")!);
+    expect(card()).not.toBeNull();
     act(() => {
-      host.querySelector("button")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
-    expect(heard).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).toBeNull();
+    expect(heard).toHaveBeenCalledTimes(1);
     window.removeEventListener("keydown", heard);
   });
 

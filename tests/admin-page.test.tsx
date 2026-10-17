@@ -293,8 +293,8 @@ describe("the users page", () => {
 
     const row = (rows(el)[0] ?? []).join("|");
     expect(row).toContain("800 / 4000 pts ?");
-    const usage = el.querySelector<HTMLElement>('span[title*="lifetime of the account"]');
-    expect(usage?.title).toContain("2 switched to High-powered AI");
+    const usage = el.querySelector<HTMLElement>('span[data-tip*="lifetime of the account"]');
+    expect(usage?.getAttribute("data-tip")).toContain("2 switched to High-powered AI");
   });
 
   /**
@@ -312,8 +312,8 @@ describe("the users page", () => {
     expect(row.join("|")).toContain("280 / 600 pts");
     expect(row.join("|")).not.toContain("1 / 3");
     expect(row).toContain("40");
-    const usage = el.querySelector<HTMLElement>('span[title*="not yet AI-processed"]');
-    expect(usage?.title).toContain("40 papers not yet AI-processed, at 2 points each");
+    const usage = el.querySelector<HTMLElement>('span[data-tip*="not yet AI-processed"]');
+    expect(usage?.getAttribute("data-tip")).toContain("40 papers not yet AI-processed, at 2 points each");
   });
 
   it("draws exactly as many rows as it says there are accounts", async () => {
@@ -358,7 +358,7 @@ describe("the users page", () => {
       }
     }
     expect(el.textContent).toContain("—");
-    expect(el.querySelector('[title="Never signed in"]')).toBeTruthy();
+    expect(el.querySelector('[data-tip="Never signed in"]')).toBeTruthy();
   });
 
   it("puts the exact timestamp on a date, not just how long ago", async () => {
@@ -367,7 +367,7 @@ describe("the users page", () => {
     /* "3 days ago" is the readable answer and "when exactly?" is the next
        question. `exactly()` formats to the reader's locale, so the assertion is
        that the title is *some* other rendering rather than a fixed string. */
-    const titled = [...el.querySelectorAll("tbody span[title]")].map((s) => s.getAttribute("title"));
+    const titled = [...el.querySelectorAll("tbody span[data-tip]")].map((s) => s.getAttribute("data-tip"));
     expect(titled.some((t) => t?.includes("2026"))).toBe(true);
   });
 
@@ -579,7 +579,7 @@ describe("the deploy stamp on the admin index", () => {
        after "2 hours ago", and the whole sha goes with it. Formatted here the
        way `exactly()` formats it — independently, so a title that dropped the
        timestamp or carried a different one fails. */
-    const title = line?.getAttribute("title") ?? "";
+    const title = line?.getAttribute("data-tip") ?? "";
     expect(title).toContain(
       built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
     );

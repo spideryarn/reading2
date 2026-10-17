@@ -210,12 +210,12 @@ function ReleaseDate({ iso, now, style, fallback }: {
   fallback: (iso: string) => string;
 }) {
   const exact = `${formatVersionStamp(iso)} UTC`;
-  /* The `title` is for a mouse. A keyboard cannot open it and a screen reader
+  /* The `data-tip` is for a mouse (TipCard.tsx). A keyboard cannot open it and a screen reader
      need not read it, so the stamp is also said in `sr-only` — the duplication
      tooltips.md asks of a trigger nothing can focus (Masthead.tsx does the
      same). A touch reader still has no way to it: see the plan's § Deferred. */
   return (
-    <time dateTime={iso} title={exact}>
+    <time dateTime={iso} data-tip={exact}>
       {relativeAgo(iso, now, style) ?? fallback(iso)}
       <span className="tw:sr-only">, released {exact}</span>
     </time>

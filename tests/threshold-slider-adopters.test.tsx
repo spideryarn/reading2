@@ -240,7 +240,7 @@ function rowAsDrawn() {
     shown: row.querySelector(".gloss-gate-value")?.textContent,
     note: row.querySelector(".gloss-gate-note")?.textContent,
     reset: reset
-      ? { type: reset.type, title: reset.title, label: reset.getAttribute("aria-label"), icon: reset.querySelector("svg") !== null }
+      ? { type: reset.type, tip: reset.getAttribute("data-tip"), label: reset.getAttribute("aria-label"), icon: reset.querySelector("svg") !== null }
       : null,
   };
 }
@@ -275,7 +275,7 @@ describe("the Glossary's threshold row", () => {
       max: "0.72",
       step: "0.01",
       value: "0.1",
-      title: TITLE,
+      tip: TITLE,
       valueText: "0.10, showing 2 of 3 terms",
       shown: "0.10 · 2 of 3",
       note: "1 term is hidden by this threshold. Drag the slider left to show it.",
@@ -293,7 +293,7 @@ describe("the Glossary's threshold row", () => {
       valueText: "0.50, showing 1 of 3 terms",
       shown: "0.50 · 1 of 3",
       note: "2 terms are hidden by this threshold. Drag the slider left to show them.",
-      reset: { type: "button", title: "Back to 0.10", label: "Reset the threshold to 0.10", icon: true },
+      reset: { type: "button", tip: "Back to 0.10", label: "Reset the threshold to 0.10", icon: true },
     });
   });
 
@@ -335,7 +335,7 @@ describe("Citations' threshold row", () => {
       max: "0.8",
       step: "0.01",
       value: "0.25",
-      title: TITLE,
+      tip: TITLE,
       valueText: "0.25, showing 2 of 3 citations",
       shown: "0.25 · 2 of 3",
       note: "1 citation is hidden by this threshold. Drag the slider left to show it.",
@@ -352,7 +352,7 @@ describe("Citations' threshold row", () => {
       valueText: "0.60, showing 1 of 3 citations",
       shown: "0.60 · 1 of 3",
       note: "2 citations are hidden by this threshold. Drag the slider left to show them.",
-      reset: { type: "button", title: "Back to 0.25", label: "Reset the threshold to 0.25", icon: true },
+      reset: { type: "button", tip: "Back to 0.25", label: "Reset the threshold to 0.25", icon: true },
     });
   });
 

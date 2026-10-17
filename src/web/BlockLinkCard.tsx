@@ -331,7 +331,11 @@ function BlockLinkCard({
     const press = (e: MouseEvent) => {
       const el = (e.target as Element | null)?.closest?.(READING_LINE);
       if (!el) return;
-      controls.openNow(el, e.clientY, el === controls.current() ? controls.pressed() : true);
+      /* Already open: leave it alone, so a second tap's close — armed by
+         its own `pointerover` — goes ahead, as "the next tap anywhere closes
+         it" says (GPT Sol, code review 1 of 261017g). */
+      if (el === controls.current()) return;
+      controls.openNow(el, e.clientY, true);
     };
     document.addEventListener("click", press);
     return () => document.removeEventListener("click", press);

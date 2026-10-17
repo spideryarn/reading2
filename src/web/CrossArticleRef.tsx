@@ -40,7 +40,7 @@ export function CrossArticleRef({
       className="cross-ref"
       data-cross-article={source.slug}
       aria-label={`${source.title}, passage ${shortBlockId(id)}`}
-      title={`Open “${source.title}” at this passage`}
+      data-tip={`Open “${source.title}” at this passage`}
       /* An ancestor's jump handler must never see this click — BlockRef's
          reason. `Link` itself leaves ⌘-click and the rest to the browser. */
       onClick={(e: MouseEvent<HTMLAnchorElement>) => e.stopPropagation()}

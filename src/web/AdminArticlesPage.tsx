@@ -326,7 +326,8 @@ export function AdminArticlesPage() {
           onClick={() => void reload()}
           disabled={loading}
           aria-label="Refresh the articles"
-          title="Refresh the articles"
+          data-tip="Refresh the articles"
+          data-tip-describes="off"
           className={BUTTON}
         >
           <RefreshCw size={12} />
@@ -366,7 +367,7 @@ export function AdminArticlesPage() {
                     {ownerLabel(a)}
                     {a.mine ? " (you)" : ""}
                   </td>
-                  <td className={`${CELL} tw:whitespace-nowrap`} title={exactly(a.createdAt)}>
+                  <td className={`${CELL} tw:whitespace-nowrap`} data-tip={exactly(a.createdAt)}>
                     {readableDate(a.createdAt) ?? a.createdAt}
                   </td>
                   <td className={CELL}>{a.visibility === "public" ? "Public" : "Private"}</td>

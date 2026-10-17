@@ -45,7 +45,7 @@ export function SavePageBookmarklet() {
         e.preventDefault();
         setClicked(true);
       }}
-      title="Drag this to your bookmarks bar"
+      data-tip="Drag this to your bookmarks bar"
       className="tw:inline-flex tw:cursor-grab tw:items-center tw:gap-1 tw:rounded-md tw:border tw:border-border tw:px-2 tw:py-0.5 tw:text-foreground tw:no-underline"
     >
       <Bookmark size={14} aria-hidden="true" />

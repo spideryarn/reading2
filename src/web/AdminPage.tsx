@@ -191,7 +191,7 @@ function BuildStampLine() {
   return (
     <p
       className="tw:mt-10 tw:text-xs tw:text-ink-faint"
-      title={[
+      data-tip={[
         builtAt ? `Compiled ${exactly(builtAt)}` : "This bundle carries no build time",
         commit ? `commit ${commit}` : "no commit stamp",
         "This is the build this tab is running — reload to ask again. Vercel promotes a " +
@@ -394,7 +394,8 @@ export function AdminUsersPage() {
             onClick={() => void reload()}
             disabled={loading}
             aria-label="Refresh the user list"
-            title="Refresh the user list"
+            data-tip="Refresh the user list"
+            data-tip-describes="off"
             className="tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
           >
             <RefreshCw size={12} />
@@ -502,7 +503,7 @@ function FeedbackFromToggle({
           type="button"
           disabled={disabled}
           aria-pressed={from === value}
-          title={FROM_LABEL[value].title}
+          data-tip={FROM_LABEL[value].title}
           onClick={() => onChange(value)}
           className={`tw:inline-flex tw:h-7 tw:items-center tw:rounded-full tw:border tw:px-3 tw:text-xs tw:disabled:opacity-50 ${
             from === value
@@ -561,7 +562,8 @@ function FeedbackInbox({
           onClick={() => void reload()}
           disabled={busy}
           aria-label="Refresh the reports"
-          title="Refresh the reports"
+          data-tip="Refresh the reports"
+          data-tip-describes="off"
           className="tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
         >
           <RefreshCw size={12} />

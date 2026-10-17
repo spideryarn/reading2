@@ -2907,8 +2907,8 @@ describe("the Earlier tab", () => {
         const next = button(thread(), "Next ›");
         expect(unavailable(previous)).toBe(true);
         expect(unavailable(next)).toBe(true);
-        expect(previous.title).toBe("No earlier thread needs a decision");
-        expect(next.title).toBe("No later thread needs a decision");
+        expect(previous.getAttribute("data-tip")).toBe("No earlier thread needs a decision");
+        expect(next.getAttribute("data-tip")).toBe("No later thread needs a decision");
         /* The live region is there, empty, before anything is said in it (P2). */
         const said = () => thread().querySelector(".fb-thread-end");
         expect(said()?.getAttribute("role")).toBe("status");
@@ -2958,7 +2958,7 @@ describe("the Earlier tab", () => {
             "Next ›",
           ]);
           expect(unavailable(button(foot(), "‹ Previous"))).toBe(true);
-          expect(button(foot(), "Next ›").title).toBe("Next thread that needs a decision");
+          expect(button(foot(), "Next ›").getAttribute("data-tip")).toBe("Next thread that needs a decision");
           click(button(foot(), "Next ›"));
           expect(showing()).toBe("q-bbbbbb");
           expect(unavailable(button(foot(), "Next ›"))).toBe(true);
@@ -3136,7 +3136,7 @@ describe("the Earlier tab", () => {
         await openThread("q-cccccc", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
         /* Not one of them, so no position: only how many there are. */
         expect(place()).toBe("1 needs a decision");
-        expect(button(thread(), "‹ Previous").title).toBe("Previous thread that needs a decision");
+        expect(button(thread(), "‹ Previous").getAttribute("data-tip")).toBe("Previous thread that needs a decision");
         expect(unavailable(button(thread(), "Next ›"))).toBe(true);
         click(button(thread(), "‹ Previous"));
         expect(showing()).toBe("q-aaaaaa");
@@ -3727,7 +3727,7 @@ describe("the Earlier tab", () => {
         expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
         expect(found?.closest('[role="tablist"]')).not.toBeNull();
         expect(found?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 2");
-        expect(found?.getAttribute("title")).toBe(
+        expect(found?.getAttribute("data-tip")).toBe(
           "2 need a decision · newest asked 8 Oct 2026 · 1 you've replied to · 1 deferred",
         );
         /* On Write it is not pressed. */
@@ -4076,7 +4076,7 @@ describe("the Earlier tab", () => {
     await act(async () => {});
     const items = [...panelOf("Earlier").querySelectorAll("li")];
     expect(items[0]?.querySelector(".fb-earlier-shipped")?.textContent).toBe("Shipped");
-    expect(items[0]?.querySelector(".fb-earlier-shipped")?.getAttribute("title")).toContain(
+    expect(items[0]?.querySelector(".fb-earlier-shipped")?.getAttribute("data-tip")).toContain(
       "in the version of Spideryarn you're using",
     );
     expect(items[1]?.querySelector(".fb-earlier-shipped")).toBeNull();
@@ -4133,7 +4133,7 @@ describe("the Earlier tab", () => {
     expect(items[0]?.querySelector(".fb-earlier-unshipped")).toBeNull();
     const unshipped = items[1]?.querySelector(".fb-earlier-unshipped");
     expect(unshipped?.textContent).toBe("Not shipped");
-    expect(unshipped?.getAttribute("title")).toContain("isn't marked as shipped");
+    expect(unshipped?.getAttribute("data-tip")).toContain("isn't marked as shipped");
     expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).toContain(" · Not shipped");
   });
 

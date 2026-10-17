@@ -133,15 +133,15 @@ export function HomeLogo() {
       /* Two lines rather than an em dash chain: the second is for the one
          reader in a hundred who wants to know which copy they have, and it
          should not push the sentence that matters onto a second line by
-         itself. `title` renders a newline as a newline.
+         itself. `data-tip` is drawn by TipCard.tsx, where a blank line starts a paragraph.
 
          **The tooltip and the hover animation both live on this element, and
-         they met at a merge.** They do not interact — one is an attribute the
-         browser reads, the other a class and a set of pointer handlers — but
+         they met at a merge.** They do not interact — one is an attribute
+         TipCard reads, the other a class and a set of pointer handlers — but
          both are about what happens when a reader points at the wordmark, so if
          one of them ever has to give way it should be a decision rather than a
          collision. docs/project/design-logo.md is the animation's. */
-      title={libraryHomeTitle()}
+      data-tip={libraryHomeTitle()}
       {...anim.handlers}
     >
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the

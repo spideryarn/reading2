@@ -225,7 +225,7 @@ export function SiteNav({
           href="/"
           className={`site-wordmark-host tw:flex tw:shrink-0 tw:items-center tw:whitespace-nowrap tw:no-underline ${anim.className}`}
           aria-label="Spideryarn Reading, home"
-          title={homeTitle}
+          data-tip={homeTitle}
           {...anim.handlers}
         >
           <Wordmark className="tw:text-base" />

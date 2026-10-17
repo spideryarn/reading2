@@ -164,7 +164,7 @@ function composer(): HTMLTextAreaElement {
 }
 function titled(text: string): HTMLButtonElement {
   const found = [...panel().querySelectorAll<HTMLButtonElement>("button")].find(
-    (b) => b.textContent?.trim() === text || b.getAttribute("aria-label") === text || b.title === text,
+    (b) => b.textContent?.trim() === text || b.getAttribute("aria-label") === text || b.getAttribute("data-tip") === text,
   );
   if (!found) throw new Error(`no "${text}" control in the panel`);
   return found;

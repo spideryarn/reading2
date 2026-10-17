@@ -674,7 +674,7 @@ export function JobCard({
             type="button"
             variant="ghost"
             size="sm"
-            title="Stop this job"
+            data-tip="Stop this job"
             disabled={job.cancelling === true}
             onClick={() => void queue.cancel(job.id)}
           >
@@ -707,7 +707,7 @@ export function JobCard({
                 type="button"
                 variant="ghost"
                 size="sm"
-                title="Run it again, skipping the stages that already worked"
+                data-tip="Run it again, skipping the stages that already worked"
                 onClick={() => void retry()}
               >
                 <RotateCw size={13} /> Retry
@@ -727,7 +727,7 @@ export function JobCard({
                 type="button"
                 variant="ghost"
                 size="sm"
-                title="Tell us about this failure — its address or file name, the error and the times go in the report, and you can edit them first"
+                data-tip="Tell us about this failure — its address or file name, the error and the times go in the report, and you can edit them first"
                 onClick={() =>
                   openFeedback({ id: mintId(), kind: "problem", body: importProblemReport(job) })
                 }
@@ -739,7 +739,9 @@ export function JobCard({
               type="button"
               variant="ghost"
               size="icon-sm"
-              title="Dismiss"
+              data-tip="Dismiss"
+              aria-label="Dismiss"
+              data-tip-describes="off"
               onClick={() => {
                 onHide();
                 void queue.forget(job.id);
@@ -872,7 +874,7 @@ function SourceLine({ job, now }: { job: Job; now: number }) {
       {ago !== undefined && (
         <>
           <span aria-hidden="true">·</span>
-          <time dateTime={job.createdAt} title={when} className="tw:whitespace-nowrap">
+          <time dateTime={job.createdAt} data-tip={when} className="tw:whitespace-nowrap">
             {ago}
           </time>
         </>

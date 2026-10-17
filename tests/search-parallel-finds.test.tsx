@@ -282,7 +282,7 @@ describe("Search: several meaning-searches at once", () => {
     expect(posted.map((p) => p.criterion)).toEqual([FIRST]);
 
     type(SECOND);
-    expect(findButton().disabled, "Find is refused while the first search runs").toBe(false);
+    expect(findButton().hasAttribute("aria-disabled"), "Find is refused while the first search runs").toBe(false);
     click(findButton());
     await flush();
     expect(posted.map((p) => p.criterion), "the second search was never sent").toEqual([FIRST, SECOND]);
@@ -338,7 +338,7 @@ describe("Search: several meaning-searches at once", () => {
     await flush();
 
     expect(foundBy()).toEqual([SECOND]);
-    const failed = host.querySelector('.srch-icon[title*="ai-refused"]');
+    const failed = host.querySelector('.srch-icon[data-tip*="ai-refused"]');
     expect(failed, "the failed search shows no failure on its row").not.toBeNull();
     expect(host.textContent).not.toContain("still searching");
   });
@@ -361,7 +361,7 @@ describe("Search: several meaning-searches at once", () => {
 
     expect(foundBy()).toEqual([SECOND]);
     expect(host.textContent).toContain("The search stopped arriving. Try again.");
-    expect(host.querySelector('.srch-icon[title*="stopped arriving"]')).not.toBeNull();
+    expect(host.querySelector('.srch-icon[data-tip*="stopped arriving"]')).not.toBeNull();
   });
 
   it("refuses a repeat of a running question even when it is not switched on", async () => {
@@ -379,8 +379,8 @@ describe("Search: several meaning-searches at once", () => {
 
     /* The session has ended, so the visible control says why this exact
        repeat is refused instead of accepting a press that can send nothing. */
-    expect(findButton().disabled).toBe(true);
-    expect(findButton().title).toBe(
+    expect(findButton().getAttribute("aria-disabled")).toBe("true");
+    expect(findButton().getAttribute("data-tip")).toBe(
       "Already searching for this — change the words to ask something else",
     );
     click(findButton());
@@ -412,7 +412,7 @@ describe("Search: several meaning-searches at once", () => {
 
     // The draft is still in the box. Pressing again would pay for the same search twice.
     expect(box().value).toBe(FIRST);
-    expect(findButton().disabled).toBe(true);
+    expect(findButton().getAttribute("aria-disabled")).toBe("true");
     click(findButton());
     enter();
     await flush();
@@ -430,12 +430,12 @@ describe("Search: several meaning-searches at once", () => {
     finish(posted[0] as Posted);
     await flush();
     expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning"]);
-    expect(findButton().disabled).toBe(true);
+    expect(findButton().getAttribute("aria-disabled")).toBe("true");
     finish(posted[1] as Posted);
     await flush();
 
     // Positive control: once the whole pipeline has finished, the same press sends.
-    expect(findButton().disabled).toBe(false);
+    expect(findButton().hasAttribute("aria-disabled")).toBe(false);
     enter();
     await flush();
     expect(posted.map((p) => p.kind)).toEqual(["quick", "meaning", "quick"]);
@@ -487,7 +487,7 @@ describe("Search: several meaning-searches at once", () => {
     await flush();
     expect(posted).toHaveLength(1);
 
-    const retry = must<HTMLButtonElement>('button.srch-icon[title="Already searching for this question"]');
+    const retry = must<HTMLButtonElement>('button.srch-icon[data-tip="Already searching for this question"]');
     expect(retry.disabled).toBe(true);
     click(retry);
     await flush();
@@ -495,7 +495,7 @@ describe("Search: several meaning-searches at once", () => {
 
     finish(posted[0] as Posted);
     await flush();
-    const enabled = must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`);
+    const enabled = must<HTMLButtonElement>(`button.srch-icon[data-tip="${message}"]`);
     expect(enabled.disabled).toBe(false);
     click(enabled);
     await flush();
@@ -527,13 +527,13 @@ describe("Search: several meaning-searches at once", () => {
     await flush();
     expect(ticked()).toEqual([FIRST]);
 
-    click(must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`));
+    click(must<HTMLButtonElement>(`button.srch-icon[data-tip="${message}"]`));
     await flush();
     expect(posted.map((p) => p.id)).toEqual([serverId]);
 
     // The same question, while the renamed run is still open: refused.
     const thorough = must<HTMLButtonElement>("button.srch-thorough");
-    expect(thorough.title).toBe("Already running the thorough search for this");
+    expect(thorough.getAttribute("data-tip")).toBe("Already running the thorough search for this");
     click(thorough);
     await flush();
     expect
@@ -580,7 +580,7 @@ describe("Search: several meaning-searches at once", () => {
     mount();
     await flush();
 
-    click(must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`));
+    click(must<HTMLButtonElement>(`button.srch-icon[data-tip="${message}"]`));
     await flush();
     click(must(`input[aria-label="Also mark: ${FIRST}"]`));
     await flush();
@@ -613,7 +613,7 @@ describe("Search: several meaning-searches at once", () => {
     const legacyRow = [...host.querySelectorAll<HTMLElement>(".srch-saved-row")].find((row) =>
       row.textContent?.includes(FIRST),
     );
-    const remove = legacyRow?.querySelector<HTMLButtonElement>('button[title="Delete this search"]');
+    const remove = legacyRow?.querySelector<HTMLButtonElement>('button[data-tip="Delete this search"]');
     if (!remove) throw new Error("the legacy search has no delete button");
     click(remove);
     await flush();
