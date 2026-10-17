@@ -54,7 +54,10 @@ export function focusTaken(taken: ItemFocus): (now: ItemFocus | null) => ItemFoc
  *   waits for the render that draws it.
  *
  * The row is found inside `scope` by `attribute`, **centred in its own
- * scroller and flashed** (`centreInScroller`, flash.ts § `flashElement`).
+ * scroller where its scroll range permits, and flashed** (`centreInScroller`,
+ * flash.ts § `flashElement`). The first and last rows naturally clamp at the
+ * list's ends; the flash still identifies them without adding blank half-list
+ * gutters to every band.
  * Greg, 2026-10-17, spya-m53cdk: *"can we scroll to the right source (perhaps
  * centred in the scrollable area), and flash it"*. It was `block: "nearest"`
  * until then, so a row already on screen did not move — and a reader who had
@@ -99,14 +102,37 @@ export function useLandOnItem({
       return;
     }
     if (!drawn) return;
-    for (const row of scope.current?.querySelectorAll<HTMLElement>(`[${attribute}]`) ?? []) {
-      if (row.getAttribute(attribute) !== focus.id) continue;
-      land.current?.(row);
-      centreInScroller(row);
-      flashElement(row);
-      taken.current?.(focus);
-      return;
-    }
+    let watch: ResizeObserver | null = null;
+    const attempt = () => {
+      for (const row of scope.current?.querySelectorAll<HTMLElement>(`[${attribute}]`) ?? []) {
+        if (row.getAttribute(attribute) !== focus.id) continue;
+        land.current?.(row);
+        const scroller = scrollerOf(row);
+        /* A band that is stepped aside measures zero. Keep the focus rather
+           than flashing it invisibly and reporting it served; its scroller's
+           first non-zero layout gets the same landing attempt. */
+        if (scroller && !centreInScroller(row, scroller)) {
+          if (typeof ResizeObserver === "function" && watch === null) {
+            watch = new ResizeObserver(() => {
+              if (scroller.clientHeight <= 0) return;
+              watch?.disconnect();
+              watch = null;
+              attempt();
+            });
+            watch.observe(scroller);
+          }
+          return;
+        }
+        flashElement(row);
+        taken.current?.(focus);
+        return;
+      }
+    };
+    attempt();
+    return () => {
+      watch?.disconnect();
+      watch = null;
+    };
   }, [focus, ready, known, drawn, scope, attribute]);
 }
 
@@ -129,7 +155,10 @@ function scrollerOf(row: HTMLElement): HTMLElement | null {
 }
 
 /**
- * **Put `row`'s centre at the centre of its scroller's visible box**, at once.
+ * **Put `row`'s centre at the centre of its scroller's visible box**, at once,
+ * where the scroller's range permits it. The browser clamps a first or last
+ * row at the corresponding edge; centring those too would require persistent
+ * blank scroll room at both ends of all four lists.
  * The scroller's own `scrollTop`, never `scrollIntoView`, which scrolls every
  * scrollable ancestor too, the page included (GPT Sol's F1 on plan 261017h;
  * list-step.ts § `useFollowRow` keeps the same rule). Instant because there is
@@ -140,14 +169,18 @@ function scrollerOf(row: HTMLElement): HTMLElement | null {
  * other end. Nothing moves while the scroller measures nothing (a band
  * stepped aside).
  */
-function centreInScroller(row: HTMLElement): void {
-  const scroller = scrollerOf(row);
-  if (!scroller || scroller.clientHeight <= 0) return;
+function centreInScroller(row: HTMLElement, scroller: HTMLElement): boolean {
+  if (scroller.clientHeight <= 0) return false;
   const box = row.getBoundingClientRect();
-  const top = box.top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  /* `getBoundingClientRect()` starts at the border box; scrolling starts at
+     the padding edge. Without `clientTop`, a bordered scroller lands high by
+     exactly its top border (chat-steps.ts § turnStarts uses the same origin). */
+  const top =
+    box.top - (scroller.getBoundingClientRect().top + scroller.clientTop) + scroller.scrollTop;
   const height = scroller.clientHeight;
   const to = box.height > height ? top : top + box.height / 2 - height / 2;
   scroller.scrollTop = Math.max(0, Math.round(to));
+  return true;
 }
 
 /**

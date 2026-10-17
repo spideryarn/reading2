@@ -166,6 +166,14 @@ describe("the flash stylesheet", () => {
     expect(css).toMatch(/\.element-flash-still::after\s*\{\s*opacity: 0\.22/);
   });
 
+  it("keeps a band row's overlay inside the row", () => {
+    const band = css.match(
+      /\.mode-band \.element-flash::after,\s*\.mode-band \.element-flash-still::after\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(band).toContain("inset: 0");
+    expect(band).toContain("border-radius: var(--radius)");
+  });
+
   it("composes the still wash with a literal search-hit rail", () => {
     const body = css.match(
       /td\.text\.has-hit:not\(\[data-hues\]\)\.block-flash-still\s*\{([^}]*)\}/,
