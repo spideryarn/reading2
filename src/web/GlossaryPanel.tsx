@@ -112,6 +112,7 @@ import {
   floorToGateStep,
   GATE_STEP,
   thresholdMax,
+  thresholdStops,
   thresholdTop,
   hiddenNote,
   survivesThreshold,
@@ -891,6 +892,11 @@ export function gateMax(entries: readonly GlossaryEntry[], gate: number): number
   return thresholdMax(entries, gate, priorityOf);
 }
 
+/** The gates that change the list — threshold.ts § thresholdStops. */
+export function gateStops(entries: readonly GlossaryEntry[]): number[] {
+  return thresholdStops(entries, priorityOf, floorToGateStep);
+}
+
 /**
  * The gate that would put this term on screen, or null if nothing should move.
  *
@@ -1250,6 +1256,7 @@ function GateSlider({
       id="gloss-gate"
       value={gate}
       max={gateMax(entries, gate)}
+      stops={gateStops(entries)}
       defaultValue={PRIORITY_GATE}
       moved={moved}
       visible={visible.length}

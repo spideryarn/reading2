@@ -1,0 +1,8 @@
+{
+  "fixture": "ieee-aws-waf",
+  "file": "ieee_aws_waf.html",
+  "note": "NOT AN ARTICLE — an AWS WAF challenge, which is what https://ieeexplore.ieee.org/document/9069875 answered src/fetch.ts's fetchDocument with on 2026-10-17 (a 202 with this 2,058-byte text/html page, given fetchDocument's HTML Accept header; only a request with no Accept header gets an empty 202 body — docs/investigations/261017a-evidence/ieee-status.txt). Readability finds no article in it, so it was refused as one with no article, whose sentence sends the reader back to the address, until src/challenge-page.ts recognised the WAF's own challenge.js script beside the div#challenge-container it renders into. NO EDIT TO THE BYTES: the page echoes no IP address; window.gokuProps holds opaque, encrypted tokens (key, iv, context) the WAF minted for the box that fetched it, not for any reader. NO NEEDLES: every word of the page is inside its <noscript>, so it has no visible text for a mustNotContain needle to be found in; notAnArticle is its one assertion. docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md.",
+  "mustContain": [],
+  "mustNotContain": [],
+  "notAnArticle": true
+}

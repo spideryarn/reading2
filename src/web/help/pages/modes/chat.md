@@ -80,8 +80,10 @@ says what pressing it will do; it never opens anything or moves you by itself. I
 greeting asks why you are reading the piece: answer in the box below as you would any message. When
 you say why, or something about yourself, the guide offers to save it, as close to your own words
 as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is
-saved until you press, unless the words are exactly ones you typed in that message: then it saves
-them straight away and says so, and **Undo** puts back what was there before. Either way, **Undo**
+saved until you press, unless the words are exactly ones you typed in that message, or one whole
+sentence of it with only the spelling tidied (*I'm* written *I am*, a capital, a full stop): then it
+saves them straight away and says so, shows your own sentence beside a tidied one, and **Undo** puts
+back what was there before. Either way, **Undo**
 puts it back. Under its latest answer the guide offers up to
 three next steps as buttons: something to ask it next, a mode to open, or a search whose words you
 can change before you press **Quick search**. Ask it to make a private link, share the article or archive

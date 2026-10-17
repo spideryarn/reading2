@@ -1,0 +1,7 @@
+accept-html	1	202	https://ieeexplore.ieee.org/document/9069875	text/html; charset=UTF-8	2058	2357d20e317b5518	challenge
+accept-html	2	202	https://ieeexplore.ieee.org/document/9069875	text/html; charset=UTF-8	2058	cda311777d346d71	challenge
+accept-html	3	202	https://ieeexplore.ieee.org/document/9069875	text/html; charset=UTF-8	2058	28cd1eb5c4fa5e7a	challenge
+no-accept	1	202	https://ieeexplore.ieee.org/document/9069875	text/html; charset=UTF-8	0	e3b0c44298fc1c14	challenge
+no-accept	2	202	https://ieeexplore.ieee.org/document/9069875	text/html; charset=UTF-8	0	e3b0c44298fc1c14	challenge
+no-accept	3	202	https://ieeexplore.ieee.org/document/9069875	text/html; charset=UTF-8	0	e3b0c44298fc1c14	challenge
+fetchDocument	html		2058	f752bb2af89fc06d

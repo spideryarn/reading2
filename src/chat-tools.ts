@@ -654,6 +654,9 @@ export const GUIDE_TOOLS: FunctionTool[] = (() => {
  * and the card saves it at once with an Undo: Greg's reply A to q-t3j8hj and his report
  * `spya-yk3r03`, plan
  * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md.
+ * Since 2026-10-17 so is one whole sentence they typed with only its spelling
+ * tidied (`route: "reworded"`, Greg's reply to q-pm2j66, plan
+ * docs/plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md).
  * So a planted instruction in the article can at worst put words on a card the
  * reader reads before pressing, or save words the reader wrote themselves,
  * with an Undo beside them (docs/project/security-map.md).
@@ -672,7 +675,8 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
       "Offer to save something the reader told you, as why they are reading this piece (field " +
       "\"reason\") or as their About you (field \"about_you\"). The reader sees your words under " +
       "your answer. Keep quite close to their own wording: it need not be an exact quote, but an " +
-      "exact quote of what they typed is saved at once with an Undo; anything else gets a button " +
+      "exact quote of what they typed, or one whole sentence of it with only its spelling tidied, is " +
+      "saved at once with an Undo; anything else gets a button " +
       "they press to save it. For about_you, give the whole new text, starting from their current About " +
       "the reader exactly as written and changing only what they told you.",
     parameters: {
@@ -2404,8 +2408,9 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   /* The one refusal that asks nothing of the model: there is nothing to
      offer, and nothing to do instead. The case that wrote answers twice. */
   if (basis === text) return refuse("those are already their saved words, exactly.", true);
-  /* Their typed words, word for word: the page saves it at once, with an
-     Undo (src/save-closeness.ts, plan 261011s). Anything else waits for the press. */
+  /* Their typed words, word for word or one sentence of them lightly
+     reworded: the page saves it at once, with an Undo (src/save-closeness.ts,
+     plans 261011s and 261012c). Anything else waits for the press. */
   const now = savesAtOnce({ field, text, basis }, ctx.typed ?? null);
   return {
     label,
@@ -2414,7 +2419,8 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
     content: now
       ? /* Not "say it is saved": the page writes it, after this, and may not
            (GPT Sol's plan review of 261011s). The card says which. */
-        "These are the reader's own words, word for word, so the page will save them itself, with an " +
+        `These are the reader's own words, ${now.route === "exact" ? "word for word" : "with only their spelling tidied"}, ` +
+        "so the page will save them itself, with an " +
         "Undo, and say under your answer whether it did. Say nothing about saving these words, and " +
         "never that there is a button for them. On a later turn, WHO IS READING THIS shows what is " +
         "saved. " + ALREADY_ON_SCREEN
@@ -2422,7 +2428,16 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
         "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
         "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
         ALREADY_ON_SCREEN,
-    offer: { field, text, basis, ...(now ? { now: true as const } : {}) },
+    offer: {
+      field,
+      text,
+      basis,
+      ...(now === null
+        ? {}
+        : now.route === "exact"
+          ? { now: true as const, route: "exact" as const }
+          : { now: true as const, route: "reworded" as const, source: now.source }),
+    },
   };
 }
 

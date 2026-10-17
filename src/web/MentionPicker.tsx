@@ -38,9 +38,16 @@ import {
   restoredMentions,
   shortTitle,
   withMention,
+  withMentionAtEnd,
   withoutMention,
 } from "./mentions.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
+
+/** An article *Bring into this chat* hands the row: one of the reader's own, by slug. */
+export interface BroughtIn {
+  slug: string;
+  title: string;
+}
 
 export interface MentionPickerState {
   /** The list is on screen. While it is, Enter and Tab pick and Escape closes it. */
@@ -66,6 +73,15 @@ export interface MentionPickerState {
   hover(index: number): void;
   /** Pick row `index`: the box's next text and caret, or null if nothing was picked. */
   pick(index: number, value: string, caret: number): { value: string; caret: number } | null;
+  /**
+   * Add an article from outside the list — *Bring into this chat* (plan
+   * 261017e): its chip, and `@Short title ` at the end of the box. The box's
+   * next text, the same text when it is already in the row, or the sentence
+   * that says the row is full.
+   */
+  add(article: BroughtIn, value: string): { value: string } | { refusal: string };
+  /** Why an outside add cannot start now, before it spends anything. */
+  addRefusal(): string | null;
   /** Move or retire remembered inserted-title ranges after a reader edit. */
   edit(before: string, after: string): void;
   /**
@@ -91,6 +107,14 @@ export function useMentionPicker(
   kept: readonly PickedMention[] = [],
 ): MentionPickerState {
   const [picked, setPicked] = useState<PickedMention[]>(() => restoredMentions(kept, value));
+  /* React may batch a chip press with an import finishing. Keep the row at the
+     last write, rather than the last render, so every writer sees the same
+     row. In particular, remove-then-add must not resurrect the removed chip. */
+  const pickedNow = useRef(picked);
+  const writePicked = (next: PickedMention[]) => {
+    pickedNow.current = next;
+    setPicked(next);
+  };
   /* `null` while the box does not have focus, which is what closes the list on blur. */
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
@@ -101,7 +125,13 @@ export function useMentionPicker(
   const listId = useId();
 
   const trigger = enabled && caret !== null ? mentionTrigger(value, caret) : null;
-  const live = trigger !== null && trigger.at !== dismissedAt ? trigger : null;
+  /* **An `@` a chip in the row wrote is never a search.** A pick also
+     dismisses its own, but that lasts only while the caret stays on it; an
+     article brought in from a button (plan 261017e) lands while the caret is
+     elsewhere, and the reader's first Enter on coming back closed a list they
+     could not see instead of sending (the browser pass). */
+  const chipWrote = trigger !== null && picked.some((m) => m.insertedAt === trigger.at);
+  const live = trigger !== null && trigger.at !== dismissedAt && !chipWrote ? trigger : null;
   /* A dismissal lasts as long as its `@` does. */
   useEffect(() => {
     if (trigger === null && dismissedAt !== null) setDismissedAt(null);
@@ -126,22 +156,19 @@ export function useMentionPicker(
 
   const pick = (index: number, text: string, at: number) => {
     const chosen = options[index];
-    if (!chosen || !live || refusal) return null;
+    const row = pickedNow.current;
+    if (!chosen || !live || pickRefusal(row) || row.some((m) => m.slug === chosen.slug)) return null;
     const next = withMention(text, live, at, chosen.title);
-    setPicked((p) => {
-      const moved = p.map((m) => afterMentionEdit(m, text, next.value));
-      return moved.some((m) => m.slug === chosen.slug)
-        ? moved
-        : [
-            ...moved,
-            {
-              slug: chosen.slug,
-              title: chosen.title,
-              titleOverridden: chosen.titleOverridden,
-              insertedAt: live.at,
-            },
-          ];
-    });
+    const moved = row.map((m) => afterMentionEdit(m, text, next.value));
+    writePicked([
+      ...moved,
+      {
+        slug: chosen.slug,
+        title: chosen.title,
+        titleOverridden: chosen.titleOverridden,
+        insertedAt: live.at,
+      },
+    ]);
     /* The `@` just written would read as a search for the title after it. */
     setDismissedAt(live.at);
     setCaret(next.caret);
@@ -149,27 +176,38 @@ export function useMentionPicker(
   };
 
   const remove = (slug_: string, text: string, at: number) => {
-    const gone = picked.find((m) => m.slug === slug_);
+    const row = pickedNow.current;
+    const gone = row.find((m) => m.slug === slug_);
     const next = gone && gone.insertedAt !== null
       ? withoutMention(text, mentionText(gone.title), at, gone.insertedAt)
       : null;
-    setPicked((p) =>
-      p
-        .filter((m) => m.slug !== slug_)
-        .map((m) => (next ? afterMentionEdit(m, text, next.value) : m)),
+    writePicked(
+      row.filter((m) => m.slug !== slug_).map((m) => (next ? afterMentionEdit(m, text, next.value) : m)),
     );
     return next;
   };
 
+  const add = (article: BroughtIn, text: string): { value: string } | { refusal: string } => {
+    const row = pickedNow.current;
+    if (row.some((m) => m.slug === article.slug)) return { value: text };
+    const refused = pickRefusal(row);
+    if (refused) return { refusal: refused };
+    const next = withMentionAtEnd(text, article.title);
+    const grown = [...row.map((m) => afterMentionEdit(m, text, next.value)), { ...article, insertedAt: next.at }];
+    writePicked(grown);
+    return { value: next.value };
+  };
+
   const edit = (before: string, after: string) => {
-    setPicked((p) => p.map((m) => afterMentionEdit(m, before, after)));
+    writePicked(pickedNow.current.map((m) => afterMentionEdit(m, before, after)));
   };
 
   const toSend = (): MentionsToSend | undefined => {
-    if (!enabled || picked.length === 0) return undefined;
-    const slugs = picked.map((m) => m.slug);
+    const row = pickedNow.current;
+    if (!enabled || row.length === 0) return undefined;
+    const slugs = row.map((m) => m.slug);
     /* Only those sent: one picked while the question was on its way stays. */
-    const drop = () => setPicked((p) => p.filter((m) => !slugs.includes(m.slug)));
+    const drop = () => writePicked(pickedNow.current.filter((m) => !slugs.includes(m.slug)));
     return { slugs, onAccepted: drop, onUnconfirmed: drop };
   };
 
@@ -208,6 +246,8 @@ export function useMentionPicker(
     },
     hover: setActive,
     pick,
+    add,
+    addRefusal: () => pickRefusal(pickedNow.current),
     edit,
     remove,
     toSend,

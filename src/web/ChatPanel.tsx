@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { Fragment, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type MutableRefObject, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -153,7 +153,9 @@ import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
 import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
-import { crossArticles, type CrossArticles } from "./citations.js";
+import { crossArticles, type CrossArticles, snippet } from "./citations.js";
+import { type BringIn, BringIntoChat } from "./BringIntoChat.js";
+import { pastedAddresses } from "./bring-in.js";
 import { MentionChips, MentionPicker, useMentionPicker } from "./MentionPicker.js";
 import type { MentionsToSend, PickedMention } from "./mentions.js";
 import { readHref } from "./router.js";
@@ -1627,6 +1629,20 @@ export function Conversation({
      answers' citation chips (citations.ts § `crossArticles`). Built from the
      server's list and the open article's blocks, never from an answer. */
   const cross = useMemo(() => crossArticles(blocks, thread.mentioned, (s) => readHref(s)), [blocks, thread.mentioned]);
+  /* *Bring into this chat* under an answer hands its article to this
+     conversation's box, which keeps the ref while it is drawn (plan 261017e).
+     Typed Chat only: no other kind takes another article in. */
+  const bringInTo = useRef<BringIn | null>(null);
+  const bring = useMemo<BringTo | undefined>(
+    () =>
+      kind === "chat"
+        ? {
+            openSlug: slug,
+            into: bringVia(bringInTo),
+          }
+        : undefined,
+    [kind, slug],
+  );
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
   const busy = last?.status === "pending";
@@ -2121,6 +2137,7 @@ export function Conversation({
                `settled()` becomes false. Keep the bin's place separately, as
                the pencil does, so the row does not change width mid-answer. */
             holdDeleteFrom={i > 0 && !speaking}
+            bring={bring}
           />
           {/* The guide's offers to save their reason or About you, each a
               card they press (GuideSaveOffer.tsx, plan 261009q). */}
@@ -2239,6 +2256,7 @@ export function Conversation({
         continuesLive={thread.messages.length > 0}
         blocks={blocks}
         onJump={onJump}
+        bringInTo={bringInTo}
       />
     </ChatCommandsFor>
   );
@@ -2410,8 +2428,11 @@ export function Turn({
   discards,
   onDeleteFrom,
   holdDeleteFrom = false,
+  bring,
 }: {
   message: ChatMessage;
+  /** Where *Bring into this chat* hands an article: typed Chat only (plan 261017e). */
+  bring?: BringTo | undefined;
   /**
    * The conversation's kind. Only Recall (`learn`) keeps an answer's last
    * `Hint:` paragraph behind a button; every other kind draws it as written.
@@ -2721,7 +2742,7 @@ export function Turn({
            prose. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
         <PassageLinks passages={message.passages} onJump={onJump} />
       )}
-      <WebSources citations={message.citations} />
+      <WebSources citations={message.citations} bring={bring} />
       {message.status !== "pending" && (
         <div className="chat-actions">
           {message.text !== "" && (
@@ -2906,7 +2927,51 @@ function AlsoReading({ mentioned }: { mentioned: readonly MentionedArticleView[]
   );
 }
 
-export function WebSources({ citations }: { citations: Citation[] | undefined }) {
+/** Where a button under an answer hands an article (plan 261017e). */
+interface BringTo {
+  openSlug: string;
+  into: BringIn;
+}
+
+/** Said while the box's last question, with its chips, has not been accepted yet. */
+const MENTION_WAITING = "Wait a moment for your question to go, then bring this in.";
+
+/** Said if the conversation's box is not on screen to take the article. */
+const BOX_GONE = "Open this conversation's box to bring it in; the page is on your shelf now.";
+const BOX_GONE_BEFORE = "Open this conversation's box before bringing the page in.";
+
+/**
+ * **The buttons under an answer reach the box through this**, and only a
+ * missing box is a refusal: `null` is the box's yes, so it must pass through
+ * rather than fall to a default (`?? BOX_GONE` refused every press — the
+ * browser pass, plan 261017e).
+ */
+export function bringVia(seam: { readonly current: BringIn | null }): BringIn {
+  return {
+    add: (article) => (seam.current ? seam.current.add(article) : BOX_GONE),
+    refusal: () => (seam.current ? seam.current.refusal() : BOX_GONE_BEFORE),
+  };
+}
+
+/** An address short enough for a button: its host and the start of its path. */
+function shortAddress(url: string): string {
+  const host = hostOf(url);
+  try {
+    const path = new URL(url).pathname.replace(/\/$/, "");
+    return path ? snippet(host + path, 40) : host;
+  } catch {
+    return host;
+  }
+}
+
+export function WebSources({
+  citations,
+  bring,
+}: {
+  citations: Citation[] | undefined;
+  /** *Bring into this chat* on each row: typed Chat only (plan 261017e). */
+  bring?: BringTo | undefined;
+}) {
   const web = (citations ?? []).filter((c) => isWebUrl(c.url));
   if (web.length === 0) return null;
   return (
@@ -2918,6 +2983,7 @@ export function WebSources({ citations }: { citations: Citation[] | undefined })
             <a href={c.url} target="_blank" rel="noreferrer noopener">
               {c.title?.trim() || hostOf(c.url)}
             </a>
+            {bring && <BringIntoChat url={c.url} title={c.title} openSlug={bring.openSlug} bringIn={bring.into} />}
           </li>
         ))}
       </ul>
@@ -3191,6 +3257,7 @@ export function Composer({
   continuesLive,
   blocks,
   onJump,
+  bringInTo,
 }: {
   slug: string;
   /**
@@ -3250,6 +3317,11 @@ export function Composer({
   continuesLive?: boolean | undefined;
   blocks?: ReadonlyMap<string, string> | undefined;
   onJump?: ((id: BlockId) => void) | undefined;
+  /**
+   * Where this box puts its *Bring into this chat* hand-over, for the buttons
+   * under the conversation's answers (plan 261017e). Typed Chat only.
+   */
+  bringInTo?: MutableRefObject<BringIn | null> | undefined;
 }) {
   /* Seeded from the draft and owned here from then on. The words are kept
      above (`drafts` in ChatPanel) because they have to outlive this component;
@@ -3543,6 +3615,37 @@ export function Composer({
     setText(next.value, "kept");
     caretTo.current = next.caret;
   };
+  /* **Bring into this chat** (plan 261017e): an article handed over from a
+     button — under an answer or under this box — joins the row as a pick from
+     the list would, its `@Short title ` at the end of the words. Typed Chat
+     only; the box registers it with the conversation for the buttons in the
+     transcript, and its own pasted-address buttons call it directly. */
+  const bringIn: BringIn = {
+    add(article) {
+      /* While a question with chips is on its way the row is that question's,
+         and the draft keeps none (Sol, plan 261017e F1). */
+      if (mentionWaiting) return MENTION_WAITING;
+      const text = latestText.current;
+      const next = mention.add(article, text);
+      if ("refusal" in next) return next.refusal;
+      if (next.value !== text) {
+        provenance.current = afterChange(provenance.current, next.value, "keyboard");
+        setText(next.value, "kept");
+      }
+      return null;
+    },
+    refusal: () => mentionWaiting ? MENTION_WAITING : mention.addRefusal(),
+  };
+  const pasted = kind === "chat" ? pastedAddresses(value) : [];
+  useLayoutEffect(() => {
+    if (!bringInTo || kind !== "chat") return;
+    bringInTo.current = bringIn;
+    return () => {
+      /* A later box may have taken the seam before this cleanup runs. Its
+         handle is not ours to clear. */
+      if (bringInTo.current === bringIn) bringInTo.current = null;
+    };
+  });
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the caret moves once the picked title is in the box
   useLayoutEffect(() => {
     const el = box.current;
@@ -3764,6 +3867,21 @@ export function Composer({
         blocks={blocks}
         onJump={onJump}
       />}
+      {pasted.length > 0 && (
+        /* An address in the draft, kept for the conversation rather than read
+           for one answer (plan 261017e). */
+        <div className="bring-in-pasted">
+          {pasted.map((url) => (
+            <BringIntoChat
+              key={url}
+              url={url}
+              openSlug={slug}
+              bringIn={bringIn}
+              label={`Bring ${shortAddress(url)} into this chat`}
+            />
+          ))}
+        </div>
+      )}
     </form>
   );
 }

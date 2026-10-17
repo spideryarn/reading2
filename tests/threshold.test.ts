@@ -26,6 +26,14 @@ describe("survivesThreshold", () => {
     expect(survivesThreshold(0.29, 0.3)).toBe(false);
   });
 
+  it("keeps a product that lands a hair under its printed score", () => {
+    /* 0.4 × 0.7 is 0.27999999999999997: printed "0.28", and the stop it makes
+       is 0.28 (floorToGateStep). Hidden at 0.28, that stop changed nothing —
+       the browser check of plan 261017f found it in a real glossary. */
+    expect(survivesThreshold(0.4 * 0.7, 0.28)).toBe(true);
+    expect(survivesThreshold(0.27, 0.28)).toBe(false);
+  });
+
   it("shows an unscored item at every position of the bar", () => {
     /* **Absent is not low**, and this is the one line in the feature that must
        not be got wrong. Greg, 2026-09-03: "In the interim, always show them."

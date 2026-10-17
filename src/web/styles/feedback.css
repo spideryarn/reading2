@@ -459,6 +459,12 @@ details.fb-threads-group > summary { cursor: pointer; }
 /* One thread on its own: the way back and the pager above it. */
 .fb-thread { display: flex; flex-direction: column; gap: 0.5rem; }
 .fb-thread-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+/* A wrapped second row's invisible 40px targets must not reach back over the
+   clickable row above it. At the supported 12px root, an .fb-copy is about
+   23px tall, leaving 17px of target outside its box; 18px keeps the two clear. */
+@media (any-pointer: coarse) {
+  .fb-thread-nav { row-gap: max(0.4rem, 18px); }
+}
 .fb-thread-place { margin-inline: auto; font-size: 0.76rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 /* Said when an end is pressed anyway: a phone has no hover to show the title. */
 .fb-thread-end { flex-basis: 100%; margin: 0; text-align: end; font-size: 0.76rem; color: var(--ink-soft); }
@@ -734,6 +740,9 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-actions {
   display: flex;
   justify-content: flex-end;
+  /* From the top, not stretched: when an end's sentence wraps under the
+     footer's pager (261017c), a stretch drew Close 53px tall beside it. */
+  align-items: flex-start;
   gap: 0.5rem;
   padding-top: 0.6rem;
   /* `--rule-strong`, not `--rule`. `--rule` is `--border` (oklch 0.27) and the
@@ -751,17 +760,21 @@ details.fb-threads-group > summary { cursor: pointer; }
   border: 1px solid var(--rule-strong);
   border-radius: 6px;
   background: none;
-  color: var(--ink-soft);
   font-family: inherit;
   font-size: 0.8rem;
   cursor: pointer;
 }
-/* Cancel and Send are both `--rule-strong` now (see the dropzone note above), so
-   the primary/secondary difference is carried by the ink rather than by the line
-   — which is the more legible of the two anyway at this size. */
-.fb-send { color: var(--ink); }
+/* **Send is green, Cancel and Close grey** (spya-bvzavw, plan 261017c): the
+   bottom-right sends on Write but on Earlier was Close, which shuts. Green is
+   `--positive`, as *Send reply* is in a thread (261011h), because both send
+   what you wrote to us; the words still say which is which. The border takes
+   the green too and keeps it on hover, as Send reply's does. */
+.fb-cancel { color: var(--ink-soft); }
+.fb-send { color: var(--positive); border-color: currentColor; }
 .fb-send:disabled { opacity: 0.45; cursor: default; }
-.fb-send:not(:disabled):hover { color: var(--highlight-text); border-color: var(--highlight); }
+.fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
+/* The thread pager again, in Earlier's footer beside Close, kept to the right. */
+.fb-foot-pager { justify-content: flex-end; }
 
 /* ---------------------------------------------------------------- the toast --
    The thank-you after a report is filed, since 2026-09-29 — Greg: *"that

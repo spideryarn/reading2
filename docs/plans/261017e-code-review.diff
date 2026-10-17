@@ -1,0 +1,1025 @@
+diff --git a/src/web/BringIntoChat.tsx b/src/web/BringIntoChat.tsx
+new file mode 100644
+index 000000000..422fffe5d
+--- /dev/null
++++ b/src/web/BringIntoChat.tsx
+@@ -0,0 +1,203 @@
++/**
++ * ***Bring into this chat*** — the button on a web link in Chat (a row of *From
++ * the web*, an address in the draft) that makes the page one of the reader's
++ * articles and puts it in the composer's "Bringing in" row. Greg's 1A on
++ * q-madusw; plan docs/plans/261017e-bring-a-web-page-into-chat.md. The pure
++ * half, and the reasons for each state, are in bring-in.ts.
++ *
++ * **The import is the ordinary one**: `POST /api/jobs { url, ownCopy: true }`
++ * through `useJobs().add`, the call the link hover card's *add to Spideryarn*
++ * makes (`WithAddToShelf` in ProseHoverCard.tsx). So the slot, the free repeat
++ * and the 402 are the server's. `ownCopy` because a public copy of somebody
++ * else's would be offered first, and Chat reads only the reader's own.
++ *
++ * **What was asked is remembered per address, for the tab**, as the hover card
++ * does, so an import outlives this button: leave the conversation and come
++ * back, and it is *on your shelf*, a press away. **Only the button that was
++ * pressed puts the chip in, and only while it is on screen** — a chip never
++ * lands in a conversation the reader has since left.
++ */
++import { ArrowDownToLine, Check, LoaderCircle } from "lucide-react";
++import { useEffect, useReducer, useState } from "react";
++import { urlKey } from "../ingest.js";
++import { hostOf } from "../urls.js";
++import {
++  BRING_IN_HOW,
++  type BringInAsked,
++  describeBringIn,
++  OPEN_ALREADY,
++} from "./bring-in.js";
++import type { BroughtIn } from "./MentionPicker.js";
++import { loadMentionCandidates } from "./mentions.js";
++import { forgetOnReaderChange } from "./lib/reader-change.js";
++import { ControlTip, Tooltip } from "./Tooltip.js";
++import { useJobs } from "./useJobs.js";
++
++/**
++ * Hand an article to the open conversation's composer: null when its chip is
++ * in the row, or the sentence that says why not (the row is full).
++ */
++export type BringIn = (article: BroughtIn) => string | null;
++
++const asked = new Map<string, BringInAsked>();
++let generation = 0;
++forgetOnReaderChange(() => {
++  generation += 1;
++  asked.clear();
++});
++
++/**
++ * The title of an article of the reader's, off the shelf the `@` list reads,
++ * or null — including for an unread paper, which the list leaves out.
++ */
++async function shelfTitle(slug: string, openSlug: string): Promise<string | null> {
++  try {
++    return (await loadMentionCandidates(openSlug)).find((c) => c.slug === slug)?.title ?? null;
++  } catch {
++    return null;
++  }
++}
++
++/** What happened when this button last handed a chip over. */
++type Handed = { kind: "in" } | { kind: "refused"; message: string };
++
++export function BringIntoChat({
++  url,
++  title,
++  openSlug,
++  bringIn,
++  label,
++}: {
++  url: string;
++  /** The link's own words for the page, for the chip until the article has a title of its own. */
++  title?: string | undefined;
++  /** The article this conversation is about. */
++  openSlug: string;
++  bringIn: BringIn;
++  /** The button's words; *Bring into this chat* unless the row needs to say which page. */
++  label?: string | undefined;
++}) {
++  /* Quiet: an active job is polled every second wherever the reader is
++     (jobEngine.ts § When it polls), and this must not buy the idle poll for
++     every link under every answer. */
++  const queue = useJobs("quiet");
++  const [, bump] = useReducer((n: number) => n + 1, 0);
++  const key = urlKey(url);
++  const state = asked.get(key);
++  /* This button started the import, so it hands the chip over when it is done. */
++  const [pressed, setPressed] = useState(false);
++  const [handed, setHanded] = useState<Handed | null>(null);
++
++  /* Wake when the POST answers; every write to `asked` is a new record. */
++  useEffect(() => {
++    if (state?.kind !== "sending") return;
++    let live = true;
++    void state.wait.then(() => {
++      if (live) bump();
++    });
++    return () => {
++      live = false;
++    };
++  }, [state]);
++
++  const job = state?.kind === "queued" ? (queue.jobs.find((j) => j.id === state.jobId) ?? null) : null;
++  const view = describeBringIn(state, job, openSlug);
++
++  const hand = (slug: string, own: string | null) => {
++    const refusal = bringIn({ slug, title: own ?? (title?.trim() || hostOf(url)) });
++    setHanded(refusal === null ? { kind: "in" } : { kind: "refused", message: refusal });
++  };
++
++  const readySlug = view.kind === "ready" ? view.slug : null;
++  const readyTitle = view.kind === "ready" ? view.title : null;
++  // biome-ignore lint/correctness/useExhaustiveDependencies: once, when this button's own import becomes an article
++  useEffect(() => {
++    if (!pressed || readySlug === null) return;
++    setPressed(false);
++    hand(readySlug, readyTitle);
++  }, [pressed, readySlug]);
++  /* An import that ended any other way is no longer this button's to finish. */
++  const settledOtherwise = view.kind === "offer" || view.kind === "refused" || view.kind === "open";
++  useEffect(() => {
++    if (pressed && settledOtherwise) setPressed(false);
++  }, [pressed, settledOtherwise]);
++
++  const press = () => {
++    setHanded(null);
++    if (view.kind === "ready") {
++      hand(view.slug, view.title);
++      return;
++    }
++    setPressed(true);
++    const asOf = generation;
++    const wait = (async () => {
++      const started = await queue.add(url, { ownCopy: true });
++      /* An answer made for the previous reader must not refill the cleared map. */
++      if (asOf !== generation) return;
++      /* Read straight after the await: useJobs.ts § lastFailure. */
++      const why = started ? null : queue.lastFailure();
++      if (started && "article" in started) {
++        /* A repeat answers with the slug alone; the shelf has its title. */
++        const title = await shelfTitle(started.article, openSlug);
++        if (asOf !== generation) return;
++        asked.set(key, { kind: "have", slug: started.article, title });
++      }
++      else if (started && "id" in started) asked.set(key, { kind: "queued", jobId: started.id });
++      else if (why) asked.set(key, { kind: "refused", message: why });
++      /* Nothing to say (or a public copy, which `ownCopy` does not ask about):
++         put the button back rather than leave a dead end. */
++      else asked.delete(key);
++    })();
++    asked.set(key, { kind: "sending", wait });
++    bump();
++  };
++
++  if (handed?.kind === "in") {
++    return (
++      <span className="bring-in bring-in-done" role="status">
++        <Check size={13} aria-hidden="true" /> In the box below
++      </span>
++    );
++  }
++  const button = (
++    <Tooltip
++      placement="top"
++      content={<ControlTip head="Bring into this chat" what={BRING_IN_HOW} how="Nothing is sent until you ask your question." />}
++    >
++      <button type="button" className="bring-in-button" onClick={press} aria-description={BRING_IN_HOW}>
++        <ArrowDownToLine size={13} aria-hidden="true" />
++        {label ?? "Bring into this chat"}
++      </button>
++    </Tooltip>
++  );
++  const note = (text: string) => <span className="bring-in-note">{text}</span>;
++  switch (view.kind) {
++    case "offer":
++    case "ready":
++      return (
++        <span className="bring-in">
++          {button}
++          {handed?.kind === "refused"
++            ? note(handed.message)
++            : view.kind === "offer" && view.after
++              ? note(view.after)
++              : null}
++        </span>
++      );
++    case "working":
++      return (
++        <span className="bring-in" role="status">
++          <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" />
++          {note(view.line)}
++        </span>
++      );
++    case "open":
++      return <span className="bring-in">{note(OPEN_ALREADY)}</span>;
++    case "refused":
++      return (
++        <span className="bring-in" role="status">
++          {note(view.message)}
++        </span>
++      );
++  }
++}
+diff --git a/src/web/ChatPanel.tsx b/src/web/ChatPanel.tsx
+index eb1d59050..f04434b21 100644
+--- a/src/web/ChatPanel.tsx
++++ b/src/web/ChatPanel.tsx
+@@ -53,7 +53,7 @@
+  * ordered list's `start`, which is a number; and a heading's element name,
+  * clamped to h4–h6.
+  */
+-import { Fragment, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
++import { Fragment, type MutableRefObject, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+ import {
+   ArrowDown,
+   BookOpen,
+@@ -153,7 +153,9 @@ import { chatDraftsFor } from "./chat-draft.js";
+ import { rowTitle } from "./chat-list-row.js";
+ import { dictationReporter } from "./dictation-report.js";
+ import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
+-import { crossArticles, type CrossArticles } from "./citations.js";
++import { crossArticles, type CrossArticles, snippet } from "./citations.js";
++import { type BringIn, BringIntoChat } from "./BringIntoChat.js";
++import { pastedAddresses } from "./bring-in.js";
+ import { MentionChips, MentionPicker, useMentionPicker } from "./MentionPicker.js";
+ import type { MentionsToSend, PickedMention } from "./mentions.js";
+ import { readHref } from "./router.js";
+@@ -1627,6 +1629,17 @@ export function Conversation({
+      answers' citation chips (citations.ts § `crossArticles`). Built from the
+      server's list and the open article's blocks, never from an answer. */
+   const cross = useMemo(() => crossArticles(blocks, thread.mentioned, (s) => readHref(s)), [blocks, thread.mentioned]);
++  /* *Bring into this chat* under an answer hands its article to this
++     conversation's box, which keeps the ref while it is drawn (plan 261017e).
++     Typed Chat only: no other kind takes another article in. */
++  const bringInTo = useRef<BringIn | null>(null);
++  const bring = useMemo<BringTo | undefined>(
++    () =>
++      kind === "chat"
++        ? { openSlug: slug, into: (article) => bringInTo.current?.(article) ?? BOX_GONE }
++        : undefined,
++    [kind, slug],
++  );
+   const last = thread.messages.at(-1);
+   const chars = last?.text.length ?? 0;
+   const busy = last?.status === "pending";
+@@ -2121,6 +2134,7 @@ export function Conversation({
+                `settled()` becomes false. Keep the bin's place separately, as
+                the pencil does, so the row does not change width mid-answer. */
+             holdDeleteFrom={i > 0 && !speaking}
++            bring={bring}
+           />
+           {/* The guide's offers to save their reason or About you, each a
+               card they press (GuideSaveOffer.tsx, plan 261009q). */}
+@@ -2239,6 +2253,7 @@ export function Conversation({
+         continuesLive={thread.messages.length > 0}
+         blocks={blocks}
+         onJump={onJump}
++        bringInTo={bringInTo}
+       />
+     </ChatCommandsFor>
+   );
+@@ -2410,8 +2425,11 @@ export function Turn({
+   discards,
+   onDeleteFrom,
+   holdDeleteFrom = false,
++  bring,
+ }: {
+   message: ChatMessage;
++  /** Where *Bring into this chat* hands an article: typed Chat only (plan 261017e). */
++  bring?: BringTo | undefined;
+   /**
+    * The conversation's kind. Only Recall (`learn`) keeps an answer's last
+    * `Hint:` paragraph behind a button; every other kind draws it as written.
+@@ -2721,7 +2739,7 @@ export function Turn({
+            prose. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
+         <PassageLinks passages={message.passages} onJump={onJump} />
+       )}
+-      <WebSources citations={message.citations} />
++      <WebSources citations={message.citations} bring={bring} />
+       {message.status !== "pending" && (
+         <div className="chat-actions">
+           {message.text !== "" && (
+@@ -2906,7 +2924,37 @@ function AlsoReading({ mentioned }: { mentioned: readonly MentionedArticleView[]
+   );
+ }
+ 
+-export function WebSources({ citations }: { citations: Citation[] | undefined }) {
++/** Where a button under an answer hands an article (plan 261017e). */
++interface BringTo {
++  openSlug: string;
++  into: BringIn;
++}
++
++/** Said while the box's last question, with its chips, has not been accepted yet. */
++const MENTION_WAITING = "Wait a moment for your question to go, then bring this in.";
++
++/** Said if the conversation's box is not on screen to take the article. */
++const BOX_GONE = "Open this conversation's box to bring it in; the page is on your shelf now.";
++
++/** An address short enough for a button: its host and the start of its path. */
++function shortAddress(url: string): string {
++  const host = hostOf(url);
++  try {
++    const path = new URL(url).pathname.replace(/\/$/, "");
++    return path ? snippet(host + path, 40) : host;
++  } catch {
++    return host;
++  }
++}
++
++export function WebSources({
++  citations,
++  bring,
++}: {
++  citations: Citation[] | undefined;
++  /** *Bring into this chat* on each row: typed Chat only (plan 261017e). */
++  bring?: BringTo | undefined;
++}) {
+   const web = (citations ?? []).filter((c) => isWebUrl(c.url));
+   if (web.length === 0) return null;
+   return (
+@@ -2918,6 +2966,7 @@ export function WebSources({ citations }: { citations: Citation[] | undefined })
+             <a href={c.url} target="_blank" rel="noreferrer noopener">
+               {c.title?.trim() || hostOf(c.url)}
+             </a>
++            {bring && <BringIntoChat url={c.url} title={c.title} openSlug={bring.openSlug} bringIn={bring.into} />}
+           </li>
+         ))}
+       </ul>
+@@ -3191,6 +3240,7 @@ export function Composer({
+   continuesLive,
+   blocks,
+   onJump,
++  bringInTo,
+ }: {
+   slug: string;
+   /**
+@@ -3250,6 +3300,11 @@ export function Composer({
+   continuesLive?: boolean | undefined;
+   blocks?: ReadonlyMap<string, string> | undefined;
+   onJump?: ((id: BlockId) => void) | undefined;
++  /**
++   * Where this box puts its *Bring into this chat* hand-over, for the buttons
++   * under the conversation's answers (plan 261017e). Typed Chat only.
++   */
++  bringInTo?: MutableRefObject<BringIn | null> | undefined;
+ }) {
+   /* Seeded from the draft and owned here from then on. The words are kept
+      above (`drafts` in ChatPanel) because they have to outlive this component;
+@@ -3543,6 +3598,35 @@ export function Composer({
+     setText(next.value, "kept");
+     caretTo.current = next.caret;
+   };
++  /* **Bring into this chat** (plan 261017e): an article handed over from a
++     button — under an answer or under this box — joins the row as a pick from
++     the list would, its `@Short title ` at the end of the words. Typed Chat
++     only; the box registers it with the conversation for the buttons in the
++     transcript, and its own pasted-address buttons call it directly. */
++  const bringIn: BringIn = (article) => {
++    /* While a question with chips is on its way the row is that question's,
++       and the draft keeps none (Sol, plan 261017e F1). */
++    if (mentionWaiting) return MENTION_WAITING;
++    const text = latestText.current;
++    const next = mention.add(article, text);
++    if ("refusal" in next) return next.refusal;
++    if (next.value !== text) {
++      provenance.current = afterChange(provenance.current, next.value, "keyboard");
++      setText(next.value, "kept");
++    }
++    return null;
++  };
++  const pasted = kind === "chat" ? pastedAddresses(value) : [];
++  useLayoutEffect(() => {
++    if (bringInTo && kind === "chat") bringInTo.current = bringIn;
++  });
++  // biome-ignore lint/correctness/useExhaustiveDependencies: on unmount only — the latest box owns the ref while it is drawn
++  useEffect(
++    () => () => {
++      if (bringInTo && kind === "chat") bringInTo.current = null;
++    },
++    [],
++  );
+   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the caret moves once the picked title is in the box
+   useLayoutEffect(() => {
+     const el = box.current;
+@@ -3764,6 +3848,21 @@ export function Composer({
+         blocks={blocks}
+         onJump={onJump}
+       />}
++      {pasted.length > 0 && (
++        /* An address in the draft, kept for the conversation rather than read
++           for one answer (plan 261017e). */
++        <div className="bring-in-pasted">
++          {pasted.map((url) => (
++            <BringIntoChat
++              key={url}
++              url={url}
++              openSlug={slug}
++              bringIn={bringIn}
++              label={`Bring ${shortAddress(url)} into this chat`}
++            />
++          ))}
++        </div>
++      )}
+     </form>
+   );
+ }
+diff --git a/src/web/MentionPicker.tsx b/src/web/MentionPicker.tsx
+index 0375273df..2dedd93cb 100644
+--- a/src/web/MentionPicker.tsx
++++ b/src/web/MentionPicker.tsx
+@@ -38,10 +38,17 @@ import {
+   restoredMentions,
+   shortTitle,
+   withMention,
++  withMentionAtEnd,
+   withoutMention,
+ } from "./mentions.js";
+ import { articleTitleVoice, voiceClass } from "./voice.js";
+ 
++/** An article *Bring into this chat* hands the row: one of the reader's own, by slug. */
++export interface BroughtIn {
++  slug: string;
++  title: string;
++}
++
+ export interface MentionPickerState {
+   /** The list is on screen. While it is, Enter and Tab pick and Escape closes it. */
+   shown: boolean;
+@@ -66,6 +73,13 @@ export interface MentionPickerState {
+   hover(index: number): void;
+   /** Pick row `index`: the box's next text and caret, or null if nothing was picked. */
+   pick(index: number, value: string, caret: number): { value: string; caret: number } | null;
++  /**
++   * Add an article from outside the list — *Bring into this chat* (plan
++   * 261017e): its chip, and `@Short title ` at the end of the box. The box's
++   * next text, the same text when it is already in the row, or the sentence
++   * that says the row is full.
++   */
++  add(article: BroughtIn, value: string): { value: string } | { refusal: string };
+   /** Move or retire remembered inserted-title ranges after a reader edit. */
+   edit(before: string, after: string): void;
+   /**
+@@ -161,6 +175,23 @@ export function useMentionPicker(
+     return next;
+   };
+ 
++  /* The row as of the last write, not the last render: two imports finishing
++     in one render must not both pass the cap (Sol, plan 261017e F1). Every
++     write below goes through `setPicked`, so this is kept with it. */
++  const pickedNow = useRef(picked);
++  pickedNow.current = picked;
++  const add = (article: BroughtIn, text: string): { value: string } | { refusal: string } => {
++    const row = pickedNow.current;
++    if (row.some((m) => m.slug === article.slug)) return { value: text };
++    const refused = pickRefusal(row);
++    if (refused) return { refusal: refused };
++    const next = withMentionAtEnd(text, article.title);
++    const grown = [...row.map((m) => afterMentionEdit(m, text, next.value)), { ...article, insertedAt: next.at }];
++    pickedNow.current = grown;
++    setPicked(grown);
++    return { value: next.value };
++  };
++
+   const edit = (before: string, after: string) => {
+     setPicked((p) => p.map((m) => afterMentionEdit(m, before, after)));
+   };
+@@ -208,6 +239,7 @@ export function useMentionPicker(
+     },
+     hover: setActive,
+     pick,
++    add,
+     edit,
+     remove,
+     toSend,
+diff --git a/src/web/bring-in.ts b/src/web/bring-in.ts
+new file mode 100644
+index 000000000..a53e5238a
+--- /dev/null
++++ b/src/web/bring-in.ts
+@@ -0,0 +1,113 @@
++/**
++ * ***Bring into this chat*** — the pure half: which addresses in a draft get
++ * a button, and what a button says, given what was asked and where its import
++ * has got to. The button itself is BringIntoChat.tsx.
++ *
++ * A web page enters a conversation the one way an article does: it becomes
++ * one of the reader's own articles (the ordinary import, `POST /api/jobs`),
++ * then a chip in the composer's "Bringing in" row, exactly as an `@` pick
++ * (plan docs/plans/261012d-chat-at-mention-your-own-articles.md). Nothing is
++ * sent by the press; the reader's next question carries the chip. Plan
++ * docs/plans/261017e-bring-a-web-page-into-chat.md; Greg's 1A on q-madusw.
++ */
++import type { Job } from "../types.js";
++import { urlKey } from "../ingest.js";
++import { webLinks } from "../urls.js";
++import { worthRetrying } from "../messages.js";
++import { MENTIONS_MAX_PER_QUESTION } from "../chat-mention-limits.js";
++
++/**
++ * What was asked about one address, in this tab. A module map holds these,
++ * keyed on `urlKey`, so an import outlives the button that started it.
++ */
++export type BringInAsked =
++  | { kind: "sending"; wait: Promise<void> }
++  | { kind: "queued"; jobId: string }
++  /** On the reader's shelf already, so the add was free; its title if the shelf could say. */
++  | { kind: "have"; slug: string; title: string | null }
++  | { kind: "refused"; message: string };
++
++/** What the button draws. */
++export type BringInView =
++  /** Press to import, with the last refusal under it when there was one worth another go. */
++  | { kind: "offer"; after: string | null }
++  | { kind: "working"; line: string }
++  /** An article of the reader's: a press adds the chip at once, nothing spent. */
++  | { kind: "ready"; slug: string; title: string | null }
++  /** The address is the article this conversation is about. */
++  | { kind: "open" }
++  | { kind: "refused"; message: string };
++
++/** The line while no step is running — before the first, and between two. */
++export const ADDING = "Adding it to your shelf…";
++
++/** What the press costs, said before it. billing.md. */
++export const BRING_IN_HOW =
++  "Adds the page to your shelf, which uses one article from your allowance, then brings it into this conversation. Free if it is on your shelf already.";
++
++/** Said when the address is the open article. */
++export const OPEN_ALREADY = "This is the article this conversation is about.";
++
++/**
++ * The button, as arithmetic: what was asked, the job's latest snapshot (by
++ * id), and the open article's slug. `describeAdd` in ProseHoverCard.tsx is the
++ * same decision for the link hover card, and the reasons for each branch are
++ * written there; what differs is that a finished import is `ready`, since a
++ * chip needs only the slug.
++ */
++export function describeBringIn(
++  asked: BringInAsked | undefined,
++  job: Job | null,
++  openSlug: string,
++): BringInView {
++  if (!asked) return { kind: "offer", after: null };
++  const ready = (slug: string, title: string | null): BringInView =>
++    slug === openSlug ? { kind: "open" } : { kind: "ready", slug, title };
++  switch (asked.kind) {
++    case "sending":
++      return { kind: "working", line: ADDING };
++    case "have":
++      return ready(asked.slug, asked.title);
++    case "refused":
++      return worthRetrying(asked.message)
++        ? { kind: "offer", after: asked.message }
++        : { kind: "refused", message: asked.message };
++    case "queued":
++      if (!job) return { kind: "working", line: ADDING };
++      switch (job.status) {
++        case "queued":
++        case "running": {
++          const step = job.steps.find((s) => s.status === "running");
++          return { kind: "working", line: step?.label ?? ADDING };
++        }
++        /* `done`, not the article opening early: a mention is refused until
++           the import has published (`admitMentions`, src/chat-mentions.ts). */
++        case "done":
++          return ready(job.slug, job.title ?? null);
++        /* The sentence and no button: a fresh add is not a retry of this job
++           (ProseHoverCard.tsx § describeAdd, Sol 2026-09-05 P1-2). */
++        case "error":
++          return job.error ? { kind: "refused", message: job.error } : { kind: "offer", after: null };
++        case "cancelled":
++          return { kind: "offer", after: null };
++      }
++  }
++}
++
++/**
++ * The web addresses in a draft that get a button: `http(s)` only, as Chat's
++ * own links are found (`webLinks`), each once by `urlKey`, in order, and no
++ * more than one question can bring in.
++ */
++export function pastedAddresses(draft: string): string[] {
++  const seen = new Set<string>();
++  const out: string[] = [];
++  for (const link of webLinks(draft)) {
++    const key = urlKey(link.url);
++    if (seen.has(key)) continue;
++    seen.add(key);
++    out.push(link.url);
++    if (out.length === MENTIONS_MAX_PER_QUESTION) break;
++  }
++  return out;
++}
+diff --git a/src/web/mentions.ts b/src/web/mentions.ts
+index ce37e3852..8b48ce403 100644
+--- a/src/web/mentions.ts
++++ b/src/web/mentions.ts
+@@ -205,6 +205,16 @@ export function withMention(
+   return { value: value.slice(0, trigger.at) + insert + after, caret: trigger.at + insert.length };
+ }
+ 
++/**
++ * The box once an article is brought in from outside the `@` list (*Bring
++ * into this chat*, plan 261017e): `@Short title ` at the end, after one space
++ * if the words do not already end in one. `at` is where the `@` landed.
++ */
++export function withMentionAtEnd(value: string, title: string): { value: string; at: number } {
++  const at = value === "" || /\s$/.test(value) ? value.length : value.length + 1;
++  return { value: value.padEnd(at, " ") + mentionText(title), at };
++}
++
+ /** What picking `title` writes into the box: `@Short title `, trailing space and all. */
+ export function mentionText(title: string): string {
+   return `@${shortTitle(title)} `;
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index e53ded00d..70f450c2b 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -1225,6 +1225,46 @@ svg.band-waiting-ghost { flex: none; }
+ }
+ .chat-sources a { color: var(--ink-faint); }
+ .chat-sources a:hover { color: var(--highlight-ink); }
++/* A source's row: the link, then *Bring into this chat* (plan 261017e). Wraps
++   on a phone rather than pushing the button off the band. */
++.chat-sources li {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  column-gap: 0.6rem;
++}
++
++/* ---- *Bring into this chat* (BringIntoChat.tsx, plan 261017e) ---- */
++.bring-in {
++  display: inline-flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 0.3rem;
++  font-family: var(--font-ui);
++  font-size: 0.8rem;
++  color: var(--ink-faint);
++}
++.bring-in-button {
++  display: inline-flex;
++  align-items: center;
++  gap: 0.25rem;
++  padding: 0.05rem 0.5rem;
++  border: 1px solid var(--rule-strong);
++  border-radius: 999px;
++  background: var(--page);
++  color: var(--ink-faint);
++  font: inherit;
++  cursor: pointer;
++}
++.bring-in-button:hover { color: var(--highlight-ink); border-color: currentColor; }
++.bring-in-done { color: var(--ink); }
++/* The draft's addresses, under the box: one button each. */
++.bring-in-pasted {
++  flex-basis: 100%;
++  display: flex;
++  flex-wrap: wrap;
++  gap: 0.3rem 0.6rem;
++}
+ 
+ /* ---- the composer ---- */
+ .chat-composer {
+diff --git a/tests/bring-in.test.ts b/tests/bring-in.test.ts
+new file mode 100644
+index 000000000..05af7868d
+--- /dev/null
++++ b/tests/bring-in.test.ts
+@@ -0,0 +1,111 @@
++/**
++ * ***Bring into this chat***, the pure half (src/web/bring-in.ts) — plan
++ * docs/plans/261017e-bring-a-web-page-into-chat.md § Stage 1.
++ */
++import { describe, expect, it } from "vitest";
++import type { Job } from "../src/types.js";
++import { ADDING, describeBringIn, pastedAddresses } from "../src/web/bring-in.js";
++
++function job(status: Job["status"], extra: Partial<Job> = {}): Job {
++  return {
++    id: "j1",
++    ownerId: "o" as Job["ownerId"],
++    slug: "smith-2024",
++    url: "https://example.com/smith",
++    steps: [
++      { name: "fetch", label: "Fetching the page", status: status === "running" ? "running" : "done" },
++    ],
++    status,
++    createdAt: "2026-10-17T10:00:00.000Z",
++    ...extra,
++  } as Job;
++}
++
++describe("describeBringIn", () => {
++  it("offers the press before anything was asked", () => {
++    expect(describeBringIn(undefined, null, "open")).toEqual({ kind: "offer", after: null });
++  });
++
++  it("says it is adding while the POST is out, and before the engine has the job", () => {
++    expect(describeBringIn({ kind: "sending", wait: Promise.resolve() }, null, "open")).toEqual({
++      kind: "working",
++      line: ADDING,
++    });
++    expect(describeBringIn({ kind: "queued", jobId: "j1" }, null, "open")).toEqual({ kind: "working", line: ADDING });
++  });
++
++  it("names the running step", () => {
++    expect(describeBringIn({ kind: "queued", jobId: "j1" }, job("running"), "open")).toEqual({
++      kind: "working",
++      line: "Fetching the page",
++    });
++  });
++
++  it("is ready with the job's slug and title once the import is done", () => {
++    expect(describeBringIn({ kind: "queued", jobId: "j1" }, job("done", { title: "Smith" }), "open")).toEqual({
++      kind: "ready",
++      slug: "smith-2024",
++      title: "Smith",
++    });
++  });
++
++  it("is ready at once for a page already on the shelf", () => {
++    expect(describeBringIn({ kind: "have", slug: "smith-2024", title: "Smith" }, null, "open")).toEqual({
++      kind: "ready",
++      slug: "smith-2024",
++      title: "Smith",
++    });
++  });
++
++  it("says so when the address is the open article", () => {
++    expect(describeBringIn({ kind: "have", slug: "open", title: null }, null, "open")).toEqual({ kind: "open" });
++    expect(describeBringIn({ kind: "queued", jobId: "j1" }, job("done", { slug: "open" }), "open")).toEqual({
++      kind: "open",
++    });
++  });
++
++  it("shows a failed job's sentence with no button", () => {
++    expect(describeBringIn({ kind: "queued", jobId: "j1" }, job("error", { error: "The page would not load." }), "o"))
++      .toEqual({ kind: "refused", message: "The page would not load." });
++  });
++
++  it("offers again after a cancel", () => {
++    expect(describeBringIn({ kind: "queued", jobId: "j1" }, job("cancelled"), "o")).toEqual({
++      kind: "offer",
++      after: null,
++    });
++  });
++
++  it("offers again under a refusal worth another go, and not under one that is not", () => {
++    expect(describeBringIn({ kind: "refused", message: "Something went wrong." }, null, "o")).toEqual({
++      kind: "offer",
++      after: "Something went wrong.",
++    });
++  });
++});
++
++describe("pastedAddresses", () => {
++  it("finds web addresses in order", () => {
++    expect(pastedAddresses("compare https://a.example/x with http://b.example/y please")).toEqual([
++      "https://a.example/x",
++      "http://b.example/y",
++    ]);
++  });
++
++  it("gives each page once, however it is spelled", () => {
++    expect(pastedAddresses("https://a.example/x and https://A.example/x")).toHaveLength(1);
++  });
++
++  it("stops at three, the most one question can bring in", () => {
++    const four = ["a", "b", "c", "d"].map((h) => `https://${h}.example/p`).join(" ");
++    expect(pastedAddresses(four)).toHaveLength(3);
++  });
++
++  it("ignores words, and anything that is not http(s)", () => {
++    expect(pastedAddresses("see example.com and ftp://x.example/f and mailto:a@b.c")).toEqual([]);
++  });
++
++  it("does not take the question mark after an address", () => {
++    expect(pastedAddresses("what about https://a.example/x?")).toEqual(["https://a.example/x"]);
++  });
++});
+diff --git a/tests/bring-into-chat.test.tsx b/tests/bring-into-chat.test.tsx
+new file mode 100644
+index 000000000..35598b81f
+--- /dev/null
++++ b/tests/bring-into-chat.test.tsx
+@@ -0,0 +1,230 @@
++// @vitest-environment jsdom
++/**
++ * ***Bring into this chat*** in the composer — plan
++ * docs/plans/261017e-bring-a-web-page-into-chat.md § Stage 1.
++ *
++ * - An article handed to the box joins the "Bringing in" row, its
++ *   `@Short title ` at the end of the words, once, and the row's cap holds.
++ * - The question then carries it, as a pick from the `@` list would.
++ * - An address in the draft gets a button; the guide's box does not.
++ * - Pressing it for a page already on the shelf puts the chip in at once,
++ *   with the shelf's title, and asks for the reader's own copy.
++ */
++import { act, createElement, createRef, type MutableRefObject } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { SendHow } from "../src/web/ChatPanel.js";
++import type { BringIn } from "../src/web/BringIntoChat.js";
++
++const posted: unknown[] = [];
++/* Each POST waits on this when set, so a test can act before it answers. */
++let hold: Promise<void> | null = null;
++
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  return {
++    ...real,
++    apiFetch: async (url: string) =>
++      new Response(
++        JSON.stringify({
++          articles: String(url).includes("archived=1")
++            ? []
++            : [
++                {
++                  slug: "smith-2024",
++                  title: "Smith 2024, Replication",
++                  addedAt: "2026-10-01T10:00:00.000Z",
++                  url: "https://a.example/essay",
++                },
++              ],
++        }),
++        { status: 200, headers: { "content-type": "application/json" } },
++      ),
++  };
++});
++
++vi.mock("../src/web/useJobs.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/useJobs.js")>("../src/web/useJobs.js");
++  return {
++    ...real,
++    useJobs: () => ({
++      jobs: [],
++      add: async (url: string, options?: unknown) => {
++        posted.push({ url, options });
++        if (hold) await hold;
++        return { article: "smith-2024", repeat: true };
++      },
++      lastFailure: () => null,
++    }),
++  };
++});
++
++const { Composer } = await import("../src/web/ChatPanel.js");
++const { noteReader } = await import("../src/web/lib/reader-change.js");
++const { withMentionAtEnd } = await import("../src/web/mentions.js");
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++let host: HTMLDivElement;
++let root: Root;
++let sent: { question: string; how: SendHow | undefined }[];
++let into: MutableRefObject<BringIn | null>;
++
++function paint(kind: "chat" | "guide" = "chat", draft = ""): void {
++  act(() => {
++    root.render(
++      createElement(Composer, {
++        slug: "open-one",
++        keepAs: "chat:open-one:t",
++        onSend: (question: string, how?: SendHow) => {
++          sent.push({ question, how });
++        },
++        busy: false,
++        focusNonce: 0,
++        focused: { current: 0 },
++        draft,
++        onDraft: () => {},
++        kind,
++        bringInTo: into,
++      }),
++    );
++  });
++}
++
++const box = () => host.querySelector<HTMLTextAreaElement>("textarea.chat-input") as HTMLTextAreaElement;
++const chips = () => [...host.querySelectorAll(".mention-chip")].map((c) => c.textContent);
++
++async function settle(): Promise<void> {
++  await act(async () => {
++    for (let i = 0; i < 8; i += 1) await Promise.resolve();
++    await new Promise((go) => setTimeout(go, 0));
++  });
++}
++
++function hand(slug: string, title: string): string | null {
++  let out: string | null = null;
++  act(() => {
++    out = (into.current as BringIn)({ slug, title });
++  });
++  return out;
++}
++
++beforeEach(() => {
++  sent = [];
++  posted.length = 0;
++  hold = null;
++  into = createRef<BringIn | null>() as MutableRefObject<BringIn | null>;
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++describe("withMentionAtEnd", () => {
++  it("puts the mention at the end, after one space", () => {
++    expect(withMentionAtEnd("", "Smith")).toEqual({ value: "@Smith ", at: 0 });
++    expect(withMentionAtEnd("compare", "Smith")).toEqual({ value: "compare @Smith ", at: 8 });
++    expect(withMentionAtEnd("compare ", "Smith")).toEqual({ value: "compare @Smith ", at: 8 });
++  });
++});
++
++describe("an article handed to the box", () => {
++  it("joins the row once, with its @ text at the end, and goes with the question", () => {
++    paint("chat", "compare with");
++    expect(hand("smith-2024", "Smith 2024, Replication")).toBeNull();
++    expect(box().value).toBe("compare with @Smith 2024, Replication ");
++    expect(chips()).toEqual(["Smith 2024, Replication"]);
++
++    expect(hand("smith-2024", "Smith 2024, Replication")).toBeNull();
++    expect(box().value).toBe("compare with @Smith 2024, Replication ");
++    expect(chips()).toHaveLength(1);
++
++    act(() => {
++      box().form?.requestSubmit();
++    });
++    expect(sent[0]?.how?.mentions?.slugs).toEqual(["smith-2024"]);
++  });
++
++  it("is refused past the most one question can bring in", () => {
++    paint();
++    for (const s of ["a", "b", "c"]) expect(hand(s, s.toUpperCase())).toBeNull();
++    expect(hand("d", "D")).toMatch(/3 articles/);
++    expect(chips()).toHaveLength(3);
++  });
++
++  it("holds the cap when two arrive before the box is drawn again", () => {
++    paint();
++    hand("a", "A");
++    hand("b", "B");
++    let last: (string | null)[] = [];
++    act(() => {
++      last = [(into.current as BringIn)({ slug: "c", title: "C" }), (into.current as BringIn)({ slug: "d", title: "D" })];
++    });
++    expect(last[0]).toBeNull();
++    expect(last[1]).toMatch(/3 articles/);
++    expect(chips()).toEqual(["A", "B", "C"]);
++    expect(box().value).toBe("@A @B @C ");
++  });
++
++  it("takes its words out again with the chip's ×", () => {
++    paint("chat", "compare with");
++    hand("smith-2024", "Smith 2024, Replication");
++    act(() => {
++      host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click();
++    });
++    expect(box().value).toBe("compare with ");
++    expect(chips()).toEqual([]);
++  });
++
++  it("is not offered by the guide's box", () => {
++    paint("guide");
++    expect(into.current).toBeNull();
++  });
++});
++
++describe("an address in the draft", () => {
++  it("gets a button in Chat and none in the guide", () => {
++    paint("chat", "what about https://a.example/essay");
++    expect(host.querySelector(".bring-in-pasted")?.textContent).toContain("Bring a.example/essay into this chat");
++    act(() => root.unmount());
++    root = createRoot(host);
++    paint("guide", "what about https://a.example/essay");
++    expect(host.querySelector(".bring-in-pasted")).toBeNull();
++  });
++
++  it("brings a page already on the shelf in at once, by its shelf title, asking for the reader's own copy", async () => {
++    paint("chat", "what about https://a.example/essay");
++    act(() => {
++      host.querySelector<HTMLButtonElement>(".bring-in-pasted .bring-in-button")?.click();
++    });
++    await settle();
++    expect(posted).toEqual([{ url: "https://a.example/essay", options: { ownCopy: true } }]);
++    expect(chips()).toEqual(["Smith 2024, Replication"]);
++    expect(box().value).toBe("what about https://a.example/essay @Smith 2024, Replication ");
++  });
++
++  it("forgets an answer that arrives after the reader changed", async () => {
++    noteReader("reader-a");
++    let answer: () => void = () => {};
++    hold = new Promise((go) => {
++      answer = go;
++    });
++    paint("chat", "see https://b.example/other");
++    act(() => {
++      host.querySelector<HTMLButtonElement>(".bring-in-pasted .bring-in-button")?.click();
++    });
++    act(() => noteReader("reader-b"));
++    answer();
++    await settle();
++    expect(chips()).toEqual([]);
++    /* Drawn afresh, the button offers again rather than showing reader A's outcome. */
++    act(() => root.unmount());
++    root = createRoot(host);
++    paint("chat", "see https://b.example/other");
++    expect(host.querySelector(".bring-in-pasted .bring-in-button")).not.toBeNull();
++  });
++});

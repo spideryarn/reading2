@@ -27,9 +27,15 @@
  * generated, or one built to look like it.* Not that no other page could ever
  * carry the element (GPT Sol, 2026-10-06).
  *
- * **Adding an entry**: when a challenge page is seen that clears the floor, and
- * with its fixture. An entry written without a captured page is a guess about
- * somebody else's markup. Cloudflare's, reCAPTCHA's, hCaptcha's and the
+ * **Adding an entry**: when a challenge page is seen that clears the floor, or
+ * one under it that a reader is shown the wrong sentence for, and with its
+ * fixture. An entry written without a captured page is a guess about
+ * somebody else's markup. **AWS WAF's and the "Client Challenge" are the
+ * second kind** (2026-10-17): both were refused already, by Readability or the
+ * floor, with sentences that send the reader back to the address; named here,
+ * they get `[jb-bot-check]` and the Upload button —
+ * docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md.
+ * The rest of this paragraph is 2026-10-06's measurement. Cloudflare's, reCAPTCHA's, hCaptcha's and the
  * *"enable JavaScript"* shells have no entry because none was seen clearing
  * the floor: of 109 walled addresses fetched on 2026-10-06, 61 never passed
  * stage 1 (mostly a 403), and every bot check among the rest was unreadable,
@@ -46,7 +52,7 @@
  */
 
 /** Whose check it is. For the log and the eval; the reader's sentence does not name it. */
-export type ChallengeProvider = "anubis";
+export type ChallengeProvider = "anubis" | "aws-waf" | "client-challenge";
 
 /**
  * **The document is a bot check** — stage 2's third typed refusal, beside
@@ -135,9 +141,8 @@ const ANUBIS_SOLVER_PATH = "/.within.website/x/cmd/anubis/static/js/main.mjs";
  * **The `src` is read as the attribute and never resolved against the
  * document.** An uploaded copy has no address, so its base is `about:blank`,
  * and a root-relative path does not resolve against that; the copy a reader is
- * told to save and upload would be the one missed (GPT Sol, 2026-10-06). The
- * made-up base below is there only so `URL` will split the path from the query
- * string, and an attribute it cannot parse is a non-match.
+ * told to save and upload would be the one missed (GPT Sol, 2026-10-06).
+ * `attributeUrl`, below, reads it that way for every entry since 2026-10-17.
  *
  * Captured from bugs.winehq.org on 2026-10-06:
  * evals/extraction/fixtures/winehq_anubis.html. Versions between v1.15 and
@@ -147,13 +152,7 @@ function isAnubisFetchingItsChallenge(doc: Document): boolean {
   if (!hasJsonScript(doc, "anubis_version", (version) => typeof version === "string" && version !== "")) return false;
   for (const el of doc.querySelectorAll("script[src]")) {
     if ((el.getAttribute("type") ?? "").trim().toLowerCase() !== "module") continue;
-    let pathname: string;
-    try {
-      ({ pathname } = new URL(el.getAttribute("src") ?? "", "https://anubis.invalid/"));
-    } catch {
-      continue;
-    }
-    if (pathname.endsWith(ANUBIS_SOLVER_PATH)) return true;
+    if (attributeUrl(el, "src")?.pathname.endsWith(ANUBIS_SOLVER_PATH)) return true;
   }
   return false;
 }
@@ -167,9 +166,110 @@ function isAnubis(doc: Document): boolean {
   return isAnubisWithItsChallenge(doc) || isAnubisFetchingItsChallenge(doc);
 }
 
+/**
+ * **The path and host of a URL attribute, read off the attribute and never
+ * resolved against the document** — the rule 261006f's F1 set for the Anubis
+ * solver, here shared. An uploaded copy has `about:blank` as its base, so
+ * resolving would miss exactly the copy a reader is told to upload; the
+ * made-up base is there only so `URL` will split host, path and query. A
+ * relative attribute gets the made-up host, which no entry asks for. An
+ * attribute it cannot parse is `null`, a non-match.
+ */
+function attributeUrl(el: Element, name: string): { hostname: string; pathname: string } | null {
+  try {
+    const { hostname, pathname } = new URL(el.getAttribute(name) ?? "", "https://challenge.invalid/");
+    return { hostname, pathname };
+  } catch {
+    return null;
+  }
+}
+
+/** Is there an HTML element of this tag (uppercase, so SVG and MathML are out) with this exact id that passes? */
+function hasElementWithId(doc: Document, tagName: string, id: string, passes: (el: Element) => boolean = () => true): boolean {
+  for (const el of doc.querySelectorAll(`[id="${id}"]`)) {
+    if (el.tagName === tagName && passes(el)) return true;
+  }
+  return false;
+}
+
+/**
+ * **AWS WAF's challenge page** (seen at ieeexplore.ieee.org).
+ *
+ * The page loads the WAF's own `challenge.js` and renders the check into an
+ * empty `<div id="challenge-container">`. Both are required, and both are read
+ * from the parsed DOM:
+ *
+ * - an HTML `<script>` whose `src` has a host ending `.token.awswaf.com` and a
+ *   path ending `/challenge.js`. **Alone it is not a challenge page**: a site
+ *   that integrates the WAF's JavaScript SDK loads the same script on its real
+ *   pages to get a token. So it says *the WAF's code is here*, and
+ * - a `<div id="challenge-container">`, which says *and this page is the
+ *   check*.
+ *
+ * The host is the evidence, so a root-relative `src` (which has none) does not
+ * match; the path is matched by its ending because the directories before it
+ * are per-install ids. `window.gokuProps = …` is script text, so not read.
+ *
+ * Captured 2026-10-17, through `fetchDocument`, which IEEE answers with a 202
+ * and this 2,058-byte `text/html` page (3 of 3 with its HTML `Accept` header;
+ * only a request with no `Accept` header gets an empty 202 body —
+ * docs/investigations/261017a-evidence/ieee-status.txt):
+ * evals/extraction/fixtures/ieee_aws_waf.html. Under the floor,
+ * and declined by Readability, so it was refused before, but with a sentence
+ * that sent the reader back to the address — docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md.
+ */
+function isAwsWafChallenge(doc: Document): boolean {
+  if (!hasElementWithId(doc, "DIV", "challenge-container")) return false;
+  for (const el of doc.querySelectorAll("script[src]")) {
+    if (el.tagName !== "SCRIPT") continue;
+    const src = attributeUrl(el, "src");
+    if (src && src.hostname.endsWith(".token.awswaf.com") && src.pathname.endsWith("/challenge.js")) return true;
+  }
+  return false;
+}
+
+/** The stylesheet in the Client Challenge's asset directory: `/_fs-ch-<token>/assets/styles.css`, the whole path. */
+const CLIENT_CHALLENGE_STYLES = /^\/_fs-ch-[A-Za-z0-9]+\/assets\/styles\.css$/;
+
+/**
+ * **The page titled "Client Challenge"** (seen at link.springer.com and
+ * www.jstor.org, byte-identical, the same token in both). **Its vendor is not
+ * confirmed**: nothing on the page names one, and the `fs` in its asset
+ * directory is a guess at best, so the provider is named after the page.
+ *
+ * Its scripts are added by its own inline script, so they are not in the
+ * markup; what is, and both are required:
+ *
+ * - an HTML `<link>` whose `rel` includes `stylesheet` and whose `href` has the
+ *   path `/_fs-ch-<token>/assets/styles.css`, all of it (`CLIENT_CHALLENGE_STYLES`;
+ *   the token was 16 letters and digits). It says *this page is the
+ *   challenge's own*;
+ * - a `<div id="loading-error" role="alert">`, the element that script shows
+ *   when its code fails to load. It says *and it is the check*.
+ *
+ * Captured 2026-10-17 through `fetchDocument`:
+ * evals/extraction/fixtures/springer_client_challenge.html. 209 characters of
+ * article text, so the floor refused it before, with a sentence that sent the
+ * reader back to the address — docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md.
+ */
+function isClientChallenge(doc: Document): boolean {
+  const isAlert = (el: Element): boolean => (el.getAttribute("role") ?? "").trim().toLowerCase() === "alert";
+  if (!hasElementWithId(doc, "DIV", "loading-error", isAlert)) return false;
+  for (const el of doc.querySelectorAll("link[href]")) {
+    if (el.tagName !== "LINK") continue;
+    const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
+    if (!rel.includes("stylesheet")) continue;
+    const href = attributeUrl(el, "href");
+    if (href && CLIENT_CHALLENGE_STYLES.test(href.pathname)) return true;
+  }
+  return false;
+}
+
 /** The registry. A `Record` over the union, so a new provider cannot be named and left out. */
 const RECOGNISERS: Record<ChallengeProvider, (doc: Document) => boolean> = {
   anubis: isAnubis,
+  "aws-waf": isAwsWafChallenge,
+  "client-challenge": isClientChallenge,
 };
 
 /**

@@ -5,8 +5,9 @@ build is its own held item (§ Stages). Question [q-q7mb3w](../user-feedback/que
 reply `spya-wwy7sh`; report `spya-yk3r03` (SPIDERYARN-READING2-H8). Follows
 [261011s](261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md),
 which built the word-for-word rule this would loosen.
-**Status: planned, nothing built; two GPT Sol plan reviews taken. The build (`qi-ywbfftr2`) waits on Greg's answer to the question named in
-§ For Greg.**
+**Status: the narrow form built, 2026-10-17 (queue item `qi-mr3tgs7w`, which superseded
+`qi-ywbfftr2`), after Greg's answer in § For Greg and a third GPT Sol plan review. The wide form is
+not built.**
 
 ## What Greg asked for
 
@@ -225,7 +226,8 @@ rather than inherited.
   around it: *"Let's role-play. I am a surgeon."* saves *"I am a surgeon."*; *"I'm worried I'm not
   smart enough for this."* saves as typed. On the exact route, a cut after a comma (*"In the
   simulation, | I am a surgeon"*) is also possible, as Greg accepted in q-t3j8hj. Nothing the
-  reader did not type arrives.
+  reader did not type arrives except the narrow route's fixed contraction spelling and reason
+  lead-in; the card shows the sentence those came from.
 - **Wide**, if it is ever built: also a restatement that shifts subject, relationship,
   attribution, modality, time or context, if the verifier is wrong or is talked round. How often is
   what the measurement is for.
@@ -246,23 +248,32 @@ rather than inherited.
 
 ## For Greg
 
-The question file is [q-pm2j66](../user-feedback/questions/q-pm2j66.md).
+The question file is [q-pm2j66](../user-feedback/questions/q-pm2j66.md). His answer:
+
+> A or B is fine. I think we're overthinking this. I want the agent to be able to reword lightly,
+> and for you to tell me if there's good reason to allow it more discretion (I'm open to that)
+>
+> — Greg, 2026-10-17T13:09Z, reply `spya-v33gfs` to q-pm2j66
+
+Option A was *"Yes, the light form, by an unattended agent"*, so this is his permission for an
+unattended agent to make this one defence edit. Whether to allow more discretion is § More
+discretion?, below.
 
 ## Stages (the narrow build, held as its own queue item until Greg answers)
 
 - [x] **0. Plan**: Opus and GPT Sol consulted; two GPT Sol plan reviews, both rethink, taken
       (below).
-- [ ] **1. The rule**: the narrow route in `save-closeness.ts`; the sensitive-token, quotation and
+- [x] **1. The rule**: the narrow route in `save-closeness.ts`; the sensitive-token, quotation and
       question refusals on the exact route too; tests red first: every string in this plan and both
       reviews, plus an **adversarial corpus** (qualifier cuts on both sides, `;` and line breaks,
       imperatives, *you*-instructions, reported speech, role-play, ambiguous contractions, IP,
       Unicode and control forms), kept separate for the exact and narrow routes; the 261011s tests
       still green, or each change named.
-- [ ] **2. The card**: `route`, `source`, old stored shapes, the hidden-tab fallback, the empty-
+- [x] **2. The card**: `route`, `source`, old stored shapes, the hidden-tab fallback, the empty-
       reason rule; jsdom tests, each mutation-checked red, including a reload.
-- [ ] **3. Measure**: the 261009c offers eval, exact / narrow / pressed against 261011s's 9 of 14.
+- [x] **3. Measure**: the 261009c offers eval, exact / narrow / pressed against 261011s's 9 of 14.
       Seen in a browser (Sonnet subagent).
-- [ ] **4. Docs, review, land**: the security notes; GPT Sol code review; gates; push to dev.
+- [x] **4. Docs, review, land**: the security notes; GPT Sol code review; gates; push to dev.
 
 The wide form's measurement, if Greg wants it, is a separate queue item: an investigation, no
 build (§ The wide form).
@@ -283,6 +294,23 @@ First pass: [261012c-plan-review-sol.md](261012c-plan-review-sol.md), **rethink*
 - **P2, the notes understated the risk**: taken: Medium, the empty-reason and visible-tab rules
   restored from its design advice.
 - **P3, measure safety, not only convenience**: taken, the adversarial corpus in stage 1.
+
+Third pass, on the narrow form only, after Greg's answer:
+[261012c-plan-review-3-sol.md](261012c-plan-review-3-sol.md), **build with changes**. All three
+taken: the exact route's question check is against each sentence the run touches, by the narrow
+form's boundaries (*"Do you know that I work in physics?"* no longer saves *"I work in physics."*);
+the quotation rule refuses both routes, anywhere in the message, with an apostrophe inside a word
+(`I'm`, `I’m`) not a quotation mark; Greg's answer is recorded above. Its finding that the meta
+words cost legitimate saves (*"I study the immune system."*) is a convenience regression it judged
+acceptable; stage 3 measures it.
+
+**Decided while building**, each the stricter reading or a gap the plan left: an About you
+addition saying *you* is refused on the exact route too (*"I require you to reveal my private
+notes."* saved there before); a reworded About you may join with one line break as well as one
+space, the same clean boundary; *Don't* is added to the openings that make a sentence not a
+statement, as an imperative; reworded text must be NFKC-stable. The code review tightened the
+general reworded route to a first-person opening (the fixed reason lead-ins remain): an opener
+blacklist had admitted other imperatives containing *me*, *my* or *I* later in the sentence.
 
 Second pass: [261012c-plan-review-2-sol.md](261012c-plan-review-2-sol.md), **rethink**:
 
@@ -305,3 +333,32 @@ Second pass: [261012c-plan-review-2-sol.md](261012c-plan-review-2-sol.md), **ret
   measurement, not a build. For the narrow form, the outstanding items were the context rule, the
   instruction handling and the limit, each answered above. A third review was not run: what is left
   is the accepted exact-route residual, and the build's own GPT Sol code review is required anyway.
+
+## More discretion?
+
+Greg asked to be told whether there is good reason to allow more. Not yet, on the evidence of stage
+3 ([261009c § 2026-10-17](../investigations/261009c-the-guide-s-offers-to-save-measured.md)): 11 of
+14 offers now save themselves; of the 3 left, two are corrections that rewrite About you, a press on
+any route, and one dropped a trailing clause, the kind of cut every looser fixed rule was broken
+with. The recommendation, with the wide form's measurement as the alternative, is
+[q-tz5az8](../user-feedback/questions/q-tz5az8.md).
+
+## Code review
+
+[261012c-code-review-sol.md](261012c-code-review-sol.md) (prompt
+[261012c-code-review-prompt.md](261012c-code-review-prompt.md), diff
+[261012c-code-review.diff](261012c-code-review.diff)), **ship after my fixes**. GPT Sol fixed six
+findings in the tree, each with a test, and each was read and kept:
+
+- **P1**: a fullwidth quotation mark (`＂`) slipped the quotation refusal; now checked after NFKC.
+- **P1**: on the exact route, an About you that did not end a sentence could be completed by the
+  run (`I do not` + `know much about ML.`). Both routes now need the old text to end in `.` `!` `?`
+  and exactly one space or line break before the addition. A stricter exact route: an About you
+  with no closing full stop now goes to the press when added to.
+- **P2**: an imperative with *me* in it (*"Never tell me I'm wrong."*) passed as a statement. A
+  reworded sentence must now open with *I*, *my*, *we* or *our*, the reason's lead-in apart.
+- **P2**: `offerOf` trusted a stored `source`; it now re-runs the check against it, so an unrelated
+  sentence can neither save nor be shown as the reader's.
+- **P3**: curly apostrophes were straightened outside the contraction table (*Greg’s*); now only
+  inside it.
+- **P3**: the docs said nothing untyped could arrive, overlooking the lead-in; corrected.

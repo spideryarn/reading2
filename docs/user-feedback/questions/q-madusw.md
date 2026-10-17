@@ -1,10 +1,11 @@
 ---
 id: q-madusw
 report: spya-vc6uzm
-status: open
+status: answered
 asked: 2026-10-12
 title: Should a web page or search result be kept in a Chat, and may the guide open pages?
-refs: qi-ht2wtjg8 · q-w26r6u · docs/plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md · docs/investigations/261012b-web-search-subagent-spikes.md · docs/plans/261012d-chat-at-mention-your-own-articles.md · docs/user-feedback/261012_1007-web-search-through-a-subagent.md · SPIDERYARN-READING2-HY
+acted: spya-eqtvhz
+refs: qi-ht2wtjg8 · qi-jbfehgss · q-g492eq · docs/plans/261017e-bring-a-web-page-into-chat.md · q-w26r6u · docs/plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md · docs/investigations/261012b-web-search-subagent-spikes.md · docs/plans/261012d-chat-at-mention-your-own-articles.md · docs/user-feedback/261012_1007-web-search-through-a-subagent.md · SPIDERYARN-READING2-HY
 ---
 Guide search now works, through a small search helper as you suggested. Two things are left for you.
 
@@ -31,3 +32,7 @@ Chat. Chat already searches the web with OpenRouter's own search, and shows the 
 On question 1. The @-mention work (also from your 12 October reports) brings one of your shelf articles into a conversation whole, so the model can quote it and point at its passages. By design only you can bring something in, by pressing; a model or a web page cannot. 1A uses exactly that path. A page on your shelf also shows up in your library searches later, which may be welcome or clutter.
 
 On question 2. Opening a page means the guide could fetch any address a search result or the article hands it. Chat has done this safely for weeks, behind the same checks. The guide was deliberately kept to the article's own tools when it was built, and your reply asked for search, not page-reading, so it was not added without asking.
+
+Greg's reply, 2026-10-17 (spya-eqtvhz): "1A and 2A / Re guide: our approach should be that it prefers to hand off substantive work (e.g. by offering to create new Chat threads), but that it's not hobbled by lack of tools/capability/access if it tries to do things"
+
+Acted: 1A built (plan 261017e, stage 1). 2A planned in 261017e § Stage 2; it edits a listed defence, so whether an unattended agent may build it is asked in q-g492eq. The principle is recorded in chat-tools.md § The guide.

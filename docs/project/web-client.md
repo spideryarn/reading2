@@ -67,6 +67,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
 | [`src/web/CrossArticleRef.tsx`](../../src/web/CrossArticleRef.tsx) | a block id in **another** of the reader's articles, one chat brought in with `@`: a link built from the server's slug, never `BlockRef`'s same-article jump — [chat-tools.md § Bringing in another of your articles](chat-tools.md#bringing-in-another-of-your-articles-with-) |
 | [`src/web/mentions.ts`](../../src/web/mentions.ts) + [`MentionPicker.tsx`](../../src/web/MentionPicker.tsx) | the `@` picker in chat's composer: the reader's own articles (shelf and archived), where an `@` starts, and the "Bringing in" chips. An ARIA combobox on the textarea, after `TagEditor`'s; no library (Ariakit is the named fallback, [261012d](../plans/261012d-chat-at-mention-your-own-articles.md#the-library-question)) |
+| [`src/web/bring-in.ts`](../../src/web/bring-in.ts) + [`BringIntoChat.tsx`](../../src/web/BringIntoChat.tsx) | *Bring into this chat*: a web link under a Chat answer, or an address in the draft, imported through `useJobs().add` (`ownCopy`) and handed to the composer's "Bringing in" row with `useMentionPicker().add`. [261017e](../plans/261017e-bring-a-web-page-into-chat.md) |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the files under [`src/web/styles/`](../../src/web/styles/). Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
@@ -208,6 +209,11 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   `applyThreshold`** — "show the items above this score". The FAQ, the Glossary and
   Citations use the component; Quotes, Search and Debate draw the same row for themselves, and
   share only `applyThreshold`.
+- **`src/web/StopRange.tsx` § `StopRange`, with `src/web/threshold.ts` § `thresholdStops`** — the
+  range input inside every numeric threshold slider (the five above bar Debate's word levels): it
+  moves only to the values that change the list and ticks each one under the track. A new
+  threshold slider uses it rather than a bare `<input type="range">`
+  ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
   the URL.
 - **`src/web/lib/SidewaysScrollBox.tsx` § `SidewaysScrollBox`, `useScrollBox`** — the box a wide

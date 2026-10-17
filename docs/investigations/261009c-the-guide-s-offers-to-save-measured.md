@@ -132,3 +132,22 @@ prints `NOW` or `press` per offer. Two runs each, $0.95 in all:
   article still drew no offer.
 
 v5 ships. Results: `evals/guide/results/offers-v4-typed.json`, `offers-v5-typed.json`.
+
+## 2026-10-17: the light rewording (plan 261012c)
+
+[Plan 261012c](../plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md)
+adds a second route to `savesAtOnce`: one whole sentence the reader typed, changed only by a fixed
+contraction, the first letter's case, the closing mark and, for a reason, *it's for* → *Preparing
+for*. Both routes now also refuse quotation marks, questions, links and markup, meta words, and an
+About you addition saying *you*. The runner prints `NOW`, `NOW-reworded` or `press`. Two runs, $0.43:
+
+- **v6-reworded**: **18/18** fields right, **11 of 14** offers saved themselves (10 exact, 1
+  reworded: *"I am a historian of science, not an ML person."* from *"I'm a historian…"*), against 9
+  of 14 at v5. The three left to the press were right to be: two corrections that rewrite what About
+  you held (a press on any route, since a save at once only appends), and one that dropped a
+  trailing clause (*"…not an AI person, so go easy on the technical bits"* offered without its
+  second half). No offer was refused by the new shared refusals. The hostile article still drew no
+  offer.
+
+So on this corpus a looser rule could gain at most one offer in fourteen: the dropped clause.
+Results: `evals/guide/results/offers-v6-reworded.json`.

@@ -1,9 +1,10 @@
 ---
 id: q-pm2j66
 report: spya-yk3r03
-status: open
+status: answered
 asked: 2026-10-12
 title: May an unattended agent build B, the guide saving a lightly reworded sentence of yours without a press?
+acted: spya-v33gfs
 refs: follows q-q7mb3w (reply spya-wwy7sh) · qi-wj98rygd (this doc work) · qi-ywbfftr2 (the build, held) · docs/plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md · docs/plans/261012c-plan-review-sol.md · docs/plans/261012c-plan-review-2-sol.md · docs/user-feedback/261011_0139-the-guide-saves-your-profile-in-your-words.md · SPIDERYARN-READING2-H8 · src/save-closeness.ts
 ---
 You chose B on q-q7mb3w: the guide may save a rewording of what you typed to About you or Why you're reading, without your press. Nothing is built yet, because this loosens a safety catch, and an agent working with nobody watching may not loosen one on a reply alone. Working it out, the only rewording a fixed rule can safely allow is very light. Real rewording would need a second AI to check it, and that check has to be tested before anyone builds it.
@@ -33,3 +34,7 @@ What is left. A planted instruction in an article can choose which of your own s
 The wider form, in B. GPT Sol designed it and judged it "a fallible semantic check, not a provenance guarantee". It also said the details of that second AI are the safety catch itself and are not defined yet, so it should be measured before anyone is asked to build it, watched or not.
 
 What would decide it. Whether the light form is worth having on its own. And whether you want the wider form tested, at some AI cost, to see if the rewording you asked for can be made safe enough.
+
+Greg's reply, 2026-10-17T13:09Z (spya-v33gfs): "A or B is fine. I think we're overthinking this. I want the agent to be able to reword lightly, and for you to tell me if there's good reason to allow it more discretion (I'm open to that)"
+
+Acted on 2026-10-17: the light form built (queue item qi-mr3tgs7w, plan 261012c). Whether to allow more discretion is asked in q-tz5az8.

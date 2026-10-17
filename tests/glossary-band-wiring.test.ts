@@ -266,7 +266,7 @@ describe("the threshold wiring", () => {
     /* An unscored item is shown without being promoted, so the verb would be a
        small lie in the one place this feature has to be honest. */
     for (const panel of [thresholdSlider, quotesPanel, searchPanel]) {
-      expect(panel).toMatch(/aria-valuetext=\{`[^`]*showing \$\{count\}/);
+      expect(panel).toMatch(/valueText=\{`[^`]*showing \$\{count\}/);
     }
   });
 });

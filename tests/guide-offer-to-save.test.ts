@@ -156,11 +156,26 @@ describe("what it returns", () => {
 
     it("marks an offer quoted from the message the reader typed, and does not let the model claim it saved", async () => {
       const out = await runTool("offer_to_save", { field: "reason", text: "For journal club next week." }, typed("it's for journal club next week"));
-      expect(out.offer).toEqual({ field: "purpose", text: "For journal club next week.", basis: null, now: true });
+      expect(out.offer).toEqual({ field: "purpose", text: "For journal club next week.", basis: null, now: true, route: "exact" });
       expect(out.content).toMatch(/the page will save them itself/);
       expect(out.content).toMatch(/say nothing about saving these words/i);
       expect(out.content).not.toMatch(/nothing is saved unless/i);
       expect(out.settles).toBe(true);
+    });
+
+    /* Plan 261012c: one whole sentence they typed, its spelling tidied. */
+    it("marks a light rewording of one of their sentences, with that sentence", async () => {
+      const out = await runTool("offer_to_save", { field: "reason", text: "Preparing for my journal club." }, typed("Hello. it's for my journal club"));
+      expect(out.offer).toEqual({
+        field: "purpose",
+        text: "Preparing for my journal club.",
+        basis: null,
+        now: true,
+        route: "reworded",
+        source: "it's for my journal club",
+      });
+      expect(out.content).toMatch(/with only their spelling tidied, so the page will save them itself/);
+      expect(out.content).not.toMatch(/word for word/);
     });
 
     it("does not mark a close paraphrase", async () => {

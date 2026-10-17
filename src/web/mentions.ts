@@ -205,6 +205,16 @@ export function withMention(
   return { value: value.slice(0, trigger.at) + insert + after, caret: trigger.at + insert.length };
 }
 
+/**
+ * The box once an article is brought in from outside the `@` list (*Bring
+ * into this chat*, plan 261017e): `@Short title ` at the end, after one space
+ * if the words do not already end in one. `at` is where the `@` landed.
+ */
+export function withMentionAtEnd(value: string, title: string): { value: string; at: number } {
+  const at = value === "" || /\s$/.test(value) ? value.length : value.length + 1;
+  return { value: value.padEnd(at, " ") + mentionText(title), at };
+}
+
 /** What picking `title` writes into the box: `@Short title `, trailing space and all. */
 export function mentionText(title: string): string {
   return `@${shortTitle(title)} `;
