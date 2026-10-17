@@ -625,7 +625,7 @@ describe("the card says when the work is already an article here", () => {
     expect(a?.textContent).toBe("In your library · archived");
     expect(a?.getAttribute("href")).toBe("/read/old-spya-k2m3n4");
     expect(a?.getAttribute("target")).toBeNull();
-    expect(a?.title).toContain("the same DOI");
+    expect(a?.getAttribute("data-tip")).toContain("the same DOI");
     /* And nothing on a work that is not here. */
     hover(cite(1));
     expect(card()?.querySelector(".cite-here")).toBeNull();
@@ -640,7 +640,7 @@ describe("the card says when the work is already an article here", () => {
     hover(cite(0));
     const a = card()?.querySelector<HTMLAnchorElement>(".cite-here a");
     expect(a?.textContent).toBe("In your library");
-    expect(a?.title).toContain("we found for your uploaded PDF");
+    expect(a?.getAttribute("data-tip")).toContain("we found for your uploaded PDF");
 
     const shared: CitedWork = {
       ...TULVING,

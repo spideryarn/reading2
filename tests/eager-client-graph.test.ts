@@ -569,6 +569,9 @@ const SHARED_WITH_READER = [
   "src/tags.ts",
   "src/web/TitleEditor.tsx",
   "src/web/Tooltip.tsx",
+  /* Split out of Tooltip.tsx on 2026-10-17 (plan 261017g), one constant, so it
+     is shared exactly as Tooltip.tsx is. */
+  "src/web/tooltip-delay.ts",
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
   /* `reception-levels.ts` and `threshold.ts` were here from 2026-09-06 to

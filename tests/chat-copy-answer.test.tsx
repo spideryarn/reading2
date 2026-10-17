@@ -90,7 +90,7 @@ function clipboard(writeText: (t: string) => Promise<void>): string[] {
 
 function copy(): HTMLButtonElement {
   const found = [...host.querySelectorAll<HTMLButtonElement>("button.chat-icon")].find((b) =>
-    /Copy this answer|would not allow the copy/.test(b.getAttribute("title") ?? ""),
+    /Copy this answer|would not allow the copy/.test(b.getAttribute("data-tip") ?? ""),
   );
   if (!found) throw new Error(`No copy button. The turn reads: ${host.innerHTML}`);
   return found;
@@ -116,7 +116,7 @@ describe("the copy button under an answer", () => {
     paint();
     expect(icon()).toContain("lucide-copy");
     expect(said()).toBe("");
-    expect(copy().getAttribute("title")).toBe("Copy this answer");
+    expect(copy().getAttribute("data-tip")).toBe("Copy this answer");
     await press();
     expect(wrote).toEqual([ANSWER]);
     expect(icon()).toContain("clipboard-check");
@@ -135,7 +135,7 @@ describe("the copy button under an answer", () => {
     await press();
     expect(icon()).toContain("lucide-triangle-alert");
     expect(said()).toBe("Copy refused by the browser.");
-    expect(copy().getAttribute("title")).toBe(
+    expect(copy().getAttribute("data-tip")).toBe(
       "Your browser would not allow the copy — an insecure connection is the usual reason",
     );
     act(() => vi.advanceTimersByTime(1500));
@@ -143,7 +143,7 @@ describe("the copy button under an answer", () => {
     act(() => vi.advanceTimersByTime(200));
     expect(icon()).toContain("lucide-copy");
     expect(said()).toBe("");
-    expect(copy().getAttribute("title")).toBe("Copy this answer");
+    expect(copy().getAttribute("data-tip")).toBe("Copy this answer");
   });
 
   it("says so, without throwing, where there is no clipboard object", async () => {
@@ -181,7 +181,7 @@ describe("the copy button under an answer", () => {
     });
     expect(icon()).toContain("clipboard-check");
     expect(said()).toBe("Answer copied.");
-    expect(copy().getAttribute("title")).toBe("Copy this answer");
+    expect(copy().getAttribute("data-tip")).toBe("Copy this answer");
   });
 
   it("gives a second copy its own full 1.6 seconds", async () => {

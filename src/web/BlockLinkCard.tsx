@@ -297,6 +297,7 @@ function BlockLinkCard({
      Reader keeps this map stable across position renders, so this runs only
      when its source changes. The cross-references are a source too: a mark
      whose links were replaced may now resolve elsewhere, or nowhere. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `index`, `resolveXref` and `readingTimeFor` are the re-run triggers; `refresh` reads them through the spec ref.
   useEffect(() => {
     controls.refresh();
   }, [controls, index, resolveXref, readingTimeFor]);

@@ -328,7 +328,7 @@ async function enter(): Promise<void> {
 }
 
 async function press(title: string): Promise<void> {
-  const button = host.querySelector<HTMLButtonElement>(`button[title="${title}"]`);
+  const button = host.querySelector<HTMLButtonElement>(`button[data-tip="${title}"]`);
   if (!button) throw new Error(`no "${title}" button`);
   await act(async () => button.click());
   await addressSettles();

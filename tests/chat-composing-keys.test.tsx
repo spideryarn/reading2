@@ -202,7 +202,7 @@ describe("the composer while an answer is arriving", () => {
 describe("renaming a conversation", () => {
   function open(): HTMLInputElement {
     paint(null);
-    click('button[title="Rename this conversation"]');
+    click('button[data-tip="Rename this conversation"]');
     const box = renameBox();
     if (!box) throw new Error("the rename box did not open");
     type(box, "骨相");
@@ -234,7 +234,7 @@ describe("renaming a conversation", () => {
 describe("rewriting a question", () => {
   function open(): HTMLTextAreaElement {
     paint(THREAD.id);
-    click('button[title="Rewrite this question"]');
+    click('button[data-tip="Rewrite this question"]');
     const box = editBox();
     if (!box) throw new Error("the editor did not open");
     type(box, "主張は何ですか");
