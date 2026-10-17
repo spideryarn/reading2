@@ -1225,6 +1225,46 @@ svg.band-waiting-ghost { flex: none; }
 }
 .chat-sources a { color: var(--ink-faint); }
 .chat-sources a:hover { color: var(--highlight-ink); }
+/* A source's row: the link, then *Bring into this chat* (plan 261017e). Wraps
+   on a phone rather than pushing the button off the band. */
+.chat-sources li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.6rem;
+}
+
+/* ---- *Bring into this chat* (BringIntoChat.tsx, plan 261017e) ---- */
+.bring-in {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+.bring-in-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--page);
+  color: var(--ink-faint);
+  font: inherit;
+  cursor: pointer;
+}
+.bring-in-button:hover { color: var(--highlight-ink); border-color: currentColor; }
+.bring-in-done { color: var(--ink); }
+/* The draft's addresses, under the box: one button each. */
+.bring-in-pasted {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+}
 
 /* ---- the composer ---- */
 .chat-composer {

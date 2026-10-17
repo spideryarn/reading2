@@ -38,9 +38,16 @@ import {
   restoredMentions,
   shortTitle,
   withMention,
+  withMentionAtEnd,
   withoutMention,
 } from "./mentions.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
+
+/** An article *Bring into this chat* hands the row: one of the reader's own, by slug. */
+export interface BroughtIn {
+  slug: string;
+  title: string;
+}
 
 export interface MentionPickerState {
   /** The list is on screen. While it is, Enter and Tab pick and Escape closes it. */
@@ -66,6 +73,13 @@ export interface MentionPickerState {
   hover(index: number): void;
   /** Pick row `index`: the box's next text and caret, or null if nothing was picked. */
   pick(index: number, value: string, caret: number): { value: string; caret: number } | null;
+  /**
+   * Add an article from outside the list — *Bring into this chat* (plan
+   * 261017e): its chip, and `@Short title ` at the end of the box. The box's
+   * next text, the same text when it is already in the row, or the sentence
+   * that says the row is full.
+   */
+  add(article: BroughtIn, value: string): { value: string } | { refusal: string };
   /** Move or retire remembered inserted-title ranges after a reader edit. */
   edit(before: string, after: string): void;
   /**
@@ -161,6 +175,23 @@ export function useMentionPicker(
     return next;
   };
 
+  /* The row as of the last write, not the last render: two imports finishing
+     in one render must not both pass the cap (Sol, plan 261017e F1). Every
+     write below goes through `setPicked`, so this is kept with it. */
+  const pickedNow = useRef(picked);
+  pickedNow.current = picked;
+  const add = (article: BroughtIn, text: string): { value: string } | { refusal: string } => {
+    const row = pickedNow.current;
+    if (row.some((m) => m.slug === article.slug)) return { value: text };
+    const refused = pickRefusal(row);
+    if (refused) return { refusal: refused };
+    const next = withMentionAtEnd(text, article.title);
+    const grown = [...row.map((m) => afterMentionEdit(m, text, next.value)), { ...article, insertedAt: next.at }];
+    pickedNow.current = grown;
+    setPicked(grown);
+    return { value: next.value };
+  };
+
   const edit = (before: string, after: string) => {
     setPicked((p) => p.map((m) => afterMentionEdit(m, before, after)));
   };
@@ -208,6 +239,7 @@ export function useMentionPicker(
     },
     hover: setActive,
     pick,
+    add,
     edit,
     remove,
     toSend,
