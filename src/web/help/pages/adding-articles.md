@@ -1,7 +1,7 @@
 ---
 title: Adding an article
 summary: How to add an article from a web address or a file, and what to try when one will not come in.
-keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet new article stop cancel give up
+keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet bookmark save for spideryarn refused blocked bot check new article stop cancel give up
 related: shelf, plans, first-article
 ---
 
@@ -16,6 +16,17 @@ authors and abstract read; open one and press **Read this** when you want the wh
 
 You can also add a page from its address: go to `/add/` followed by the full URL, for example
 `spideryarn.com/add/https://example.com/essay`. That makes a bookmarklet easy.
+
+Some sites turn Spideryarn away but let you in. For those there is **Save for Spideryarn**, a
+bookmark that saves the page you are looking at as a web page file, which you then upload. You find
+it under the upload button when an article fails to come in for that reason: drag it to your
+browser's bookmarks bar (on a computer; phones and tablets usually have no bookmarks bar). On the
+article's page, click the bookmark, then upload the file it saved.
+
+It saves the page as you see it, so anything personal on it, such as your name in the site's menu,
+comes too; it leaves out the page's scripts and what you have typed into its boxes. The file itself
+is kept for you alone, even if you share the article. Its pictures may not come through, because
+they are fetched from the same site that turned us away.
 
 While an article is coming in, you see each stage tick past. **Keep a Spideryarn tab open until it
 finishes**: the work is driven by your browser, and if you close every tab it pauses until you come
