@@ -2384,6 +2384,14 @@ shelf to find its File button. Which failures count is `SUGGESTS_UPLOAD` in
 failed job stays on the shelf. Getting the page without the reader saving anything (an open-access
 copy, a bookmarklet, an extension) is Greg's call:
 [261015a](../plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md).
+Since 2026-10-17 the picker has a "Save for Spideryarn" bookmarklet under it
+([`SavePageBookmarklet.tsx`](../../src/web/SavePageBookmarklet.tsx), drawn only for a fine
+pointer): run on the publisher's page it saves the page as rendered as one UTF-8 `.html` file, with
+its addresses made absolute (in-page `#` links left alone) and what may be a credential removed
+(scripts other than maths and metadata, hidden and password inputs, typed values, CSRF meta), for
+the reader to upload here. It makes no request, so the
+upload path is unchanged ([`save-page-bookmarklet.ts`](../../src/web/save-page-bookmarklet.ts),
+[261017b](../plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md)).
 
 ## The one security check
 

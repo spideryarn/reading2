@@ -700,8 +700,19 @@ score.
 ### The bar's positions are the scores, not a grid
 
 `?bar=` keeps the glossary slider's four properties — the number and the count on screen, the foot
-line saying how many are hidden, and a reset — and it does **not** keep its continuous track. The
-stops are `barStops`: nothing, then every distinct `max(importance, striking)` the list contains.
+line saying how many are hidden, and a reset. The stops are `barStops`: every distinct
+`max(importance, striking)` the list contains, and the thumb moves only between them.
+The URL preserves that raw stop rather than rounding it to the displayed hundredth, so two close
+scores cannot make a drag reload on a different count. The number beside the slider stays at two
+decimals; the extra URL precision is state, not reader-facing copy.
+
+**Since 2026-10-17 every numeric threshold slider moves this way**, through `StopRange`, at Greg's
+request (*"I'd rather that, as I slide it, it jumps to the values that will affect the number of
+results shown"*). Until then this was the only one, and it did it with a track that was an index
+into the stops, so the stops sat evenly spaced whatever the scores were. Its track is now the score
+itself, `0` to the top stop, with a tick at each stop, so the ticks show where the scores bunch —
+[261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md).
+The history below is why this one got there first.
 
 That replaced a `0.05`-stepped slider after a cross-family review showed the continuous version could
 not keep its own promises, in three separate ways that are all the same way — a track whose positions

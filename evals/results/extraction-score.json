@@ -3052,9 +3052,9 @@
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.09252376352666135,
+        "value": 0.9498095853991522,
         "exercised": 180,
-        "basis": "26437 of 285732 own-text characters are the article region"
+        "basis": "26437 of 27834 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -3070,7 +3070,7 @@
       },
       "blockCleanliness": {
         "name": "blockCleanliness",
-        "value": 0.875,
+        "value": 1,
         "exercised": 1,
         "basis": "offending blocks against a budget of 40"
       }
@@ -3079,26 +3079,26 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 2360,
-        "detail": "2360 output node(s) each say what their own source element said"
+        "exercised": 215,
+        "detail": "215 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 2839,
-        "detail": "2839 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 301,
+        "detail": "301 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
     "placements": {
       "form": "provenance",
       "carriers": {
-        "direct": 2360,
+        "direct": 215,
         "descendant": 0,
         "ancestor": 0,
         "none": 0
       },
       "runs": {
-        "owner": 2839,
+        "owner": 301,
         "subtreeEarlier": 0,
         "subtreeOnly": 0,
         "page": 0,
@@ -3112,8 +3112,8 @@
     "article": {
       "chars": 26437,
       "recall": 1,
-      "precision": 0.09252376352666135,
-      "outputChars": 285732,
+      "precision": 0.9498095853991522,
+      "outputChars": 27834,
       "regionChars": 26437,
       "exercised": 180,
       "basis": "180 of 180 stamped region element(s) came back, holding 26437 of 26437 characters"
@@ -3121,13 +3121,7 @@
     "failures": [
       "kept excluded text: \"Leave a Reply\"",
       "kept excluded text: \"This entry was posted on\"",
-      "kept excluded text: \"Anyone who feels unjustly censored is welcome to the rest of the Internet.\"",
-      "block of 4141 chars exceeds maxBlockChars 4000",
-      "block of 4812 chars exceeds maxBlockChars 4000",
-      "block of 4927 chars exceeds maxBlockChars 4000",
-      "block of 5304 chars exceeds maxBlockChars 4000",
-      "block of 4054 chars exceeds maxBlockChars 4000",
-      "only 9.3% of the output is the declared article region (26437 of 285732 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
+      "kept excluded text: \"Anyone who feels unjustly censored is welcome to the rest of the Internet.\""
     ],
     "finding": {
       "assertionsHeld": false,
@@ -3137,11 +3131,10 @@
       },
       "regressions": [
         "exclusionPrecision",
-        "regionPrecision",
-        "blockCleanliness"
+        "regionPrecision"
       ],
       "articleChars": 26437,
-      "gistableChars": 343374,
+      "gistableChars": 33421,
       "articleRecall": 1
     },
     "exercised": true
@@ -3295,9 +3288,9 @@
       },
       "regionPrecision": {
         "name": "regionPrecision",
-        "value": 0.09388793057457365,
+        "value": 0.9525149743811792,
         "exercised": 180,
-        "basis": "26398 of 281165 own-text characters are the article region"
+        "basis": "26398 of 27714 own-text characters are the article region"
       },
       "structureFidelity": {
         "name": "structureFidelity",
@@ -3322,26 +3315,26 @@
       "attribution": {
         "name": "attribution",
         "passed": true,
-        "exercised": 1713,
-        "detail": "1713 output node(s) each say what their own source element said"
+        "exercised": 202,
+        "detail": "202 output node(s) each say what their own source element said"
       },
       "sourceOrder": {
         "name": "sourceOrder",
         "passed": true,
-        "exercised": 2191,
-        "detail": "2191 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+        "exercised": 288,
+        "detail": "288 text run(s) placed in source order; no DIRECTLY stamped node said twice"
       }
     },
     "placements": {
       "form": "provenance",
       "carriers": {
-        "direct": 1713,
+        "direct": 202,
         "descendant": 0,
         "ancestor": 0,
         "none": 0
       },
       "runs": {
-        "owner": 2191,
+        "owner": 288,
         "subtreeEarlier": 0,
         "subtreeOnly": 0,
         "page": 0,
@@ -3355,8 +3348,8 @@
     "article": {
       "chars": 26398,
       "recall": 0.9985247947951734,
-      "precision": 0.09388793057457365,
-      "outputChars": 281165,
+      "precision": 0.9525149743811792,
+      "outputChars": 27714,
       "regionChars": 26437,
       "exercised": 180,
       "basis": "175 of 180 stamped region element(s) came back, holding 26398 of 26437 characters"
@@ -3366,8 +3359,7 @@
       "kept excluded text: \"Anyone who feels unjustly censored is welcome to the rest of the Internet.\"",
       "structure blockquote: 0 against at least 2",
       "structure figure: 0 against at least 5",
-      "structure img: 0 against at least 5",
-      "only 9.4% of the output is the declared article region (26398 of 281165 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
+      "structure img: 0 against at least 5"
     ],
     "finding": {
       "assertionsHeld": false,
@@ -3381,7 +3373,7 @@
         "structureFidelity"
       ],
       "articleChars": 26398,
-      "gistableChars": 336981,
+      "gistableChars": 33285,
       "articleRecall": 0.9985247947951734
     },
     "exercised": true
@@ -3627,121 +3619,7 @@
   {
     "fixture": "aaronson",
     "arm": "region-padded-collage",
-    "tier": "manifest",
-    "metrics": {
-      "requiredRecall": {
-        "name": "requiredRecall",
-        "value": 1,
-        "exercised": 3,
-        "basis": "mustContain needles"
-      },
-      "exclusionPrecision": {
-        "name": "exclusionPrecision",
-        "value": 1,
-        "exercised": 3,
-        "basis": "named needles only — says nothing about junk nobody named"
-      },
-      "bodyPurity": {
-        "name": "bodyPurity",
-        "value": null,
-        "exercised": 0,
-        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
-      },
-      "articleRecall": {
-        "name": "articleRecall",
-        "value": 0.08053107387373756,
-        "exercised": 180,
-        "basis": "17 of 180 stamped region element(s) came back, holding 2129 of 26437 characters"
-      },
-      "regionPrecision": {
-        "name": "regionPrecision",
-        "value": 0.09742815302947098,
-        "exercised": 180,
-        "basis": "2129 of 21852 own-text characters are the article region"
-      },
-      "structureFidelity": {
-        "name": "structureFidelity",
-        "value": 1,
-        "exercised": 3,
-        "basis": "declared per-tag floors met"
-      },
-      "metadataExactness": {
-        "name": "metadataExactness",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared metadata fields matching exactly"
-      },
-      "blockCleanliness": {
-        "name": "blockCleanliness",
-        "value": 0.975,
-        "exercised": 1,
-        "basis": "offending blocks against a budget of 40"
-      }
-    },
-    "gates": {
-      "attribution": {
-        "name": "attribution",
-        "passed": true,
-        "exercised": 184,
-        "detail": "184 output node(s) each say what their own source element said"
-      },
-      "sourceOrder": {
-        "name": "sourceOrder",
-        "passed": true,
-        "exercised": 201,
-        "detail": "201 text run(s) placed in source order; no DIRECTLY stamped node said twice"
-      }
-    },
-    "placements": {
-      "form": "provenance",
-      "carriers": {
-        "direct": 184,
-        "descendant": 0,
-        "ancestor": 0,
-        "none": 0
-      },
-      "runs": {
-        "owner": 201,
-        "subtreeEarlier": 0,
-        "subtreeOnly": 0,
-        "page": 0,
-        "behind": 0,
-        "behindSubtree": 0,
-        "unplaceable": 0
-      },
-      "ownerlessStamped": 0
-    },
-    "assertionsPassed": false,
-    "article": {
-      "chars": 2129,
-      "recall": 0.08053107387373756,
-      "precision": 0.09742815302947098,
-      "outputChars": 21852,
-      "regionChars": 26437,
-      "exercised": 180,
-      "basis": "17 of 180 stamped region element(s) came back, holding 2129 of 26437 characters"
-    },
-    "failures": [
-      "block of 4141 chars exceeds maxBlockChars 4000",
-      "2129 characters of the article region came back (8.1% of 26437), under minArticleChars 25000",
-      "only 9.7% of the output is the declared article region (2129 of 21852 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
-    ],
-    "finding": {
-      "assertionsHeld": false,
-      "gates": {
-        "attribution": true,
-        "sourceOrder": true
-      },
-      "regressions": [
-        "articleRecall",
-        "regionPrecision",
-        "blockCleanliness"
-      ],
-      "articleChars": 2129,
-      "gistableChars": 26271,
-      "articleRecall": 0.08053107387373756
-    },
-    "exercised": true
+    "exercised": false
   },
   {
     "fixture": "aaronson",
@@ -3761,125 +3639,7 @@
   {
     "fixture": "aaronson",
     "arm": "region-padding-only",
-    "tier": "manifest",
-    "metrics": {
-      "requiredRecall": {
-        "name": "requiredRecall",
-        "value": 1,
-        "exercised": 3,
-        "basis": "mustContain needles"
-      },
-      "exclusionPrecision": {
-        "name": "exclusionPrecision",
-        "value": 0.3333333333333333,
-        "exercised": 3,
-        "basis": "named needles only — says nothing about junk nobody named"
-      },
-      "bodyPurity": {
-        "name": "bodyPurity",
-        "value": null,
-        "exercised": 0,
-        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
-      },
-      "articleRecall": {
-        "name": "articleRecall",
-        "value": 0.9997730453531036,
-        "exercised": 180,
-        "basis": "179 of 180 stamped region element(s) came back, holding 26431 of 26437 characters"
-      },
-      "regionPrecision": {
-        "name": "regionPrecision",
-        "value": 0.092695141667748,
-        "exercised": 180,
-        "basis": "26431 of 285139 own-text characters are the article region"
-      },
-      "structureFidelity": {
-        "name": "structureFidelity",
-        "value": 1,
-        "exercised": 3,
-        "basis": "declared per-tag floors met"
-      },
-      "metadataExactness": {
-        "name": "metadataExactness",
-        "value": null,
-        "exercised": 0,
-        "basis": "declared metadata fields matching exactly"
-      },
-      "blockCleanliness": {
-        "name": "blockCleanliness",
-        "value": 0.875,
-        "exercised": 1,
-        "basis": "offending blocks against a budget of 40"
-      }
-    },
-    "gates": {
-      "attribution": {
-        "name": "attribution",
-        "passed": true,
-        "exercised": 2334,
-        "detail": "2334 output node(s) each say what their own source element said"
-      },
-      "sourceOrder": {
-        "name": "sourceOrder",
-        "passed": true,
-        "exercised": 2810,
-        "detail": "2810 text run(s) placed in source order; no DIRECTLY stamped node said twice"
-      }
-    },
-    "placements": {
-      "form": "provenance",
-      "carriers": {
-        "direct": 2334,
-        "descendant": 0,
-        "ancestor": 0,
-        "none": 0
-      },
-      "runs": {
-        "owner": 2810,
-        "subtreeEarlier": 0,
-        "subtreeOnly": 0,
-        "page": 0,
-        "behind": 0,
-        "behindSubtree": 0,
-        "unplaceable": 0
-      },
-      "ownerlessStamped": 0
-    },
-    "assertionsPassed": false,
-    "article": {
-      "chars": 26431,
-      "recall": 0.9997730453531036,
-      "precision": 0.092695141667748,
-      "outputChars": 285139,
-      "regionChars": 26437,
-      "exercised": 180,
-      "basis": "179 of 180 stamped region element(s) came back, holding 26431 of 26437 characters"
-    },
-    "failures": [
-      "kept excluded text: \"This entry was posted on\"",
-      "kept excluded text: \"Anyone who feels unjustly censored is welcome to the rest of the Internet.\"",
-      "block of 4141 chars exceeds maxBlockChars 4000",
-      "block of 4812 chars exceeds maxBlockChars 4000",
-      "block of 4927 chars exceeds maxBlockChars 4000",
-      "block of 5304 chars exceeds maxBlockChars 4000",
-      "block of 4054 chars exceeds maxBlockChars 4000",
-      "only 9.3% of the output is the declared article region (26431 of 285139 own-text characters), under the corpus floor of 50% — the rest of it came from somewhere else on the page"
-    ],
-    "finding": {
-      "assertionsHeld": false,
-      "gates": {
-        "attribution": true,
-        "sourceOrder": true
-      },
-      "regressions": [
-        "regionPrecision",
-        "blockCleanliness"
-      ],
-      "articleChars": 26431,
-      "gistableChars": 342680,
-      "articleRecall": 0.9997730453531036
-    },
-    "exercised": true
+    "exercised": false
   },
   {
     "fixture": "aaronson",
@@ -13810,6 +13570,786 @@
   },
   {
     "fixture": "winehq-anubis",
+    "arm": "duplicate-paragraph",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "shipped",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) found in the source — the WEAK text form, no stamped output"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) in source order (WEAK text form)"
+      }
+    },
+    "placements": {
+      "form": "text",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [],
+    "finding": {
+      "assertionsHeld": true,
+      "gates": {
+        "attribution": null,
+        "sourceOrder": null
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 0,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "raw-body",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "this page is not an article and the extractor did not refuse it — it returned 0 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": null,
+        "sourceOrder": null
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 0,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "first-20-percent",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "article-plus-rail",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "restore-everything",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "this page is not an article and the extractor did not refuse it — it returned 0 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": null,
+        "sourceOrder": null
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 0,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "drop-every-short-block",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "needle-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "region-padded-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "drop-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "repeat-one-generated-node",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "reverse-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "region-padding-only",
+    "exercised": false
+  },
+  {
+    "fixture": "ieee-aws-waf",
+    "arm": "duplicate-paragraph",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "shipped",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 1,
+        "exercised": 1,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) found in the source — the WEAK text form, no stamped output"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 0,
+        "detail": "0 block(s) in source order (WEAK text form)"
+      }
+    },
+    "placements": {
+      "form": "text",
+      "carriers": {
+        "direct": 0,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 0,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": true,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [],
+    "finding": {
+      "assertionsHeld": true,
+      "gates": {
+        "attribution": null,
+        "sourceOrder": null
+      },
+      "regressions": [],
+      "articleChars": null,
+      "gistableChars": 0,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "raw-body",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0,
+        "exercised": 1,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 1,
+        "detail": "1 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 1,
+        "detail": "1 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "kept excluded text: \"A required part of this site\"",
+      "this page is not an article and the extractor did not refuse it — it returned 209 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": null
+      },
+      "regressions": [
+        "exclusionPrecision"
+      ],
+      "articleChars": null,
+      "gistableChars": 209,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "first-20-percent",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "article-plus-rail",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "restore-everything",
+    "tier": "manifest",
+    "metrics": {
+      "requiredRecall": {
+        "name": "requiredRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "mustContain needles"
+      },
+      "exclusionPrecision": {
+        "name": "exclusionPrecision",
+        "value": 0,
+        "exercised": 1,
+        "basis": "named needles only — says nothing about junk nobody named"
+      },
+      "bodyPurity": {
+        "name": "bodyPurity",
+        "value": null,
+        "exercised": 0,
+        "basis": "no gold — a page off the web cannot say what fraction of an output is the article"
+      },
+      "articleRecall": {
+        "name": "articleRecall",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "regionPrecision": {
+        "name": "regionPrecision",
+        "value": null,
+        "exercised": 0,
+        "basis": "no articleRegion declared — nobody has written down what the article is here"
+      },
+      "structureFidelity": {
+        "name": "structureFidelity",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared per-tag floors met"
+      },
+      "metadataExactness": {
+        "name": "metadataExactness",
+        "value": null,
+        "exercised": 0,
+        "basis": "declared metadata fields matching exactly"
+      },
+      "blockCleanliness": {
+        "name": "blockCleanliness",
+        "value": null,
+        "exercised": 0,
+        "basis": "offending blocks against a budget of 40"
+      }
+    },
+    "gates": {
+      "attribution": {
+        "name": "attribution",
+        "passed": true,
+        "exercised": 1,
+        "detail": "1 output node(s) each say what their own source element said"
+      },
+      "sourceOrder": {
+        "name": "sourceOrder",
+        "passed": null,
+        "exercised": 1,
+        "detail": "1 text run(s) placed in source order; no DIRECTLY stamped node said twice"
+      }
+    },
+    "placements": {
+      "form": "provenance",
+      "carriers": {
+        "direct": 1,
+        "descendant": 0,
+        "ancestor": 0,
+        "none": 0
+      },
+      "runs": {
+        "owner": 1,
+        "subtreeEarlier": 0,
+        "subtreeOnly": 0,
+        "page": 0,
+        "behind": 0,
+        "behindSubtree": 0,
+        "unplaceable": 0
+      },
+      "ownerlessStamped": 0
+    },
+    "assertionsPassed": false,
+    "article": {
+      "chars": null,
+      "recall": null,
+      "precision": null,
+      "outputChars": 0,
+      "regionChars": 0,
+      "exercised": 0,
+      "basis": "no articleRegion declared — nobody has written down what the article is here"
+    },
+    "failures": [
+      "kept excluded text: \"A required part of this site\"",
+      "this page is not an article and the extractor did not refuse it — it returned 209 characters as though they were one"
+    ],
+    "finding": {
+      "assertionsHeld": false,
+      "gates": {
+        "attribution": true,
+        "sourceOrder": null
+      },
+      "regressions": [
+        "exclusionPrecision"
+      ],
+      "articleChars": null,
+      "gistableChars": 209,
+      "articleRecall": null
+    },
+    "exercised": true
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "drop-every-short-block",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "needle-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "region-padded-collage",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "drop-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "repeat-one-generated-node",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "reverse-generated-nodes",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
+    "arm": "region-padding-only",
+    "exercised": false
+  },
+  {
+    "fixture": "springer-client-challenge",
     "arm": "duplicate-paragraph",
     "exercised": false
   },

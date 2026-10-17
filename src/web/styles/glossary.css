@@ -211,6 +211,30 @@
   cursor: pointer;
 }
 .gloss-gate-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+/* A faint tick under the track at every value that changes the list
+   (StopRange.tsx; Greg, 2026-10-17: *"little visual ticks on the slider that
+   show where within the spectrum such thresholds are"*). A native thumb's
+   centre runs from half a thumb in to half a thumb short of the far end, not
+   edge to edge, so the row is inset by half of `--gloss-gate-thumb` each side —
+   the width Chromium draws with `accent-color` and nothing else. Safari's and
+   Firefox's are within a few pixels, which is not worth redrawing the thumb in
+   three engines for. */
+.gloss-gate-track { --gloss-gate-thumb: 16px; }
+.gloss-gate-ticks {
+  position: relative;
+  height: 4px;
+  margin: 1px calc(var(--gloss-gate-thumb) / 2) 0;
+  pointer-events: none;
+}
+.gloss-gate-tick {
+  position: absolute;
+  top: 0;
+  left: calc(var(--at) * 100%);
+  width: 1px;
+  height: 100%;
+  margin-left: -0.5px;
+  background: var(--ink-faint);
+}
 /* Said in words, because a bar that is holding rows back looks exactly like a
    glossary that never had them — or a search that found nothing, or a debate
    nobody answered. Until 2026-09-03 this said when the bar had *divided*

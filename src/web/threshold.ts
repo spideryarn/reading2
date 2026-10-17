@@ -42,7 +42,7 @@
  * one result.
  *
  * What deliberately stays with each panel: the track (a data-derived maximum
- * next door, an index into real stops for quotes, a fixed 0–100 for search),
+ * next door, a raw-score scale for quotes, a fixed 0–100 for search),
  * the unit, and which noun the foot line uses. Those genuinely differ, and
  * unifying them would be the over-abstraction.
  *
@@ -98,9 +98,18 @@ export interface ThresholdResult<T> {
  *
  * Inclusive at the bar, because the number is printed on the row: a term
  * showing `0.30` that vanished at a threshold of `0.30` reads as a bug.
+ *
+ * **And inclusive by a hair below it**, for the same reason: a product such as
+ * `0.4 × 0.7` is `0.27999999999999997`, printed `0.28`, and its stop is `0.28`
+ * (`floorToGateStep` rounds the quotient before flooring). Compared exactly, it
+ * vanished at its own stop, which was then a stop that changed nothing — found
+ * in a real glossary by plan 261017f's browser check. The tolerance is the
+ * same `1e-9` scale `floorToGateStep` uses, far below any score's precision.
  */
+const SCORE_EPSILON = 1e-9;
+
 export function survivesThreshold(score: number | null | undefined, threshold: number): boolean {
-  return score == null || score >= threshold;
+  return score == null || score >= threshold - SCORE_EPSILON;
 }
 
 /**
@@ -256,4 +265,73 @@ export function canThreshold<T>(
     if (s != null && s < top) return true;
   }
   return false;
+}
+
+/* ------------------------------------------------------------ the stops --
+   **The threshold values at which the list on screen changes**, and how a
+   slider moves between them. Greg, 2026-10-17 (spya-t80rep): *"I'd rather
+   that, as I slide it, it jumps to the values that will affect the number of
+   results shown. And/or little visual ticks on the slider that show where
+   within the spectrum such thresholds are."* `StopRange.tsx` does both, and
+   these are its arithmetic.
+
+   The bar is inclusive (`survivesThreshold`), so the list at `t` is "everything
+   scoring at least `t`", and every `t` in `(sᵢ₋₁, sᵢ]` shows the same list.
+   **So the stops are the distinct scores themselves**, and each is the
+   canonical value of its list: at a stop, the printed threshold is the lowest
+   score on screen. There is no *synthetic* stop at 0; a genuine zero score is
+   retained. docs/plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md. */
+
+/**
+ * The stops, ascending and distinct. Unscored items survive every bar and so
+ * make none. `round` puts each score on the caller's URL grid —
+ * `floorToGateStep` for the 0.01 sliders — and must round **down**, so that an
+ * item always survives the stop its own score made.
+ */
+export function thresholdStops<T>(
+  items: readonly T[],
+  scoreOf: (item: T) => number | null | undefined,
+  round: (score: number) => number = (s) => s,
+): number[] {
+  const seen = new Set<number>();
+  for (const item of items) {
+    const s = scoreOf(item);
+    if (s != null) seen.add(round(s));
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * **One key press: the next value that changes the list**, up (`1`) or down
+ * (`-1`), or `value` itself if there is none that way.
+ *
+ * Down is the largest stop strictly below `value`. Up is subtler, because
+ * `value` is often between stops — a default, a link — and the list there is
+ * already the list of the next stop up. Going to that stop would change
+ * nothing, which is the whole complaint; so up goes to the stop after it.
+ */
+export function stepToStop(stops: readonly number[], value: number, direction: 1 | -1): number {
+  if (direction === -1) {
+    let below: number | undefined;
+    for (const s of stops) if (s < value) below = s;
+    return below ?? value;
+  }
+  const at = stops.findIndex((s) => s >= value);
+  if (at === -1) return value;
+  return stops[at + 1] ?? value;
+}
+
+/**
+ * The stop nearest a raw value — what a drag or a tap lands on. Nearest rather
+ * than "the next one in the direction of travel": a direction-based snap
+ * oscillates under a finger that has stopped (just past a stop reads as up, the
+ * snapped value then reads the same finger as down). A tie goes up. With no
+ * stops, the value as it came.
+ */
+export function nearestStop(stops: readonly number[], value: number): number {
+  let best: number | undefined;
+  for (const s of stops) {
+    if (best === undefined || Math.abs(s - value) <= Math.abs(best - value)) best = s;
+  }
+  return best ?? value;
 }

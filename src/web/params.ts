@@ -583,6 +583,13 @@ export const rankParam = createParser<QuoteRank>({
  * above, for the same reason. Absent means *nobody has touched this*, and the
  * panel resolves it to `QUOTE_BAR_DEFAULT`.
  *
+ * **The URL preserves the raw stop**, rather than rounding it to a hundredth.
+ * Quotes' stops are the model's scores and are deliberately not on a grid; two
+ * distinct stops can sit inside one hundredth. A lossy URL would let the thumb
+ * land on one stop and reload on another, changing both the count and the
+ * prose marks. The number printed beside the control is still rounded to two
+ * decimals; the URL is state, not display copy.
+ *
  * `replace` and debounced, exactly as `?gate=` is: a range input fires on every
  * pixel of a drag, browsers rate-limit history writes, and a Back button that
  * walked back through a drag one step at a time would be useless. Back should
@@ -591,9 +598,9 @@ export const rankParam = createParser<QuoteRank>({
 export const barParam = createParser<number>({
   parse: (v) => {
     const n = Number.parseFloat(v);
-    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? n : null;
   },
-  serialize: (v) => v.toFixed(2),
+  serialize: (v) => String(v),
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /**

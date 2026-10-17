@@ -1,0 +1,5 @@
+Review this plan, read-only: docs/plans/261017c-feedback-needs-a-decision-pager-at-the-foot-and-send-vs-close.md
+
+Code it changes: src/web/FeedbackEarlier.tsx (ThreadView, pagerStops, EarlierThreads), src/web/FeedbackDialog.tsx (the .fb-actions footers, ~line 1553), src/web/styles/feedback.css (.fb-actions, .fb-send, .fb-thread-nav, .fb-reply-send). Tests: tests/feedback-dialog.test.tsx. Docs: docs/project/feedback.md, docs/project/controls.md.
+
+Look for: product reasoning flaws against Greg's words; a11y problems with drawing the pager twice (two navs, live regions, focus after a footer press); whether the footer condition can disagree with the thread actually showing (EarlierThreads gates on choice, earlier.kind==="loaded", open, onEarlier; the dialog's threadOpen uses threadShowing); phone layout at 390px with the keyboard up; whether scroll-to-top on thread change has a pitfall (hidden panel, reopen, a reply send re-rendering). List findings by severity with file:line, and a one-line verdict at the end.

@@ -32,8 +32,10 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 
+import { challengeIn } from "../src/challenge-page.js";
 import {
   ChallengePage,
   MIN_ARTICLE_CHARS,
@@ -62,6 +64,33 @@ const winehq = bytes(WINEHQ.file);
 const PAGES = [
   { ...HAL, html: hal, chars: 1034 },
   { ...WINEHQ, html: winehq, chars: 1106 },
+] as const;
+
+/**
+ * **Two more providers since 2026-10-17**
+ * (docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md § Stage 1).
+ * Neither clears the floor: IEEE's AWS WAF page is declined by Readability and
+ * Springer's "Client Challenge" is too little text. They were refused before,
+ * with sentences that send the reader to the address rather than to Upload, so
+ * the rung that matters is that the bot check now wins, on every path. JSTOR's
+ * capture is byte-identical to Springer's (the same sha256), so it is not a
+ * third fixture.
+ */
+const IEEE = {
+  name: "ieee-aws-waf",
+  file: "ieee_aws_waf.html",
+  url: "https://ieeexplore.ieee.org/document/9069875",
+  provider: "aws-waf",
+} as const;
+const SPRINGER = {
+  name: "springer-client-challenge",
+  file: "springer_client_challenge.html",
+  url: "https://link.springer.com/article/10.1007/s10648-015-9348-9",
+  provider: "client-challenge",
+} as const;
+const OTHER_PAGES = [
+  { ...IEEE, html: bytes(IEEE.file) },
+  { ...SPRINGER, html: bytes(SPRINGER.file) },
 ] as const;
 
 /** Readability's own measure of an article — src/extract.ts § `visibleLength`. */
@@ -627,7 +656,7 @@ describe("precedence — the challenge wins over both older refusals", () => {
    `STEPS.extract` reads the document out of Storage, and this file runs in the
    `unit` lane, where Storage is deliberately unreachable (vitest.config.ts). */
 
-describe.each(PAGES)("rungs 4 and 5 — Candidate.refused for $name, with the floor held open", (PAGE) => {
+describe.each([...PAGES, ...OTHER_PAGES])("rungs 4 and 5 — Candidate.refused for $name, with the floor held open", (PAGE) => {
   const manifest = parseManifest(
     JSON.parse(readFileSync(path.join(FIXTURES, `${PAGE.name}.manifest.json`), "utf-8")),
     PAGE.name,
@@ -675,5 +704,253 @@ describe.each(PAGES)("rungs 4 and 5 — Candidate.refused for $name, with the fl
     });
     expect(card.failures).toEqual([]);
     expect(card.assertionsPassed).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------
+ * AWS WAF and the "Client Challenge", 2026-10-17 (261017b § Stage 1).
+ * Both pages are under the floor, so there is no "it was an article"
+ * counterfactual: before, they were refused with the older sentences, and
+ * the counterfactual is that each half taken out puts them back there.
+ * ------------------------------------------------------------------ */
+
+/** The two older refusals, one of which each of these pages got before it was recognised. */
+const isAnOlderRefusal = (e: unknown): boolean => e instanceof ReadabilityRefused || e instanceof TooLittleTextToRead;
+
+/** Not a bot check anywhere: no `ChallengePage` on either read path, or out of `runExtract`. */
+async function expectNoChallenge(html: string, url: string | null): Promise<void> {
+  expect(readArticle(html, url).refusal).not.toBeInstanceOf(ChallengePage);
+  expect(readArticleWithProvenance(html, url ?? "about:blank").refusal).not.toBeInstanceOf(ChallengePage);
+  expect(await thrownBy(html, url)).not.toBeInstanceOf(ChallengePage);
+}
+
+/** A real article over the floor, published on both read paths and by `runExtract`, with and without an address. */
+async function expectPublished(html: string, url: string): Promise<void> {
+  for (const u of [url, null]) {
+    const shipping = readArticle(html, u);
+    expect(shipping.refusal).toBeNull();
+    expect(measured(shipping.article?.textContent)).toBeGreaterThanOrEqual(MIN_ARTICLE_CHARS);
+    expect(readArticleWithProvenance(html, u ?? "about:blank").refusal).toBeNull();
+    expect(await thrownBy(html, u)).toBeNull();
+  }
+}
+
+/** The two elements each entry reads, as the captured pages write them; only the test reads bytes with a regex. */
+const WAF_SCRIPT = /<script src="https:\/\/[^"]*\.token\.awswaf\.com\/[^"]*\/challenge\.js"><\/script>/g;
+const WAF_CONTAINER = /<div id="challenge-container"><\/div>/g;
+const FS_STYLES = /<link href="\/_fs-ch-[A-Za-z0-9]+\/assets\/styles\.css" rel="stylesheet" \/>/g;
+const FS_ALERT = /<div id="loading-error" role="alert"/g;
+
+const WAF_SRC =
+  "https://f321f3b23f09.2a420fac.eu-central-1.token.awswaf.com/f321f3b23f09/7311181d7708/27944042042b/challenge.js";
+const wafScript = (src = WAF_SRC): string => `<script src="${src}"></script>`;
+const wafContainer = (tag = "div"): string => `<${tag} id="challenge-container"></${tag}>`;
+
+const FS_HREF = "/_fs-ch-1T1wmsGaOgGaSxcX/assets/styles.css";
+const fsStyles = (href = FS_HREF, rel = "stylesheet"): string => `<link href="${href}" rel="${rel}" />`;
+const fsAlert = (attrs = 'id="loading-error" role="alert"', tag = "div"): string =>
+  `<${tag} ${attrs} aria-live="polite">A required part of this site could not load.</${tag}>`;
+
+const escaped = (h: string): string => h.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+describe("AWS WAF and the Client Challenge — the captured pages", () => {
+  it.each(OTHER_PAGES)("refuses $file as a challenge of its own provider, on both read paths", ({ html, url, provider }) => {
+    for (const u of [url, null]) {
+      const shipping = readArticle(html, u).refusal;
+      expect(shipping).toBeInstanceOf(ChallengePage);
+      expect((shipping as ChallengePage).provider).toBe(provider);
+      const instrumented = readArticleWithProvenance(html, u ?? "about:blank").refusal;
+      expect(instrumented).toBeInstanceOf(ChallengePage);
+      expect((instrumented as ChallengePage).provider).toBe(provider);
+    }
+  });
+
+  it.each(OTHER_PAGES)(
+    "throws it out of runExtract for $file, fetched and as an upload with no address",
+    async ({ html, url, provider }) => {
+      for (const u of [url, null]) {
+        const err = await thrownBy(html, u);
+        expect(err).toBeInstanceOf(ChallengePage);
+        expect((err as ChallengePage).provider).toBe(provider);
+      }
+    },
+  );
+
+  it("wins over the older refusal each page would otherwise get, with and without an address", async () => {
+    /* IEEE's page is one Readability declines (no article at all); Springer's
+       is under the floor. Both older verdicts are still visible on the result,
+       and the bot check is what is reported and thrown. */
+    const [ieee, springer] = OTHER_PAGES;
+    for (const u of [ieee.url, null]) {
+      const r = readArticle(ieee.html, u);
+      expect(r.article).toBeNull();
+      expect(r.refusal).toBeInstanceOf(ChallengePage);
+      expect(await thrownBy(ieee.html, u)).toBeInstanceOf(ChallengePage);
+    }
+    for (const u of [springer.url, null]) {
+      const r = readArticle(springer.html, u);
+      expect(measured(r.article?.textContent)).toBeLessThan(MIN_ARTICLE_CHARS);
+      expect(r.refusal).toBeInstanceOf(ChallengePage);
+      expect(await thrownBy(springer.html, u)).toBeInstanceOf(ChallengePage);
+    }
+  });
+
+  it("each page carries exactly one of each element its entry reads", () => {
+    const [ieee, springer] = OTHER_PAGES;
+    expect(ieee.html.match(WAF_SCRIPT) ?? []).toHaveLength(1);
+    expect(ieee.html.match(WAF_CONTAINER) ?? []).toHaveLength(1);
+    expect(springer.html.match(FS_STYLES) ?? []).toHaveLength(1);
+    expect(springer.html.match(FS_ALERT) ?? []).toHaveLength(1);
+  });
+});
+
+describe("AWS WAF and the Client Challenge — the counterfactuals: each half taken out", () => {
+  const [ieee, springer] = OTHER_PAGES;
+  /* The alert keeps its text and loses only its id, so the page is otherwise the same. */
+  const lessScript = ieee.html.replace(WAF_SCRIPT, "");
+  const lessContainer = ieee.html.replace(WAF_CONTAINER, "");
+  const lessStyles = springer.html.replace(FS_STYLES, "");
+  const lessAlert = springer.html.replace(FS_ALERT, '<div id="loading-error-x" role="alert"');
+
+  it("each copy lost what it names and kept the other half", () => {
+    expect(lessScript).not.toContain("awswaf");
+    expect(lessScript).toContain('id="challenge-container"');
+    expect(lessContainer).toContain("token.awswaf.com");
+    expect(lessContainer).not.toContain("challenge-container");
+    expect(lessStyles).not.toContain("styles.css");
+    expect(lessStyles).toContain('id="loading-error" role="alert"');
+    expect(lessAlert).toContain(FS_HREF);
+    expect(lessAlert).not.toContain('id="loading-error"');
+  });
+
+  it.each([
+    { name: "IEEE less the WAF script", html: lessScript, url: ieee.url },
+    { name: "IEEE less the challenge container", html: lessContainer, url: ieee.url },
+    { name: "Springer less its stylesheet", html: lessStyles, url: springer.url },
+    { name: "Springer with the alert's id changed", html: lessAlert, url: springer.url },
+  ])("$name: not a bot check, and refused the old way", async ({ html, url }) => {
+    /* The registry itself, on the raw document, before either read path. */
+    expect(challengeIn(new JSDOM(html).window.document)).toBeNull();
+    for (const u of [url, null]) {
+      await expectNoChallenge(html, u);
+      expect(isAnOlderRefusal(await thrownBy(html, u))).toBe(true);
+    }
+  });
+});
+
+describe("AWS WAF — negative controls on a real article, and the positive beside them", () => {
+  const URL_ = "https://example.com/aws-waf";
+  const CONTROLS: { name: string; html: string }[] = [
+    /* A site that integrates AWS WAF's SDK loads challenge.js on its real pages,
+       which is why the container is required beside it. */
+    { name: "the WAF script alone", html: page({ head: wafScript() }) },
+    { name: "the container alone", html: page({ body: PROSE + wafContainer() }) },
+    {
+      name: "both, escaped, in a code sample",
+      html: page({ body: `${PROSE}<pre><code>${escaped(wafScript() + wafContainer())}</code></pre>` }),
+    },
+    {
+      name: "a link to the script, and the container",
+      html: page({ body: `${PROSE}<p><a href="${WAF_SRC}">the script</a></p>${wafContainer()}` }),
+    },
+    {
+      name: "the script's address in an inline script, no src",
+      html: page({ head: `<script>import("${WAF_SRC}")</script>`, body: PROSE + wafContainer() }),
+    },
+    {
+      name: "a host that only contains the WAF's",
+      html: page({ head: wafScript("https://x.token.awswaf.com.example.net/a/challenge.js"), body: PROSE + wafContainer() }),
+    },
+    {
+      name: "a host without the dot before token",
+      html: page({ head: wafScript("https://xtoken.awswaf.com/a/challenge.js"), body: PROSE + wafContainer() }),
+    },
+    {
+      name: "another awswaf host (the CAPTCHA API's)",
+      html: page({ head: wafScript("https://x.captcha.awswaf.com/a/challenge.js"), body: PROSE + wafContainer() }),
+    },
+    {
+      name: "a root-relative path, with no host",
+      html: page({ head: wafScript("/a/b/challenge.js"), body: PROSE + wafContainer() }),
+    },
+    {
+      name: "a path that goes past challenge.js",
+      html: page({ head: wafScript(`${WAF_SRC}.map`), body: PROSE + wafContainer() }),
+    },
+    {
+      name: "challenge.js only in the query string",
+      html: page({ head: wafScript("https://x.token.awswaf.com/a/jsapi.js?f=/challenge.js"), body: PROSE + wafContainer() }),
+    },
+    {
+      name: "a src that does not parse",
+      html: page({ head: wafScript("https://[x.token.awswaf.com/challenge.js"), body: PROSE + wafContainer() }),
+    },
+    { name: "the container's id on a span", html: page({ head: wafScript(), body: PROSE + wafContainer("span") }) },
+    { name: "an SVG script of that src", html: page({ body: `${PROSE}<svg>${wafScript()}</svg>${wafContainer()}` }) },
+  ];
+
+  it.each(CONTROLS)("$name", async ({ html }) => {
+    await expectPublished(html, URL_);
+  });
+
+  it.each([
+    { name: "as the captured page writes them", html: page({ head: wafScript(), body: PROSE + wafContainer() }) },
+    { name: "with the container first and the script after it", html: page({ body: PROSE + wafContainer() + wafScript() }) },
+  ])("and the same real article WITH both is refused — $name", async ({ html }) => {
+    await expectAChallenge(html, URL_);
+    await expectAChallenge(html, null);
+    expect((readArticle(html, null).refusal as ChallengePage).provider).toBe("aws-waf");
+  });
+});
+
+describe("the Client Challenge — negative controls on a real article, and the positive beside them", () => {
+  const URL_ = "https://example.com/client-challenge";
+  const CONTROLS: { name: string; html: string }[] = [
+    { name: "the stylesheet alone", html: page({ head: fsStyles() }) },
+    { name: "the alert alone", html: page({ body: PROSE + fsAlert() }) },
+    {
+      name: "both, escaped, in a code sample",
+      html: page({ body: `${PROSE}<pre><code>${escaped(fsStyles() + fsAlert())}</code></pre>` }),
+    },
+    {
+      name: "a link to the stylesheet's path, and the alert",
+      html: page({ body: `${PROSE}<p><a href="${FS_HREF}">styles</a></p>${fsAlert()}` }),
+    },
+    { name: "the path preloaded, not a stylesheet", html: page({ head: fsStyles(FS_HREF, "preload"), body: PROSE + fsAlert() }) },
+    { name: "an empty token", html: page({ head: fsStyles("/_fs-ch-/assets/styles.css"), body: PROSE + fsAlert() }) },
+    { name: "the directory under a prefix", html: page({ head: fsStyles(`/static${FS_HREF}`), body: PROSE + fsAlert() }) },
+    { name: "a path that goes past styles.css", html: page({ head: fsStyles(`${FS_HREF}.map`), body: PROSE + fsAlert() }) },
+    {
+      name: "the path only in the query string",
+      html: page({ head: fsStyles(`/site.css?from=${FS_HREF}`), body: PROSE + fsAlert() }),
+    },
+    { name: "an href that does not parse", html: page({ head: fsStyles(`https://[x${FS_HREF}`), body: PROSE + fsAlert() }) },
+    { name: "the alert with no role", html: page({ head: fsStyles(), body: PROSE + fsAlert('id="loading-error"') }) },
+    {
+      name: "the alert with another role",
+      html: page({ head: fsStyles(), body: PROSE + fsAlert('id="loading-error" role="status"') }),
+    },
+    { name: "the alert's id on a span", html: page({ head: fsStyles(), body: PROSE + fsAlert(undefined, "span") }) },
+  ];
+
+  it.each(CONTROLS)("$name", async ({ html }) => {
+    await expectPublished(html, URL_);
+  });
+
+  it.each([
+    { name: "as the captured page writes them", html: page({ head: fsStyles(), body: PROSE + fsAlert() }) },
+    {
+      name: "with the stylesheet as a whole address",
+      html: page({ head: fsStyles(`https://link.springer.com${FS_HREF}`), body: PROSE + fsAlert() }),
+    },
+    { name: "with rel in another case and padded", html: page({ head: fsStyles(FS_HREF, " STYLESHEET "), body: PROSE + fsAlert() }) },
+    {
+      name: "with the role padded and capitalised",
+      html: page({ head: fsStyles(), body: PROSE + fsAlert('id="loading-error" role=" Alert "') }),
+    },
+  ])("and the same real article WITH both is refused — $name", async ({ html }) => {
+    await expectAChallenge(html, URL_);
+    await expectAChallenge(html, null);
+    expect((readArticle(html, null).refusal as ChallengePage).provider).toBe("client-challenge");
   });
 });
