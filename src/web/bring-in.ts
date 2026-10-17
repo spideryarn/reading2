@@ -25,6 +25,10 @@ export type BringInAsked =
   | { kind: "queued"; jobId: string }
   /** On the reader's shelf already, so the add was free; its title if the shelf could say. */
   | { kind: "have"; slug: string; title: string | null }
+  /** On the shelf, but not a readable article Chat may mention yet. */
+  | { kind: "unavailable"; message: string }
+  /** A terminal import failure, kept after the job leaves the engine snapshot. */
+  | { kind: "failed"; message: string }
   | { kind: "refused"; message: string };
 
 /** What the button draws. */
@@ -68,6 +72,9 @@ export function describeBringIn(
       return { kind: "working", line: ADDING };
     case "have":
       return ready(asked.slug, asked.title);
+    case "unavailable":
+    case "failed":
+      return { kind: "refused", message: asked.message };
     case "refused":
       return worthRetrying(asked.message)
         ? { kind: "offer", after: asked.message }

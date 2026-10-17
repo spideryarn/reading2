@@ -13,12 +13,16 @@
 import { act, createElement, createRef, type MutableRefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Job } from "../src/types.js";
 import type { SendHow } from "../src/web/ChatPanel.js";
 import type { BringIn } from "../src/web/BringIntoChat.js";
 
 const posted: unknown[] = [];
 /* Each POST waits on this when set, so a test can act before it answers. */
 let hold: Promise<void> | null = null;
+let showMentionCandidate = true;
+let jobRows: Job[] = [];
+let addAnswer: Job | { article: string; repeat: true } = { article: "smith-2024", repeat: true };
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -27,7 +31,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     apiFetch: async (url: string) =>
       new Response(
         JSON.stringify({
-          articles: String(url).includes("archived=1")
+          articles: String(url).includes("archived=1") || !showMentionCandidate
             ? []
             : [
                 {
@@ -48,11 +52,11 @@ vi.mock("../src/web/useJobs.js", async () => {
   return {
     ...real,
     useJobs: () => ({
-      jobs: [],
+      jobs: jobRows,
       add: async (url: string, options?: unknown) => {
         posted.push({ url, options });
         if (hold) await hold;
-        return { article: "smith-2024", repeat: true };
+        return addAnswer;
       },
       lastFailure: () => null,
     }),
@@ -60,6 +64,7 @@ vi.mock("../src/web/useJobs.js", async () => {
 });
 
 const { Composer } = await import("../src/web/ChatPanel.js");
+const { BringIntoChat } = await import("../src/web/BringIntoChat.js");
 const { noteReader } = await import("../src/web/lib/reader-change.js");
 const { withMentionAtEnd } = await import("../src/web/mentions.js");
 
@@ -104,7 +109,7 @@ async function settle(): Promise<void> {
 function hand(slug: string, title: string): string | null {
   let out: string | null = null;
   act(() => {
-    out = (into.current as BringIn)({ slug, title });
+    out = (into.current as BringIn).add({ slug, title });
   });
   return out;
 }
@@ -113,6 +118,9 @@ beforeEach(() => {
   sent = [];
   posted.length = 0;
   hold = null;
+  showMentionCandidate = true;
+  jobRows = [];
+  addAnswer = { article: "smith-2024", repeat: true };
   into = createRef<BringIn | null>() as MutableRefObject<BringIn | null>;
   host = document.createElement("div");
   document.body.append(host);
@@ -162,7 +170,10 @@ describe("an article handed to the box", () => {
     hand("b", "B");
     let last: (string | null)[] = [];
     act(() => {
-      last = [(into.current as BringIn)({ slug: "c", title: "C" }), (into.current as BringIn)({ slug: "d", title: "D" })];
+      last = [
+        (into.current as BringIn).add({ slug: "c", title: "C" }),
+        (into.current as BringIn).add({ slug: "d", title: "D" }),
+      ];
     });
     expect(last[0]).toBeNull();
     expect(last[1]).toMatch(/3 articles/);
@@ -180,7 +191,27 @@ describe("an article handed to the box", () => {
     expect(chips()).toEqual([]);
   });
 
+  it("uses the row after a removal when another import lands in the same batch", () => {
+    paint();
+    for (const s of ["a", "b", "c"]) hand(s, s.toUpperCase());
+    let refusal: string | null = "not called";
+    act(() => {
+      host.querySelector<HTMLButtonElement>(".mention-chip-x")?.click();
+      refusal = (into.current as BringIn).add({ slug: "d", title: "D" });
+    });
+    expect(refusal).toBeNull();
+    expect(chips()).toEqual(["B", "C", "D"]);
+    expect(box().value).toBe("@B @C @D ");
+  });
+
   it("is not offered by the guide's box", () => {
+    paint("guide");
+    expect(into.current).toBeNull();
+  });
+
+  it("retires the registered hand-over if a mounted box stops being Chat", () => {
+    paint("chat");
+    expect(into.current).not.toBeNull();
     paint("guide");
     expect(into.current).toBeNull();
   });
@@ -205,6 +236,100 @@ describe("an address in the draft", () => {
     expect(posted).toEqual([{ url: "https://a.example/essay", options: { ownCopy: true } }]);
     expect(chips()).toEqual(["Smith 2024, Replication"]);
     expect(box().value).toBe("what about https://a.example/essay @Smith 2024, Replication ");
+  });
+
+  it("does not start an import when the box already holds three articles", () => {
+    paint("chat", "see https://full.example/page");
+    for (const s of ["a", "b", "c"]) hand(s, s.toUpperCase());
+    act(() => {
+      host.querySelector<HTMLButtonElement>(".bring-in-pasted .bring-in-button")?.click();
+    });
+    expect(posted).toEqual([]);
+    expect(host.querySelector(".bring-in-pasted")?.textContent).toMatch(/3 articles/);
+  });
+
+  it("posts once when two buttons for one address are pressed before either redraws", async () => {
+    const brought: string[] = [];
+    act(() => {
+      root.render(
+        createElement("div", null,
+          createElement(BringIntoChat, {
+            url: "https://c.example/same",
+            openSlug: "open-one",
+            bringIn: {
+              add: ({ slug }) => {
+                brought.push(slug);
+                return null;
+              },
+              refusal: () => null,
+            },
+          }),
+          createElement(BringIntoChat, {
+            url: "https://C.example/same",
+            openSlug: "open-one",
+            bringIn: {
+              add: ({ slug }) => {
+                brought.push(slug);
+                return null;
+              },
+              refusal: () => null,
+            },
+          }),
+        ),
+      );
+    });
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>(".bring-in-button")];
+    act(() => {
+      buttons[0]?.click();
+      buttons[1]?.click();
+    });
+    expect(posted).toEqual([{ url: "https://c.example/same", options: { ownCopy: true } }]);
+    await settle();
+    expect(brought).toEqual(["smith-2024", "smith-2024"]);
+  });
+
+  it("does not put an unread shelf article in the box", async () => {
+    showMentionCandidate = false;
+    paint("chat", "see https://d.example/abstract");
+    act(() => {
+      host.querySelector<HTMLButtonElement>(".bring-in-pasted .bring-in-button")?.click();
+    });
+    await settle();
+    expect(chips()).toEqual([]);
+    expect(host.querySelector(".bring-in-pasted")?.textContent).toMatch(/not ready/i);
+  });
+
+  it("keeps a completed import ready after its job leaves the engine snapshot", async () => {
+    const queued = {
+      id: "job-snapshot",
+      ownerId: "owner" as Job["ownerId"],
+      slug: "snapshot-page",
+      url: "https://snapshot.example/page",
+      steps: [],
+      status: "queued",
+      createdAt: "2026-10-17T10:00:00.000Z",
+    } as Job;
+    addAnswer = queued;
+    const bringIn: BringIn = { add: () => null, refusal: () => null };
+    const draw = () => {
+      act(() => {
+        root.render(createElement(BringIntoChat, {
+          url: queued.url as string,
+          openSlug: "open-one",
+          bringIn,
+        }));
+      });
+    };
+    draw();
+    act(() => host.querySelector<HTMLButtonElement>(".bring-in-button")?.click());
+    await settle();
+    jobRows = [{ ...queued, status: "done", title: "Snapshot page" }];
+    draw();
+    await settle();
+    jobRows = [];
+    draw();
+    expect(host.querySelector(".bring-in-button")).not.toBeNull();
+    expect(host.textContent).not.toContain("Adding it to your shelf");
   });
 
   it("forgets an answer that arrives after the reader changed", async () => {

@@ -67,6 +67,8 @@ describe("describeBringIn", () => {
   it("shows a failed job's sentence with no button", () => {
     expect(describeBringIn({ kind: "queued", jobId: "j1" }, job("error", { error: "The page would not load." }), "o"))
       .toEqual({ kind: "refused", message: "The page would not load." });
+    expect(describeBringIn({ kind: "failed", message: "The page would not load." }, null, "o"))
+      .toEqual({ kind: "refused", message: "The page would not load." });
   });
 
   it("offers again after a cancel", () => {

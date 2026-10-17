@@ -1233,6 +1233,7 @@ svg.band-waiting-ghost { flex: none; }
   align-items: center;
   column-gap: 0.6rem;
 }
+.chat-sources li > a { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---- *Bring into this chat* (BringIntoChat.tsx, plan 261017e) ---- */
 .bring-in {
@@ -1243,6 +1244,8 @@ svg.band-waiting-ghost { flex: none; }
   font-family: var(--font-ui);
   font-size: 0.8rem;
   color: var(--ink-faint);
+  min-width: 0;
+  max-width: 100%;
 }
 .bring-in-button {
   display: inline-flex;
@@ -1255,7 +1258,11 @@ svg.band-waiting-ghost { flex: none; }
   color: var(--ink-faint);
   font: inherit;
   cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
 }
+.bring-in-button-label { min-width: 0; overflow-wrap: anywhere; }
 .bring-in-button:hover { color: var(--highlight-ink); border-color: currentColor; }
 .bring-in-done { color: var(--ink); }
 /* The draft's addresses, under the box: one button each. */

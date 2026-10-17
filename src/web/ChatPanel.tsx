@@ -1636,7 +1636,13 @@ export function Conversation({
   const bring = useMemo<BringTo | undefined>(
     () =>
       kind === "chat"
-        ? { openSlug: slug, into: (article) => bringInTo.current?.(article) ?? BOX_GONE }
+        ? {
+            openSlug: slug,
+            into: {
+              add: (article) => bringInTo.current?.add(article) ?? BOX_GONE,
+              refusal: () => bringInTo.current?.refusal() ?? BOX_GONE_BEFORE,
+            },
+          }
         : undefined,
     [kind, slug],
   );
@@ -2935,6 +2941,7 @@ const MENTION_WAITING = "Wait a moment for your question to go, then bring this 
 
 /** Said if the conversation's box is not on screen to take the article. */
 const BOX_GONE = "Open this conversation's box to bring it in; the page is on your shelf now.";
+const BOX_GONE_BEFORE = "Open this conversation's box before bringing the page in.";
 
 /** An address short enough for a button: its host and the start of its path. */
 function shortAddress(url: string): string {
@@ -3603,30 +3610,32 @@ export function Composer({
      the list would, its `@Short title ` at the end of the words. Typed Chat
      only; the box registers it with the conversation for the buttons in the
      transcript, and its own pasted-address buttons call it directly. */
-  const bringIn: BringIn = (article) => {
-    /* While a question with chips is on its way the row is that question's,
-       and the draft keeps none (Sol, plan 261017e F1). */
-    if (mentionWaiting) return MENTION_WAITING;
-    const text = latestText.current;
-    const next = mention.add(article, text);
-    if ("refusal" in next) return next.refusal;
-    if (next.value !== text) {
-      provenance.current = afterChange(provenance.current, next.value, "keyboard");
-      setText(next.value, "kept");
-    }
-    return null;
+  const bringIn: BringIn = {
+    add(article) {
+      /* While a question with chips is on its way the row is that question's,
+         and the draft keeps none (Sol, plan 261017e F1). */
+      if (mentionWaiting) return MENTION_WAITING;
+      const text = latestText.current;
+      const next = mention.add(article, text);
+      if ("refusal" in next) return next.refusal;
+      if (next.value !== text) {
+        provenance.current = afterChange(provenance.current, next.value, "keyboard");
+        setText(next.value, "kept");
+      }
+      return null;
+    },
+    refusal: () => mentionWaiting ? MENTION_WAITING : mention.addRefusal(),
   };
   const pasted = kind === "chat" ? pastedAddresses(value) : [];
   useLayoutEffect(() => {
-    if (bringInTo && kind === "chat") bringInTo.current = bringIn;
+    if (!bringInTo || kind !== "chat") return;
+    bringInTo.current = bringIn;
+    return () => {
+      /* A later box may have taken the seam before this cleanup runs. Its
+         handle is not ours to clear. */
+      if (bringInTo.current === bringIn) bringInTo.current = null;
+    };
   });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: on unmount only — the latest box owns the ref while it is drawn
-  useEffect(
-    () => () => {
-      if (bringInTo && kind === "chat") bringInTo.current = null;
-    },
-    [],
-  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — the caret moves once the picked title is in the box
   useLayoutEffect(() => {
     const el = box.current;

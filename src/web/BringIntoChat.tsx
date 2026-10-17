@@ -37,24 +37,45 @@ import { useJobs } from "./useJobs.js";
  * Hand an article to the open conversation's composer: null when its chip is
  * in the row, or the sentence that says why not (the row is full).
  */
-export type BringIn = (article: BroughtIn) => string | null;
+export interface BringIn {
+  /** Hand a finished article to the box. */
+  add(article: BroughtIn): string | null;
+  /** Refuse before an import can spend an allowance slot. */
+  refusal(): string | null;
+}
 
 const asked = new Map<string, BringInAsked>();
+const listeners = new Map<string, Set<() => void>>();
 let generation = 0;
 forgetOnReaderChange(() => {
   generation += 1;
   asked.clear();
+  for (const wake of [...listeners.values()].flatMap((set) => [...set])) wake();
 });
 
+/** Write one address's tab-wide state and wake every button for that page. */
+function remember(key: string, next: BringInAsked | null): void {
+  if (next === null) asked.delete(key);
+  else asked.set(key, next);
+  for (const wake of listeners.get(key) ?? []) wake();
+}
+
+/** A repeat can be a minimal paper: on the shelf, but not readable by Chat. */
+const NOT_READY = "That page is on your shelf, but it is not ready to bring into Chat. Open it and choose Read this first.";
+
 /**
- * The title of an article of the reader's, off the shelf the `@` list reads,
- * or null — including for an unread paper, which the list leaves out.
+ * Whether an article of the reader's appears on the shelf list the `@` picker
+ * reads, and its title when it does. A minimal paper is deliberately absent.
  */
-async function shelfTitle(slug: string, openSlug: string): Promise<string | null> {
+async function shelfArticle(
+  slug: string,
+  openSlug: string,
+): Promise<{ kind: "ready"; title: string } | { kind: "not-ready" } | { kind: "unknown" }> {
   try {
-    return (await loadMentionCandidates(openSlug)).find((c) => c.slug === slug)?.title ?? null;
+    const found = (await loadMentionCandidates(openSlug)).find((c) => c.slug === slug);
+    return found ? { kind: "ready", title: found.title } : { kind: "not-ready" };
   } catch {
-    return null;
+    return { kind: "unknown" };
   }
 }
 
@@ -88,23 +109,35 @@ export function BringIntoChat({
   const [pressed, setPressed] = useState(false);
   const [handed, setHanded] = useState<Handed | null>(null);
 
-  /* Wake when the POST answers; every write to `asked` is a new record. */
+  /* Every copy of a button for this normalized address shows the same state.
+     This is also the client-side half of making two quick presses one import. */
   useEffect(() => {
-    if (state?.kind !== "sending") return;
-    let live = true;
-    void state.wait.then(() => {
-      if (live) bump();
-    });
+    const forKey = listeners.get(key) ?? new Set();
+    forKey.add(bump);
+    listeners.set(key, forKey);
     return () => {
-      live = false;
+      forKey.delete(bump);
+      if (forKey.size === 0) listeners.delete(key);
     };
-  }, [state]);
+  }, [key]);
 
   const job = state?.kind === "queued" ? (queue.jobs.find((j) => j.id === state.jobId) ?? null) : null;
   const view = describeBringIn(state, job, openSlug);
 
+  /* A job list is a snapshot, not durable history. Once this button has seen
+     an ending, keep the ending itself: retention or another reconciliation
+     must not turn Done or Failed back into an endless Adding… line. */
+  useEffect(() => {
+    if (state?.kind !== "queued" || !job || asked.get(key) !== state) return;
+    if (job.status === "done") remember(key, { kind: "have", slug: job.slug, title: job.title ?? null });
+    else if (job.status === "error") {
+      if (job.error) remember(key, { kind: "failed", message: job.error });
+      else remember(key, null);
+    } else if (job.status === "cancelled") remember(key, null);
+  }, [job, key, state]);
+
   const hand = (slug: string, own: string | null) => {
-    const refusal = bringIn({ slug, title: own ?? (title?.trim() || hostOf(url)) });
+    const refusal = bringIn.add({ slug, title: own ?? (title?.trim() || hostOf(url)) });
     setHanded(refusal === null ? { kind: "in" } : { kind: "refused", message: refusal });
   };
 
@@ -124,8 +157,20 @@ export function BringIntoChat({
 
   const press = () => {
     setHanded(null);
+    /* Another copy of this button may have acted before React redrew this
+       one. Join that state; never POST from a stale `offer` closure. */
+    if (asked.get(key) !== state) {
+      setPressed(true);
+      bump();
+      return;
+    }
     if (view.kind === "ready") {
       hand(view.slug, view.title);
+      return;
+    }
+    const cannotStart = bringIn.refusal();
+    if (cannotStart !== null) {
+      setHanded({ kind: "refused", message: cannotStart });
       return;
     }
     setPressed(true);
@@ -137,36 +182,42 @@ export function BringIntoChat({
       /* Read straight after the await: useJobs.ts § lastFailure. */
       const why = started ? null : queue.lastFailure();
       if (started && "article" in started) {
-        /* A repeat answers with the slug alone; the shelf has its title. */
-        const title = await shelfTitle(started.article, openSlug);
-        if (asOf !== generation) return;
-        asked.set(key, { kind: "have", slug: started.article, title });
-      }
-      else if (started && "id" in started) asked.set(key, { kind: "queued", jobId: started.id });
-      else if (why) asked.set(key, { kind: "refused", message: why });
+        if (started.article === openSlug) {
+          remember(key, { kind: "have", slug: started.article, title: null });
+        } else {
+          /* A repeat answers with the slug alone. The shelf supplies both the
+             title and the fact that this is a readable article, not a minimal
+             paper whose later Chat send would be refused. */
+          const shelf = await shelfArticle(started.article, openSlug);
+          if (asOf !== generation) return;
+          if (shelf.kind === "ready") remember(key, { kind: "have", slug: started.article, title: shelf.title });
+          else if (shelf.kind === "not-ready") remember(key, { kind: "unavailable", message: NOT_READY });
+          else remember(key, { kind: "have", slug: started.article, title: null });
+        }
+      } else if (started && "id" in started) remember(key, { kind: "queued", jobId: started.id });
+      else if (why) remember(key, { kind: "refused", message: why });
       /* Nothing to say (or a public copy, which `ownCopy` does not ask about):
          put the button back rather than leave a dead end. */
-      else asked.delete(key);
+      else remember(key, null);
     })();
-    asked.set(key, { kind: "sending", wait });
-    bump();
+    remember(key, { kind: "sending", wait });
   };
 
-  if (handed?.kind === "in") {
-    return (
-      <span className="bring-in bring-in-done" role="status">
-        <Check size={13} aria-hidden="true" /> In the box below
-      </span>
-    );
-  }
   const button = (
     <Tooltip
       placement="top"
       content={<ControlTip head="Bring into this chat" what={BRING_IN_HOW} how="Nothing is sent until you ask your question." />}
     >
-      <button type="button" className="bring-in-button" onClick={press} aria-description={BRING_IN_HOW}>
+      <button
+        type="button"
+        className="bring-in-button"
+        onClick={press}
+        /* The visible words first, so a voice command that says them still finds it (WCAG 2.5.3). */
+        aria-label={label ?? `Bring into this chat: ${title?.trim() || hostOf(url)}`}
+        aria-description={BRING_IN_HOW}
+      >
         <ArrowDownToLine size={13} aria-hidden="true" />
-        {label ?? "Bring into this chat"}
+        <span className="bring-in-button-label">{label ?? "Bring into this chat"}</span>
       </button>
     </Tooltip>
   );
@@ -177,11 +228,15 @@ export function BringIntoChat({
       return (
         <span className="bring-in">
           {button}
-          {handed?.kind === "refused"
-            ? note(handed.message)
-            : view.kind === "offer" && view.after
-              ? note(view.after)
-              : null}
+          {handed?.kind === "in"
+            ? <span className="bring-in-done" role="status">
+                <Check size={13} aria-hidden="true" /> Added to the box
+              </span>
+            : handed?.kind === "refused"
+              ? <span className="bring-in-note" role="status">{handed.message}</span>
+              : view.kind === "offer" && view.after
+                ? <span className="bring-in-note" role="status">{view.after}</span>
+                : null}
         </span>
       );
     case "working":
