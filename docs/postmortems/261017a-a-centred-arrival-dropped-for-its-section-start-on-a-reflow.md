@@ -39,7 +39,10 @@ it, and re-centring the block is another that keeps the reader where they are.
 `useReadingPosition`'s layout re-anchor: when the address did not move and a centred arrival still
 holds, re-centre that block (instantly) and keep the hold; only without one does `?at=`'s section go
 back to the top. When the address moved in the same commit the restore effect still owns the move,
-and the hold ends as before. Tests in
+and the hold ends as before. The move is `recentreArrival()` (scroll.ts), which takes the hold again
+straight after the instant move: GPT Sol's review of the first version found that going through
+`scrollToBlock` alone let the hold lapse for a frame while the position spy measured, which for a
+block at a section's start would have written the section before into `?at=`. Tests in
 [`reading-position-holds-across-a-reflow.test.tsx`](../../tests/reading-position-holds-across-a-reflow.test.tsx):
 the deep-in-a-section case (red before: the page landed at the section start), the no-`?at=` case
 (which used to assert the hold ended, now asserts it is re-centred), and the address-moved case.
