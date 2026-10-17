@@ -978,6 +978,25 @@ function holdAnchor(id: string, passage: string | undefined): void {
   for (const listener of anchorListeners) listener();
 }
 
+/**
+ * **Put a held centred arrival back in the centre, instantly, without the
+ * hold lapsing** — the reflow re-anchor's move (reader/useReadingPosition.ts;
+ * postmortem 261017a). `scrollToBlock`'s glide ends the hold at once and takes
+ * it again only on its corrective frame, and the position spy measures in
+ * between: centred on a section's first block, it would read the section
+ * before and write that into `?at=` (GPT Sol's review of the fix, F1). So the
+ * hold is taken again here, straight after the instant move. `false` when
+ * nothing is held, and nothing moves.
+ */
+export function recentreArrival(): boolean {
+  const held = arrivalAnchor();
+  if (held === null) return false;
+  abandonScroll();
+  scrollToBlock(held.id, "auto", undefined, { align: "centre", passage: held.passage });
+  holdAnchor(held.id, held.passage);
+  return true;
+}
+
 /** The centred arrival the reader is standing on, or `null` — see `anchor`. */
 export function arrivalAnchor(): { id: string; passage: string | undefined } | null {
   /* A re-extraction or page change can remove the row without moving the

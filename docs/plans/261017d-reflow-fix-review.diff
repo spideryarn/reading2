@@ -1,0 +1,128 @@
+commit a1a16f7e1b4c38a1d4c5a976181243dc14095dde
+Author: Greg Detre <greg@gregdetre.com>
+Date:   Sat Oct 17 20:00:03 2026 +0100
+
+    A centred arrival is re-centred on a reflow, not dropped for its section start
+    
+    Found by the 261017d browser check: a ?stop= link to a Skim figure stop
+    deep in a long section centred the figure, then the controls bar appeared
+    (layoutKey changed, ?at= unchanged) and the re-anchor ended the arrival hold
+    and scrolled ?at='s section start to the top, leaving the figure 1,200px
+    below the window. The re-anchor now re-centres a held arrival and keeps the
+    hold; without one, ?at= is restored as before; when the address moved too
+    the restore effect still owns the move. Introduced by 30b5eac34 (260929a).
+    Red test first (it landed at the section start). Postmortem 261017a.
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+diff --git a/src/web/reader/useReadingPosition.ts b/src/web/reader/useReadingPosition.ts
+index 5a0e35864..598c143dd 100644
+--- a/src/web/reader/useReadingPosition.ts
++++ b/src/web/reader/useReadingPosition.ts
+@@ -134,11 +134,29 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
+     laidOut.current = { layoutKey, at };
+     if (was === null) return; // arrival: the restore effect above owns it
+     if (was.layoutKey === layoutKey) return; // nothing reflowed
+-    /* A centred arrival belongs to the geometry it landed in. End that logical
+-       hold even when there is no `?at=` to re-anchor below: the page can reflow
+-       without emitting a scroll event, and the old block must not stay current. */
+-    clearArrivalAnchor();
+-    if (was.at !== at) return; // the address moved too — not ours
++    if (was.at !== at) {
++      /* The address moved too — not ours. A centred arrival belonged to the
++         geometry it landed in, and the restore effect is taking the reader
++         elsewhere, so its hold ends here. */
++      clearArrivalAnchor();
++      return;
++    }
++    /* **A centred arrival the reader has not left is put back where it
++       landed**, centred again, and goes on holding — not left to the section
++       `?at=` names, whose start can be a screen or more above it. Found on a
++       Skim figure stop deep in a long section: the controls bar appearing after
++       a `?stop=` link's arrival re-anchored to the section's start and left the
++       figure below the window (plan 261017d). The arrival is the finer truth
++       while it holds, as `positionToWrite` already treats it. Until then this
++       ended the hold and re-anchored to `?at=`, because a reflow moves the
++       block off the centre without a scroll event; re-centring it keeps that
++       true. */
++    const held = arrivalAnchor();
++    if (held !== null) {
++      abandonScroll();
++      scrollToBlock(held.id, "auto", undefined, { align: "centre", passage: held.passage });
++      return;
++    }
+     if (at === null) return; // nothing to hold at the top
+     abandonScroll();
+     scrollToBlock(at, "auto");
+diff --git a/tests/reading-position-holds-across-a-reflow.test.tsx b/tests/reading-position-holds-across-a-reflow.test.tsx
+index ac8441abe..068d797ef 100644
+--- a/tests/reading-position-holds-across-a-reflow.test.tsx
++++ b/tests/reading-position-holds-across-a-reflow.test.tsx
+@@ -404,7 +404,39 @@ describe("a reflow under a reader who is staying put", () => {
+     expect(atNow()).toBeNull();
+   });
+ 
+-  it("ends a centred arrival even when there is no ?at= to re-anchor", async () => {
++  /**
++   * **A centred arrival is put back where it landed, not at its section's
++   * start.** Found on a Skim figure stop (plan 261017d): a `?stop=` link
++   * centred a figure deep in a long section, `?at=` was written as that
++   * section's start, and the controls bar then appeared — a layout change with
++   * the address unchanged — so the re-anchor scrolled the section's start to
++   * the top and left the figure 1,200px below the window. The arrival is the
++   * finer truth while it holds, as `positionToWrite` already says; the reflow
++   * re-centres it and the hold goes on.
++   */
++  it("re-centres a held arrival deep in a section, rather than going to the section's start", async () => {
++    history.replaceState(null, "", `/read/x?at=${block(12)}`);
++    render("portrait");
++    await settle();
++
++    /* Block 20 is in § The middle bit (12–23), centred exactly, so the arrival
++       makes no scroll event that could end the hold for another reason. */
++    scrollY = 20 * PORTRAIT - (window.innerHeight - PORTRAIT) / 2;
++    scrollToBlock(block(20), "smooth", undefined, { align: "centre" });
++    expect(arrivalAnchor()).toEqual({ id: block(20), passage: undefined });
++
++    rowHeight = LANDSCAPE;
++    render("landscape");
++
++    expect(scrollY).toBe(20 * LANDSCAPE - (window.innerHeight - LANDSCAPE) / 2);
++    /* An instant move settles, and takes the hold again, on its next frame. */
++    await measureFrame();
++    expect(arrivalAnchor()).toEqual({ id: block(20), passage: undefined });
++    await settle();
++    expect(atNow()).toBe(block(12));
++  });
++
++  it("re-centres a held arrival when there is no ?at= either", async () => {
+     history.replaceState(null, "", "/read/x");
+     render("portrait");
+     await settle();
+@@ -417,6 +449,26 @@ describe("a reflow under a reader who is staying put", () => {
+ 
+     rowHeight = LANDSCAPE;
+     render("landscape");
++    expect(scrollY).toBe(12 * LANDSCAPE - (window.innerHeight - LANDSCAPE) / 2);
++    await measureFrame();
++    expect(arrivalAnchor()).toEqual({ id: block(12), passage: undefined });
++  });
++
++  it("still leaves the move to the restore effect, and ends the hold, when ?at= changed as well", async () => {
++    history.replaceState(null, "", `/read/x?at=${block(12)}`);
++    render("portrait");
++    await settle();
++    scrollY = 20 * PORTRAIT - (window.innerHeight - PORTRAIT) / 2;
++    scrollToBlock(block(20), "smooth", undefined, { align: "centre" });
++    expect(arrivalAnchor()).not.toBeNull();
++
++    history.replaceState(null, "", `/read/x?at=${block(24)}`);
++    window.dispatchEvent(new PopStateEvent("popstate"));
++    rowHeight = LANDSCAPE;
++    render("landscape");
++    await settle();
++
++    expect(scrollY).toBe(24 * LANDSCAPE);
+     expect(arrivalAnchor()).toBeNull();
+   });
+ });

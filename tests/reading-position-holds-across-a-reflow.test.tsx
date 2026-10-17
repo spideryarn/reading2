@@ -436,6 +436,31 @@ describe("a reflow under a reader who is staying put", () => {
     expect(atNow()).toBe(block(12));
   });
 
+  /**
+   * **And the address is not moved by the re-centring itself** (GPT Sol's
+   * review of the fix, finding 1). Centred on a section's first block, the
+   * reading line sits in the section before it; if the hold lapsed for a frame
+   * while the spy measured, `?at=` would be written as the previous section.
+   */
+  it("keeps ?at= on the arrival's section while it re-centres a section's first block", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(12)}`);
+    render("portrait");
+    await settle();
+
+    scrollY = 12 * PORTRAIT - (window.innerHeight - PORTRAIT) / 2;
+    scrollToBlock(block(12), "smooth", undefined, { align: "centre" });
+    expect(arrivalAnchor()).toEqual({ id: block(12), passage: undefined });
+
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    expect(arrivalAnchor(), "the hold must not lapse while the spy measures").toEqual({ id: block(12), passage: undefined });
+    await settle();
+
+    expect(atNow()).toBe(block(12));
+    expect(scrollY).toBe(12 * LANDSCAPE - (window.innerHeight - LANDSCAPE) / 2);
+    expect(arrivalAnchor()).toEqual({ id: block(12), passage: undefined });
+  });
+
   it("re-centres a held arrival when there is no ?at= either", async () => {
     history.replaceState(null, "", "/read/x");
     render("portrait");

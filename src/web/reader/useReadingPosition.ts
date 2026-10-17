@@ -19,6 +19,7 @@ import {
   arrivalAnchor,
   clearArrivalAnchor,
   glideTarget,
+  recentreArrival,
   scrollToBlock,
   scrollToTop,
   stickyOffset,
@@ -150,13 +151,9 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
        while it holds, as `positionToWrite` already treats it. Until then this
        ended the hold and re-anchored to `?at=`, because a reflow moves the
        block off the centre without a scroll event; re-centring it keeps that
-       true. */
-    const held = arrivalAnchor();
-    if (held !== null) {
-      abandonScroll();
-      scrollToBlock(held.id, "auto", undefined, { align: "centre", passage: held.passage });
-      return;
-    }
+       true — without the hold lapsing while the spy below measures
+       (`recentreArrival`). */
+    if (recentreArrival()) return;
     if (at === null) return; // nothing to hold at the top
     abandonScroll();
     scrollToBlock(at, "auto");
