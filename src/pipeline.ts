@@ -5404,6 +5404,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ideasChars: run.promptChars.ideas,
           outlineChars: run.promptChars.outline,
           quotesChars: run.promptChars.quotes,
+          /* Figures offered and chosen (`skim/14`, plan 261017d); their drops ride in `dropped`. */
+          figuresOffered: run.figuresOffered,
+          figureStops: run.skim.figures?.length ?? 0,
+          figuresChars: run.promptChars.figures,
           promptChars: run.promptChars.total,
           /* The profile's LENGTH, never the profile. docs/project/logging.md. */
           profileChars: ctx.profile?.length ?? 0,
