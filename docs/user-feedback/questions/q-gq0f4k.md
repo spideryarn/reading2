@@ -1,6 +1,6 @@
 ---
 id: q-gq0f4k
-report: none
+report: spya-c8z66b
 status: open
 asked: 2026-10-17
 title: Should figure stops in Skim's route reach visitors to a shared article too?
