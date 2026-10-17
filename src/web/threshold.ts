@@ -42,7 +42,7 @@
  * one result.
  *
  * What deliberately stays with each panel: the track (a data-derived maximum
- * next door, an index into real stops for quotes, a fixed 0–100 for search),
+ * next door, a raw-score scale for quotes, a fixed 0–100 for search),
  * the unit, and which noun the foot line uses. Those genuinely differ, and
  * unifying them would be the over-abstraction.
  *
@@ -98,9 +98,18 @@ export interface ThresholdResult<T> {
  *
  * Inclusive at the bar, because the number is printed on the row: a term
  * showing `0.30` that vanished at a threshold of `0.30` reads as a bug.
+ *
+ * **And inclusive by a hair below it**, for the same reason: a product such as
+ * `0.4 × 0.7` is `0.27999999999999997`, printed `0.28`, and its stop is `0.28`
+ * (`floorToGateStep` rounds the quotient before flooring). Compared exactly, it
+ * vanished at its own stop, which was then a stop that changed nothing — found
+ * in a real glossary by plan 261017f's browser check. The tolerance is the
+ * same `1e-9` scale `floorToGateStep` uses, far below any score's precision.
  */
+const SCORE_EPSILON = 1e-9;
+
 export function survivesThreshold(score: number | null | undefined, threshold: number): boolean {
-  return score == null || score >= threshold;
+  return score == null || score >= threshold - SCORE_EPSILON;
 }
 
 /**
@@ -270,8 +279,8 @@ export function canThreshold<T>(
    scoring at least `t`", and every `t` in `(sᵢ₋₁, sᵢ]` shows the same list.
    **So the stops are the distinct scores themselves**, and each is the
    canonical value of its list: at a stop, the printed threshold is the lowest
-   score on screen. There is no stop at 0, which shows what the lowest stop
-   does. docs/plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md. */
+   score on screen. There is no *synthetic* stop at 0; a genuine zero score is
+   retained. docs/plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md. */
 
 /**
  * The stops, ascending and distinct. Unscored items survive every bar and so

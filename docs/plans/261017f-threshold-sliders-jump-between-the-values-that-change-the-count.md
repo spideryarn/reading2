@@ -145,9 +145,10 @@ BUILD WITH FIXES.
   change to the value already held (Firefox fires one for a press on the thumb) is ignored. Real
   VoiceOver and TalkBack were not available on the box; see § Not verified.
 - **P2, taken the other way.** Quotes keeps its raw stops with `step="any"` rather than flooring
-  them to 0.01: `snapToStop` already brings `?bar=` (written at two places) back onto the raw stop on
-  reload, which is what it was doing before this change, and flooring would have collapsed close
-  scores and changed what the Quotes bar hides.
+  them to 0.01, which would have collapsed close scores and changed what the Quotes bar hides.
+  The code review found that the old two-decimal `?bar=` could reload on a neighbouring raw stop;
+  `barParam` now preserves the exact stop in the URL, while the displayed number stays at two
+  decimals.
 - **P3, taken.** "No *synthetic* stop at 0": a score that is genuinely 0 is a stop
   (`thresholdStops` keeps it; `tests/stop-range.test.tsx`).
 - **P4, not taken; a limit that was already there.** A Search list with no confidences at all (a
@@ -158,3 +159,31 @@ BUILD WITH FIXES.
   snapped `?gate=`.
 - **P6, partly.** `pointer-events: none` on the ticks. The browser check ran what the box has.
 - **P7, taken.** The two stale Search comments are corrected.
+
+## GPT Sol's code review
+
+[The review](261017f-threshold-sliders-jump-between-the-values-that-change-the-count-code-review-sol.md):
+SHIP AFTER MY FIXES. It fixed C1 (the pointer flag could stay set after a release outside the
+input, so window-level release, cancel and blur now clear it, with mouse and touch fallbacks) and
+C2 (`?bar=` rounded Quotes' raw stops to a hundredth, so two stops inside one hundredth could reload
+onto the other; the URL now keeps the exact score, and `barToReveal` returns it). C3 was stale
+comments. C4 is plan-review P4 again, the inert slider over a Search list with no confidences, and
+is left as said there.
+
+## The browser check
+
+Sonnet, with Playwright against system Chrome and WebKit, on this worktree's own dev server and
+the local database. Firefox is not installed on the box. All five sliders were checked, on desktop
+in light and dark and at 390px with touch emulation. A tick sits within ±0.5px of the thumb's centre
+at every stop, the ends included. A slow drag visits one state per stop, a tap between stops lands
+on a tick, every arrow press changes the count, and the URL takes the snapped value. WebKit matched
+Chromium's sequences.
+
+**It found one bug, fixed here:** in a real glossary a stop changed nothing (`1@0.28, 1@0.30`),
+because `0.4 × 0.7` is a hair under the `0.28` it prints as and the bar compared it exactly —
+[261017b](../postmortems/261017b-an-exact-comparison-against-a-rounded-stop.md).
+
+## Not verified
+
+Real VoiceOver (iOS) and TalkBack (Android), and Firefox. The non-pointer path that TalkBack's swipe
+takes is covered in jsdom (`tests/stop-range.test.tsx`), not on a device.

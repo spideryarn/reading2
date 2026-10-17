@@ -26,7 +26,7 @@
  * are words, one per position already.
  * docs/plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md.
  */
-import { type CSSProperties, type KeyboardEvent, useRef } from "react";
+import { type CSSProperties, type KeyboardEvent, useEffect, useRef } from "react";
 import { nearestStop, stepToStop } from "./threshold.js";
 
 export function StopRange({
@@ -63,6 +63,31 @@ export function StopRange({
      direction; snapping it to the nearest would put it straight back. GPT Sol's
      plan review, P1. */
   const pointer = useRef(false);
+
+  useEffect(() => {
+    /* A mouse does not implicitly capture its pointer, so a drag can finish
+       outside the input and never reach its `onPointerUp`. Clear at the
+       window boundary as well; blur covers a release after the whole window
+       lost focus. Mouse and touch are fallbacks for browsers that do not
+       expose Pointer Events. */
+    const endPointer = () => {
+      pointer.current = false;
+    };
+    window.addEventListener("pointerup", endPointer, true);
+    window.addEventListener("pointercancel", endPointer, true);
+    window.addEventListener("mouseup", endPointer, true);
+    window.addEventListener("touchend", endPointer, true);
+    window.addEventListener("touchcancel", endPointer, true);
+    window.addEventListener("blur", endPointer);
+    return () => {
+      window.removeEventListener("pointerup", endPointer, true);
+      window.removeEventListener("pointercancel", endPointer, true);
+      window.removeEventListener("mouseup", endPointer, true);
+      window.removeEventListener("touchend", endPointer, true);
+      window.removeEventListener("touchcancel", endPointer, true);
+      window.removeEventListener("blur", endPointer);
+    };
+  }, []);
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (stops.length === 0) return;
@@ -113,6 +138,21 @@ export function StopRange({
           pointer.current = false;
         }}
         onPointerCancel={() => {
+          pointer.current = false;
+        }}
+        onMouseDown={() => {
+          pointer.current = true;
+        }}
+        onMouseUp={() => {
+          pointer.current = false;
+        }}
+        onTouchStart={() => {
+          pointer.current = true;
+        }}
+        onTouchEnd={() => {
+          pointer.current = false;
+        }}
+        onTouchCancel={() => {
           pointer.current = false;
         }}
         onChange={(e) => {

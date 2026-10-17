@@ -40,6 +40,11 @@ describe("thresholdStops", () => {
     expect(thresholdStops([null, undefined], scoreOf)).toEqual([]);
   });
 
+  it("keeps a genuine zero score without inventing one", () => {
+    expect(thresholdStops([0, 0.4], scoreOf)).toEqual([0, 0.4]);
+    expect(thresholdStops([0.4], scoreOf)).toEqual([0.4]);
+  });
+
   it("every stop shows a different count from its neighbours", () => {
     const items = [0.1, 0.1, 0.3, 0.35, 0.7, null];
     const stops = thresholdStops(items, scoreOf);

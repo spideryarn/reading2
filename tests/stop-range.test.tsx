@@ -118,6 +118,33 @@ describe("StopRange", () => {
     expect(onStep.mock.calls).toEqual([[0.2]]);
   });
 
+  it("stops treating changes as pointer drags when the pointer is released outside", async () => {
+    const onChange = await draw(0.5, STOPS);
+    await act(async () => {
+      input().dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      document.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    await change(0.51, { pointer: false });
+    /* A non-pointer increment moves to the next useful stop. If the pointer
+       flag is stuck, nearest-stop snapping returns to 0.50 and does nothing. */
+    expect(onChange.mock.calls).toEqual([[0.9]]);
+  });
+
+  it("treats a touch drag as a pointer drag even when Pointer Events are unavailable", async () => {
+    const onChange = await draw(0.5, STOPS);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => {
+      input().dispatchEvent(new Event("touchstart", { bubbles: true }));
+      setter.call(input(), "0.6");
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+      input().dispatchEvent(new Event("touchend", { bubbles: true }));
+    });
+    /* 0.60 is nearer 0.50 than 0.90. React must also restore the controlled
+       DOM value when snapping produces the value already in props. */
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input().value).toBe("0.5");
+  });
+
   it("a genuine zero score is a stop, so the reader can get back to it", async () => {
     const onChange = await draw(0.4, [0, 0.4, 0.8]);
     await press("Home");

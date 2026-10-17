@@ -70,7 +70,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { StopRange } from "./StopRange.js";
-import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
+import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
 import {
   aiProvenance,
   quoteBandRows,
@@ -229,12 +229,13 @@ interface Props {
 export const QUOTE_BAR_DEFAULT = 0.6;
 
 /**
- * **The positions the bar can take: every score the list actually contains.**
+ * **The stops the bar can take: every score the list actually contains.**
  *
- * A discrete track rather than a continuous one, and it replaced a `0.05`-step
- * slider after GPT Sol showed the continuous version could not keep its own
- * promises. Three failures, all the same thing — a track whose positions are
- * arithmetic rather than data:
+ * The track is linear in the score, but `StopRange` snaps it to this discrete
+ * list. Before 2026-10-17 it was an index into the same list, which jumped
+ * correctly but could not show where the scores bunch. The list itself
+ * replaced a `0.05`-step slider after GPT Sol showed arithmetic positions
+ * could not keep their own promises:
  *
  *  1. **The right-hand end kept a *band*, not the top.** It was the top score
  *     rounded down to the step, so priorities of `.62`, `.61` and `.20` gave an
@@ -594,8 +595,8 @@ export function markedQuotes(
  * current quote to the prose after the bar hid it; *open Quotes* must then
  * reveal that row before `useQuoteMarks`' `hiddenSelection` effect clears the
  * selection. This is Quotes' `gateToReveal` (GlossaryPanel.tsx): preserve the
- * chosen order, move the visible control, and floor to the URL's hundredth so
- * serialisation can never put the bar back above the quote.
+ * chosen order and move the visible control to that quote's exact stop. The
+ * URL preserves raw Quotes stops (`barParam`), so there is no grid to floor to.
  */
 export function barToReveal(
   quotes: readonly Quote[],
@@ -609,7 +610,7 @@ export function barToReveal(
   const priority = quote ? priorityOf(quote) : undefined;
   const shownAt = snapToStop(barStops(list), bar);
   if (priority === undefined || priority >= shownAt) return null;
-  return floorToGateStep(priority);
+  return priority;
 }
 
 /**

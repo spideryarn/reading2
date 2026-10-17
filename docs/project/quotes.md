@@ -702,6 +702,9 @@ score.
 `?bar=` keeps the glossary slider's four properties — the number and the count on screen, the foot
 line saying how many are hidden, and a reset. The stops are `barStops`: every distinct
 `max(importance, striking)` the list contains, and the thumb moves only between them.
+The URL preserves that raw stop rather than rounding it to the displayed hundredth, so two close
+scores cannot make a drag reload on a different count. The number beside the slider stays at two
+decimals; the extra URL precision is state, not reader-facing copy.
 
 **Since 2026-10-17 every numeric threshold slider moves this way**, through `StopRange`, at Greg's
 request (*"I'd rather that, as I slide it, it jumps to the values that will affect the number of
