@@ -122,6 +122,41 @@ export function prepareLatexml(doc: Document): LatexmlStats {
 }
 
 /**
+ * **A LaTeXML document with no title of its own**, whose `<title>` is
+ * therefore LaTeXML's fallback rather than the author's `\title`.
+ *
+ * A paper that sets its title page by hand, with no `\title`, gets no
+ * `.ltx_title_document`, and LaTeXML fills `<title>` with a numbered part of
+ * the paper, number glued on: arXiv 2308.08708 was shelved as
+ * `1Indicator Properties` (report spya-mx3wz0). Every titled paper measured
+ * that day had an `h1.ltx_title_document` equal to its `<title>`.
+ *
+ * Rule 1 above: only at a supported source, and only with an
+ * `article.ltx_document`, and the title looked for beneath it: a class
+ * elsewhere on the page says nothing about the document. By class rather than
+ * by `h1`, since the class is LaTeXML's name for the role. Asked of the page
+ * as it arrived.
+ * docs/plans/261017a-an-arxiv-paper-with-no-title-takes-its-title-from-its-own-opening.md.
+ */
+export function latexmlUntitled(doc: Document): boolean {
+  if (!hasLatexmlSource(doc)) return false;
+  return untitledLatexmlMarkup(doc);
+}
+
+/**
+ * The markup half of `latexmlUntitled`, without the source-address proof.
+ *
+ * An uploaded HTML file has no address. Its extraction and metadata readers
+ * may use this weaker signal only to distrust a guessed `<title>`; it must not
+ * opt a page into LaTeXML's structural rewrites. An upload can already choose
+ * any title, so declining this one grants the file no new capability.
+ */
+export function untitledLatexmlMarkup(doc: Document): boolean {
+  const roots = Array.from(doc.querySelectorAll(DOCUMENT));
+  return roots.length > 0 && roots.every((root) => root.querySelector(".ltx_title_document") === null);
+}
+
+/**
  * Producer evidence outside the page's markup. The document URL is the final
  * fetched address JSDOM was given; unlike a class or generator comment, a
  * stranger's page cannot opt itself into these rewrites by writing one.
