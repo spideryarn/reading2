@@ -255,5 +255,18 @@ answered (`acted: spya-eqtvhz`), since the 2A follow-up is a different question.
   line removed (`ownCopy`, the guide's box, the row read at render, the reader-change fence).
 - **Departure from § Stage 1**: a free repeat looks its title up on the shelf the `@` list reads,
   rather than falling back to the host — which also tells an unread paper apart (Sol).
+- **Browser pass** (Sonnet, Playwright on the box, 1440 and 390, no console errors; shots
+  `261017e-shot-*.png`). A pasted repeat went in in under a second, a new Wikipedia page in 17 s,
+  the open article said so, and the guide's box had no button. **It found two bugs, both fixed in
+  `53b58f38c` with tests seen red first**:
+  - every *From the web* button refused, because Sol's seam read `?.refusal() ?? BOX_GONE_BEFORE`
+    and `null` is the box's yes; now `bringVia`, which refuses only a missing box;
+  - the first Enter after a bring-in was swallowed: the `@` it wrote read as a new `@` search while
+    the shelf list loaded. An `@` a chip in the row wrote is no longer a search.
+
+  Re-checked after: a new page from *From the web* in 9 s at 1440 and 5 s at 390, a repeat in
+  0.7 s, a site that refuses automated readers says so, Enter sends at once, and a second press
+  adds nothing twice. Known and left: the button on a pasted address of the open article says so
+  only once pressed (the box does not know the open article's address).
 - **Stage 2**: not built; asked as q-g492eq. Greg's principle is in
   [chat-tools.md § The guide](../project/chat-tools.md#the-guide).
