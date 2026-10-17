@@ -3372,6 +3372,16 @@ export interface SaveOffer {
    * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md.
    */
   now?: true;
+  /**
+   * **Which rule let a `now` offer save itself**: `exact`, a run of what they
+   * typed, or `reworded`, one whole sentence of it changed only in spelling,
+   * with that sentence as `source` for the card to show beside it (plan
+   * docs/plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md).
+   * Absent on an offer stored before 2026-10-17, which reads as `exact`, what
+   * every such offer was.
+   */
+  route?: "exact" | "reworded";
+  source?: string;
 }
 
 

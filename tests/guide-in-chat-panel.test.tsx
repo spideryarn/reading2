@@ -77,7 +77,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 type SendHow = import("../src/web/ChatPanel.js").SendHow;
 const { GUIDE_STARTS } = await import("../src/web/GuideGreeting.js");
-const { OFFER_WORDS, UNDO_LABEL } = await import("../src/web/GuideSaveOffer.js");
+const { FROM_YOUR_MESSAGE, OFFER_WORDS, UNDO_LABEL } = await import("../src/web/GuideSaveOffer.js");
 const { forgetAnsweredHere, markAnsweredHere } = await import("../src/web/chat/answered-here.js");
 
 const AT = "2026-10-07T09:00:00.000Z";
@@ -667,6 +667,58 @@ describe("the guide's offer to save", () => {
     it("ignores a `now` that is not literally true", async () => {
       await watch([{ ...REASON, now: "yes" } as unknown as Offer]);
       expect(patches).toEqual([]);
+    });
+
+    /* Plan 261012c: one whole sentence they typed, its spelling tidied. */
+    describe("reworded", () => {
+      const SOURCE = "it's for my journal club";
+      const REWORDED = { ...REASON, text: "Preparing for my journal club.", now: true, route: "reworded", source: SOURCE } as Offer;
+      afterEach(() => {
+        Reflect.deleteProperty(document, "visibilityState");
+      });
+
+      it("saves on an answer this tab watched, says it was reworded, shows their sentence, and Undo puts it back", async () => {
+        await watch([REWORDED]);
+        expect(patches).toEqual([{ purpose: "Preparing for my journal club." }]);
+        expect(host.textContent).toContain(OFFER_WORDS.purpose.savedReworded);
+        expect(host.textContent).toContain(`${FROM_YOUR_MESSAGE} “${SOURCE}”`);
+        expect(host.querySelector(".guide-offer-status .voice-reader")?.textContent).toBe(SOURCE);
+        await press(UNDO_LABEL);
+        expect(patches.at(-1)).toEqual({ purpose: null });
+      });
+
+      it("after a reload, shows it saved and reworded when the words are what is stored", async () => {
+        reader = { ...reader, purpose: "Preparing for my journal club." };
+        await draw(guideWith([REWORDED]));
+        expect(patches).toEqual([]);
+        expect(host.textContent).toContain(OFFER_WORDS.purpose.savedReworded);
+        expect(host.textContent).toContain(SOURCE);
+      });
+
+      it("does not save itself in a hidden tab: the button instead", async () => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        await watch([REWORDED]);
+        expect(patches).toEqual([]);
+        expect(button(SAVE)).toBeDefined();
+      });
+
+      it("an exact one still saves in a hidden tab, as before", async () => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        await watch([{ ...NOW, route: "exact" } as Offer]);
+        expect(patches).toEqual([{ purpose: "For my journal club." }]);
+        expect(host.textContent).toContain(OFFER_WORDS.purpose.savedNow);
+        expect(host.textContent).not.toContain(FROM_YOUR_MESSAGE);
+      });
+
+      it.each([
+        ["no sentence of theirs", { ...REWORDED, source: undefined }],
+        ["an empty sentence", { ...REWORDED, source: "  " }],
+        ["a route it does not know", { ...REWORDED, route: "wide" }],
+      ])("waits for the press with %s", async (_what, offer) => {
+        await watch([offer as Offer]);
+        expect(patches).toEqual([]);
+        expect(button(SAVE)).toBeDefined();
+      });
     });
   });
 

@@ -347,7 +347,7 @@ describe("a guide turn", () => {
       vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
       replies = offering("For my journal club.");
       expect(await post({ threadId: "spya-gdrtt2", question: "it is for my journal club", kind: "guide", typed: true })).toBe(200);
-      expect(await offerOn("spya-gdrtt2")).toEqual({ field: "purpose", text: "For my journal club.", basis: null, now: true });
+      expect(await offerOn("spya-gdrtt2")).toEqual({ field: "purpose", text: "For my journal club.", basis: null, now: true, route: "exact" });
     });
 
     it("leaves the same offer to the press when the question was not typed", async () => {
