@@ -75,7 +75,7 @@
  * the reader has already chosen a filter.
  */
 import { LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MAX_FEEDBACK_COMMENT_CHARS } from "../feedback-ending-values.js";
 import {
@@ -1542,24 +1542,24 @@ function ThreadContents({
 }
 
 /**
- * **One thread on its own**: where it sits among the rest and the way back,
- * the ids, the question (its *Details* shut), the report it is about (shut),
- * what the admin has replied, acted on first and then not yet acted on, and
- * the box.
+ * **‹ Previous and Next ›**, and the sentence an end says when pressed. Drawn
+ * twice while a thread shows: at its top, and in the dialog's footer, where the
+ * reader is once a reply is written (`spya-bvzavw`, plan 261017c). Each copy
+ * keeps its own end sentence, so a press at the foot is answered at the foot.
  */
-function ThreadView({
-  question,
+function ThreadPager({
   pager: { stops, deciding },
+  showing,
   replies,
-  active,
+  announce = false,
 }: {
-  question: ThreadQuestion;
-  /** `pagerStops`: the threads that need a decision, and this one. */
   pager: PagerStops;
+  showing: string;
   replies: QuestionReplies;
-  active: boolean;
+  /** Say which thread a press opened, for the foot's copy: its focus stays in the footer, after the new thread (GPT Sol, 261017c F2). */
+  announce?: boolean;
 }) {
-  const at = stops.findIndex((one) => one.id === question.id);
+  const at = stops.findIndex((one) => one.id === showing);
   const previous = at > 0 ? stops[at - 1] : undefined;
   const next = at >= 0 && at < stops.length - 1 ? stops[at + 1] : undefined;
   const pagerKey = stops.map((one) => `${one.id}:${deciding.has(one.id) ? "1" : "0"}`).join("|");
@@ -1584,10 +1584,91 @@ function ThreadView({
   useEffect(() => {
     setRefused((was) => (was !== null && was.pagerKey !== pagerKey ? null : was));
   }, [pagerKey]);
+  /* Which thread this copy's own press opened, said only while it is the one showing. */
+  const [went, setWent] = useState<{ id: string; title: string } | null>(null);
+  const arrived = announce && went !== null && went.id === showing ? went : null;
+  return (
+    <>
+      {/* **`aria-disabled`, not `disabled`, and a `title`** (261009m § 4): a
+          natively disabled button is no reliable trigger for a hint
+          (tooltips.md), and the house card portals to `document.body`,
+          underneath this modal dialog, which is why the shortcut beside the
+          tabs has a `title` too. A phone has no hover, so pressing an end
+          says the same sentence on the row. */}
+      {(
+        [
+          ["previous", previous, "‹ Previous"],
+          ["next", next, "Next ›"],
+        ] as const
+      ).map(([which, to, word]) => (
+        <button
+          key={which}
+          type="button"
+          className="fb-copy tap-target"
+          aria-disabled={to === undefined || undefined}
+          title={to === undefined ? PAGER_HINT[which].end : PAGER_HINT[which].go}
+          onClick={() => {
+            if (to === undefined) {
+              setRefused((was) => ({ pagerKey, which, times: (was?.times ?? 0) + 1 }));
+              return;
+            }
+            /* A refusal belongs to this visit. Without clearing it here,
+               paging away and back revives the old sentence unprompted. */
+            setRefused(null);
+            setWent({ id: to.id, title: to.title });
+            replies.open(to.id);
+          }}
+        >
+          {word}
+        </button>
+      ))}
+      {/* Always mounted, empty until an end is pressed: a live region that
+          arrives with its words in it is often not announced (P2). */}
+      <p className="fb-thread-end" role="status" aria-atomic="true">
+        {said === null ? null : <span key={said.times}>{PAGER_HINT[said.which].end}</span>}
+      </p>
+      {announce ? (
+        /* Heard, not seen: the thread itself shows which one this is. */
+        <p className="sr-only" role="status" aria-atomic="true">
+          {arrived === null ? null : `Showing: ${arrived.title}`}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * **One thread on its own**: where it sits among the rest and the way back,
+ * the ids, the question (its *Details* shut), the report it is about (shut),
+ * what the admin has replied, acted on first and then not yet acted on, and
+ * the box.
+ */
+function ThreadView({
+  question,
+  pager: { stops, deciding },
+  replies,
+  active,
+}: {
+  question: ThreadQuestion;
+  /** `pagerStops`: the threads that need a decision, and this one. */
+  pager: PagerStops;
+  replies: QuestionReplies;
+  active: boolean;
+}) {
+  const at = stops.findIndex((one) => one.id === question.id);
   const { summary, details } = splitQuestionBody(question.body);
   const now = Date.now();
+  /* **Each thread opens at its top** (261017c § 2). Paging keeps this view
+     mounted, so the panel's scroll would otherwise carry over: Next pressed at
+     the foot of a long thread landed half-way down the next. Keyed on the id,
+     so typing or a send re-rendering this thread keeps the reader's place. */
+  const top = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const scroller = top.current?.closest(".fb-scroll");
+    if (scroller) scroller.scrollTop = 0;
+  }, [question.id]);
   return (
-    <div className="fb-thread">
+    <div className="fb-thread" ref={top}>
       <nav className="fb-thread-nav" aria-label="Threads">
         <button type="button" className="fb-copy" onClick={replies.close}>
           ‹ All threads
@@ -1599,43 +1680,7 @@ function ThreadView({
               ? "No threads need a decision now"
               : `${deciding.size} need${deciding.size === 1 ? "s" : ""} a decision`}
         </span>
-        {/* **`aria-disabled`, not `disabled`, and a `title`** (261009m § 4): a
-            natively disabled button is no reliable trigger for a hint
-            (tooltips.md), and the house card portals to `document.body`,
-            underneath this modal dialog, which is why the shortcut beside the
-            tabs has a `title` too. A phone has no hover, so pressing an end
-            says the same sentence on the row. */}
-        {(
-          [
-            ["previous", previous, "‹ Previous"],
-            ["next", next, "Next ›"],
-          ] as const
-        ).map(([which, to, word]) => (
-          <button
-            key={which}
-            type="button"
-            className="fb-copy"
-            aria-disabled={to === undefined || undefined}
-            title={to === undefined ? PAGER_HINT[which].end : PAGER_HINT[which].go}
-            onClick={() => {
-              if (to === undefined) {
-                setRefused((was) => ({ pagerKey, which, times: (was?.times ?? 0) + 1 }));
-                return;
-              }
-              /* A refusal belongs to this visit. Without clearing it here,
-                 paging away and back revives the old sentence unprompted. */
-              setRefused(null);
-              replies.open(to.id);
-            }}
-          >
-            {word}
-          </button>
-        ))}
-        {/* Always mounted, empty until an end is pressed: a live region that
-            arrives with its words in it is often not announced (P2). */}
-        <p className="fb-thread-end" role="status" aria-atomic="true">
-          {said === null ? null : <span key={said.times}>{PAGER_HINT[said.which].end}</span>}
-        </p>
+        <ThreadPager pager={{ stops, deciding }} showing={question.id} replies={replies} />
       </nav>
       <article className="fb-question" data-question={question.id} data-state={question.state}>
         <p className="fb-earlier-meta">
@@ -1758,6 +1803,32 @@ export function EarlierThreads({
         <ThreadView question={thread} pager={pagerStops(questions, live, thread.id)} replies={replies} active={showing} />
       )}
     </section>
+  );
+}
+
+/**
+ * **The pager in the dialog's footer**, beside Close, while one thread shows
+ * (`spya-bvzavw`: "add Next/Previous buttons at the bottom of the box as well
+ * (since often that's where I am when I finish responding)"). The footer is
+ * outside the scroller, so it is there however long the thread. The dialog
+ * draws this only when `threadShowing` holds and the list is loaded, which is
+ * when `EarlierThreads` draws the thread (plan 261017c § 1).
+ */
+export function ThreadFootPager({
+  questions,
+  liveQuestions,
+  replies,
+}: {
+  questions: ThreadQuestion[];
+  liveQuestions: ThreadQuestion[] | null;
+  replies: QuestionReplies;
+}) {
+  if (replies.openId === null) return null;
+  const live = new Set((liveQuestions ?? []).map((question) => question.id));
+  return (
+    <nav className="fb-thread-nav fb-foot-pager" aria-label="Threads, at the foot">
+      <ThreadPager pager={pagerStops(questions, live, replies.openId)} showing={replies.openId} replies={replies} announce />
+    </nav>
   );
 }
 

@@ -120,6 +120,7 @@ import {
   EarlierFilter,
   EarlierList,
   EarlierThreads,
+  ThreadFootPager,
   shortcutTitle,
   threadShowing,
   useEarlierFeedback,
@@ -1551,18 +1552,24 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>
-          <button type="button" className="fb-cancel" onClick={onClose}>
+          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
             Close
           </button>
+          {/* With a thread showing, Previous and Next again, where the reader
+              is once a reply is written; and so the bottom-right moves you on
+              rather than shutting the dialog (spya-bvzavw, plan 261017c). */}
+          {threadOpen && earlier.kind === "loaded" && questions !== null ? (
+            <ThreadFootPager questions={questions} liveQuestions={liveQuestions} replies={replies} />
+          ) : null}
         </div>
 
         <div className="fb-actions" hidden={view !== "write"}>
-          <button type="button" className="fb-cancel" onClick={onClose}>
+          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="fb-send"
+            className="fb-send tap-target"
             /* **Live while the microphone is involved**: pressing it then stops
                the microphone and sends once the words land (`send`). Plan
                261010f; it used to be disabled here while still reading Send. */

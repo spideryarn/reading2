@@ -751,17 +751,21 @@ details.fb-threads-group > summary { cursor: pointer; }
   border: 1px solid var(--rule-strong);
   border-radius: 6px;
   background: none;
-  color: var(--ink-soft);
   font-family: inherit;
   font-size: 0.8rem;
   cursor: pointer;
 }
-/* Cancel and Send are both `--rule-strong` now (see the dropzone note above), so
-   the primary/secondary difference is carried by the ink rather than by the line
-   — which is the more legible of the two anyway at this size. */
-.fb-send { color: var(--ink); }
+/* **Send is green, Cancel and Close grey** (spya-bvzavw, plan 261017c): the
+   bottom-right sends on Write but on Earlier was Close, which shuts. Green is
+   `--positive`, as *Send reply* is in a thread (261011h), because both send
+   what you wrote to us; the words still say which is which. The border takes
+   the green too and keeps it on hover, as Send reply's does. */
+.fb-cancel { color: var(--ink-soft); }
+.fb-send { color: var(--positive); border-color: currentColor; }
 .fb-send:disabled { opacity: 0.45; cursor: default; }
-.fb-send:not(:disabled):hover { color: var(--highlight-text); border-color: var(--highlight); }
+.fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
+/* The thread pager again, in Earlier's footer beside Close, kept to the right. */
+.fb-foot-pager { justify-content: flex-end; }
 
 /* ---------------------------------------------------------------- the toast --
    The thank-you after a report is filed, since 2026-09-29 — Greg: *"that

@@ -160,3 +160,16 @@ describe("a Needs-a-decision thread's Send reply and Defer for now", () => {
     expect(declared(CSS, ".fb-defer", "color")).toEqual([]);
   });
 });
+
+/* spya-bvzavw (Greg, 2026-10-17): "In the bottom right of Feedback/Write, the
+   "Send" button submits. But in the bottom-right of Needs-Input, the Close
+   button effectively cancels. How can we signal the difference?" Plan 261017c § 3. */
+describe("Write's Send, told apart from Close", () => {
+  it("draws Send in --positive, as Send reply is, hover included, and Cancel and Close in neither", () => {
+    expectUnconditional(".fb-send", "color", "var(--positive)");
+    expectUnconditional(".fb-send", "border-color", "currentColor");
+    expectUnconditional(".fb-send:not(:disabled):hover", "color", "var(--positive)");
+    expectUnconditional(".fb-send:not(:disabled):hover", "border-color", "currentColor");
+    expect(declared(CSS, ".fb-cancel", "color")).toEqual(["var(--ink-soft)"]);
+  });
+});
