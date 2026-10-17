@@ -8,6 +8,8 @@
  */
 import { type MutableRefObject, useLayoutEffect, useRef } from "react";
 import type { BlockId } from "../../../types.js";
+import { type Figure, figureName } from "../../../figures.js";
+import type { Voice } from "../../voice.js";
 import { dropPendingFlash, flashBlock } from "../../flash.js";
 import { scrollToBlock } from "../../scroll.js";
 import type { SkimArrival, SkimControl } from "./SkimMode.js";
@@ -89,4 +91,14 @@ export function arriveAtBlock(block: BlockId): void {
     },
     { align: "centre" },
   );
+}
+
+/**
+ * **A figure's words on its row and under the door: its caption, else its
+ * name** — the author's words in the author's face, or *"Table 2"*, which is
+ * ours. Both walks draw a figure with it: the Figures walk's rows, and a figure
+ * stop on the route (plan 261017d).
+ */
+export function figureLabel(figure: Figure): { text: string; voice: Voice } {
+  return figure.caption ? { text: figure.caption, voice: "author" } : { text: figureName(figure), voice: "ui" };
 }

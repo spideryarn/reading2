@@ -671,7 +671,8 @@ const SKIM_VIEW: SkimView = {
   depths: [{ depth: 1, label: "Gist", count: 1 }],
   rows: [
     {
-      quoteId: "spya-qte234",
+      key: "spya-qte234",
+      figure: null,
       n: 1,
       place: [{ title: "Methods", voice: "ai" }],
       cue: "The headline result",

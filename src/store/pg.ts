@@ -1452,10 +1452,11 @@ export const REVISION_PROJECTIONS = {
   /**
    * **The second projection that takes other artefacts' columns**, after
    * `illustrated`, and **no fingerprint columns**: the route's `sourceHash` is
-   * `skimInputHash` — over the quotes, the Ideas they carry and the
-   * top-level outline — and it never read the article's prose. So it takes the
-   * `quotes` and `ideas` columns and the tree; `loadSkim` reads the
-   * blocks beside it, for the positions the Idea associations are made from.
+   * `skimInputHash` — over the quotes, the Ideas they carry, the top-level
+   * outline and the figures — and it never reads the prose around a quote. So
+   * it takes the `quotes` and `ideas` columns and the tree; `loadSkim` reads the
+   * blocks beside it for Idea associations, section paths, and figure markup
+   * and captions.
    */
   skim: {
     id: articleRevisions.id,
@@ -4132,7 +4133,7 @@ const rawPgArticleReader: ArticleReader = {
   /**
    * The route through the Quotes — the Postgres half of `loadSkim`.
    *
-   * **Judged against its own input, never the article's prose**: `stale` when
+   * **Judged against its own input, not the prose around a quote**: `stale` when
    * `skimInputHash` has moved (*Find more* added quotes, they were chosen
    * again, the Ideas were regenerated or arrived, the outline changed) or there
    * are no quotes at all; `notOnRoute` counts the current quotes the route does
@@ -4158,8 +4159,8 @@ const rawPgArticleReader: ArticleReader = {
     const onRoute = new Set(skim.stops.map((s) => s.quoteId));
     const tree = found.revision.tree as Tree | null;
     const ideas = found.revision.ideas as Ideas | null;
-    /* The blocks for positions only — which quote carries which Idea, and
-       which section each sits in. `skimInput` reads no prose. */
+    /* The complete blocks, including HTML: `skimInput` needs positions for
+       Idea and section associations, and markup plus captions for figures. */
     const blocks = current.length > 0 && tree ? await blocksFor(found.revision.id) : [];
     const input = tree ? skimInput({ quotes, blocks, tree, ideas }) : null;
     /* A quote left out because it sits in the abstract is not missing from

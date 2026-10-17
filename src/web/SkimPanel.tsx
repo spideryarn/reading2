@@ -82,6 +82,8 @@ import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
 import { type Voice, voiceClass } from "./voice.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { FIGURE_ICON } from "./FigureMark.js";
+import { FIGURE_NOUN, type FigureKind } from "../figures.js";
 
 /** One title on a row's section path, and whose words it is — tree.ts § `titleVoice`. */
 export interface PlaceStep {
@@ -105,7 +107,8 @@ export interface SkimPass {
 
 /** One row of the list. Built by `useSkimMode`, drawn here. */
 export interface SkimRow {
-  quoteId: string;
+  /** The stop's key: its quote's id, or for a figure stop the figure's block id (`WalkStop`). */
+  key: string;
   /** Its number on this pass, from 1. */
   n: number;
   /**
@@ -139,6 +142,13 @@ export interface SkimRow {
    * when the quote has gone, and then the words are drawn as a string.
    */
   blockId: BlockId | null;
+  /**
+   * **A figure stop** (plan 261017d): what to draw where a quote's words go —
+   * the kind's icon and the label, the author's caption or our *"Figure 2"*
+   * (`figureLabel`), cut as the words are. `null` for a quote stop, and for a
+   * figure no longer in the article, whose row is `missing`.
+   */
+  figure: { kind: FigureKind; text: string; voice: Voice; captioned: boolean } | null;
   /** Where it sits in the article's outline, for its position mark's card — `[]` for none (260929f § 3). */
   where: readonly WhereRow[];
   /**
@@ -200,12 +210,31 @@ export const WORDS_ON_A_ROW = 100;
  * it cut, and this decides whether there is a tooltip at all.
  */
 function rowWords(row: SkimRow): { shown: string; whole: string | null } | null {
-  if (row.words === null) return null;
-  const clean = row.words.replace(/\s+/g, " ").trim();
+  /* A figure's label is cut the same way: a caption can run to a paragraph. */
+  const text = row.figure?.text ?? row.words;
+  if (text === null) return null;
+  const clean = text.replace(/\s+/g, " ").trim();
   if (clean === "") return null;
   if (row.current) return { shown: clean, whole: null };
   const cut = snippet(clean, WORDS_ON_A_ROW);
   return { shown: cut, whole: cut === clean ? null : clean };
+}
+
+/**
+ * **A figure stop's label on its row** — the Figures walk's row (FiguresWalk.tsx),
+ * on the route: the kind's icon, and the caption in the author's face or our
+ * name for it in ours. A caption need not say what kind it is, so a screen
+ * reader is told (plan 261017d).
+ */
+function FigureLabel({ figure, text }: { figure: NonNullable<SkimRow["figure"]>; text: string }) {
+  const Icon = FIGURE_ICON[figure.kind];
+  return (
+    <span className="skim-fig-label">
+      <Icon size={14} aria-hidden="true" className="skim-fig-icon" />
+      {figure.captioned && <span className="sr-only">{FIGURE_NOUN[figure.kind]}: </span>}
+      <span className={`skim-fig-text ${voiceClass(figure.voice)}`}>{text}</span>
+    </span>
+  );
 }
 
 /**
@@ -779,7 +808,7 @@ export function SkimPanel({ access, view, away }: Props) {
   const [snippetOpen, setSnippet] = useState<OpenSnippet | null>(null);
   /** The list's own scroller, kept pointed at the current row (54). */
   const scroller = useRef<HTMLDivElement>(null);
-  const currentId = ready ? (view.rows.find((row) => row.current)?.quoteId ?? null) : null;
+  const currentId = ready ? (view.rows.find((row) => row.current)?.key ?? null) : null;
   /* The depth and the card reflow the list without changing the current row.
      `away` is there because a band that stepped aside is `display: none`: a
      step made from the prose's door measures nothing, so the list is measured
@@ -819,7 +848,7 @@ export function SkimPanel({ access, view, away }: Props) {
      the row later returns. The enabled check also covers words disappearing. */
   useEffect(() => {
     if (tipFor === null) return;
-    const row = ready ? view.rows.find((candidate) => candidate.quoteId === tipFor) : undefined;
+    const row = ready ? view.rows.find((candidate) => candidate.key === tipFor) : undefined;
     if (row === undefined || !(row.missing || rowWords(row)?.whole)) setTipFor(null);
   }, [ready, tipFor, view.rows]);
   /* A controlled tooltip can unmount before reporting that it closed. Do not
@@ -827,7 +856,7 @@ export function SkimPanel({ access, view, away }: Props) {
      pass brings it back. This is the where-card equivalent of `tipFor` above. */
   useEffect(() => {
     if (whereFor === null) return;
-    const row = ready ? view.rows.find((candidate) => candidate.quoteId === whereFor) : undefined;
+    const row = ready ? view.rows.find((candidate) => candidate.key === whereFor) : undefined;
     if (row === undefined || row.position === null || row.where.length === 0) setWhereFor(null);
   }, [ready, whereFor, view.rows]);
   /* `snippet` hides an old stop's opening immediately during the step. Clear
@@ -998,7 +1027,7 @@ export function SkimPanel({ access, view, away }: Props) {
                         className="skim-go"
                         aria-current={row.current ? "step" : undefined}
                         disabled={row.missing}
-                        onClick={() => view.onRow(row.quoteId)}
+                        onClick={() => view.onRow(row.key)}
                       >
                         <span className="skim-n">
                           {row.n}
@@ -1026,7 +1055,11 @@ export function SkimPanel({ access, view, away }: Props) {
                               <span className="skim-cue">{row.cue}</span>
                             </Tooltip>
                           )}
-                          {words && <span className="skim-words">“<Excerpt blockId={row.blockId} words={words.shown} />”</span>}
+                          {row.figure ? (
+                            <FigureLabel figure={row.figure} text={words?.shown ?? row.figure.text} />
+                          ) : (
+                            words && <span className="skim-words">“<Excerpt blockId={row.blockId} words={words.shown} />”</span>
+                          )}
                           {row.missing && <span className="skim-missing">{SKIM_STOP_MISSING}.</span>}
                         </span>
                       </button>
@@ -1034,10 +1067,10 @@ export function SkimPanel({ access, view, away }: Props) {
                     const below = row.current && view.card !== null && !cardIsEmpty(view.card);
                     return (
                       <li
-                        key={row.quoteId}
+                        key={row.key}
                         className={`skim-row${row.current ? " current" : ""}`}
-                        data-stop={row.quoteId}
-                        {...{ [FOLLOW_ATTR]: row.quoteId }}
+                        data-stop={row.key}
+                        {...{ [FOLLOW_ATTR]: row.key }}
                       >
                         {/* `piped`: the pips sit between the number and the
                             position line, so the line and the button laid over
@@ -1051,14 +1084,16 @@ export function SkimPanel({ access, view, away }: Props) {
                           content={
                             row.missing ? (
                               <p>{SKIM_STOP_MISSING}.</p>
+                            ) : words?.whole && row.figure ? (
+                              <p className={voiceClass(row.figure.voice)}>{words.whole}</p>
                             ) : words?.whole ? (
                               <p>“<Excerpt blockId={row.blockId} words={words.whole} />”</p>
                             ) : null
                           }
                           enabled={row.missing || Boolean(words?.whole)}
-                          open={tipFor === row.quoteId}
+                          open={tipFor === row.key}
                           onOpenChange={(open) =>
-                            setTipFor((was) => (open ? row.quoteId : was === row.quoteId ? null : was))
+                            setTipFor((was) => (open ? row.key : was === row.key ? null : was))
                           }
                           className="skim-words-tip"
                         >
@@ -1072,9 +1107,9 @@ export function SkimPanel({ access, view, away }: Props) {
                           <Tooltip
                             content={<WhereCard rows={row.where} />}
                             placement="right"
-                            open={whereFor === row.quoteId}
+                            open={whereFor === row.key}
                             onOpenChange={(open) =>
-                              setWhereFor((was) => (open ? row.quoteId : was === row.quoteId ? null : was))
+                              setWhereFor((was) => (open ? row.key : was === row.key ? null : was))
                             }
                             className="where-tip"
                           >
@@ -1082,8 +1117,8 @@ export function SkimPanel({ access, view, away }: Props) {
                               type="button"
                               className="skim-where"
                               aria-label={`Where stop ${row.n} is in the article`}
-                              aria-expanded={whereFor === row.quoteId}
-                              onClick={() => setWhereFor((was) => (was === row.quoteId ? null : row.quoteId))}
+                              aria-expanded={whereFor === row.key}
+                              onClick={() => setWhereFor((was) => (was === row.key ? null : row.key))}
                             />
                           </Tooltip>
                         )}

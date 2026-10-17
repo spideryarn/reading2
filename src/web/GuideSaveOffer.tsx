@@ -38,6 +38,12 @@
  * or the button if not, so an Undo and a reload never save it again. Greg's reply A to q-t3j8hj and report `spya-yk3r03`, plan
  * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md.
  *
+ * **A reworded `now` offer** (since 2026-10-17, plan
+ * docs/plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md)
+ * is one whole sentence the reader typed with only its spelling tidied. Saved,
+ * it says *lightly reworded* and shows that sentence, in the reader's face,
+ * beside the Undo; in a hidden tab it does not save itself, and shows its button.
+ *
  * The words are the model's, however close to the reader's, so they are set in
  * the model's face (docs/project/fonts.md); the heading and buttons are ours.
  */
@@ -50,6 +56,7 @@ import {
   type SaveOffer,
   type ToolRun,
 } from "../types.js";
+import { savesAtOnce } from "../save-closeness.js";
 import { Link } from "./Link.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { answeredHereWork, takeAnsweredHere, trackAnsweredHereWork } from "./chat/answered-here.js";
@@ -64,14 +71,22 @@ export const OFFER_WORDS = {
     save: "Save as why you're reading",
     saved: "Saved as why you're reading this one.",
     savedNow: "Saved as why you're reading this one, from what you wrote.",
+    savedReworded: "Saved as why you're reading this one, lightly reworded.",
   },
   profile: {
     heading: "About you",
     save: "Save to About you",
     saved: "Saved to About you.",
     savedNow: "Saved to About you, from what you wrote.",
+    savedReworded: "Saved to About you, lightly reworded.",
   },
-} as const satisfies Record<SaveOffer["field"], { heading: string; save: string; saved: string; savedNow: string }>;
+} as const satisfies Record<
+  SaveOffer["field"],
+  { heading: string; save: string; saved: string; savedNow: string; savedReworded: string }
+>;
+
+/** Before the reader's own sentence, under a reworded save. */
+export const FROM_YOUR_MESSAGE = "From your message:";
 
 export const UNDO_LABEL = "Undo";
 
@@ -94,8 +109,23 @@ export function offerOf(run: ToolRun): SaveOffer | null {
   if (basis !== null && (typeof basis !== "string" || normaliseProfileText(basis) !== basis || basis.length > max)) {
     return null;
   }
-  /* Saved without a press only when the stored run says so literally. */
-  return { field, text, basis, ...((run.offer as { now?: unknown }).now === true ? { now: true as const } : {}) };
+  /* Saved without a press only when the stored run says so literally. A
+     reworded one also needs the reader's sentence to show beside it; an
+     offer stored before routes existed has none and reads as exact. */
+  const { now, route, source } = run.offer as { now?: unknown; route?: unknown; source?: unknown };
+  if (now !== true) return { field, text, basis };
+  if (route === undefined) return { field, text, basis, now: true };
+  if (route === "exact") return { field, text, basis, now: true, route };
+  if (route === "reworded" && typeof source === "string" && source.trim() !== "") {
+    /* Stored JSON must still prove that this is the sentence the offer
+       rewords. Otherwise a malformed run could save one string while naming
+       an unrelated one as the reader's own words. */
+    const checked = savesAtOnce({ field, text, basis }, source);
+    if (checked?.route === "reworded" && checked.source === source) {
+      return { field, text, basis, now: true, route, source };
+    }
+  }
+  return { field, text, basis };
 }
 
 /**
@@ -207,7 +237,10 @@ export function GuideSaveOffer({ slug, offer, answer }: { slug: string; offer: S
   useEffect(() => {
     if (offer.now !== true || tried.current) return;
     tried.current = true;
-    if (takeAnsweredHere(answer, offer.field)) {
+    /* A reworded one saves itself only where the reader can see it happen
+       (plan 261012c): in a hidden tab it shows its button instead. */
+    const unseen = offer.route === "reworded" && document.visibilityState === "hidden";
+    if (takeAnsweredHere(answer, offer.field) && !unseen) {
       void trackAnsweredHereWork(answer, offer.field, () => save(true));
       return;
     }
@@ -245,7 +278,17 @@ export function GuideSaveOffer({ slug, offer, answer }: { slug: string; offer: S
       <p className="guide-offer-text voice-ai">{offer.text}</p>
       {shows === "saved" ? (
         <p className="chat-empty-hint guide-offer-status" role="status">
-          {state.kind === "saved" && state.now ? words.savedNow : words.saved} You can change it on <Link href={where}>{whereName}</Link>.{" "}
+          {state.kind === "saved" && state.now
+            ? offer.route === "reworded"
+              ? words.savedReworded
+              : words.savedNow
+            : words.saved}{" "}
+          {state.kind === "saved" && state.now && offer.source !== undefined && (
+            <>
+              {FROM_YOUR_MESSAGE} “<span className="voice-reader">{offer.source}</span>”{" "}
+            </>
+          )}
+          You can change it on <Link href={where}>{whereName}</Link>.{" "}
           <button
             type="button"
             className="chat-suggest-btn"

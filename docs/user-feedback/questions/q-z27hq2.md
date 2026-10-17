@@ -1,10 +1,11 @@
 ---
 id: q-z27hq2
 report: spya-c8z66b
-status: open
+status: answered
 asked: 2026-10-15
+acted: spya-zrfpc0
 title: Figures in Skim's Gist, More and Most: their own stop, or alongside a quote? And chosen by the model, or by a rule?
-refs: SPIDERYARN-READING2-J5 · qi-r4rvhyqw · qi-647czja2 · docs/plans/261015b-figures-follow-ups-tables-as-pictures-louder-structure-marks.md · docs/user-feedback/261015_2040-figures-in-the-skim-route-awaiting.md
+refs: SPIDERYARN-READING2-J5 · qi-r4rvhyqw · qi-647czja2 · docs/plans/261015b-figures-follow-ups-tables-as-pictures-louder-structure-marks.md · docs/user-feedback/261015_2040-figures-in-the-skim-route.md · qi-77vvdcac · docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md
 ---
 You asked for figures to appear in the Gist, More and Most walks, as the model sees fit. Two choices before we build it.
 
@@ -31,3 +32,9 @@ What each choice gives you in use. With 1A, on a Gist stop about imagery being l
 What would make you pick B for question 1: if what you want is for the walk itself to step through some figures, not just point at them.
 
 Done in the meantime: your two other reports from the same minute. Structure's figure marks were already on that paper but too faint to notice, and are now darker and bigger. Tables were already in the Figures walk; a table published as a picture now counts as a table too.
+
+Greg's reply, 2026-10-17 (spya-zrfpc0):
+
+"I was thinking 1B, perhaps with some kind of commentary or cue to make it easier to see why the figure is being included. Use your judgment. / 2A"
+
+Built as 1B and 2A, with a cue on every figure. A figure follows the quote it goes with and is walked in that quote's pass, and it counts in that pass's length. Plan 261017d, measured in investigation 261017b. Figure stops are not shown to visitors yet; that is asked in q-gq0f4k.

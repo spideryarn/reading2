@@ -18,17 +18,20 @@
  * does (the caller's `max`), the count is on screen, the foot line is always
  * there wherever the slider is, and the reset appears only once there is
  * something to undo. A native range input, for its keyboard, touch and screen
- * reader behaviour for free.
+ * reader behaviour for free — `StopRange`, which since 2026-10-17 moves only
+ * to the values that change the list and ticks each one (plan 261017f).
  *
  * The shared "show items above a score" row — web-client.md#shared-code-client.
  */
 import { RotateCcw } from "lucide-react";
+import { StopRange } from "./StopRange.js";
 import { GATE_STEP } from "./threshold.js";
 
 export function ThresholdSlider({
   id,
   value,
   max,
+  stops,
   defaultValue,
   moved,
   visible,
@@ -43,6 +46,11 @@ export function ThresholdSlider({
   value: number;
   /** The track's right-hand end — `thresholdMax` over the caller's score. */
   max: number;
+  /**
+   * The values that change the list — threshold.ts § thresholdStops over the
+   * caller's score, floored to the grid. The thumb moves only between these.
+   */
+  stops: readonly number[];
   /** Where the reset returns to. */
   defaultValue: number;
   /** Has the reader touched it? Only then is there a reset. */
@@ -81,17 +89,16 @@ export function ThresholdSlider({
           </button>
         )}
       </div>
-      <input
+      <StopRange
         id={id}
-        className="gloss-gate-range"
-        type="range"
         min={0}
         max={max}
         step={GATE_STEP}
         value={value}
-        data-tip={tip}
-        aria-valuetext={`${value.toFixed(2)}, showing ${count} ${noun}`}
-        onChange={(e) => onChange(Number.parseFloat(e.target.value))}
+        stops={stops}
+        tip={tip}
+        valueText={`${value.toFixed(2)}, showing ${count} ${noun}`}
+        onChange={onChange}
       />
       <p className="gloss-gate-note">{note}</p>
     </div>

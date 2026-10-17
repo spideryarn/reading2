@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Tree } from "../../../types.js";
-import { type Figure, figureName, FIGURE_NOUN } from "../../../figures.js";
+import { type Figure, FIGURE_NOUN } from "../../../figures.js";
 import { blockIndex, sectionNodesOf } from "../../../section-path.js";
 import { titleVoice } from "../../tree.js";
 import { depthParam, type SkimPart, stopParam } from "../../params.js";
@@ -41,18 +41,13 @@ import { ModeSurface } from "../../ModeSurface.js";
 import { TooltipGroup } from "../../Tooltip.js";
 import { FIGURE_ICON } from "../../FigureMark.js";
 import { type PlaceStep, PlacePath, partChoices, placeText, SkimHead, SkimParts, StopPosition } from "../../SkimPanel.js";
-import { type Voice, voiceClass } from "../../voice.js";
+import { voiceClass } from "../../voice.js";
 import type { DoorView, SkimArrival, SkimControl } from "./SkimMode.js";
-import { arriveAtBlock, takeArrival, useClaimedArrival, usePublishedControl } from "./walk.js";
+import { arriveAtBlock, figureLabel as labelOf, takeArrival, useClaimedArrival, usePublishedControl } from "./walk.js";
 
 /** What the band's (i) says while walking the figures. */
 export const FIGURES_ABOUT =
   "Every figure, table and media item in the article, in the order it comes. Read off the article itself: no model chose them, and the captions are the author's.";
-
-/** A figure's words on its row and under the door: its caption, else its name. */
-function labelOf(figure: Figure): { text: string; voice: Voice } {
-  return figure.caption ? { text: figure.caption, voice: "author" } : { text: figureName(figure), voice: "ui" };
-}
 
 /** One row of the figures' list. */
 interface FigureRow {

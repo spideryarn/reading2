@@ -10,10 +10,12 @@
 import { describe, expect, it } from "vitest";
 import { savesAtOnce } from "../src/save-closeness.js";
 
+/* Exact-route behaviour: whether it saves at all. The reworded route is
+   tests/save-closeness-reworded.test.ts. */
 const reason = (text: string, typed: string | null, basis: string | null = null) =>
-  savesAtOnce({ field: "purpose", text, basis }, typed);
+  savesAtOnce({ field: "purpose", text, basis }, typed) !== null;
 const about = (text: string, typed: string | null, basis: string | null = null) =>
-  savesAtOnce({ field: "profile", text, basis }, typed);
+  savesAtOnce({ field: "profile", text, basis }, typed) !== null;
 
 describe("word for word from what the reader typed: saves at once", () => {
   it("the whole message", () => {

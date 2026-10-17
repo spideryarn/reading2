@@ -107,7 +107,15 @@
  * d, which is what scripts/eval/skim-walked-metrics.ts reads (GPT Sol, plan
  * review F4).
  * scripts/eval/skim-cue-pairs.ts turns several results files into the
- * screens, the route comparison and the blind pairs.
+ * screens, the route comparison and the blind pairs. *
+ * ## Also used for `skim/13` vs `skim/14` (plan 261017d § Measuring it)
+ *
+ * `skim/14` offers the figures and may stop at them. Each run also records
+ * `figuresOffered` (the NEW arm's; an older arm offers none), `figureStops`
+ * (each chosen figure with its cue, its anchor, and its neighbours in its
+ * pass, for reading placement) and `walkedWithFigures`. The other metrics
+ * stay the quotes'. `--file=` inputs carry block HTML since then, which
+ * `figuresOf` needs.
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -159,7 +167,7 @@ const { isBody } = await import("../../src/block-policy.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const { costStore } = await import("../../src/store/ai-calls.js");
 const NEW = await import("../../src/skim.js");
-const { passRoute } = await import("../../src/web/skim-route.js");
+const { passCount, passRoute, walkOf } = await import("../../src/web/skim-route.js");
 const { renderProfile } = await import("../../src/profile.js");
 const PROFILE = renderProfile({
   profile: aboutArg ? aboutArg.slice("--about=".length) : null,
@@ -352,6 +360,27 @@ interface RunResult {
   abstractQuotes: number;
   /** Stops visible at depth ≤ 1, ≤ 2, ≤ 3 that sit under an abstract heading. */
   abstractStops: [number, number, number];
+  /**
+   * **Figures** (`skim/14`, plan 261017d). What the NEW arm's prompt offered
+   * (`[]` for an older arm, which offers none), the figure stops the route
+   * chose — each with its pass neighbours, so placement can be read — and
+   * each pass's length walked with them (`walkOf`).
+   */
+  figuresOffered: { blockId: string; name: string; caption: string | null; section: string; namedIn: string[] }[];
+  figureStops: {
+    blockId: string;
+    name: string;
+    caption: string | null;
+    depth: SkimDepth;
+    cue: string | null;
+    after: string | null;
+    section: string;
+    namedIn: string[];
+    /** The stops either side of it in its pass: a quote id, a figure's block id, or `null` at an end. */
+    prev: { key: string; section: string; quote: string | null } | null;
+    next: { key: string; section: string; quote: string | null } | null;
+  }[];
+  walkedWithFigures: [number, number, number];
 }
 
 async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
@@ -385,6 +414,48 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   const byId = new Map(quotes.quotes.map((q) => [q.id, q]));
   const idx = blockIndex(article.blocks);
   const sections = sectionsOf(article, idx);
+  /* Figures (plan 261017d): what was offered, and where each chosen one sits in its pass. */
+  const sectionAt = (blockId: string) => {
+    const at = idx.get(blockId) ?? -1;
+    return sections.find((x) => x.lo <= at && at <= x.hi)?.title ?? "(none)";
+  };
+  const figInput = arm === "new" ? NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas }) : null;
+  const labelToId = new Map((figInput?.offered ?? []).map((q, i) => [`Q${i + 1}`, q.id]));
+  const figuresOffered = (figInput?.figures ?? []).map((f) => ({
+    blockId: f.figure.blockId as string,
+    name: f.name,
+    caption: f.caption,
+    section: sectionAt(f.figure.blockId),
+    namedIn: f.namedIn.map((l) => labelToId.get(l) ?? l),
+  }));
+  const offeredBy = new Map(figuresOffered.map((f) => [f.blockId, f]));
+  const walk = walkOf(skim.stops, skim.figures ?? []);
+  const neighbour = (k: { key: string; kind: string } | undefined) =>
+    k === undefined
+      ? null
+      : {
+          key: k.key,
+          section: sectionAt(k.kind === "quote" ? (byId.get(k.key)?.blockId ?? "") : k.key),
+          quote: k.kind === "quote" ? (byId.get(k.key)?.text.replace(/\s+/g, " ").slice(0, 240) ?? null) : null,
+        };
+  const figureStops = (skim.figures ?? []).map((f) => {
+    const pass = passRoute(walk, f.depth);
+    const i = pass.findIndex((s) => s.key === f.blockId);
+    const o = offeredBy.get(f.blockId);
+    return {
+      blockId: f.blockId as string,
+      name: o?.name ?? "?",
+      caption: o?.caption ?? null,
+      depth: f.depth,
+      cue: f.cue,
+      after: f.after,
+      section: sectionAt(f.blockId),
+      namedIn: o?.namedIn ?? [],
+      prev: neighbour(pass[i - 1]),
+      next: neighbour(pass[i + 1]),
+    };
+  });
+  const walkedWithFigures = ([1, 2, 3] as const).map((d) => passCount(walk, d)) as [number, number, number];
   const occBlocks = ideas.ideas.map((i) => new Set(i.occurrences.map((o) => o.blockId)));
   const stopBlocks = skim.stops.map((s) => {
     const q = byId.get(s.quoteId);
@@ -399,6 +470,9 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   return {
     abstractQuotes: quotes.quotes.filter((q) => idx.has(q.blockId) && isAbs(q.blockId)).length,
     abstractStops,
+    figuresOffered,
+    figureStops,
+    walkedWithFigures,
     intros: skim.intros ?? null,
     profile: PROFILE,
     slug,

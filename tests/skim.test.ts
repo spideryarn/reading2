@@ -23,10 +23,20 @@ import { hashProfile, PROFILE_RULES } from "../src/profile.js";
 import { blockIndex, sectionPathOf } from "../src/section-path.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { SHAPE, sameStamp, stampOf } from "../src/store/artifacts.js";
-import { type Block, type BlockId, type Idea, type Ideas, MAX_QUOTES_TOTAL, type NodeId, type Quote, type Quotes, type Tree, type TreeNode } from "../src/types.js";
+import { type Block, type BlockId, type Idea, type Ideas, MAX_QUOTES_TOTAL, type NodeId, type Quote, type Quotes, type SkimDepth, type SkimFigureStop, type SkimStop, type Tree, type TreeNode } from "../src/types.js";
+import type { Figure } from "../src/figures.js";
+import { walkOf } from "../src/skim-passes.js";
 import {
   ANSWER_TOKENS,
   DEPTH_CAPS,
+  FIGURE_CAPS,
+  MAX_FIGURES_OFFERED,
+  figureNumber,
+  fromFigureLabels,
+  fromLabels,
+  namesFigure,
+  trimFigures,
+  validateFigures,
   LONG_STOP_WORDS,
   MAX_CUE_CHARS,
   MAX_IDEA_PROMPT_CHARS,
@@ -244,10 +254,11 @@ function inputOf(
   });
 }
 
-function buildOpts(quotes: readonly Quote[]) {
+function buildOpts(quotes: readonly Quote[], figures: readonly Figure[] = []) {
   return {
     slug: SLUG,
     quotes,
+    figures,
     sourceHash: "h",
     profileHash: null,
     elapsedMs: 1,
@@ -340,7 +351,7 @@ describe("validating the model's route", () => {
     expect(prompt).toContain("THE ECHO TEST");
     expect(prompt).toContain("ASK ONLY WHAT THE QUOTE ANSWERS");
     expect(prompt).toContain("IT SAYS WHY THIS PASSAGE");
-    expect(prompt).toMatch(/OUTPUT[\s\S]*"cue": ""[\s\S]*"cue": "" means that stop has no cue/);
+    expect(prompt).toMatch(/OUTPUT[\s\S]*"cue": ""[\s\S]*"cue": "" means that quote stop has no cue/);
     expect(SKIM_OUTPUT_SCHEMA.properties.stops.items.required).toContain("cue");
     expect(SKIM_OUTPUT_SCHEMA.properties.stops.items.properties.cue).toEqual({ type: "string" });
     expect(prompt).not.toContain("MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS");
@@ -978,7 +989,8 @@ describe("each pass's intro (skim/13, plan 261011r)", () => {
   });
 
   it("asks for an intro per pass in the schema and the prompt, never a finding or the reader", () => {
-    expect(SKIM_OUTPUT_SCHEMA.required).toEqual(["stops", "intros"]);
+    /* The figures between the two since `skim/14` (plan 261017d). */
+    expect(SKIM_OUTPUT_SCHEMA.required).toEqual(["stops", "figures", "intros"]);
     expect(SKIM_OUTPUT_SCHEMA.properties.intros.required).toEqual(["gist", "more", "most"]);
     expect(SKIM_SYSTEM).toMatch(/4\. AN INTRO for each pass you offer/);
     expect(SKIM_SYSTEM).toMatch(/never say what the piece found/);
@@ -1132,7 +1144,7 @@ describe("what the prompt is given", () => {
   });
 
   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
-    expect(PROMPT_VERSION).toBe("skim/13");
+    expect(PROMPT_VERSION).toBe("skim/14");
     expect(MAX_CUE_CHARS).toBe(200);
     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
     expect(SKIM_SYSTEM).not.toContain(`"role"`);
@@ -1183,11 +1195,13 @@ describe("what the prompt is given", () => {
     expect(SKIM_SYSTEM).toMatch(/carry at least one earlier stop into MOST/);
     expect(SKIM_SYSTEM).toMatch(/when a target is 0 that pass may be\s+absent/);
     expect(SKIM_SYSTEM).toMatch(/Use about as many quotes in all as the three targets add up to/);
-    /* The targets are each pass's own stops since skim/12, and the user
+    /* The targets are each pass's own quote stops since skim/12, and the user
        message says a carried stop is not counted in them. */
     const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });
-    expect(prompt).toContain("Targets, each pass's own stops: about 2 at depth 1; about 3 at depth 2; about 5 at depth 3.");
-    expect(prompt).toMatch(/is not counted in that pass's target/);
+    expect(prompt).toContain(
+      "Targets, each pass's own quote stops: about 2 at depth 1; about 3 at depth 2; about 5 at depth 3.",
+    );
+    expect(prompt).toMatch(/A quote stop carried[\s\S]*is not counted in that pass's target/);
   });
 
   it("marks quote text as untrusted data and prevents it from closing its prompt fence", () => {
@@ -1226,8 +1240,12 @@ describe("freshness", () => {
     /* A literal, recorded from this fixture while `skimInput` and
        `skimInputHash` were still byte-for-byte `skim/8`'s (the stage's diff
        touches neither). The version alone stales a stored route; if the hash
-       moved as well, nobody could tell which of the two had changed. */
-    expect(skimInputHash(inputOf(quotesOf(10)))).toBe("85a84fc58c7c372f");
+       moved as well, nobody could tell which of the two had changed.
+       **Re-recorded at `skim/14`**, which moved it on purpose: the input
+       gained the figures (an empty list here), so a route of that version
+       is stale when they change (plan 261017d). It was "85a84fc58c7c372f"
+       from `skim/8` to `skim/13`. */
+    expect(skimInputHash(inputOf(quotesOf(10)))).toBe("5423f1ba6d51f837");
   });
 
   it("still gives the prompt no paragraph: the words around a quote are neither sent nor hashed (plan 261006e, arm C removed)", () => {
@@ -1899,5 +1917,265 @@ describe("the abstract is left out of the route (Greg, 2026-09-28)", () => {
     expect(failure).toEqual(SKIM_ONLY_ABSTRACT_QUOTES);
     expect(failure.message).toContain("[jb-only-abstract-quotes]");
     expect(sent).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------- figures --
+   `skim/14`: a figure as a stop of its own, between quotes, with a cue — Greg's
+   1B and 2A to q-z27hq2. docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md. */
+
+describe("figures on the route (skim/14)", () => {
+  /* Block 10 is Figure 3, captioned; quote 4's paragraph names it. No quote sits on block 10. */
+  const FIGURE_AT = 10;
+  const withFigure = (caption = "Figure 3. The rig, from above."): Block[] =>
+    blocks.map((b, i) =>
+      i === FIGURE_AT
+        ? { ...b, tag: "figure", kind: "media", text: caption, html: `<figure><img src="a.png"><figcaption>${caption}</figcaption></figure>` }
+        : i === 4
+          ? { ...b, text: `${b.text} The rig is drawn in Fig. 3 for reference.` }
+          : b,
+    );
+  const fig = (at: number, ordinal = 1): Figure => ({ blockId: bid(at), row: at, kind: "figure", caption: "A figure.", ordinal });
+  const figures = [fig(10), fig(11, 2)];
+  /** goodRoute, validated: own stops Gist 2, More 3, Most 5 over ten quotes. */
+  const route = () => validateRoute(goodRoute, quotesOf(10), emptyDrops());
+  const entry = (at: number, after: unknown, cue: unknown = "Compare the two panels.") => ({
+    figure: bid(at),
+    after,
+    cue,
+  });
+
+  describe("what the model is given", () => {
+    it("offers each figure with its author's number, its section, its caption and the quotes whose paragraph names it", () => {
+      const input = inputOf(quotesOf(10), null, { blocks: withFigure() });
+      expect(input.figures).toHaveLength(1);
+      const [f] = input.figures;
+      expect(f!.name).toBe("Figure 3");
+      expect(f!.path).toEqual(["Results", "Robustness"]);
+      expect(f!.caption).toBe("Figure 3. The rig, from above.");
+      expect(f!.namedIn).toEqual(["Q5"]);
+      const prompt = renderPrompt({ input, profile: null });
+      expect(prompt).toContain("Plan the route through these 10 quotes and this figure.");
+      expect(prompt).toMatch(/<<<UNTRUSTED FIGURE RECORD[^\n]*\nF1 · Figure 3 · Results › Robustness · named in the paragraph of Q5\nFigure 3\. The rig, from above\./);
+    });
+
+    it("says there are none, and to answer with an empty list, when the article has no figures", () => {
+      const input = inputOf(quotesOf(10));
+      expect(input.figures).toEqual([]);
+      expect(renderPrompt({ input, profile: null })).toContain('(none — the article has no figures. Write "figures": [].)');
+    });
+
+    it("hashes the figures: a changed caption makes a skim/14 route stale", () => {
+      const a = skimInputHash(inputOf(quotesOf(10), null, { blocks: withFigure() }));
+      const b = skimInputHash(inputOf(quotesOf(10), null, { blocks: withFigure("Figure 3. The rig, from the side.") }));
+      expect(a).not.toBe(b);
+      expect(a).not.toBe(skimInputHash(inputOf(quotesOf(10))));
+    });
+
+    it("reads the author's number off a caption, and finds it named in a paragraph without matching 20 for 2 (Sol F6)", () => {
+      expect(figureNumber("Figure 2. The rig.")).toBe("2");
+      expect(figureNumber("Fig. 3b: panels")).toBe("3b");
+      expect(figureNumber("Table S1 — counts")).toBe("S1");
+      expect(figureNumber("Supplementary Table 2.")).toBe("2");
+      expect(figureNumber("The rig, from above.")).toBeNull();
+      expect(figureNumber(null)).toBeNull();
+      expect(namesFigure("as Figure 2 shows", "figure", "2")).toBe(true);
+      expect(namesFigure("(Fig. 2a)", "figure", "2")).toBe(true);
+      expect(namesFigure("see Figs. 2 and 3", "figure", "2")).toBe(true);
+      expect(namesFigure("see Figure 20", "figure", "2")).toBe(false);
+      expect(namesFigure("in Table 1", "figure", "1")).toBe(false);
+      expect(namesFigure("in Table S1", "table", "S1")).toBe(true);
+      expect(namesFigure("in Table 12", "table", "1")).toBe(false);
+      expect(namesFigure("Media 1", "media", "1")).toBe(false);
+    });
+  });
+
+  describe("validating the figures", () => {
+    it("keeps a figure after its quote, walked in that quote's own pass, with its cue", () => {
+      const d = emptyDrops();
+      /* q4 is a More stop and q1 a Most one (`goodRoute`). */
+      const out = validateFigures([entry(10, qid(4)), entry(11, qid(1))], figures, route(), d);
+      expect(out).toEqual([
+        { blockId: bid(10), depth: 2, cue: "Compare the two panels.", after: qid(4) },
+        { blockId: bid(11), depth: 3, cue: "Compare the two panels.", after: qid(1) },
+      ]);
+    });
+
+    it("drops an unknown figure, a malformed entry, and an anchor that is not on the route or is empty (Sol F3)", () => {
+      const d = emptyDrops();
+      const out = validateFigures(
+        [entry(3, qid(4)), { figure: bid(10), after: "" }, "nonsense", entry(10, "tq9999")],
+        figures,
+        route(),
+        d,
+      );
+      expect(out).toEqual([]);
+      expect(d.unknownFigure).toBe(2);
+      expect(d.figureAnchorGone).toBe(2);
+    });
+
+    it("keeps one entry per figure and one figure per quote, the shallowest then the earliest", () => {
+      const d = emptyDrops();
+      const out = validateFigures([entry(10, qid(1)), entry(10, qid(0))], figures, route(), d);
+      expect(out.map((f) => [f.after, f.depth])).toEqual([[qid(0), 2]]);
+      expect(d.duplicateFigure).toBe(1);
+      /* Two figures after one quote would be met side by side: the earlier stays. */
+      const d2 = emptyDrops();
+      expect(validateFigures([entry(10, qid(4)), entry(11, qid(4))], figures, route(), d2).map((f) => f.blockId)).toEqual([bid(10)]);
+      expect(d2.duplicateFigure).toBe(1);
+    });
+
+    it("caps each pass in route order, Gist at one", () => {
+      expect(FIGURE_CAPS).toEqual({ 1: 1, 2: 2, 3: 3 });
+      const d = emptyDrops();
+      /* Both in Gist: 11 is placed before 10 in the route (after q8, the first stop), so 10 goes. */
+      const out = validateFigures([entry(10, qid(9)), entry(11, qid(8))], figures, route(), d);
+      expect(out.map((f) => f.blockId)).toEqual([bid(11)]);
+      expect(d.overFigureCap).toBe(1);
+    });
+
+    it("keeps a figure whose cue is missing or too long, with none, and counts only the kept", () => {
+      const d = emptyDrops();
+      const out = validateFigures(
+        [entry(10, qid(4), ""), entry(11, qid(1), "w".repeat(MAX_CUE_CHARS + 1)), entry(3, qid(4), "")],
+        figures,
+        route(),
+        d,
+      );
+      expect(out.map((f) => f.cue)).toEqual([null, null]);
+      expect([d.noFigureCue, d.badFigureCue, d.unknownFigure]).toEqual([1, 1, 1]);
+    });
+  });
+
+  describe("keeping the passes growing (Sol F4)", () => {
+    const at = (blockId: BlockId, depth: SkimDepth, after: string): SkimFigureStop => ({ blockId, depth, cue: null, after });
+
+    it("drops a Gist figure that makes Gist as long as More", () => {
+      const d = emptyDrops();
+      expect(trimFigures(route(), [at(bid(10), 1, qid(8))], 10, d)).toEqual([]);
+      expect(d.figureShrink).toBe(1);
+    });
+
+    it("keeps the same Gist figure when a More figure keeps More the longer, and drops the More figure that ties Most", () => {
+      const both = [at(bid(10), 1, qid(8)), at(bid(11), 2, qid(4))];
+      expect(trimFigures(route(), both, 10, emptyDrops())).toEqual(both);
+      expect(passSizes(walkOf(route(), both))).toEqual([3, 4, 5]);
+      const d = emptyDrops();
+      const tie = [at(bid(10), 2, qid(4)), at(bid(11), 2, qid(0))];
+      expect(trimFigures(route(), tie, 10, d).map((f) => f.blockId)).toEqual([bid(10)]);
+      expect(d.figureShrink).toBe(1);
+    });
+
+    it("leaves every figure count within the caps walking a growing route, Gist + Most with no More included", () => {
+      const noMore = validateRoute([stop(0, 1), stop(1, 1), stop(2, 3), stop(3, 3), stop(4, 3)], quotesOf(5), emptyDrops());
+      const cases: [SkimStop[], number][] = [
+        [route(), 10],
+        [noMore, 5],
+      ];
+      const pool = [10, 11, 6, 7, 5, 9].map((i) => bid(i));
+      for (const [stops, q] of cases) {
+        expect(growthFailure(passSizes(stops), q)).toBeNull();
+        for (let g = 0; g <= FIGURE_CAPS[1]; g++) {
+          for (let m = 0; m <= FIGURE_CAPS[2]; m++) {
+            for (let o = 0; o <= FIGURE_CAPS[3]; o++) {
+              const blocksFor = [...pool];
+              /* Each after a different quote of its own pass, as `validateFigures` leaves them. */
+              const anchors = (d: SkimDepth) => stops.filter((s) => s.depth === d).map((s) => s.quoteId);
+              const make = (n: number, d: SkimDepth) =>
+                anchors(d).slice(0, n).map((q) => at(blocksFor.shift()!, d, q));
+              const figs = [...make(g, 1), ...make(m, 2), ...make(o, 3)];
+              const kept = trimFigures(stops, figs, q, emptyDrops());
+              expect(growthFailure(passSizes(walkOf(stops, kept)), q), `${g}/${m}/${o} over ${q}`).toBeNull();
+            }
+          }
+        }
+      }
+    });
+
+    it("on a route under eight quotes, lets a figure make a pass as long as the next (the rule there is not strict)", () => {
+      const noMore = validateRoute([stop(0, 1), stop(1, 1), stop(2, 3), stop(3, 3), stop(4, 3)], quotesOf(5), emptyDrops());
+      const kept = trimFigures(noMore, [at(bid(10), 1, qid(0))], 5, emptyDrops());
+      expect(kept).toHaveLength(1);
+      expect(passSizes(walkOf(noMore, kept))).toEqual([3, 0, 3]);
+    });
+  });
+
+  describe("the artefact", () => {
+    it("stores the figures the model chose, anchored by quote id, from its labels", () => {
+      const input = inputOf(quotesOf(10), null, { blocks: withFigure() });
+      const raw = { stops: fromLabels(goodRoute.map((s) => ({ ...s, quote: `Q${quotesOf(10).findIndex((q) => q.id === s.quote) + 1}` })), input.offered), figures: fromFigureLabels([{ figure: "F1", after: "Q5", cue: "Where does the light come from?" }], input.figures.map((f) => f.figure), input.offered) };
+      const skim = buildSkim(raw, buildOpts(input.offered, input.figures.map((f) => f.figure)));
+      expect(skim.figures).toEqual([{ blockId: bid(10), depth: 2, cue: "Where does the light come from?", after: qid(4) }]);
+      /* The quotes' own record is untouched by it. */
+      expect(skim.visible).toEqual([2, 5, 10]);
+    });
+
+    it("makes room for a Gist figure by carrying a stop into More, not by losing the figure (Greg, q-vzd2xt B)", () => {
+      /* goodRoute walks Gist 2, More 3, Most 5: a figure after q8 makes Gist 3, tying More. */
+      const opts = buildOpts(quotesOf(10), figures);
+      const skim = buildSkim({ stops: goodRoute, figures: [entry(10, qid(8))] }, opts);
+      expect(skim.figures?.map((f) => [f.blockId, f.depth])).toEqual([[bid(10), 1]]);
+      expect(passSizes(walkOf(skim.stops, skim.figures))).toEqual([3, 4, 5]);
+      expect(opts.dropped.growCarried).toBe(1);
+      expect(opts.dropped.figureShrink ?? 0).toBe(0);
+      /* The quotes alone still grow. */
+      expect(growthFailure(passSizes(skim.stops), 10)).toBeNull();
+    });
+
+    it("replans when repair moves a figure's anchor into another pass", () => {
+      /* Own stops 2/2/4 do not grow. The repair moves the latest, tied-lowest
+         Gist quote (q1) into More. Its figure therefore moves into More too,
+         so Most needs one carried quote to remain longer. Planning only with
+         the figure's old Gist count trims a figure that the route can keep. */
+      const raw = [
+        stop(0, 1),
+        stop(1, 1),
+        stop(2, 2),
+        stop(3, 2),
+        stop(4, 3),
+        stop(5, 3),
+        stop(6, 3),
+        stop(7, 3),
+      ];
+      const opts = buildOpts(quotesOf(8), [fig(10)]);
+      const skim = buildSkim({ stops: raw, figures: [entry(10, qid(1))] }, opts);
+
+      expect(skim.figures).toEqual([
+        { blockId: bid(10), depth: 2, cue: "Compare the two panels.", after: qid(1) },
+      ]);
+      expect(passSizes(walkOf(skim.stops, skim.figures))).toEqual([1, 4, 5]);
+      expect(opts.dropped.figureShrink ?? 0).toBe(0);
+    });
+
+    it("reads an answer with no `figures` as none, and still writes the route", () => {
+      const skim = buildSkim({ stops: goodRoute }, buildOpts(quotesOf(10), figures));
+      expect(skim.figures).toEqual([]);
+    });
+
+    it("budgets for every offered figure with a cue at the cap, as for the stops", () => {
+      const cue = "w".repeat(MAX_CUE_CHARS);
+      const intro = "w".repeat(MAX_INTRO_CHARS);
+      const stops = Array.from({ length: MAX_QUOTES_TOTAL }, (_, i) => `  {"quote": "Q${i + 1}", "depth": 1, "again": [2, 3], "cue": "${cue}"}`);
+      const figs = Array.from({ length: MAX_FIGURES_OFFERED }, (_, i) => `  {"figure": "F${i + 1}", "after": "Q${MAX_QUOTES_TOTAL}", "cue": "${cue}"}`);
+      const largest = `{"stops": [\n${stops.join(",\n")}\n],\n "figures": [\n${figs.join(",\n")}\n],\n "intros": {"gist": "${intro}", "more": "${intro}", "most": "${intro}"}}`;
+      expect(JSON.parse(largest).figures).toHaveLength(MAX_FIGURES_OFFERED);
+      expect(Math.ceil(largest.length / 3)).toBeLessThanOrEqual(ANSWER_TOKENS);
+    });
+
+    it("asks for a cue on every figure, and keeps figures out of the intros", () => {
+      expect(SKIM_SYSTEM).toContain("A CUE FOR EVERY FIGURE");
+      expect(SKIM_SYSTEM).toContain("Never name or mention a figure in it");
+      expect(SKIM_OUTPUT_SCHEMA.properties.figures.items.required).toEqual(["figure", "after", "cue"]);
+    });
+
+    it("keeps quote-only depths, targets and optional cues distinct from figure stops", () => {
+      expect(SKIM_SYSTEM).toContain("THE DEPTH of each quote stop");
+      expect(SKIM_SYSTEM).toContain("targets for each pass's own quote stops");
+      expect(SKIM_SYSTEM).toContain("A CUE for each quote stop, or none");
+      expect(SKIM_SYSTEM).toContain("how many quote stops of its own");
+      expect(renderPrompt({ input: inputOf(quotesOf(10)), profile: null })).toContain(
+        "Targets, each pass's own quote stops:",
+      );
+    });
   });
 });

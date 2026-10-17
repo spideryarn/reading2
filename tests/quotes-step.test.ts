@@ -73,14 +73,14 @@ describe("the quotes available to the prose card", () => {
   });
 
   it("lowers a prioritised bar enough for Open in Quotes to keep the row selected", () => {
-    const hidden = { ...LIST[1]!, importance: 0.42 };
+    const hidden = { ...LIST[1]!, importance: 0.424 };
     const all = [
       { ...LIST[0]!, importance: 0.9 },
       hidden,
       { ...LIST[2]!, importance: 0.7 },
     ];
 
-    expect(barToReveal(all, hidden.id, "prioritised", 0.8)).toBe(0.42);
+    expect(barToReveal(all, hidden.id, "prioritised", 0.8)).toBe(0.424);
     expect(barToReveal(all, hidden.id, "document", 0.8)).toBeNull();
     expect(barToReveal(all, hidden.id, "prioritised", 0.4)).toBeNull();
   });

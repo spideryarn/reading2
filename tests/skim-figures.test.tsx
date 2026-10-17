@@ -588,3 +588,93 @@ describe("the door, walking figures", () => {
     expect(host.querySelector(".skim-door-cue")?.textContent).toBe("End of the figures — 7.");
   });
 });
+
+/**
+ * **A figure as a stop on the route** — plan 261017d, Greg's 1B to q-z27hq2:
+ * *"I was thinking 1B, perhaps with some kind of commentary or cue to make it
+ * easier to see why the figure is being included."* The route's Gist walks
+ * q2, then the figure, then q0.
+ */
+describe("a figure stop on the route", () => {
+  const FIGURE_CUE = "How is the landscape divided? Look at the category names.";
+  const withFigure = (after: string, depth: 1 | 2 = 1) => ({
+    ...SKIM_BODY,
+    skim: { ...ROUTE, figures: [{ blockId: FIG, depth, cue: FIGURE_CUE, after }] },
+  });
+
+  it("is a row of its own between quotes, with its icon and caption, and counted in the pass", async () => {
+    skimBody = withFigure(Q[2]!);
+    await mount();
+    expect(chipText()).toEqual(["Gist3", "More1", "Figures2"]);
+    const rows = [...host.querySelectorAll(".skim-row")];
+    expect(rows.map((r) => r.getAttribute("data-stop"))).toEqual([Q[2], FIG, Q[0]]);
+    expect(rows[1]!.querySelector(".skim-fig-icon")).not.toBeNull();
+    expect(rows[1]!.querySelector(".skim-fig-text")?.textContent).toBe("The landscape, by category");
+    expect(rows[1]!.querySelector(".skim-words")).toBeNull();
+  });
+
+  it("is stepped to like any stop: its block whole, flashed with no passage, its cue on the row and under the door", async () => {
+    skimBody = withFigure(Q[2]!);
+    await mount();
+    expect(control?.door).toEqual({ kind: "next", noun: "stop", cue: FIGURE_CUE });
+    scrolled.length = 0;
+    flashed.length = 0;
+    passages.length = 0;
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(param("stop")).toBe(FIG);
+    expect(scrolled).toEqual([FIG]);
+    expect(flashed).toEqual([FIG]);
+    expect(passages).toEqual([null]);
+    expect(control?.blockId).toBe(FIG);
+    expect(control?.hasPrevious).toBe(true);
+    /* No quote to ring on a figure. */
+    expect(published).toEqual([]);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("Stop 2 of 3");
+    const current = host.querySelector(".skim-row.current");
+    expect(current?.getAttribute("data-stop")).toBe(FIG);
+    expect(current?.querySelector(".skim-cue")?.textContent).toBe(FIGURE_CUE);
+    /* And on to the next quote, ringed again. */
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(param("stop")).toBe(Q[0]);
+    expect(published).toHaveLength(1);
+  });
+
+  it("is arrived at by a ?stop= link naming it, and a row press is a jump with no passage", async () => {
+    skimBody = withFigure(Q[2]!);
+    history.replaceState(null, "", "/read/figs?mode=skim&stop=" + FIG);
+    await mount();
+    expect(control?.blockId).toBe(FIG);
+    expect(scrolled).toEqual([FIG]);
+    jumps.length = 0;
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".skim-go")[2]!.click());
+    await settled();
+    expect(jumps).toEqual([{ id: P[0], passage: expect.any(String) }]);
+    await act(async () => host.querySelectorAll<HTMLButtonElement>(".skim-go")[1]!.click());
+    await settled();
+    expect(jumps.at(-1)).toEqual({ id: FIG, passage: null });
+  });
+
+  it("is counted on its pass's chip while the Figures walk is drawn, and a switch into the pass walks it (Sol F2)", async () => {
+    skimBody = withFigure(Q[1]!, 2);
+    history.replaceState(null, "", "/read/figs?mode=skim&depth=figures&stop=" + TAB);
+    await mount();
+    expect(chipText()).toEqual(["Gist2", "More2", "Figures2"]);
+    await act(async () => chip("More").click());
+    await settled();
+    expect([param("depth"), param("stop")]).toEqual(["2", Q[1]]);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("Stop 1 of 2");
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(control?.blockId).toBe(FIG);
+  });
+
+  it("a figure that is no longer in the article is a missing row, not a crash", async () => {
+    skimBody = withFigure(Q[2]!);
+    await mount(PLAIN);
+    const rows = [...host.querySelectorAll(".skim-row")];
+    expect(rows).toHaveLength(3);
+    expect(rows[1]!.querySelector<HTMLButtonElement>(".skim-go")?.disabled).toBe(true);
+  });
+});

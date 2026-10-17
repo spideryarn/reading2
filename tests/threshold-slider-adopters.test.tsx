@@ -235,9 +235,14 @@ function rowAsDrawn() {
     max: input.max,
     step: input.step,
     value: input.value,
-    title: input.title,
+    tip: input.getAttribute("data-tip") ?? "",
     valueText: input.getAttribute("aria-valuetext"),
     shown: row.querySelector(".gloss-gate-value")?.textContent,
+    /* Where each tick sits along the track, 0 to 1 — one per value that changes
+       the list (StopRange.tsx, plan 261017f). */
+    ticks: [...row.querySelectorAll<HTMLElement>(".gloss-gate-tick")].map(
+      (t) => Math.round(Number(t.style.getPropertyValue("--at")) * 1000) / 1000,
+    ),
     note: row.querySelector(".gloss-gate-note")?.textContent,
     reset: reset
       ? { type: reset.type, tip: reset.getAttribute("data-tip"), label: reset.getAttribute("aria-label"), icon: reset.querySelector("svg") !== null }
@@ -245,18 +250,25 @@ function rowAsDrawn() {
   };
 }
 
-/** The native setter then an `input` event — React swallows a plain assignment. */
-async function dragTo(id: string, value: number): Promise<void> {
+/**
+ * The native setter then an `input` event — React swallows a plain assignment.
+ * `pointer` puts a finger on the control first, which is what makes the change
+ * a drag (snapped to the nearest stop) rather than a step (moved one stop that
+ * way, as TalkBack's swipe does).
+ */
+async function dragTo(id: string, value: number, { pointer = true } = {}): Promise<void> {
   const slider = host.querySelector<HTMLInputElement>(`#${id}`)!;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   await act(async () => {
+    if (pointer) slider.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     setter.call(slider, String(value));
     slider.dispatchEvent(new Event("input", { bubbles: true }));
+    if (pointer) slider.dispatchEvent(new Event("pointerup", { bubbles: true }));
   });
 }
 
 const HEAD = ["label.gloss-gate-label", "span.gloss-gate-value"];
-const SHAPE = ["div.gloss-gate-row", "input.gloss-gate-range", "p.gloss-gate-note"];
+const SHAPE = ["div.gloss-gate-row", "div.gloss-gate-track", "p.gloss-gate-note"];
 
 describe("the Glossary's threshold row", () => {
   const TITLE =
@@ -278,6 +290,7 @@ describe("the Glossary's threshold row", () => {
       tip: TITLE,
       valueText: "0.10, showing 2 of 3 terms",
       shown: "0.10 · 2 of 3",
+      ticks: [0.028, 0.278, 1],
       note: "1 term is hidden by this threshold. Drag the slider left to show it.",
       reset: null,
     });
@@ -308,13 +321,25 @@ describe("the Glossary's threshold row", () => {
     expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing is hidden by this threshold." });
   });
 
-  it("a drag calls back with the number, and the reset with null", async () => {
+  it("a drag lands on the nearest value that changes the list, and the reset calls back with null", async () => {
+    /* Stops 0.02, 0.20, 0.72: 0.33 is nearest 0.20. */
     const onGate = vi.fn();
     await drawGlossary(0.5, onGate);
     await dragTo("gloss-gate", 0.33);
-    expect(onGate.mock.calls).toEqual([[0.33]]);
+    expect(onGate.mock.calls).toEqual([[0.2]]);
     await act(async () => host.querySelector<HTMLButtonElement>(".gloss-gate-reset")!.click());
-    expect(onGate.mock.calls).toEqual([[0.33], [null]]);
+    expect(onGate.mock.calls).toEqual([[0.2], [null]]);
+  });
+
+  it("a change with no pointer moves one stop that way, or nowhere if none changes the list", async () => {
+    const onGate = vi.fn();
+    await drawGlossary(0.5, onGate);
+    await dragTo("gloss-gate", 0.49, { pointer: false });
+    expect(onGate.mock.calls).toEqual([[0.2]]);
+    /* At 0.50 the list is already the 0.72 one, so up has nothing to change. */
+    await drawGlossary(0.5, onGate);
+    await dragTo("gloss-gate", 0.51, { pointer: false });
+    expect(onGate.mock.calls).toEqual([[0.2]]);
   });
 });
 
@@ -338,6 +363,7 @@ describe("Citations' threshold row", () => {
       tip: TITLE,
       valueText: "0.25, showing 2 of 3 citations",
       shown: "0.25 · 2 of 3",
+      ticks: [0.25, 0.625, 1],
       note: "1 citation is hidden by this threshold. Drag the slider left to show it.",
       reset: null,
     });
@@ -367,12 +393,13 @@ describe("Citations' threshold row", () => {
     expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing is hidden by this threshold." });
   });
 
-  it("a drag calls back with the number, and the reset with null", async () => {
+  it("a drag lands on the nearest value that changes the list, and the reset calls back with null", async () => {
     const onBar = vi.fn();
     await drawBibliography(0.6, onBar);
+    /* Stops 0.20, 0.50, 0.80: 0.4 is nearest 0.50. */
     await dragTo("cite-bar", 0.4);
-    expect(onBar.mock.calls).toEqual([[0.4]]);
+    expect(onBar.mock.calls).toEqual([[0.5]]);
     await act(async () => host.querySelector<HTMLButtonElement>(".gloss-gate-reset")!.click());
-    expect(onBar.mock.calls).toEqual([[0.4], [null]]);
+    expect(onBar.mock.calls).toEqual([[0.5], [null]]);
   });
 });

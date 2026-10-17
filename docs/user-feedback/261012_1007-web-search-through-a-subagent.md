@@ -1,7 +1,7 @@
 ---
 reports: spya-vc6uzm
 ending: awaiting
-comment: The guide now searches the web through a small helper that hands back links with a sentence each. Keeping a page or search result in a Chat for later questions is a question for you (q-madusw), as is letting the guide open pages.
+comment: The guide searches the web, and a web page can now be brought into a Chat with a button, as an @-mention. Letting the guide open pages is planned; whether an agent may build it is q-g492eq.
 ---
 # Web search through a subagent, and results loaded into a Chat
 
@@ -20,8 +20,9 @@ feedback sweep does. Plan, reviews and measurements:
 > could be loaded into the Chat's context, so that I could ask stuff like 'where is this article
 > situated in the wider literature?' etc.
 
-**Ending: Awaiting Greg**, on [q-madusw](questions/q-madusw.md), with the search half shipped on
-`dev` and not deployed.
+**Ending: Awaiting Greg**, now on [q-g492eq](questions/q-g492eq.md) (the guide opening pages),
+with the search half and *Bring into this chat* shipped on `dev`. [q-madusw](questions/q-madusw.md)
+is answered.
 
 What we did:
 
@@ -41,3 +42,16 @@ Still open:
 - **[q-madusw](questions/q-madusw.md)**: how a page or search result stays in a Chat for later
   questions (recommended: add it to the shelf and bring it in through the @-mention that
   `spya-a63vmt` built), and whether the guide may open pages.
+
+**Greg's answer, 2026-10-17** (reply `spya-eqtvhz` to q-madusw, queue item `qi-jbfehgss`): *"1A and
+2A / Re guide: our approach should be that it prefers to hand off substantive work (e.g. by offering
+to create new Chat threads), but that it's not hobbled by lack of tools/capability/access if it tries
+to do things"*. Plan [261017e](../plans/261017e-bring-a-web-page-into-chat.md).
+
+- **1A, shipped on `dev`**: *Bring into this chat* on each *From the web* row under a Chat answer
+  and under the box for each address in the draft. It imports the page as the Add box does (free if
+  it is on the shelf already) and puts it in the box as an @-mention.
+- **2A, planned, asked**: the guide opening a page edits a listed defence (its tool list), so it is
+  planned in 261017e § Stage 2, limited to addresses the guide was handed and one read a turn, and
+  whether an unattended agent may build it is [q-g492eq](questions/q-g492eq.md).
+- **The principle** is in [chat-tools.md § The guide](../project/chat-tools.md#the-guide).

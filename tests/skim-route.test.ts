@@ -9,20 +9,29 @@
  * still never walks the reader through a stop a shallower pass already did.
  */
 import { describe, expect, it } from "vitest";
-import type { Block, BlockId, SkimStop } from "../src/types.js";
+import type { Block, BlockId, SkimDepth, SkimFigureStop, SkimStop } from "../src/types.js";
 import {
-  doorAfter,
+  doorAfter as doorAfterWalk,
   effectiveDepth,
-  firstStopOf,
-  locate,
+  firstStopOf as firstStopOfWalk,
+  locate as locateWalk,
   offeredDepths,
   passCount,
   passRoute,
   positionOf,
   positionsOf,
-  stepStop,
+  stepStop as stepStopWalk,
   walkedIn,
+  type WalkStop,
+  walkOf,
 } from "../src/web/skim-route.js";
+
+/* The walk is over `WalkStop`s since plan 261017d; these quote-only routes go
+   through `walkOf`, which keys each stop by its quote id. */
+const locate = (stops: readonly SkimStop[], ...rest: [SkimDepth | null, string | null]) => locateWalk(walkOf(stops), ...rest);
+const stepStop = (stops: readonly SkimStop[], ...rest: [string | null, -1 | 1]) => stepStopWalk(walkOf(stops), ...rest);
+const firstStopOf = (stops: readonly SkimStop[], depth: SkimDepth) => firstStopOfWalk(walkOf(stops), depth);
+const doorAfter = (stops: readonly SkimStop[], ...rest: [SkimDepth, string | null]) => doorAfterWalk(walkOf(stops), ...rest);
 
 /**
  * The route used throughout, in route order:
@@ -46,7 +55,7 @@ const ROUTE: SkimStop[] = [
   { quoteId: "h", depth: 3, role: null },
 ];
 
-const ids = (stops: readonly SkimStop[]) => stops.map((s) => s.quoteId);
+const ids = (stops: readonly (SkimStop | WalkStop)[]) => stops.map((s) => ("key" in s ? s.key : s.quoteId));
 const stop = (quoteId: string, depth: 1 | 2 | 3): SkimStop => ({ quoteId, depth, role: null });
 
 describe("a pass", () => {
@@ -151,7 +160,7 @@ describe("a stop carried into a deeper pass (261003l)", () => {
       const at = locate(SHARED, 2, "a");
       expect(at.depth).toBe(2);
       expect(ids(at.route)).toEqual(["a", "c", "f"]);
-      expect(at.current?.quoteId).toBe("a");
+      expect(at.current?.key).toBe("a");
       /* The object the pass holds, so the band can find its position in it. */
       expect(at.route.indexOf(at.current!)).toBe(0);
       expect(locate(SHARED, 3, "f").depth).toBe(3);
@@ -161,7 +170,7 @@ describe("a stop carried into a deeper pass (261003l)", () => {
       const at = locate(SHARED, 3, "a");
       expect(at.depth).toBe(1);
       expect(ids(at.route)).toEqual(["a", "d", "g"]);
-      expect(at.current?.quoteId).toBe("a");
+      expect(at.current?.key).toBe("a");
       expect(locate(SHARED, 1, "f").depth).toBe(2);
     });
 
@@ -174,13 +183,13 @@ describe("a stop carried into a deeper pass (261003l)", () => {
   it("the door at the end of Gist leads to it when it is stop 1 of More", () => {
     expect(doorAfter(SHARED, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "a" } });
     /* Standing on it in More, the door is the next stop of More. */
-    expect(doorAfter(SHARED, 2, "a")).toEqual({ kind: "next", quoteId: "c" });
+    expect(doorAfter(SHARED, 2, "a")).toEqual({ kind: "next", key: "c" });
     expect(doorAfter(SHARED, 2, "f")).toEqual({ kind: "end", deeper: { depth: 3, first: "b" } });
     /* A one-stop Gist whose stop is carried and first in More: *More detail ›*
        lands on the stop the reader is standing at. */
     const carried: SkimStop[] = [{ ...stop("x", 1), again: [2] }, stop("y", 2)];
     expect(doorAfter(carried, 1, "x")).toEqual({ kind: "end", deeper: { depth: 2, first: "x" } });
-    expect(doorAfter(carried, 2, "x")).toEqual({ kind: "next", quoteId: "y" });
+    expect(doorAfter(carried, 2, "x")).toEqual({ kind: "next", key: "y" });
   });
 });
 
@@ -190,22 +199,22 @@ describe("where the reader is (Sol F4)", () => {
     const at = locate(ROUTE, 2, "d");
     expect(at.depth).toBe(1);
     expect(ids(at.route)).toEqual(["a", "d", "g"]);
-    expect(at.current?.quoteId).toBe("d");
+    expect(at.current?.key).toBe("d");
     expect(locate(ROUTE, 1, "h").depth).toBe(3);
   });
 
   it("with a stop on the asked pass, is exactly that", () => {
     const at = locate(ROUTE, 2, "f");
     expect(at.depth).toBe(2);
-    expect(at.current?.quoteId).toBe("f");
+    expect(at.current?.key).toBe("f");
   });
 
   it("with no stop, or one on no pass, is the asked depth's first stop", () => {
-    expect(locate(ROUTE, 2, null).current?.quoteId).toBe("c");
+    expect(locate(ROUTE, 2, null).current?.key).toBe("c");
     const gone = locate(ROUTE, 3, "gone");
     expect(gone.depth).toBe(3);
-    expect(gone.current?.quoteId).toBe("b");
-    expect(locate(ROUTE, null, null).current?.quoteId).toBe("a");
+    expect(gone.current?.key).toBe("b");
+    expect(locate(ROUTE, null, null).current?.key).toBe("a");
   });
 
   it("with no route, is nowhere", () => {
@@ -246,8 +255,8 @@ describe("changing depth", () => {
 
 describe("the door after the current stop", () => {
   it("offers the next stop on the pass", () => {
-    expect(doorAfter(ROUTE, 1, "a")).toEqual({ kind: "next", quoteId: "d" });
-    expect(doorAfter(ROUTE, 2, "c")).toEqual({ kind: "next", quoteId: "f" });
+    expect(doorAfter(ROUTE, 1, "a")).toEqual({ kind: "next", key: "d" });
+    expect(doorAfter(ROUTE, 2, "c")).toEqual({ kind: "next", key: "f" });
   });
 
   it("offers stop 1 of the next deeper pass at the end of a pass — on a route with no `again`, a stop not walked yet", () => {
@@ -319,5 +328,72 @@ describe("where a stop sits in the article", () => {
 
     expect([...positions.values()]).toEqual([0.05, 0.2, 0.6, 0.95]);
     expect(reads).toBeLessThanOrEqual(counted.length * 2);
+  });
+});
+
+/**
+ * **Figure stops** (plan 261017d; Greg's 1B to q-z27hq2): a figure is a stop of
+ * its own, met straight after the quote it follows, in that quote's pass, and
+ * counted in its length. Stored beside the quotes (`Skim.figures`) and merged
+ * into one walk by `walkOf`, keyed by its block id.
+ */
+describe("a route with figures", () => {
+  const fig = (blockId: string, depth: 1 | 2 | 3, after: string): SkimFigureStop => ({
+    blockId: blockId as BlockId,
+    depth,
+    cue: null,
+    after,
+  });
+  const keys = (stops: readonly WalkStop[]) => stops.map((s) => s.key);
+
+  it("places each figure straight after the quote it follows", () => {
+    const walk = walkOf(ROUTE, [fig("F1", 1, "d"), fig("F3", 3, "b"), fig("F2", 2, "f")]);
+    expect(keys(walk)).toEqual(["a", "b", "F3", "c", "d", "F1", "e", "f", "F2", "g", "h"]);
+    expect(walk.find((s) => s.key === "F1")?.kind).toBe("figure");
+  });
+
+  it("walks a figure in its quote's pass, counted in that pass's length, and never carried", () => {
+    const walk = walkOf(SHARED, [fig("F1", 1, "a"), fig("F2", 2, "f")]);
+    /* `a` is carried into More (`SHARED`); its figure is not. */
+    expect(keys(passRoute(walk, 1))).toEqual(["a", "F1", "d", "g"]);
+    expect(keys(passRoute(walk, 2))).toEqual(["a", "c", "f", "F2"]);
+    expect([passCount(walk, 1), passCount(walk, 2), passCount(walk, 3)]).toEqual([4, 4, 4]);
+  });
+
+  it("never makes a pass: a figure at a depth no quote is at is left out", () => {
+    const gistOnly = [stop("a", 1), stop("b", 1)];
+    const walk = walkOf(gistOnly, [fig("F1", 2, "a")]);
+    expect(keys(walk)).toEqual(["a", "b"]);
+    expect(offeredDepths(walkOf(gistOnly))).toEqual([1]);
+    /* And `offeredDepths` itself does not count a figure, whatever it is handed. */
+    expect(offeredDepths([{ depth: 1 }, { depth: 2, kind: "figure" }])).toEqual([1]);
+  });
+
+  it("leaves out a figure whose anchor is not on the route, a repeat, and one whose block id is a quote's (Sol F7)", () => {
+    const walk = walkOf(ROUTE, [fig("F1", 1, "gone"), fig("F2", 1, "a"), fig("F2", 1, "d"), fig("c", 1, "a")]);
+    expect(keys(walk)).toEqual(["a", "F2", "b", "c", "d", "e", "f", "g", "h"]);
+  });
+
+  it("is located, stepped to and offered by the door by its key", () => {
+    const walk = walkOf(ROUTE, [fig("F1", 1, "d")]);
+    const at = locateWalk(walk, null, "F1");
+    expect(at.depth).toBe(1);
+    expect(at.current?.kind).toBe("figure");
+    expect(keys(at.route)).toEqual(["a", "d", "F1", "g"]);
+    expect(stepStopWalk(at.route, "F1", 1)).toBe("g");
+    expect(stepStopWalk(at.route, "F1", -1)).toBe("d");
+    expect(doorAfterWalk(walk, 1, "d")).toEqual({ kind: "next", key: "F1" });
+  });
+
+  it("can end a pass, and the door after it offers the next pass", () => {
+    const walk = walkOf(ROUTE, [fig("F9", 1, "g")]);
+    expect(doorAfterWalk(walk, 1, "g")).toEqual({ kind: "next", key: "F9" });
+    expect(doorAfterWalk(walk, 1, "F9")).toEqual({ kind: "end", deeper: { depth: 2, first: "c" } });
+    expect(firstStopOfWalk(walk, 2)).toBe("c");
+  });
+
+  it("leaves a route with no figures walking exactly as before", () => {
+    expect(walkOf(ROUTE, [])).toEqual(walkOf(ROUTE));
+    expect(keys(walkOf(ROUTE))).toEqual(ids(ROUTE));
   });
 });
