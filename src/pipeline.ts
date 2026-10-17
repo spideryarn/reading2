@@ -5325,7 +5325,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    *    plans on the quotes alone (plan 260928a § Stage 6).
    * 2. **Its fingerprint is what the prompt renders, not the article** —
    *    `skimInputHash` over `skimInput`: the offered quotes, the
-   *    Ideas they carry, and the top-level outline. `stamp` and `run` build
+   *    Ideas they carry, the top-level outline and the offered figures.
+   *    `stamp` and `run` build
    *    the same input from the same reads, so *Find more* adding a quote, or
    *    the Ideas being regenerated or arriving, makes the route not-current
    *    without anybody forcing it (Sol F68).
@@ -5359,9 +5360,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     },
     async run(ctx, store) {
       const quotes = await store.read(ctx.slug, "quotes", "quotes");
-      /* The tree and the blocks for the section paths, the outline and the
-         Idea associations only — the prose is never sent. `readArticle`
-         refuses loudly when they are missing. */
+      /* The tree and blocks for section paths, the outline, Idea associations
+         and figures. Only quotes and figure captions go to the model, not the
+         prose around them. `readArticle` refuses loudly when they are missing. */
       const article = await readArticle(ctx.slug, store);
       const ideas = await store.read(ctx.slug, "ideas", "ideas");
       const input = skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });

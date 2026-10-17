@@ -1195,11 +1195,13 @@ describe("what the prompt is given", () => {
     expect(SKIM_SYSTEM).toMatch(/carry at least one earlier stop into MOST/);
     expect(SKIM_SYSTEM).toMatch(/when a target is 0 that pass may be\s+absent/);
     expect(SKIM_SYSTEM).toMatch(/Use about as many quotes in all as the three targets add up to/);
-    /* The targets are each pass's own stops since skim/12, and the user
+    /* The targets are each pass's own quote stops since skim/12, and the user
        message says a carried stop is not counted in them. */
     const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });
-    expect(prompt).toContain("Targets, each pass's own stops: about 2 at depth 1; about 3 at depth 2; about 5 at depth 3.");
-    expect(prompt).toMatch(/is not counted in that pass's target/);
+    expect(prompt).toContain(
+      "Targets, each pass's own quote stops: about 2 at depth 1; about 3 at depth 2; about 5 at depth 3.",
+    );
+    expect(prompt).toMatch(/A quote stop carried[\s\S]*is not counted in that pass's target/);
   });
 
   it("marks quote text as untrusted data and prevents it from closing its prompt fence", () => {
@@ -2120,6 +2122,31 @@ describe("figures on the route (skim/14)", () => {
       expect(growthFailure(passSizes(skim.stops), 10)).toBeNull();
     });
 
+    it("replans when repair moves a figure's anchor into another pass", () => {
+      /* Own stops 2/2/4 do not grow. The repair moves the latest, tied-lowest
+         Gist quote (q1) into More. Its figure therefore moves into More too,
+         so Most needs one carried quote to remain longer. Planning only with
+         the figure's old Gist count trims a figure that the route can keep. */
+      const raw = [
+        stop(0, 1),
+        stop(1, 1),
+        stop(2, 2),
+        stop(3, 2),
+        stop(4, 3),
+        stop(5, 3),
+        stop(6, 3),
+        stop(7, 3),
+      ];
+      const opts = buildOpts(quotesOf(8), [fig(10)]);
+      const skim = buildSkim({ stops: raw, figures: [entry(10, qid(1))] }, opts);
+
+      expect(skim.figures).toEqual([
+        { blockId: bid(10), depth: 2, cue: "Compare the two panels.", after: qid(1) },
+      ]);
+      expect(passSizes(walkOf(skim.stops, skim.figures))).toEqual([1, 4, 5]);
+      expect(opts.dropped.figureShrink ?? 0).toBe(0);
+    });
+
     it("reads an answer with no `figures` as none, and still writes the route", () => {
       const skim = buildSkim({ stops: goodRoute }, buildOpts(quotesOf(10), figures));
       expect(skim.figures).toEqual([]);
@@ -2139,6 +2166,16 @@ describe("figures on the route (skim/14)", () => {
       expect(SKIM_SYSTEM).toContain("A CUE FOR EVERY FIGURE");
       expect(SKIM_SYSTEM).toContain("Never name or mention a figure in it");
       expect(SKIM_OUTPUT_SCHEMA.properties.figures.items.required).toEqual(["figure", "after", "cue"]);
+    });
+
+    it("keeps quote-only depths, targets and optional cues distinct from figure stops", () => {
+      expect(SKIM_SYSTEM).toContain("THE DEPTH of each quote stop");
+      expect(SKIM_SYSTEM).toContain("targets for each pass's own quote stops");
+      expect(SKIM_SYSTEM).toContain("A CUE for each quote stop, or none");
+      expect(SKIM_SYSTEM).toContain("how many quote stops of its own");
+      expect(renderPrompt({ input: inputOf(quotesOf(10)), profile: null })).toContain(
+        "Targets, each pass's own quote stops:",
+      );
     });
   });
 });

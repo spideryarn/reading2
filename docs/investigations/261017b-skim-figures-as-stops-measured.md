@@ -137,6 +137,15 @@ intros are a little better. Intros that lean towards a result are a standing mat
 not for this change. Files: `evals/results/skim-261017d-blind/` and
 `evals/results/skim-261017d-blind-intros-control/`.
 
+## A confirming round after the code review
+
+GPT Sol's code review ([261017d-figures-code-review-sol.md](../plans/261017d-figures-code-review-sol.md))
+reworded the prompt where it still said "stop" of what applies to quote stops only (depth, the
+optional cue, the targets), and made `buildSkim` re-plan the pass sizes when a repair moves a
+figure's anchor. One more run on all eleven articles (`…T18-40-29-f5.json`, $0.41): no failed route,
+no figure trimmed, 17 figure stops on the nine articles with figures, every cue a pointer; Gist Ideas
+40 and More 54, inside the control's spread.
+
 ## Limits
 
 - Two runs per arm and one judge; the control's spread is the yardstick, and on Gist it is wide.

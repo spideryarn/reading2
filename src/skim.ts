@@ -12,11 +12,12 @@
  *
  * Its input is other steps' artefacts, like `illustrated`'s: the stored
  * Quotes, the **Ideas** (stage 6 — the article's key points), the structure step's
- * tree (each quote's section path, and the top-level outline with its gists)
- * and the reader's profile. **It never reads the article's prose** — the prompt
- * holds the quotes, which are already the article's own words, the Ideas' names
- * and statements, and the outline, so the call is small and in no cached
- * prefix. It refuses without Quotes (src/pipeline.ts § the `skim` step);
+ * tree (each quote's section path, and the top-level outline with its gists),
+ * the article's figure markup and captions, and the reader's profile. It never
+ * reads the prose around a quote: the prompt holds the quotes, which are already
+ * the article's own words, the figure captions, the Ideas' names and statements,
+ * and the outline, so the call is small and in no cached prefix. It refuses
+ * without Quotes (src/pipeline.ts § the `skim` step);
  * the client asks for Quotes and Ideas first, in the same job. Without Ideas
  * (a forced run on an article that has none) it plans on the quotes alone.
  * Handing the prompt each quote's own paragraph as well, for writing its cue,
@@ -197,9 +198,9 @@ export type {
  * to make it easier to see why the figure is being included. Use your
  * judgment. / 2A"* — the model chooses them. The prompt is given the
  * article's figures (`FigureRecord`), section 5 says when one earns a place,
- * and the answer gains `figures`, each with a pass, the quote it follows and
- * a cue (`validateFigures`, `trimFigures`). A figure counts in its pass's
- * length; the quote targets are unchanged. An intro maps the quotes only,
+ * and the answer gains `figures`, each with the quote it follows and a cue;
+ * that quote gives it its pass (`validateFigures`, `trimFigures`). A figure
+ * counts in its pass's length; the quote targets are unchanged. An intro maps the quotes only,
  * since a visitor walks no figures. **The input hash gains the figures**, so
  * this version's route is stale when they change; an older route is only
  * outdated, which is not announced.
@@ -299,7 +300,7 @@ export const ANSWER_TOKENS =
   300 +
   Math.ceil((3 * MAX_INTRO_CHARS + 60) / 3) +
   MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 80) / 3) +
-  /* Since `skim/14`: a figure entry per offered figure — its label, depth,
+  /* Since `skim/14`: a figure entry per offered figure — its label, quote
      anchor and a cue at the cap — for the same reason as the stops. */
   MAX_FIGURES_OFFERED * Math.ceil((MAX_CUE_CHARS + 60) / 3);
 
@@ -1538,13 +1539,35 @@ export function buildSkim(
   }
   const d = opts.dropped;
   const validated = validateRoute(parsed.stops, opts.quotes, d);
-  /* The figures the model chose, read once against the route before its
-     repair only to count them per pass, so the repair can make room for them
-     (`growPasses`); read for real against the final route below. */
+  /* Read the figures against each repaired route so `growPasses` counts them
+     in the pass their anchors will actually occupy. A repair may move an
+     anchor a pass deeper; planning only once would leave the figure counted
+     in its old pass, then trim it even when another repair could make room.
+     Stop once the derived figure plan is stable. A quote can move at most two
+     passes deeper, so one final confirming round after twice the route length
+     is a hard bound, not an open-ended convergence loop. Read for real against
+     the final route below, with the caller's drop counts. */
   const rawFigures = Array.isArray(parsed.figures) ? parsed.figures : [];
-  const planned = validateFigures(rawFigures, opts.figures, validated, emptyDrops());
-  const perPass = ([1, 2, 3] as const).map((depth) => planned.filter((f) => f.depth === depth).length);
-  const stops = growPasses(validated, opts.quotes, d, perPass as [number, number, number]);
+  const sameFigurePlan = (a: readonly SkimFigureStop[], b: readonly SkimFigureStop[]) =>
+    a.length === b.length &&
+    a.every(
+      (figure, i) =>
+        figure.blockId === b[i]!.blockId && figure.after === b[i]!.after && figure.depth === b[i]!.depth,
+    );
+  let planned = validateFigures(rawFigures, opts.figures, validated, emptyDrops());
+  let stops = validated;
+  for (let attempt = 0; attempt <= validated.length * 2; attempt++) {
+    const perPass = ([1, 2, 3] as const).map(
+      (depth) => planned.filter((f) => f.depth === depth).length,
+    ) as [number, number, number];
+    stops = growPasses(stops, opts.quotes, d, perPass);
+    const next = validateFigures(rawFigures, opts.figures, stops, emptyDrops());
+    if (sameFigurePlan(planned, next)) break;
+    planned = next;
+  }
+  /* Settled or not, the quotes below are checked on their own and the
+     figures are trimmed to fit (`trimFigures`): figures are extras, and a
+     route that is good without them is never thrown away over them. */
   /* The passes whose own stops the repair changed: the model's intro for
      them describes a walk that is no longer the one drawn (GPT Sol, plan
      review F3). `growPasses` keeps the order, so index pairs them. */
@@ -1651,7 +1674,7 @@ WHAT YOU DECIDE
    report with its conclusion. It varies from piece to piece: judge what each
    passage DOES, and put first what a first-time reader most needs.
 
-2. THE DEPTH of each stop — the first (shallowest) pass it belongs to:
+2. THE DEPTH of each quote stop — the first (shallowest) pass it belongs to:
    1 = GIST: the few stops that give the gist on their own;
    2 = MORE: go round again, in more detail — the stops that fill in how and why;
    3 = MOST: nearly everything else worth stopping at.
@@ -1661,7 +1684,7 @@ WHAT YOU DECIDE
    eight or more quotes, all three passes are offered, MORE walks more stops
    than GIST, and MOST walks more than MORE. With fewer, a deeper pass is
    never shorter than the one before, and when a target is 0 that pass may be
-   absent. So follow the targets for each pass's own stops. When MOST's target
+   absent. So follow the targets for each pass's own quote stops. When MOST's target
    is no bigger than MORE's, carry at least one earlier stop into MOST, and
    never carry so many into MORE that it walks as many stops as MOST.
 
@@ -1673,7 +1696,7 @@ WHAT YOU DECIDE
    depth 3, or leave it out. Of two quotes that carry the same idea, choose
    the shorter.
 
-   And "again" for each stop: the deeper passes it is ALSO walked in. The
+   And "again" for each quote stop: the deeper passes it is ALSO walked in. The
    reader walks one pass at a time. A pass is its own stops (the ones whose
    depth it is) plus any earlier stop you carry into it, all in your one route
    order. A depth-1 stop with "again": [2] is met in GIST and again in MORE;
@@ -1716,7 +1739,7 @@ WHAT YOU DECIDE
    same way: a pass that skips a whole section with quotes in it should have a
    reason.
 
-3. A CUE for each stop, or none. A cue is one or two complete sentences, at
+3. A CUE for each quote stop, or none. A cue is one or two complete sentences, at
    most ${MAX_CUE_CHARS} characters in all, that the reader reads just before the
    passage. Its only job is to make the passage mean more for having read it:
    easier to understand, easier to place, or easier to see why it matters.
@@ -1883,7 +1906,7 @@ RULES
 - Use about as many quotes in all as the three targets add up to. Those chosen
   for neither depth 1 nor depth 2 go at depth 3. Prefer leaving out a quote
   that adds nothing a chosen stop already gives.
-- The user message gives a target for each depth: how many stops of its own
+- The user message gives a target for each depth: how many quote stops of its own
   that pass has. Aim near it. A carried stop is not counted in the target.
 
 OUTPUT
@@ -1991,8 +2014,8 @@ export function renderPromptParts(opts: {
       : ` and ${input.figures.length === 1 ? "this figure" : `these ${input.figures.length} figures`}`;
   const prompt = `Plan the route through these ${count} quotes${also}.
 
-Targets, each pass's own stops: about ${t.gist} at depth 1; about ${t.more} at depth 2; about ${t.most} at depth 3.
-A stop carried into a deeper pass with "again" is not counted in that pass's target.
+Targets, each pass's own quote stops: about ${t.gist} at depth 1; about ${t.more} at depth 2; about ${t.most} at depth 3.
+A quote stop carried into a deeper pass with "again" is not counted in that pass's target.
 ${who ? `\n${who}\n` : ""}
 === THE KEY IDEAS ===
 
