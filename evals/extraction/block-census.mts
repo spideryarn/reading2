@@ -124,7 +124,8 @@ export async function censusOf(
 
        **All three, since 2026-10-06**: `ChallengePage` fires on `hal-anubis`
        and `winehq-anubis`, which are in `all` too, and the same crash was one
-       fixture away again. */
+       fixture away again (and on `ieee-aws-waf` and
+       `springer-client-challenge` since 2026-10-17). */
     if (
       err instanceof ReadabilityRefused ||
       err instanceof TooLittleTextToRead ||

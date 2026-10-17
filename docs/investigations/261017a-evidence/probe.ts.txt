@@ -1,0 +1,65 @@
+/* Measurement only, not product code. For each sample line (URL \t DOI \t oa):
+   1. our real fetchDocument on the pasted URL — refused, a bot-check page, or the article?
+   2. OpenAlex (through our own bibliographic door) — OA status, PMCID, an arXiv location?
+   3. Europe PMC fullTextXML for that PMCID — does the server get the full text?
+   4. the publisher's COOP / CSP headers, for the bookmarklet question. */
+import fs from "node:fs";
+import { JSDOM } from "/var/tmp/spideryarn-worktrees/refused-site-open-copy/node_modules/jsdom/lib/api.js";
+import { fetchDocument, fetchBibliographicJson, FetchFailure, USER_AGENT } from "/var/tmp/spideryarn-worktrees/refused-site-open-copy/src/fetch.ts";
+import { challengeIn } from "/var/tmp/spideryarn-worktrees/refused-site-open-copy/src/challenge-page.ts";
+
+const lines = fs.readFileSync(process.argv[2]!, "utf8").split("\n").map((l) => l.trim()).filter((l) => l.startsWith("http"));
+const out: Record<string, unknown>[] = [];
+
+function looksWalled(html: string): boolean {
+  return /just a moment|cf-chl|challenge-platform|captcha|are you a robot|verify you are human|access denied|perimeterx|px-captcha|datadome/i.test(html.slice(0, 200_000)) && html.length < 400_000;
+}
+
+for (const line of lines) {
+  const [url, doiRaw, oaClaim] = line.split("\t");
+  const doi = (doiRaw ?? "").replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").trim().toLowerCase();
+  const row: Record<string, unknown> = { url, doi, oaClaim };
+  try {
+    const d = await fetchDocument(url!, { attempts: 1, timeoutMs: 20_000 });
+    row.fetch = d.kind;
+    if (d.kind === "html") {
+      const html = d.text;
+      let ch = null;
+      try { ch = challengeIn(new JSDOM(html).window.document); } catch { /* ignore */ }
+      row.fetch = ch ? `html:challenge(${ch.provider})` : looksWalled(html) ? "html:walled?" : `html:${html.length}`;
+    }
+  } catch (e) {
+    row.fetch = e instanceof FetchFailure ? `fail:${e.code}:${e.status ?? ""}` : `fail:${String(e).slice(0, 60)}`;
+  }
+  try {
+    const h = await fetch(url!, { headers: { "User-Agent": USER_AGENT }, redirect: "follow" });
+    row.coop = h.headers.get("cross-origin-opener-policy");
+    const csp = h.headers.get("content-security-policy") ?? "";
+    row.csp = csp ? csp.slice(0, 120) : null;
+    await h.body?.cancel();
+  } catch { /* ignore */ }
+  if (doi) {
+    try {
+      const w = (await fetchBibliographicJson(`https://api.openalex.org/works/doi:${doi}?select=open_access,ids,locations&mailto=greg@gregdetre.com`)) as any;
+      row.isOa = w.open_access?.is_oa;
+      row.oaStatus = w.open_access?.oa_status;
+      row.pmcid = w.ids?.pmcid ? String(w.ids.pmcid).replace(/.*\//, "") : null;
+      const arx = (w.locations ?? []).find((l: any) => /arxiv/i.test(l.source?.display_name ?? "") || /arxiv\.org/i.test(l.landing_page_url ?? ""));
+      row.arxiv = arx ? arx.landing_page_url : null;
+    } catch (e) {
+      row.openalex = e instanceof FetchFailure ? `fail:${e.code}:${e.status ?? ""}` : String(e).slice(0, 60);
+    }
+  }
+  if (row.pmcid) {
+    try {
+      const r = await fetch(`https://www.ebi.ac.uk/europepmc/webservices/rest/${row.pmcid}/fullTextXML`);
+      const t = await r.text();
+      row.epmcXml = r.status === 200 && /<body[\s>]/.test(t) ? `full:${t.length}` : `${r.status}:${t.length}`;
+    } catch (e) {
+      row.epmcXml = String(e).slice(0, 60);
+    }
+  }
+  out.push(row);
+  console.error(JSON.stringify(row));
+}
+fs.writeFileSync(process.argv[3]!, JSON.stringify(out, null, 1));
