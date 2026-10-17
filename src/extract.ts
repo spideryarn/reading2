@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { removePlatformFurniture } from "./furniture.js";
-import { latexmlAuthorNames, prepareLatexml } from "./latexml.js";
+import { latexmlAuthorNames, latexmlUntitled, prepareLatexml } from "./latexml.js";
 import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
@@ -54,6 +54,7 @@ import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
 import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, pageOpening } from "./front-matter-authors.js";
+import type { OpeningTitleReader } from "./opening-title.js";
 import type { Author, Meta } from "./types.js";
 
 /**
@@ -426,6 +427,12 @@ export function readArticle(
   opening: OpeningRecord[];
   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
   ownIds: WorkId[];
+  /**
+   * A LaTeXML paper with no title of its own, so its `<title>` (and
+   * Readability's `title`) is LaTeXML's guess — src/latexml.ts §
+   * `latexmlUntitled`. `runExtract` does not use it.
+   */
+  untitled: boolean;
   refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
@@ -445,6 +452,7 @@ export function readArticle(
     authors: shipped.authors,
     opening: shipped.opening,
     ownIds: shipped.ownIds,
+    untitled: shipped.untitled,
     refusal: refusalFor(shipped),
     notes: shipped.notes,
     callouts: shipped.callouts,
@@ -473,6 +481,7 @@ function readingArm(
   authors: Author[] | null;
   opening: OpeningRecord[];
   ownIds: WorkId[];
+  untitled: boolean;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: ExtractRemovals;
@@ -503,6 +512,8 @@ function readingArm(
      into one row per author (src/latexml.ts § 6). `metaAuthors` still reads the
      `<meta>` tags where it always has, below, and falls back to these names. */
   const titleBlockNames = latexmlAuthorNames(dom.window.document);
+  /* And whether it has a title of its own, before anything rewrites it. */
+  const untitled = latexmlUntitled(dom.window.document);
   /* And what the page hides from its reader, before `prepareDocument` un-hides
      collapsed sections for Readability: the opening below leaves it out. */
   markHidden(dom.window.document);
@@ -526,6 +537,7 @@ function readingArm(
     authors,
     opening,
     ownIds,
+    untitled,
     notes,
     callouts,
     removed,
@@ -1265,6 +1277,16 @@ export class TooLittleTextToRead extends Error {
 /** The cheap test before loading temml: a `<math>` or a MathJax script anywhere in the raw page. */
 const MIGHT_HOLD_MATHS = /<math[\s>]|math\/tex/iu;
 
+/**
+ * An untitled LaTeXML paper's title when nothing could read one off its
+ * opening: `arXiv:2308.08708` from the page's own ids, or `null` for the slug.
+ * Plan 261017a.
+ */
+function untitledPlaceholder(ownIds: readonly WorkId[]): string | null {
+  const arxiv = ownIds.find((id) => id.startsWith("arxiv:"));
+  return arxiv ? `arXiv:${arxiv.slice("arxiv:".length)}` : null;
+}
+
 export async function runExtract(opts: {
   html: string;
   /**
@@ -1293,6 +1315,13 @@ export async function runExtract(opts: {
    * authors and gives none of them an affiliation.
    */
   frontMatterAuthors?: FrontMatterAuthorsReader;
+  /**
+   * What reads the title off the page's opening when the page's `<title>` is
+   * known not to be it: a LaTeXML paper with no title of its own
+   * (src/opening-title.ts, plan 261017a). Import hands in the cheap model's;
+   * absent, or no answer, the title is the slug.
+   */
+  titleFromOpening?: OpeningTitleReader;
 }): Promise<ExtractResult> {
   const { slug } = opts;
   /* Before the DOM pass that asks whether each formula would draw: this is the
@@ -1317,7 +1346,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors: declaredAuthors, opening, ownIds, refusal, notes, callouts, removed, kept } = readArticle(
+  const { article, authors: declaredAuthors, opening, ownIds, untitled, refusal, notes, callouts, removed, kept } = readArticle(
     opts.html,
     opts.url,
   );
@@ -1373,7 +1402,16 @@ export async function runExtract(opts: {
      `<title>` or `og:title` can say `&lt;i&gt;Drosophila&lt;/i&gt;`, which
      Readability decodes into literal tags.
      docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
-  const title = typeof article.title === "string" ? plainTitle(article.title) : article.title;
+  /* **Not the page's `<title>` when it is known to be somebody else's guess**:
+     a LaTeXML paper with no `\title`, whose `<title>` names a numbered part
+     of it (`1Indicator Properties`, report spya-mx3wz0). The title is then
+     read off the page's own opening, or is a placeholder: the paper's own
+     arXiv id where the page gives one, else the slug. A placeholder is
+     plainly one, and LaTeXML's guess looks like a title. Plan 261017a. */
+  const declaredTitle = untitled
+    ? ((await opts.titleFromOpening?.(opening)) ?? untitledPlaceholder(ownIds))
+    : article.title;
+  const title = typeof declaredTitle === "string" ? plainTitle(declaredTitle) : declaredTitle;
   const meta: Meta = {
     slug,
     /* **Tidied for the shelf, and only here** — capitals, a site's name on the

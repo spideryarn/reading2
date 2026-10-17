@@ -965,6 +965,14 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **A paper's title, off its opening** (src/opening-title.ts).
+     `front-matter-authors`' route, for its reason: the same opening records,
+     to the same upstream, with a strict schema back. */
+  "opening-title": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
      route, copied for a sharper reason: what it sends is the reader's own
      conversation, so every endpoint is a zero-retention one. A refusal costs
@@ -1254,6 +1262,12 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
     providerDefault:
       "Measured 2026-10-09 by the eval that chose the model: 50–1,600 output tokens, 1.6–6 s, " +
       "~$0.0005 a page (plan 261010d). Unmeasured at any named effort.",
+  },
+  /* The authors pass's setting, on its model and route: nothing has measured
+     this job at a named effort, and its answer is one line. */
+  "opening-title": {
+    providerDefault:
+      "Not measured at a named effort: front-matter-authors' model and route, one record id and one line back (plan 261017a).",
   },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */
