@@ -59,7 +59,7 @@ same time.
 
 **After these runs**, GPT Sol's code review moved the guide's read count inside `fetchDocument`
 (so an address the fetcher refuses no longer spends the read; postmortem
-[261018c](../postmortems/261018c-entering-a-fetch-abstraction-is-not-dispatching-a-request.md))
+[261018d](../postmortems/261018d-entering-a-fetch-abstraction-is-not-dispatching-a-request.md))
 and extended `chat-web-reach.ts` to record each read's requested address, whether a page reached
 the model, model rounds and calls. The results files here carry the earlier fields: a read's host,
 time and outcome. All six *given* reads show a page's character count as their outcome, so all six

@@ -293,7 +293,7 @@ history (`git log -p` on it) should the allowlist be wanted later, for the guide
     moved to a `beforeFirstRequest` option on `fetchDocument`, asked once before the first HTTP
     request (not again on retries or redirects), off by default so ingest is unchanged; tests in
     `tests/fetch.test.ts` and `tests/chat-tools.test.ts`; postmortem
-    [261018c](../postmortems/261018c-entering-a-fetch-abstraction-is-not-dispatching-a-request.md);
+    [261018d](../postmortems/261018d-entering-a-fetch-abstraction-is-not-dispatching-a-request.md);
   - F2, the eval recorded a read's host, not its address, and counted refused reads as reads: it now
     records the requested address and whether a page reached the model, plus rounds and calls;
   - F3, stale wording in chat-tools.md, live-conversation.md, the prompt and the help page.
