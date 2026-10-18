@@ -1,0 +1,398 @@
+diff --git a/docs/project/security-map.md b/docs/project/security-map.md
+index d9af1d609..65c538706 100644
+--- a/docs/project/security-map.md
++++ b/docs/project/security-map.md
+@@ -654,6 +654,22 @@ key. `tests/public-dto-matter.test.ts` and `tests/public-visibility-pg.test.ts`
+ second through the real route, owner and visitor side by side
+ ([261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)).
+ 
++**`PublicSkim` gained `figures` on 2026-10-18**: the figure stops on Skim's route (`skim/14`). The
++question was whether a visitor walks them as the owner does
++([q-gq0f4k](../user-feedback/questions/q-gq0f4k.md)):
++
++> A
++>
++> — Greg, 2026-10-18 (`spya-qj6qzz`)
++
++That is the say-so for this one field and nothing else on the route. Each figure stop crosses field by
++field, `{blockId, depth, cue, after}`: the id of a block already in the payload, the pass, the quote
++stop it follows, and the model's one line about what to look at, which is held to a stop cue's rules,
++checked by the same `cueOf`, and drawn as a text node. It is absent on a route from before `skim/14`.
++A field added to the stored figure stop later does not cross, and `profileHash` and `dropped` still do
++not; `tests/public-dto.test.ts` and `tests/public-visibility-pg.test.ts` assert it
++([261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md)).
++
+ ## The fleet dashboard, which is a different product on the same box
+ 
+ `tools/fleet/` is the agent dashboard on port 8787, not Spideryarn, and its threat model is its own:
+diff --git a/docs/project/skim.md b/docs/project/skim.md
+index 233824271..543ded073 100644
+--- a/docs/project/skim.md
++++ b/docs/project/skim.md
+@@ -779,9 +779,19 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
+   value the *Figures* walk uses.
+ - **Stored beside the quotes, not among them**: `Skim.figures`, merged into one walk by `walkOf`
+   ([`src/skim-passes.ts`](../../src/skim-passes.ts)), so `stops` stays quote-only for everything
+-  that reads it. **A visitor walks no figures**: the public DTO is a listed defence and was not
+-  edited, so the intros map the quotes only and never mention a figure. Letting figure stops cross
+-  is asked of Greg in the feedback note.
++  that reads it. The intros map the quotes only and never mention a figure, which stays right
++  when a figure is trimmed.
++- **A visitor walks the figure stops too**, since 2026-10-18. Adding `figures` to what a shared
++  article sends was an edit to the visitor allowlist, a listed defence, so it was Greg's call:
++
++  > A
++  >
++  > — Greg, 2026-10-18 (`spya-qj6qzz`, reply to
++  > [q-gq0f4k](../user-feedback/questions/q-gq0f4k.md))
++
++  `publicSkim` copies each figure stop field by field, `{ blockId, depth, cue, after }`, and
++  `VisitorSkimBand` walks them through the same `walkOf`
++  ([261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md)).
+ - The input hash covers the figures, so a `skim/14` route is stale when they change; older routes
+   have no figures until planned again, and are only outdated, which is not announced.
+ 
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index 0a57e5f80..cf568b9b6 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -307,7 +307,7 @@
+   "summary": "A route through the piece's quotes, a little deeper each time round.",
+   "keywords": "skimming quick read route spiral trajectory stops depth gist more most tour fast overview spiral route trajectory skim read speed read quick read preview scan skim",
+   "experimental": false,
+-  "body": "## In short\n\nSkim picks out a handful of passages which, read on their own, give you a good sense of what the\npiece is about. Think of it as an alternative to a summary that keeps you in the article: every stop\nis a passage from the article, or one of its figures, in place, sometimes with a short question to\nread it with. Along the way it\nshows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.\nGo round quickly with a few stops, then again in more detail, then again in more.\n\n(Picture: Pressing the right arrow twice: the outlined passage in the article moves to the next stop each time, with Next stop and the next cue beneath it. Caption: Each press of → or Next stop moves to the next stop, and the article scrolls to it.)\n\n## How it works\n\nA route through the piece's quotes, a little deeper each time round.\n\nA short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.\n\n## When to use it\n\nWhen you need the shape of a paper fast but do not want a summary in place of the text: every stop\nis a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a\ndozen, **Most** a larger share of the piece; each walks more stops than the one before. The order is\nplanned for you — the results first, say, then a quick look at the methods — not the article’s. Only whoever added the article can plan a\nroute; visitors to a shared article can walk one already planned.\n\n## Reading it\n\n(Picture: A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below. Caption: A stop on the route: the question to read it with, the passage marked in place, and Next stop to move on.)\n\n- <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop\n  to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a\n  pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.\n- A line above the stops, written by AI, maps the pass you are on: what it goes through, and in\n  what order, so the jumps between passages make sense. It never says what the piece found.\n- Some stops have a short question above the quote, written by AI, to read it with: what the quote\n  refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on\n  its own has none.\n- On a paper with figures, a stop can be a figure or a table instead of a passage, where looking at\n  it helps with the passages around it. Its row shows the caption, and a line above it, written by\n  AI, says why it is there and what to look at — never what it shows the result to be. Stepping to\n  it brings the figure into view. Visitors to a shared article walk the passages only.\n- A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.\n  When a route has any, small dots under each stop’s number show which passes it is in, shallowest\n  first: more than one filled, and you may have read it already.\n- Under the current stop, a card gathers what other modes have already found there: **Terms it\n  uses** and **Ideas it bears on**.\n- The dot beside each row shows how far through the article that stop is, so you can see the route\n  jump about.\n- **Reading for:** at the top is what you said you want from this article; the route is planned\n  around it. **Edit** opens it in place: say what you are skimming for and press **Plan the route\n  for this**, and the route is planned again around it. It is the same sentence as the article’s\n  purpose in Metadata, so other modes use it too. With nothing said yet, the box is already there.\n- The route prefers shorter passages, so a skim does not stall on a paragraph-long quote; a long\n  one is kept for the deeper passes unless it is the only one that makes its point."
++  "body": "## In short\n\nSkim picks out a handful of passages which, read on their own, give you a good sense of what the\npiece is about. Think of it as an alternative to a summary that keeps you in the article: every stop\nis a passage from the article, or one of its figures, in place, sometimes with a short question to\nread it with. Along the way it\nshows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.\nGo round quickly with a few stops, then again in more detail, then again in more.\n\n(Picture: Pressing the right arrow twice: the outlined passage in the article moves to the next stop each time, with Next stop and the next cue beneath it. Caption: Each press of → or Next stop moves to the next stop, and the article scrolls to it.)\n\n## How it works\n\nA route through the piece's quotes, a little deeper each time round.\n\nA short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.\n\n## When to use it\n\nWhen you need the shape of a paper fast but do not want a summary in place of the text: every stop\nis a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a\ndozen, **Most** a larger share of the piece; each walks more stops than the one before. The order is\nplanned for you — the results first, say, then a quick look at the methods — not the article’s. Only whoever added the article can plan a\nroute; visitors to a shared article can walk one already planned.\n\n## Reading it\n\n(Picture: A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below. Caption: A stop on the route: the question to read it with, the passage marked in place, and Next stop to move on.)\n\n- <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop\n  to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a\n  pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.\n- A line above the stops, written by AI, maps the pass you are on: what it goes through, and in\n  what order, so the jumps between passages make sense. It never says what the piece found.\n- Some stops have a short question above the quote, written by AI, to read it with: what the quote\n  refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on\n  its own has none.\n- On a paper with figures, a stop can be a figure or a table instead of a passage, where looking at\n  it helps with the passages around it. Its row shows the caption, and a line above it, written by\n  AI, says why it is there and what to look at — never what it shows the result to be. Stepping to\n  it brings the figure into view. Visitors to a shared article meet the same figure stops.\n- A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.\n  When a route has any, small dots under each stop’s number show which passes it is in, shallowest\n  first: more than one filled, and you may have read it already.\n- Under the current stop, a card gathers what other modes have already found there: **Terms it\n  uses** and **Ideas it bears on**.\n- The dot beside each row shows how far through the article that stop is, so you can see the route\n  jump about.\n- **Reading for:** at the top is what you said you want from this article; the route is planned\n  around it. **Edit** opens it in place: say what you are skimming for and press **Plan the route\n  for this**, and the route is planned again around it. It is the same sentence as the article’s\n  purpose in Metadata, so other modes use it too. With nothing said yet, the box is already there.\n- The route prefers shorter passages, so a skim does not stall on a paragraph-long quote; a long\n  one is kept for the deeper passes unless it is the only one that makes its point."
+  },
+  {
+   "anchor": "mode-marginalia",
+diff --git a/src/public-types.ts b/src/public-types.ts
+index 8f7bff126..561a0505f 100644
+--- a/src/public-types.ts
++++ b/src/public-types.ts
+@@ -89,6 +89,7 @@ import type {
+   SearchHit,
+   SearchKind,
+   TimelineEvent,
++  SkimFigureStop,
+   SkimIntros,
+   SkimStop,
+   Tree,
+@@ -615,6 +616,14 @@ export interface PublicTimeline {
+  * say-so this allowlist needs (plan 261012a). Its prompt holds the cue's rules
+  * and adds *"Never address or mention the reader"* (src/skim.ts, section 4).
+  *
++ * **`figures` crosses** since 2026-10-18 — the figure stops (`skim/14`, plan
++ * 261017d), each `{ blockId, depth, cue, after }`: a block of this article,
++ * which `blocks` already carries, the pass, the quote stop it follows, and the
++ * model's line about what to look at, held to a stop cue's rules and checked
++ * by the same `cueOf` (src/skim.ts). Absent on a route from before it. Greg's
++ * "A" to q-gq0f4k (plan 261018m); without it a visitor walked a stop or two
++ * fewer than the owner and never met a figure.
++ *
+  * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
+  * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this
+  * route"*), so a visitor is shown it and stripping it would make that sentence
+@@ -627,7 +636,7 @@ export interface PublicTimeline {
+  * `generator`, `slug`, `sourceHash`, `visible`, `dropped`, `generatedAt`,
+  * `elapsedMs`.
+  *
+- * The cues and intros *may* have been shaped by the owner's profile and their *why I'm
++ * The cues (a figure stop's among them) and intros *may* have been shaped by the owner's profile and their *why I'm
+  * reading this*, exactly as the glossary, ideas, quotes, tweets and sketch may;
+  * `PROFILE_RULES` (src/profile.ts) forbids a sentence about the reader, and
+  * /features/public-readable-sharing tells the author so.
+@@ -635,6 +644,7 @@ export interface PublicTimeline {
+ export interface PublicSkim {
+   stops: SkimStop[];
+   intros?: SkimIntros;
++  figures?: SkimFigureStop[];
+   offered: number;
+ }
+ 
+diff --git a/src/public/dto.ts b/src/public/dto.ts
+index 60d655647..7b7c3140a 100644
+--- a/src/public/dto.ts
++++ b/src/public/dto.ts
+@@ -89,6 +89,7 @@ import type {
+   Timeline,
+   TimelineEvent,
+   Skim,
++  SkimFigureStop,
+   SkimStop,
+   TimelineOccurrence,
+   Tree,
+@@ -563,7 +564,10 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
+  * passes the stop is walked in — the route itself, so without it a visitor
+  * would walk a different pass from the owner (plan 261003l, Sol F4). `intros`
+  * is optional too (absent before `skim/13`) and crosses since 2026-10-12, on
+- * Greg's say-so (q-t5xjqn, plan 261012a).
++ * Greg's say-so (q-t5xjqn, plan 261012a). `figures`, the figure stops, is
++ * optional (absent before `skim/14`) and crosses since 2026-10-18 (q-gq0f4k,
++ * plan 261018m) — rebuilt field by field like a stop, so a field added to
++ * `SkimFigureStop` later does not cross unasked.
+  * src/public-types.ts § `PublicSkim` is the argument for each.
+  */
+ function publicSkim(skim: Skim): PublicSkim {
+@@ -578,6 +582,18 @@ function publicSkim(skim: Skim): PublicSkim {
+       }),
+     ),
+     ...opt(skim, "intros"),
++    ...(skim.figures
++      ? {
++          figures: skim.figures.map(
++            (figure): SkimFigureStop => ({
++              blockId: figure.blockId,
++              depth: figure.depth,
++              cue: figure.cue,
++              after: figure.after,
++            }),
++          ),
++        }
++      : {}),
+     offered: skim.offered,
+   };
+ }
+diff --git a/src/skim.ts b/src/skim.ts
+index a5a621408..40a9573cf 100644
+--- a/src/skim.ts
++++ b/src/skim.ts
+@@ -201,7 +201,8 @@ export type {
+  * and the answer gains `figures`, each with the quote it follows and a cue;
+  * that quote gives it its pass (`validateFigures`, `trimFigures`). A figure
+  * counts in its pass's length; the quote targets are unchanged. An intro maps the quotes only,
+- * since a visitor walks no figures. **The input hash gains the figures**, so
++ * since a visitor walked no figures then (they do since 2026-10-18, plan 261018m) and a
++ * trimmed figure would leave a false map. **The input hash gains the figures**, so
+  * this version's route is stale when they change; an older route is only
+  * outdated, which is not announced.
+  * docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md.
+diff --git a/src/types.ts b/src/types.ts
+index dec1edb89..95ede1b41 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1562,7 +1562,8 @@ export interface Skim {
+   /**
+    * **The figures the route stops at** (`skim/14`), each placed after a quote
+    * stop of `stops`. **Absent** on routes written before it, and `[]` when the
+-   * model chose none. Never crosses to a visitor (src/public/dto.ts).
++   * model chose none. A visitor's route carries it too since 2026-10-18 (Greg's
++   * "A" to q-gq0f4k, plan 261018m; src/public/dto.ts § `publicSkim`).
+    */
+   figures?: SkimFigureStop[];
+   /**
+diff --git a/src/web/help/pages/modes/skim.md b/src/web/help/pages/modes/skim.md
+index 2b97d0f0a..80308bbcb 100644
+--- a/src/web/help/pages/modes/skim.md
++++ b/src/web/help/pages/modes/skim.md
+@@ -37,7 +37,7 @@ route; visitors to a shared article can walk one already planned.
+ - On a paper with figures, a stop can be a figure or a table instead of a passage, where looking at
+   it helps with the passages around it. Its row shows the caption, and a line above it, written by
+   AI, says why it is there and what to look at — never what it shows the result to be. Stepping to
+-  it brings the figure into view. Visitors to a shared article walk the passages only.
++  it brings the figure into view. Visitors to a shared article meet the same figure stops.
+ - A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.
+   When a route has any, small dots under each stop’s number show which passes it is in, shallowest
+   first: more than one filled, and you may have read it already.
+diff --git a/src/web/modes/skim/SkimMode.tsx b/src/web/modes/skim/SkimMode.tsx
+index 99f2a04e6..2775d7c97 100644
+--- a/src/web/modes/skim/SkimMode.tsx
++++ b/src/web/modes/skim/SkimMode.tsx
+@@ -466,9 +466,9 @@ export function VisitorSkimBand({
+   );
+   const { away, ...rest } = walk;
+   /* The chip too, through the same pieces as the owner's (plan 261011b). */
+-  /* Quotes only: figure stops do not cross to a visitor (src/public/dto.ts,
+-     plan 261017d § Not built). */
+-  const stops = useMemo(() => walkOf(route.stops), [route.stops]);
++  /* Figure stops too, as the owner's walk has them: they cross to a visitor
++     since 2026-10-18 (src/public/dto.ts § `publicSkim`, plan 261018m). */
++  const stops = useMemo(() => walkOf(route.stops, route.figures), [route.stops, route.figures]);
+   const parts = useSkimParts(stops, rest.blocks, rest.arrival);
+   if (parts.walk === "figures") {
+     return (
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index a1a7ef253..723e89e94 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -55,6 +55,7 @@ import type {
+   NodeId,
+   Timeline,
+   Skim,
++  SkimFigureStop,
+   Tree,
+   TreeNode,
+   TweetThread,
+@@ -1312,9 +1313,19 @@ describe("the artefacts a shared link carries", () => {
+     /* `skim/13`'s pass intros (plan 261011r) cross since 2026-10-12, Greg's
+        "A" to q-t5xjqn (plan 261012a); a `null` entry crosses as `null`. */
+     intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
+-    /* `skim/14`'s figure stops (plan 261017d) do not cross: `figures` is
+-       default-absent here, and letting them is Greg's decision, not built. */
+-    figures: [{ blockId: "spya-figur1" as BlockId, depth: 1, cue: "Why the figure is on the walk.", after: "spya-quote1" }],
++    /* `skim/14`'s figure stops (plan 261017d) cross since 2026-10-18, Greg's
++       "A" to q-gq0f4k (plan 261018m) — field by field: the key planted on the
++       first must not ride along, and the second's `null` cue crosses as `null`. */
++    figures: [
++      {
++        blockId: "spya-figur1" as BlockId,
++        depth: 1,
++        cue: "Why the figure is on the walk.",
++        after: "spya-quote1",
++        plantedFigureField: "a field added to SkimFigureStop later",
++      } as SkimFigureStop,
++      { blockId: "spya-figur2" as BlockId, depth: 2, cue: null, after: "spya-quote2" },
++    ],
+     visible: [1, 2, 2],
+     offered: 12,
+     dropped: {
+@@ -2204,14 +2215,19 @@ describe("the artefacts a shared link carries", () => {
+   });
+ 
+   /**
+-   * **The route's stops, its pass intros and `offered`, and nothing else** — not who it was
+-   * planned for (`profileHash`), and not the pipeline's counts and timings.
++   * **The route's stops, its pass intros, its figure stops and `offered`, and nothing else** —
++   * not who it was planned for (`profileHash`), and not the pipeline's counts and timings.
+    * Asserted twice: the key set would pass a renamed `profileHash`, and the
+    * string search would not.
+    */
+-  it("carries the route's stops, intros and offered count, and not who it was planned for", () => {
++  it("carries the route's stops, intros, figure stops and offered count, and not who it was planned for", () => {
+     expect(pathsUnder("skim")).toEqual(
+       [
++        "figures",
++        "figures[].after",
++        "figures[].blockId",
++        "figures[].cue",
++        "figures[].depth",
+         "intros",
+         "offered",
+         "stops",
+@@ -2238,6 +2254,13 @@ describe("the artefacts a shared link carries", () => {
+       /* The map of each pass, read before its first stop: the model's text
+          about the piece, never about the reader (plan 261012a). */
+       intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
++      /* Each figure stop after the quote it goes with: a block the visitor's
++         payload already holds, a pass, and the model's line about what to
++         look at (Greg's "A" to q-gq0f4k, plan 261018m). */
++      figures: [
++        { blockId: "spya-figur1", depth: 1, cue: "Why the figure is on the walk.", after: "spya-quote1" },
++        { blockId: "spya-figur2", depth: 2, cue: null, after: "spya-quote2" },
++      ],
+       offered: 12,
+     });
+     /* The cue-less stop crosses with no `cue` key, not an `undefined` one —
+@@ -2247,8 +2270,17 @@ describe("the artefacts a shared link carries", () => {
+     const json = JSON.stringify(built);
+     expect(json).not.toContain("profileHash");
+     expect(json).not.toContain("profile-of-a-person");
+-    /* Figure stops stay the owner's until Greg says otherwise (plan 261017d § Not built). */
+-    expect(json).not.toContain("Why the figure is on the walk.");
++    /* Field by field: a key added to a stored figure stop does not cross unasked. */
++    expect(json).not.toContain("plantedFigureField");
++  });
++
++  /* A route from before `skim/14` has no `figures` key, and crosses with none —
++     not an invented `[]` (plan 261018m, Sol plan review F2). */
++  it("sends no figures key for a route that has none", () => {
++    const { figures: _figures, ...older } = SKIM;
++    const olderBuilt = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, skim: older });
++    expect(olderBuilt.skim).toBeDefined();
++    expect("figures" in (olderBuilt.skim ?? {})).toBe(false);
+   });
+ 
+   /** The questions and the article's passages, and not our checking's tally. */
+diff --git a/tests/public-visibility-pg.test.ts b/tests/public-visibility-pg.test.ts
+index 7bde88829..0282f9489 100644
+--- a/tests/public-visibility-pg.test.ts
++++ b/tests/public-visibility-pg.test.ts
+@@ -62,7 +62,7 @@ import { MATTER_PROMPT_VERSION, matterInputHash } from "../src/matter-current.js
+ import { documentTitle } from "../src/title-text.js";
+ import { safePublicCanonical } from "../src/urls.js";
+ import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
+-import type { Bibliography, Block, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
++import type { Bibliography, Block, BlockId, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
+ 
+ loadEnvLocal();
+ 
+@@ -113,6 +113,8 @@ const PUBLIC_TWEET = "The first post of the thread.";
+ const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
+ /** A stored Skim pass intro — the same, since 2026-10-12 (plan 261012a). */
+ const PUBLIC_INTRO = "Starts with what a measurement would have to show, then the test it is put to.";
++/** A stored Skim figure stop's cue — the same, since 2026-10-18 (plan 261018m). */
++const PUBLIC_FIGURE_CUE = "Read the left panel first: where does the measured value sit against the prediction?";
+ /** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
+ const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
+ const PUBLIC_WORK = "Consciousness as integrated information";
+@@ -249,6 +251,8 @@ const ARTEFACTS: {
+     profileHash: PRIVATE_PROFILE_HASH,
+     stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+     intros: [PUBLIC_INTRO, null, null],
++    /* The block id need not resolve either, for the same reason. */
++    figures: [{ blockId: "spya-fgfgfg" as BlockId, depth: 1, cue: PUBLIC_FIGURE_CUE, after: "spya-wpvvqq" }],
+     visible: [1, 1, 1],
+     offered: 4,
+     dropped: {
+@@ -1130,7 +1134,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
+    * to a public article with a built route being refused it
+    * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
+    * planned for does not, and neither does the pipeline around it. The pass
+-   * intros cross since 2026-10-12 (plan 261012a). Read off a
++   * intros cross since 2026-10-12 (plan 261012a), and the figure stops since
++   * 2026-10-18 (plan 261018m). Read off a
+    * real row, because the question is whether the public `select` fetches the
+    * column at all — a DTO test only ever sees what it was handed.
+    */
+@@ -1142,10 +1147,13 @@ describe("sharing one article", { timeout: 60_000 }, () => {
+       stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
+       /* The pass intros, since 2026-10-12 (Greg's "A" to q-t5xjqn, plan 261012a). */
+       intros: [PUBLIC_INTRO, null, null],
++      /* The figure stops, since 2026-10-18 (Greg's "A" to q-gq0f4k, plan 261018m). */
++      figures: [{ blockId: "spya-fgfgfg", depth: 1, cue: PUBLIC_FIGURE_CUE, after: "spya-wpvvqq" }],
+       offered: 4,
+     });
+     expect(r.text).toContain(PUBLIC_CUE);
+     expect(r.text).toContain(PUBLIC_INTRO);
++    expect(r.text).toContain(PUBLIC_FIGURE_CUE);
+     expect(JSON.stringify(body.skim)).not.toContain("profileHash");
+     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
+   });
+diff --git a/tests/skim-figures.test.tsx b/tests/skim-figures.test.tsx
+index d22037079..e5e39301d 100644
+--- a/tests/skim-figures.test.tsx
++++ b/tests/skim-figures.test.tsx
+@@ -286,7 +286,9 @@ function Harness({
+     visitor
+       ? createElement(VisitorSkimBand, {
+           ...walk,
+-          route: { ...ROUTE } as never,
++          /* The same stored route the owner's read returns, as the public
++             payload carries it. */
++          route: { ...((skimBody as typeof SKIM_BODY | null)?.skim ?? ROUTE) } as never,
+           quotes: QUOTE_LIST,
+           glossary: undefined,
+           ideas: undefined,
+@@ -670,6 +672,23 @@ describe("a figure stop on the route", () => {
+     expect(control?.blockId).toBe(FIG);
+   });
+ 
++  /* Greg's "A" to q-gq0f4k (plan 261018m): a visitor's walk is the owner's. */
++  it("is walked by a visitor to a shared article too, stepped to as the owner's is", async () => {
++    skimBody = withFigure(Q[2]!);
++    await mount(BLOCKS, true);
++    expect(chipText()).toEqual(["Gist3", "More1", "Figures2"]);
++    const rows = [...host.querySelectorAll(".skim-row")];
++    expect(rows.map((r) => r.getAttribute("data-stop"))).toEqual([Q[2], FIG, Q[0]]);
++    expect(rows[1]!.querySelector(".skim-fig-text")?.textContent).toBe("The landscape, by category");
++    await act(async () => void control!.step(1));
++    await settled();
++    expect(param("stop")).toBe(FIG);
++    expect(flashed).toEqual([FIG]);
++    expect(host.querySelector(".skim-row.current .skim-cue")?.textContent).toBe(FIGURE_CUE);
++    /* Public payloads are the whole data source: no owner read and no job. */
++    expect(apiRequests).toEqual([]);
++  });
++
+   it("a figure that is no longer in the article is a missing row, not a crash", async () => {
+     skimBody = withFigure(Q[2]!);
+     await mount(PLAIN);

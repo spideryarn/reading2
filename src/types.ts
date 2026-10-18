@@ -1403,10 +1403,9 @@ export interface SkimStop {
  * is being included."* A stop of its own, met straight after the quote stop
  * `after` names, in that quote's own pass (`depth`) and no other — never
  * carried — and counted in that pass's length as walked. At most one figure
- * follows a quote. Kept in `Skim.figures`, beside `stops` rather than in it, so that
- * `stops` stays quote-only for every reader of it — the public DTO above all,
- * which does not carry figures (src/public/dto.ts § `publicSkim`).
- * `walkOf` (src/skim-passes.ts) merges the two into the walk.
+ * follows a quote. Kept in `Skim.figures`, beside `stops` rather than in it, so
+ * `stops` stays quote-only for every reader of it. `publicSkim` likewise carries
+ * `figures` beside `stops`; `walkOf` (src/skim-passes.ts) merges the two into the walk.
  * docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md.
  */
 export interface SkimFigureStop {
@@ -1562,7 +1561,8 @@ export interface Skim {
   /**
    * **The figures the route stops at** (`skim/14`), each placed after a quote
    * stop of `stops`. **Absent** on routes written before it, and `[]` when the
-   * model chose none. Never crosses to a visitor (src/public/dto.ts).
+   * model chose none. A visitor's route carries it too since 2026-10-18 (Greg's
+   * "A" to q-gq0f4k, plan 261018m; src/public/dto.ts § `publicSkim`).
    */
   figures?: SkimFigureStop[];
   /**

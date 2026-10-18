@@ -779,9 +779,19 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   value the *Figures* walk uses.
 - **Stored beside the quotes, not among them**: `Skim.figures`, merged into one walk by `walkOf`
   ([`src/skim-passes.ts`](../../src/skim-passes.ts)), so `stops` stays quote-only for everything
-  that reads it. **A visitor walks no figures**: the public DTO is a listed defence and was not
-  edited, so the intros map the quotes only and never mention a figure. Letting figure stops cross
-  is asked of Greg in the feedback note.
+  that reads it. The intros map the quotes only and never mention a figure, which stays right
+  when a figure is trimmed.
+- **A visitor walks the figure stops too**, since 2026-10-18. Adding `figures` to what a shared
+  article sends was an edit to the visitor allowlist, a listed defence, so it was Greg's call:
+
+  > A
+  >
+  > — Greg, 2026-10-18 (`spya-qj6qzz`, reply to
+  > [q-gq0f4k](../user-feedback/questions/q-gq0f4k.md))
+
+  `publicSkim` copies each figure stop field by field, `{ blockId, depth, cue, after }`, and
+  `VisitorSkimBand` walks them through the same `walkOf`
+  ([261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md)).
 - The input hash covers the figures, so a `skim/14` route is stale when they change; older routes
   have no figures until planned again, and are only outdated, which is not announced.
 

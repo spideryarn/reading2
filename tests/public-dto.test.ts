@@ -55,6 +55,7 @@ import type {
   NodeId,
   Timeline,
   Skim,
+  SkimFigureStop,
   Tree,
   TreeNode,
   TweetThread,
@@ -1312,9 +1313,19 @@ describe("the artefacts a shared link carries", () => {
     /* `skim/13`'s pass intros (plan 261011r) cross since 2026-10-12, Greg's
        "A" to q-t5xjqn (plan 261012a); a `null` entry crosses as `null`. */
     intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
-    /* `skim/14`'s figure stops (plan 261017d) do not cross: `figures` is
-       default-absent here, and letting them is Greg's decision, not built. */
-    figures: [{ blockId: "spya-figur1" as BlockId, depth: 1, cue: "Why the figure is on the walk.", after: "spya-quote1" }],
+    /* `skim/14`'s figure stops (plan 261017d) cross since 2026-10-18, Greg's
+       "A" to q-gq0f4k (plan 261018m) — field by field: the key planted on the
+       first must not ride along, and the second's `null` cue crosses as `null`. */
+    figures: [
+      {
+        blockId: "spya-figur1" as BlockId,
+        depth: 1,
+        cue: "Why the figure is on the walk.",
+        after: "spya-quote1",
+        plantedFigureField: "a field added to SkimFigureStop later",
+      } as SkimFigureStop,
+      { blockId: "spya-figur2" as BlockId, depth: 2, cue: null, after: "spya-quote2" },
+    ],
     visible: [1, 2, 2],
     offered: 12,
     dropped: {
@@ -2204,14 +2215,19 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
-   * **The route's stops, its pass intros and `offered`, and nothing else** — not who it was
-   * planned for (`profileHash`), and not the pipeline's counts and timings.
+   * **The route's stops, its pass intros, its figure stops and `offered`, and nothing else** —
+   * not who it was planned for (`profileHash`), and not the pipeline's counts and timings.
    * Asserted twice: the key set would pass a renamed `profileHash`, and the
    * string search would not.
    */
-  it("carries the route's stops, intros and offered count, and not who it was planned for", () => {
+  it("carries the route's stops, intros, figure stops and offered count, and not who it was planned for", () => {
     expect(pathsUnder("skim")).toEqual(
       [
+        "figures",
+        "figures[].after",
+        "figures[].blockId",
+        "figures[].cue",
+        "figures[].depth",
         "intros",
         "offered",
         "stops",
@@ -2238,6 +2254,13 @@ describe("the artefacts a shared link carries", () => {
       /* The map of each pass, read before its first stop: the model's text
          about the piece, never about the reader (plan 261012a). */
       intros: ["Starts with the claim, then the trouble it meets.", "Goes back for the examples.", null],
+      /* Each figure stop after the quote it goes with: a block the visitor's
+         payload already holds, a pass, and the model's line about what to
+         look at (Greg's "A" to q-gq0f4k, plan 261018m). */
+      figures: [
+        { blockId: "spya-figur1", depth: 1, cue: "Why the figure is on the walk.", after: "spya-quote1" },
+        { blockId: "spya-figur2", depth: 2, cue: null, after: "spya-quote2" },
+      ],
       offered: 12,
     });
     /* The cue-less stop crosses with no `cue` key, not an `undefined` one —
@@ -2247,8 +2270,17 @@ describe("the artefacts a shared link carries", () => {
     const json = JSON.stringify(built);
     expect(json).not.toContain("profileHash");
     expect(json).not.toContain("profile-of-a-person");
-    /* Figure stops stay the owner's until Greg says otherwise (plan 261017d § Not built). */
-    expect(json).not.toContain("Why the figure is on the walk.");
+    /* Field by field: a key added to a stored figure stop does not cross unasked. */
+    expect(json).not.toContain("plantedFigureField");
+  });
+
+  /* A route from before `skim/14` has no `figures` key, and crosses with none —
+     not an invented `[]` (plan 261018m, Sol plan review F2). */
+  it("sends no figures key for a route that has none", () => {
+    const { figures: _figures, ...older } = SKIM;
+    const olderBuilt = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, skim: older });
+    expect(olderBuilt.skim).toBeDefined();
+    expect("figures" in (olderBuilt.skim ?? {})).toBe(false);
   });
 
   /** The questions and the article's passages, and not our checking's tally. */

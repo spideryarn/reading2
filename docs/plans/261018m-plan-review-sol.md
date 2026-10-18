@@ -1,0 +1,9 @@
+1. **P2 — `docs/user-feedback/questions/q-gq0f4k.md:4`** — The question remains `open` and does not record reply `spya-qj6qzz`; `docs/user-feedback/261015_2040-figures-in-the-skim-route.md:4` and `:43` still tell Greg that visitors get quotes only. This would keep the answered question in the dialog and leave the Earlier tab inaccurate. Fix: add `acted`, mark it `answered`, append the dated answer and outcome, update the report note, then regenerate both feedback-generated files as required by `docs/project/feedback-reports.md:590`.
+
+2. **P2 — `tests/public-dto.test.ts:2223`** — The proposed tests go red without the feature and the planted field catches whole-object spreading, but they do not test the plan’s promise that a pre-`skim/14` route retains no `figures` key. An implementation that always emits `figures: []` would pass. Fix: project a route with the property genuinely absent and assert `"figures" in built.skim === false`.
+
+3. **P3 — `src/skim.ts:203`** — The documentation sweep misses this comment’s now-false “a visitor walks no figures,” and the related live prompt rationale at `src/skim.ts:1855` still says some readers walk without them. The quote-only intro rule remains valid because figures can be removed during validation, but its stated reason becomes stale. Fix: correct the source comment and explicitly address the prompt wording—either rephrase it around validation/trimming with the required prompt-version/evaluation work, or name that prompt-only correction as a separate deliberate deferral.
+
+No further changes are needed in the public-reader select, export, caching/ETag, server render, or MCP paths; the shared client path is not owner-gated for figure rows or traversal.
+
+APPROVE WITH CHANGES

@@ -654,6 +654,22 @@ key. `tests/public-dto-matter.test.ts` and `tests/public-visibility-pg.test.ts` 
 second through the real route, owner and visitor side by side
 ([261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)).
 
+**`PublicSkim` gained `figures` on 2026-10-18**: the figure stops on Skim's route (`skim/14`). The
+question was whether a visitor walks them as the owner does
+([q-gq0f4k](../user-feedback/questions/q-gq0f4k.md)):
+
+> A
+>
+> — Greg, 2026-10-18 (`spya-qj6qzz`)
+
+That is the say-so for this one field and nothing else on the route. Each figure stop crosses field by
+field, `{blockId, depth, cue, after}`: the id of a block already in the payload, the pass, the quote
+stop it follows, and the model's one line about what to look at, which is held to a stop cue's rules,
+checked by the same `cueOf`, and drawn as a text node. It is absent on a route from before `skim/14`.
+A field added to the stored figure stop later does not cross, and `profileHash` and `dropped` still do
+not; `tests/public-dto.test.ts` and `tests/public-visibility-pg.test.ts` assert it
+([261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md)).
+
 ## The fleet dashboard, which is a different product on the same box
 
 `tools/fleet/` is the agent dashboard on port 8787, not Spideryarn, and its threat model is its own:

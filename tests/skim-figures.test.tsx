@@ -286,7 +286,9 @@ function Harness({
     visitor
       ? createElement(VisitorSkimBand, {
           ...walk,
-          route: { ...ROUTE } as never,
+          /* The same stored route the owner's read returns, as the public
+             payload carries it. */
+          route: { ...((skimBody as typeof SKIM_BODY | null)?.skim ?? ROUTE) } as never,
           quotes: QUOTE_LIST,
           glossary: undefined,
           ideas: undefined,
@@ -668,6 +670,23 @@ describe("a figure stop on the route", () => {
     await act(async () => void control!.step(1));
     await settled();
     expect(control?.blockId).toBe(FIG);
+  });
+
+  /* Greg's "A" to q-gq0f4k (plan 261018m): a visitor's walk is the owner's. */
+  it("is walked by a visitor to a shared article too, stepped to as the owner's is", async () => {
+    skimBody = withFigure(Q[2]!);
+    await mount(BLOCKS, true);
+    expect(chipText()).toEqual(["Gist3", "More1", "Figures2"]);
+    const rows = [...host.querySelectorAll(".skim-row")];
+    expect(rows.map((r) => r.getAttribute("data-stop"))).toEqual([Q[2], FIG, Q[0]]);
+    expect(rows[1]!.querySelector(".skim-fig-text")?.textContent).toBe("The landscape, by category");
+    await act(async () => void control!.step(1));
+    await settled();
+    expect(param("stop")).toBe(FIG);
+    expect(flashed).toEqual([FIG]);
+    expect(host.querySelector(".skim-row.current .skim-cue")?.textContent).toBe(FIGURE_CUE);
+    /* Public payloads are the whole data source: no owner read and no job. */
+    expect(apiRequests).toEqual([]);
   });
 
   it("a figure that is no longer in the article is a missing row, not a crash", async () => {

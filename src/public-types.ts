@@ -89,6 +89,7 @@ import type {
   SearchHit,
   SearchKind,
   TimelineEvent,
+  SkimFigureStop,
   SkimIntros,
   SkimStop,
   Tree,
@@ -615,6 +616,14 @@ export interface PublicTimeline {
  * say-so this allowlist needs (plan 261012a). Its prompt holds the cue's rules
  * and adds *"Never address or mention the reader"* (src/skim.ts, section 4).
  *
+ * **`figures` crosses** since 2026-10-18 — the figure stops (`skim/14`, plan
+ * 261017d), each `{ blockId, depth, cue, after }`: a block of this article,
+ * which `blocks` already carries, the pass, the quote stop it follows, and the
+ * model's line about what to look at, held to a stop cue's rules and checked
+ * by the same `cueOf` (src/skim.ts). Absent on a route from before it. Greg's
+ * "A" to q-gq0f4k (plan 261018m); without it a visitor walked a stop or two
+ * fewer than the owner and never met a figure.
+ *
  * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
  * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this
  * route"*), so a visitor is shown it and stripping it would make that sentence
@@ -627,7 +636,7 @@ export interface PublicTimeline {
  * `generator`, `slug`, `sourceHash`, `visible`, `dropped`, `generatedAt`,
  * `elapsedMs`.
  *
- * The cues and intros *may* have been shaped by the owner's profile and their *why I'm
+ * The cues (a figure stop's among them) and intros *may* have been shaped by the owner's profile and their *why I'm
  * reading this*, exactly as the glossary, ideas, quotes, tweets and sketch may;
  * `PROFILE_RULES` (src/profile.ts) forbids a sentence about the reader, and
  * /features/public-readable-sharing tells the author so.
@@ -635,6 +644,7 @@ export interface PublicTimeline {
 export interface PublicSkim {
   stops: SkimStop[];
   intros?: SkimIntros;
+  figures?: SkimFigureStop[];
   offered: number;
 }
 

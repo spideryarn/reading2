@@ -89,6 +89,7 @@ import type {
   Timeline,
   TimelineEvent,
   Skim,
+  SkimFigureStop,
   SkimStop,
   TimelineOccurrence,
   Tree,
@@ -563,7 +564,10 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
  * passes the stop is walked in — the route itself, so without it a visitor
  * would walk a different pass from the owner (plan 261003l, Sol F4). `intros`
  * is optional too (absent before `skim/13`) and crosses since 2026-10-12, on
- * Greg's say-so (q-t5xjqn, plan 261012a).
+ * Greg's say-so (q-t5xjqn, plan 261012a). `figures`, the figure stops, is
+ * optional (absent before `skim/14`) and crosses since 2026-10-18 (q-gq0f4k,
+ * plan 261018m) — rebuilt field by field like a stop, so a field added to
+ * `SkimFigureStop` later does not cross unasked.
  * src/public-types.ts § `PublicSkim` is the argument for each.
  */
 function publicSkim(skim: Skim): PublicSkim {
@@ -578,6 +582,18 @@ function publicSkim(skim: Skim): PublicSkim {
       }),
     ),
     ...opt(skim, "intros"),
+    ...(skim.figures
+      ? {
+          figures: skim.figures.map(
+            (figure): SkimFigureStop => ({
+              blockId: figure.blockId,
+              depth: figure.depth,
+              cue: figure.cue,
+              after: figure.after,
+            }),
+          ),
+        }
+      : {}),
     offered: skim.offered,
   };
 }

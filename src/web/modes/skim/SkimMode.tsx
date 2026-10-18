@@ -466,9 +466,9 @@ export function VisitorSkimBand({
   );
   const { away, ...rest } = walk;
   /* The chip too, through the same pieces as the owner's (plan 261011b). */
-  /* Quotes only: figure stops do not cross to a visitor (src/public/dto.ts,
-     plan 261017d § Not built). */
-  const stops = useMemo(() => walkOf(route.stops), [route.stops]);
+  /* Figure stops too, as the owner's walk has them: they cross to a visitor
+     since 2026-10-18 (src/public/dto.ts § `publicSkim`, plan 261018m). */
+  const stops = useMemo(() => walkOf(route.stops, route.figures), [route.stops, route.figures]);
   const parts = useSkimParts(stops, rest.blocks, rest.arrival);
   if (parts.walk === "figures") {
     return (

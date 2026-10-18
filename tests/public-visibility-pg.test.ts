@@ -62,7 +62,7 @@ import { MATTER_PROMPT_VERSION, matterInputHash } from "../src/matter-current.js
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Bibliography, Block, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
+import type { Bibliography, Block, BlockId, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -113,6 +113,8 @@ const PUBLIC_TWEET = "The first post of the thread.";
 const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
 /** A stored Skim pass intro — the same, since 2026-10-12 (plan 261012a). */
 const PUBLIC_INTRO = "Starts with what a measurement would have to show, then the test it is put to.";
+/** A stored Skim figure stop's cue — the same, since 2026-10-18 (plan 261018m). */
+const PUBLIC_FIGURE_CUE = "Read the left panel first: where does the measured value sit against the prediction?";
 /** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
 const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
 const PUBLIC_WORK = "Consciousness as integrated information";
@@ -249,6 +251,8 @@ const ARTEFACTS: {
     profileHash: PRIVATE_PROFILE_HASH,
     stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
     intros: [PUBLIC_INTRO, null, null],
+    /* The block id need not resolve either, for the same reason. */
+    figures: [{ blockId: "spya-fgfgfg" as BlockId, depth: 1, cue: PUBLIC_FIGURE_CUE, after: "spya-wpvvqq" }],
     visible: [1, 1, 1],
     offered: 4,
     dropped: {
@@ -1130,7 +1134,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * to a public article with a built route being refused it
    * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
    * planned for does not, and neither does the pipeline around it. The pass
-   * intros cross since 2026-10-12 (plan 261012a). Read off a
+   * intros cross since 2026-10-12 (plan 261012a), and the figure stops since
+   * 2026-10-18 (plan 261018m). Read off a
    * real row, because the question is whether the public `select` fetches the
    * column at all — a DTO test only ever sees what it was handed.
    */
@@ -1142,10 +1147,13 @@ describe("sharing one article", { timeout: 60_000 }, () => {
       stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
       /* The pass intros, since 2026-10-12 (Greg's "A" to q-t5xjqn, plan 261012a). */
       intros: [PUBLIC_INTRO, null, null],
+      /* The figure stops, since 2026-10-18 (Greg's "A" to q-gq0f4k, plan 261018m). */
+      figures: [{ blockId: "spya-fgfgfg", depth: 1, cue: PUBLIC_FIGURE_CUE, after: "spya-wpvvqq" }],
       offered: 4,
     });
     expect(r.text).toContain(PUBLIC_CUE);
     expect(r.text).toContain(PUBLIC_INTRO);
+    expect(r.text).toContain(PUBLIC_FIGURE_CUE);
     expect(JSON.stringify(body.skim)).not.toContain("profileHash");
     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
   });

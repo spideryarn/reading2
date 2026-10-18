@@ -37,7 +37,7 @@ route; visitors to a shared article can walk one already planned.
 - On a paper with figures, a stop can be a figure or a table instead of a passage, where looking at
   it helps with the passages around it. Its row shows the caption, and a line above it, written by
   AI, says why it is there and what to look at — never what it shows the result to be. Stepping to
-  it brings the figure into view. Visitors to a shared article walk the passages only.
+  it brings the figure into view. Visitors to a shared article meet the same figure stops.
 - A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.
   When a route has any, small dots under each stop’s number show which passes it is in, shallowest
   first: more than one filled, and you may have read it already.

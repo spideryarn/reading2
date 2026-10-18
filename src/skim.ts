@@ -201,7 +201,8 @@ export type {
  * and the answer gains `figures`, each with the quote it follows and a cue;
  * that quote gives it its pass (`validateFigures`, `trimFigures`). A figure
  * counts in its pass's length; the quote targets are unchanged. An intro maps the quotes only,
- * since a visitor walks no figures. **The input hash gains the figures**, so
+ * since a visitor walked no figures then (they do since 2026-10-18, plan 261018m) and a
+ * trimmed figure would leave a false map. **The input hash gains the figures**, so
  * this version's route is stale when they change; an older route is only
  * outdated, which is not announced.
  * docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md.

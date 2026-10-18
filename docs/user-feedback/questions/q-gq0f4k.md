@@ -1,10 +1,11 @@
 ---
 id: q-gq0f4k
 report: spya-c8z66b
-status: open
+status: answered
 asked: 2026-10-17
 title: Should figure stops in Skim's route reach visitors to a shared article too?
-refs: qi-at6acbtb · docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md · docs/user-feedback/261015_2040-figures-in-the-skim-route.md · spya-c8z66b · SPIDERYARN-READING2-J5
+refs: qi-at6acbtb · qi-6297kfn6 · docs/plans/261017d-figures-as-stops-of-their-own-in-the-skim-route.md · docs/plans/261018m-skim-figure-stops-cross-to-visitors.md · docs/user-feedback/261015_2040-figures-in-the-skim-route.md · spya-c8z66b · SPIDERYARN-READING2-J5 · src/public/dto.ts publicSkim · docs/project/security-map.md
+acted: spya-qj6qzz
 ---
 Skim's Gist, More and Most walks can now stop at a figure, as you asked (your 1B and 2A). Only you, the owner, see those figure stops. Someone reading an article you have shared walks the same route with the figures left out. Should they see them too?
 
@@ -24,3 +25,13 @@ Why visitors do not get it yet. What a shared article sends to someone who is no
 What each choice would look like. With A, a visitor stepping through Gist on your shared paper would meet the same figure stop you do, after the same quote. With B, they step from that quote straight to the next quote.
 
 What would make you pick B: if you would rather shared articles carry as little AI-written text as possible.
+
+## Greg's answer, 2026-10-18 (in the Feedback dialog, reply `spya-qj6qzz`)
+
+> A
+
+Built: a visitor to a shared or public article now walks the same figure stops as the owner, each
+after the same quote, with its line saying why it is there. It is one more field in the visitor
+allowlist (`PublicSkim.figures`, src/public/dto.ts), copied field by field and recorded in
+security-map.md; who the route was planned for still does not cross. On `dev`, not deployed. Plan
+[261018m](../../plans/261018m-skim-figure-stops-cross-to-visitors.md), queue item `qi-6297kfn6`.

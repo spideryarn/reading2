@@ -1,7 +1,7 @@
 ---
 reports: spya-c8z66b
 ending: shipped
-comment: Built as Greg chose (1B, 2A to q-z27hq2): the model may put a figure between quotes in Gist, More and Most, with a cue. skim/14, commits 27d0c289d, 18765fa34, d008d8cb6. Visitors' routes stay quote-only until q-gq0f4k (qi-at6acbtb).
+comment: Built as Greg chose (1B, 2A to q-z27hq2): the model may put a figure between quotes in Gist, More and Most, with a cue. Visitors to a shared article walk the figure stops too since 2026-10-18 (A to q-gq0f4k, plan 261018m).
 ---
 # Figures inside Skim's Gist · More · Most route: shipped
 
@@ -40,9 +40,19 @@ It had two decisions in it, asked in [q-z27hq2](questions/q-z27hq2.md) on 2026-1
   quote's. The quote route held: as many Ideas in Gist as before, and a blind judge preferred the
   new Gist walks 8 to 4. On Greg's paper the route chose Figure 1 (imagery as weak perception) and
   Figure 2 (the visual hierarchy), each after the quote about it.
-- **Not built: figure stops for visitors.** What a shared article sends a stranger is a listed
-  defence (`src/public/dto.ts`), so a visitor's route stays quotes-only and the pass intros never
-  mention a figure. Asked in [q-gq0f4k](questions/q-gq0f4k.md), queued as `qi-at6acbtb`.
+- **Figure stops for visitors: built 2026-10-18.** What a shared article sends a stranger is a
+  listed defence (`src/public/dto.ts`), so at first a visitor's route stayed quotes-only. Asked in
+  [q-gq0f4k](questions/q-gq0f4k.md):
+
+  > A
+  >
+  > — Greg, 2026-10-18 (`spya-qj6qzz`)
+
+  A visitor now walks the same figure stops as the owner, one field added to the allowlist and
+  recorded in security-map.md
+  ([plan 261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md), queue item
+  `qi-6297kfn6`). The pass intros still never mention a figure, since one can be dropped in
+  checking.
 - A route planned before this has no figures until it is planned again (Metadata's *AI processing*,
   or *Plan it again*); the older version is not announced.
 
