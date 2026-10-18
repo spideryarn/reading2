@@ -14,6 +14,7 @@ import {
   registryAuthorIsOurs,
   registryIsThisArticle,
   withRegistryFacts,
+  type OwnIds,
 } from "../src/article-registry.js";
 import { parseWorkId, type LookupResult, type WorkId, type WorkRecord } from "../src/bibliographic.js";
 import type { Meta } from "../src/types.js";
@@ -48,6 +49,9 @@ function lookupOf(answers: Record<string, LookupResult>): { lookup: (id: WorkId)
 }
 
 const meta = (over: Partial<Meta> = {}): Meta => ({ slug: "s", title: TITLE, byline: "Taylor Beck", ...over });
+/* Where the candidates came from: text printed on a PDF's pages, or the page's own address and meta tags. */
+const printed = (ids: WorkId[]): OwnIds => ({ from: "printed", ids });
+const onPage = (ids: WorkId[]): OwnIds => ({ from: "page", ids });
 
 describe("ownIdsOfPdf", () => {
   it("finds a DOI in any record of the first two pages, with the sentence's punctuation off", () => {
@@ -189,19 +193,19 @@ describe("withRegistryFacts", () => {
     const { lookup } = lookupOf({
       "doi:10.1000/cited": { kind: "found", record: record("10.1000/cited", { title: `${TITLE}: a field guide` }) },
     });
-    expect((await withRegistryFacts(meta(), candidates, { lookup })).meta).toEqual(meta());
+    expect((await withRegistryFacts(meta(), printed(candidates), { lookup })).meta).toEqual(meta());
   });
 
   it("fills the DOI, the journal and the day from an agreeing record", async () => {
     const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
-    const out = await withRegistryFacts(meta(), [ID], { lookup });
+    const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
     expect(out.meta).toEqual({ ...meta(), doi: "10.3390/e26060481", journal: "Entropy", publishedAt: "2024-05-31" });
     expect(out.outcome).toBe("agreed");
   });
 
   it("keeps the page's own date, and still takes the journal", async () => {
     const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
-    const out = await withRegistryFacts(meta({ publishedAt: "2024-06-02T09:00:00+02:00" }), [ID], { lookup });
+    const out = await withRegistryFacts(meta({ publishedAt: "2024-06-02T09:00:00+02:00" }), printed([ID]), { lookup });
     expect(out.meta.publishedAt).toBe("2024-06-02T09:00:00+02:00");
     expect(out.meta.journal).toBe("Entropy");
   });
@@ -209,7 +213,7 @@ describe("withRegistryFacts", () => {
   it("takes nothing from a record whose title is another work's", async () => {
     const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481", { title: "Another paper about something else" }) } });
     const before = meta();
-    const out = await withRegistryFacts(before, [ID], { lookup });
+    const out = await withRegistryFacts(before, printed([ID]), { lookup });
     expect(out.meta).toEqual(before);
     expect(out.outcome).toBe("none-agreed");
   });
@@ -220,14 +224,14 @@ describe("withRegistryFacts", () => {
       [first]: { kind: "found", record: record("10.1000/cited", { title: "A cited work with its own long title" }) },
       [ID]: { kind: "found", record: record("10.3390/e26060481") },
     });
-    const out = await withRegistryFacts(meta(), [first, ID], { lookup });
+    const out = await withRegistryFacts(meta(), printed([first, ID]), { lookup });
     expect(asked).toEqual([first, ID]);
     expect(out.meta.doi).toBe("10.3390/e26060481");
   });
 
   it("asks about the DOI the article already has first, and keeps it when nothing agrees", async () => {
     const { lookup, asked } = lookupOf({});
-    const out = await withRegistryFacts(meta({ doi: "10.1000/Mine" }), [ID], { lookup });
+    const out = await withRegistryFacts(meta({ doi: "10.1000/Mine" }), printed([ID]), { lookup });
     expect(asked).toEqual(["doi:10.1000/mine", ID]);
     expect(out.meta.doi).toBe("10.1000/Mine");
     expect(out.meta.journal).toBeUndefined();
@@ -235,9 +239,9 @@ describe("withRegistryFacts", () => {
 
   it("leaves meta alone, and does not throw, when the registry cannot be reached", async () => {
     const before = meta();
-    const unavailable = await withRegistryFacts(before, [ID], { lookup: async () => ({ kind: "unavailable", why: "busy" }) });
+    const unavailable = await withRegistryFacts(before, printed([ID]), { lookup: async () => ({ kind: "unavailable", why: "busy" }) });
     expect(unavailable.meta).toEqual(before);
-    const thrown = await withRegistryFacts(before, [ID], {
+    const thrown = await withRegistryFacts(before, printed([ID]), {
       lookup: async () => {
         throw new Error("down");
       },
@@ -248,18 +252,18 @@ describe("withRegistryFacts", () => {
 
   it("asks nobody when there is no candidate, or no title worth checking against", async () => {
     const { lookup, asked } = lookupOf({});
-    expect((await withRegistryFacts(meta(), [], { lookup })).outcome).toBe("no-candidate");
-    expect((await withRegistryFacts(meta({ title: "Introduction" }), [ID], { lookup })).outcome).toBe("no-candidate");
+    expect((await withRegistryFacts(meta(), printed([]), { lookup })).outcome).toBe("no-candidate");
+    expect((await withRegistryFacts(meta({ title: "Introduction" }), printed([ID]), { lookup })).outcome).toBe("no-candidate");
     expect(asked).toEqual([]);
   });
 
   it("takes nothing from the same title by other authors, or when either side names nobody", async () => {
     const others = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481", { authors: [{ family: "Lovelace", given: "Ada" }] }) } });
-    expect((await withRegistryFacts(meta(), [ID], others)).outcome).toBe("none-agreed");
+    expect((await withRegistryFacts(meta(), printed([ID]), others)).outcome).toBe("none-agreed");
     const nobody = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481", { authors: [] }) } });
-    expect((await withRegistryFacts(meta(), [ID], nobody)).outcome).toBe("none-agreed");
+    expect((await withRegistryFacts(meta(), printed([ID]), nobody)).outcome).toBe("none-agreed");
     const agreeing = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
-    const out = await withRegistryFacts({ slug: "s", title: TITLE }, [ID], agreeing);
+    const out = await withRegistryFacts({ slug: "s", title: TITLE }, printed([ID]), agreeing);
     expect(out.outcome).toBe("no-candidate");
     expect(agreeing.asked).toEqual([]);
   });
@@ -268,7 +272,7 @@ describe("withRegistryFacts", () => {
     const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481", { authors: [{ family: "Müller" }] }) } });
     const out = await withRegistryFacts(
       { slug: "s", title: TITLE, authors: [{ name: "Jana Muller", affiliations: [] }] },
-      [ID],
+      printed([ID]),
       { lookup },
     );
     expect(out.outcome).toBe("agreed");
@@ -278,14 +282,14 @@ describe("withRegistryFacts", () => {
     const arxiv = "arxiv:1706.03762" as WorkId;
     const datacite = { source: "datacite" as const, published: undefined };
     const viaArxiv = lookupOf({ [arxiv]: { kind: "found", record: { ...record("10.48550/arxiv.1706.03762", { venue: "arXiv", ...datacite }), id: arxiv } } });
-    const a = await withRegistryFacts(meta(), [arxiv], viaArxiv);
+    const a = await withRegistryFacts(meta(), printed([arxiv]), viaArxiv);
     expect(a.meta.journal).toBe("arXiv");
     /* arXiv's own DataCite DOI, since 261010n: before, an arXiv import kept no DOI and
        Reception's Cited by said "no DOI on record" for every arXiv paper (spya-sbj3yk). */
     expect(a.meta.doi).toBe("10.48550/arxiv.1706.03762");
     const zenodo = "doi:10.5281/zenodo.1" as WorkId;
     const viaZenodo = lookupOf({ [zenodo]: { kind: "found", record: record("10.5281/zenodo.1", { venue: "Zenodo", ...datacite }) } });
-    const z = await withRegistryFacts(meta(), [zenodo], viaZenodo);
+    const z = await withRegistryFacts(meta(), printed([zenodo]), viaZenodo);
     expect(z.outcome).toBe("agreed");
     expect(z.meta.journal).toBeUndefined();
     expect(z.meta.doi).toBe("10.5281/zenodo.1");
@@ -295,10 +299,10 @@ describe("withRegistryFacts", () => {
     const first = "doi:10.1000/cited" as WorkId;
     const slow = lookupOf({});
     let t = 0;
-    await withRegistryFacts(meta(), [first, ID], { lookup: slow.lookup, now: () => (t += 11_000) });
+    await withRegistryFacts(meta(), printed([first, ID]), { lookup: slow.lookup, now: () => (t += 11_000) });
     expect(slow.asked).toEqual([first]);
     const cancelled = lookupOf({});
-    const out = await withRegistryFacts(meta(), [ID], { lookup: cancelled.lookup, signal: AbortSignal.abort() });
+    const out = await withRegistryFacts(meta(), printed([ID]), { lookup: cancelled.lookup, signal: AbortSignal.abort() });
     expect(cancelled.asked).toEqual([]);
     expect(out.outcome).toBe("none-agreed");
   });
@@ -307,7 +311,7 @@ describe("withRegistryFacts", () => {
     const { lookup } = lookupOf({
       [ID]: { kind: "found", record: { ...record("10.3390/e26060481"), published: "2024-02-31" } },
     });
-    const out = await withRegistryFacts(meta(), [ID], { lookup });
+    const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
     expect(out.meta.journal).toBe("Entropy");
     expect(out.meta.publishedAt).toBeUndefined();
   });
@@ -318,20 +322,20 @@ describe("withRegistryFacts", () => {
 
     it("fills the year and no day", async () => {
       const { lookup } = lookupOf({ [ID]: yearOnly });
-      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
       expect(out.meta).toEqual({ ...meta(), doi: "10.3390/e26060481", journal: "Entropy", publishedYear: 2011 });
     });
 
     it("fills the day and no year when the record states a whole day", async () => {
       const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
-      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
       expect(out.meta.publishedAt).toBe("2024-05-31");
       expect(out.meta).not.toHaveProperty("publishedYear");
     });
 
     it("gives neither to an article with its own date", async () => {
       const { lookup } = lookupOf({ [ID]: yearOnly });
-      const out = await withRegistryFacts(meta({ publishedAt: "2011-06-02T09:00:00+02:00" }), [ID], { lookup });
+      const out = await withRegistryFacts(meta({ publishedAt: "2011-06-02T09:00:00+02:00" }), printed([ID]), { lookup });
       expect(out.meta.publishedAt).toBe("2011-06-02T09:00:00+02:00");
       expect(out.meta).not.toHaveProperty("publishedYear");
     });
@@ -340,14 +344,14 @@ describe("withRegistryFacts", () => {
       const { lookup } = lookupOf({
         [ID]: { kind: "found", record: record("10.3390/e26060481", { year: 2024, published: "2024-02-31" }) },
       });
-      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
       expect(out.meta).not.toHaveProperty("publishedAt");
       expect(out.meta.publishedYear).toBe(2024);
     });
 
     it("drops a year the article carried when the record now states a day", async () => {
       const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
-      const out = await withRegistryFacts(meta({ publishedYear: 2024 }), [ID], { lookup });
+      const out = await withRegistryFacts(meta({ publishedYear: 2024 }), printed([ID]), { lookup });
       expect(out.meta.publishedAt).toBe("2024-05-31");
       expect(out.meta).not.toHaveProperty("publishedYear");
     });
@@ -357,7 +361,7 @@ describe("withRegistryFacts", () => {
         const { lookup } = lookupOf({
           [ID]: { kind: "found", record: record("10.3390/e26060481", { year, published: undefined }) },
         });
-        const out = await withRegistryFacts(meta({ publishedYear: 2011 }), [ID], { lookup });
+        const out = await withRegistryFacts(meta({ publishedYear: 2011 }), printed([ID]), { lookup });
         expect(out.meta.publishedYear).toBe(2011);
         expect(out.meta).not.toHaveProperty("publishedAt");
       }
@@ -365,7 +369,7 @@ describe("withRegistryFacts", () => {
 
     it("uses a newly stated year instead of a carried year", async () => {
       const { lookup } = lookupOf({ [ID]: yearOnly });
-      const out = await withRegistryFacts(meta({ publishedYear: 2010 }), [ID], { lookup });
+      const out = await withRegistryFacts(meta({ publishedYear: 2010 }), printed([ID]), { lookup });
       expect(out.meta.publishedYear).toBe(2011);
     });
 
@@ -373,9 +377,79 @@ describe("withRegistryFacts", () => {
       const { lookup } = lookupOf({
         [ID]: { kind: "found", record: record("10.3390/e26060481", { year: undefined, published: undefined }) },
       });
-      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
       expect(out.meta).not.toHaveProperty("publishedYear");
       expect(out.meta.journal).toBe("Entropy");
+    });
+  });
+
+  /* Plan 261018a, Stage 4: arXiv 2308.08708's HTML page prints its authors in a
+     table and declares none, so there was no author to agree with and the
+     registry was never asked. An id from the page's own address names the page. */
+  describe("an article that declares no author", () => {
+    const ARXIV = "arxiv:2308.08708" as WorkId;
+    const named = record("10.48550/arxiv.2308.08708", {
+      source: "datacite",
+      venue: "arXiv",
+      published: undefined,
+      year: 2023,
+      authors: [{ family: "Butlin", given: "Patrick" }, { family: "Long", given: "Robert" }, { family: "Bengio" }],
+    });
+    const found = (over: Partial<WorkRecord> = {}): LookupResult => ({ kind: "found", record: { ...named, id: ARXIV, ...over } });
+    const nobody: Meta = { slug: "s", title: TITLE };
+
+    it("takes the year and the registry's names from the page's own id when the title agrees exactly", async () => {
+      const { lookup } = lookupOf({ [ARXIV]: found() });
+      const out = await withRegistryFacts(nobody, onPage([ARXIV]), { lookup });
+      expect(out.outcome).toBe("agreed");
+      expect(out.meta).toEqual({
+        ...nobody,
+        doi: "10.48550/arxiv.2308.08708",
+        journal: "arXiv",
+        publishedYear: 2023,
+        authors: [
+          { name: "Patrick Butlin", affiliations: [] },
+          { name: "Robert Long", affiliations: [] },
+          { name: "Bengio", affiliations: [] },
+        ],
+        byline: "Patrick Butlin; Robert Long; Bengio",
+      });
+    });
+
+    it("still requires an author for an id printed on a PDF's pages", async () => {
+      const { lookup, asked } = lookupOf({ [ARXIV]: found() });
+      const out = await withRegistryFacts(nobody, printed([ARXIV]), { lookup });
+      expect(out.outcome).toBe("no-candidate");
+      expect(out.meta).toEqual(nobody);
+      expect(asked).toEqual([]);
+    });
+
+    it("takes nothing when the title is not exactly the article's", async () => {
+      const { lookup } = lookupOf({ [ARXIV]: found({ title: `${TITLE}: a reply` }) });
+      const out = await withRegistryFacts(nobody, onPage([ARXIV]), { lookup });
+      expect(out.outcome).toBe("none-agreed");
+      expect(out.meta).toEqual(nobody);
+    });
+
+    it("never asks about a DOI the article carried from elsewhere without an author to check it", async () => {
+      const { lookup, asked } = lookupOf({ "doi:10.1000/carried": found() });
+      const out = await withRegistryFacts({ ...nobody, doi: "10.1000/carried" }, onPage([ARXIV]), { lookup });
+      expect(asked).toEqual([ARXIV]);
+      expect(out.meta.publishedYear).toBeUndefined();
+    });
+
+    it("never replaces declared authors, and still needs one of them to agree", async () => {
+      const declared = meta();
+      const agreeing = lookupOf({ [ARXIV]: found({ authors: [{ family: "Beck", given: "Taylor" }, { family: "Long", given: "Robert" }] }) });
+      const out = await withRegistryFacts(declared, onPage([ARXIV]), agreeing);
+      expect(out.outcome).toBe("agreed");
+      expect(out.meta.byline).toBe("Taylor Beck");
+      expect(out.meta.authors).toBeUndefined();
+      expect(out.meta.publishedYear).toBe(2023);
+      const others = lookupOf({ [ARXIV]: found() });
+      const refused = await withRegistryFacts(declared, onPage([ARXIV]), others);
+      expect(refused.outcome).toBe("none-agreed");
+      expect(refused.meta).toEqual(declared);
     });
   });
 });

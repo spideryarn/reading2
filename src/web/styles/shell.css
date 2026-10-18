@@ -451,11 +451,9 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 /* The fold-all at the end of the line (FoldToggle.tsx § `FoldAllButton`, plan
    261002e): the line's own size and colour, a dotted word rather than a box,
    the way `.author-name` below reads. A button, so the dot rule above skips it.
-   "Show authors and details" beside it is drawn the same (§ `FrontMatterButton`,
-   plan 261007d), and so is *Show counts* before them (Masthead.tsx §
-   `CountsButton`, plan 261015c). */
+   *Show counts* before it is drawn the same (Masthead.tsx § `CountsButton`,
+   plan 261015c). */
 .facts > .fold-all,
-.facts > .front-matter-toggle,
 .facts > .counts-toggle {
   margin-left: 0.6rem;
   padding: 0;
@@ -468,8 +466,6 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 }
 .facts > .fold-all:hover,
 .facts > .fold-all:focus-visible,
-.facts > .front-matter-toggle:hover,
-.facts > .front-matter-toggle:focus-visible,
 .facts > .counts-toggle:hover,
 .facts > .counts-toggle:focus-visible { color: var(--highlight-text); }
 

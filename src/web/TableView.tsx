@@ -71,8 +71,8 @@ import {
 } from "./zoomable.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
-import { frontMatter } from "./front-matter.js";
-import { FoldToggle } from "./FoldToggle.js";
+import { atFront, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
+import { FoldToggle, MatterStub } from "./FoldToggle.js";
 import { mastheadEcho } from "./masthead-echo.js";
 
 /**
@@ -797,22 +797,42 @@ function TableViewInner({
     () => mastheadEcho({ blocks, meta: { title }, titleOverridden }),
     [blocks, title, titleOverridden],
   );
-  /* **The byline blocks under the title start folded away** (Greg,
-     spya-duh4w3: *"default collapse them so that you kind of jump straight
-     into the article itself"*). Hidden the way the echo is, through the fold
-     store, but the reader can open them: the masthead's "Show authors and
-     details", or a jump to one of them (fold.ts § The front matter). Owner
-     and visitor alike. Keyed on the two fields of `meta` the rule reads, so
-     an unrelated change to `meta` does not hand the store a new array.
-     docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md */
+  /* **Front and back matter start folded, each stretch to a one-line stub**
+     (Greg, spya-ftsqsn: *"Mark it up as being less interesting … And
+     default-collapse it"*). The stored `matter` when the owner's read carries
+     it, else the byline rule (matter-view.ts § `matterStretches`), so a
+     visitor and an old article still fold their byline. Hidden through the
+     fold store, past each stub; the stub, or a jump into the stretch, opens
+     it (fold.ts § Front and back matter). Keyed on the fields the rule reads,
+     so an unrelated change to `meta` does not hand the store a new array.
+     docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md */
   const { authors, byline } = article.meta;
-  const front = useMemo(
-    () => frontMatter({ blocks, meta: { authors, byline } }, echo),
-    [blocks, authors, byline, echo],
+  const { matter } = article;
+  const stretches = useMemo(
+    () => matterStretches({ blocks, matter, meta: { authors, byline } }, echo),
+    [blocks, matter, authors, byline, echo],
+  );
+  const stretchIds = useMemo(() => stretches.map((s) => s.ids), [stretches]);
+  /* Each stub, by the row it stands in, with its words worked out once. */
+  const stubs = useMemo(
+    () =>
+      new Map(
+        stretches.map((s) => [
+          s.ids[0]!,
+          {
+            label: stubLabel(s.kinds),
+            count: stubCount(s, blocks),
+            what: stubWhat(s.kinds),
+            how: stubHow(atFront(s, blocks)),
+          },
+        ]),
+      ),
+    [stretches, blocks],
   );
   /* Which article the fold store is about, and ⌘⌥T — fold.ts. Subscribes to
-     nothing, so folding never re-renders this table; the chevrons do that. */
-  useFoldArticle(slug, blocks, echo, front);
+     nothing, so folding never re-renders this table; the chevrons and the
+     stubs do that. */
+  useFoldArticle(slug, blocks, echo, stretchIds);
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /**
    * The figure the reader asked to see larger, or null. A *copy* of the html
@@ -1694,6 +1714,12 @@ function TableViewInner({
                     are untouched. Nothing on a heading with nothing under it.
                     FoldToggle.tsx; plan 261002e. */}
                 {block.kind === "heading" && <FoldToggle id={block.id} />}
+                {/* **A stretch's stub**, on its first row: the one line while
+                    it is shut — the store hides the rest of this cell around
+                    it — and the fold-away chevron while it is open, where a
+                    heading's sits (a heading in a stretch has none of its
+                    own). FoldToggle.tsx § `MatterStub`; plan 261018a. */}
+                {stubs.has(block.id) && <MatterStub id={block.id} {...stubs.get(block.id)!} />}
                 {/* **The heading the source never wrote.** Gwern's page ends
                     `## Bibliography` and then nine bare `<li>`s; Wikipedia
                     writes its own `References` and gets nothing from us. A real

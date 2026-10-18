@@ -288,6 +288,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* A paper's title, read off its opening inside `extract` when its `<title>`
      is known not to be it. src/opening-title.ts. */
   "opening-title": "step-driven",
+  /* An article's front and back matter, found inside the `matter` step
+     (plan 261018a). src/matter.ts. */
+  matter: "step-driven",
   /* A note on each cited work, and its check, written inside the
      `citation-blurbs` step. src/citation-blurbs.ts. */
   "citation-blurbs": "step-driven",

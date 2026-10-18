@@ -195,7 +195,7 @@ import {
   NARROW_WINDOW_MAX,
   readerMinWidth,
 } from "../layout.js";
-import { isFolded, subscribeFold } from "../fold.js";
+import { isContentHidden, subscribeFold } from "../fold.js";
 import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -2219,7 +2219,9 @@ export function Reader({
     BLOCK_CHAT_IN_COLUMN === "card" && marginRoom ? chatCard(fit, windowWidth, rootFontPx) : null;
   const chatBlockFolded = useSyncExternalStore(
     subscribeFold,
-    () => chatOpenBlock !== null && isFolded(chatOpenBlock),
+    /* `isContentHidden`: the card's host sits in the cell beside the block's
+       words, and a shut stretch's stub hides those along with the host. */
+    () => chatOpenBlock !== null && isContentHidden(chatOpenBlock),
     () => false,
   );
   /** The block whose cell gets the card's host, or `null` for no card. */

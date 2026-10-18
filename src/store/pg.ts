@@ -172,6 +172,9 @@ import {
   CITATION_BLURBS_PROMPT_VERSION,
   citationBlurbsExpectedHash,
 } from "../citation-blurbs-identity.js";
+import { matterInputHash } from "../matter.js";
+import { isMatterDocument } from "../matter-shape.js";
+import { MATTER_PROMPT_VERSION, matterForReader } from "../matter-step.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { blocksAreWhatTheirHtmlProduces } from "../blocks.js";
@@ -1026,6 +1029,14 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. */
   crossrefs: { metadata: "value", crossrefs: "value" },
+  /* **The owner's article read, the metadata page and the publication**, and
+     no public read: src/public/dto.ts is a listed defence (security-map.md),
+     so a visitor keeps today's byline rule. `article` because the reading view
+     folds what it names, behind `matterForReader`; `metadata` for `isCurrent`'s
+     arm; `publish` because the publication queues the step when the value is
+     not about the blocks it publishes.
+     docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md. */
+  matter: { article: "value", metadata: "value", publish: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. And the public
      read, in src/store/public-reader.ts: generated output is readable by a
@@ -1268,6 +1279,9 @@ export const REVISION_PROJECTIONS = {
        the client can withhold that layer rather than draw it empty. See the
        policy entry above, and src/db/schema.ts § `navLabelStatus`. */
     navLabelStatus: articleRevisions.navLabelStatus,
+    /* The front and back matter to fold, which `loadArticle` hands on only
+       when it is about these blocks (src/matter-step.ts § `matterForReader`). */
+    matter: articleRevisions.matter,
   },
   /**
    * The shelf. **Five cached scalars and five booleans, and not one document.**
@@ -1355,6 +1369,8 @@ export const REVISION_PROJECTIONS = {
     /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
+    matter: articleRevisions.matter,
+    /* For `isCurrent`'s arm, as `debate` above. */
     simpleSummary: articleRevisions.simpleSummary,
     /* For `isCurrent`'s arm, and a seventh artefact that can carry a
        `profileHash` — `personalisedSteps` must be exhaustive. */
@@ -1375,6 +1391,9 @@ export const REVISION_PROJECTIONS = {
        the only thing that ever makes a `pending` revision stop being one. See
        the policy entry above, and `publishRevisionIn` in src/store/pg-revisions.ts. */
     navLabelStatus: articleRevisions.navLabelStatus,
+    /* Not a gate either: what tells the publication whether to queue the
+       `matter` successor — `matterSettled` against the blocks it publishes. */
+    matter: articleRevisions.matter,
     /* Whether the draft holds a Bibliography — what tells a publication whose
        job ran `bibliography` to queue the notes on its works (plan 261017h).
        A boolean, so the list itself is not pulled across to answer it. */
@@ -2076,6 +2095,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   relations: ["article_revisions.relations"],
   skim: ["article_revisions.skim"],
   crossrefs: ["article_revisions.crossrefs"],
+  matter: ["article_revisions.matter"],
   simple: ["article_revisions.simple_summary"],
 };
 
@@ -2940,6 +2960,7 @@ const rawPgArticleReader: ArticleReader = {
        undefined` because Postgres hands back `null` for a column nothing has
        written, and the third state the reader branches on is `undefined`. */
     const assets = found.revision.assets ?? undefined;
+    const matter = matterForReader(found.revision.matter, blocks);
     return {
       /* Through `titleFor`, so the reading view's masthead calls a renamed
          article what the shelf calls it. The filesystem store did the same at
@@ -2966,6 +2987,12 @@ const rawPgArticleReader: ArticleReader = {
          act on it — `paragraphLabelsReady` in src/web/nav-labels.ts treats
          anything but `ready` as *withhold*, which fails in the safe direction. */
       navLabelStatus: found.revision.navLabelStatus,
+      /* **Only when it is about these blocks** — a valid shape, every id here
+         and in order, and the stored `sourceHash` equal to these blocks' —
+         and otherwise left out, which the reading view reads as *use today's
+         byline rule*. A draft carries the column forward (plan 261018a, review
+         F2), so a stale value is ordinary, not corrupt. */
+      ...(matter !== undefined ? { matter } : {}),
       /* **Free, off the row `shelfFrom` is already reading**, and the reason
          the masthead's sharing mark costs no request: `currentRevision`
          selects `articles` whole.
@@ -3557,6 +3584,21 @@ const rawPgArticleReader: ArticleReader = {
               promptVersion: CROSSREFS_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
+          );
+        }
+        /* `matterInputHash` of the blocks alone (plan 261018a, review F1) and
+           the step's version, **and no model**: `generator` names the value's
+           sources (`labels+<model>`, or `labels` after a failed call), and the
+           model is folded into `MATTER_PROMPT_VERSION` (src/matter-step.ts).
+           A labels-only or `unavailable` value on these blocks is current, as
+           its run row says to the pipeline: a failed call is not retried by
+           itself, and a re-run from this page is the way to ask again. */
+        case "matter": {
+          const matter = revision.matter;
+          if (!isMatterDocument(matter) || blocks.length === 0) return false;
+          return sameStamp(
+            { inputHash: matter.sourceHash, promptVersion: matter.version },
+            { inputHash: matterInputHash(blocks), promptVersion: MATTER_PROMPT_VERSION },
           );
         }
         /* The same stamp shape as `crossrefs`, over its own exact request. */

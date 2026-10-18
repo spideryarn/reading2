@@ -53,6 +53,17 @@ export const STEP_ORDER = [
   "metadata",
   "extract",
   "blocks",
+  /* **Straight after `blocks`, because the blocks are all it reads** (with the
+     title, byline and authors from `meta`): one cheap call that finds the
+     front and back matter, and code that holds it to the stored blocks.
+
+     **Not in `DEFAULT_INGEST_STEPS`**: the publication that changed the blocks
+     queues it as a free successor ahead of `labels` and `structure`
+     (src/store/pg-revisions.ts § `publishRevisionIn`), so the article opens
+     without waiting the ~6 s (up to 30) the call takes, and the reading view
+     uses today's byline rule until it lands. src/matter-step.ts says why.
+     docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md. */
+  "matter",
   "structure",
   /* **After `structure`, because it reads the tree that step just cut.**
      Immediate adjacency is not required; this is the second half of stage 4.

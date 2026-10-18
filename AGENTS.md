@@ -78,6 +78,7 @@ listed here; the names under each are files in `docs/project/`.
   `reception.md` (Reception and Claims: what the rest of the web says about the piece) ·
   `tweets.md` (the piece as a thread; the one mode that writes on arrival) ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
+  `front-and-back-matter.md` (the authors, abstract, thanks and references, folded to a stub) ·
   `chat-tools.md` (what chat may call) ·
   `chat-from-a-mode.md` (an "Ask in chat" button in a mode: which modes have one, and every place
   a new one has to be told to) ·

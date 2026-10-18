@@ -105,12 +105,13 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   hidden rather than the row, and why a jump unfolds:
   [261002e](../plans/261002e-collapsible-headings-and-fold-all.md); the chord is in
   [keyboard.md](keyboard.md).
-- **The byline blocks under the title start folded away** — authors, affiliations and contact
-  lines, where the article has them as blocks; *Show authors and details* on the masthead opens
-  them, and so does a jump to one. A rule over the words (`src/web/front-matter.ts`), hidden
-  through the same store as a fold, display only. What counts, what it leaves showing on purpose,
-  and why `?at=` never names a hidden row:
-  [261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md).
+- **Front and back matter starts folded to a one-line stub** — the title block, authors, abstract,
+  contents, acknowledgements, funding, declarations and references, each stretch with a faint stub
+  and an ⓘ; pressing it, or a jump into it, opens it in place, and Structure keeps its rows, faint.
+  Found at import by a label rule and one Haiku call, held by code, and stored beside the blocks;
+  an article without it falls back to the older byline rule (`src/web/front-matter.ts`,
+  [261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md)):
+  [front-and-back-matter.md](front-and-back-matter.md).
 - **The masthead's facts line** — byline, journal, site, *Published …* and the read time, in the
   order the Metadata page prints them; the word, part and section counts wait behind *Show
   counts*, shut on every load:

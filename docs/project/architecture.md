@@ -146,6 +146,10 @@ file gets. It publishes a revision with no blocks and no tree, which only a `'mi
 the headings, and the real tree is swapped in live by a second job —
 [ingest-queue.md § A first import opens before its structure](ingest-queue.md#a-first-import-opens-before-its-structure).
 
+**After a publication whose blocks changed, `matter` runs as a free successor job**: one cheap call
+and a label rule mark the front and back matter, which the reading view folds to stubs —
+[front-and-back-matter.md](front-and-back-matter.md).
+
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
 down to a paragraph level" *is* the granularity-zoom tree. Structure is that tree rendered as

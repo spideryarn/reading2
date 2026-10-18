@@ -84,8 +84,10 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
       );
       /* A folded section is never the one in focus (fold.ts). The table's
          ResizeObserver below already hears a fold, since it changes the
-         table's height. `isFoldedAway`, not `isFolded`: the first section
-         starts on the masthead's echo, hidden with its section on screen. */
+         table's height. `isFoldedAway`, not `isRowHidden`: the first section
+         starts on the masthead's echo, hidden with its section on screen,
+         and a section starting on a shut stretch's stub or behind it is on
+         screen too, at its stub or its first row after (fold.ts). */
       const focusRow =
         sections[
           activeSectionIndex(tops, focusLine, (i) => {

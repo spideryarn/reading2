@@ -198,6 +198,8 @@ const STEPS = [
   "metadata",
   "extract",
   "blocks",
+  /* The front and back matter, 2026-10-18 (plan 261018a). */
+  "matter",
   "structure",
   /* Stage 4b, 2026-09-06 — the paragraph labels, which left the `structure`
      step. `tests/feedback-payload.test.ts` named it the moment it entered

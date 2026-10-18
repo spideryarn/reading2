@@ -23,10 +23,16 @@ const previous: Meta = {
 
 afterEach(() => vi.restoreAllMocks());
 
-async function extract(old: Meta, full: boolean, title = TITLE, answer: LookupResult = { kind: "unavailable", why: "busy" }) {
+async function extract(
+  old: Meta,
+  full: boolean,
+  title = TITLE,
+  answer: LookupResult = { kind: "unavailable", why: "busy" },
+  page: { url: string; author: boolean } = { url: "https://example.org/paper", author: true },
+) {
   const store = memoryArtefacts();
   store.plant("s", "fetch", "raw", {
-    kind: "html", file: "raw.html", requestedUrl: "https://example.org/paper", url: "https://example.org/paper",
+    kind: "html", file: "raw.html", requestedUrl: page.url, url: page.url,
     contentType: "text/html", encoding: "utf-8", bytes: 100, sha256: "a".repeat(64),
     storedSha256: "a".repeat(64), storedBytes: 100, fetchedAt: "2024-05-31T00:00:00Z",
   } satisfies RawManifest);
@@ -36,14 +42,14 @@ async function extract(old: Meta, full: boolean, title = TITLE, answer: LookupRe
      though read() still sees the copied HTML. Completion is not presence. */
   vi.spyOn(store, "has").mockResolvedValue(false);
   vi.mocked(readRawBytes).mockResolvedValue(new TextEncoder().encode(
-    `<html><head><title>${title}</title><meta name="author" content="Taylor Beck"></head>` +
+    `<html><head><title>${title}</title>${page.author ? `<meta name="author" content="Taylor Beck">` : ""}</head>` +
     `<body><article><h1>${title}</h1>${"<p>A careful discussion of entropy and the arrow of time in open quantum systems. We measure the system and consider what this means for time and physics.</p>".repeat(30)}</article></body></html>`,
   ));
   const lookup = vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue(answer);
   /* The step's title tidy is a model's (plan 261005j); here it is the rule. */
   const tidy = vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
   const result = await STEPS.extract.run({
-    slug: "s", url: "https://example.org/paper", report: () => {}, preview: () => {},
+    slug: "s", url: page.url, report: () => {}, preview: () => {},
     signal: new AbortController().signal, cacheArticle: false, power: "standard",
   }, store, nullCheckpointStore());
   return { meta: result.parts?.meta, lookup, tidy };
@@ -129,5 +135,33 @@ describe("the title across a re-extraction", () => {
     expect(tidy).toHaveBeenCalledOnce();
     /* Bound to the step's own cancellation, which `runExtract` has no signal to carry. */
     expect(tidy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+/* Plan 261018a, Stage 4: arXiv's HTML declares no author, and its address names it. */
+describe("a page that names nobody, at an address that names it", () => {
+  it("takes the year and the authors from the record its own address names", async () => {
+    const arxiv = parseWorkId("https://arxiv.org/html/2308.08708v3") as WorkId;
+    const answer: LookupResult = {
+      kind: "found",
+      record: {
+        id: arxiv, doi: "10.48550/arxiv.2308.08708", source: "datacite", title: TITLE, venue: "arXiv", year: 2023,
+        authors: [{ family: "Butlin", given: "Patrick" }, { family: "Long", given: "Robert" }],
+      },
+    };
+    const { meta, lookup } = await extract(
+      { slug: "s", title: TITLE },
+      true,
+      TITLE,
+      answer,
+      { url: "https://arxiv.org/html/2308.08708v3", author: false },
+    );
+    expect(lookup).toHaveBeenCalledWith(arxiv);
+    expect(meta).toMatchObject({
+      publishedYear: 2023,
+      doi: "10.48550/arxiv.2308.08708",
+      byline: "Patrick Butlin; Robert Long",
+      authors: [{ name: "Patrick Butlin", affiliations: [] }, { name: "Robert Long", affiliations: [] }],
+    });
   });
 });

@@ -10,6 +10,16 @@
  * article's only when its complete title and an author agree — a DOI on
  * a first page may be a cited work's or the journal issue's.
  *
+ * **One exception: a page that names nobody** (plan 261018a, Stage 4). An
+ * identifier from the page itself — its own address, or a `citation_doi` it
+ * declares (`OwnIds.from === "page"`) — names this page, not something it
+ * cites, so for an article that declares no author at all the exact title is
+ * enough, and the registry's names become its authors. arXiv's HTML prints
+ * its authors in a table and declares none, which left every such paper with
+ * no authors and no year. A printed identifier never gets this: text on a
+ * PDF's pages can be a cited work's DOI with the same title (a thesis and its
+ * paper). Declared authors are never replaced, and still have to agree.
+ *
  * It never fails an import: an unreachable registry, a miss and a disagreement
  * all leave `meta` exactly as it was.
  *
@@ -169,6 +179,18 @@ const GIVEN_WORDS_BEFORE = 3;
 /** Stop starting lookups after this long. One already started keeps `lookupWork`'s own bounds. */
 const LOOKUP_BUDGET_MS = 10_000;
 
+/**
+ * The candidates, and where they came from. `page`: the page's own address or
+ * the identifier its meta tags declare (`ownIdsOfDocument`), which name the
+ * page itself. `printed`: text on a document's pages (`ownIdsOfPdf`), or a DOI
+ * read off them, which may name a cited work. Only `page` ids may agree
+ * without an author, and only for an article that declares none.
+ */
+export interface OwnIds {
+  from: "page" | "printed";
+  ids: readonly WorkId[];
+}
+
 export interface RegistryFactsDeps {
   lookup: (id: WorkId) => Promise<LookupResult>;
   signal?: AbortSignal | undefined;
@@ -177,7 +199,8 @@ export interface RegistryFactsDeps {
 }
 
 /**
- * - `no-candidate` — nothing to ask about, or no title or author worth checking against.
+ * - `no-candidate` — nothing to ask about, or no title worth checking against,
+ *   or no author to check against and no identifier from the page itself.
  * - `agreed` — a record's title was the article's, and its facts were taken.
  * - `none-agreed` — every candidate was missing, unreachable or another work.
  */
@@ -198,11 +221,16 @@ export interface RegistryFacts {
  */
 export async function withRegistryFacts(
   meta: Meta,
-  candidates: readonly WorkId[],
+  own: OwnIds,
   deps: RegistryFactsDeps,
 ): Promise<RegistryFacts> {
-  const ids = unique([meta.doi ? parseWorkId(meta.doi) : null, ...candidates]);
-  if (ids.length === 0 || !registryTitleIsDistinctive(meta.title) || authorWords(meta).size === 0) {
+  const declaresAuthors = authorWords(meta).size > 0;
+  const pageIds = new Set(own.from === "page" ? own.ids : []);
+  /* With no author to agree, only the page's own identifiers can be checked:
+     a DOI the article carried from elsewhere is asked about only with one. */
+  const ids = unique([meta.doi ? parseWorkId(meta.doi) : null, ...own.ids])
+    .filter((id) => declaresAuthors || pageIds.has(id));
+  if (ids.length === 0 || !registryTitleIsDistinctive(meta.title)) {
     return { meta, outcome: "no-candidate", asked: 0 };
   }
   const now = deps.now ?? Date.now;
@@ -217,7 +245,11 @@ export async function withRegistryFacts(
     const answer = await safeLookup(deps.lookup, id);
     if (answer.kind !== "found") continue;
     const { record } = answer;
-    if (!registryIsThisArticle(meta.title, record.title) || !registryAuthorIsOurs(meta, record.authors)) continue;
+    if (!registryIsThisArticle(meta.title, record.title)) continue;
+    if (declaresAuthors ? !registryAuthorIsOurs(meta, record.authors) : !pageIds.has(id)) continue;
+    /* The registry's names, for an article that declared none. No
+       affiliations: a registry's are not what the piece itself prints. */
+    const names = declaresAuthors ? [] : record.authors.map((a) => (a.given ? `${a.given} ${a.family}` : a.family));
     const day = meta.publishedAt === undefined ? realIsoDay(record.published) : undefined;
     /* Crossref's `container-title` is where the piece appeared. DataCite's
        venue falls back to the depositing publisher, which is a repository's
@@ -244,6 +276,10 @@ export async function withRegistryFacts(
         ...(journal !== undefined ? { journal } : {}),
         ...(day !== undefined ? { publishedAt: day } : {}),
         ...(year !== undefined ? { publishedYear: year } : {}),
+        /* The byline is derived from the list, as everywhere (`Meta.byline`). */
+        ...(names.length > 0
+          ? { authors: names.map((name) => ({ name, affiliations: [] })), byline: names.join("; ") }
+          : {}),
       },
     };
   }

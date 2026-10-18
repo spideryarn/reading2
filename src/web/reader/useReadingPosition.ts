@@ -29,7 +29,7 @@ import { positionToWrite, type Section } from "../position.js";
 import { beginJump, beginReturn, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
-import { isFoldedAway, subscribeFold, visibleFrom } from "../fold.js";
+import { isFoldedAway, subscribeFold, visibleNear } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -180,15 +180,15 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          function throw the answer away. The rects are the expensive half of
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
-      /* Closing the front matter can leave the address holding a finer block
-         inside it, and so can folding a heading over a paragraph a jump put
-         there. Canonicalise that held value before asking whether the
-         measured section changed (fold.ts § `visibleFrom`): `positionToWrite`
-         deliberately returns null while two ids are in the same section, but
-         the hidden id must still be replaced or the next restore would open
-         the run, or the fold, again. */
+      /* Shutting a stretch can leave the address holding a block inside it,
+         and so can folding a heading over a paragraph a jump put there.
+         Canonicalise that held value before asking whether the measured
+         section changed (fold.ts § `visibleFrom`, § `visibleNear`):
+         `positionToWrite` deliberately returns null while two ids are in the
+         same section, but the hidden id must still be replaced or the next
+         restore would open the stretch, or the fold, again. */
       const held =
-        synced.current === null ? null : (visibleFrom(synced.current) as BlockId | null);
+        synced.current === null ? null : (visibleNear(synced.current) as BlockId | null);
       const next = positionToWrite({
         sections,
         rowOf,
@@ -204,7 +204,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
         /* A folded section start is never written: restoring it would unfold
            it (scroll.ts § `scrollToBlock`). fold.ts. `isFoldedAway`, not
-           `isFolded`: the first section starts on the masthead's echo, which
+           `isRowHidden`: the first section starts on the masthead's echo, which
            is hidden with its section still on screen, and skipping it wrote
            the next section while the reader was in the first. */
         skip: (i) => {
@@ -219,14 +219,16 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         }
         return;
       }
-      /* **A section that starts in the shut front matter is written as its
-         first visible block** (fold.ts § `visibleFrom`; Greg, spya-duh4w3).
-         The restore effect and the re-anchor above both go through
-         `scrollToBlock`, which opens the front matter for any block of it: a
-         reload, or a turned phone, would have opened it under a reader who was
-         in the abstract. A finer block inside the section is a value this spy
-         already leaves standing (position.ts § `positionToWrite`). */
-      const at = next.at === null ? null : (visibleFrom(next.at) as BlockId | null);
+      /* **A section that starts in a shut stretch is written as its first
+         block after the stretch**, never as the stub (fold.ts § `visibleFrom`;
+         plan review of 261018a, F6), and a trailing stretch as the block
+         before it (§ `visibleNear`). The restore effect and the re-anchor
+         above both go through `scrollToBlock`, which opens a stretch for any
+         block of it: a reload, or a turned phone, would have opened it under a
+         reader who had only scrolled past its stub. A finer block inside the
+         section is a value this spy already leaves standing (position.ts §
+         `positionToWrite`). */
+      const at = next.at === null ? null : (visibleNear(next.at) as BlockId | null);
       synced.current = at;
       void setAt(at);
     };

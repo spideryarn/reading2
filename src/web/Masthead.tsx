@@ -83,7 +83,7 @@ import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
-import { FoldAllButton, FrontMatterButton } from "./FoldToggle.js";
+import { FoldAllButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
@@ -341,11 +341,9 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
               nothing on an article with no heading to fold. FoldToggle.tsx;
               plan 261002e. */}
           <FoldAllButton />
-          {/* The byline blocks under the title, folded away on arrival, and
-              the one control that shows them: here because this line is where
-              the authors are already named. Nothing on an article with no
-              such blocks. FoldToggle.tsx § `FrontMatterButton`; plan 261007d. */}
-          <FrontMatterButton />
+          {/* No "Show authors and details" here since plan 261018a: the
+              byline, like every stretch of front or back matter, folds to a
+              stub in the prose that opens it (FoldToggle.tsx § `MatterStub`). */}
         </p>
 
         {/* **Where this article came from, when the answer is not "a web page".**
@@ -397,9 +395,9 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
 /**
  * **Show the word, part and section counts on the facts line, or put them
  * away** — the line's own kind of control, a dotted word drawn like Fold all
- * and *Show authors and details* beside it (FoldToggle.tsx; controls.md §
- * Controls that do the same job look the same). Named *counts* so it cannot be
- * mistaken for the authors button's *details*. Plan 261015c.
+ * beside it (FoldToggle.tsx; controls.md § Controls that do the same job look
+ * the same). Named *counts* so it could not be mistaken for the authors
+ * button's *details*, which the line had until plan 261018a. Plan 261015c.
  */
 function CountsButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const label = open ? "Hide counts" : "Show counts";

@@ -973,6 +973,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **An article's front and back matter** (src/matter.ts). The authors
+     pass's route, for its reason: the stored blocks' edges, to the upstream
+     the capable tier already sends the whole article to, with a strict
+     schema back. */
+  matter: {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A note on each cited work, and its check** (src/citation-blurbs.ts).
      `front-matter-authors`' route, for its reason: an Anthropic model and a
      strict schema an upstream that dropped `response_format` would not honour.
@@ -1285,6 +1294,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
     providerDefault:
       "Not measured at a named effort: front-matter-authors' model and route, one record id and one line back (plan 261017a).",
   },
+  /* `low`, not the provider default: at the default Haiku spent the whole
+     2,000-token ceiling thinking on the reported article and never answered.
+     At `low`, with a 6,000 ceiling, 108 calls answered in a median 5.8 s,
+     ~$0.0014 each (scripts/matter-eval.ts, plan 261018a). */
+  matter: { effort: "low" },
   /* Left at the default because the default is what the spike measured:
      Haiku thinking over twenty abstracts at a time, about $0.002 a batch
      (docs/investigations/261017c-citation-blurbs-cost-and-quality.md). The

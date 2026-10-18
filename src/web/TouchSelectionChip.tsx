@@ -1,5 +1,5 @@
 /**
- * **What a finger's selection gets: one button, below the words.**
+ * **What a finger's selection gets: one button, docked at the screen edge away from the words.**
  *
  * Selecting prose highlights it from `mouseup` (TableView.tsx § onMouseUp), and
  * a long-press selection on iOS and iPadOS fires no `mouseup` at all — so on an
@@ -25,9 +25,9 @@
  * - **Touch only.** The last pointer down decides. A mouse selection keeps its
  *   mouseup and never sees this; a hybrid machine gets whichever made the
  *   selection.
- * - **It sits beside the words that will be saved** — the *clamped* range's
- *   last rectangle (`readSelectionWithRange`), not the end of a drag that ran
- *   on into the next paragraph.
+ * - **It answers to the words that will be saved** — the *clamped* range
+ *   (`readSelectionWithRange`), not a drag that ran on into the next
+ *   paragraph — and docks at the screen edge with more room (`placeFor`).
  * - **It cannot open a box on stale words.** iOS may collapse the selection as
  *   the tap lands, so the last anchor is kept — but only for `GRACE_MS`, and
  *   only while its paragraph is still in the document. A press prefers a fresh
@@ -64,13 +64,16 @@ export const SETTLE_MS = 300;
  */
 export const GRACE_MS = 300;
 
+/** Which screen edge the chip docks at: the one further from the words. */
+export type ChipEdge = "top" | "bottom";
+
 interface Shown {
   anchor: SelectionAnchor;
   /** The paragraph it was read from: gone from the document means stale. */
   prose: Element | null;
-  /** Viewport coordinates of the last rectangle of the clamped range. */
+  edge: ChipEdge;
+  /** Viewport x of the last rectangle of the clamped range. */
   left: number;
-  bottom: number;
 }
 
 interface ArmedPress {
@@ -80,23 +83,43 @@ interface ArmedPress {
 }
 
 /**
- * Where the saved words end on screen, or `null` when they are not on it.
+ * Where the chip docks for the saved words, or `null` when they are not on screen.
  *
- * **Off-screen words get no chip.** The stylesheet clamps the chip into the
- * viewport, so a selection scrolled away used to come back with a chip pinned
- * to the screen edge, beside words it had nothing to do with — and pressing it
- * would open the box on a passage the reader could not see (browser check,
- * 2026-10-03). jsdom has no range geometry at all, and there the chip is placed
- * at the origin.
+ * **The edge with more room between it and the words**, because iOS draws its
+ * own selection menu right beside them — above when there is room, below when
+ * there isn't — and over whatever of ours is there. Greg, 2026-10-18
+ * (spya-bynh22), on an iPhone: *"I could see the iPhone, like, default
+ * standard menu for copy and other stuff on top, and I could see there was
+ * something underneath it."* No supported web API hides or moves that menu
+ * while keeping native selection, so ours keeps away. A selection tall enough
+ * to leave no room at either edge gets the larger of two small gaps; nothing
+ * can promise clearance there.
+ *
+ * Measured against the layout viewport (`innerHeight`), the one the fixed
+ * chip is positioned in, so the edge chosen and the edge drawn agree. A
+ * pinch-zoomed reader sees only part of it, and the chip may then be off the
+ * glass; it was before this too, and handling zoom properly needs the visual
+ * viewport's offsets threaded into the CSS — left for when it is asked for
+ * (docs/plans/261018c-… § Review of the code). The horizontal position still
+ * follows the words' end (`left`); only the vertical one docks, since the
+ * collision is vertical.
+ *
+ * **Off-screen words get no chip**: pressing it would open the box on a passage
+ * the reader could not see (browser check, 2026-10-03). jsdom has no range
+ * geometry at all, and there the chip docks at the bottom, at the left edge.
  */
-function endOf(range: Range): { left: number; bottom: number } | null {
-  const rects = typeof range.getClientRects === "function" ? range.getClientRects() : null;
-  const last = rects && rects.length > 0 ? rects[rects.length - 1] : undefined;
-  const box =
-    last ?? (typeof range.getBoundingClientRect === "function" ? range.getBoundingClientRect() : null);
-  if (!box) return { left: 0, bottom: 0 };
-  if (box.bottom < 0 || box.top > window.innerHeight) return null;
-  return { left: box.left, bottom: box.bottom };
+function placeFor(range: Range): Pick<Shown, "edge" | "left"> | null {
+  const rects = typeof range.getClientRects === "function" ? Array.from(range.getClientRects()) : [];
+  if (rects.length === 0 && typeof range.getBoundingClientRect === "function") {
+    rects.push(range.getBoundingClientRect());
+  }
+  const last = rects[rects.length - 1];
+  if (!last) return { edge: "bottom", left: 0 };
+  const height = window.innerHeight;
+  const top = Math.max(0, Math.min(...rects.map((r) => r.top)));
+  const bottom = Math.min(height, Math.max(...rects.map((r) => r.bottom)));
+  if (bottom < 0 || top > height) return null;
+  return { edge: height - bottom >= top ? "bottom" : "top", left: last.left };
 }
 
 function isFinger(e: Event): boolean {
@@ -160,9 +183,9 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
       const el = range.startContainer instanceof Element
         ? range.startContainer
         : range.startContainer.parentElement;
-      const end = endOf(range);
-      if (!end) return;
-      show({ anchor: read.anchor, prose: el?.closest("td.text .prose") ?? null, ...end });
+      const place = placeFor(range);
+      if (!place) return;
+      show({ anchor: read.anchor, prose: el?.closest("td.text .prose") ?? null, ...place });
     };
     const schedule = () => {
       if (settle.current !== null) clearTimeout(settle.current);
@@ -227,7 +250,7 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
     const onMove = () => {
       if (!shownRef.current && settle.current === null) {
         /* Nothing shown and nothing pending — but a finger's selection that
-           was held back for being off screen (`endOf`) may be scrolling into
+           was held back for being off screen (`placeFor`) may be scrolling into
            view, and only a scroll can tell us. `settled` does the real read. */
         const live = window.getSelection();
         if (finger.current === true && live && !live.isCollapsed) schedule();
@@ -309,7 +332,8 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
          and focus moving to it would be a second thing happening to the
          selection it is about. */
       tabIndex={-1}
-      style={{ "--chip-x": `${shown.left}px`, "--chip-y": `${shown.bottom}px` } as CSSProperties}
+      data-edge={shown.edge}
+      style={{ "--chip-x": `${shown.left}px` } as CSSProperties}
       /* Neither press may move focus or start a selection of its own: either
          can clear the words this is for. The action itself is on pointerup, so
          it does not depend on a cancelled pointerdown producing a click. */

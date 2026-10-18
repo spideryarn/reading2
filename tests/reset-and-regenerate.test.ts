@@ -426,9 +426,14 @@ async function othersOn(slug: string, except: string[]) {
 const notIn = (ids: string[]) =>
   ids.length === 1 ? ne(jobsTable.id, ids[0] ?? "") : and(...ids.map((id) => ne(jobsTable.id, id)));
 
-/** The jobs a reset's publication queued to make its extras again. */
+/**
+ * The jobs a reset's publication queued to make its extras again — not the
+ * `labels` successor, and not the `matter` one, which a reset that cut the
+ * blocks queues like any import (plan 261018a; RESET_ROLE calls both
+ * successors). The fixture has no stored matter, so it is always there.
+ */
 const regenerationsOf = async (slug: string, resetId: string) =>
-  (await othersOn(slug, [resetId])).filter((j) => j.steps[0]?.name !== "labels");
+  (await othersOn(slug, [resetId])).filter((j) => j.steps[0]?.name !== "labels" && j.steps[0]?.name !== "matter");
 
 const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOwner(OWNER, body));
 
@@ -438,10 +443,14 @@ describe("RESET_ROLE", () => {
   it("calls every import step an import, labels a successor, and the rest extras", () => {
     for (const step of DEFAULT_INGEST_STEPS) expect(RESET_ROLE[step], step).toBe("import");
     expect(RESET_ROLE.labels).toBe("successor");
+    /* Queued by the publication that cut the blocks, like `labels` (plan 261018a). */
+    expect(RESET_ROLE.matter).toBe("successor");
     /* A minimal paper's step; a reset is refused on one, and never lists it. */
     expect(RESET_ROLE.metadata).toBe("import");
     expect(extraSteps()).toEqual(
-      STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels" && s !== "metadata"),
+      STEP_ORDER.filter(
+        (s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels" && s !== "matter" && s !== "metadata",
+      ),
     );
     /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f); fifteen since
        `simple` the same day (plan 260930i); sixteen since `relations`,

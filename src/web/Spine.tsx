@@ -121,7 +121,7 @@ import { WhereCard } from "./WhereCard.js";
 import { spineLabel, type WhereRow, whereForBand } from "./where.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
-import { isFolded } from "./fold.js";
+import { isContentHidden, isRowHidden } from "./fold.js";
 
 /**
  * Where a band sits inside the part it belongs to.
@@ -209,7 +209,9 @@ function measure(outline: OutlineEntry[]): Metrics | null {
   /** Whether every row from `start` to `end`, inclusive, is folded away. */
   const foldedThrough = (start: number, end: number): boolean => {
     for (let i = start; i <= end && i < rows.length; i++) {
-      if (!isFolded(rows[i]!.dataset.block ?? "")) return false;
+      /* `isRowHidden`: geometry. A shut stretch's stub row has a height, so
+         a band holding it is not folded to nothing. */
+      if (!isRowHidden(rows[i]!.dataset.block ?? "")) return false;
     }
     return start < rows.length;
   };
@@ -255,8 +257,9 @@ function measure(outline: OutlineEntry[]): Metrics | null {
         // A row with no id cannot be addressed by anything upstream, so it is
         // dropped rather than given an index nothing will ever look up. A
         // folded row likewise, so no search, reading or origin mark is drawn
-        // for words that are not on the page.
-        return id && !isFolded(id)
+        // for words that are not on the page — `isContentHidden`, so a shut
+        // stretch's stub row draws none for the block behind it either.
+        return id && !isContentHidden(id)
           ? [[id, { index: i, top: tops[i]! - docTop, height: rects[i]!.height }] as const]
           : [];
       }),

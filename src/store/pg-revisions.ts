@@ -120,6 +120,7 @@ import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, structureCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
 import { enqueueSuccessorIn, type SuccessorOutcome } from "./pg-successor.js";
+import { matterSettled } from "../matter-step.js";
 
 const logger = log("store");
 
@@ -399,6 +400,13 @@ export const REVISION_CARRY_POLICY: Record<
      Carrying keeps it for the day the article moves back, and costs nothing.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   crossrefs: "carry",
+  /* **Carries, like `crossrefs`** (plan 261018a, review F2): the stretches name
+     block ids, and their `sourceHash` is `matterInputHash` of the blocks they
+     were found in. A carried value over changed blocks is **not drawn** — the
+     owner's article read withholds it (src/matter-step.ts § `matterForReader`)
+     and the reading view falls back to its byline rule — and the publication
+     that changed the blocks queues the step again (`publishRevisionIn`). */
+  matter: "carry",
   /* **Carries, like `faq`** — a replace-on-rerun artefact whose `sourceHash`
      answers at read time whether the article moved underneath it; the panel
      shows a stale one with a notice. Minting would empty the band until
@@ -1049,7 +1057,9 @@ async function fenceJob(
      is a reset's, and this statement already holds that row's lock — so the
      answer comes off the fenced row itself rather than a second read (Sol F7).
      `reserves_name` for the same reason: it is what says the job is an import
-     (`firstFullPublicationOfAnImport` in `publishRevisionIn`). */
+     (`firstFullPublicationOfAnImport` in `publishRevisionIn`). `steps` for
+     the same reason again: whether this job cut the blocks is what decides
+     the `matter` successor (plan 261018a). */
   const fenced = await tx
     .update(jobs)
     .set({ draftRevisionId })
@@ -2201,6 +2211,15 @@ export interface PublishRevisionResult {
    */
   readonly structureSuccessor: SuccessorOutcome | null;
   /**
+   * **What became of the `matter` job this publication needed** — `null` when
+   * it did not need one: the blocks are the ones it was copied with, or the
+   * stored matter is already about them (src/matter-step.ts §
+   * `matterSettled`). Its own field for `structureSuccessor`'s reason.
+   * `logPublication` is the only reader.
+   * docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md.
+   */
+  readonly matterSuccessor: SuccessorOutcome | null;
+  /**
    * **What a reset's publication queued to make its extras again**, one
    * outcome per step of `jobs.reset.regenerate`, in that order. Empty for every
    * publication that is not a reset's, and for a reset that asked for none.
@@ -2568,6 +2587,44 @@ export async function publishRevisionIn(
    * this commit, so a mode a reader asks for meanwhile normally waits behind it.
    * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
+  /**
+   * **A publication whose blocks the stored matter is not about buys the
+   * `matter` job** — here, first, for the labels successor's reason (the
+   * pointer and the job become true together), and before it for a reason of
+   * its own. docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md;
+   * src/matter-step.ts § Why a successor job.
+   *
+   * - **Only when the publishing job cut the blocks** — its `blocks` step ran
+   *   rather than skipped: an import, a re-extraction, a rebuild, a reset, a
+   *   *Read this*. A mode job, a `labels` or `structure` successor and a
+   *   standalone publication do not, so an article imported before the step
+   *   existed is not classified behind the reader's back by opening a mode
+   *   (whether to backfill old articles is Greg's call, plan Stage 5), and the
+   *   test loader's synthetic `structure` job queues nothing.
+   * - **And only when the stored value is not already about these blocks**
+   *   (`matterSettled`), a labels-only or `unavailable` one included: a
+   *   failed call is not retried
+   *   by every publication, and the step's own publication never queues
+   *   another.
+   * - **Stamped one microsecond before this transaction's `now()`**
+   *   (`after: -1`), so it sorts ahead of the `structure` and `labels`
+   *   successors queued below at `now()`. Those are exclusive and take
+   *   minutes; this is a sharing step that takes seconds, and behind them the
+   *   folds would arrive minutes late rather than seconds. The cost is that
+   *   the structure or labels job starts those seconds later.
+   * - **Not without a tree**: a minimal paper has no reading view to fold (its
+   *   *Read this* publication, which lands one, does queue it).
+   */
+  const matterSuccessor =
+    cutTheBlocks(fenced) && tree !== null && blocks.length > 0 && !matterSettled(draft.matter, blocks)
+      ? await enqueueSuccessorIn(tx, {
+          ownerId: article.ownerId as OwnerId,
+          slug,
+          steps: ["matter"],
+          after: -1,
+        })
+      : null;
+
   const awaiting = awaitingStructure(tree);
   const structureSuccessor = awaiting
     ? await enqueueSuccessorIn(tx, {
@@ -2718,6 +2775,7 @@ export async function publishRevisionIn(
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
     structureSuccessor,
+    matterSuccessor,
     regenerated,
     autoModes,
     citationBlurbs,
@@ -2809,6 +2867,15 @@ async function queueMainModesIn(
     );
   }
   return queued;
+}
+
+/**
+ * **Did the publishing job cut this draft's blocks** — its `blocks` step ran
+ * (`done`, or `running` if the publication is that step's own end) rather than
+ * being skipped or never named. Off the fenced job row, under its lock.
+ */
+function cutTheBlocks(fenced: { steps: JobStep[] } | null): boolean {
+  return fenced?.steps.some((s) => s.name === "blocks" && (s.status === "done" || s.status === "running")) ?? false;
 }
 
 /** `articles.processing` — the CHECK `articles_processing` holds it to these two. */
@@ -3224,6 +3291,12 @@ export function logPublication(
             structureJobId: published.structureSuccessor.jobId,
             structureJob: published.structureSuccessor.kind,
           }
+        : {}),
+      /* Present only when this publication changed the blocks under the
+         stored front and back matter (plan 261018a): the job that finds it
+         again, and whether this publication queued it or joined it. */
+      ...(published.matterSuccessor
+        ? { matterJobId: published.matterSuccessor.jobId, matterJob: published.matterSuccessor.kind }
         : {}),
       /* Present only on a reset's publication that asked for its extras to be
          made again: which jobs it queued, by id and outcome. Ids only. */

@@ -40,6 +40,7 @@ export type WholeColumn =
   | "bibliography"
   | "citationBlurbs"
   | "crossrefs"
+  | "matter"
   | "simpleSummary";
 
 /**
@@ -149,6 +150,7 @@ export const STORAGE: {
   bibliography: { bibliography: { at: "column", column: "bibliography" } },
   "citation-blurbs": { "citation-blurbs": { at: "column", column: "citationBlurbs" } },
   crossrefs: { crossrefs: { at: "column", column: "crossrefs" } },
+  matter: { matter: { at: "column", column: "matter" } },
   /* The kind is the step's name, as every other kind here is — it is also the
      URL segment (`/api/simple/`), which tests/cacheable-covers-artefact-routes.test.ts
      derives from the kind. The column is named for what it holds. */

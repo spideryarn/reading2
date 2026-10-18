@@ -47,6 +47,7 @@ import type {
   Bibliography,
   CitationBlurbs,
   Crossrefs,
+  Matter,
   SimpleSummary,
   Reception,
   Faq,
@@ -65,6 +66,7 @@ import type {
   TweetThread,
 } from "../types.js";
 import { isReceptionDocument, isUsableSimpleSummary } from "../types.js";
+import { isMatterDocument } from "../matter-shape.js";
 import { isDifficultyLevel } from "../reading-time.js";
 import { sameGenerator } from "../models.js";
 import type { LabelsFile } from "../labels.js";
@@ -114,6 +116,7 @@ export type ArtifactKind =
   | "bibliography"
   | "citation-blurbs"
   | "crossrefs"
+  | "matter"
   | "simple";
 
 /**
@@ -254,6 +257,13 @@ export interface ArtifactMap {
    * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
    */
   crossrefs: Crossrefs;
+  /**
+   * The front and back matter to fold — `Matter`, src/types.ts, written by
+   * the `matter` step (src/matter-step.ts). An `unavailable` value is an
+   * artefact too: the step ran and failed, on these blocks.
+   * docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md.
+   */
+  matter: Matter;
   /**
    * Simple, the plain-words orientation — `SimpleSummary`, src/types.ts,
    * written by the `simple` step.
@@ -504,6 +514,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
   crossrefs: { field: "links", ok: isArray },
+  /* Whole-document, both statuses: an `unavailable` value is the step's
+     honest answer on these blocks, and refusing it would re-buy the call on
+     every run. `ok` with no stretches is usable too: nothing to fold. */
+  matter: { field: "status", ok: isMatterDocument, whole: true },
   /* The current version and every level within its limits. Whole-document
      because a `simple/1` row with a hand-added `levels` field is still v1, and
      must not make the step report done. */
@@ -988,6 +1002,10 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   metadata: null,
   extract: null,
   blocks: null,
+  /* **No `BASELINE` row**: nothing addresses a stretch, so a re-run replaces
+     it. An `unavailable` value carries no `generator`, so its stamp has no
+     model to clash with (`assertStampAgrees`). */
+  matter: "matter",
   structure: "labels",
   /**
    * **The same artefact as `structure` above, and two steps really can read

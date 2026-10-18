@@ -17,7 +17,7 @@ import {
   foldableHeadings,
   foldsHiding,
   hiddenBlocks,
-  isFolded,
+  isRowHidden,
   isFoldedAway,
   revealBlock,
   setFoldArticle,
@@ -102,48 +102,48 @@ describe("the store", () => {
   it("writes the hiding rule synchronously, against the cells and not the row", () => {
     setFoldArticle("slug", blocks);
     toggleFold(id("b"));
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(true);
     expect(style()).toContain('tr[data-block="spya-b1"]>td{display:none}');
     toggleFold(id("b"));
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
     expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
   });
 
   it("reveals a block by unfolding only the folds hiding it", () => {
     setFoldArticle("slug", blocks);
     toggleFoldAll();
-    expect(isFolded("spya-ax1")).toBe(true);
+    expect(isRowHidden("spya-ax1")).toBe(true);
     revealBlock("spya-ax1");
-    expect(isFolded("spya-ax1")).toBe(false);
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-ax1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(true);
     // A's other children are visible now, because A is open; A.x was opened too.
-    expect(isFolded("spya-a1")).toBe(false);
+    expect(isRowHidden("spya-a1")).toBe(false);
   });
 
   it("toggles all: folds everything, then opens everything", () => {
     setFoldArticle("slug", blocks);
     toggleFoldAll();
-    expect(isFolded("spya-a1")).toBe(true);
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-a1")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(true);
     toggleFoldAll();
-    expect(isFolded("spya-a1")).toBe(false);
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-a1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
   });
 
   it("opens everything when anything is folded, rather than folding the rest", () => {
     setFoldArticle("slug", blocks);
     toggleFold(id("b"));
     toggleFoldAll();
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
   });
 
   it("starts a different article with nothing folded, and keeps folds across a refetch", () => {
     setFoldArticle("slug", blocks);
     toggleFold(id("b"));
     setFoldArticle("slug", [...blocks]);
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(true);
     setFoldArticle("other", blocks);
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
   });
 
   it("recomputes a kept fold against changed blocks, and drops a heading that is no longer foldable", () => {
@@ -153,8 +153,8 @@ describe("the store", () => {
       block.id === id("b1") ? { ...block, id: id("b2") } : block,
     );
     setFoldArticle("slug", changed);
-    expect(isFolded("spya-b1")).toBe(false);
-    expect(isFolded("spya-b2")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b2")).toBe(true);
 
     setFoldArticle("slug", changed.filter((block) => block.id !== id("b2")));
     expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
@@ -198,7 +198,7 @@ describe("the mounted article", () => {
     });
     act(() => window.dispatchEvent(event));
     expect(event.defaultPrevented).toBe(true);
-    expect(isFolded("spya-b1")).toBe(true); // one listener, not StrictMode's setup twice
+    expect(isRowHidden("spya-b1")).toBe(true); // one listener, not StrictMode's setup twice
     expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).not.toBeNull();
     act(() => root.unmount());
     expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
@@ -222,7 +222,7 @@ describe("the mounted article", () => {
     });
     expect(host.querySelector("output")?.getAttribute("data-foldable")).toBe("1");
     act(() => toggleFold(id("next")));
-    expect(isFolded("spya-next1")).toBe(true);
+    expect(isRowHidden("spya-next1")).toBe(true);
     act(() => root.unmount());
     host.remove();
   });
@@ -249,25 +249,25 @@ describe("the mounted article", () => {
     };
 
     expect(press()).toBe(true);
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(true);
     act(() => toggleFoldAll());
 
     const input = document.createElement("input");
     document.body.append(input);
     input.focus();
     expect(press()).toBe(false);
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
     input.remove();
 
     const dialog = document.createElement("dialog");
     dialog.setAttribute("open", "");
     document.body.append(dialog);
     expect(press()).toBe(false);
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
     dialog.remove();
 
     expect(press(true)).toBe(true);
-    expect(isFolded("spya-b1")).toBe(false);
+    expect(isRowHidden("spya-b1")).toBe(false);
 
     act(() => {
       root.render(
@@ -304,13 +304,13 @@ describe("FoldToggle", () => {
 
     act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(rowClicks).toBe(0);
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(true);
     expect(button.getAttribute("aria-expanded")).toBe("false");
 
     act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true })));
-    expect(isFolded("spya-a1")).toBe(true);
-    expect(isFolded("spya-b1")).toBe(true);
+    expect(isRowHidden("spya-a1")).toBe(true);
+    expect(isRowHidden("spya-b1")).toBe(true);
     expect(rowClicks).toBe(0);
     act(() => root.unmount());
     host.remove();
@@ -345,9 +345,9 @@ describe("the masthead's echo", () => {
 
   it("hides the echo rows from the start, with nothing folded", () => {
     setFoldArticle("slug", article, echo);
-    expect(isFolded("spya-t")).toBe(true);
-    expect(isFolded("spya-m")).toBe(true);
-    expect(isFolded("spya-first")).toBe(false);
+    expect(isRowHidden("spya-t")).toBe(true);
+    expect(isRowHidden("spya-m")).toBe(true);
+    expect(isRowHidden("spya-first")).toBe(false);
     expect(style()).toBe(
       'tr[data-block="spya-t"]>td{display:none}\ntr[data-block="spya-m"]>td{display:none}\n',
     );
@@ -359,7 +359,7 @@ describe("the masthead's echo", () => {
     expect(isFoldedAway("spya-m")).toBe(false);
     toggleFold(id("a"));
     expect(isFoldedAway("spya-a1")).toBe(true);
-    expect(isFolded("spya-a1")).toBe(true);
+    expect(isRowHidden("spya-a1")).toBe(true);
     expect(isFoldedAway("spya-first")).toBe(false);
   });
 
@@ -372,19 +372,19 @@ describe("the masthead's echo", () => {
     act(() => root.unmount());
 
     toggleFold(id("t"));
-    expect(isFolded("spya-first")).toBe(false);
+    expect(isRowHidden("spya-first")).toBe(false);
     toggleFoldAll();
-    expect(isFolded("spya-a1")).toBe(true);
-    expect(isFolded("spya-first")).toBe(false);
-    expect(isFolded("spya-a")).toBe(false);
+    expect(isRowHidden("spya-a1")).toBe(true);
+    expect(isRowHidden("spya-first")).toBe(false);
+    expect(isRowHidden("spya-a")).toBe(false);
   });
 
   it("keeps the echo hidden when every fold is opened again", () => {
     setFoldArticle("slug", article, echo);
     toggleFoldAll();
     toggleFoldAll();
-    expect(isFolded("spya-a1")).toBe(false);
-    expect(isFolded("spya-t")).toBe(true);
+    expect(isRowHidden("spya-a1")).toBe(false);
+    expect(isRowHidden("spya-t")).toBe(true);
     expect(style()).toContain('tr[data-block="spya-m"]>td{display:none}');
   });
 
@@ -392,20 +392,20 @@ describe("the masthead's echo", () => {
     setFoldArticle("slug", article, echo);
     revealBlock("spya-t");
     revealBlock("spya-m");
-    expect(isFolded("spya-t")).toBe(true);
-    expect(isFolded("spya-m")).toBe(true);
+    expect(isRowHidden("spya-t")).toBe(true);
+    expect(isRowHidden("spya-m")).toBe(true);
   });
 
   it("leaves a fold alone when the reveal is of an echo row under it (a renamed article)", () => {
     // Renamed: the heading is the author's and is kept, our line is still hidden.
     setFoldArticle("slug", article, set("m"));
     toggleFold(id("t"));
-    expect(isFolded("spya-first")).toBe(true);
+    expect(isRowHidden("spya-first")).toBe(true);
     /* The line is an echo, but it is also genuinely inside the fold. Navigation
        must skip it rather than send a press to its page-top jump policy. */
     expect(isFoldedAway("spya-m")).toBe(true);
     revealBlock("spya-m");
-    expect(isFolded("spya-first")).toBe(true);
+    expect(isRowHidden("spya-first")).toBe(true);
     expect(isFoldedAway("spya-m")).toBe(true);
   });
 
@@ -414,21 +414,21 @@ describe("the masthead's echo", () => {
     toggleFold(id("a"));
     // Renamed: same key, the same blocks array, a smaller echo.
     setFoldArticle("slug", article, set("m"));
-    expect(isFolded("spya-t")).toBe(false);
-    expect(isFolded("spya-m")).toBe(true);
-    expect(isFolded("spya-a1")).toBe(true); // the reader's folds are kept
+    expect(isRowHidden("spya-t")).toBe(false);
+    expect(isRowHidden("spya-m")).toBe(true);
+    expect(isRowHidden("spya-a1")).toBe(true); // the reader's folds are kept
     // Reset to the original title.
     setFoldArticle("slug", article, echo);
-    expect(isFolded("spya-t")).toBe(true);
-    expect(isFolded("spya-a1")).toBe(true);
+    expect(isRowHidden("spya-t")).toBe(true);
+    expect(isRowHidden("spya-a1")).toBe(true);
   });
 
   it("drops a fold on the first heading when a rename's undoing makes it an echo again", () => {
     setFoldArticle("slug", article, set("m"));
     toggleFold(id("t"));
-    expect(isFolded("spya-first")).toBe(true);
+    expect(isRowHidden("spya-first")).toBe(true);
     setFoldArticle("slug", article, echo);
-    expect(isFolded("spya-first")).toBe(false);
+    expect(isRowHidden("spya-first")).toBe(false);
   });
 
   it("tells a subscriber when only the echo changed", () => {
@@ -441,14 +441,14 @@ describe("the masthead's echo", () => {
     expect(heard).toBe(1);
     setFoldArticle("slug", article, set("t")); // as many ids, and not the same ones
     expect(heard).toBe(2);
-    expect(isFolded("spya-m")).toBe(false);
+    expect(isRowHidden("spya-m")).toBe(false);
     stop();
   });
 
   it("forgets the echo with the article", () => {
     setFoldArticle("slug", article, echo);
     clearFoldArticle();
-    expect(isFolded("spya-t")).toBe(false);
+    expect(isRowHidden("spya-t")).toBe(false);
     expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
   });
 
@@ -460,11 +460,11 @@ describe("the masthead's echo", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     act(() => root.render(createElement(Harness, { hide: echo })));
-    expect(isFolded("spya-t")).toBe(true);
+    expect(isRowHidden("spya-t")).toBe(true);
     act(() => root.render(createElement(Harness, { hide: set("m") })));
-    expect(isFolded("spya-t")).toBe(false);
-    expect(isFolded("spya-m")).toBe(true);
+    expect(isRowHidden("spya-t")).toBe(false);
+    expect(isRowHidden("spya-m")).toBe(true);
     act(() => root.unmount());
-    expect(isFolded("spya-m")).toBe(false);
+    expect(isRowHidden("spya-m")).toBe(false);
   });
 });

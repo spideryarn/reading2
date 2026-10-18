@@ -861,6 +861,13 @@ DataCite about **the article's own identifier**, after the extractor and outside
   author's family name with the same given name or initial beside it; a surname alone is
   sufficient only in a structured author name. A shared title prefix or an ordinary byline
   word can belong to a cited work. With no author evidence, nothing is kept.
+- **One exception: a web page that declares no author at all** (since 2026-10-18, plan
+  [261018a](../plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md)
+  Stage 4). An identifier from the page itself — its address or its declared `citation_doi` —
+  names the page, not a work it cites, so the exact title is enough, and the registry's names
+  become `Meta.authors` (`Given Family`, no affiliations). arXiv's HTML prints its authors in a
+  table and declares none. The pipeline says which kind its candidates are (`OwnIds.from`); an
+  identifier printed on a PDF's pages never gets this, and declared authors are never replaced.
 - **What is kept**: `Meta.doi`; `Meta.journal`, from Crossref's `container-title` (and `arXiv` for
   an arXiv id; a DataCite repository's name is not a journal); and `Meta.publishedAt`, only when
   the page stated none and the registry states a whole day.

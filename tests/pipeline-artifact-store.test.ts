@@ -142,6 +142,8 @@ import {
   PROMPT_VERSION as TWEETS_VERSION,
 } from "../src/tweets.js";
 import { splitIntoBlocks } from "../src/blocks.js";
+import { matterInputHash } from "../src/matter.js";
+import { MATTER_GENERATOR, MATTER_PROMPT_VERSION } from "../src/matter-step.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
 import {
   articleFingerprint,
@@ -429,6 +431,15 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
      step makes no model call, so its `stamp` names only `inputHash` and
      `promptVersion`. Adding a `generator` here would be recorded and never
      compared, which is the quieter half of the same drift. */
+  /* The front and back matter: its stamp is `matterInputHash` of the blocks
+     and the step's version, no model (src/matter-step.ts). */
+  store.plant(SLUG, "matter", "matter", {
+    status: "ok",
+    version: MATTER_PROMPT_VERSION,
+    generator: MATTER_GENERATOR,
+    sourceHash: matterInputHash(BLOCKS),
+    stretches: [],
+  });
   store.plant(SLUG, "assets", "assets", {
     version: ASSETS_VERSION,
     /* **Not `SOURCE_HASH`, since 2026-09-06.** The step stopped stamping

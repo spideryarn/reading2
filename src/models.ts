@@ -525,6 +525,15 @@ export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 export const OPENING_TITLE_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What finds an article's front and back matter** — the title block, the
+ * abstract, acknowledgements, the reference list — so the reading view can
+ * fold it (src/matter.ts, plan 261018a). The authors pass's model and route,
+ * under its own constant: the job is measured by its own eval
+ * (scripts/matter-eval.ts), and moving one must not move the other.
+ */
+export const MATTER_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes a short note on each work an article cites, from that work's
  * abstract alone, and what checks each note against that abstract**
  * (src/citation-blurbs.ts, plan 261017h stage 3). Haiku, as the spike measured
@@ -1051,6 +1060,9 @@ export type NonTaskAiJob =
   /* **A paper's title, off its opening**, when its `<title>` is known not to
      be it — src/opening-title.ts, on `OPENING_TITLE_MODEL` below. */
   | "opening-title"
+  /* **An article's front and back matter, found** — src/matter.ts, on
+     `MATTER_MODEL` below. */
+  | "matter"
   /* **A note on each cited work, from its abstract alone** — one batched call
      per twenty works (src/citation-blurbs.ts, plan 261017h), on
      `CITATION_BLURBS_MODEL` below. */
@@ -1627,6 +1639,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "front-matter-authors": "chat",
   /* A strict JSON schema back, on chat/completions. src/opening-title.ts. */
   "opening-title": "chat",
+  /* A strict JSON schema back, on chat/completions. src/matter.ts. */
+  matter: "chat",
   /* A strict JSON schema back, on chat/completions. src/citation-blurbs.ts. */
   "citation-blurbs": "chat",
   "citation-blurbs-check": "chat",
@@ -1899,6 +1913,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "front-matter-authors", id: FRONT_MATTER_AUTHORS_MODEL, provider: "openrouter" },
   { job: "opening-title", id: OPENING_TITLE_MODEL, provider: "openrouter" },
+  { job: "matter", id: MATTER_MODEL, provider: "openrouter" },
   { job: "citation-blurbs", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "citation-blurbs-check", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },

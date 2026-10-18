@@ -33,7 +33,7 @@ vi.mock("../src/web/ChatDialog.js", async () => {
 });
 
 import type { ReactElement } from "react";
-import { clearFoldArticle, isFolded, setFoldArticle, toggleFold } from "../src/web/fold.js";
+import { clearFoldArticle, isRowHidden, setFoldArticle, toggleFold } from "../src/web/fold.js";
 import { chatCard, chatDock, fitView } from "../src/web/layout.js";
 import type { BlockId, ThreadSummary } from "../src/types.js";
 import {
@@ -343,13 +343,13 @@ describe("Reader draws the block chat as a card in the column", () => {
     const blocks = [heading, ...readingHarnessArticle.blocks] as typeof readingHarnessArticle.blocks;
     act(() => setFoldArticle("reading-harness", blocks));
     await act(async () => toggleFold(heading.id as BlockId));
-    expect(isFolded(BLOCK)).toBe(true);
+    expect(isRowHidden(BLOCK)).toBe(true);
     expect(card()).toBeNull();
     expect(dockRoom()).not.toBeNull();
     expect(hostIn(await cell())).toBeNull();
 
     await act(async () => toggleFold(heading.id as BlockId));
-    expect(isFolded(BLOCK)).toBe(false);
+    expect(isRowHidden(BLOCK)).toBe(false);
     expect(hostIn(await cell())).not.toBeNull();
     expect(card()).not.toBeNull();
     expect(dialog.mounts).toBe(1);

@@ -68,6 +68,10 @@ const SHARED = new Set([
   /* A DOI as a doi.org address, encoded, and back — one builder for the
      server's links and the client's. Imports nothing. Plan 261004j. */
   "doi-url.js",
+  /* Each heading's section as block indices: the fold store's rule and the
+     front- and back-matter pass's, one definition so the two cannot disagree.
+     Imports nothing. Plan 261018a, review F8. */
+  "section-ranges.js",
   /* Which modes' "older version of the article" notices may be dismissed, and
      what a dismissal may say — the route checks a body with it and the hook
      builds one, so the two cannot disagree. Imports nothing. Plan 261010a. */

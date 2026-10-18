@@ -258,3 +258,66 @@ describe("the figure mark on Structure's list", () => {
     }
   });
 });
+
+/**
+ * **A row the prose folds away is drawn faint, with an ⓘ, in both faces and
+ * in their measuring copies** (MatterMark.tsx; plan 261018a § Stage 3, review
+ * F9). Section A is rows 0–4, one stretch; Part one runs past it.
+ */
+describe("the matter mark on Structure's rows", () => {
+  const matter = [{ start: 0, end: 4 }];
+  const faint = (rows: Iterable<Element>, textSel: string, cls: string) =>
+    new Map(
+      [...rows].map((r) => [
+        titleOf(r.querySelector(textSel)).replace(", folded in the article", ""),
+        r.classList.contains(cls) && r.querySelector(".struct-matter-mark") !== null,
+      ]),
+    );
+
+  it("marks the section wholly inside the stretch, and not the part that runs past it", () => {
+    act(() => {
+      reactRoot.render(
+        <StructurePanel root={root} figures={figures} focusRow={0} allowParagraphs={false} onJump={() => {}} matter={matter} />,
+      );
+    });
+    const band = host.querySelector(".mode-band.struct")!;
+    const drawn = faint(band.querySelectorAll(".struct-grid > .struct-side .struct-row"), ".struct-text", "struct-matter");
+    expect(drawn.get("Section A")).toBe(true);
+    expect(drawn.get("Section B")).toBe(false);
+    expect(drawn.get("Part one")).toBe(false);
+    const measured = faint(band.querySelectorAll(".struct-measure .struct-row"), ".struct-text", "struct-matter");
+    expect(measured.get("Section A")).toBe(true);
+    /* Its number is kept: it is still part of the piece. */
+    const row = [...band.querySelectorAll(".struct-grid > .struct-side .struct-row.struct-matter")][0]!;
+    expect(row.querySelector(".struct-num")?.textContent).toBe("1.1");
+    expect(row.querySelector(".struct-matter-mark")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("is the same in the list face, drawn and measured", () => {
+    act(() => {
+      reactRoot.render(
+        <OutlinePanel
+          root={root}
+          figures={figures}
+          supplementOf={geometry.supplementOf}
+          arcByRow={null}
+          focusRow={0}
+          proseBeside={true}
+          paragraphLabels={false}
+          onJump={() => {}}
+          expanded={false}
+          matter={matter}
+        />,
+      );
+    });
+    const band = host.querySelector(".mode-band.outln")!;
+    const drawn = faint(band.querySelectorAll(".outln-list:not([data-rung]) .outln-row"), ".outln-text", "matter");
+    expect(drawn.get("Section A")).toBe(true);
+    expect(drawn.get("Part one")).toBe(false);
+    for (const list of band.querySelectorAll(".outln-measure ol")) {
+      const m = faint(list.querySelectorAll(".outln-row"), ".outln-text", "matter");
+      if (m.has("Section A")) expect(m.get("Section A")).toBe(true);
+      expect(m.get("Part one")).toBe(false);
+    }
+  });
+});

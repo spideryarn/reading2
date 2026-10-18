@@ -2207,6 +2207,22 @@ export interface Article {
   navLabelStatus: NavLabelStatus;
 
   /**
+   * **The stretches of front and back matter to fold**, off
+   * `article_revisions.matter` — and only when they are known to be about
+   * *these* blocks: a valid shape, every id a current block, each `from` at or
+   * before its `to` by index, the stretches in order, and the stored
+   * `sourceHash` equal to `matterInputHash` of the blocks on this payload
+   * (src/matter-step.ts § `matterForReader`; plan 261018a review F2).
+   *
+   * **Optional, and absent means *use today's rule*** (src/web/front-matter.ts):
+   * no step run yet, a failed call, a column carried forward over blocks that
+   * have since changed, or a visitor's payload, which never carries it (the
+   * public DTO is a listed defence; security-map.md). An empty list is not
+   * absence: the step looked and found nothing to fold.
+   */
+  matter?: MatterStretchStored[];
+
+  /**
    * **May a stranger read this** — the owner's copy of `articles.visibility`,
    * so the masthead can say so without a request of its own.
    *
@@ -3666,7 +3682,15 @@ export type StepName =
      two-step job a minimal upload queues, `["fetch", "metadata"]` — `enqueue`
      refuses it anywhere else. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md. */
   | "metadata"
-  | "extract" | "blocks" | "structure"
+  | "extract" | "blocks"
+  /* **The article's front and back matter** — title, authors, abstract,
+     contents, acknowledgements, references — found by one cheap call over the
+     stored blocks and held to them by code (src/matter.ts), stored for the
+     reading view to fold. Off `DEFAULT_INGEST_STEPS`: queued as a successor by
+     the publication that changed the blocks (src/matter-step.ts).
+     docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md. */
+  | "matter"
+  | "structure"
   /* The per-paragraph navigation labels, which left the `structure` step on
      2026-09-06 because they were 79.5–92% of its wall clock and one measured
      call took 602s of a 682s pass — past what the job lease allows.
@@ -6781,6 +6805,76 @@ export interface SimpleSummaryResponse {
 
 /** What the store hands the route, before the route adds the profile answer. */
 export type SimpleSummaryFound = Omit<SimpleSummaryResponse, "profileChanged">;
+
+/* ----------------------------------------------------------------- matter --
+   An article's front and back matter, as stretches of blocks the reading view
+   folds — the `matter` column on `article_revisions`, written by the `matter`
+   step (src/matter-step.ts). docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md.
+
+   Here rather than in src/matter.ts because the reading view needs the shape
+   and `src/web/` may import only the pure leaves; src/matter.ts imports the
+   server's model gateway. `MatterKindName` is the same closed list as
+   `MATTER_KINDS` there, and src/matter-step.ts holds the two equal at compile
+   time. */
+
+/** The kinds of matter, closed. `MATTER_KINDS` in src/matter.ts, held equal to this. */
+export type MatterKindName =
+  | "title"
+  | "authors"
+  | "abstract"
+  | "keywords"
+  | "contents"
+  | "dates"
+  | "acknowledgements"
+  | "funding"
+  | "declarations"
+  | "references";
+
+/** One folded stretch, by its first and last block id, inclusive, `from` at or before `to` by index. */
+export interface MatterStretchStored {
+  from: BlockId;
+  to: BlockId;
+  kinds: MatterKindName[];
+}
+
+/**
+ * Why the model's half is missing, as a closed code — **never the model's
+ * words** (plan review F2, F4). The free labels rule still ran.
+ */
+export type MatterModelUnavailable = "call-failed" | "timed-out" | "invalid-answer";
+
+/** Why the step itself stored no stretches, as a closed code. */
+export type MatterUnavailableReason = "no-blocks" | "step-failed";
+
+/**
+ * The artefact. **`sourceHash` is `matterInputHash`** (src/matter.ts) over
+ * the blocks the step read (review F1), not `hashBlocks`, so a draft that
+ * carried an older column forward can never pass it off as current.
+ *
+ * - `ok` — the union of the classifier's stretches and the labels rule's
+ *   (`combineMatter`); `generator` names both sources, `labels+<model>`.
+ *   **When the call failed** it is still `ok`, with the labels rule's
+ *   stretches alone, `generator: "labels"` and `modelUnavailable` saying why:
+ *   a failed call still folds what the free rule finds. **An `ok` with no
+ *   stretches is a real answer**: nothing to fold.
+ * - `unavailable` — the step itself failed (review F2): nothing to fold, and
+ *   the reading view uses today's byline rule.
+ */
+export type Matter =
+  | {
+      status: "ok";
+      version: string;
+      generator: string;
+      sourceHash: string;
+      stretches: MatterStretchStored[];
+      modelUnavailable?: MatterModelUnavailable;
+    }
+  | {
+      status: "unavailable";
+      version: string;
+      sourceHash: string;
+      reason: MatterUnavailableReason;
+    };
 
 /* -------------------------------------------------------------- crossrefs --
    Links inside one article: a short phrase in one block that refers to what

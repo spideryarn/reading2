@@ -27,6 +27,7 @@
  */
 import type { BlockId, NodeId } from "../types.js";
 import { navLabelVoice, nodeLabel, titleVoice, type SummaryNode } from "./tree.js";
+import { type MatterRange, coveredByStretches } from "./matter-view.js";
 import type { Voice } from "./voice.js";
 
 /**
@@ -186,6 +187,16 @@ export interface StructureRow {
   before: boolean;
   /** The apparatus — one row, never expanded, never given a gist. */
   supplement: boolean;
+  /**
+   * **Wholly front or back matter** — the abstract, the references — which
+   * the prose folds to stubs (matter-view.ts): inside one stretch, or inside
+   * stretches back to back. Drawn faint with the stub's ⓘ; its number and
+   * label are kept, because it is still part of the piece, and pressing it
+   * opens every stretch within it and jumps there (fold.ts §
+   * `openStretchesWithin`). By index, never by comparing ids
+   * (matter-view.ts § `coveredByStretches`; plan review of 261018a, F9).
+   */
+  matter: boolean;
 }
 
 export interface StructureColumn {
@@ -271,6 +282,7 @@ function makeRow(
   here: boolean,
   focusRow: number,
   gist: string | undefined,
+  matter: readonly MatterRange[],
 ): StructureRow | null {
   const label = rowText(entry);
   if (label === null) return null;
@@ -306,8 +318,11 @@ function makeRow(
     here,
     before: entry.endRow < focusRow,
     supplement,
+    matter: coveredByStretches(entry.startRow, entry.endRow, matter),
   };
 }
+
+const NO_MATTER: readonly MatterRange[] = [];
 
 /**
  * What hovering `row` would add, given what the panel turned out to draw.
@@ -509,6 +524,8 @@ export interface StructureInput {
   /** How many rows each column has room for, or `null` for all of them. */
   limitA?: number | null;
   limitB?: number | null;
+  /** The stretches the prose folds (matter-view.ts § `matterStretches`), for `StructureRow.matter`. */
+  matter?: readonly MatterRange[];
 }
 
 export function structureProjection({
@@ -519,6 +536,7 @@ export function structureProjection({
   allowParagraphs,
   limitA = null,
   limitB = null,
+  matter = NO_MATTER,
 }: StructureInput): StructureProjection {
   const empty: StructureColumn = { rows: [], earlier: 0, later: 0 };
   if (!root) {
@@ -563,7 +581,7 @@ export function structureProjection({
     const wantsGist =
       !supplement &&
       (rungA >= 4 || (rungA >= 2 && isCurrent) || (rungA >= 3 && isNear(parts, part, currentPart)));
-    const row = makeRow(part, "part", isCurrent, focusRow, wantsGist ? part.gist : undefined);
+    const row = makeRow(part, "part", isCurrent, focusRow, wantsGist ? part.gist : undefined, matter);
     if (row) {
       aRows.push(row);
       aPairs.push({ row, entry: part });
@@ -618,6 +636,7 @@ export function structureProjection({
       isCurrent,
       focusRow,
       wantsGist ? section.gist : undefined,
+      matter,
     );
     if (row) {
       sectionRows.push(row);
@@ -634,7 +653,7 @@ export function structureProjection({
     const kids = currentSection.children;
     if (at !== -1 && kids.length > 0) {
       const paraRows = kids
-        .map((p) => makeRow(p, "paragraph", PARAGRAPH_IS_NEVER_CURRENT, focusRow, undefined))
+        .map((p) => makeRow(p, "paragraph", PARAGRAPH_IS_NEVER_CURRENT, focusRow, undefined, matter))
         .filter((p): p is StructureRow => p !== null);
       const room = limitB === null ? Number.POSITIVE_INFINITY : limitB - columnB.rows.length;
       const fits = allowParagraphs && kids.length <= PARAGRAPH_CAP && paraRows.length <= room;

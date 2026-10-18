@@ -105,6 +105,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
   "src/front-matter-authors.ts":
     "copies a web page's authors and their affiliations verbatim, and the code stores the page's characters, not the model's",
+  "src/matter.ts": "writes block ids and kinds from a closed list, which code checks; no reader sees its words",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
   "src/chat-gist.ts":
     "writes one line about a conversation for another model to decide whether to open it; no reader sees it",
@@ -131,6 +132,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/structure-deepen.ts": "sends EXPAND_SYSTEM, which lives in src/structure-expand.ts and carries the rule there",
   "src/spend-declarations.ts": "names a model call inside a string, and makes none",
   "scripts/spike-book-structure.ts": "a one-off spike that sends production's own structure prompt",
+  "scripts/matter-eval.ts": "an eval that sends production's own matter prompt, through classifyMatter",
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
   "scripts/eval-pdf-chunk-size.ts":
     "an eval that runs production's own PDF readers and their prompts, unchanged",

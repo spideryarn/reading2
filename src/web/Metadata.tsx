@@ -206,6 +206,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   Blocks,
+  FoldVertical,
   Bot,
   BookA,
   CircleDashed,
@@ -355,6 +356,8 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   metadata: IdCard,
   extract: FileText,
   blocks: Blocks,
+  /* Folded paper: the front and back matter the reading view folds away. */
+  matter: FoldVertical,
   structure: ListTree,
   /* A luggage tag: the short label each paragraph is given so it can be told
      apart from its neighbours. Beside the tree it is written onto, and

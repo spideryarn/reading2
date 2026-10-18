@@ -294,7 +294,10 @@ async function planRow(row: ArticleRow, deps: PlanDeps): Promise<PlanRow> {
     return { ...base, sourceKind: found.sourceKind, outcome: "source-unreadable", candidates: [], asked: [], write: {}, note: found.note };
   }
   const asked: { id: string; answer: string }[] = [];
-  const facts = await withRegistryFacts(metaOf(row), found.ids, {
+  /* A PDF's candidates are printed on its pages (plus its address, mixed in),
+     so they keep the author check; a page's are its own (src/article-registry.ts). */
+  const own = { from: found.sourceKind === "html" ? "page" : "printed", ids: found.ids } as const;
+  const facts = await withRegistryFacts(metaOf(row), own, {
     lookup: async (id) => {
       const answer = await deps.lookup(id);
       asked.push({ id, answer: answer.kind === "unavailable" ? `unavailable:${answer.why}` : answer.kind });
