@@ -1976,7 +1976,7 @@ export function renderHtml(
     const html =
       record.type === "figure" || record.type === "table"
         ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}>${caption}${tableHtml(rows ?? [], rowsUncertain ?? false)}</figure>`
-        : `<${tag}${cls}>${withMarkers(text, markers.filter((m) => m.block === b))}</${tag}>`;
+        : `<${tag}${cls}>${withLines(record.type, text, withMarkers(text, markers.filter((m) => m.block === b)))}</${tag}>`;
     parts.push(html);
   }
   if (list) parts.push("</ul>");
@@ -1993,6 +1993,72 @@ ${parts.join("\n")}
 </article>
 </body></html>
 `;
+}
+
+/**
+ * A quote's HTML with its line breaks drawn as `<br>`, when they are the
+ * author's — or the HTML unchanged.
+ *
+ * **The model writes `\n` for two different things** and HTML collapses both to
+ * a space: the end of a line of verse, and the end of a printed line of prose.
+ * Drawing every one would break a prose quote mid-sentence at the page width,
+ * so only a quote whose breaks `linesAreTheAuthors` are drawn.
+ *
+ * **`<br>\n`, not `<br>`: the newline stays in the text.** A `<br>` has no text
+ * node, and the browser anchors comments, selections and cross-references to
+ * the concatenated text nodes of `block.html` (src/web/annotate.ts) — so a bare
+ * `<br>` would turn `body,\nThey` into `body,They` there, and a passage selected
+ * across the line would no longer match its block (GPT Sol, plan review F1).
+ * The block's `text` does not change either way: `extractText` (src/blocks.ts)
+ * collapses both to one space, so ids and `hashBlocks` hold.
+ * docs/plans/261018d-a-poem-quoted-in-a-pdf-keeps-its-line-breaks.md.
+ */
+function withLines(type: RecordType, text: string, html: string): string {
+  if (type !== "quote" || !linesAreTheAuthors(text)) return html;
+  return html.replace(/\n/gu, "<br>\n");
+}
+
+/** A printed text column is wider than this, so lines shorter are the author's however uniform. */
+const COLUMN_FLOOR = 45;
+/** How much of the line must be left over for a break to have been chosen rather than forced. */
+const ROOM_TO_SPARE = 0.85;
+
+/**
+ * **Did the author end these lines, or did the column?** The typesetter's own
+ * test: a column breaks a line because the next word would not fit, and a line
+ * of verse ends with room to spare. A break is *free* when the line, a space and
+ * the next line's first word fit in `ROOM_TO_SPARE` of the width; the lines are
+ * the author's when at least half the breaks are free.
+ *
+ * The width is the **second**-longest line, never under `COLUMN_FLOOR`, so one
+ * outlier — a URL, two lines the model joined — cannot widen the column and make
+ * every ordinary wrap look free. Blank lines are not breaks. Fewer than three
+ * lines is never verse: one break is too little evidence either way.
+ *
+ * **A miss renders exactly as before this existed; a false positive is a new
+ * break mid-sentence**, so it is tuned to miss. Measured on 39 newline-bearing
+ * block quotes from production PDFs: every quote it calls verse (24) is verse;
+ * the misses are two-line quotes, a three-line fragment and a speech set a
+ * sentence to a line. Dialogue set a turn to a line would be drawn as lines,
+ * which is how it was printed.
+ *
+ * A quote with TeX in it is never verse: a `<br>` inside a formula breaks it.
+ */
+export function linesAreTheAuthors(text: string): boolean {
+  if (/\\[([]/u.test(text)) return false;
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length < 3) return false;
+  const chars = (s: string) => [...s].length;
+  const width = Math.max(COLUMN_FLOOR, lines.map(chars).sort((a, b) => b - a)[1]!);
+  let free = 0;
+  for (let i = 0; i + 1 < lines.length; i++) {
+    const next = lines[i + 1]!.split(/\s+/u)[0]!;
+    if (chars(lines[i]!) + 1 + chars(next) <= width * ROOM_TO_SPARE) free++;
+  }
+  return free * 2 >= lines.length - 1;
 }
 
 /** A rendered block, and where each record joined into it starts in its text. */
