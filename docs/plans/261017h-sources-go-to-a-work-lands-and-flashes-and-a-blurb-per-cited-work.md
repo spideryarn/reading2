@@ -185,3 +185,10 @@ link, which repeats but is a control, and per-row.
 ## Progress
 
 - 2026-10-17: plan written; reviewed (above); spike and Stage 1 under way.
+- 2026-10-17: Stage 1 and 2 committed (8160890cf); GPT Sol's Stage 1 code review fixed (784b217d6).
+  Stage 3 designed and reviewed again by Sol
+  ([261017h-stage-3-design-citation-blurbs.md](261017h-stage-3-design-citation-blurbs.md)).
+- 2026-10-18: 3a, evidence (a34253620). 3b, the step (d8933fe53): a real local run on a 40-work
+  list made 12 notes from 16 abstracts for $0.0095. 3b's own notes for the code review: the 16k
+  output ceiling for a batch of 20 is tight (13k across two calls); `too-long` refused 4 of 16
+  twice, now split into `quote-too-long` to say why. 3c (the panel, visitors, chat) under way.

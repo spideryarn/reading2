@@ -358,6 +358,31 @@ async function until(ok: () => boolean, what: string): Promise<void> {
   await settle();
 }
 
+/**
+ * **Which elements were landed on while `run` ran.** A landing centres the
+ * row in its own scroller and flashes it (item-focus.ts § useLandOnItem, plan
+ * 261017h); jsdom lays nothing out, so the flash class is what shows it.
+ */
+async function landedDuring(run: () => Promise<void>): Promise<Element[]> {
+  const landed: Element[] = [];
+  const watch = new MutationObserver((records) => {
+    for (const { target } of records) {
+      if (target instanceof Element
+        && (target.classList.contains("element-flash") || target.classList.contains("element-flash-still"))) {
+        landed.push(target);
+      }
+    }
+  });
+  watch.observe(document.body, { attributes: true, attributeFilter: ["class"], subtree: true });
+  try {
+    await run();
+    await settle();
+  } finally {
+    watch.disconnect();
+  }
+  return landed;
+}
+
 /** The whole app, exactly as `main.tsx` mounts it, at a given window width. */
 async function open(width: number, search = ""): Promise<void> {
   setWidth(width);
@@ -762,21 +787,13 @@ describe("the citation card's actions from a stepped-aside Sources band", () => 
       "the citation card did not offer Sources",
     );
 
-    const landed: Element[] = [];
-    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
-    Element.prototype.scrollIntoView = function (this: Element) {
-      landed.push(this);
-    };
     const pushed = vi.spyOn(history, "pushState");
-    try {
+    const landed = await landedDuring(async () => {
       const openSources = [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")]
         .find((button) => button.textContent?.includes("Open in Sources"));
       await act(async () => openSources?.click());
       await settle();
-    } finally {
-      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
-      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-    }
+    });
 
     expect(param("mode")).toBe("sources");
     expect(param("sources")).toBeNull();
@@ -831,20 +848,10 @@ describe("the term card brings its band back", () => {
       mark?.dispatchEvent(event);
     });
     await until(() => document.querySelector(".prose-card .prose-card-open") !== null, "the term card did not open");
-    /* jsdom has no `scrollIntoView`; item-focus.ts calls it optionally, so a
-       stub is the only way to see the row was landed on (plan 261010e). */
-    const landed: Element[] = [];
-    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
-    Element.prototype.scrollIntoView = function (this: Element) {
-      landed.push(this);
-    };
-    try {
+    const landed = await landedDuring(async () => {
       await act(async () => document.querySelector<HTMLButtonElement>(".prose-card .prose-card-open")?.click());
       await settle();
-    } finally {
-      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
-      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-    }
+    });
     expect(param("mode")).toBe("glossary");
     expect(param("term")).toBe(TERM_ID);
     expect(reader().classList.contains("band-away"), "Open in Glossary left the band hidden").toBe(false);
