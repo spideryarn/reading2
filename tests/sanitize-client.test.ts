@@ -54,9 +54,11 @@ const CORPUS: Array<[string, string]> = [
      in each namespace, beside a forged copy, and on the one element exempt. */
   ["author title", `<p><a href="https://e.com/" title="'A', B 2020">a</a> <abbr title="circa">c.</abbr></p>`],
   ["author title, unnamed", `<p><a href="https://e.com/" title="Home"><img src="/i.png"></a></p>`],
+  ["author title, removed child", `<p><a href="https://e.com/" title="Home"><script>not a name</script></a></p>`],
   ["author title, forged", `<p><span data-author-title="x" title="y">z</span></p>`],
   ["author title, iframe", `<iframe src="https://www.youtube.com/embed/a" title="A talk"></iframe>`],
   ["author title, svg", `<svg><circle r="5" title="c"></circle></svg>`],
+  ["author title, svg link", `<svg><a href="https://e.com/" title="Home"></a></svg>`],
   ["author title, mathml", `<math><mi title="x">x</mi></math>`],
   [
     "mathml marking",

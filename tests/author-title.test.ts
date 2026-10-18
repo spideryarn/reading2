@@ -40,6 +40,25 @@ describe("the policy moves an article's title off the element", () => {
     expect(out).toContain(`${AUTHOR_TITLE_ATTR}="Home page"`);
   });
 
+  it("judges a link's name from what survives sanitising, not from children DOMPurify removes later", () => {
+    for (const child of [`<script>not a name</script>`, `<input alt="not a name">`]) {
+      const out = sanitizeHtml(`<p><a href="https://example.com/" title="Home page">${child}</a></p>`);
+      expect(out, child).toContain(`aria-label="Home page"`);
+    }
+  });
+
+  it("names an otherwise unnamed SVG link too", () => {
+    const out = sanitizeHtml(`<svg><a href="https://example.com/" title="Home page"></a></svg>`);
+    expect(out).toContain(`aria-label="Home page"`);
+  });
+
+  it("does not mistake a blank ARIA attribute for a usable name", () => {
+    for (const aria of [`aria-label=""`, `aria-labelledby="  "`, `aria-labelledby="missing"`]) {
+      const out = sanitizeHtml(`<p><a href="https://example.com/" title="Home page" ${aria}></a></p>`);
+      expect(out, aria).toContain(`aria-label="Home page"`);
+    }
+  });
+
   it("keeps an abbreviation's expansion for a screen reader", () => {
     const out = sanitizeHtml(`<p><abbr title="circa">c.</abbr></p>`);
     expect(out).toContain(`aria-description="circa"`);
@@ -113,6 +132,11 @@ describe("authorTitleWorthShowing", () => {
     ).toBeNull();
   });
 
+  it("compares relative paths but does not mistake a fragment-only link for the article's path", () => {
+    expect(authorTitleWorthShowing("Ancient Corinth", "Corinth", "../wiki/Ancient_Corinth")).toBeNull();
+    expect(authorTitleWorthShowing("Introduction", "go back", "#spya-k3m9qt")).toBe("Introduction");
+  });
+
   it("keeps punctuation that is part of the meaning", () => {
     expect(authorTitleWorthShowing("C++", "C", null)).toBe("C++");
     expect(authorTitleWorthShowing("C#", "C", null)).toBe("C#");
@@ -129,5 +153,11 @@ describe("authorTitleWorthShowing", () => {
     expect(shown?.startsWith("a b word")).toBe(true);
     expect(shown?.length).toBeLessThanOrEqual(301);
     expect(shown?.endsWith("…")).toBe(true);
+  });
+
+  it("does not split a surrogate pair at the clip boundary", () => {
+    const shown = authorTitleWorthShowing(`${"a".repeat(299)}🧵tail`, "x", null);
+    expect(shown).toBe(`${"a".repeat(299)}🧵…`);
+    expect(shown).not.toMatch(/[\uD800-\uDFFF](?![\uDC00-\uDFFF])/u);
   });
 });

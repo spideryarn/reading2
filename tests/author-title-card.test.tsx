@@ -71,6 +71,11 @@ function hover(target: Element): void {
   });
 }
 
+function focus(target: HTMLElement): void {
+  act(() => target.focus());
+  act(() => vi.advanceTimersByTime(1));
+}
+
 const card = () => document.querySelector(".prose-card");
 const el = (selector: string) => {
   const found = host.querySelector(selector);
@@ -108,6 +113,14 @@ describe("the article's own hover text, in our card", () => {
     expect(shown?.textContent).toContain("gwern.net");
   });
 
+  it("shows the same author section when a keyboard focuses the link", () => {
+    focus(el('a[href^="https://gwern.net"]') as HTMLElement);
+    expect(card()?.querySelector(".prose-card-quote")?.textContent).toBe(
+      "'Scaling Laws for Neural Language Models', Kaplan et al 2020",
+    );
+    expect(card()?.parentElement?.getAttribute("aria-label")).toContain("from the article");
+  });
+
   it("opens a card on an abbreviation by itself", () => {
     hover(el("abbr"));
     expect(card()?.querySelector(".prose-card-quote")?.textContent).toBe("circa");
@@ -118,12 +131,14 @@ describe("the article's own hover text, in our card", () => {
     expect(card()?.textContent ?? "").not.toContain("from the article");
   });
 
-  it("leaves a cross-reference inside a titled span to its own card", () => {
+  it("lets a cross-reference shadow only its own words inside a titled span", () => {
     const span = el("span");
     span.setAttribute("data-author-title", "Section 2, above");
-    span.innerHTML = `<mark class="xref" data-xref="x1">see above</mark>`;
+    span.innerHTML = `<em>ordinary words</em> <mark class="xref" data-xref="x1">see above</mark>`;
     hover(el("mark.xref"));
     expect(card()).toBeNull();
+    hover(el("em"));
+    expect(card()?.querySelector(".prose-card-quote")?.textContent).toBe("Section 2, above");
   });
 
   it("opens no card on COinS metadata", () => {

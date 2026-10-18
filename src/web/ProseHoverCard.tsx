@@ -466,6 +466,12 @@ function HoverCard({
      card for no reason a reader could see. */
   const read = useCallback(
     (el: HTMLElement): Hit | null => {
+      /* A cross-reference owns the exact words it marks. It is included in the
+         delegated selector as a shadowing target so `el` is the xref itself,
+         rather than a titled ancestor found by `closest`; decline it before
+         walking upwards. Other words in that titled ancestor still keep the
+         author's hover text. */
+      if (el.matches(XREF_SELECTOR)) return null;
       const mark = el.closest("mark.term");
       const anchorEl = el.closest("a[href]");
 
@@ -540,12 +546,11 @@ function HoverCard({
          article's html can carry it. The innermost wins — an `<abbr>` inside a
          titled link is about the abbreviation.
 
-         **Not round a cross-reference.** A `mark.xref` is BlockLinkCard's, and
-         the selector skips it, so a pointer on one inside a titled `<span>`
-         resolves to the span — and two cards would open over one phrase. Such a
-         span gives up its hover text instead (GPT Sol, plan review of 261018n). */
-      const titledAt = el.closest(`.prose [${AUTHOR_TITLE_ATTR}]`);
-      const titled = titledAt?.querySelector(XREF_SELECTOR) ? null : titledAt;
+         **Not on a cross-reference.** A `mark.xref` is BlockLinkCard's; it is a
+         shadowing selector target and was declined at the top of `read`, so a
+         titled ancestor is reached from its other words but never through the
+         xref itself (GPT Sol, plan review of 261018n). */
+      const titled = el.closest(`.prose [${AUTHOR_TITLE_ATTR}]`);
       const authorTitle = titled
         ? authorTitleWorthShowing(
             titled.getAttribute(AUTHOR_TITLE_ATTR) ?? "",
@@ -609,7 +614,7 @@ function HoverCard({
        a titled `<abbr>` or `<span>` opens the card by itself, where the browser
        used to draw its grey box. Pointer only, as the quote is: a `<span>` takes
        no focus, and a finger never got the grey box either. Plan 261018n. */
-    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}]`,
+    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}], ${XREF_SELECTOR}`,
     /* Both containers survive their own re-render, which is the whole
        requirement — see `host`. A chat answer's `<p>` does not, so the
        fallback would leave a card pinned to a detached node as an answer

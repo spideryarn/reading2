@@ -668,13 +668,6 @@ function stripOwnApiUrls(el: Element): void {
  *
  * - **Not on an `<iframe>`**, whose `title` is the frame's accessible name
  *   rather than a tooltip.
- * - **What a screen reader had from it, it keeps** (GPT Sol, plan review): a
- *   link with no words, no `alt` and no label, and an image with no `alt` at
- *   all, get it as `aria-label`, as 261017g did for our own controls; an
- *   `<abbr>` gets its expansion as `aria-description`. An image whose `alt=""`
- *   says it is decorative stays decorative. Other elements' titles were only
- *   ever a description, and repeating 170k of them, mostly Wikipedia's page
- *   names, onto every link is not worth what it would say.
  * - **An article's own `AUTHOR_TITLE_ATTR` wins over its `title`**, so a pass
  *   over our own output, which has no `title` left, changes nothing, and an
  *   element carrying both keeps one.
@@ -685,27 +678,84 @@ function stripOwnApiUrls(el: Element): void {
  */
 function moveAuthorTitle(el: Element): void {
   const title = el.getAttribute("title");
-  if (title === null || el.tagName === "IFRAME") return;
+  if (title === null || el.localName === "iframe") return;
   el.removeAttribute("title");
   if (!el.hasAttribute(AUTHOR_TITLE_ATTR)) el.setAttribute(AUTHOR_TITLE_ATTR, title);
-  if (!title.trim()) return;
-  const unnamed =
-    (el.tagName === "A" && !hasAName(el)) ||
-    (el.tagName === "IMG" && !el.hasAttribute("alt") && !hasALabel(el));
-  if (unnamed) el.setAttribute("aria-label", title);
-  if (el.tagName === "ABBR" && !el.hasAttribute("aria-description")) {
-    el.setAttribute("aria-description", title);
-  }
 }
 
-function hasALabel(el: Element): boolean {
-  return el.hasAttribute("aria-label") || el.hasAttribute("aria-labelledby");
+function hasAriaLabel(el: Element): boolean {
+  return (el.getAttribute("aria-label") ?? "").trim() !== "";
 }
 
 /** Words, a non-empty `alt` inside, or a label of its own. */
 function hasAName(el: Element): boolean {
-  if ((el.textContent ?? "").trim() || hasALabel(el)) return true;
-  return Array.from(el.querySelectorAll("[alt]")).some((i) => (i.getAttribute("alt") ?? "").trim());
+  if ((el.textContent ?? "").trim() || hasAriaLabel(el)) return true;
+  return Array.from(el.querySelectorAll("img[alt]")).some((i) =>
+    (i.getAttribute("alt") ?? "").trim(),
+  );
+}
+
+/**
+ * Preserve the accessible meaning of the `title` attributes moved above.
+ *
+ * **This runs after DOMPurify has finished the whole tree, not from its
+ * `afterSanitizeAttributes` hook.** That hook is pre-order: while it is on an
+ * anchor, descendants such as `<script>` and forbidden form controls have not
+ * been removed yet. Reading `textContent` or `[alt]` there can therefore call
+ * an eventually empty link "named" and discard the only name a screen reader
+ * had. It also made namespace-sensitive `tagName === "A"` miss SVG's lowercase
+ * `<a>`. The clean tree and `localName` make both claims true rather than
+ * parser-dependent. Caught in review of plan 261018n before it shipped.
+ *
+ * `aria-labelledby` is deliberately not accepted as proof of a name here: a
+ * reference can point at an element DOMPurify removed, or at a different block
+ * this fragment cannot inspect. Adding the fallback `aria-label` is harmless
+ * when the reference resolves, because `aria-labelledby` takes precedence.
+ *
+ * An unnamed link and an image with no `alt` at all get the author's words as
+ * `aria-label`; an image whose `alt=""` says it is decorative stays decorative.
+ * An `<abbr>` keeps its expansion as `aria-description`. Other elements' titles
+ * were only ever a description, and repeating 170k of them, mostly Wikipedia's
+ * page names, onto every link is not worth what it would say.
+ */
+function preserveAuthorTitleAccessibility(root: ParentNode): void {
+  for (const el of Array.from(root.querySelectorAll(`[${AUTHOR_TITLE_ATTR}]`))) {
+    const words = el.getAttribute(AUTHOR_TITLE_ATTR) ?? "";
+    if (!words.trim()) continue;
+    const unnamedLink = el.localName === "a" && !hasAName(el);
+    const unnamedImage =
+      el.localName === "img" && !el.hasAttribute("alt") && !hasAriaLabel(el);
+    if (unnamedLink || unnamedImage) el.setAttribute("aria-label", words);
+    if (el.localName === "abbr" && !el.hasAttribute("aria-description")) {
+      el.setAttribute("aria-description", words);
+    }
+  }
+}
+
+/**
+ * Sanitise one article fragment and finish the policy decisions that require
+ * seeing the fully sanitised tree. Both bindings call this exact function, so
+ * the server/client byte-equality contract still has one implementation.
+ */
+export function sanitizeArticleHtml(purify: DOMPurify, html: string): string {
+  /* Nearly every policy call has no author title. Asking DOMPurify for a DOM
+     fragment just to serialize it again roughly doubles those calls, which is
+     visible on the allowlist's thousands of one-element probes. The hook still
+     runs on the fast string path; only the post-walk accessibility decision
+     needs a tree, and an attribute that can create it must be spelt in the
+     input. False positives cost one slower call, while HTML cannot entity- or
+     whitespace-encode an attribute name into a false negative. */
+  if (!/\b(?:title|data-author-title)\s*=/i.test(html)) {
+    return purify.sanitize(html, { ...ARTICLE_CONFIG });
+  }
+  const clean = purify.sanitize(html, {
+    ...ARTICLE_CONFIG,
+    RETURN_DOM_FRAGMENT: true,
+  }) as DocumentFragment;
+  preserveAuthorTitleAccessibility(clean);
+  const holder = clean.ownerDocument.createElement("div");
+  holder.append(clean);
+  return holder.innerHTML;
 }
 
 export function installArticlePolicy(purify: DOMPurify): void {

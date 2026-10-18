@@ -29,7 +29,9 @@ at all. [tooltips.md](../project/tooltips.md) says what to write instead. Two na
 each with its reason: an iframe's `title`, which is its name rather than a tooltip, and the cost
 chart when it is saved as a standalone file, where there is no app to draw a card.
 
-**Left for Greg:** articles' own `title` attributes, an author's hover text on a link or an
-abbreviation, still show the grey box in the prose. Changing that means changing the sanitiser,
-which is a security defence, so it is a question rather than a change:
-[q-z2c269](questions/q-z2c269.md).
+**Articles' own `title` attributes**, an author's hover text on a link or an abbreviation, still
+showed the grey box in the prose. Changing that meant changing the sanitiser, a security defence, so
+it went to Greg as [q-z2c269](questions/q-z2c269.md). He chose C on 2026-10-18 (`spya-y0xzwm`), and
+it shipped in plan
+[261018n](../plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md):
+the words now appear in our card, marked as the article's.

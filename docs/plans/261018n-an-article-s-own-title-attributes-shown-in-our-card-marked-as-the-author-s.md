@@ -98,7 +98,8 @@ expansion the author chose — so it does not replace them.
    elements' titles, which were only ever a description, are not copied into ARIA — that would be
    170k repeats, mostly Wikipedia page names.
 3. **P2, cross-references.** A titled `<span>` round a `mark.xref` would have opened our card beside
-   BlockLinkCard. Such an element gives up its hover text.
+   BlockLinkCard. The xref is a shadowing selector target and belongs only to BlockLinkCard; other
+   words in the same titled element still show the author's hover text.
 4. **P2, the filter.** Visible-text comparison now ignores only case, spacing and outer quotes, so
    `C++` over `C` is kept; the address comparison stays aggressive.
 5. **P3, parity.** Six title cases joined `tests/sanitize-client.test.ts`'s corpus (each namespace, a

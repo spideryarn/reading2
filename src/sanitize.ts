@@ -34,10 +34,10 @@ import createDOMPurify from "dompurify";
    Both exports below stay synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 import {
-  ARTICLE_CONFIG,
   RISKY_ROOT_ATTR,
   SANITIZER_VERSION,
   installArticlePolicy,
+  sanitizeArticleHtml,
 } from "./sanitize-policy.js";
 
 /**
@@ -102,7 +102,7 @@ export function sanitizeInPlace(root: Element): void {
 
 /** The same policy applied to a fragment of HTML text. */
 export function sanitizeHtml(html: string): string {
-  return purify().sanitize(html, { ...ARTICLE_CONFIG });
+  return sanitizeArticleHtml(purify(), html);
 }
 
 /**

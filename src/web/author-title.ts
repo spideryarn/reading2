@@ -30,7 +30,8 @@ export function authorTitleWorthShowing(
   const key = addressWords(words);
   const path = href ? addressWords(pathOf(href)) : "";
   if (key && (path === key || path.endsWith(` ${key}`))) return null;
-  return words.length > MAX ? `${words.slice(0, MAX).trimEnd()}…` : words;
+  const characters = Array.from(words);
+  return characters.length > MAX ? `${characters.slice(0, MAX).join("").trimEnd()}…` : words;
 }
 
 const MAX = 300;
