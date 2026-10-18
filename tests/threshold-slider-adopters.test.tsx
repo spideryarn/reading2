@@ -235,7 +235,7 @@ function rowAsDrawn() {
     max: input.max,
     step: input.step,
     value: input.value,
-    title: input.title,
+    tip: input.getAttribute("data-tip") ?? "",
     valueText: input.getAttribute("aria-valuetext"),
     shown: row.querySelector(".gloss-gate-value")?.textContent,
     /* Where each tick sits along the track, 0 to 1 — one per value that changes
@@ -245,7 +245,7 @@ function rowAsDrawn() {
     ),
     note: row.querySelector(".gloss-gate-note")?.textContent,
     reset: reset
-      ? { type: reset.type, title: reset.title, label: reset.getAttribute("aria-label"), icon: reset.querySelector("svg") !== null }
+      ? { type: reset.type, tip: reset.getAttribute("data-tip"), label: reset.getAttribute("aria-label"), icon: reset.querySelector("svg") !== null }
       : null,
   };
 }
@@ -287,7 +287,7 @@ describe("the Glossary's threshold row", () => {
       max: "0.72",
       step: "0.01",
       value: "0.1",
-      title: TITLE,
+      tip: TITLE,
       valueText: "0.10, showing 2 of 3 terms",
       shown: "0.10 · 2 of 3",
       ticks: [0.028, 0.278, 1],
@@ -306,7 +306,7 @@ describe("the Glossary's threshold row", () => {
       valueText: "0.50, showing 1 of 3 terms",
       shown: "0.50 · 1 of 3",
       note: "2 terms hidden. Drag left to show them.",
-      reset: { type: "button", title: "Back to 0.10", label: "Reset the threshold to 0.10", icon: true },
+      reset: { type: "button", tip: "Back to 0.10", label: "Reset the threshold to 0.10", icon: true },
     });
   });
 
@@ -360,7 +360,7 @@ describe("Citations' threshold row", () => {
       max: "0.8",
       step: "0.01",
       value: "0.25",
-      title: TITLE,
+      tip: TITLE,
       valueText: "0.25, showing 2 of 3 citations",
       shown: "0.25 · 2 of 3",
       ticks: [0.25, 0.625, 1],
@@ -378,7 +378,7 @@ describe("Citations' threshold row", () => {
       valueText: "0.60, showing 1 of 3 citations",
       shown: "0.60 · 1 of 3",
       note: "2 citations hidden. Drag left to show them.",
-      reset: { type: "button", title: "Back to 0.25", label: "Reset the threshold to 0.25", icon: true },
+      reset: { type: "button", tip: "Back to 0.25", label: "Reset the threshold to 0.25", icon: true },
     });
   });
 

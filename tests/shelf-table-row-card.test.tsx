@@ -362,9 +362,9 @@ describe("the row", () => {
     expect(cell(BARE.slug)?.querySelector(".tw\\:sr-only")?.textContent).toBe("no publication date");
   });
 
-  it("has no title attribute anywhere in the table body", () => {
+  it("has no native or delegated tooltip anywhere in the table body", () => {
     paint([ENTRY, BARE, { ...BARE, slug: "row-card-shared", visibility: "public" }]);
-    const titled = [...host.querySelectorAll("tbody [title]")].map((el) => el.outerHTML.slice(0, 80));
+    const titled = [...host.querySelectorAll("tbody [title], tbody [data-tip]")].map((el) => el.outerHTML.slice(0, 80));
     expect(titled).toEqual([]);
   });
 

@@ -148,7 +148,8 @@ export function BatchPanel({ source = batchUpload }: { source?: BatchSource }) {
             variant="ghost"
             size="icon-sm"
             aria-label="Clear this list"
-            title="Clear this list"
+            data-tip="Clear this list"
+            data-tip-describes="off"
             onClick={() => source.dismiss()}
           >
             <X size={14} />

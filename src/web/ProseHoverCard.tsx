@@ -1744,7 +1744,7 @@ function ExternalBody({
           the harmless half of a URL and cut the interesting half would be worse
           than one that showed none of it. So the whole string is in the DOM,
           selectable, and on `title`. Raised by a GPT Sol review, 2026-08-27. */}
-      <p className="prose-card-text prose-card-url" title={link.url}>
+      <p className="prose-card-text prose-card-url" data-tip={link.url}>
         {link.url}
       </p>
 
@@ -1961,7 +1961,7 @@ function QuoteCard({
       {scores.length > 0 ? (
         <dl className="prose-card-scores">
           {scores.map((s) => (
-            <div key={s.key} className="prose-card-score" title={QUOTE_SCORE_LABEL[s.key]}>
+            <div key={s.key} className="prose-card-score" data-tip={QUOTE_SCORE_LABEL[s.key]}>
               <dt>{s.key === "importance" ? "Importance" : "Striking"}</dt>
               <dd>
                 <span className="score-bar" aria-hidden="true">
@@ -2254,7 +2254,7 @@ function CiteCard({
           {by}
           {/* Where the registry filled in what the article does not give: said
               on the card itself, with the sentence on hover (plan 261001a stage 5). */}
-          {line.filled && <span title={registryFilledNote(line.filled)}> · {registryFilledMark(line.filled)}</span>}
+          {line.filled && <span data-tip={registryFilledNote(line.filled)}> · {registryFilledMark(line.filled)}</span>}
         </p>
       )}
       {/* The work's note, from its abstract alone — the band's component, so
@@ -2320,7 +2320,7 @@ function CiteCard({
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            title="The article gives no link for this work, so this is a Google Scholar search for its title — not a link the article gave"
+            data-tip="The article gives no link for this work, so this is a Google Scholar search for its title — not a link the article gave"
           >
             <Search size={10} />
             search Scholar
@@ -2665,7 +2665,7 @@ export function TermCard({
               /* Statements, not two instructions in one run — spya-d886ah's rule
                  (Tooltip.tsx § `ControlTip.press`). Until 2026-10-02 it ended
                  "Unhide it from the glossary's Hidden list." */
-              title="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
+              data-tip="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
               onClick={() => void hide()}
             >
               <Trash2 size={10} />

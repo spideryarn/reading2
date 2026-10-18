@@ -199,7 +199,7 @@ export function CommandChip({
       <button
         type="button"
         className="cmd-chip"
-        title={description}
+        data-tip={description}
         disabled={!chip.enabled}
         aria-busy={pending}
         onClick={() => press()}

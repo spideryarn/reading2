@@ -196,7 +196,7 @@ const SMALL_LABEL = "tw:text-xs tw:text-muted-foreground";
 /**
  * A row label's width: capped so that at 390px the label and the amount beside
  * it are both on screen, and let out on a wider window. The text truncates
- * inside it and its `title` has the whole of it.
+ * inside it and its `data-tip` has the whole of it.
  */
 const LABEL_WIDTH = "tw:min-w-0 tw:max-w-40 tw:sm:max-w-72 tw:lg:max-w-md";
 
@@ -257,7 +257,8 @@ export function AdminCostsPage() {
             onClick={reload}
             disabled={load.kind === "loading"}
             aria-label="Refresh the costs"
-            title="Refresh the costs"
+            data-tip="Refresh the costs"
+            data-tip-describes="off"
             className={`${chipClass(false)} tw:disabled:opacity-50`}
           >
             <RefreshCw size={12} />
@@ -505,7 +506,7 @@ function Figure({
   hint: string;
 }) {
   return (
-    <div data-figure={name} data-nanos={nanos} title={hint} className="tw:min-w-0">
+    <div data-figure={name} data-nanos={nanos} data-tip={hint} className="tw:min-w-0">
       <dt className={SMALL_LABEL}>{label}</dt>
       <dd className="tw:m-0 tw:text-lg tw:tabular-nums tw:text-foreground">{children}</dd>
     </div>
@@ -653,7 +654,7 @@ function rankingColumns({
             <button
               type="button"
               data-drill=""
-              title={`Filter to ${g.label}`}
+              data-tip={`Filter to ${g.label}`}
               onClick={() => drill(dim, g.key)}
               className="tw:block tw:max-w-full tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:text-sm tw:text-foreground tw:underline-offset-2 tw:hover:underline"
             >
@@ -662,7 +663,7 @@ function rankingColumns({
             {(owner !== undefined || slug !== undefined) && (
               <div className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-2 tw:text-xs tw:text-muted-foreground">
                 {owner !== undefined && (
-                  <span className="tw:min-w-0 tw:truncate" title={owner}>
+                  <span className="tw:min-w-0 tw:truncate" data-tip={owner}>
                     {owner}
                   </span>
                 )}
@@ -895,7 +896,7 @@ function PivotTable({
                   key={col.key}
                   scope="col"
                   data-col={col.key}
-                  title={col.label}
+                  data-tip={col.label}
                   className={`${HEAD} tw:text-right`}
                 >
                   <span data-col-label="" className="tw:ml-auto tw:block tw:max-w-40 tw:truncate">
@@ -915,7 +916,7 @@ function PivotTable({
                   <button
                     type="button"
                     data-drill=""
-                    title={`Filter to ${row.label}`}
+                    data-tip={`Filter to ${row.label}`}
                     onClick={() => drill(rowDim, row.key)}
                     className={`tw:block tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:text-sm tw:text-foreground tw:underline-offset-2 tw:hover:underline ${LABEL_WIDTH}`}
                   >
@@ -934,7 +935,7 @@ function PivotTable({
                       data-nanos={cell?.recordedNanos ?? 0}
                       style={shade(cell?.recordedNanos ?? 0)}
                       className={`${CELL} ${cell ? "tw:text-foreground" : "tw:text-ink-faint"}`}
-                      title={cell ? `${plural(cell.calls, "call")}` : "No calls"}
+                      data-tip={cell ? `${plural(cell.calls, "call")}` : "No calls"}
                     >
                       {cell ? amountWithFloor(cell) : ""}
                     </td>
@@ -1000,7 +1001,7 @@ function OverTime({
     <>
       <figure className="tw:m-0 tw:mb-4 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
         <figcaption className={`tw:mb-2 ${SMALL_LABEL}`}>{label}</figcaption>
-        <StackedDayChart data={daySeries(pivot, days)} colourKeys={colourKeys} label={label} box={box} />
+        <StackedDayChart data={daySeries(pivot, days)} colourKeys={colourKeys} label={label} box={box} tips="card" />
       </figure>
       <PivotTable pivot={pivot} rowDim="day" colDim={stack} drill={drill} />
     </>
@@ -1096,7 +1097,7 @@ function FailureCountsTable({
               {label}
             </th>
             {COUNT_COLUMNS.map((col) => (
-              <th key={col.id} scope="col" title={col.hint} className={`${HEAD} tw:text-right`}>
+              <th key={col.id} scope="col" data-tip={col.hint} className={`${HEAD} tw:text-right`}>
                 {col.header}
               </th>
             ))}
@@ -1105,7 +1106,7 @@ function FailureCountsTable({
         <tbody>
           {groups.map((group) => (
             <tr key={group.key} className="tw:border-b tw:border-border/60">
-              <th scope="row" title={group.label} className={`tw:px-3 tw:py-2 tw:text-left tw:font-normal ${PINNED}`}>
+              <th scope="row" data-tip={group.label} className={`tw:px-3 tw:py-2 tw:text-left tw:font-normal ${PINNED}`}>
                 <span className={`tw:block tw:truncate ${LABEL_WIDTH}`}>{group.label}</span>
               </th>
               {COUNT_COLUMNS.map((col) => {

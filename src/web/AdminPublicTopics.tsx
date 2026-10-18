@@ -80,8 +80,9 @@ export function AdminPublicTopics() {
       </p>
       {error && <p className="tw:mb-3 tw:text-sm tw:text-danger">{error}</p>}
       {status && (
-        <p className="tw:mb-3 tw:text-sm tw:text-foreground" title={status.rethoughtAt ? exactly(status.rethoughtAt) : undefined}>
+        <p className="tw:mb-3 tw:text-sm tw:text-foreground" data-tip={status.rethoughtAt ? exactly(status.rethoughtAt) : undefined}>
           {statusSentence(status, ago ?? null)}
+          {status.rethoughtAt && <span className="tw:sr-only"> ({exactly(status.rethoughtAt)})</span>}
         </p>
       )}
       <div className="tw:flex tw:flex-wrap tw:gap-2">

@@ -48,10 +48,10 @@ function data(series: string[]): DaySeries {
 
 const ALL = ["alpha", "beta", "gamma"];
 
-function chart(series: string[], colourKeys = ALL): HTMLElement {
+function chart(series: string[], colourKeys = ALL, tips: "card" | "native" = "native"): HTMLElement {
   return parse(
     renderToStaticMarkup(
-      <StackedDayChart data={data(series)} colourKeys={colourKeys} label="Recorded amount per UTC day" />,
+      <StackedDayChart data={data(series)} colourKeys={colourKeys} label="Recorded amount per UTC day" tips={tips} />,
     ),
   );
 }
@@ -98,6 +98,18 @@ describe("the stacked chart per UTC day", () => {
     expect(title).toMatch(/\d/);
   });
 
+  /* The app's half (plan 261017g): no native tooltip, and the same words on
+     the shape for the page-wide card to draw. The static report keeps its
+     `<title>` — the case above — because it has no card. */
+  it("in the app, says the same thing in a data-tip and draws no <title>", () => {
+    const el = chart(ALL, ALL, "card");
+    const bar = segment(el, "2033-05-01", "beta");
+    expect(bar?.querySelector("title")).toBeNull();
+    expect(bar?.getAttribute("data-tip") ?? "").toContain("BETA");
+    expect(bar?.getAttribute("data-tip") ?? "").toContain("2033-05-01");
+    expect(el.querySelectorAll("title")).toHaveLength(0);
+  });
+
   it("has one y axis of three or four ticks", () => {
     const ticks = chart(ALL).querySelectorAll("[data-y-tick]");
     expect(ticks.length).toBeGreaterThanOrEqual(3);
@@ -112,7 +124,7 @@ describe("the stacked chart per UTC day", () => {
     };
     const el = parse(
       renderToStaticMarkup(
-        <StackedDayChart data={empty} colourKeys={["alpha"]} label="Recorded amount per UTC day" />,
+        <StackedDayChart data={empty} colourKeys={["alpha"]} label="Recorded amount per UTC day" tips="native" />,
       ),
     );
     expect([...el.querySelectorAll("[data-y-tick] text")].map((tick) => tick.textContent)).toEqual(["$0.00"]);
@@ -152,7 +164,7 @@ describe("CHART_TOKENS", () => {
       values: new Map([["2033-05-01", new Map(series.map((s, i) => [s.key, 10 + i]))]]),
     };
     const markup =
-      renderToStaticMarkup(<StackedDayChart data={wide} colourKeys={keys} label="x" />) +
+      renderToStaticMarkup(<StackedDayChart data={wide} colourKeys={keys} label="x" tips="native" />) +
       renderToStaticMarkup(<ChartLegend series={series} colourKeys={keys} />) +
       renderToStaticMarkup(<RankBar share={0.4} />);
     const read = new Set([...markup.matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1]));

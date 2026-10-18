@@ -1223,7 +1223,7 @@ function OrderBar({
             type="button"
             className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
             aria-pressed={order === option.key}
-            title={option.title}
+            data-tip={option.title}
             onClick={() => onOrder(option.key)}
           >
             {option.label}
@@ -1258,7 +1258,7 @@ function BarSlider({
       visible={visible.length}
       total={works.length}
       noun="citations"
-      title="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
+      tip="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
       note={bibliographyNote(hiddenCount, works.length)}
       onChange={onBar}
     />
@@ -1316,7 +1316,7 @@ function WorkRow({
     <li
       className="tl-item cite-item"
       data-citation-id={work.id}
-      {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
+      data-tip={unscored ? "Not scored for prioritising — shown regardless of the threshold" : undefined}
     >
       <CiteTitle work={work} source={source} foundAs={foundAs} by={by} />
       {owned && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
@@ -1346,7 +1346,7 @@ function WorkRow({
             href={source.url}
             target="_blank"
             rel="noreferrer noopener"
-            title="The article gives no link for this work, so this is a Google Scholar search for its title — not a link the article gave"
+            data-tip="The article gives no link for this work, so this is a Google Scholar search for its title — not a link the article gave"
           >
             search Scholar ↗
           </a>
@@ -1676,7 +1676,7 @@ function byLineFolds(work: ShownWork, by: string): boolean {
  * only place its real title is.
  *
  * A linked title is then the card's trigger itself, so the link is what
- * `aria-describedby` names, and its native `title` goes (two popups on one
+ * `aria-describedby` names, and its native tooltip goes (two popups on one
  * hover) with its words, `foundAs` included, as the card's last line. A finger
  * gets reveal-then-commit (useTapReveal.ts, docs/project/touch.md): the first
  * tap opens the card, the second follows the link — otherwise the entry would
@@ -1728,7 +1728,7 @@ function CiteTitle({
   if (card === null) {
     return (
       <p className="cite-title">
-        <a href={source.url} target="_blank" rel="noreferrer noopener" title={linkSays ?? undefined}>
+        <a href={source.url} target="_blank" rel="noreferrer noopener" data-tip={linkSays ?? undefined}>
           {inner}
         </a>
       </p>
@@ -1795,7 +1795,7 @@ export function citeHereLabel(match: CitedInSpideryarn): string {
 export function InSpideryarn({ match }: { match: CitedInSpideryarn }) {
   return (
     <p className="cite-here">
-      <Link href={readHref(match.slug)} title={`Open “${match.title}” here — matched by ${CITE_HERE_HOW[match.matchedBy]}`}>
+      <Link href={readHref(match.slug)} data-tip={`Open “${match.title}” here — matched by ${CITE_HERE_HOW[match.matchedBy]}`}>
         <BookOpen size={11} aria-hidden="true" className="cite-here-icon" />
         {citeHereLabel(match)}
       </Link>

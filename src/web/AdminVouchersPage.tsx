@@ -810,7 +810,7 @@ function whatTheChangeCameTo(answer: UpdateAnswer): { refusal: string | null; sa
 function StarterLine({ starter }: { starter: AdminVoucherRow["starter"] }) {
   if (starter === null) return null;
   return (
-    <div className="tw:break-words tw:text-xs tw:text-muted-foreground" title={starter.slug}>
+    <div className="tw:break-words tw:text-xs tw:text-muted-foreground" data-tip={starter.slug}>
       Starter:{" "}
       {starter.title === null ? (
         `${starter.slug} (deleted)`
@@ -1137,7 +1137,8 @@ export function AdminVouchersPage() {
           onClick={() => void reload()}
           disabled={loading}
           aria-label="Refresh the vouchers"
-          title="Refresh the vouchers"
+          data-tip="Refresh the vouchers"
+          data-tip-describes="off"
           className={BUTTON}
         >
           <RefreshCw size={12} />

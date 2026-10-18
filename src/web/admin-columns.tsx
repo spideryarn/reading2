@@ -72,14 +72,25 @@ export const ADMIN_CHIP_ORDER = [
  * A date cell: how long ago, with the exact timestamp on hover.
  *
  * An em dash rather than a blank when there is none — an empty cell reads as
- * data that failed to load, and "never signed in" is a fact. The `title`
+ * data that failed to load, and "never signed in" is a fact. The `data-tip`
  * carries the precise time because "3 days ago" is the readable answer and
  * "when exactly?" is the next question.
  */
 function When({ iso, now, absent }: { iso: string | undefined; now: number; absent: string }) {
   const ago = timeAgo(iso, now);
-  if (!ago) return <span title={absent}>—</span>;
-  return <span title={exactly(iso) ?? absent}>{ago}</span>;
+  if (!ago) return (
+    <span data-tip={absent}>
+      <span aria-hidden="true">—</span>
+      <span className="tw:sr-only">{absent}</span>
+    </span>
+  );
+  const exact = exactly(iso) ?? absent;
+  return (
+    <span data-tip={exact}>
+      {ago}
+      <span className="tw:sr-only"> ({exact})</span>
+    </span>
+  );
 }
 
 /**
@@ -107,19 +118,24 @@ function When({ iso, now, absent }: { iso: string | undefined; now: number; abse
 function Spend({ user }: { user: AdminUser }) {
   const period = `over ${user.spendMonth} (UTC)`;
   if (user.spendCalls === 0) {
-    return <span title={`No model calls recorded ${period}`}>—</span>;
+    return (
+      <span data-tip={`No model calls recorded ${period}`}>
+        <span aria-hidden="true">—</span>
+        <span className="tw:sr-only">No model calls recorded {period}</span>
+      </span>
+    );
   }
   return (
     <div className="tw:min-w-0">
       {/* Whole dollars on the cell and the exact figure on hover — Greg,
           2026-10-01, plan 261002b stage 3. */}
-      <div title={`${formatSpendNanos(user.spendNanos)} — ${user.spendCalls} model call(s) ${period}`}>
+      <div data-tip={`${formatSpendNanos(user.spendNanos)} — ${user.spendCalls} model call(s) ${period}`}>
         {formatWholeDollars(user.spendNanos)}
       </div>
       {user.spendUnpricedCalls > 0 && (
         <div
           className="tw:truncate tw:text-xs tw:text-muted-foreground"
-          title={
+          data-tip={
             `${user.spendUnpricedCalls} of those call(s) reported no cost, so the figure above ` +
             "is short by an unknown amount"
           }
@@ -153,7 +169,7 @@ function Plan({ user }: { user: AdminUser }) {
       {user.planStatus && (
         <div
           className="tw:truncate tw:font-mono tw:text-xs tw:text-muted-foreground"
-          title={`Stripe's own subscription status. Entitlement is decided from an allowlist, so a status not on it reads as the free tier.`}
+          data-tip={`Stripe's own subscription status. Entitlement is decided from an allowlist, so a status not on it reads as the free tier.`}
         >
           {user.planStatus}
         </div>
@@ -167,7 +183,7 @@ function Plan({ user }: { user: AdminUser }) {
  *
  * `4 / 20` rather than `4`, because a bare count against a limit that is a *row*
  * in `billing_tiers` — raisable at any time, by anybody with a psql prompt — is
- * a number the reader of this page cannot scale. The window is in the `title`
+ * a number the reader of this page cannot scale. The window is in the `data-tip`
  * and again in the column's hint, for the reason the spend column carries its
  * period twice: an allowance measured over an unnamed span is a figure two
  * people read differently.
@@ -192,7 +208,7 @@ function Plan({ user }: { user: AdminUser }) {
  */
 function Ingests({ user }: { user: AdminUser }) {
   if (isAdmin(user.id)) {
-    return <span title="Administrators take no quota slot, so nothing is counted">—</span>;
+    return <span data-tip="Administrators take no quota slot, so nothing is counted">—</span>;
   }
   /* **"used", not "successful ingests"**, because the figure includes
      reservations still in flight — which is what the wall counts, so it is what
@@ -229,7 +245,7 @@ function Ingests({ user }: { user: AdminUser }) {
     return (
       <span
         className="tw:text-muted-foreground"
-        title={
+        data-tip={
           `${user.ingests} added over the lifetime of the account, ${user.ingestsShared} public now` +
           (user.highPower === 0
             ? ""
@@ -266,7 +282,7 @@ function Ingests({ user }: { user: AdminUser }) {
     user.ingests <= user.ingestLimit
   ) {
     return (
-      <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
+      <span data-tip={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
         {user.ingests} / {user.ingestLimit}
       </span>
     );
@@ -278,10 +294,10 @@ function Ingests({ user }: { user: AdminUser }) {
      rounding of it is correct beside an article limit (src/billing-plan.ts §
      *Every number here is a whole count*), so the cell shows the enforcement
      pair in its own unit and names it — `pts` on the cell, and *points* in the
-     title. */
+     tip. */
   return (
     <span
-      title={
+      data-tip={
         `${user.ingests} added ${window}, ` +
         /* *None of them public* is a different fact from *0 of them public*, and
            it is the one that explains a cell like `1200 / 600 pts` on an account
@@ -331,7 +347,7 @@ function AdminMarker({ id }: { id: string }) {
        matches the words beside it (`google`, `email unconfirmed`). Measured at
        1280 and 390 on 2026-09-03. */
     <span
-      title="Can reach the admin pages"
+      data-tip="Can reach the admin pages"
       className="tw:shrink-0 tw:rounded tw:bg-highlight/15 tw:px-1.5 tw:text-highlight-text"
     >
       admin
@@ -409,7 +425,7 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
              same component (260906g). The arrangement below is still right; the
              reason it was urgent is half gone. */
           <div className="tw:min-w-0">
-            <div className="tw:truncate tw:text-foreground" title={row.original.email}>
+            <div className="tw:truncate tw:text-foreground" data-tip={row.original.email}>
               {row.original.email}
             </div>
             {(marked || under.length > 0) && (
@@ -472,7 +488,7 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
       sortingFn: numberOrMissing<AdminUser>(),
       meta: {
         label: "Spend",
-        /* The period is in the hint and again in every cell's `title`, and that
+        /* The period is in the hint and again in every cell's `data-tip`, and that
            is not belt-and-braces: a currency figure with no window is the one
            thing GPT Sol would not let this column ship as. It reads the row's
            own `spendMonth` rather than the browser's clock, so a page left open

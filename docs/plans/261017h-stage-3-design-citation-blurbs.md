@@ -12,7 +12,7 @@ marked *Decided* are the orchestrator's.
 - Runs for every work whenever a Bibliography is made, after the list is published, going forward
   only (no backfill). Greg's own condition, *"a few cents for all the citations"*, is met at ~$0.01.
 - Not Semantic Scholar and not OpenAlex title search in v1 (keyless rate limits; keys are question
-  [q-ny49p3](../user-feedback/questions/q-ny49p3.md)).
+  `q-ny49p3` (docs/user-feedback/questions/, committed with the feedback note)).
 
 ## Findings that changed the plan
 

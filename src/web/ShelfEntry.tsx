@@ -87,14 +87,14 @@ export type Shelf = ReturnType<typeof useShelf>;
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E.
  *
  * Visible text as well as the hover, for the reason `ViewOnlyChip`'s file gives
- * at length: a `title` is unreachable by touch and by keyboard.
+ * at length: a `data-tip` is unreachable by touch and by keyboard.
  */
 export function SharedBadge({
   /**
    * `false` in the table, where the same sentence is in the title's row card
    * instead and the rows carry no `title` attributes at all (library-columns.tsx
    * § `rowCardFacts`, plan 260928a). The cards view has no row card, so it keeps
-   * the `title` — `IconButton`'s `titled`, the same switch for the same reason.
+   * the `data-tip` — `IconButton`'s `titled`, the same switch for the same reason.
    */
   titled = true,
   privateLink = false,
@@ -102,7 +102,7 @@ export function SharedBadge({
   return (
     <span
       className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight-text"
-      title={titled ? privateLink ? SHARING_OFF_WITH_LINK : SHARING_ON : undefined}
+      data-tip={titled ? privateLink ? SHARING_OFF_WITH_LINK : SHARING_ON : undefined}
     >
       {privateLink ? <Link2 size={11} /> : <Globe size={11} />}
       {privateLink ? PRIVATE_LINK_HEADING : SHARING_BADGE}
@@ -306,7 +306,7 @@ export function ShelfCard({
         {entry.fixture && (
           <span
             className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5"
-            title="The committed placeholder fixture, not real pipeline output — see example/README.md"
+            data-tip="The committed placeholder fixture, not real pipeline output — see example/README.md"
           >
             fixture
           </span>
@@ -375,10 +375,11 @@ export function ShelfCard({
         {entry.comments > 0 && (
           <span
             className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight-text"
-            title={`${entry.comments} question${entry.comments === 1 ? "" : "s"} asked about this article`}
+            data-tip={`${entry.comments} question${entry.comments === 1 ? "" : "s"} asked about this article`}
           >
             <MessageCircle size={13} />
             {entry.comments}
+            <span className="tw:sr-only"> question{entry.comments === 1 ? "" : "s"} asked about this article</span>
           </span>
         )}
         <Tooltip content={<Details entry={entry} />} placement="top">

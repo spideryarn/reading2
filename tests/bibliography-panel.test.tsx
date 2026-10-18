@@ -617,9 +617,9 @@ describe("BibliographyPanel", () => {
     /* A row with a relevance is scored by the bar even when its influence is
        unknown, so it no longer carries the "not scored" title; a row with no
        relevance still does. */
-    expect(row(UNKNOWN.id).getAttribute("title")).toBeNull();
+    expect(row(UNKNOWN.id).getAttribute("data-tip")).toBeNull();
     await draw(owner({ bibliography: artefact([...WORKS, BARE]) }));
-    expect(row(BARE.id).getAttribute("title")).toContain("Not scored");
+    expect(row(BARE.id).getAttribute("data-tip")).toContain("Not scored");
   });
 
   it("says `influence unknown` in words where a row has a relevance and no influence", async () => {
@@ -670,7 +670,7 @@ describe("BibliographyPanel", () => {
       expect(host.querySelector(".gloss-gate-value")?.textContent).toBe("0.25 · 2 of 3");
       expect(host.querySelector(".gloss-gate-note")?.textContent).toContain("1 citation hidden");
       expect(host.querySelector(`[data-citation-id="${low.id}"]`)).toBeNull();
-      expect(row(BARE.id).title).toContain("Not scored");
+      expect(row(BARE.id).getAttribute("data-tip")).toContain("Not scored");
     }
   });
 
@@ -889,7 +889,7 @@ describe("a by-line that repeats the title", () => {
     /* The entry is where an author–year work's real title lives: kept. */
     const title = row(label.id).querySelector(".cite-title") as Element;
     const link = title.querySelector("a") as HTMLAnchorElement;
-    expect(link.getAttribute("title")).toBeNull();
+    expect(link.getAttribute("data-tip")).toBeNull();
     const card = await cardFor(link);
     expect(card.what).toBe(entry);
     expect(card.body).toContain("opens doi.org in a new tab");
@@ -924,7 +924,7 @@ describe("a by-line that repeats the title", () => {
       });
     }
     /* A titled row's link keeps its native title and has no card. */
-    expect(row(titled.id).querySelector(".cite-title a")?.getAttribute("title")).toContain("opens doi.org");
+    expect(row(titled.id).querySelector(".cite-title a")?.getAttribute("data-tip")).toContain("opens doi.org");
   });
 
   it("folds cleanly with no card, but keeps a registry-filled line visible", async () => {
@@ -959,7 +959,7 @@ describe("a by-line that repeats the title", () => {
     });
     await draw(owner({ bibliography: artefact([plain, filled, shortened]) }));
     expect(row(plain.id).querySelector(".cite-by")).toBeNull();
-    expect(row(plain.id).querySelector(".cite-title a")?.getAttribute("title")).toContain("opens doi.org");
+    expect(row(plain.id).querySelector(".cite-title a")?.getAttribute("data-tip")).toContain("opens doi.org");
     expect(row(filled.id).querySelector(".cite-by")?.textContent).toContain("from Crossref");
     expect(row(shortened.id).querySelector(".cite-by")).toBeNull();
     const shortenedCard = await cardFor(row(shortened.id).querySelector(".cite-title a") as Element);
@@ -1736,8 +1736,8 @@ describe("a row whose work is already an article here", () => {
     expect(a?.textContent).toBe("In your library");
     expect(a?.getAttribute("href")).toBe("/read/my-copy-spya-a2b3c4");
     expect(a?.getAttribute("target")).toBeNull();
-    expect(a?.title).toContain("My copy");
-    expect(a?.title).toContain("the same DOI");
+    expect(a?.getAttribute("data-tip")).toContain("My copy");
+    expect(a?.getAttribute("data-tip")).toContain("the same DOI");
     /* A DOI match is identity, so the row does not repeat the title. */
     expect(row(owned.id).querySelector(".cite-here-how")).toBeNull();
     /* A matched article does not mean we read the cited work: the band's
@@ -1772,7 +1772,7 @@ describe("a row whose work is already an article here", () => {
     expect(row(archived.id).querySelector(".cite-here a")?.textContent).toBe("In your library · archived");
     const a = row(uploaded.id).querySelector<HTMLAnchorElement>(".cite-here a");
     expect(a?.textContent).toBe("In your library");
-    expect(a?.title).toContain("we found for your uploaded PDF");
+    expect(a?.getAttribute("data-tip")).toContain("we found for your uploaded PDF");
   });
 
   it("never renders an owner attachment on a visitor's row, even from a malformed payload", async () => {

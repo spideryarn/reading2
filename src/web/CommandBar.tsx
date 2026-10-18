@@ -3003,7 +3003,7 @@ export function CommandBar({
                 {row.suggested !== undefined && (
                   <span
                     aria-hidden="true"
-                    title={DISMISS_LABEL}
+                    data-tip={DISMISS_LABEL}
                     className="cmdbar-dismiss tw:-my-1 tw:ml-auto tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded tw:p-1 tw:text-ink-faint tw:hover:bg-muted tw:hover:text-ink tw:pointer-coarse:min-h-11 tw:pointer-coarse:min-w-11"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {

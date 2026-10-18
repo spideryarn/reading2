@@ -143,7 +143,7 @@ function SketchCard({
       <p className="sk-card-title">{node.text}</p>
       {node.sub && <p className="sk-card-sub">{node.sub}</p>}
       {node.detail && (
-        <p className="sk-card-detail" title={node.detail}>
+        <p className="sk-card-detail" data-tip={node.detail}>
           {node.detail}
         </p>
       )}

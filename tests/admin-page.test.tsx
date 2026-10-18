@@ -293,8 +293,8 @@ describe("the users page", () => {
 
     const row = (rows(el)[0] ?? []).join("|");
     expect(row).toContain("800 / 4000 pts ?");
-    const usage = el.querySelector<HTMLElement>('span[title*="lifetime of the account"]');
-    expect(usage?.title).toContain("2 switched to High-powered AI");
+    const usage = el.querySelector<HTMLElement>('span[data-tip*="lifetime of the account"]');
+    expect(usage?.getAttribute("data-tip")).toContain("2 switched to High-powered AI");
   });
 
   /**
@@ -312,8 +312,8 @@ describe("the users page", () => {
     expect(row.join("|")).toContain("280 / 600 pts");
     expect(row.join("|")).not.toContain("1 / 3");
     expect(row).toContain("40");
-    const usage = el.querySelector<HTMLElement>('span[title*="not yet AI-processed"]');
-    expect(usage?.title).toContain("40 papers not yet AI-processed, at 2 points each");
+    const usage = el.querySelector<HTMLElement>('span[data-tip*="not yet AI-processed"]');
+    expect(usage?.getAttribute("data-tip")).toContain("40 papers not yet AI-processed, at 2 points each");
   });
 
   it("draws exactly as many rows as it says there are accounts", async () => {
@@ -345,7 +345,8 @@ describe("the users page", () => {
   it("says something in every cell an empty account leaves blank", async () => {
     /* **The row that breaks a page of numbers.** An empty cell reads as data
        that failed to load; "never signed in" is a fact. Every absent value has
-       to draw *something* — an em dash with a reason on its `title`. */
+       to draw *something* — an em dash with a reason on its card and in text
+       a screen reader can read without hovering. */
     vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [BOB] })));
     const el = await show();
 
@@ -358,7 +359,12 @@ describe("the users page", () => {
       }
     }
     expect(el.textContent).toContain("—");
-    expect(el.querySelector('[title="Never signed in"]')).toBeTruthy();
+    const never = el.querySelector('[data-tip="Never signed in"]');
+    expect(never).toBeTruthy();
+    expect(never?.querySelector(".tw\\:sr-only")?.textContent).toBe("Never signed in");
+    const noCalls = el.querySelector('[data-tip^="No model calls recorded"]');
+    expect(noCalls).toBeTruthy();
+    expect(noCalls?.querySelector(".tw\\:sr-only")?.textContent).toBe(noCalls?.getAttribute("data-tip"));
   });
 
   it("puts the exact timestamp on a date, not just how long ago", async () => {
@@ -367,7 +373,7 @@ describe("the users page", () => {
     /* "3 days ago" is the readable answer and "when exactly?" is the next
        question. `exactly()` formats to the reader's locale, so the assertion is
        that the title is *some* other rendering rather than a fixed string. */
-    const titled = [...el.querySelectorAll("tbody span[title]")].map((s) => s.getAttribute("title"));
+    const titled = [...el.querySelectorAll("tbody span[data-tip]")].map((s) => s.getAttribute("data-tip"));
     expect(titled.some((t) => t?.includes("2026"))).toBe(true);
   });
 
@@ -569,7 +575,9 @@ describe("the deploy stamp on the admin index", () => {
     /* Short, because that is what the dashboard and `--short` both show — and
        long enough that `sameCommit` would still compare it. */
     expect(line?.textContent).toContain("8ca6bc7");
-    expect(line?.textContent).not.toContain(SHA);
+    const visible = line?.cloneNode(true) as HTMLElement;
+    for (const hidden of visible.querySelectorAll(".tw\\:sr-only")) hidden.remove();
+    expect(visible.textContent).not.toContain(SHA);
     /* **The time is actually drawn**, which the sha alone would not have said:
        the fallback branch prints "at an unknown time" and would otherwise have
        passed every assertion in here. GPT Sol, reviewing this, 2026-09-04. */
@@ -579,11 +587,14 @@ describe("the deploy stamp on the admin index", () => {
        after "2 hours ago", and the whole sha goes with it. Formatted here the
        way `exactly()` formats it — independently, so a title that dropped the
        timestamp or carried a different one fails. */
-    const title = line?.getAttribute("title") ?? "";
+    const title = line?.getAttribute("data-tip") ?? "";
     expect(title).toContain(
       built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
     );
     expect(title).toContain(SHA);
+    const spoken = line?.querySelector(".tw\\:sr-only")?.textContent;
+    expect(spoken).toContain(SHA);
+    expect(spoken).toContain(built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }));
     /* The caveats are the honest half of the claim — see AdminPage.tsx §
        BuildStampLine on why the line says "Built" rather than "Deployed". */
     expect(title).toContain("this tab is running");
@@ -598,5 +609,18 @@ describe("the deploy stamp on the admin index", () => {
     expect(el.textContent).toContain("Running unbuilt");
     expect(el.textContent).not.toContain("Built");
     expect(el.textContent).not.toContain("1970");
+  });
+
+  it("keeps the public topics' exact rebuild time readable without hovering", async () => {
+    const stamp = "2026-10-09T10:00:00.000Z";
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({
+      cards: 12, rethoughtAt: stamp, filed: 12, withheld: false,
+      rebuildDue: false, working: false, autoMax: 20,
+    })));
+    const el = await showHome();
+    const line = el.querySelector("section[aria-labelledby='admin-public-topics'] p[data-tip]");
+    const exact = new Date(stamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    expect(line?.getAttribute("data-tip")).toBe(exact);
+    expect(line?.querySelector(".tw\\:sr-only")?.textContent).toContain(exact);
   });
 });

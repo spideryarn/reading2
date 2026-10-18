@@ -36,7 +36,7 @@ export function StopRange({
   step,
   value,
   stops,
-  title,
+  tip,
   valueText,
   onChange,
 }: {
@@ -49,7 +49,8 @@ export function StopRange({
   value: number;
   /** Ascending and distinct — threshold.ts § thresholdStops. */
   stops: readonly number[];
-  title: string;
+  /** What the control does, in the page-wide card (TipCard.tsx). */
+  tip: string;
   /** `aria-valuetext`: the count, since a thumb position is a number nobody can hear. */
   valueText: string;
   onChange(value: number): void;
@@ -128,7 +129,7 @@ export function StopRange({
         max={max}
         step={step}
         value={value}
-        title={title}
+        data-tip={tip}
         aria-valuetext={valueText}
         onKeyDown={onKeyDown}
         onPointerDown={() => {

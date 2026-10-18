@@ -219,7 +219,7 @@ export function PdfFigureNotes({
                 slug={slug}
                 fragment={`page=${note.page}`}
                 className="figure-note-link"
-                title={`Open page ${note.page} of the PDF`}
+                tip={`Open page ${note.page} of the PDF`}
               >
                 View the original
               </SourceLink>
@@ -234,7 +234,7 @@ export function PdfFigureNotes({
                 slug={slug}
                 fragment={`page=${note.page}`}
                 className="figure-note-icon"
-                title={`Open page ${note.page} of the PDF`}
+                tip={`Open page ${note.page} of the PDF`}
               >
                 <FileText size={12} aria-hidden="true" />
                 <span className="sr-only">Open page {note.page} of the PDF</span>

@@ -318,7 +318,7 @@ export function UploadPicker({
         /* The words the dashed box used to say. They were the only thing
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
-        title={
+        data-tip={
           single
             ? "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box."
             : "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
@@ -430,7 +430,9 @@ export function UploadPicker({
             type="button"
             variant="ghost"
             size="icon-xs"
-            title={stoppable ? "Stop uploading" : "Forget this file"}
+            data-tip={stoppable ? "Stop uploading" : "Forget this file"}
+            aria-label={stoppable ? "Stop uploading" : "Forget this file"}
+            data-tip-describes="off"
             /* **Nothing to press while the ingest is being queued.** That phase
                is a single small request and it cannot be undone, so a button
                here would either lie or decline. It reappears the instant the

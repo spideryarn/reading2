@@ -900,7 +900,7 @@ export function QuotesPanel({
             scores={rowScores(row.quote, rank)}
             /* An unscored quote got here without clearing anything, and
                in an unheaded list a row with no numbers otherwise reads
-               as though it had. A `title` and nothing visible — the same
+               as though it had. A `data-tip` and nothing visible — the same
                call the glossary makes, for the same reason. */
             unscored={rank === "prioritised" && priorityOf(row.quote) === undefined}
             onSelect={() => {
@@ -1187,7 +1187,7 @@ function RankBar({
             type="button"
             className={`gloss-sort-btn${rank === option.key ? " on" : ""}`}
             aria-pressed={rank === option.key}
-            title={option.title}
+            data-tip={option.title}
             onClick={() => onRank(option.key)}
           >
             {option.label}
@@ -1261,7 +1261,7 @@ function BarSlider({
           <button
             type="button"
             className="gloss-gate-reset"
-            title={`Back to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
+            data-tip={`Back to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             aria-label={`Reset the bar to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             onClick={() => onBar(null)}
           >
@@ -1283,7 +1283,7 @@ function BarSlider({
         step="any"
         value={bar}
         stops={stops}
-        title="How high a quote has to score to stay on screen: the higher of the model's two judgments, so either reason is enough. Every stop is a score this list actually contains — left shows everything, right shows only the top-scored."
+        tip="How high a quote has to score to stay on screen: the higher of the model's two judgments, so either reason is enough. Every stop is a score this list actually contains — left shows everything, right shows only the top-scored."
         /* The thumb's position is a number nobody can hear. This is what makes
            it audible, and it is the count rather than the score because the
            count is what the reader is aiming at. **"showing", not
@@ -1330,7 +1330,7 @@ function QuoteRow({
   /**
    * This row survived the bar without being scored, so say so — quietly.
    *
-   * A `title` and nothing visible, the same call the glossary makes. It reveals
+   * A `data-tip` and nothing visible, the same call the glossary makes. It reveals
    * no composite, so the rule that only the model's raw numbers reach the
    * screen still holds. The quotes prompt explicitly permits omitting both
    * scores, so unlike next door this state is by design rather than a model
@@ -1356,9 +1356,7 @@ function QuoteRow({
     <li
       className={`quotes-row${selected ? " on" : ""}`}
       data-quote-row={quote.id}
-      {...(unscored && {
-        title: "Not scored for prioritising — shown regardless of the threshold",
-      })}
+      data-tip={unscored ? "Not scored for prioritising — shown regardless of the threshold" : undefined}
     >
       <button
         type="button"
@@ -1466,7 +1464,7 @@ function YoursRow({
             model is not the reader's note. Not a button — the row itself opens
             the comment. */}
         {comment.body && (
-          <span className="quotes-yours-noted" title="Has your note" role="img" aria-label="Has your note">
+          <span className="quotes-yours-noted" data-tip="Has your note" data-tip-describes="off" role="img" aria-label="Has your note">
             <Pencil size={11} />
           </span>
         )}

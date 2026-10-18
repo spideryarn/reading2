@@ -558,7 +558,7 @@ describe("checking a Debate claim in chat", () => {
     );
 
     /* 7. Delete it there, go back to Debate, and the mark has gone. */
-    const del = fromClaimCheck[0]?.querySelector<HTMLButtonElement>('button[title="Delete this conversation"]');
+    const del = fromClaimCheck[0]?.querySelector<HTMLButtonElement>('button[data-tip="Delete this conversation"]');
     await act(async () => del?.click());
     await settle();
     await until(() => !server.some((t) => t.id === fresh), "the delete to reach the server");

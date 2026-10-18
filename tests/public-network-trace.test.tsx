@@ -1488,13 +1488,18 @@ describe("a signed-out browser on a shared document", () => {
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_WORK);
     /* A visitor has no verdict and no Dig deeper answer, so never the model's
-       sentence about the work (plan 261003j). That we have not read the works
-       was said once above the list (plan 261011c) until 2026-10-17, and is in
-       the band's (i) since (spya-m53cdk, plan 261017h stage 1), so not in the
-       band's own text. */
+       sentence about the work (plan 261003j) — only that we have not read the
+       works (plan 261011c), which is in the band's (i) since plan 261017h, not
+       above the list. */
     expect(text).not.toContain("The theory the piece argues against.");
     expect(text).toContain("Tononi");
     expect(text).not.toContain("we have read none of these works");
+    const about = band?.querySelector<HTMLButtonElement>(":scope > .band-about");
+    expect(about, "the band's (i)").not.toBeNull();
+    await act(async () => about?.click());
+    const card = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
+    await act(async () => about?.click());
+    expect(card.split("we have read none of these works")).toHaveLength(2);
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Sources is for whoever added this article");
@@ -2401,7 +2406,7 @@ describe("a signed-out browser on a shared document", () => {
        `.srch-icon` button, so a class would not tell them apart, and the title
        is what the reader is offered. A control whose only difference from its
        neighbour is a tooltip has to be asserted by the tooltip. */
-    const titles = [...host.querySelectorAll("button")].map((b) => b.getAttribute("title") ?? "");
+    const titles = [...host.querySelectorAll("button")].map((b) => b.getAttribute("data-tip") ?? "");
     expect(titles, "delete").not.toContain("Delete this search");
     expect(titles, "reuse").not.toContain("Put this question back in the box");
     expect(titles, "the colour picker").not.toContain("Change this search's colour");
@@ -2442,7 +2447,7 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent, "the warning").toContain("older version of the article");
     expect(host.textContent, "the instruction").not.toContain("puts its question back in the box");
     const titles = [...host.querySelectorAll("span, button")].map(
-      (e) => e.getAttribute("title") ?? "",
+      (e) => e.getAttribute("data-tip") ?? "",
     );
     expect(titles.join(" | "), "the row's tooltip").not.toContain("so you can ask it again");
     /* And it does not assert a cause nobody knows: `stale` is also true when a
@@ -2654,7 +2659,7 @@ describe("a signed-out browser on a shared document", () => {
   /**
    * **What this asserts changed on 2026-09-07, and it went red rather than
    * quiet, which is the only reason it is still worth having.** The link's
-   * `title` became a `ControlTip` card, so `getAttribute("title")` is `null` —
+   * `title` became a `ControlTip` card, so `getAttribute("data-tip")` is `null` —
    * and `expect(null).not.toContain(…)` throws rather than passing, so the
    * suite said so instead of going on agreeing with itself.
    *

@@ -741,7 +741,7 @@ describe("the live session in the shipping chat composer", () => {
   it("flushes a new spoken conversation before deciding whether it is empty", async () => {
     const { api, finish } = fakeLive("live");
     paint(api, THREAD.id, [{ ...THREAD, messages: [] }]);
-    const leave = host.querySelector<HTMLButtonElement>('button[title="All conversations"]');
+    const leave = host.querySelector<HTMLButtonElement>('button[data-tip="All conversations"]');
     act(() => leave!.click());
     expect(events, "the empty base was discarded while speech was still in flight").toEqual(["stop"]);
     await act(async () => { finish(); });
@@ -753,7 +753,7 @@ describe("the live session in the shipping chat composer", () => {
     api.error = "Could not save the spoken turn.";
     api.lines = [line("u1", "reader", "Words still worth keeping", true)];
     paint(api, THREAD.id, [{ ...THREAD, messages: [] }]);
-    act(() => host.querySelector<HTMLButtonElement>('button[title="All conversations"]')!.click());
+    act(() => host.querySelector<HTMLButtonElement>('button[data-tip="All conversations"]')!.click());
     expect(events, "discard made the only unsaved transcript unreachable").toEqual(["thread:null"]);
   });
 

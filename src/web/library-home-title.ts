@@ -1,5 +1,5 @@
 /**
- * The native tooltip on a signed-in home wordmark.
+ * The tooltip on a signed-in home wordmark.
  *
  * `HomeLogo` used to be the home control on every standalone signed-in page.
  * The four pages with `SiteNav` replaced it with the bar's wordmark on

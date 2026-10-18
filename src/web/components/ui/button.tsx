@@ -82,13 +82,15 @@ const buttonVariants = cva(
   }
 )
 
+/* No `title`: a native tooltip, which the app does not use — say `data-tip`
+   (TipCard.tsx; plan 261017g). tests/no-native-title-tooltips.test.ts. */
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
   ...props
-}: React.ComponentProps<"button"> &
+}: Omit<React.ComponentProps<"button">, "title"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
   }) {

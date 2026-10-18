@@ -938,7 +938,7 @@ describe("a release's date", () => {
     await draw(fixtureVersions());
     const heading = host.querySelector("details h2 time");
     expect(heading?.getAttribute("dateTime")).toBe("2026-09-06T09:49:03Z");
-    expect(heading?.getAttribute("title")).toBe("6 September 2026, 09:49 UTC");
+    expect(heading?.getAttribute("data-tip")).toBe("6 September 2026, 09:49 UTC");
     expect(spoken(heading)).toBe(", released 6 September 2026, 09:49 UTC");
     // The heading's formatter speaks the runtime's own locale. Deriving the
     // expected words from that same locale checks the long style without
@@ -948,7 +948,7 @@ describe("a release's date", () => {
 
     // The contents column's is pinned to English (relative-time.ts § narrow).
     const contents = host.querySelector('nav[aria-label="Releases"] time');
-    expect(contents?.getAttribute("title")).toBe("6 September 2026, 09:49 UTC");
+    expect(contents?.getAttribute("data-tip")).toBe("6 September 2026, 09:49 UTC");
     expect(visible(contents)).toBe("3h ago");
   });
 

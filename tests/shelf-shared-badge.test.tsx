@@ -153,6 +153,15 @@ it("calls it Shared, and not the opposite", () => {
 });
 
 describe("the card", () => {
+  it("says what its question count counts without needing to hover", () => {
+    paint(createElement(ShelfCard, {
+      entry: entry({ comments: 2 }), shelf, note: ADDED_NOTE(entry(), NOW),
+    }));
+    const count = host.querySelector('[data-tip="2 questions asked about this article"]');
+    expect(count).not.toBeNull();
+    expect(count?.textContent?.trim()).toBe("2 questions asked about this article");
+  });
+
   it("marks an article anyone can read", () => {
     paint(
       createElement(ShelfCard, {
@@ -166,7 +175,7 @@ describe("the card", () => {
     /* The sentence, not merely the word: a chip saying "Shared" and nothing
        else leaves the owner to guess whether it means *shared with me* or
        *shared by me*. It is the owner's own card's sentence, reused. */
-    expect(badges()[0]?.title).toContain("Anyone can read this without signing in");
+    expect(badges()[0]?.getAttribute("data-tip")).toContain("Anyone can read this without signing in");
   });
 
   it("says nothing whatever about a private one", () => {

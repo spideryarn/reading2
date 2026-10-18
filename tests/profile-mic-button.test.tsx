@@ -176,7 +176,7 @@ describe("the microphone button", () => {
          thing a mouse gets. A disabled button with no reason on it is the
          thing copy.md exists to stop. */
       expect(button.getAttribute("aria-label")).toMatch(/internet connection/i);
-      expect(button.getAttribute("title")).toMatch(/internet connection/i);
+      expect(button.getAttribute("data-tip")).toMatch(/internet connection/i);
     });
 
     it("comes back on its own when the connection does", () => {

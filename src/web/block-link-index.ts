@@ -10,6 +10,7 @@
  */
 import { createContext, useContext } from "react";
 import type { Block, BlockId } from "../types.js";
+import { XREF_SELECTOR } from "./xref.js";
 
 /** What a card says about one block. */
 export interface BlockLinkEntry {
@@ -34,3 +35,17 @@ export const BlockLinkContext = createContext<BlockLinkIndex | null>(null);
 export function useBlockLinks(): BlockLinkIndex | null {
   return useContext(BlockLinkContext);
 }
+
+/** The gutter's reading-time line (BlockGutter.tsx, gutter.css § reading time). */
+export const READING_LINE = ".blk-gutter > span.blk-read";
+/** A note in Marginalia's column (MarginaliaColumn.tsx), whose card is `MARG_TIPS[data-marg-tip]`. */
+export const MARG_NOTE = ".marg-note [data-marg-tip]";
+/**
+ * **Everything BlockLinkCard.tsx draws a card for**: a block link, a
+ * cross-reference mark, the reading-time line, a Marginalia note. Here rather
+ * than in the card so TipCard.tsx can leave them alone without importing it —
+ * a `[data-tip]` inside one of these would otherwise open two cards at once.
+ */
+export const BLOCK_CARD_TRIGGERS = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${MARG_NOTE}`;
+/** The ones that are not links, and draw a control's card rather than a passage's preview. */
+export const CONTROL_SHAPED = `${READING_LINE}, ${MARG_NOTE}`;

@@ -663,7 +663,7 @@ function GiftActions({
           <button
             type="button"
             disabled={busy || running}
-            title={running ? "A lookup is running" : undefined}
+            data-tip={running ? "A lookup is running" : undefined}
             onClick={() => attempt(() => hooks.lookUpAgain(gift.id))}
             className={BUTTON}
           >
@@ -893,7 +893,8 @@ export function AuthorGifts({ shelf, onVoucherMade }: { shelf: StarterShelf | nu
           onClick={() => void reload()}
           disabled={loading}
           aria-label="Refresh the author gifts"
-          title="Refresh the author gifts"
+          data-tip="Refresh the author gifts"
+          data-tip-describes="off"
           className={BUTTON}
         >
           <RefreshCw size={12} />

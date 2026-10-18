@@ -4,10 +4,10 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 ## In this doc
 
-Code: [`Tooltip.tsx`](../../src/web/Tooltip.tsx) (`Tooltip`, `ControlTip`, `TooltipGroup`, `DELAY`), [`styles/tooltip.css`](../../src/web/styles/tooltip.css); the card copy for modes is [`mode-catalog.ts`](../../src/mode-catalog.ts).
+Code: [`Tooltip.tsx`](../../src/web/Tooltip.tsx) (`Tooltip`, `ControlTip`, `TooltipGroup`, `DELAY`), [`TipCard.tsx`](../../src/web/TipCard.tsx) (`data-tip`, every page), [`styles/tooltip.css`](../../src/web/styles/tooltip.css); the card copy for modes is [`mode-catalog.ts`](../../src/mode-catalog.ts).
 
 - [§ When something needs one](#when-something-needs-one) — deciding whether a control gets a tooltip at all
-- [§ Prefer the rich card to a native `title`](#prefer-the-rich-card-to-a-native-title) — Greg's rule
+- [§ Prefer the rich card to a native `title`](#prefer-the-rich-card-to-a-native-title) — Greg's rule, the test that holds it, and `data-tip`
 - [§ Short paragraphs or bullets](#short-paragraphs-or-bullets-not-one-block) — how to write a card's text
 - [§ What we chose](#what-we-chose) — Floating UI, and what was rejected
 - [§ Where the code is](#where-the-code-is) — the table of every file that draws a card; open it to find the one to copy
@@ -66,6 +66,28 @@ costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2
 that, and the gutter's controls — the mark, permalink, chat, bookmark, help and overflow — followed
 on 2026-10-02, when Greg asked that they *"all have tooltips"* (spya-jc0vm6;
 [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
+
+> Look for anywhere we're using regular tooltips (e.g. when hovering over the search name), and
+> replace with rich tooltips / see tooltips.md / And how can we ensure this going forwards?
+>
+> — Greg, 2026-10-17 (spya-q04h98)
+
+**Since 2026-10-17 there is no native `title` left in `src/web`, and a test fails on a new one**:
+[`tests/no-native-title-tooltips.test.ts`](../../tests/no-native-title-tooltips.test.ts) parses
+every `.tsx` and refuses a `title` on a host element, one in a spread, an SVG `<title>`, and a
+`title` handed to `Button`, `Link`, `IconButton` or `SourceLink` (whose types refuse it too). The
+one exception is an `<iframe>`'s, which is its accessible name; and `cost-charts.tsx` keeps its SVG
+`<title>` only for the static report, which has no card
+([261017g](../plans/261017g-native-title-tooltips-become-rich-cards-everywhere-and-a-test-keeps-it-that-way.md)).
+
+**The replacement for a `title` is `data-tip`**: say `data-tip="…"` and
+[`TipCard.tsx`](../../src/web/TipCard.tsx), mounted once in `main.tsx` for every page, draws it as
+ours on hover and keyboard focus — a blank line in the words starts a paragraph. Three things a
+`title` did that `data-tip` does not, so the site has to: be the **accessible name** of an icon-only
+control (add `aria-label`); reach a **screen reader on a span** that takes no focus (add `sr-only`
+text where the words matter); and show on a **disabled shadcn `Button`**, which has
+`pointer-events: none`. Where a card wants a head and paragraphs rather than a sentence, it is a
+`ControlTip` in a `Tooltip`, as before.
 
 ## Short paragraphs or bullets, not one block
 
@@ -138,6 +160,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 
 | File | What it does |
 |---|---|
+| [`src/web/TipCard.tsx`](../../src/web/TipCard.tsx) | **the card for `data-tip`, on every page** — what a native `title` became on 2026-10-17. One panel by delegation, so a trigger costs nothing; the machinery is [`useDelegatedCard.tsx`](../../src/web/useDelegatedCard.tsx), shared with `BlockLinkCard`. Leaves alone an element that is a `Tooltip`'s trigger or a block link |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
@@ -227,7 +250,10 @@ points: the strip is a whole paragraph tall, so the reference is the strip at th
 it changes (the permalink's *Copied*, the "…" turning into ✕). Mouse hover and keyboard focus open
 it; a finger does not, because a tap presses the control. It adds no `aria-describedby` there: the
 sentence is the control's own name, near enough, and would be read twice
-([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
+([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)). **On 2026-10-17 `data-tip` became the
+app's**, and the gutter's controls moved to `TipCard`, each saying `data-tip-describes="off"` for
+that reason; the shared hover intent moved into `useDelegatedCard.tsx`
+([261017g](../plans/261017g-native-title-tooltips-become-rich-cards-everywhere-and-a-test-keeps-it-that-way.md)).
 
 **And Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in `data-marg-tip`,
 and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note is, which mode
