@@ -914,9 +914,10 @@ export interface MatterCandidate {
   /** Today's byline rule (src/web/front-matter.ts) has its own evidence test. */
   trusted?: boolean;
   /**
-   * Merged from these by `combineMatter`, each already held. The evidence is
-   * re-checked part by part (each on its own blocks, kinds and label), and a
-   * merged stretch is not cut to its references again: its parts were.
+   * The stretches covering this segment of `combineMatter`'s union, each
+   * already held. The evidence is re-checked part by part (each on its own
+   * blocks, kinds and label); a segment is not cut to its references again,
+   * nor dropped for being one short block: its parts were held to both.
    */
   parts?: readonly MatterCandidate[];
 }
@@ -1074,7 +1075,8 @@ export function referenceSegments(blocks: readonly MatterBlock[], c: MatterCandi
  * the labels rule (src/matter-labels.ts):
  *
  * 1. The masthead echo's ids come off the front (review F7); one block under
- *    `ONE_BLOCK_MIN_WORDS` is not worth a stub.
+ *    `ONE_BLOCK_MIN_WORDS` is not worth a stub (a union's segment is exempt:
+ *    see `combineMatter`).
  * 2. `MAX_RANGE_WORDS` for a range, whatever its kinds.
  * 3. Each block's evidence, on its full stored text (`stretchEvidence`).
  * 4. In document order, no overlap: a stretch overlapping an earlier one is dropped.
@@ -1097,7 +1099,9 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
     }
     end = contentsCut(blocks, c0, start, end);
     const withWords = blocks.slice(start, end).filter((b) => b.words > 0);
-    if (withWords.length <= 1 && sumWords(blocks, start, end) < ONE_BLOCK_MIN_WORDS) {
+    /* A union's segment is not dropped for being small: its parts each passed
+       this already, and the cut is what made it small (`combineMatter`). */
+    if (!c0.parts && withWords.length <= 1 && sumWords(blocks, start, end) < ONE_BLOCK_MIN_WORDS) {
       drop("one short block is not worth a stub");
       continue;
     }
@@ -1108,7 +1112,7 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
     const evidenceOf = (c: MatterCandidate, from: number, to: number): string | null =>
       c.trusted ? null : stretchEvidence(article, from, to, c.kinds, c.headedBy);
     const evidence = c0.parts
-      ? (c0.parts.map((p) => evidenceOf(p, Math.max(p.start, start), p.end)).find((e) => e !== null) ?? null)
+      ? (c0.parts.map((p) => evidenceOf(p, p.start, p.end)).find((e) => e !== null) ?? null)
       : evidenceOf(c0, start, end);
     if (evidence !== null) {
       drop(evidence);
@@ -1159,14 +1163,28 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
  * **The union of two sources' stretches** — the classifier's and the labels
  * rule's (src/matter-labels.ts), the candidate product design: the label rule
  * is free and strong on references and contents, the model on titles, authors
- * and dates. Stretches that overlap or touch become one, their kinds unioned
- * (in `MATTER_KINDS` order), so the reader gets one stub, not two.
+ * and dates.
  *
- * The merged stretches are held again (`holdStretches`): a merged range is
- * held to `MAX_RANGE_WORDS` as a whole, the share cap counts everything
- * folded, and each part's evidence is checked again. A merged stretch that
- * fails is dropped whole — measured in the eval before anything gentler is
- * built. A stretch is a range only if every part was.
+ * It keeps **the finest partition the two agree to**, because each stretch is
+ * one stub in the reading view and the abstract should be its own (Greg,
+ * 2026-10-18: "visible in Structure so that the reader can see that there is
+ * an Abstract and easily get to it"):
+ *
+ * 1. The blocks folded are those either source admitted, cut at every start
+ *    and end of any stretch from either.
+ * 2. Each segment takes the kinds of the classifier's stretch covering it, or
+ *    else the label rule's (one source's stretches never overlap each other).
+ * 3. Touching segments with equal kinds are joined again.
+ * 4. A segment the cut left too small for a stub of its own (one block under
+ *    `ONE_BLOCK_MIN_WORDS`) is joined to the touching neighbour sharing most
+ *    of its kinds, kinds unioned in `MATTER_KINDS` order. It is never dropped
+ *    for being small: each source already admitted its blocks.
+ * 5. An abstract segment is never joined to one that is not.
+ *
+ * The result is held again (`holdStretches`): a range is held to
+ * `MAX_RANGE_WORDS` as a whole, the share cap counts everything folded, and
+ * each part's evidence is checked again on its own blocks. A stretch that
+ * fails is dropped whole. A stretch is a range only if every part was.
  */
 export function combineMatter(
   article: MatterArticle,
@@ -1174,29 +1192,75 @@ export function combineMatter(
   labelled: Pick<MatterAdmitted, "held">,
   echo: ReadonlySet<BlockId>,
 ): MatterAdmitted {
-  const all = [...classified.held, ...labelled.held].sort((a, b) => a.start - b.start || b.end - a.end);
-  const groups: MatterCandidate[][] = [];
-  let end = -1;
-  for (const c of all) {
-    const last = groups[groups.length - 1];
-    if (last && c.start <= end) last.push(c);
-    else groups.push([c]);
-    end = Math.max(end, c.end);
-  }
+  const { blocks } = article;
+  const cuts = [...new Set([...classified.held, ...labelled.held].flatMap((c) => [c.start, c.end]))].sort((a, b) => a - b);
+  const covering = (held: readonly MatterCandidate[], a: number, b: number) => held.find((c) => c.start <= a && b <= c.end);
   const order = (k: MatterKind) => MATTER_KINDS.indexOf(k);
-  const merged = groups.map((g, item): MatterCandidate => {
-    if (g.length === 1) return { ...g[0]!, item };
-    const start = g[0]!.start;
-    return {
+  const kindsOf = (ks: readonly MatterKind[]) => [...new Set(ks)].sort((a, b) => order(a) - order(b));
+  const sameKinds = (x: readonly MatterKind[], y: readonly MatterKind[]) => x.length === y.length && x.every((k, i) => k === y[i]);
+
+  interface Segment {
+    start: number;
+    end: number;
+    kinds: MatterKind[];
+    parts: MatterCandidate[];
+  }
+  const join = (into: Segment, from: Segment): void => {
+    into.start = Math.min(into.start, from.start);
+    into.end = Math.max(into.end, from.end);
+    into.kinds = kindsOf([...into.kinds, ...from.kinds]);
+    for (const p of from.parts) if (!into.parts.includes(p)) into.parts.push(p);
+  };
+  const segments: Segment[] = [];
+  for (let k = 0; k + 1 < cuts.length; k++) {
+    const a = cuts[k]!;
+    const b = cuts[k + 1]!;
+    const model = covering(classified.held, a, b);
+    const label = covering(labelled.held, a, b);
+    const by = model ?? label;
+    if (by === undefined) continue;
+    const seg: Segment = { start: a, end: b, kinds: kindsOf(by.kinds), parts: [model, label].filter((c): c is MatterCandidate => c !== undefined) };
+    const last = segments[segments.length - 1];
+    if (last && last.end === a && sameKinds(last.kinds, seg.kinds)) join(last, seg);
+    else segments.push(seg);
+  }
+
+  /* Tiny segments, joined to a touching neighbour rather than dropped. */
+  const tiny = (s: Segment) =>
+    blocks.slice(s.start, s.end).filter((b) => b.words > 0).length <= 1 && sumWords(blocks, s.start, s.end) < ONE_BLOCK_MIN_WORDS;
+  const isAbstract = (s: Segment) => s.kinds.includes("abstract");
+  for (let i = 0; i < segments.length; ) {
+    const s = segments[i]!;
+    const prev = segments[i - 1];
+    const next = segments[i + 1];
+    /* How many kinds a touching neighbour shares, or -1 if it may not take this one. */
+    const shared = (o: Segment | undefined, touches: boolean) =>
+      o && touches && isAbstract(o) === isAbstract(s) ? o.kinds.filter((k) => s.kinds.includes(k)).length : -1;
+    const left = shared(prev, prev?.end === s.start);
+    const right = shared(next, next?.start === s.end);
+    if (!tiny(s) || (left < 0 && right < 0)) {
+      i++;
+    } else if (left >= right) {
+      join(prev!, s);
+      segments.splice(i, 1);
+      i--;
+    } else {
+      join(next!, s);
+      segments.splice(i, 1);
+    }
+  }
+
+  const merged = segments.map(
+    (g, item): MatterCandidate => ({
       item,
-      start,
-      end: Math.max(...g.map((c) => c.end)),
-      kinds: [...new Set(g.flatMap((c) => c.kinds))].sort((a, b) => order(a) - order(b)),
-      headedBy: g.find((c) => c.start === start && c.headedBy !== null)?.headedBy ?? null,
-      shape: g.every((c) => c.shape === "range") ? "range" : "section",
-      parts: g,
-    };
-  });
+      start: g.start,
+      end: g.end,
+      kinds: g.kinds,
+      headedBy: g.parts.find((c) => c.start === g.start && c.headedBy !== null)?.headedBy ?? null,
+      shape: g.parts.every((c) => c.shape === "range") ? "range" : "section",
+      parts: g.parts,
+    }),
+  );
   return holdStretches(article, merged, echo);
 }
 

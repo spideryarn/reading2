@@ -8,7 +8,7 @@
    full blocks from the LOCAL database, read-only. Paid: three Haiku calls an
    article, in the ledger as an eval.
 
-     npx tsx scripts/matter-eval.ts <matter-eval dir> [--corpus <dir>] [--gold <dir>] [--draws=3] [--only=slug,slug] [--model=…]
+     npx tsx scripts/matter-eval.ts <matter-eval dir> [--corpus <dir>] [--gold <dir>] [--draws=3] [--only=slug,slug] [--show=slug,slug] [--model=…]
 
    The corpus and gold default to <dir>/corpus and <dir>/gold; results go to
    <dir>/results. **Classifier answers are cached** in <dir>/cache, one file
@@ -56,7 +56,7 @@ const flag = (name: string): string | undefined => {
   const at = args.indexOf(`--${name}`);
   return at >= 0 ? args[at + 1] : undefined;
 };
-const VALUED = new Set(["--corpus", "--gold", "--draws", "--only", "--model"]);
+const VALUED = new Set(["--corpus", "--gold", "--draws", "--only", "--model", "--show"]);
 const DIR = args.find((a, i) => !a.startsWith("--") && !VALUED.has(args[i - 1] ?? ""));
 if (!DIR) throw new Error("usage: matter-eval.ts <matter-eval dir> [--corpus <dir>] [--gold <dir>] [--draws=3] [--only=a,b]");
 const CORPUS_DIR = flag("corpus") ?? path.join(DIR, "corpus");
@@ -64,6 +64,8 @@ const GOLD_DIR = flag("gold") ?? path.join(DIR, "gold");
 const CACHE_DIR = path.join(DIR, "cache");
 const DRAWS = Number(flag("draws") ?? 3);
 const ONLY = flag("only")?.split(",");
+/** Articles whose union stretches the report lists in full (`--show=slug,slug`). */
+const SHOW = flag("show")?.split(",") ?? ["arxiv-2308-08708-spya-w598t3"];
 const MODEL = flag("model");
 const CONCURRENCY = 6;
 const ONE_BLOCK_OPTIONAL_WORDS = 40;
@@ -473,9 +475,21 @@ async function main(): Promise<void> {
     md.push(`| ${k} | ${Object.values(totals).map((t) => { const v = t.byKind[k] ?? { gold: 0, found: 0 }; return `${v.found}/${v.gold} (${pct(v.found, v.gold)})`; }).join(" | ")} |`);
   }
   md.push("", `Classifier cost: ${formatNanos(cost)} over ${allDraws.length} calls, ${cachedDraws} from the cache (${formatNanos(cost / Math.max(1, allDraws.length))} a call). Seconds: median ${secs[Math.floor(secs.length / 2)]?.toFixed(1)}, max ${secs.at(-1)?.toFixed(1)}. Unavailable: ${unavailable.length} ${unavailable.length ? `(${unavailable.join("; ")})` : ""}`, "");
-  md.push("## Per article", "", "| slug | blocks | gold matter | classifier prose folded (d1,d2,d3) | found (d1,d2,d3) | labels prose / found | union prose (d1,d2,d3) | union found (d1,d2,d3) | today prose / found |", "|---|---|---|---|---|---|---|---|---|");
+  /* Each union stretch is one stub the reader sees, so how many there are matters as much as what they fold. */
+  const stubs = real.flatMap((p) => p.union.map((d) => d.stretches.length)).sort((x, y) => x - y);
+  md.push(`Union stubs per article (one per stretch, all draws): mean ${(stubs.reduce((n, x) => n + x, 0) / Math.max(1, stubs.length)).toFixed(2)}, median ${stubs[Math.floor(stubs.length / 2)] ?? 0}, max ${stubs.at(-1) ?? 0}.`, "");
+  md.push("## Union stretches, shown articles", "");
+  for (const slug of SHOW) {
+    const p = perArticle.find((x) => x.slug === slug);
+    const a = articles.find((x) => x.slug === slug);
+    if (!p || !a) continue;
+    const at = new Map(a.blocks.map((b, i) => [b.id, i]));
+    p.union.forEach((d, k) => md.push(`- **${slug}** union d${k + 1}: ${d.stretches.map((s) => `${at.get(s.from)}..${at.get(s.to)} (${s.kinds.join(",")})`).join("; ") || "nothing"}`));
+  }
+  md.push("");
+  md.push("## Per article", "", "| slug | blocks | gold matter | classifier prose folded (d1,d2,d3) | found (d1,d2,d3) | labels prose / found | union prose (d1,d2,d3) | union found (d1,d2,d3) | union stubs (d1,d2,d3) | today prose / found |", "|---|---|---|---|---|---|---|---|---|---|");
   for (const p of perArticle) {
-    md.push(`| ${p.slug} | ${p.blocks} | ${p.labels.score.matterBlocks} | ${p.classifier.map((d) => d.status === "ok" ? d.score.proseFolded.length : "×").join(",")} | ${p.classifier.map((d) => d.score.found).join(",")} | ${p.labels.score.proseFolded.length} / ${p.labels.score.found} | ${p.union.map((d) => d.score.proseFolded.length).join(",")} | ${p.union.map((d) => d.score.found).join(",")} | ${p.today.score.proseFolded.length} / ${p.today.score.found} |`);
+    md.push(`| ${p.slug} | ${p.blocks} | ${p.labels.score.matterBlocks} | ${p.classifier.map((d) => d.status === "ok" ? d.score.proseFolded.length : "×").join(",")} | ${p.classifier.map((d) => d.score.found).join(",")} | ${p.labels.score.proseFolded.length} / ${p.labels.score.found} | ${p.union.map((d) => d.score.proseFolded.length).join(",")} | ${p.union.map((d) => d.score.found).join(",")} | ${p.union.map((d) => d.stretches.length).join(",")} | ${p.today.score.proseFolded.length} / ${p.today.score.found} |`);
   }
   md.push("", "## Every block of prose folded", "");
   for (const p of perArticle) {
@@ -497,6 +511,7 @@ async function main(): Promise<void> {
   for (const [r, n] of [...unionCount].sort((a, b) => b[1] - a[1])) md.push(`- ${n} × ${r}`);
   writeFileSync(path.join(resultsDir, `results-${stamp}.md`), md.join("\n"));
   console.log(md.slice(0, 40).join("\n"));
+  console.log(md.filter((l) => l.startsWith("Union stubs") || SHOW.some((x) => l.startsWith(`- **${x}** union`))).join("\n"));
   console.log(`\nwritten: ${path.join(resultsDir, `results-${stamp}.{json,md}`)}`);
 }
 

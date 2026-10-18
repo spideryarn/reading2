@@ -444,25 +444,69 @@ describe("matterByLabels", () => {
 describe("combineMatter", () => {
   const ids = (a: MatterArticle, s: { from: string; to: string }) => [a.blocks.findIndex((b) => b.id === s.from), a.blocks.findIndex((b) => b.id === s.to)];
 
-  it("merges overlapping stretches into one, kinds unioned in the closed order", () => {
+  it("cuts at every boundary either method drew: overlapping stretches with different kinds stay apart, the classifier's kinds where it covers", () => {
     const a = paper();
     const model = admitMatter(a, [range(a, a.at.title!, a.at.abstractLabel!, ["title", "authors"])]);
     const labels = admitMatter(a, [range(a, a.at.abstractLabel!, a.at.abstract!, ["abstract"]), section(a, a.at.refsHeading!, ["references"])]);
     expect(model.stretches).toHaveLength(1);
     const u = combineMatter(a, model, labels, new Set());
     expect(u.dropped).toEqual([]);
-    expect(u.stretches.map((s) => s.kinds)).toEqual([["title", "authors", "abstract"], ["references"]]);
-    expect(ids(a, u.stretches[0]!)).toEqual([a.at.title!, a.at.abstract!]);
+    expect(u.stretches.map((s) => s.kinds)).toEqual([["title", "authors"], ["abstract"], ["references"]]);
+    expect(ids(a, u.stretches[0]!)).toEqual([a.at.title!, a.at.abstractLabel!]);
+    expect(ids(a, u.stretches[1]!)).toEqual([a.at.abstract!, a.at.abstract!]);
   });
 
-  it("merges stretches that touch, and keeps a section's shape so a reference list is not held to the range cap", () => {
+  it("keeps stretches that touch apart when their kinds differ, and keeps a section's shape so a reference list is not held to the range cap", () => {
     const a = paper();
-    const model = admitMatter(a, [range(a, a.at.ackHeading!, a.at.ack!, ["acknowledgements"])]);
-    const labels = admitMatter(a, [section(a, a.at.refsHeading!, ["references"])]);
-    expect(model.stretches).toHaveLength(1);
+    const model = admitMatter(a, [range(a, a.at.title!, a.at.authors!, ["title", "authors"]), range(a, a.at.ackHeading!, a.at.ack!, ["acknowledgements"])]);
+    const labels = admitMatter(a, [range(a, a.at.abstractLabel!, a.at.abstract!, ["abstract"]), section(a, a.at.refsHeading!, ["references"])]);
+    expect(model.stretches).toHaveLength(2);
     const u = combineMatter(a, model, labels, new Set());
     expect(u.dropped).toEqual([]);
-    expect(u.stretches).toEqual([{ from: a.blocks[a.at.ackHeading!]!.id, to: a.blocks.at(-1)!.id, kinds: ["acknowledgements", "references"] }]);
+    const at = (i: number) => a.blocks[i]!.id;
+    expect(u.stretches).toEqual([
+      { from: at(a.at.title!), to: at(a.at.authors!), kinds: ["title", "authors"] },
+      { from: at(a.at.abstractLabel!), to: at(a.at.abstract!), kinds: ["abstract"] },
+      { from: at(a.at.ackHeading!), to: at(a.at.ack!), kinds: ["acknowledgements"] },
+      { from: at(a.at.refsHeading!), to: a.blocks.at(-1)!.id, kinds: ["references"] },
+    ]);
+  });
+
+  /** Short blocks, each passing alone as the candidate says (trusted), then a long body. */
+  const furniture = () => {
+    const blocks = ["Title of it", "By A. Author", "Posted 3 May", "Updated 4 May", "Filed under things"].map((t) => block(t));
+    for (let i = 0; i < 60; i++) blocks.push(block(prose(i)));
+    return { blocks, meta: {} };
+  };
+  const held = (a: MatterArticle, ...cs: [number, number, MatterAnswerItem["kinds"]][]) =>
+    holdStretches(a, cs.map(([start, end, kinds], item) => ({ item, start, end, kinds: [...kinds], headedBy: null, shape: "range" as const, trusted: true })), new Set());
+  const spans = (a: MatterArticle, r: { stretches: { from: string; to: string; kinds: readonly string[] }[] }) =>
+    r.stretches.map((s) => [...ids(a, s), s.kinds.join(",")]);
+
+  it("re-joins segments whose kinds are equal: one stub for one kind of matter, however the methods split it", () => {
+    const a = furniture();
+    const model = held(a, [0, 2, ["dates"]]);
+    const labels = held(a, [1, 4, ["dates"]]);
+    expect(spans(a, combineMatter(a, model, labels, new Set()))).toEqual([[0, 3, "dates"]]);
+  });
+
+  it("joins a tiny segment the cut leaves to the neighbour it shares most kinds with, rather than dropping it", () => {
+    const a = furniture();
+    /* The labels rule's [1, 4) leaves block 2 alone between the classifier's two. */
+    const model = held(a, [0, 2, ["title"]], [3, 5, ["authors", "dates"]]);
+    const labels = held(a, [1, 4, ["authors"]]);
+    const u = combineMatter(a, model, labels, new Set());
+    expect(u.dropped).toEqual([]);
+    expect(spans(a, u)).toEqual([[0, 1, "title"], [2, 4, "authors,dates"]]);
+  });
+
+  it("never joins the abstract to a neighbour that is not, and does not drop the tiny segment that leaves alone", () => {
+    const a = furniture();
+    const model = held(a, [1, 4, ["abstract"]]);
+    const labels = held(a, [0, 2, ["title", "authors"]]);
+    const u = combineMatter(a, model, labels, new Set());
+    expect(u.dropped).toEqual([]);
+    expect(spans(a, u)).toEqual([[0, 0, "title,authors"], [1, 3, "abstract"]]);
   });
 
   it("leaves apart stretches that neither overlap nor touch", () => {
