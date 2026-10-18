@@ -622,6 +622,31 @@ describe("the topic pills", () => {
     expect(pills(page)).toHaveLength(8);
   });
 
+  it("keeps the All control while an expanded row narrows to six, so expansion cannot linger invisibly", async () => {
+    const keys = Array.from({ length: 8 }, (_, i) => `t${i}`);
+    const MANY: PublicLibrary = {
+      entries: [card("a-spya-aaaaaa", "First six", keys.slice(0, 6)), card("b-spya-bbbbbb", "Last two", keys.slice(6))],
+      topics: keys.map((key) => ({ key, label: key.toUpperCase(), granularity: 0 })),
+      truncated: false,
+    };
+    const page = await show(() => MANY);
+    const all = () =>
+      [...page.querySelectorAll<HTMLButtonElement>("[data-public-topics] button")].find((b) =>
+        /^All \d+ topics/.test(b.textContent ?? ""),
+      );
+    await act(async () => all()?.click());
+    expect(all()?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => pills(page)[0]?.click());
+    expect(all()?.textContent).toMatch(/^All 6 topics/);
+    expect(all()?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => all()?.click());
+    await act(async () => pills(page)[0]?.click());
+    expect(all()?.getAttribute("aria-expanded")).toBe("false");
+    expect(pills(page)).toHaveLength(6);
+  });
+
   it("draws no row when the server sent no topics", async () => {
     const page = await show();
     expect(page.querySelector("[data-public-topics]")).toBeNull();

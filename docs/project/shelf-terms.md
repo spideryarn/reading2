@@ -364,8 +364,10 @@ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedbac
 
 - **Pills**, the default: the first six topics in the server's rank order, plus any chosen one
   further down, in its own place — never re-sorted by count, so nothing moves when you press one.
-  **"All N topics"** expands the same row to every pill; it is shown only when the collapsed row
-  leaves some out. Six since 2026-10-18, twelve before (`COLLAPSED_CHIPS` and `collapsedTopics` in
+  **"All N topics"** expands the same row to every pill; while collapsed, it is shown only when the
+  collapsed row leaves some out. Once expanded it stays until pressed again, even if narrowing
+  temporarily leaves only six, so expansion cannot linger invisibly and return when that filter is
+  cleared. Six since 2026-10-18, twelve before (`COLLAPSED_CHIPS` and `collapsedTopics` in
   [`shelf-narrow.ts`](../../src/web/shelf-narrow.ts), plan
   [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)):
 

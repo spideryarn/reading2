@@ -1,0 +1,468 @@
+diff --git a/docs/project/public-shelf.md b/docs/project/public-shelf.md
+index 10fa984b5..e3ba77a6e 100644
+--- a/docs/project/public-shelf.md
++++ b/docs/project/public-shelf.md
+@@ -214,7 +214,9 @@ What that is, as built (plan
+ [261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md)):
+ 
+ - **The same row of pills as a reader's shelf** above the cards (`PublicShelfTopics.tsx`, the same
+-  `TermChip` and the same AND narrowing), with no "More detail" view and no URL state. It arrives in
++  `TermChip` and the same AND narrowing), with no "More detail" view and no URL state. It
++  collapses to the same six pills and *"All N topics"* by the same function (`collapsedTopics`,
++  plan [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)). It arrives in
+   the page's one request; nothing is worked out or spent for the visitor.
+ - **Named from the shared articles' titles and one-line summaries only**, by the same model and
+   coordinator as a reader's topics ([shelf-terms.md](shelf-terms.md)), stored under the **site
+diff --git a/docs/project/shelf-terms.md b/docs/project/shelf-terms.md
+index 22728448e..2c1c74d67 100644
+--- a/docs/project/shelf-terms.md
++++ b/docs/project/shelf-terms.md
+@@ -307,10 +307,10 @@ disabled in place, on the argument that a row reshuffling under the pointer is w
+ chip; Greg's report weighed it the other way. The order is still the server's rank order — the
+ survivors keep their places relative to each other, and each keeps its colour.
+ 
+-**The zeros go first, then the first twelve** (`availableTopics` in
++**The zeros go first, then the first six** (`availableTopics` in
+ [`shelf-narrow.ts`](../../src/web/shelf-narrow.ts); GPT Sol R5 on plan
+ [260929a](../plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)):
+-taking twelve and then dropping zeros would leave the row short with live pills waiting beyond it.
++taking six and then dropping zeros would leave the row short with live pills waiting beyond it.
+ *"All N topics"* counts the pills it would show, not every topic the server chose.
+ 
+ **Then the topics inside a chosen one move up beside it** (`withinChosenFirst`, same file), for
+@@ -321,7 +321,10 @@ sits ahead of *Vision*. So the topics **directly** inside a chosen one are gathe
+ last chosen pill that is not itself inside a chosen one, broad first; nothing else moves, and a topic
+ two levels down waits until its parent is chosen. **A pill never moves when it is pressed**: a pill
+ chosen from that group stays in it. With nothing chosen, and for phrase topics, the order is
+-untouched. It runs after the zeros go and before the first twelve.
++untouched. It runs after the zeros go and before the first six, so the first of the finer topics
++fill the slots after the chosen pill and the rest are behind *"All N topics"*. Keeping all of them
++in the collapsed row was weighed and dropped: a subject can have twenty, and the row would stop
++being a half dozen (plan [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)).
+ 
+ ## Archived
+ 
+@@ -359,10 +362,17 @@ The word **Topics** at the head of the row has a card saying how they are picked
+ Greg, `spya-tw6zxw`, 2026-09-29 — and the sort row above it has no visible *Sort* label (the legend
+ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 3.
+ 
+-- **Pills**, the default: the first twelve topics in the server's rank order, plus any chosen one
++- **Pills**, the default: the first six topics in the server's rank order, plus any chosen one
+   further down, in its own place — never re-sorted by count, so nothing moves when you press one.
+-  **"All N topics"** expands the same row to every pill; it is shown only when there are more than
+-  twelve.
++  **"All N topics"** expands the same row to every pill; it is shown only when the collapsed row
++  leaves some out. Six since 2026-10-18, twelve before (`COLLAPSED_CHIPS` and `collapsedTopics` in
++  [`shelf-narrow.ts`](../../src/web/shelf-narrow.ts), plan
++  [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)):
++
++  > By default, initially just show a half dozen or so topic pills on the logged in page above the
++  > shelf.
++  >
++  > — Greg, 2026-10-18 (`spya-qawppt`)
+ - **More detail** (`?topicsView=detail`): every topic, in rank order, one compact row each — a colour
+   swatch, the chip, a bar for its live count (relative to the largest count shown, so the bars line
+   up in one column and compare at a glance, with a card saying so), and the three articles that use
+@@ -541,7 +551,7 @@ tag edit in flight or an archive still loading cannot eat the reader's filter.
+ | storage, the owner-scoped set, the bounded fill; the `shelf_topic_sets` row and its claim (and the older `shelf_topic_scores`) | [`src/store/pg-shelf-terms.ts`](../../src/store/pg-shelf-terms.ts) |
+ | `GET /api/library/terms` (`?archived=1` for active + archived), `private, no-store` | [`src/routes.ts`](../../src/routes.ts); the shape is `LibraryTermsResponse` in [`src/types.ts`](../../src/types.ts) |
+ | the fetch, the ask-again loop, which URL keys apply | [`src/web/useShelfTerms.ts`](../../src/web/useShelfTerms.ts) |
+-| the narrowing and the count formula, pure | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
++| the narrowing and the count formula, pure; how many pills the collapsed row draws (`COLLAPSED_CHIPS`, `collapsedTopics`) | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
+ | the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
+ | one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
+ | the More-detail rows: swatch, chip, count bar, links with the paper card | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
+diff --git a/src/shelf-terms/choose.ts b/src/shelf-terms/choose.ts
+index 2b53a6d28..b77beb818 100644
+--- a/src/shelf-terms/choose.ts
++++ b/src/shelf-terms/choose.ts
+@@ -827,7 +827,9 @@ export interface ShelfTermHeadMetrics {
+  * **What a reader sees first** (plan 260928d § Stage 1): coverage of the first
+  * few topics **in the order given** — pass the order the row draws them in —
+  * and how much the first twelve restate each other. Physical articles, only
+- * those in `articleSlugs`, like `shelfTermMetrics`.
++ * those in `articleSlugs`, like `shelfTermMetrics`. The @12 figures are from
++ * when the collapsed row drew twelve; it draws six since 2026-10-18
++ * (`COLLAPSED_CHIPS`, plan 261018k), which @5 and @8 bracket.
+  */
+ export function shelfTermHeadMetrics(
+   terms: ShelfTerm[],
+diff --git a/src/web/PublicShelfTopics.tsx b/src/web/PublicShelfTopics.tsx
+index 301881eee..d0a78462d 100644
+--- a/src/web/PublicShelfTopics.tsx
++++ b/src/web/PublicShelfTopics.tsx
+@@ -20,13 +20,18 @@ import { useMemo, useState } from "react";
+ 
+ import type { PublicLibrary } from "../public-library-types.js";
+ import { articleTopics } from "./article-topics.js";
+-import { type ShelfTerm, availableTopics, topicCounts, topicMembers, withTopics, withinChosenFirst } from "./shelf-narrow.js";
++import {
++  type ShelfTerm,
++  availableTopics,
++  collapsedTopics,
++  topicCounts,
++  topicMembers,
++  withTopics,
++  withinChosenFirst,
++} from "./shelf-narrow.js";
+ import { QUIET_BUTTON, TERMS_ROW, TermChip, type TermTipScope } from "./ShelfTermChip.js";
+ import { TooltipGroup } from "./Tooltip.js";
+ 
+-/** As many pills as the reader's row shows before "All N topics" (ShelfTerms.tsx § `COLLAPSED_CHIPS`). */
+-const COLLAPSED = 12;
+-
+ 
+ /** The wire's topics as the reader's shelf's terms: each with the slugs of its cards. */
+ export function publicTerms(shelf: PublicLibrary): ShelfTerm[] {
+@@ -73,7 +78,9 @@ export function PublicShelfTopics({
+   const count = (key: string) => counts.get(key) ?? 0;
+   const on = new Set(chosen);
+   const available = withinChosenFirst(availableTopics(terms, count, on), on);
+-  const shown = all ? available : available.filter((t, i) => i < COLLAPSED || on.has(t.key));
++  /* As many as the reader's row collapses to, by the same rule (plan 261018k). */
++  const collapsed = collapsedTopics(available, on);
++  const shown = all ? available : collapsed;
+   const titles = new Map(shelf.entries.map((e) => [e.slug, e.title]));
+   const labels = new Map(terms.map((t) => [t.key, t.label]));
+   const scope: TermTipScope = {
+@@ -106,7 +113,7 @@ export function PublicShelfTopics({
+           Clear
+         </button>
+       )}
+-      {available.length > COLLAPSED && (
++      {available.length > collapsed.length && (
+         <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className={QUIET_BUTTON}>
+           All {available.length} topics
+           <ChevronRight size={12} className={`tw:transition-transform ${all ? "tw:rotate-90" : ""}`} />
+diff --git a/src/web/ShelfTerms.tsx b/src/web/ShelfTerms.tsx
+index ca9e275db..4b8544cd2 100644
+--- a/src/web/ShelfTerms.tsx
++++ b/src/web/ShelfTerms.tsx
+@@ -13,8 +13,8 @@
+  * what hovering would have told you is in the rows.
+  *
+  * **Two views** (plan 260928d § Stage 2). Pills, the default: the first
+- * COLLAPSED_CHIPS in rank order plus any chosen further down, and "All N
+- * topics" expands the same row to every pill in place. Detail
++ * COLLAPSED_CHIPS in rank order plus any chosen further down
++ * (`collapsedTopics`), and "All N topics" expands the same row to every pill in place. Detail
+  * (`?topicsView=detail`): every topic, in rank order, one row each —
+  * ShelfTermsDetail.tsx. Each topic wears a hue chosen by which articles it
+  * shares with the others, so related topics look alike (topic-colour.ts,
+@@ -34,13 +34,12 @@ import { useQueryState } from "nuqs";
+ import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
+ import type { ArticleTopics } from "./article-topics.js";
+ import { libraryTopicsViewParam } from "./params.js";
+-import { availableTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
++import { availableTopics, COLLAPSED_CHIPS, collapsedTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
+ import { TermChip, type TermTipScope, QUIET_BUTTON, TERMS_ROW } from "./ShelfTermChip.js";
+ import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
+ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+ 
+-/** How many chips the collapsed row draws, besides any chosen ones. */
+-export const COLLAPSED_CHIPS = 12;
++export { COLLAPSED_CHIPS } from "./shelf-narrow.js";
+ 
+ /** Below this many distinct works the server chooses no topics at all. */
+ export const MIN_WORKS = 8;
+@@ -63,7 +62,7 @@ export function mightHaveTopics(articleCount: number): boolean {
+  * outlines wrap where the pills will. One fewer than COLLAPSED_CHIPS, because
+  * the spinner and its words take the first pill's place.
+  */
+-const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6, 8, 4, 6.5, 7, 5.5, 6];
++const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6];
+ 
+ /**
+  * **The word *Topics*, with a card saying how they are picked and ordered.**
+@@ -144,9 +143,10 @@ function TopicsLabel({ modelNamed }: { modelNamed: boolean }) {
+  */
+ export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
+   const ghostPills = mightHaveTopics(articleCount);
+-  /* The chooser returns at most one topic per distinct work. More than twelve
+-     article rows is therefore necessary — though not sufficient — for the
+-     real row's conditional "All N topics" button. */
++  /* The chooser returns at most one topic per distinct work. More than
++     COLLAPSED_CHIPS article rows is therefore necessary — though not
++     sufficient — for the real row's conditional "All N topics" button. Since
++     the row went to six (plan 261018k) every shelf with outlines passes it. */
+   const mightHaveAllTopics = articleCount > COLLAPSED_CHIPS;
+   return (
+     <div
+@@ -277,22 +277,21 @@ export function ShelfTerms({
+   const slotOf = (key: string) => hues.get(key) ?? 0;
+   /* **The server's rank order**, never re-sorted (plan 260928d): the chooser
+      ranks for coverage, so the first few chips are the few that reach most of
+-     the shelf. **Zeros go first, then the first twelve** (plan 260929a, Sol
+-     R5): a topic with nothing left to show is dropped unless chosen, and only
+-     then does the row take the first COLLAPSED_CHIPS, plus any chosen topic
+-     further down, in its place — or, with "All N topics", every one. Taking
+-     twelve and then dropping zeros would leave the row short with pills
+-     waiting beyond it. The colour is computed over every topic, above, so a chip
+-     keeps its dot when its neighbours come and go. */
++     the shelf. **Zeros go first, then the first COLLAPSED_CHIPS** (plan
++     260929a, Sol R5): a topic with nothing left to show is dropped unless
++     chosen, and only then does the row take the first COLLAPSED_CHIPS, plus
++     any chosen topic further down, in its place — or, with "All N topics",
++     every one. Taking the first few and then dropping zeros would leave the
++     row short with pills waiting beyond it. The colour is computed over every
++     topic, above, so a chip keeps its dot when its neighbours come and go. */
+   /* Then the finer topics inside a chosen one move up beside it
+      (`withinChosenFirst`): the identity with nothing chosen, and for phrase
+-     topics. Before the first twelve, so the next step down is never beyond
+-     the fold. */
++     topics. Before the first COLLAPSED_CHIPS, so the first of the next step
++     down are in the collapsed row; the rest are behind "All N topics". */
+   const available = withinChosenFirst(availableTopics(terms, count, chosen), chosen);
+   const byKey = new Map(terms.map((t) => [t.key, t]));
+-  const shown = all
+-    ? available
+-    : available.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
++  const collapsed = collapsedTopics(available, chosen);
++  const shown = all ? available : collapsed;
+   const tipScope: TermTipScope = {
+     inScope,
+     scopeWord: archived ? "on the shelf and in the archive" : "on the shelf",
+@@ -336,7 +335,7 @@ export function ShelfTerms({
+         {available.length === 0 && (
+           <span className="tw:text-xs tw:text-muted-foreground">None of the topics is in this view.</span>
+         )}
+-        {!detail && available.length > COLLAPSED_CHIPS && (
++        {!detail && available.length > collapsed.length && (
+           <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className={QUIET_BUTTON}>
+             All {available.length} topics
+             <ChevronRight size={12} className={`tw:transition-transform ${all ? "tw:rotate-90" : ""}`} />
+diff --git a/src/web/shelf-narrow.ts b/src/web/shelf-narrow.ts
+index 0aa090fd9..befe34467 100644
+--- a/src/web/shelf-narrow.ts
++++ b/src/web/shelf-narrow.ts
+@@ -186,7 +186,7 @@ export function topicCountsForVisible(
+  * to an empty shelf is noise. A **chosen** topic at zero stays, or it could not
+  * be removed. Plan 260929a § Stage 2.
+  *
+- * Applied **before** the collapsed row takes its first twelve (GPT Sol R5), so
++ * Applied **before** the collapsed row takes its first few (GPT Sol R5), so
+  * the row has no holes where zeros used to be, and "All N topics" counts what
+  * it would show.
+  */
+@@ -255,8 +255,7 @@ export function topicDepth(
+  * *Vision* back to its rank place would jump it out from under the pointer.
+  *
+  * With nothing chosen, and for phrase topics (no `within`), it is the
+- * identity. Applied after `availableTopics` and before the row takes its
+- * first twelve.
++ * identity. Applied after `availableTopics` and before `collapsedTopics`.
+  */
+ export function withinChosenFirst<T extends { key: string; within?: string }>(
+   terms: readonly T[],
+@@ -274,6 +273,26 @@ export function withinChosenFirst<T extends { key: string; within?: string }>(
+   return [...head, ...terms.filter(inside), ...tail];
+ }
+ 
++/**
++ * How many pills a collapsed Topics row draws, besides the ones below.
++ * Greg, 2026-10-18 (`spya-qawppt`): *"By default, initially just show a half
++ * dozen or so topic pills"*. It was twelve. The reader's row and the public
++ * shelf's both use it. Plan 261018k.
++ */
++export const COLLAPSED_CHIPS = 6;
++
++/**
++ * **The collapsed row**: the first COLLAPSED_CHIPS of what `withinChosenFirst`
++ * returns, plus any chosen topic further down, in its place. One copy for the
++ * reader's row and the public shelf's. A chosen subject's finer topics fill
++ * the slots after it and the rest wait behind "All N topics": keeping them all
++ * was weighed and dropped, because a subject can have twenty, and the row
++ * would no longer be a half dozen (GPT Sol on plan 261018k).
++ */
++export function collapsedTopics<T extends { key: string }>(terms: readonly T[], chosen: ReadonlySet<string>): T[] {
++  return terms.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
++}
++
+ /**
+  * **The reader's own tags as filter facets** — one per tag on any entry in
+  * scope, shaped like a topic so `topicMembers`, `withTopics` and
+diff --git a/tests/public-shelf-page.test.tsx b/tests/public-shelf-page.test.tsx
+index b00361e78..2cf220322 100644
+--- a/tests/public-shelf-page.test.tsx
++++ b/tests/public-shelf-page.test.tsx
+@@ -606,6 +606,22 @@ describe("the topic pills", () => {
+     expect(cards(page)).toHaveLength(4);
+   });
+ 
++  it("draws six pills, and the rest behind All N topics, as a reader's row does (plan 261018k)", async () => {
++    const keys = Array.from({ length: 8 }, (_, i) => `t${i}`);
++    const MANY: PublicLibrary = {
++      entries: [card("a-spya-aaaaaa", "Everything", keys)],
++      topics: keys.map((key) => ({ key, label: key.toUpperCase(), granularity: 0 })),
++      truncated: false,
++    };
++    const page = await show(() => MANY);
++    expect(pills(page).map((b) => b.textContent)).toEqual(["T01", "T11", "T21", "T31", "T41", "T51"]);
++    const all = [...page.querySelectorAll<HTMLButtonElement>("[data-public-topics] button")].find((b) =>
++      b.textContent?.startsWith("All 8 topics"),
++    );
++    await act(async () => all?.click());
++    expect(pills(page)).toHaveLength(8);
++  });
++
+   it("draws no row when the server sent no topics", async () => {
+     const page = await show();
+     expect(page.querySelector("[data-public-topics]")).toBeNull();
+diff --git a/tests/shelf-narrow.test.ts b/tests/shelf-narrow.test.ts
+index 578ba46a5..457dc4a58 100644
+--- a/tests/shelf-narrow.test.ts
++++ b/tests/shelf-narrow.test.ts
+@@ -12,6 +12,8 @@ import type { LibraryEntry } from "../src/types.js";
+ import {
+   availableTopics,
+   chosenTopics,
++  COLLAPSED_CHIPS,
++  collapsedTopics,
+   isArchived,
+   isModelNamed,
+   MAX_TOPIC_DEPTH,
+@@ -216,6 +218,24 @@ describe("a three-level tree of model-named topics", () => {
+     expect(withinChosenFirst(phrases, new Set(["b"]))).toEqual(phrases);
+   });
+ 
++  /* Plan 261018k: the row collapses to six. */
++  it("collapses to the first six, plus a chosen one further down", () => {
++    expect(COLLAPSED_CHIPS).toBe(6);
++    const broad = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8"].map((k) => named(k, 0, undefined, "a"));
++    const inner = ["f1", "f2", "f3", "f4"].map((k) => named(k, 0.5, "b5", "a"));
++    const deeper = named("g1", 0.75, "f1", "a");
++    const wide = [...broad, ...inner, deeper];
++    expect(keys(collapsedTopics(wide, new Set()))).toEqual(["b1", "b2", "b3", "b4", "b5", "b6"]);
++    /* b5 chosen: its finer topics come up beside it and fill the slot after
++       it; the rest wait behind "All N topics", and the pressed pill does not
++       move. */
++    const one = new Set(["b5"]);
++    expect(keys(collapsedTopics(withinChosenFirst(wide, one), one))).toEqual(["b1", "b2", "b3", "b4", "b5", "f1"]);
++    /* A chosen one further down is kept in its place. */
++    const two = new Set(["b5", "f3", "b8"]);
++    expect(keys(collapsedTopics(withinChosenFirst(wide, two), two))).toEqual(["b1", "b2", "b3", "b4", "b5", "b6", "b8", "f3"]);
++  });
++
+   it("reads a topic's depth off the within chain, capped, and 0 for a phrase", () => {
+     const byKey = new Map(TREE.map((t) => [t.key, t]));
+     const depth = (key: string) => topicDepth(byKey.get(key) as ShelfTerm, byKey);
+diff --git a/tests/shelf-topics-detail.test.tsx b/tests/shelf-topics-detail.test.tsx
+index eb20b4e11..bbd920961 100644
+--- a/tests/shelf-topics-detail.test.tsx
++++ b/tests/shelf-topics-detail.test.tsx
+@@ -37,7 +37,7 @@ Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
+ (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+ enableHistorySync();
+ 
+-/* Fourteen topics, so "All 14" has two more than the collapsed twelve. Topic
++/* Fourteen topics, so "All 14" has eight more than the collapsed six. Topic
+    i is used by articles a{i}, a{i+1}, a{i+2}; its live count is 14 − i, so the
+    first (rank 0) has the largest count and the bars can be checked. */
+ const KEYS = Array.from({ length: 14 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+@@ -154,7 +154,7 @@ async function click(el: HTMLElement | undefined | null) {
+ describe("All N topics", () => {
+   it("expands the same row of pills to every topic, in rank order, with no list", async () => {
+     await show("/");
+-    expect(pills().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(KEYS.slice(0, 12));
++    expect(pills().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(KEYS.slice(0, 6));
+     const row = pills()[0]?.parentElement;
+ 
+     await click(button("All 14 topics"));
+diff --git a/tests/shelf-topics.test.tsx b/tests/shelf-topics.test.tsx
+index 3a410eb29..480f0a097 100644
+--- a/tests/shelf-topics.test.tsx
++++ b/tests/shelf-topics.test.tsx
+@@ -546,22 +546,13 @@ describe("the Topics row", () => {
+     // The spinner and its words take the first pill's place.
+     expect(ghosts).toHaveLength(COLLAPSED_CHIPS - 1);
+     for (const g of ghosts) expect(g.getAttribute("aria-hidden")).toBe("true");
+-    // Eight article rows can produce at most eight topics, so the real
+-    // collapsed row cannot have its conditional "All N topics" control.
+-    expect(reservedControl(status, "All")).toBeUndefined();
++    // Eight article rows can produce up to eight topics, more than the
++    // collapsed row's six, so the real row may have its conditional "All N
++    // topics" control and the outlines reserve its width (plan 261018k).
++    expect(MIN_WORKS).toBeGreaterThan(COLLAPSED_CHIPS);
++    expect(reservedControl(status, "All")?.getAttribute("aria-hidden")).toBe("true");
+     expect(reservedControl(status, "More detail")?.getAttribute("aria-hidden")).toBe("true");
+   });
+-
+-  it("reserves the conditional All-topics control only when more than twelve topics are possible", async () => {
+-    activeArticles = Array.from({ length: COLLAPSED_CHIPS + 1 }, (_, i) => ({
+-      ...ACTIVE[i % ACTIVE.length]!,
+-      slug: `many-${i}`,
+-    }));
+-    answer = () => new Promise(() => {});
+-    await show("/");
+-    const all = reservedControl(topicsLoading(), "All");
+-    expect(all?.getAttribute("aria-hidden")).toBe("true");
+-  });
+ });
+ 
+ describe("the archive in scope", () => {
+@@ -636,7 +627,7 @@ describe("the archive in scope", () => {
+     expect(order()).toEqual(["neuron", "memory"]);
+   });
+ 
+-  it("draws the first twelve by rank, plus a chosen one further down in its own place", async () => {
++  it("draws the first six by rank, plus a chosen one further down in its own place", async () => {
+     const keys = Array.from({ length: 14 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+     answer = async () => ({
+       ...ACTIVE_TERMS,
+@@ -649,14 +640,15 @@ describe("the archive in scope", () => {
+         .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
+         .filter((k) => /^topic\d\d$/.test(k ?? ""));
+     await waitFor(() => order().length > 0, "the chips");
+-    expect(order()).toEqual([...keys.slice(0, 12), "topic13"]);
++    expect(COLLAPSED_CHIPS).toBe(6);
++    expect(order()).toEqual([...keys.slice(0, COLLAPSED_CHIPS), "topic13"]);
+   });
+ 
+-  it("takes the first twelve from the pills that have something to show — no holes (Sol R5)", async () => {
+-    /* Sixteen topics; the odd-numbered ones use only "startups", so choosing
++  it("takes the first six from the pills that have something to show — no holes (Sol R5)", async () => {
++    /* Twelve topics; the odd-numbered ones use only "startups", so choosing
+        topic00 (palaces + neurons) zeroes them. The row must then be the first
+-       twelve *available* — ten even ones by rank would leave holes. */
+-    const keys = Array.from({ length: 16 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
++       six *available* — three even ones by rank would leave holes. */
++    const keys = Array.from({ length: 12 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+     answer = async () => ({
+       ...ACTIVE_TERMS,
+       terms: keys.map((k, i) => (i % 2 ? term(k, ["startups", 3]) : term(k, ["palaces", 3], ["neurons", 2]))),
+@@ -670,7 +662,7 @@ describe("the archive in scope", () => {
+     await waitFor(() => order().length > 0, "the chips");
+     const even = keys.filter((_, i) => i % 2 === 0);
+     expect(order()).toEqual(even);
+-    // Eight available, so no "All N topics" to offer.
++    // Six available, so no "All N topics" to offer.
+     expect([...host.querySelectorAll("button")].some((b) => /^All \d+ topics/.test(b.textContent ?? ""))).toBe(false);
+   });
+ 
+@@ -809,6 +801,26 @@ describe("topics a model named", () => {
+     expect(labels()).toEqual(["Neuroscience", "Memory", "Mnemonics", "Business"]);
+   });
+ 
++  it("collapses to six with a subject chosen too: its finer topics fill the slots after it, the rest behind All (plan 261018k)", async () => {
++    const broad = ["B1", "B2", "B3", "B4", "B5"].map((l) => named(l, 0, undefined, "neurons", "startups"));
++    const finer = ["F1", "F2", "F3", "F4"].map((l) => named(l, 0.5, "neuroscience", "neurons"));
++    answer = async () => ({
++      ...NAMED_TERMS,
++      terms: [...broad, named("Neuroscience", 0, undefined, "neurons", "palaces"), ...finer],
++    });
++    await show("/");
++    const allButton = () => [...host.querySelectorAll("button")].find((b) => /^All \d+ topics/.test(b.textContent ?? ""));
++    expect(labels()).toEqual(["B1", "B2", "B3", "B4", "B5", "Neuroscience"]);
++    expect(allButton()?.textContent).toMatch(/^All 10 topics/);
++    click(chip("Neuroscience"));
++    await settle();
++    expect(labels()).toEqual(["B1", "B2", "B3", "B4", "B5", "Neuroscience"]);
++    expect(allButton()?.textContent).toMatch(/^All 10 topics/);
++    click(allButton()!);
++    await settle();
++    expect(labels()).toEqual(["B1", "B2", "B3", "B4", "B5", "Neuroscience", "F1", "F2", "F3", "F4"]);
++  });
++
+   it("says which broader topic a finer one is inside, and never 'used N times'", async () => {
+     await show("/");
+     await hover(chip("Memory"));

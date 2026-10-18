@@ -10,7 +10,7 @@
  *  - the chips' counts follow the one formula (shelf-narrow.ts) as the view
  *    narrows, and two chosen topics AND;
  *  - an unchosen chip at zero is not drawn at all, a chosen one at zero is,
- *    and the first twelve are the first twelve that have something to show
+ *    and the first six are the first six that have something to show
  *    (plan 260929a, Greg's report 4Y);
  *  - the "n of m" line equals the cards drawn, and the table obeys the filter;
  *  - `?archived=1` widens the topics' scope and merges the archived articles
@@ -688,6 +688,36 @@ describe("the archive in scope", () => {
       .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
       .filter((k) => /^topic\d\d$/.test(k ?? ""));
     expect(drawn).toEqual(keys.slice(0, 15));
+  });
+
+  it("keeps the All control while an expanded row narrows to six, so expansion cannot linger invisibly", async () => {
+    const keys = Array.from({ length: 8 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+    answer = async () => ({
+      ...ACTIVE_TERMS,
+      terms: keys.map((k, i) => (i < 6 ? term(k, ["palaces", 3]) : term(k, ["startups", 3]))),
+    });
+    await show("/");
+    const all = () => [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => /^All \d+ topics/.test(b.textContent ?? ""));
+    await waitFor(() => !!all(), "the All button");
+    click(all()!);
+    await settle();
+    expect(all()?.getAttribute("aria-expanded")).toBe("true");
+
+    click(chip("topic00"));
+    await settle();
+    expect(all()?.textContent).toMatch(/^All 6 topics/);
+    expect(all()?.getAttribute("aria-expanded")).toBe("true");
+
+    click(all()!);
+    await settle();
+    click(chip("topic00"));
+    await settle();
+    expect(all()?.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
+        .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
+        .filter((k) => /^topic\d\d$/.test(k ?? "")),
+    ).toEqual(keys.slice(0, COLLAPSED_CHIPS));
   });
 
   it("shows topics when every article is archived and the active shelf is empty", async () => {

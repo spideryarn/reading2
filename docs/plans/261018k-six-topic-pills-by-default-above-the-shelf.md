@@ -31,8 +31,10 @@ straightforward and costs no AI, and here it is one constant.
 3. **One shared helper, `collapsedTopics`** in `shelf-narrow.ts` beside the constant: the first
    six of what `withinChosenFirst` returns, plus any chosen topic further down. Both rows call it,
    and the "All N topics" button shows when it leaves something out (`available.length >
-   collapsed.length`) rather than when there are more than six, so the button never reveals
-   nothing.
+   collapsed.length`) rather than when there are more than six, so the collapsed button never
+   reveals nothing. Once expanded, the button stays until it is pressed again even if narrowing
+   temporarily leaves six topics: otherwise its hidden `all` state would surprise-expand the row
+   when the filter was cleared (code review finding 1).
 
    *Dropped after the plan review*: a first draft also kept every topic directly inside a chosen
    one in the collapsed row, so a chosen subject's finer topics would never be cut off by the six.

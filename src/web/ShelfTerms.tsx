@@ -335,7 +335,10 @@ export function ShelfTerms({
         {available.length === 0 && (
           <span className="tw:text-xs tw:text-muted-foreground">None of the topics is in this view.</span>
         )}
-        {!detail && available.length > collapsed.length && (
+        {/* Once expanded, keep the control available even when narrowing
+            temporarily leaves no extra pills. Otherwise `all` stays true
+            invisibly and clearing that filter surprise-expands the row. */}
+        {!detail && (all || available.length > collapsed.length) && (
           <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className={QUIET_BUTTON}>
             All {available.length} topics
             <ChevronRight size={12} className={`tw:transition-transform ${all ? "tw:rotate-90" : ""}`} />
