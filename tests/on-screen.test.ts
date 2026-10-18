@@ -55,6 +55,31 @@ describe("rowsOnScreen", () => {
     expect(rowsOnScreen(rows, -1, 200).map((row) => row.id)).toEqual([A, C]);
     expect(reads[1]).toBeLessThanOrEqual(1); // at most the binary-search probe
   });
+
+  /* A shut stretch's stub row is on screen with a height of its own, and the
+     block's words are not (fold.ts § `isContentHidden`; plan review of
+     261018a, F5): words nobody can see accrue no reading time. */
+  it("leaves out a shut stretch's stub row, whose row is on screen and whose words are not", () => {
+    const block = (id: string): Block => ({
+      id: id as BlockId,
+      tag: "p",
+      kind: "text",
+      text: id,
+      words: 1,
+      html: id,
+      gistable: true,
+    });
+    const blocks = [block(A), block(B), block(C)];
+    setFoldArticle("slug", blocks, new Set(), [[A as BlockId, B as BlockId]]);
+    const rows = blocks.map((entry, i) => {
+      const row = document.createElement("tr");
+      row.dataset.block = entry.id;
+      const top = [0, 30, 30][i]!;
+      row.getBoundingClientRect = () => ({ top, bottom: top + (i === 1 ? 0 : 30) }) as DOMRect;
+      return row;
+    });
+    expect(rowsOnScreen(rows, -1, 200).map((row) => row.id)).toEqual([C]);
+  });
 });
 
 describe("rowCache", () => {

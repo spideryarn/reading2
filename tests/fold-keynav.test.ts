@@ -14,10 +14,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId } from "../src/types.js";
 import {
   clearFoldArticle,
-  isFolded,
+  isContentHidden,
+  isRowHidden,
   setFoldArticle,
   toggleFold,
-  toggleFrontMatter,
+  toggleStretch,
 } from "../src/web/fold.js";
 
 const jumps: string[] = [];
@@ -241,7 +242,7 @@ describe("↑ and the masthead's echo", () => {
       expect(outcomes).toEqual(["settled", "settled"]);
       expect(real.arrivalAnchor()).toBeNull();
       real.abandonScroll();
-      expect(isFolded("spya-b0")).toBe(true);
+      expect(isRowHidden("spya-b0")).toBe(true);
     } finally {
       real.abandonScroll();
       scrollTo.mockRestore();
@@ -288,6 +289,28 @@ describe("a folded row is never where the reader is", () => {
       table.remove();
     }
   });
+
+  /* A shut stretch's stub is a row on screen, and the block is not: "already
+     there" would skip the jump that opens it (plan review of 261018a, F5). */
+  it("never counts a shut stretch's stub as on screen, though its row is", async () => {
+    const { isBlockOnScreen, isPassageOnScreen, whereIsBlock } =
+      await vi.importActual<typeof import("../src/web/scroll.js")>("../src/web/scroll.js");
+    globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
+    const table = document.createElement("table");
+    table.innerHTML = '<tbody><tr data-block="spya-b1"><td class="text">x</td></tr></tbody>';
+    document.body.append(table);
+    try {
+      setFoldArticle("slug", blocks, new Set(), [["spya-b1", "spya-b2"] as BlockId[]]);
+      expect(isBlockOnScreen("spya-b1")).toBe(false);
+      expect(whereIsBlock("spya-b1")).toBe("away");
+      expect(isPassageOnScreen("spya-b1", "x")).toBe(false);
+      toggleStretch("spya-b1" as BlockId);
+      expect(isBlockOnScreen("spya-b1")).toBe(true);
+      expect(whereIsBlock("spya-b1")).toBe("here");
+    } finally {
+      table.remove();
+    }
+  });
 });
 
 describe("a jump into a folded section", () => {
@@ -297,9 +320,9 @@ describe("a jump into a folded section", () => {
     /* jsdom has no `CSS.escape`; the shim tests/block-flash.test.ts uses. */
     globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
     toggleFold("spya-b0" as BlockId);
-    expect(isFolded("spya-b2")).toBe(true);
+    expect(isRowHidden("spya-b2")).toBe(true);
     scrollToBlock("spya-b2", "auto");
-    expect(isFolded("spya-b2")).toBe(false);
+    expect(isRowHidden("spya-b2")).toBe(false);
   });
 });
 
@@ -319,25 +342,28 @@ describe("measureRow with nothing to measure", () => {
 });
 
 /**
- * **A section that starts inside the shut front matter** (front-matter.ts;
- * Greg, spya-duh4w3;
+ * **A section that starts inside a shut stretch** (fold.ts § Front and back
+ * matter; Greg, spya-duh4w3; since plan 261018a a stretch with a stub, so
+ * its first row is on screen and its content is not;
  * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
  * § Sections that start inside the run). The Structure prompt invites one
  * node for the byline and the abstract together, so a section's first block
  * can be a hidden row while the rest of it is on screen. `scrollToBlock` opens
  * the run for whatever it is sent to, so the arrow keys must not send it
- * there: they land on the section's first visible row, and step over a
- * section that is wholly hidden.
+ * there — not to the stub either (plan review of 261018a, F6): they land on
+ * the section's first row after the stretch, and step over a section that is
+ * wholly inside it.
  *
- * b0 is the title and the echo, b1 and b2 the front matter, b3 and b4 prose.
+ * b0 is the title and the echo, b1 (the stub) and b2 the front matter, b3 and
+ * b4 prose.
  */
-describe("↑ / ↓ and the shut front matter", () => {
+describe("↑ / ↓ and a shut stretch", () => {
   const press = (key: "ArrowUp" | "ArrowDown") =>
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
     });
   const echo = new Set(["spya-b0" as BlockId]);
-  const front = ["spya-b1", "spya-b2"] as BlockId[];
+  const front = [["spya-b1", "spya-b2"] as BlockId[]];
 
   /** The reader on row `at`, with the first `hidden` rows drawn at no height. */
   function standOn(at: number, hidden: number): () => void {
@@ -375,7 +401,8 @@ describe("↑ / ↓ and the shut front matter", () => {
     try {
       press("ArrowUp");
       expect(jumps).toEqual(["spya-b3"]);
-      expect(isFolded("spya-b2")).toBe(true);
+      expect(isRowHidden("spya-b2")).toBe(true);
+      expect(isContentHidden("spya-b1")).toBe(true);
     } finally {
       leave();
     }
@@ -409,9 +436,9 @@ describe("↑ / ↓ and the shut front matter", () => {
     }
   });
 
-  it("steps to the run's own rows once the reader has opened it", async () => {
+  it("steps to the stretch's own rows once the reader has opened it", async () => {
     setFoldArticle("slug", blocks, echo, front);
-    toggleFrontMatter();
+    toggleStretch("spya-b1" as BlockId);
     const leave = standOn(4, 1);
     await nav([0, 2, 4]);
     try {
@@ -425,7 +452,7 @@ describe("↑ / ↓ and the shut front matter", () => {
   /* **The run starts at block 0**: a web article imported with no title
      heading (front-matter.ts § Where it starts). There is no echo; b0 and b1
      are the run, and the first section starts on a hidden row. */
-  const fromTop = ["spya-b0", "spya-b1"] as BlockId[];
+  const fromTop = [["spya-b0", "spya-b1"] as BlockId[]];
 
   it("reaches the first section's first visible row when the run starts at block 0, and stops there", async () => {
     /* Sections start at b0 (hidden; it runs on through b2) and b3. */
@@ -441,8 +468,8 @@ describe("↑ / ↓ and the shut front matter", () => {
       expect(jumps).toEqual(["spya-b3", "spya-b2"]);
       press("ArrowDown");
       expect(jumps).toEqual(["spya-b3", "spya-b2", "spya-b3"]);
-      expect(isFolded("spya-b0")).toBe(true);
-      expect(isFolded("spya-b1")).toBe(true);
+      expect(isContentHidden("spya-b0")).toBe(true); // the stub, still shut
+      expect(isRowHidden("spya-b1")).toBe(true);
     } finally {
       leave();
     }
@@ -457,7 +484,26 @@ describe("↑ / ↓ and the shut front matter", () => {
       press("ArrowUp");
       press("ArrowUp");
       expect(jumps).toEqual(["spya-b2"]);
-      expect(isFolded("spya-b0")).toBe(true);
+      expect(isContentHidden("spya-b0")).toBe(true);
+    } finally {
+      leave();
+    }
+  });
+
+  /* The stub's row has a height of its own, unlike the 261007d run's first
+     row: standing on it, or just below it, ↑ still goes past it, to the
+     section before, and never to the stub (F6). */
+  it("never steps to the stub of a shut stretch, though its row is on screen", async () => {
+    /* Sections start at b0, b1 (the stub: it runs on through b2) and b3. */
+    setFoldArticle("slug", blocks, echo, front);
+    const leave = standOn(3, 1);
+    await nav([0, 1, 3, 4]);
+    try {
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b0"]);
+      press("ArrowDown");
+      expect(jumps).toEqual(["spya-b0", "spya-b3"]);
+      expect(isContentHidden("spya-b1")).toBe(true);
     } finally {
       leave();
     }

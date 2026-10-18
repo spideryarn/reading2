@@ -197,6 +197,12 @@ describe("Structure's current row when the first section starts on the masthead'
  * the fold store without being folded away, so a section that starts on one
  * and carries on past it is still the one in focus, and one wholly inside the
  * run loses the tie to the section whose row is on screen.
+ *
+ * Since plan 261018a the run is a stretch, and its first row a stub with a
+ * height of its own in a browser. The fake below still draws it at no height,
+ * which is the harder case for the tie and the one these cases were written
+ * against; the stub's own row only ever adds a pixel range where its section
+ * is the one in focus, which is right: the reader is looking at its stub.
  */
 describe("Structure's current row when a section starts in the shut front matter", () => {
   const T = "spya-tttttt";
@@ -221,7 +227,7 @@ describe("Structure's current row when a section starts in the shut front matter
     });
   }
 
-  beforeEach(() => setFoldArticle("slug", blocks, new Set([T as BlockId]), [R as BlockId]));
+  beforeEach(() => setFoldArticle("slug", blocks, new Set([T as BlockId]), [[R as BlockId]]));
 
   it("is that section while the reader is in the part of it that shows", () => {
     /* The section is R and V. Its hidden start ties with V, above the line at 80. */
@@ -247,14 +253,14 @@ describe("Structure's current row when a section starts in the shut front matter
   ] as Block[];
 
   it("is the first section when the run starts at block 0 and the section carries on past it", () => {
-    setFoldArticle("slug", noTitle, new Set(), [R as BlockId]);
+    setFoldArticle("slug", noTitle, new Set(), [[R as BlockId]]);
     place({ [R]: 20, [V]: 20, [B]: 150 });
     act(() => root.render(<Harness sections={[at(0, R, 1), at(2, B, 2)]} layoutKey="k" />));
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
   });
 
   it("is the second section when the first is the run at block 0 and nothing else", () => {
-    setFoldArticle("slug", noTitle, new Set(), [R as BlockId]);
+    setFoldArticle("slug", noTitle, new Set(), [[R as BlockId]]);
     place({ [R]: 20, [V]: 20, [B]: 150 });
     act(() => root.render(<Harness sections={[at(0, R, 1), at(1, V, 2), at(2, B, 3)]} layoutKey="k" />));
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("1");

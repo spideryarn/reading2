@@ -10,7 +10,7 @@
  *
  * What is pinned is **how** they are hidden: the rows stay in the table, so
  * block ids, row indices and the tree's spans still agree, and the fold
- * store's one stylesheet hides their cells and answers `isFolded` for them.
+ * store's one stylesheet hides their cells and answers `isRowHidden` for them.
  * jsdom lays nothing out, so "hidden" here is the rule in that stylesheet;
  * that the rule draws nothing is the browser pass's to see.
  *
@@ -34,7 +34,7 @@ vi.mock("../src/web/Tooltip.js", () => ({
 import { TableView } from "../src/web/TableView.js";
 import { buildGeometry } from "../src/web/tree.js";
 import { fitView } from "../src/web/layout.js";
-import { FOLD_STYLE_ATTR, isFolded, isFoldedAway, toggleFoldAll } from "../src/web/fold.js";
+import { FOLD_STYLE_ATTR, isRowHidden, isFoldedAway, toggleFoldAll } from "../src/web/fold.js";
 import { readArticleFromDir } from "./helpers/article-from-dir.js";
 import type { Article } from "../src/types.js";
 
@@ -128,9 +128,9 @@ describe("the wrapper's heading and reading-time line, in the prose table", () =
   it("hides their cells through the fold stylesheet, and nothing else's", async () => {
     await draw(article);
     expect(sheet()).toBe(`${rule(0)}\n${rule(1)}\n`);
-    expect(isFolded(article.blocks[0]!.id)).toBe(true);
-    expect(isFolded(article.blocks[1]!.id)).toBe(true);
-    expect(isFolded(article.blocks[2]!.id)).toBe(false);
+    expect(isRowHidden(article.blocks[0]!.id)).toBe(true);
+    expect(isRowHidden(article.blocks[1]!.id)).toBe(true);
+    expect(isRowHidden(article.blocks[2]!.id)).toBe(false);
     /* Hidden, and not folded away: its section is the one on screen. */
     expect(isFoldedAway(article.blocks[0]!.id)).toBe(false);
   });
@@ -149,7 +149,7 @@ describe("the wrapper's heading and reading-time line, in the prose table", () =
     /* Fold all folds the sections and cannot shut the article behind the
        hidden h1, which would have taken this row with it. */
     act(() => toggleFoldAll());
-    expect(isFolded(article.blocks[2]!.id)).toBe(false);
+    expect(isRowHidden(article.blocks[2]!.id)).toBe(false);
     expect(sheet().split("\n").length).toBeGreaterThan(3);
     act(() => toggleFoldAll());
     expect(sheet()).toBe(`${rule(0)}\n${rule(1)}\n`);

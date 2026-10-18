@@ -58,6 +58,8 @@ import {
 import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
 import { FigureMark } from "./FigureMark.js";
+import type { MatterRange } from "./matter-view.js";
+import { MATTER_ROW_NOTE, MatterMark } from "./MatterMark.js";
 import { ModeSurface } from "./ModeSurface.js";
 import {
   type StructureCard,
@@ -123,6 +125,9 @@ const COUNTER_ROWS = 2;
  * is a new prop on every one of them.
  */
 const NO_JUMP = () => {};
+/** The card of a matter row that has nothing else to preview. */
+const NO_CARD: StructureCard = { children: [], more: 0 };
+const NO_MATTER: readonly MatterRange[] = [];
 
 /**
  * How many of these rows fit in `available` pixels, expanding outward from the
@@ -250,8 +255,9 @@ function RowCard({
   number,
   text,
   voice,
+  matter,
   tapHint,
-}: { card: StructureCard; number: string; text: string; voice: Voice; tapHint: boolean }) {
+}: { card: StructureCard; number: string; text: string; voice: Voice; matter: boolean; tapHint: boolean }) {
   return (
     <>
       <div className="tip-title">
@@ -270,6 +276,8 @@ function RowCard({
           {card.more > 0 && <li className="tip-more">+ {card.more} more</li>}
         </ul>
       )}
+      {/* Why the row is faint (MatterMark.tsx). */}
+      {matter ? <p className="tip-matter">{MATTER_ROW_NOTE}</p> : null}
       {/* Only when a finger opened it, in the spine's words (Spine.tsx §
           BandCard): the row was pressed and nothing moved, and without this
           that reads as a row that is broken. */}
@@ -298,9 +306,12 @@ function Row({
   onJump(id: BlockId): void;
   tip: boolean;
 }) {
-  const card = tip ? row.card : null;
+  /* A matter row always has a card, if only to say why it is faint
+     (MatterMark.tsx); a row with nothing else to say gets an empty one. */
+  const card = tip ? (row.card ?? (row.matter ? NO_CARD : null)) : null;
   const classes = ["struct-row", `struct-${row.kind}`];
   if (row.supplement) classes.push("struct-supp");
+  if (row.matter) classes.push("struct-matter");
   if (row.before) classes.push("struct-read");
 
   /**
@@ -342,6 +353,9 @@ function Row({
                 a grid row of its own; and here in the one `Row`, so the
                 measuring copies carry it too (FigureMark.tsx). */}
             <FigureMark figures={figures} startRow={row.startRow} endRow={row.endRow} />
+            {/* In the one `Row` too, for the same reason: the measuring
+                copies must wrap as the visible rows do (F9). */}
+            {row.matter ? <MatterMark /> : null}
           </span>
           {/* Inside the title's grid, in its column, so a gist starts where its
               title does — the list face's `.outln-gist` does the same. */}
@@ -436,6 +450,7 @@ function CardRow({
               number={row.number}
               text={row.text}
               voice={row.voice}
+              matter={row.matter}
               tapHint={reveal.tap !== undefined}
             />
           }
@@ -526,6 +541,7 @@ export function StructurePanel({
   onJump,
   surfaceRef,
   head,
+  matter = NO_MATTER,
 }: {
   root: SummaryNode | null;
   /**
@@ -558,6 +574,8 @@ export function StructurePanel({
    * it, so a head row costs the fit nothing to account for.
    */
   head?: ReactNode;
+  /** The stretches the prose folds, for the faint rows (structure.ts § `StructureRow.matter`). */
+  matter?: readonly MatterRange[];
 }) {
   /**
    * **Projected once, unwindowed.** The measuring copies below and the visible
@@ -571,6 +589,7 @@ export function StructurePanel({
     rungA: STAGE_ONE_RUNG_A,
     rungB: STAGE_ONE_RUNG_B,
     allowParagraphs,
+    matter,
   });
 
   const [cap, setCap] = useState<Capacity>(UNMEASURED);

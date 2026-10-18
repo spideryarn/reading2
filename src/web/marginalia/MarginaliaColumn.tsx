@@ -26,7 +26,7 @@ import {
 import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
-import { isFolded, subscribeFold } from "../fold.js";
+import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
@@ -936,7 +936,9 @@ function measureNotes(notes: readonly HTMLElement[]) {
   const heights: number[] = [];
   for (const note of notes) {
     const row = note.closest("tr");
-    if (row && isFolded(row.dataset.block ?? "")) {
+    /* `isContentHidden`: a note on a shut stretch's stub row is hidden with
+       the block it belongs to, though the row itself is on screen. */
+    if (row && isContentHidden(row.dataset.block ?? "")) {
       hidden.push(note);
       continue;
     }
@@ -959,11 +961,12 @@ function measureNotes(notes: readonly HTMLElement[]) {
  * Re-runs, through one animation frame, when the table changes size (zoom,
  * images, maths), when any note changes size (fonts arriving, a longer
  * question), once the fonts are ready, whenever `key` changes (the notes
- * themselves), and when a section folds or the front matter opens. Notes are
+ * themselves), and when a section folds or a stretch of front or back matter
+ * opens or shuts. Notes are
  * absolutely positioned and translate is not layout, so nothing written here
  * can resize what is observed and loop it.
  *
- * **A note on a hidden row is left out** (fold.ts § `isFolded`). It lives in
+ * **A note on a hidden row is left out** (fold.ts § `isContentHidden`). It lives in
  * its row's cell, so it is not drawn; measured, it has no height and sits
  * level with the next visible row, and the collision rule would still start
  * that row's note one gap below it: 8px lower for every hidden note above.

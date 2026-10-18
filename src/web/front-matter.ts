@@ -10,9 +10,12 @@
  * § The rule, v1 has the reasoning, the plan review this answers, and what the
  * rule gives up.
  *
- * This file only says which blocks. The fold store hides them until the reader
- * asks (fold.ts § The front matter); nothing is removed from the article, and
- * models, exports and the other bands still see every block.
+ * This file only says which blocks. Since plan 261018a it is the fallback for
+ * an article with no stored `matter`, as one `authors` stretch
+ * (matter-view.ts § `matterStretches`); the fold store folds it to a stub
+ * until the reader asks (fold.ts § Front and back matter). Nothing is removed
+ * from the article, and models, exports and the other bands still see every
+ * block.
  *
  * **It fails towards showing.** No stored field says which blocks were the
  * byline, so this reads the words, and every block has to earn its place: it

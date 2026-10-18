@@ -17,6 +17,8 @@ import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState
 import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
 import { FigureMark } from "./FigureMark.js";
+import type { MatterRange } from "./matter-view.js";
+import { MATTER_ROW_NOTE, MatterMark } from "./MatterMark.js";
 import {
   outlineProjection,
   RUNGS,
@@ -111,7 +113,11 @@ interface Props {
   expanded?: boolean;
   /** The Fisheye / Expanded toggle, drawn in the band's head row. */
   head?: ReactNode;
+  /** The stretches the prose folds, for the faint rows (outline.ts § `OutlineRow.matter`). */
+  matter?: readonly MatterRange[];
 }
+
+const NO_MATTER: readonly MatterRange[] = [];
 
 export function OutlinePanel({
   root,
@@ -125,6 +131,7 @@ export function OutlinePanel({
   surfaceRef,
   expanded = false,
   head,
+  matter = NO_MATTER,
 }: Props) {
   const panelRef = useRef<HTMLElement | null>(null);
   const bandRef = useCallback(
@@ -208,9 +215,10 @@ export function OutlinePanel({
               focusRow,
               rung: r,
               allowParagraphs,
+              matter,
             }),
           ),
-    [root, supplementOf, arcByRow, focusRow, allowParagraphs, expanded],
+    [root, supplementOf, arcByRow, focusRow, allowParagraphs, expanded, matter],
   );
   const everything = useMemo(
     () =>
@@ -223,9 +231,10 @@ export function OutlinePanel({
             rung: 1,
             allowParagraphs: false,
             expanded: true,
+            matter,
           })
         : null,
-    [root, supplementOf, arcByRow, focusRow, expanded],
+    [root, supplementOf, arcByRow, focusRow, expanded, matter],
   );
 
   /**
@@ -683,6 +692,8 @@ function Row({
           <div className="outln-card-crumb">{row.number}</div>
           <div className={withVoice("outln-card-title", row.voice)}>{row.text}</div>
           {row.node.gist ? <p className="outln-card-gist">{row.node.gist}</p> : null}
+          {/* Why the row is faint (MatterMark.tsx). */}
+          {row.matter ? <p className="tip-matter">{MATTER_ROW_NOTE}</p> : null}
           {/* The spine's words, and only for a finger (StructurePanel.tsx § RowCard). */}
           {reveal.tap !== undefined && <div className="tip-tap">Tap again to go here</div>}
         </div>
@@ -723,6 +734,7 @@ function rowClass(row: OutlineRow, focused: boolean): string {
     row.now ? "now" : "",
     row.before ? "read" : "",
     row.supplement ? "supplement" : "",
+    row.matter ? "matter" : "",
     focused ? "focused" : "",
   ]
     .filter(Boolean)
@@ -739,6 +751,7 @@ function RowBody({ row, figures }: { row: OutlineRow; figures: readonly Figure[]
         {/* Inside the title so it trails the last word; here so the hidden
             candidates carry it too (FigureMark.tsx). */}
         <FigureMark figures={figures} startRow={row.startRow} endRow={row.endRow} />
+        {row.matter ? <MatterMark /> : null}
       </span>
       {row.arc ? <p className="outln-arc">{row.arc}</p> : null}
       {row.sentence ? <p className="outln-gist">{row.sentence}</p> : null}

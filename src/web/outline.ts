@@ -17,6 +17,7 @@
 import type { BlockId, NodeId, TreeNode } from "../types.js";
 import type { Tier } from "./context.js";
 import { nodeLabel, type ArcCell, type SummaryNode } from "./tree.js";
+import { type MatterRange, withinOneStretch } from "./matter-view.js";
 import type { Voice } from "./voice.js";
 
 /**
@@ -94,6 +95,12 @@ export interface OutlineRow {
   arc?: string;
   /** The apparatus — one row, never expanded, never given a sentence. */
   supplement: boolean;
+  /**
+   * Wholly inside one stretch of front or back matter, which the prose folds
+   * to a stub: drawn faint with the stub's ⓘ — structure.ts §
+   * `StructureRow.matter` has the rule.
+   */
+  matter: boolean;
   /** The reader is inside this row. True on the whole ancestor chain. */
   here: boolean;
   /** The one deepest drawn row the reader is in — what gets `aria-current`. */
@@ -187,7 +194,11 @@ interface Input {
    * docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md.
    */
   expanded?: boolean;
+  /** The stretches the prose folds (matter-view.ts § `matterStretches`), for `OutlineRow.matter`. */
+  matter?: readonly MatterRange[];
 }
+
+const NO_MATTER: readonly MatterRange[] = [];
 
 const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.endRow;
 
@@ -209,6 +220,7 @@ export function outlineProjection({
   rung,
   allowParagraphs,
   expanded = false,
+  matter = NO_MATTER,
 }: Input): OutlineProjection {
   if (!root) return { rows: [], currentId: null, rung };
 
@@ -254,6 +266,7 @@ export function outlineProjection({
       ...(extra.sentence !== undefined && { sentence: extra.sentence }),
       ...(extra.arc !== undefined && { arc: extra.arc }),
       supplement,
+      matter: withinOneStretch(entry.startRow, entry.endRow, matter),
       here: paragraph && PARAGRAPHS_ARE_NEVER_CURRENT ? false : contains(entry, focusRow),
       now: false,
       before: entry.endRow < focusRow,

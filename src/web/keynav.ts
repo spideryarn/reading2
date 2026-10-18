@@ -64,7 +64,7 @@ import { navigableItems, type Cell, type Geometry } from "./tree.js";
 /* Typing somewhere? Then the arrows are the caret's, not ours. One copy for
    every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
 import { isTyping } from "./key-chord.js";
-import { isFolded, isFoldedAway, isMastheadEcho, visibleFrom } from "./fold.js";
+import { isFoldedAway, isMastheadEcho, isRowHidden, visibleFrom } from "./fold.js";
 import { blockRow } from "./rows.js";
 
 /**
@@ -166,7 +166,9 @@ export function chainedRow(chain: Chain | null, checkLayout = false): number | n
      answer, and Diagram's row sampler also checks it before updating state. */
   if (checkLayout && chain.blockId !== undefined) {
     const held = chain.layout;
-    if (!held?.element.isConnected || isFolded(chain.blockId)) return null;
+    /* `isRowHidden`: the aim is a row's geometry, and a shut stretch's stub
+       is a row with a height whatever its content shows (fold.ts). */
+    if (!held?.element.isConnected || isRowHidden(chain.blockId)) return null;
     const { top, bottom } = held.element.getBoundingClientRect();
     /* By a pixel or more, not exactly: a browser re-rounds a row's edge by a
        fraction of a pixel with nothing a reader could see having moved, and an
@@ -214,12 +216,13 @@ export function itemStarts(cells: Cell[]): number[] {
  * plan is memoised on.
  *
  * - A start a fold hides is left out (`isFoldedAway`).
- * - **A start inside the shut front matter moves to the first row after it**
- *   (`visibleFrom`; Greg, spya-duh4w3). A section can start on a byline row
- *   and carry on into the abstract, so it is on screen and must be reachable,
- *   but a jump to its own first row would open the front matter. Two starts
- *   that land on the same row are one stop, which is how a section wholly
- *   inside the run is stepped over.
+ * - **A start inside a shut stretch, its stub included, moves to the first
+ *   row after it** (`visibleFrom`; Greg, spya-duh4w3; plan review of 261018a,
+ *   F6). A section can start on a byline row and carry on into the abstract,
+ *   so it is on screen and must be reachable, but a jump to its own first row
+ *   would open the stretch. Two starts that land on the same row are one stop,
+ *   which is how a section wholly inside a stretch is stepped over; the stub
+ *   itself is a button, reached by Tab.
  *   docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
  *   § Sections that start inside the run.
  */
@@ -333,7 +336,9 @@ function rowTops(): { tops: number[]; skip: (i: number) => boolean } {
   const rows = Array.from(document.querySelectorAll<HTMLElement>("tbody tr[data-block]"));
   return {
     tops: rows.map((r) => r.getBoundingClientRect().top),
-    skip: (i) => isFolded(rows[i]?.dataset.block ?? ""),
+    /* `isRowHidden`: a shut stretch's stub is a row the reader can stand on,
+       so it is not skipped; the rows behind it are (fold.ts). */
+    skip: (i) => isRowHidden(rows[i]?.dataset.block ?? ""),
   };
 }
 
@@ -771,7 +776,7 @@ export function useArrowNav(
          open every section it met (fold.ts). Filtered here, at the press,
          because folding changes nothing the plan is memoised on.
 
-         `isFoldedAway`, not `isFolded`: the masthead's echo is hidden and
+         `isFoldedAway`, not `isRowHidden`: the masthead's echo is hidden and
          stays a start, because block 0 is where the first section begins.
          ↑ to it goes to the top of the page (scroll.ts § `scrollToBlock`);
          filtered out, ↑ from inside the first section had nowhere to go. */

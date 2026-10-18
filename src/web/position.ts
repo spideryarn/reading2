@@ -2,9 +2,10 @@
  * Reading position — the pure half. The DOM half lives in TableView.tsx.
  *
  * **`?at=` always holds a block id.** Ordinary scrolling writes the first block
- * of the section in view, or that section's first visible block when its first
- * is hidden in the shut front matter (fold.ts § `visibleFrom`, applied by
- * useReadingPosition.ts to what this file returns); a deliberate jump may name
+ * of the section in view, or that section's first block after a shut stretch
+ * of front or back matter when its first is in one (fold.ts § `visibleFrom`
+ * and § `visibleNear`, applied by useReadingPosition.ts to what this file
+ * returns); a deliberate jump may name
  * a finer block, and the spy
  * preserves it while the reader stays inside that block's section
  * (§ positionToWrite, at the bottom of this file). What follows is about the

@@ -14,14 +14,16 @@
  * (src/paperwork.ts), so a shut front matter would have done it on arrival.
  *
  * jsdom lays nothing out, so the browser is faked from the one thing the fold
- * store gives it: a row named in the store's stylesheet has no height, sits at
- * the top of the next row that has one, and its note measures nothing.
+ * store gives it: a row whose cells the store's stylesheet hides has no
+ * height, sits at the top of the next row that has one, and its note measures
+ * nothing. A shut stretch's stub row (plan 261018a) keeps its height, and its
+ * note, hidden with the block's content, measures nothing.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId } from "../src/types.js";
-import { FOLD_STYLE_ATTR, clearFoldArticle, setFoldArticle, toggleFold, toggleFrontMatter } from "../src/web/fold.js";
+import { FOLD_STYLE_ATTR, clearFoldArticle, setFoldArticle, toggleFold, toggleStretch } from "../src/web/fold.js";
 import { NOTE_GAP_PX, useMarginLayout } from "../src/web/marginalia/MarginaliaColumn.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,7 +41,11 @@ const ROW = 100;
 let noteHeight: Record<string, number> = {};
 
 const hiddenIds = () => document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)?.textContent ?? "";
-const isHidden = (blockId: string | undefined) => blockId !== undefined && hiddenIds().includes(`"${blockId}"`);
+/** The row is gone: its cells are hidden. */
+const isHidden = (blockId: string | undefined) =>
+  blockId !== undefined && hiddenIds().includes(`"${blockId}"]>td{display:none}`);
+/** Its content is gone, the note with it: the row is hidden, or it is a shut stub. */
+const isNoteHidden = (blockId: string | undefined) => blockId !== undefined && hiddenIds().includes(`"${blockId}"`);
 
 class NoResize {
   observe() {}
@@ -76,7 +82,7 @@ beforeEach(() => {
   });
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
     const blockId = this.closest("tr")?.dataset.block;
-    return isHidden(blockId) ? 0 : (noteHeight[blockId ?? ""] ?? 40);
+    return isNoteHidden(blockId) ? 0 : (noteHeight[blockId ?? ""] ?? 40);
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -135,9 +141,9 @@ describe("the margin layout and a folded section", () => {
   });
 });
 
-describe("the margin layout and the shut front matter", () => {
-  /* a is the title, b and c the byline, d the abstract's heading. */
-  const front = [id("b"), id("c")];
+describe("the margin layout and a shut stretch", () => {
+  /* a is the title, b (the stub) and c the byline, d the abstract's heading. */
+  const front = [[id("b"), id("c")]];
 
   it("leaves the first visible note level with its row on arrival", () => {
     setFoldArticle("slug", blocks, new Set(), front);
@@ -145,11 +151,22 @@ describe("the margin layout and the shut front matter", () => {
     expect(note("d").style.translate).toBe("");
   });
 
-  it("lays out again when the front matter is opened", async () => {
+  /* The stub's row is on screen and its note is not (fold.ts § `stubCss`).
+     Counted, the hidden note would sit at the stub's row and start d's one
+     gap further down: 8px for a note nobody can see (plan review of 261018a,
+     F5). a's note runs 5px past d's row, so d moves by exactly that and a gap. */
+  it("leaves out the note on a shut stub's row, though the row itself is on screen", () => {
+    noteHeight = { [id("a")]: 2 * ROW + 5 };
+    setFoldArticle("slug", blocks, new Set(), front);
+    act(() => root.render(createElement(Harness)));
+    expect(note("d").style.translate).toBe(`0 ${5 + NOTE_GAP_PX}px`);
+  });
+
+  it("lays out again when the stretch is opened", async () => {
     noteHeight = { [id("b")]: 3 * ROW };
     setFoldArticle("slug", blocks, new Set(), front);
     act(() => root.render(createElement(Harness)));
-    toggleFrontMatter();
+    toggleStretch(id("b"));
     await frame();
     expect(note("c").style.translate).toBe(`0 ${2 * ROW + NOTE_GAP_PX}px`);
   });

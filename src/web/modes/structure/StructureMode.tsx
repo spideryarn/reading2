@@ -45,6 +45,8 @@ import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
 import { type ArcCell, buildSummaryTree } from "../../tree.js";
 import { useColumnContext } from "../../useColumnContext.js";
+import { mastheadEcho } from "../../masthead-echo.js";
+import { matterStretches } from "../../matter-view.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
 import type { Section } from "../../position.js";
 
@@ -231,6 +233,25 @@ export function StructureBand({
   const figures = useMemo(() => figuresOf(article.blocks), [article.blocks]);
 
   /**
+   * **The stretches the prose folds to a stub** — the abstract, the
+   * references — so a row wholly inside one is drawn faint with an ⓘ, and
+   * keeps its place (Greg, spya-vskdap: *"visible in Structure so that the
+   * reader can see that there is an Abstract and easily get to it"*). The same
+   * function and the same echo the prose table asks (TableView.tsx), so the two
+   * cannot disagree. Plan 261018a § Stage 3.
+   */
+  const { blocks, matter: stored, titleOverridden } = article;
+  /* Read through `?.`: this band is mounted in a dozen tests with an article
+     that is only a tree and blocks, and a faint row is not worth a crash. */
+  const authors = article.meta?.authors;
+  const byline = article.meta?.byline;
+  const title = article.meta?.title;
+  const matter = useMemo(() => {
+    const echo = mastheadEcho({ blocks, meta: { title }, titleOverridden });
+    return matterStretches({ blocks, matter: stored, meta: { authors, byline } }, echo);
+  }, [blocks, stored, title, titleOverridden, authors, byline]);
+
+  /**
    * Where the reader is — one sampler for both faces, so they can never
    * disagree about which section is under the focus line. A face change at a
    * resize must not also move "here".
@@ -345,6 +366,7 @@ export function StructureBand({
         onJump={onJump}
         expanded={view === "expanded"}
         head={head}
+        matter={matter}
       />
     );
   }
@@ -357,6 +379,7 @@ export function StructureBand({
       allowParagraphs={proseBeside && labelsReady}
       onJump={onJump}
       head={head}
+      matter={matter}
     />
   );
 }

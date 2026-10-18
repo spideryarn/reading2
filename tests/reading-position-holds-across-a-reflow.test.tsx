@@ -49,10 +49,11 @@ import {
 } from "../src/web/scroll.js";
 import {
   clearFoldArticle,
-  isFolded,
+  isContentHidden,
+  isRowHidden,
   setFoldArticle,
   toggleFold,
-  toggleFrontMatter,
+  toggleStretch,
   useFoldArticle,
 } from "../src/web/fold.js";
 import { useReadingPosition } from "../src/web/reader/useReadingPosition.js";
@@ -106,6 +107,8 @@ let rowHeight = PORTRAIT;
 let scrollY = 0;
 /** How many leading rows are the masthead's echo: drawn with no height. */
 let echoRows = 0;
+/** Rows after this one are behind a trailing stretch's stub: drawn with no height. */
+let tailFrom = ROWS;
 let scrollTo: ReturnType<typeof vi.fn>;
 
 function rowIndexOf(el: Element): number | null {
@@ -150,6 +153,7 @@ beforeEach(() => {
   rowHeight = PORTRAIT;
   scrollY = 0;
   echoRows = 0;
+  tailFrom = ROWS;
 
   document.body.replaceChildren();
   const table = document.createElement("table");
@@ -169,8 +173,9 @@ beforeEach(() => {
     /* A hidden row has no height and sits at the top of the next visible one
        (fold.ts § Why the cells are hidden): the masthead's echo, below. */
     const echo = i !== null && i < echoRows;
-    const height = echo ? 0 : rowHeight;
-    const top = i === null ? 0 : (echo ? echoRows : i) * rowHeight - scrollY;
+    const tail = i !== null && i > tailFrom;
+    const height = echo || tail ? 0 : rowHeight;
+    const top = i === null ? 0 : (echo ? echoRows : tail ? tailFrom + 1 : i) * rowHeight - scrollY;
     return { top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
   });
   vi.spyOn(document.documentElement, "scrollHeight", "get").mockImplementation(
@@ -559,13 +564,13 @@ describe("an article whose first rows are the masthead's echo", () => {
 
     toggleFold(block(13));
     await settle();
-    expect(isFolded(block(15))).toBe(true);
+    expect(isRowHidden(block(15))).toBe(true);
     expect(atNow()).toBe(block(13));
 
     rowHeight = LANDSCAPE;
     render("landscape");
     await settle();
-    expect(isFolded(block(15))).toBe(true);
+    expect(isRowHidden(block(15))).toBe(true);
   });
 
   it("arrives at the top of the page for ?at= naming an echo row", async () => {
@@ -578,8 +583,9 @@ describe("an article whose first rows are the masthead's echo", () => {
 });
 
 /**
- * **A section that starts inside the shut front matter** (front-matter.ts;
- * Greg, spya-duh4w3;
+ * **A section that starts inside a shut stretch** (fold.ts § Front and back
+ * matter; Greg, spya-duh4w3; a stretch with a stub since plan 261018a, whose
+ * review, F6, is why the stub is not named either;
  * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
  * § Sections that start inside the run). Row 0 is the echo and rows 1 to 3 the
  * front matter, all four drawn at no height. A section whose first block is in
@@ -600,7 +606,7 @@ describe("an article whose front matter is shut", () => {
   const SPANNING = [section(0, 1), section(2, 2), section(12, 3), section(24, 4)];
   /** A section that is rows 1 to 3 and nothing else: wholly hidden. */
   const WHOLLY = [section(0, 1), section(1, 2), section(4, 3), section(12, 4)];
-  const front = [block(1), block(2), block(3)];
+  const front = [[block(1), block(2), block(3)]];
 
   beforeEach(() => {
     echoRows = 4;
@@ -614,7 +620,7 @@ describe("an article whose front matter is shut", () => {
     window.scrollTo({ top: 6 * PORTRAIT });
     await settle();
     expect(atNow()).toBe(block(4));
-    expect(isFolded(block(2))).toBe(true);
+    expect(isRowHidden(block(2))).toBe(true);
   });
 
   it("goes on naming it as the reader moves through it, and the next one after", async () => {
@@ -640,7 +646,7 @@ describe("an article whose front matter is shut", () => {
     rowHeight = LANDSCAPE;
     render("landscape", SPANNING);
     await settle();
-    expect(isFolded(block(2))).toBe(true);
+    expect(isRowHidden(block(2))).toBe(true);
     expect(atNow()).toBe(block(4));
   });
 
@@ -651,32 +657,71 @@ describe("an article whose front matter is shut", () => {
     window.scrollTo({ top: 5 * PORTRAIT });
     await settle();
     expect(atNow()).toBe(block(4));
-    expect(isFolded(block(1))).toBe(true);
+    expect(isContentHidden(block(1))).toBe(true); // the stub, still shut
   });
 
   it("opens the front matter for a link that names one of its blocks", async () => {
     history.replaceState(null, "", `/read/x?at=${block(2)}`);
     render("k", SPANNING);
     await settle();
-    expect(isFolded(block(2))).toBe(false);
-    expect(isFolded(block(0))).toBe(true); // the echo stays
+    expect(isRowHidden(block(2))).toBe(false);
+    expect(isRowHidden(block(0))).toBe(true); // the echo stays
   });
 
   it("rewrites a front-matter position when the reader shuts the run", async () => {
     history.replaceState(null, "", `/read/x?at=${block(2)}`);
     render("portrait", SPANNING);
     await settle();
-    expect(isFolded(block(2))).toBe(false);
+    expect(isRowHidden(block(2))).toBe(false);
 
-    toggleFrontMatter();
+    toggleStretch(block(1));
     await settle();
-    expect(isFolded(block(2))).toBe(true);
+    expect(isRowHidden(block(2))).toBe(true);
     expect(atNow()).toBe(block(4));
 
     rowHeight = LANDSCAPE;
     render("landscape", SPANNING);
     await settle();
-    expect(isFolded(block(2))).toBe(true);
+    expect(isRowHidden(block(2))).toBe(true);
+  });
+});
+
+/**
+ * **A stretch that ends the article** — the references, behind a stub at row
+ * 24 that starts the last section. Nothing comes after it, so `?at=` names the
+ * block before it (fold.ts § `visibleNear`): not the stub, whose restore would
+ * open the stretch (F6), and not nothing, which would send a reload to the top
+ * of the page from the end of it.
+ */
+describe("an article whose references are shut at its end", () => {
+  const back = [[block(24), ...Array.from({ length: 5 }, (_, i) => block(25 + i))]];
+
+  beforeEach(() => {
+    tailFrom = 24;
+    setFoldArticle("x", BLOCKS, new Set(), back);
+  });
+
+  it("names the block before the stretch while the reader is at its stub, and leaves it shut on a reload", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("portrait");
+    await settle();
+    window.scrollTo({ top: 24 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(23));
+    expect(isContentHidden(block(24))).toBe(true);
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    await settle();
+    expect(isContentHidden(block(24))).toBe(true);
+    expect(atNow()).toBe(block(23));
+  });
+
+  it("opens it for a link that names one of its blocks", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(26)}`);
+    render("k");
+    await settle();
+    expect(isRowHidden(block(26))).toBe(false);
+    expect(isContentHidden(block(24))).toBe(false);
   });
 });
 
@@ -689,7 +734,8 @@ describe("an article whose front matter is shut", () => {
  * opens the run.
  */
 describe("an article whose front matter starts at block 0", () => {
-  const front = [block(0), block(1), block(2)];
+  const run = [block(0), block(1), block(2)];
+  const front = [run];
   /** The first section is the run and nothing else. */
   const WHOLLY: Section[] = [
     { row: 0, blockId: block(0), nodeId: "n0001" as NodeId, title: "Authors", titleVoice: "ai" },
@@ -710,7 +756,7 @@ describe("an article whose front matter starts at block 0", () => {
     window.scrollTo({ top: 6 * PORTRAIT });
     await settle();
     expect(atNow()).toBe(block(3));
-    expect(isFolded(block(0))).toBe(true);
+    expect(isContentHidden(block(0))).toBe(true);
   });
 
   it("never writes a hidden block, wherever the reader stops", async () => {
@@ -720,10 +766,10 @@ describe("an article whose front matter starts at block 0", () => {
     for (const row of [3, 4, 11, 13, 5, 3, 25, 4]) {
       window.scrollTo({ top: row * PORTRAIT });
       await settle();
-      expect(front, `row ${row}`).not.toContain(atNow());
+      expect(run, `row ${row}`).not.toContain(atNow());
       expect(atNow(), `row ${row}`).toBe(row < 12 ? block(3) : row < 24 ? block(12) : block(24));
     }
-    expect(isFolded(block(0))).toBe(true);
+    expect(isContentHidden(block(0))).toBe(true);
   });
 
   it("names the second section when the first is the run and nothing else", async () => {
@@ -733,19 +779,19 @@ describe("an article whose front matter starts at block 0", () => {
     window.scrollTo({ top: 5 * PORTRAIT });
     await settle();
     expect(atNow()).toBe(block(3));
-    expect(isFolded(block(0))).toBe(true);
+    expect(isContentHidden(block(0))).toBe(true);
   });
 
   it("leaves the run shut on a reload, and when the phone is turned", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     render("portrait");
     await settle();
-    expect(isFolded(block(0))).toBe(true);
+    expect(isContentHidden(block(0))).toBe(true);
     expect(atNow()).toBe(block(3));
     rowHeight = LANDSCAPE;
     render("landscape");
     await settle();
-    expect(isFolded(block(0))).toBe(true);
+    expect(isContentHidden(block(0))).toBe(true);
     expect(atNow()).toBe(block(3));
   });
 
@@ -753,8 +799,8 @@ describe("an article whose front matter starts at block 0", () => {
     history.replaceState(null, "", `/read/x?at=${block(0)}`);
     render("k");
     await settle();
-    expect(isFolded(block(0))).toBe(false);
-    expect(isFolded(block(2))).toBe(false);
+    expect(isContentHidden(block(0))).toBe(false);
+    expect(isRowHidden(block(2))).toBe(false);
     expect(atNow()).toBe(block(0));
   });
 });
@@ -772,7 +818,7 @@ describe("an article whose front matter starts at block 0", () => {
  * has no StrictMode, so there the link always opened the run.
  */
 describe("a link that names a run block, with the table mounting beside the hook", () => {
-  const front = [block(1), block(2), block(3)];
+  const front = [[block(1), block(2), block(3)]];
   const echo = new Set([block(0)]);
 
   function Table(): ReactNode {
@@ -801,7 +847,7 @@ describe("a link that names a run block, with the table mounting beside the hook
     history.replaceState(null, "", `/read/x?at=${block(2)}`);
     mount(false);
     await settle();
-    expect(isFolded(block(2))).toBe(false);
+    expect(isRowHidden(block(2))).toBe(false);
     expect(atNow()).toBe(block(2));
   });
 
@@ -809,8 +855,8 @@ describe("a link that names a run block, with the table mounting beside the hook
     history.replaceState(null, "", `/read/x?at=${block(2)}`);
     mount(true);
     await settle();
-    expect(isFolded(block(2))).toBe(false);
-    expect(isFolded(block(0))).toBe(true); // the echo stays
+    expect(isRowHidden(block(2))).toBe(false);
+    expect(isRowHidden(block(0))).toBe(true); // the echo stays
     expect(atNow()).toBe(block(2));
   });
 
@@ -818,7 +864,7 @@ describe("a link that names a run block, with the table mounting beside the hook
     history.replaceState(null, "", `/read/x?at=${block(12)}`);
     mount(true);
     await settle();
-    expect(isFolded(block(2))).toBe(true);
+    expect(isRowHidden(block(2))).toBe(true);
     expect(atNow()).toBe(block(12));
   });
 });

@@ -33,7 +33,7 @@ vi.mock("../src/web/Tooltip.js", () => ({
 import { TableView } from "../src/web/TableView.js";
 import { buildGeometry } from "../src/web/tree.js";
 import { fitView } from "../src/web/layout.js";
-import { FOLD_STYLE_ATTR, foldableHeadings, isFolded, toggleFold } from "../src/web/fold.js";
+import { FOLD_STYLE_ATTR, foldableHeadings, isRowHidden, toggleFold } from "../src/web/fold.js";
 import { readArticleFromDir } from "./helpers/article-from-dir.js";
 import type { Article } from "../src/types.js";
 
@@ -139,7 +139,7 @@ describe("the end of the article", () => {
     const heading = [...foldableHeadings(article.blocks)].at(-1);
     if (!heading) throw new Error("the fixture has no foldable heading");
     act(() => toggleFold(heading));
-    expect(isFolded(article.blocks.at(-1)!.id)).toBe(true);
+    expect(isRowHidden(article.blocks.at(-1)!.id)).toBe(true);
     expect(marks()).toHaveLength(1);
     const folded = document.head.querySelector<HTMLStyleElement>(`style[${FOLD_STYLE_ATTR}]`);
     if (!folded?.sheet) throw new Error("folding did not install its stylesheet");

@@ -190,6 +190,65 @@ td.text.kind-heading:has(> .fold-toggle) {
 .fold-toggle:hover,
 .fold-toggle:focus-visible { opacity: 1; color: var(--highlight-text); }
 
+/* ------------------------------------- § a stretch of front or back matter --
+   A shut stretch's stub: one quiet line in the prose column where the
+   stretch's first block was — a chevron, what is folded, how much, and an ⓘ
+   (FoldToggle.tsx § `MatterStub`; fold.ts § Front and back matter; plan
+   261018a). Greg, `spya-k7gm2b`: *"delicate UI … so that they don't get in
+   the way, but that the user can notice/discover them if needed."* So: the
+   interface face, because these are the app's words (fonts.md); faint ink;
+   no box; smaller than the prose. Open, the stretch's first row carries the
+   heading's own `.fold-toggle` above, which needs nothing here.
+
+   **It sits on the prose's measure**, so its first letter lines up with the
+   article's: the container takes `.prose`'s face and size, so `ch` means what
+   it means there, and only its children switch to the interface face. */
+.matter-stub {
+  font-family: var(--font-reading);
+  font-size: var(--reading-size);
+  font-weight: var(--reading-weight);
+  max-width: clamp(45ch, 90vw, var(--reading-measure));
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.matter-stub > button {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  font-weight: 400;
+  padding: 0.1rem 0.2rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.matter-stub-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  text-align: start;
+}
+.matter-stub-open svg { width: 14px; height: 14px; flex: none; }
+/* The dot between the label and the count is drawn, not written, so a screen
+   reader hears "Abstract, 200 words" rather than a symbol. */
+.matter-stub-count::before { content: "·"; margin-inline-end: 0.3rem; }
+.matter-stub-info { display: inline-grid; place-items: center; opacity: 0.6; }
+.matter-stub-info svg { width: 13px; height: 13px; }
+.matter-stub > button:hover,
+.matter-stub > button:focus-visible,
+.matter-stub-info.on { opacity: 1; color: var(--highlight-text); }
+/* A stub on a heading's row is one quiet line like any other, not a heading's
+   doubled space above. */
+td.text.kind-heading:has(> .matter-stub) {
+  padding-top: var(--block-pad);
+  padding-bottom: var(--block-pad);
+  --blk-top: calc(var(--block-pad) + 0.2rem);
+}
+
 tr.row-active td.text { background: var(--panel); }
 
 /* ---------------------------------------------------- § the flash on arrival --
