@@ -97,6 +97,10 @@ export const STEP_SHARING = {
   /* Reads the article only — not the stored Debate — and writes its own column. */
   "sources-claims": { column: "sourcesClaims", reads: [] },
   bibliography: { column: "bibliography", reads: [] },
+  /* Each note is keyed to a row of the list and fingerprinted by that row's
+     identity, so a list remade mid-run would leave notes about rows that
+     are no longer there. */
+  "citation-blurbs": { column: "citationBlurbs", reads: ["bibliography"] },
   crossrefs: { column: "crossrefs", reads: [] },
   simple: { column: "simpleSummary", reads: [] },
 } as const satisfies Record<StepName, "exclusive" | SharingPolicy>;

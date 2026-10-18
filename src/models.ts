@@ -525,6 +525,19 @@ export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 export const OPENING_TITLE_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What writes a short note on each work an article cites, from that work's
+ * abstract alone, and what checks each note against that abstract**
+ * (src/citation-blurbs.ts, plan 261017h stage 3). Haiku, as the spike measured
+ * it: about a cent for a whole bibliography
+ * (docs/investigations/261017c-citation-blurbs-cost-and-quality.md). The
+ * authors pass's string, on its route, for its reason: an Anthropic model with
+ * a strict schema back. Its own constant, though the string is the same: the
+ * jobs were chosen separately. On no tier, so High-powered AI does not move
+ * it. Routes `citation-blurbs` and `citation-blurbs-check` in src/ai-call.ts.
+ */
+export const CITATION_BLURBS_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -1038,6 +1051,14 @@ export type NonTaskAiJob =
   /* **A paper's title, off its opening**, when its `<title>` is known not to
      be it — src/opening-title.ts, on `OPENING_TITLE_MODEL` below. */
   | "opening-title"
+  /* **A note on each cited work, from its abstract alone** — one batched call
+     per twenty works (src/citation-blurbs.ts, plan 261017h), on
+     `CITATION_BLURBS_MODEL` below. */
+  | "citation-blurbs"
+  /* **And the check of each note against that one work's abstract** — one
+     small call per work, which sees nothing else (GPT Sol's G4 on the plan).
+     Its own job so the ledger can say what checking adds. */
+  | "citation-blurbs-check"
   /* **A conversation's one-line gist**, written after each answer —
      src/chat-gist.ts, on `CHAT_GIST_MODEL` below. */
   | "chat-gist"
@@ -1606,6 +1627,9 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "front-matter-authors": "chat",
   /* A strict JSON schema back, on chat/completions. src/opening-title.ts. */
   "opening-title": "chat",
+  /* A strict JSON schema back, on chat/completions. src/citation-blurbs.ts. */
+  "citation-blurbs": "chat",
+  "citation-blurbs-check": "chat",
   /* A strict JSON schema back, on chat/completions. src/chat-gist.ts. */
   "chat-gist": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
@@ -1875,6 +1899,8 @@ export const NON_TASK_MODELS: readonly {
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "front-matter-authors", id: FRONT_MATTER_AUTHORS_MODEL, provider: "openrouter" },
   { job: "opening-title", id: OPENING_TITLE_MODEL, provider: "openrouter" },
+  { job: "citation-blurbs", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
+  { job: "citation-blurbs-check", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },

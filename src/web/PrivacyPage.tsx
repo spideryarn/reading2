@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "11 October 2026";
+const LAST_UPDATED = "18 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -422,7 +422,12 @@ export function PrivacyPage() {
           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
           its title instead, to find it by. And when you press Search OpenAlex for related work, in
           Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its
-          abstract, on a paper), to find papers close to it. Never the rest of the article’s text, and nothing about
+          abstract, on a paper), to find papers close to it. When the list of works your article
+          cites is made, each is looked up to write a short note on it from its abstract: Crossref
+          and DataCite are sent its DOI or arXiv identifier, and OpenAlex its DOI. For an article
+          you added from a public web address, a cited work with no DOI may be looked up at Crossref
+          by its title and its first author’s surname instead; for a file you uploaded, the works it
+          cites are looked up by their identifiers only. Never the rest of the article’s text, and nothing about
           who you are. They learn that somebody using Spideryarn asked about that work, not who.
         </p>
         <p>
@@ -537,7 +542,10 @@ export function PrivacyPage() {
           most;{" "}
           <code>claude-haiku-5-5</code> to read where each author of a web page you add works, when
           the page names its authors but not their institutions, for which it is shown the authors’
-          names and the opening of the page, about 6,000 characters at most;{" "}
+          names and the opening of the page, about 6,000 characters at most, and to write a short
+          note on each work an article cites and check it, for which it is shown each cited work’s
+          title, authors and year and its abstract from a public catalogue, and none of the
+          article’s own text;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it

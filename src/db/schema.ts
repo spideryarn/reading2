@@ -83,6 +83,7 @@ import type {
   Block,
   BlockKind,
   Bibliography,
+  CitationBlurbs,
   Arc,
   Citation,
   Reception,
@@ -1339,6 +1340,22 @@ export const articleRevisions = spideryarn.table(
      * one is still here below, kept equal to this one by a trigger.
      */
     bibliography: jsonb("bibliography").$type<Bibliography>(),
+
+    /**
+     * A short note on each cited work, from its abstract alone —
+     * `CitationBlurbs`, src/types.ts, written by the `citation-blurbs` step
+     * (src/citation-blurbs.ts). Plan 261017h stage 3.
+     *
+     * The WHOLE artefact, like its neighbours, with entries keyed by the
+     * Bibliography's row ids and each carrying that row's identity
+     * fingerprint, so a reader attaches a note only to the row it was written
+     * for. `sourceHash` hashes those identities, not the list's own hash, so a
+     * list made again with the same works keeps its notes. **No abstract is
+     * stored here**, only its hash and the quotes a note rests on; the abstracts
+     * are in `bibliographic_records`. No foreign key, on the argument its
+     * neighbours make.
+     */
+    citationBlurbs: jsonb("citation_blurbs").$type<CitationBlurbs>(),
 
     /**
      * **Retired: nothing reads or writes this.** Bibliography's column before
@@ -3580,7 +3597,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",

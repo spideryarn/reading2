@@ -160,6 +160,9 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   reception: ["inputHash", "promptVersion", "model"],
   "sources-claims": ["inputHash", "promptVersion", "model"],
   bibliography: ["inputHash", "promptVersion", "model"],
+  /* Judged on the Bibliography's rows, not the article: none of the moves
+     below reaches it (plan 261017h stage 3). */
+  "citation-blurbs": ["inputHash", "promptVersion", "model"],
   crossrefs: ["inputHash", "promptVersion", "model"],
 };
 
@@ -170,6 +173,13 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
  * one thing this must never become is a silent skip.
  */
 const EXCLUDED: Partial<Record<StepName, string>> = {};
+
+/**
+ * **Stamped steps whose model is not the capable one**, so the high-power case
+ * below has nothing to ask of them: `sameGenerator` lumps only the capable
+ * and high-power models together.
+ */
+const OFF_THE_CAPABLE_GENERATION: readonly StepName[] = ["citation-blurbs"];
 
 /** What the two deciders said, in the order this file always writes them. */
 interface Pair {
@@ -344,6 +354,8 @@ function minimal(step: StepName): Artefact {
       return { ...made, citations: [] };
     case "crossrefs":
       return { ...made, links: [] };
+    case "citation-blurbs":
+      return { ...made, entries: {}, counts: {} };
     case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":
@@ -660,7 +672,10 @@ describe.each(Object.entries(CASES) as [StepName, readonly Field[]][])(
       });
     }
 
-    if (fields.includes("model")) {
+    /* Only a step on the capable generation has a "same generation, other
+       model" to be written by: the notes on cited works are Haiku's, on no
+       tier, and High-powered AI does not move them (plan 261017h). */
+    if (fields.includes("model") && !OFF_THE_CAPABLE_GENERATION.includes(step)) {
       /* `sameStamp` compares the model by generation (plan 260930f): an
          artefact Opus wrote on a high-powered article is current against a
          Sonnet expectation. Both deciders have to make that same allowance —

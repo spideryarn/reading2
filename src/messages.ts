@@ -1677,6 +1677,21 @@ export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
 };
 
 /**
+ * **The notes on cited works refuse when there is no list of cited works** —
+ * they are written about the Bibliography's rows, and the step does not make
+ * the list itself (plan 261017h stage 3, § 1). Normally queued only after a
+ * Bibliography is published, so a reader meets this only by asking for the
+ * notes alone on an article that has none.
+ */
+export const CITATION_BLURBS_NO_BIBLIOGRAPHY: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no list of the works this article cites yet, and the notes on them are written from " +
+    "that list. Make the Bibliography first, in Sources, and the notes follow it. Until there is " +
+    "one, this will come back the same way. [jb-no-bibliography]",
+};
+
+/**
  * **A step that reads the article's structure was asked to run before the
  * structure exists.** An article that opened early is published with a
  * stand-in outline cut from its headings, and the job that builds the real

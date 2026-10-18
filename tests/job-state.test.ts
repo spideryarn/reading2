@@ -216,6 +216,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   /* Unmeasured: the fallback. */
   "sources-claims": 180_000,
   bibliography: 180_000,
+  /* Unmeasured: the fallback. */
+  "citation-blurbs": 180_000,
   crossrefs: 180_000,
   simple: 180_000,
 };

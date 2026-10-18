@@ -128,6 +128,15 @@ export const METADATA_RERUN_STEPS = [
   "skim",
   "reception",
   "bibliography",
+  /* **Joined on 2026-10-18 with the step** (*Notes on cited works*, plan 261017h
+     stage 3). The three answers: **about a cent** a press — a few registry
+     lookups that cost nothing, then one Haiku call per twenty works with an
+     abstract and one small check per note (`generateCitationBlurbs`); it
+     **refuses without a Bibliography** and does not make one; and it is **safe
+     to publish over a good set**, draft-then-publish — a pressed run asks every
+     work again, and a work whose lookup or call fails this time keeps the note
+     it had. Not a mode, so no switch hides it. */
+  "citation-blurbs",
   /* **Joined on 2026-09-30 with the step**, the one way to make cross-references
      for an article already on the shelf (the after-import box covers new ones).
      The three answers: **one** metered call a press — a single

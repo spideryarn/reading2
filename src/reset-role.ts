@@ -85,6 +85,10 @@ export const RESET_ROLE = {
      mode of its own. */
   "sources-claims": "extra",
   bibliography: "extra",
+  /* Queued by the publication of a Bibliography, off DEFAULT_INGEST_STEPS, a
+     whole column: the modes' shape. A reset drops it with the list it
+     annotates, and remaking the list queues it again. */
+  "citation-blurbs": "extra",
   /* Made after import by the add page's box or a press on Metadata, off
      DEFAULT_INGEST_STEPS, a whole column: exactly the modes' shape, though it
      is not a mode. */

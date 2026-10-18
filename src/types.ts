@@ -3749,6 +3749,15 @@ export type StepName =
      Called `citations` until 2026-10-09 (plan 261009w); the old name is read
      as this one through `RETIRED_STEPS` (src/step-order.ts). */
   | "bibliography"
+  /* **A short note on each cited work, from its abstract alone** — plan 261017h
+     stage 3 (docs/plans/261017h-stage-3-design-citation-blurbs.md). It reads
+     the Bibliography and nothing of the article: each work's abstract is looked
+     up in a public catalogue (src/citation-evidence.ts), and Haiku writes and
+     then checks a sentence from it (src/citation-blurbs.ts). Queued by any
+     publication whose job ran `bibliography`; it *refuses* rather than pulls
+     when there is no list, as `illustrated` does without a Sketch. Not an
+     `ArticleStage`: it is on chat/completions and sends no article. */
+  | "citation-blurbs"
   /* **Links between the article's own blocks** — a phrase in one block that
      refers to what another shows in detail. Ideas' article block, byte for byte
      up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`. Not a mode: the links sit in the prose in every mode.
@@ -5723,6 +5732,124 @@ export interface BibliographyResponse {
 
 /** As `TimelineFound`: the same type, because there is no `profileChanged` to omit. */
 export type BibliographyFound = BibliographyResponse;
+
+/* -------------------------------------------------------- citation blurbs --
+   A short note on each cited work, from its abstract alone — the
+   `citation_blurbs` column on `article_revisions`, written by the
+   `citation-blurbs` step (src/citation-blurbs.ts). Plan 261017h stage 3:
+   docs/plans/261017h-stage-3-design-citation-blurbs.md, whose design review
+   (G1–G9) governs where it and § 2 disagree.
+
+   Here rather than in src/citation-blurbs.ts for every artefact's reason: the
+   panel reads them (stage 3c), and a client module may not import a stage.  */
+
+/**
+ * **Where a note's words came from** — `Evidence` (src/citation-evidence.ts)
+ * without its text: the artefact keeps the abstract's hash, never the abstract.
+ * `url` was built by code from `workId`, never taken from a registry or a model.
+ */
+export interface CitationBlurbEvidence {
+  /** The author's abstract, or OpenAlex's reconstruction of one — said as such on screen. */
+  kind: "author-abstract" | "registry-reconstruction";
+  source: "crossref" | "datacite" | "openalex";
+  /** By the row's own identifier, or by a Crossref title search (G6: public-address articles only). */
+  via: "id" | "title";
+  /** `doi:…` or `arxiv:…` — `WorkId` (src/bibliographic.ts). */
+  workId: string;
+  url: string;
+  host: string;
+  /** When the abstract was read, ISO. */
+  readAt: string;
+  evidenceHash: string;
+}
+
+/** One sentence of a note and the words of the abstract it rests on (G4: one quote per sentence). */
+export interface CitationBlurbSentence {
+  text: string;
+  /** Copied from that work's own abstract; code found it there. */
+  quote: string;
+}
+
+/** Why a written note was not kept. Terminal for its `validationVersion` (G2, G8). */
+export type CitationBlurbCheckWhy =
+  /** A sentence's quote is not in this work's abstract. */
+  | "quote-not-in-evidence"
+  /** A sentence's quote is shorter than six words — too little to rest on. */
+  | "quote-too-short"
+  /** A sentence's quote is longer than thirty words — the abstract copied out rather than cited. */
+  | "quote-too-long"
+  /** The model answered this work's index twice. */
+  | "repeated-index"
+  /** More than two sentences, or more than `BLURB_MAX_CHARS`. */
+  | "too-long"
+  /** The separate check, shown only this work's abstract, did not call every sentence supported. */
+  | "not-supported";
+
+/** No evidence, for a reason that will not change until the row does. */
+export type CitationBlurbStructuralWhy =
+  | "no-identifier-or-title"
+  | "label-only"
+  | "unpublished"
+  | "title-search-off";
+
+/** No evidence, because of what a registry said; asked again after seven days (G9). */
+export type CitationBlurbRegistryWhy = "not-found" | "no-abstract" | "not-identified" | "conflict";
+
+/**
+ * **What every entry carries**, whatever its state.
+ *
+ * `identity` is the row's identity fingerprint — its id, title, authors, year,
+ * link and the registry verdict's kind and source — and **not** the list's
+ * `sourceHash`, so a list made again with the same works keeps its notes. A
+ * reader attaches an entry only while `identity` equals the one recomputed from
+ * the current row **and** `validationVersion` is the current one (G8): a new
+ * prompt or model keeps old notes on screen; a change to the checks takes them
+ * down.
+ */
+interface CitationBlurbEntryBase {
+  identity: string;
+  validationVersion: string;
+  promptVersion: string;
+  model: string;
+  /** When this entry was decided, ISO. */
+  at: string;
+}
+
+export type CitationBlurbEntry = CitationBlurbEntryBase &
+  (
+    | { state: "blurb"; sentences: CitationBlurbSentence[]; evidence: CitationBlurbEvidence }
+    /** The model said the abstract does not say what the work argues or finds. */
+    | { state: "declined"; evidence: CitationBlurbEvidence }
+    | { state: "failed-check"; why: CitationBlurbCheckWhy; evidence: CitationBlurbEvidence }
+    | { state: "no-evidence"; why: CitationBlurbStructuralWhy }
+    /** `checkedAt` is when the registry said so; the step asks again once it is a week old. */
+    | { state: "no-evidence"; why: CitationBlurbRegistryWhy; checkedAt: string }
+  );
+
+/**
+ * The artefact. **Transient outcomes are counted, never stored** (a registry
+ * busy, a model call cut off): such a row keeps the entry it had, if its
+ * identity still matches, and the run is stamped `:partial` so the next one is
+ * not "done" (G2).
+ */
+export interface CitationBlurbs {
+  /** The prompt version, `citation-blurbs/N` — the stamp's `promptVersion` (G1). */
+  version: string;
+  /** The model, `CITATION_BLURBS_MODEL` — the stamp's `model` (G1). */
+  generator: string;
+  slug: string;
+  /**
+   * A hash of every row's identity in list order and the validation version;
+   * with `:partial` on the end when any row ended transient (G2).
+   */
+  sourceHash: string;
+  /** By `CitedWork.id`. A row with no entry has not been decided yet. */
+  entries: Record<string, CitationBlurbEntry>;
+  /** What this run did, by outcome. Counts only. */
+  counts: Record<string, number>;
+  generatedAt: string;
+  elapsedMs: number;
+}
 
 /* ------------------------------------------------------------------- quiz --
    The questions the piece can ask you back — `data/<slug>/quiz.json`, and the

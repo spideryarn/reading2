@@ -219,6 +219,7 @@ const STEPS = [
   "reception",
   "sources-claims",
   "bibliography",
+  "citation-blurbs",
   "crossrefs",
   "simple",
 ] as const;

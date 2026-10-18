@@ -208,7 +208,25 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "11 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "18 October 2026"');
+  });
+
+  it("says what the notes on cited works send, and that an upload's are looked up by identifier only", () => {
+    /* Plan 261017h stage 3b, the design review's G6: a Crossref title search
+       for a cited work only for an article fetched from a public address
+       (src/citation-blurbs.ts § `importedFromAPublicAddress`); OpenAlex by
+       DOI (src/citation-evidence.ts); Haiku shown the cited works' details
+       and public abstracts, never the article's text. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "Crossref and DataCite are sent its DOI or arXiv identifier, and OpenAlex its DOI",
+    );
+    expect(prose).toContain(
+      "For an article you added from a public web address, a cited work with no DOI may be looked up at Crossref by its title and its first author’s surname instead; for a file you uploaded, the works it cites are looked up by their identifiers only",
+    );
+    expect(prose).toContain(
+      "to write a short note on each work an article cites and check it, for which it is shown each cited work’s title, authors and year and its abstract from a public catalogue, and none of the article’s own text",
+    );
   });
 
   it("says the public shelf's topics are named from shared titles and summaries only", () => {

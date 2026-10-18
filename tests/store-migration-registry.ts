@@ -2849,6 +2849,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      tables are ownerless and this file resets all three between cases, which a
      shared database must never have done to it mid-run. */
   "tests/bibliographic-pg.test.ts": "private-postgres",
+  /* 261017h stage 3b: the notes on cited works — the successor a Bibliography's
+     publication queues, and real jobs claimed, run and published. Its own
+     owner and slug prefix, under the run lock. No GoTrue and no bucket. */
+  "tests/citation-blurbs-pg.test.ts": "private-postgres",
   /* Plan 261009w Stage 2: the expand migration against the old code's and the new code's statements. */
   "tests/bibliography-expand-pg.test.ts": "private-postgres",
   /* Plan 261009w Stage 3: the same for Reception, Claims and the claim-check table's view. */
