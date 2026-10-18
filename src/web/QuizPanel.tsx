@@ -101,12 +101,14 @@ import {
   List,
   LoaderCircle,
   MessageCircleQuestionMark,
+  MessagesSquare,
   RotateCcw,
   SendHorizontal,
   TriangleAlert,
 } from "lucide-react";
 import type { BlockId, Quiz, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
+import { discussQuizMark } from "./chat-handoff.js";
 import { showPremise } from "./quiz-ladder.js";
 import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./quiz-sections.js";
 import type { Section } from "./position.js";
@@ -374,6 +376,7 @@ export function QuizPanel({
   sections,
   onJump,
   onArrowKeys,
+  onDiscuss,
 }: {
   owner: UseQuiz;
   /** A question pressed in the prose, to go to — `QuizArrival`. */
@@ -404,6 +407,12 @@ export function QuizPanel({
    * `onControl` does. Absent in a test that is not about the keys.
    */
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
+  /**
+   * **Discuss this in chat**: hands `Reader` the composer seed for a fresh
+   * chat — the question, the answer and the mark (`discussQuizMark`). Absent,
+   * no button is drawn. Greg, spya-jvsv3q; plan 261018b stage 2.
+   */
+  onDiscuss?: ((seed: string) => void) | undefined;
 }) {
   useRenderCount("QuizPanel");
   const { quiz, attempt, answered } = owner;
@@ -1402,6 +1411,35 @@ export function QuizPanel({
                       <List />
                     </IconButton>
                   </Tooltip>
+                  {/* **Only on a whole mark**: a failed or half-arrived one is
+                      not "the discussion so far", and Try again is the press
+                      for it. Waits rather than sends, like Summary's paragraph
+                      button: what was confusing is the reader's to say. */}
+                  {onDiscuss && mine?.status === "done" && mine.reply.trim() !== "" && (
+                    <Tooltip
+                      content={
+                        <ControlTip
+                          head="Discuss this in chat"
+                          what="A new chat with the AI, starting from this question, your answer and the mark."
+                          how="The chat is kept in Chat, like any other."
+                          press="Opens it with all three quoted, for you to add what you want to ask."
+                        />
+                      }
+                      placement="top"
+                    >
+                      <IconButton
+                        label="Discuss this in chat"
+                        titled={false}
+                        onClick={() =>
+                          onDiscuss(
+                            discussQuizMark({ question: question.question, answer: mine.answer, mark: mine.reply }),
+                          )
+                        }
+                      >
+                        <MessagesSquare />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </div>
 
                 <ReferenceAnswer

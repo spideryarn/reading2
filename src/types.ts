@@ -6153,6 +6153,15 @@ export interface QuizMarkBody {
  */
 export const MAX_QUIZ_ANSWER_CHARS = 4000;
 
+/**
+ * **The most a chat question may be**, heading and quoted text included. The
+ * route refuses more (src/routes.ts); here so a seed the browser writes into
+ * the composer (`discussQuizMark` in src/web/chat-handoff.ts) is sized against
+ * the same number. Long enough for a paragraph of context, short enough that
+ * nothing runs away.
+ */
+export const MAX_CHAT_QUESTION_CHARS = 4000;
+
 /* -------------------------------------------------------------------- faq --
    The questions a careful first-time reader would put to this piece while
    reading it, and the passages where the piece itself responds — the `faq`

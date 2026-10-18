@@ -532,6 +532,46 @@ describe("a reply the provider did not finish writing", () => {
   });
 });
 
+describe("the room a mark is given", () => {
+  it("leaves room for the model's thinking as well as a whole reply", async () => {
+    /* `max_tokens` on the chat wire covers the thinking too. Sonnet 5.5 thinks
+       by default: on a 90k-token book (spya-ag4hsu, 2026-10-18) one mark spent
+       832 tokens thinking and was cut off at the old 1,200, with 368 left for
+       the reply. The ceiling has to hold the worst thinking seen plus the whole
+       reply the old ceiling was sized for. docs/plans/261018b-…md stage 1. */
+    let sent: { max_tokens?: number } | undefined;
+    process.env.OPENROUTER_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (typeof url === "string" && url.startsWith("/api/")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(JSON.stringify({ jobs: [] })),
+          } as unknown as Response);
+        }
+        /* The first model call is the mark; the hidden verdict call after it
+           (src/quiz-verdict.ts, an 8-token ceiling) comes through here too. */
+        sent ??= JSON.parse(String(init?.body)) as { max_tokens?: number };
+        return Promise.resolve(
+          provider(
+            wire({ choices: [{ delta: { content: "You have it." } }] }) +
+              wire({ choices: [{ finish_reason: "stop", delta: {} }] }) +
+              "data: [DONE]\n\n",
+          ),
+        );
+      }),
+    );
+
+    await drain(markAnswerStream(MARK));
+    /* The product decision is 4,000, not merely "more than the observed
+       failure needed". A 2,032-token request would satisfy that arithmetic
+       and quietly give back almost half the margin this change is for. */
+    expect(sent?.max_tokens).toBe(4_000);
+  });
+});
+
 describe("a mark the reader walked away from", () => {
   it("ends with no `done`, so half a reply is never filed as a whole one", async () => {
     /* The reader navigated away. `sseChunks` cancels its reader on abort and a

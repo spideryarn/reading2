@@ -1410,35 +1410,30 @@ td.text.has-hit[data-hues="8"] {
 /* **What a finger's selection gets** — TouchSelectionChip.tsx, and
    docs/project/touch.md § A finger's selection gets a button.
 
-   `--chip-x` / `--chip-y` are the viewport coordinates of the end of the words
-   that will be saved; everything else is here, so the clamping is the
-   stylesheet's and reads the same notch and bar tokens everything else does.
-
-   - **Below the words**, because iOS puts its own callout above them. The gap
-     is there for the selection handle, whose knob hangs under the last line.
-   - **Clamped to the viewport**, inside the safe area and above the bottom bar
-     and install hint where they are showing. The width is stated so the
-     right-hand clamp can be arithmetic rather than a measurement.
+   - **Docked at the screen edge with more room between it and the words**
+     (`data-edge`, chosen in the component): at the bottom above the bottom bar
+     and install hint, or at the top under the top bar. iOS draws its own
+     selection menu right beside the words, above or below as it chooses, and
+     over anything of ours that is there (Greg, 2026-10-18, spya-bynh22).
+   - **Across, it follows the words**: `--chip-x` is the viewport x of the end
+     of the words that will be saved, clamped inside the side safe areas. The
+     width is stated so the right-hand clamp can be arithmetic rather than a
+     measurement.
+   - **The layout viewport, not the visual one**, as the component measures:
+     pinch-zoomed, the chip can sit off the glass. Left so on purpose (plan
+     261018c § Review of the code).
    - **44px tall at every pointer**, not only a coarse one: nothing but a finger
      ever draws it, and a hybrid's primary pointer may be the trackpad.
    - **z-index 50**: over the bars (40), the spine (45) and the mode bands
      (44–46); under every dialog (70) and the bottom bar (96). */
 .touch-select-chip {
   --chip-w: 13rem;
-  --chip-gap: 1.25rem;
   position: fixed;
   z-index: 50;
   left: clamp(
     calc(var(--safe-left) + 0.5rem),
     var(--chip-x, 0px),
     calc(100vw - var(--safe-right) - var(--chip-w) - 0.5rem)
-  );
-  top: clamp(
-    calc(var(--safe-top) + 0.5rem),
-    calc(var(--chip-y, 0px) + var(--chip-gap)),
-    calc(
-      100dvh - max(var(--dock-bottom), var(--safe-bottom)) - var(--hint-now) - var(--control-h-lg) - 0.5rem
-    )
   );
   box-sizing: border-box;
   inline-size: var(--chip-w);
@@ -1464,6 +1459,10 @@ td.text.has-hit[data-hues="8"] {
   user-select: none;
   -webkit-touch-callout: none;
   touch-action: manipulation;
+}
+.touch-select-chip[data-edge="top"] { top: calc(var(--bar-bottom) + 0.5rem); }
+.touch-select-chip[data-edge="bottom"] {
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.5rem);
 }
 .touch-select-chip svg { flex: none; color: var(--highlight-text); }
 .touch-select-chip:active { background: var(--highlight-wash); }

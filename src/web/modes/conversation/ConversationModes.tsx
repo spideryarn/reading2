@@ -103,6 +103,7 @@ export function LearnBand({
   sections,
   onJump,
   onQuizKeys,
+  onDiscussQuizMark,
 }: {
   slug: string;
   /** The opening quiz read, shared with the prose. `useQuizRead` in `OwnedReader`. */
@@ -118,6 +119,8 @@ export function LearnBand({
   onJump(id: BlockId): void;
   /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
+  /** Quiz's *Discuss this in chat* — `QuizPanel`'s `onDiscuss`. */
+  onDiscussQuizMark?: ((seed: string) => void) | undefined;
 }) {
   useRenderCount("LearnBand");
   /* Only for which chips the row draws (QuizPanel.tsx § `LearnSubModeToggle`);
@@ -169,6 +172,7 @@ export function LearnBand({
         sections={sections}
         onJump={onJump}
         onArrowKeys={onQuizKeys}
+        onDiscuss={onDiscussQuizMark}
       />
     );
   if (learn === "tutorial")
@@ -236,6 +240,7 @@ function QuizSubBand({
   sections,
   onJump,
   onArrowKeys,
+  onDiscuss,
 }: {
   slug: string;
   read: QuizRead;
@@ -247,6 +252,7 @@ function QuizSubBand({
   sections: QuizSections;
   onJump(id: BlockId): void;
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
+  onDiscuss?: ((seed: string) => void) | undefined;
 }) {
   useRenderCount("QuizSubBand");
   const owner = useQuiz(slug, read);
@@ -261,6 +267,7 @@ function QuizSubBand({
       sections={sections}
       onJump={onJump}
       onArrowKeys={onArrowKeys}
+      onDiscuss={onDiscuss}
     />
   );
 }

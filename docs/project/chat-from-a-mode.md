@@ -57,7 +57,9 @@ Timeline, Quotes, FAQ and Skim have no such button (checked 2026-10-09: none of 
 glossary or the ideas or anything like that"* (plan 261009k); the other three wait on a queue item,
 and FAQ first needs an id that survives a re-run.
 
-Three things look like this and are not: Summary's *Ask about a paragraph*
+Four things look like this and are not: Quiz's *Discuss this in chat* on a mark
+([quiz.md § On screen](quiz.md#on-screen)), which, like Summary's, waits in the composer and stores
+no origin; Summary's *Ask about a paragraph*
 ([summaries.md](summaries.md#ask-about-a-paragraph-since-2026-10-04)) goes to Chat and stores no
 origin (`summary` is reserved in the database CHECK and not built, and since 2026-10-09 the CHECK
 `chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an

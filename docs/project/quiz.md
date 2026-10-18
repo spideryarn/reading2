@@ -328,6 +328,17 @@ Sol reviews and the browser check:
   roof; the band scrolls, the box never does. It is re-measured when its width changes as well as
   when its words do, or a rotated iPad hides the last lines.
 - The mark is drawn with `CitedText`, so its block ids are chips that jump the prose.
+- **Discuss this in chat** (since 2026-10-18): Chat's two bubbles, last in the step row, on a whole
+  mark only. Greg (spya-jvsv3q): *"it was interesting but confusing. I wanted to discuss how. There
+  needs to be a way to turn the discussion so far into a chat thread and continue it."* The press
+  opens a fresh chat in Chat's band with the question, the answer and the mark quoted in the
+  composer (`discussQuizMark` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts)), and waits for
+  the reader to say what they want to ask, as Summary's paragraph button does. A plain chat: no
+  origin is stored, so the question shows no mark of it
+  ([261018b](../plans/261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat.md)).
+- **The mark's ceiling covers its thinking too.** `MARK_MAX_TOKENS` is 4,000 since 2026-10-18; at
+  1,200 a Sonnet 5.5 mark on a whole book spent 832 tokens thinking and was cut off
+  (`[ai-mark-cut-off]`, spya-ag4hsu, same plan).
 - **A question is ticked answered only when its mark reaches `done`.** A stream that stops cleanly
   without finishing looks exactly like one that finished, which is the whole reason `attempt.status`
   and not a non-empty reply is what the tick reads. [silent-success.md](../reusable/silent-success.md).
