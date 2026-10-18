@@ -1190,8 +1190,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   },
   "quiz-mark": {
     providerDefault:
-      "Not measured. A short mark against a whole-article prompt; a cut-off mark is refused " +
-      "rather than shown (src/quiz-mark.ts § MARK_CUT_OFF).",
+      "Measured 2026-10-18 on Sonnet 5.5: 545–832 thinking tokens on a 90k-token book, which cut " +
+      "a mark off at the old 1,200 ceiling; the ceiling was raised to hold it " +
+      "(src/quiz-mark.ts § MARK_MAX_TOKENS). A cut-off mark is still refused (MARK_CUT_OFF).",
   },
   /* One word out, under an 8-token ceiling (src/quiz-verdict.ts). The provider
      default was fine on GPT-5.6 Luna; GPT-6 Luna reasons by default and spent

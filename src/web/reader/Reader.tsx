@@ -1164,6 +1164,10 @@ export function Reader({
     (paragraphText: string) => handToChat(askAboutSummaryParagraph(paragraphText), "wait"),
     [handToChat],
   );
+  /* Quiz's *Discuss this in chat* (plan 261018b): the question, the answer
+     and the mark, quoted, waiting for what the reader wants to ask. A plain
+     chat, like the paragraph's: no origin is stored. */
+  const discussQuizMarkInChat = useCallback((seed: string) => handToChat(seed, "wait"), [handToChat]);
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   /**
    * **An item's chat between its first press and the summaries hearing of
@@ -3570,6 +3574,7 @@ export function Reader({
             sections={quizSections}
             onJump={bandJump}
             onQuizKeys={onQuizKeys}
+            onDiscussQuizMark={discussQuizMarkInChat}
           />
         ) : null;
       case "glossary":

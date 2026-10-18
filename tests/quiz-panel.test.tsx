@@ -1956,3 +1956,45 @@ describe("where to look again", () => {
     expect(buttons(RETRY)).toHaveLength(0);
   });
 });
+
+/**
+ * **Discuss this in chat** (spya-jvsv3q, plan 261018b stage 2): on a whole mark
+ * only, and its press hands the question, the answer and the mark to chat.
+ */
+describe("discuss a mark in chat", () => {
+  const Q = question(1);
+  const seeds: string[] = [];
+  function paintWith(o: UseQuiz, withDiscuss = true) {
+    act(() => {
+      root.render(
+        createElement(QuizPanel, {
+          owner: o,
+          blocks: BLOCKS,
+          onJump: () => {},
+          ...(withDiscuss ? { onDiscuss: (seed: string) => seeds.push(seed) } : {}),
+        }),
+      );
+    });
+  }
+  const attempt = (over: Partial<Attempt>): Attempt =>
+    ({ questionId: Q.id, answer: "My answer.", status: "done", reply: "Half of it.", error: null, ...over }) as Attempt;
+
+  it("is offered on a whole mark, and hands all three to chat", () => {
+    seeds.length = 0;
+    paintWith(owner({ quiz: batch([Q, question(2)]), attempt: attempt({}) }));
+    press("Discuss this in chat");
+    expect(seeds).toHaveLength(1);
+    expect(seeds[0]).toContain(Q.question);
+    expect(seeds[0]).toContain("My answer.");
+    expect(seeds[0]).toContain("Half of it.");
+  });
+
+  it("is not offered while the mark is arriving, after it failed, or with no chat to hand to", () => {
+    paintWith(owner({ quiz: batch([Q]), attempt: attempt({ status: "marking" }) }));
+    expect(buttons("Discuss this in chat")).toHaveLength(0);
+    paintWith(owner({ quiz: batch([Q]), attempt: attempt({ status: "failed", error: "cut off" }) }));
+    expect(buttons("Discuss this in chat")).toHaveLength(0);
+    paintWith(owner({ quiz: batch([Q]), attempt: attempt({}) }), false);
+    expect(buttons("Discuss this in chat")).toHaveLength(0);
+  });
+});

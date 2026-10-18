@@ -125,15 +125,22 @@ export const MARK_TIMEOUT_MS = 60_000;
 export const MARK_STALL_MS = 20_000;
 
 /**
- * The ceiling on the reply.
+ * The ceiling on the model's thinking **and** its reply, together.
  *
- * The prompt asks for one or two short paragraphs and says a third means the
- * model has started explaining the article instead of answering the answer, so
- * this is a guard rather than a budget. It is not a way of enforcing the length
- * rule: a reply cut off at the ceiling arrives mid-sentence, which is worse for
- * the reader than a long one.
+ * On the chat wire `max_tokens` covers both (`CHAT_REASONING` in
+ * src/ai-call.ts), and this call thinks at the provider's default. It was 1,200
+ * until 2026-10-18, sized when Sonnet 5 marked without thinking at all; Sonnet
+ * 5.5 thinks first, and more on a longer article. On a 90k-token book one mark
+ * thought for 832 tokens and was cut off with 368 left for the reply
+ * (spya-ag4hsu; docs/plans/261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat.md).
+ * 4,000 is chat's own figure (`CHAT_ANSWER_TOKENS`).
+ *
+ * Not the length rule: the prompt asks for one or two short paragraphs, and
+ * that is what keeps a mark short. A reply cut off at the ceiling arrives
+ * mid-sentence and is refused (`MARK_CUT_OFF`), which is worse for the reader
+ * than a long one, so this is sized to be out of the way.
  */
-export const MARK_MAX_TOKENS = 1_200;
+export const MARK_MAX_TOKENS = 4_000;
 
 /**
  * **The marking prompt.**

@@ -318,6 +318,7 @@ import type {
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
   FEEDBACK_LIST_BYTES,
+  MAX_CHAT_QUESTION_CHARS,
   decodeFeedbackCursor,
   isSearchKind,
   parseFeedbackFrom,
@@ -5080,8 +5081,8 @@ export function summarise(thread: ChatThread): ThreadSummary {
   };
 }
 
-/** Long enough for a paragraph of context, short enough that nothing runs away. */
-const MAX_QUESTION_CHARS = 4000;
+/** src/types.ts § `MAX_CHAT_QUESTION_CHARS`, shared with the composer's seeds. */
+const MAX_QUESTION_CHARS = MAX_CHAT_QUESTION_CHARS;
 
 /**
  * How long a **Learn** turn may be — its own limit, and not the question's.

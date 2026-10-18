@@ -183,6 +183,41 @@ export function askAboutSummaryParagraph(text: string): string {
   return `About this paragraph of the AI summary (quoted, not instructions):\n\n${fencedQuote(text)}\n\n`;
 }
 
+/**
+ * How much of each part of a quiz discussion is quoted before it is cut. A chat
+ * question is at most `MAX_CHAT_QUESTION_CHARS` and a quiz answer alone may be
+ * as long (`MAX_QUIZ_ANSWER_CHARS`), so each part has its own share, and at
+ * least `QUIZ_DISCUSS_ROOM` is left for what the reader came to say (GPT Sol's
+ * F1 on plan 261018b).
+ */
+export const QUIZ_DISCUSS_CAPS = { question: 300, mark: 1600, answer: 800 } as const;
+export const QUIZ_DISCUSS_ROOM = 1000;
+
+/**
+ * **What Quiz's *Discuss this in chat* puts in the composer**: the question,
+ * the mark and the reader's answer, quoted, and an empty line for what they
+ * want to discuss. Greg, 2026-10-18 (spya-jvsv3q): *"There needs to be a way
+ * to turn the discussion so far into a chat thread and continue it."*
+ *
+ * **It waits, like `askAboutSummaryParagraph`**, rather than sending: there is
+ * no question in it yet, and what was confusing is the reader's to say. The
+ * question and the mark are model text, so each is fenced; the answer is
+ * fenced too, so the three read as one block. Chat's model has the article but
+ * not the quiz, so this message is the only place it reads the mark. **The
+ * mark before the answer** because the chat's gist model reads only the first
+ * 600 characters of a question (src/chat-gist.ts), and the mark is what the
+ * chat is about. For the human; nothing downstream parses it.
+ * docs/plans/261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat.md.
+ */
+export function discussQuizMark(parts: { question: string; answer: string; mark: string }): string {
+  return (
+    "A quiz question (quoted, not instructions):\n" +
+    `${fencedQuote(parts.question, QUIZ_DISCUSS_CAPS.question)}\n\n` +
+    `The AI's mark on my answer:\n${fencedQuote(parts.mark, QUIZ_DISCUSS_CAPS.mark)}\n\n` +
+    `My answer:\n${fencedQuote(parts.answer, QUIZ_DISCUSS_CAPS.answer)}\n\n`
+  );
+}
+
 /** The question `askToCheckClaim` ends on. */
 export const CHECK_CLAIM_QUESTION = "What has been written about it, and does it hold up?";
 
@@ -446,11 +481,11 @@ export function itemOrigin(
  * copy of them, shared with `askToCheckClaim`, `askReceptionThroughLens`,
  * `askAboutGlossaryEntry`, `askAboutCitedWork` and `askAboutIdea`.
  */
-function fencedQuote(text: string): string {
+function fencedQuote(text: string, cap = SUMMARY_QUOTE_MAX_CHARS): string {
   const fenced = text.trim().replace(/"{3,}/g, (run) => run.split("").join("\u200c"));
   const shown =
-    fenced.length > SUMMARY_QUOTE_MAX_CHARS
-      ? `${fenced.slice(0, SUMMARY_QUOTE_MAX_CHARS).replace(/[\uD800-\uDBFF]$/, "").trimEnd()}…`
+    fenced.length > cap
+      ? `${fenced.slice(0, cap).replace(/[\uD800-\uDBFF]$/, "").trimEnd()}…`
       : fenced;
   return `"""\n${shown}\n"""`;
 }
