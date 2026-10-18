@@ -517,22 +517,43 @@ describe("the committed questions", () => {
   /* qi-7j8d72p9, plan 261016a: a repeat folded into the note an open
      question is about is in its `repeats:`, or the repeat shows as waiting
      with no question. This is where forgetting it goes red. */
-  it("names in an open question's repeats every other report of its source note that waits", () => {
-    const { questions } = compileQuestions(readQuestionFiles());
-    let checked = 0;
+  /* Which open questions are about an awaiting note with more reports than
+     the question names. A function so that the positive control below can be
+     a made-up pair: until 2026-10-18 it was the live cell.com note, and the
+     check went red the day that question was answered (plan 261018j). */
+  type QuestionLike = Pick<ReturnType<typeof compileQuestions>["questions"][number], "id" | "status" | "report" | "repeats" | "refs">;
+  function missingRepeats(questions: readonly QuestionLike[], readNote: (name: string) => string): string[] {
+    const problems: string[] = [];
     for (const question of questions.filter((one) => one.status === "open" && one.report !== null)) {
       const noteName = /docs\/user-feedback\/([^ ·]+\.md)/.exec(question.refs ?? "")?.[1];
       if (!noteName) continue;
-      const header = parseNoteHeader(readFileSync(path.join(NOTES_DIR, noteName), "utf8"));
+      const header = parseNoteHeader(readNote(noteName));
       if (header === null || typeof header === "string" || header.ending !== "awaiting") continue;
       if (!header.reports.includes(question.report ?? "")) continue;
-      checked += header.reports.length > 1 ? 1 : 0;
-      expect(
-        [question.report, ...question.repeats].sort(),
-        `${question.id} is about ${noteName}: name its other reports in repeats:`,
-      ).toEqual([...header.reports].sort());
+      const named = [question.report, ...question.repeats].sort();
+      if (JSON.stringify(named) !== JSON.stringify([...header.reports].sort())) {
+        problems.push(`${question.id} is about ${noteName}: name its other reports in repeats:`);
+      }
     }
-    expect(checked, "the positive control: the cell.com note names two reports (q-emrf2p since 2026-10-17, q-fp8tqr before)").toBeGreaterThan(0);
+    return problems;
+  }
+
+  it("names in an open question's repeats every other report of its source note that waits", () => {
+    const { questions } = compileQuestions(readQuestionFiles());
+    expect(missingRepeats(questions, (name) => readFileSync(path.join(NOTES_DIR, name), "utf8"))).toEqual([]);
+  });
+
+  it("the repeats check catches a two-report note whose question names only one (the positive control)", () => {
+    const note = "---\nreports: spya-aaaaaa, spya-bbbbbb\nending: awaiting\ncomment: Waiting on q-test01.\n---\n# A note\n";
+    const question: QuestionLike = {
+      id: "q-test01",
+      status: "open",
+      report: "spya-aaaaaa",
+      repeats: [],
+      refs: "docs/user-feedback/261018_0000-a-note.md",
+    };
+    expect(missingRepeats([question], () => note)).toHaveLength(1);
+    expect(missingRepeats([{ ...question, repeats: ["spya-bbbbbb"] }], () => note)).toEqual([]);
   });
 
   it("has no live work left in the retired waiting list", () => {
