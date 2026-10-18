@@ -65,9 +65,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "Cites",
     /* "Press this line", not "Press it" (Greg, spya-xf6m2u: *"I don't see
        anything to press"*): the line is the button. And only what opens — the
-       by-line and the reference entry, never the model's reason (261003j). */
-    what: "A work the article cites, at the first place it does. Press this line to open it and see what the article gives for the work: who wrote it, and its entry in the reference list.",
-    how: "From Sources' Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words.",
+       by-line, the reference entry and, where there is one, the checked note
+       from the work's abstract (261017h, 261018i); never the model's reason
+       (261003j). */
+    what: "A work the article cites, at the first place it does. Press this line to open it and see who wrote it, its entry in the reference list, and, where we found its abstract, a short note on what the work says.",
+    how: "From Sources' Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words. The note on what the work says was written by AI from the work's abstract alone, and checked against it.",
   },
   "comment-own": {
     head: "Yours",

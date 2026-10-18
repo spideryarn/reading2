@@ -59,7 +59,9 @@ one would otherwise be missed; it would not be, so it is not
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
-  reference entry for a citation (not the model's reason, since 261003j), or, for a comment, the
+  reference entry for a citation (not the model's reason, since 261003j) and, where there is one,
+  the checked note on what the work says from its abstract, the Sources band's own `CiteBlurb`
+  (since 2026-10-18, [261018i](../plans/261018i-marginalia-notes-that-save-a-click.md)), or, for a comment, the
   first lines of its AI answer. A lone comment's own words are its line and are not said again
   underneath: pressing a comment with no answer only lets a long line wrap (Greg, `spya-a0wpv4`;
   [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)).

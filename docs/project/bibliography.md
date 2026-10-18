@@ -227,7 +227,10 @@ the row** — the model declined, no abstract we could be sure was the work's, a
 checks, a run still to come — because a row without a note says nothing about the work. The prose
 hover card draws the same component (`CiteBlurb` in
 [`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx)); there the card links nothing,
-because the hover card is itself a card the pointer is in. Marginalia does not show notes. The
+because the hover card is itself a card the pointer is in. Marginalia's opened *Cites* line draws
+it too, under the entry, with the link, since an open panel is not a card (since 2026-10-18,
+[261018i](../plans/261018i-marginalia-notes-that-save-a-click.md); Greg, spya-w99qsz: *"what's
+that citation say"*). The
 words, shared with chat, are [`src/citation-blurb-words.ts`](../../src/citation-blurb-words.ts).
 
 **It runs by itself**, after every published Bibliography, in a job of its own, so the list never

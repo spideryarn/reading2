@@ -124,6 +124,29 @@ describe("a shut line", () => {
     expect(item?.querySelector(".marg-cite-entry")?.textContent).toBe(cited.entry);
   });
 
+  /* Greg, spya-w99qsz (plan 261018i stage 1): "what's that citation say" —
+     the checked note from the work's abstract (261017h), the one the Sources
+     band shows, opens under the entry. A work without one is unchanged. */
+  it("opens a citation to the checked note on what the work says, when it has one", () => {
+    const blurb: NonNullable<CitedWork["blurb"]> = {
+      sentences: [{ text: "It shows that loss falls as a power of model size.", quote: "The loss scales as a power-law" }],
+      kind: "author-abstract",
+      source: "datacite",
+      via: "id",
+      workId: "arxiv:2001.08361",
+      url: "https://arxiv.org/abs/2001.08361",
+      readAt: "2026-10-18T08:00:00.000Z",
+    };
+    const noted = { id: "a", title: "Scaling laws", authors: "Kaplan", year: "2020", entry: "Kaplan et al. 2020.", blurb } as unknown as CitedWork;
+    const bare = { id: "b", title: "Another", entry: "Someone 1999." } as unknown as CitedWork;
+    const el = draw([{ kind: "citation", items: [noted, bare] }]);
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    const items = el.querySelectorAll(".marg-open-item");
+    expect(items[0]?.querySelector(".cite-blurb-text")?.textContent).toBe(blurb.sentences[0]!.text);
+    expect(items[0]?.querySelector(".cite-blurb-basis")?.textContent).toBe("From the abstract · arXiv");
+    expect(items[1]?.querySelector(".cite-blurb")).toBeNull();
+  });
+
   it("opens a lone citation with no by-line and no entry to its title, not to nothing", () => {
     const bare = { id: "a", title: "A bare work", why: "THE MODEL'S SENTENCE." } as unknown as CitedWork;
     const el = draw([{ kind: "citation", items: [bare] }]);
