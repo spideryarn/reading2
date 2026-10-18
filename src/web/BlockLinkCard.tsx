@@ -19,7 +19,8 @@
  * `[data-block-link]`, and `setPositionReference` against whichever element
  * that is. It does **not** share `useHoverCard` yet: that one carries a card a
  * pointer can enter and a tap-to-reveal gesture, and this card wants neither —
- * a tap on a block link simply follows it. tooltips.md § The second
+ * a tap on a block link simply follows it (a cross-reference mark is the
+ * exception, below `BlockLinkCard`). tooltips.md § The second
  * implementation.
  *
  * It looks like every other card because it is drawn with `Tooltip`'s classes
@@ -58,7 +59,7 @@
  * A column of dozens of notes, so the same reason as the gutter.
  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
 import {
@@ -221,6 +222,8 @@ function contentFor(
   index: BlockLinkIndex,
   resolveXref: XrefResolver | undefined,
   readingTimeFor: ReadingTimeFor | undefined,
+  /** A finger opened this cross-reference's card, so a second tap goes there. */
+  tapHint = false,
 ): ReactNode | null {
   if (el.matches(READING_LINE)) {
     const row = el.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
@@ -268,8 +271,105 @@ function contentFor(
             <BlockExcerpt block={entry.block} words={shown} />
           </p>
         ))}
+      {tapHint && <div className="tip-tap">Tap again to go there</div>}
     </>
   );
+}
+
+/** How long a press recorded at `pointerdown` may wait for its click (Spine.tsx § PRESS_MS). */
+const PRESS_MS = 2_000;
+
+/**
+ * The phrase a cross-reference piece belongs to. A phrase that marking split
+ * (across an `<em>`) is several `<mark>`s sharing one `data-xref`, and a second
+ * tap on another piece of it is a second tap on the same link.
+ */
+const phraseOf = (el: Element | null | undefined) => el?.getAttribute("data-xref") ?? null;
+const isFinger = (type: string | undefined) => type === "touch" || type === "pen";
+
+interface XrefPermit {
+  phrase: string;
+  at: number;
+}
+
+interface XrefPress {
+  type: string;
+  pointerId: number;
+  at: number;
+  releasedAt: number | null;
+  permit: XrefPermit | undefined;
+}
+
+function pointerIdOf(e: MouseEvent): number | undefined {
+  const id = (e as Partial<PointerEvent>).pointerId;
+  return typeof id === "number" ? id : undefined;
+}
+
+/** Which lifted press can have produced this click. See the effect below. */
+function takeXrefPress(
+  presses: XrefPress[],
+  clickType: string | undefined,
+  pointerId: number | undefined,
+): XrefPress | null {
+  const lastReleasedType = (): string | null => {
+    let latest: XrefPress | null = null;
+    for (const press of presses) {
+      if (
+        press.releasedAt !== null &&
+        (latest?.releasedAt === null ||
+          latest?.releasedAt === undefined ||
+          press.releasedAt >= latest.releasedAt)
+      ) {
+        latest = press;
+      }
+    }
+    return latest?.type ?? null;
+  };
+  const lastReleasedMouse = (id?: number): number => {
+    for (let i = presses.length - 1; i >= 0; i -= 1) {
+      const press = presses[i];
+      if (
+        press?.type === "mouse" &&
+        press.releasedAt !== null &&
+        (id === undefined || press.pointerId === id)
+      ) {
+        return i;
+      }
+    }
+    return -1;
+  };
+  const firstReleased = (type: string): number =>
+    presses.findIndex((press) => press.type === type && press.releasedAt !== null);
+
+  let at = -1;
+  if (clickType === "touch" || clickType === "pen") {
+    at = presses.findIndex(
+      (press) =>
+        press.type === clickType &&
+        press.releasedAt !== null &&
+        press.pointerId === pointerId,
+    );
+    if (at === -1) at = firstReleased(clickType);
+  } else {
+    /* Affected WebKit calls a finger click `mouse` and can even give it the
+       mouse pointer's id. Release order is stronger evidence: a held mouse
+       cannot have clicked, and a real mouse's pointerup is the latest release
+       before its click. This also disambiguates MouseEvent-only Safari. */
+    const latestType = lastReleasedType();
+    if (latestType !== null && latestType !== "mouse") {
+      at = firstReleased(latestType);
+    } else {
+      if (pointerId !== undefined) at = lastReleasedMouse(pointerId);
+      if (at === -1) at = lastReleasedMouse();
+      if (at === -1) {
+        /* A cancelled or touch-adjusted click can lack its pointerup record.
+           Ambiguity must reveal, never authorize a jump. */
+        at = presses.findIndex((press) => isFinger(press.type));
+      }
+    }
+  }
+  if (at === -1) return null;
+  return presses.splice(at, 1)[0] ?? null;
 }
 
 function BlockLinkCard({
@@ -281,9 +381,14 @@ function BlockLinkCard({
   resolveXref: XrefResolver | undefined;
   readingTimeFor: ReadingTimeFor | undefined;
 }) {
+  /** The cross-reference phrase a finger opened, which is the card that says "Tap again". */
+  const tappedPhrase = useRef<string | null>(null);
+  const resolveRef = useRef(resolveXref);
+  resolveRef.current = resolveXref;
   const { card, controls, open } = useDelegatedCard({
     selector: BLOCK_CARD_TRIGGERS,
-    contentFor: (el) => contentFor(el, index, resolveXref, readingTimeFor),
+    contentFor: (el) =>
+      contentFor(el, index, resolveXref, readingTimeFor, phraseOf(el) === tappedPhrase.current),
     referenceFor,
     /* Not on a trigger hidden from assistive technology — the reading-time
        line is decoration, and nothing about reading time is announced. (The
@@ -340,6 +445,143 @@ function BlockLinkCard({
     };
     document.addEventListener("click", press);
     return () => document.removeEventListener("click", press);
+  }, [controls]);
+
+  /* The "Tap again" line belongs to the card a tap opened and to no later
+     opening of it — but all pieces of one split phrase are the same link. */
+  useEffect(() => {
+    if (phraseOf(open) !== tappedPhrase.current) tappedPhrase.current = null;
+  }, [open]);
+
+  /* **A finger's first tap on a cross-reference shows its card; the second goes
+     there** — Greg, 2026-10-17 (spya-yk33ke): *"I was expecting a single touch
+     on an iPad to show me a tooltip before taking me there."* The rule every
+     other underline in the prose with a card already keeps (touch.md § What
+     happens where): a surface with no hover has to let the first press mean
+     *show me*, or the reader commits blind.
+
+     **The finger is read off the `pointerdown` and the decision made at the
+     click** — touch.md's rule for any new tap rule. On iOS 18.2 and later a
+     finger's click says `mouse` (WebKit bug 282988), and a tap's pointer
+     events and its click can disagree about where and whether
+     (docs/postmortems/260915a-a-tap-judged-at-pointerup-and-acted-on-at-click.md),
+     so the click, the event that jumps, is the one place to stop a jump.
+
+     **Capture, on `document`**, which is above React's root and so ahead of
+     TableView's `onClick`, the thing that jumps. Revealing stops the click
+     there. A second tap whose press began with this phrase's card open, from a
+     tap, lets it through, and TableView jumps as it does for a mouse. A mouse
+     and a keyboard are untouched.
+
+     **Doubt reveals; it never jumps** (GPT Sol, plan review). Recent presses
+     are queued with their release order, because WebKit can give a delayed
+     finger click a trackpad pointer's id. A finger landing beside the mark and
+     adjusted onto it is still recognised as a finger, but carries no
+     permission to jump: permission belongs only to a fresh press on this open
+     phrase. The first click spends every pending permission, so a grouped click
+     behind it reveals rather than jumping again.
+     docs/plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md. */
+  useEffect(() => {
+    let presses: XrefPress[] = [];
+    const prune = (at: number) => {
+      presses = presses.filter((press) => at - press.at <= PRESS_MS);
+    };
+    const down = (e: PointerEvent) => {
+      /* `pen` as well as `touch`: touch.md § An Apple Pencil counts as a finger. */
+      prune(e.timeStamp);
+      const finger = isFinger(e.pointerType);
+      let permit: XrefPermit | undefined;
+      /* A second contact turns the gesture into a pinch/palm ambiguity. It
+         revokes authority already captured by the primary contact too. */
+      if (finger && e.isPrimary === false) {
+        for (const press of presses) press.permit = undefined;
+      }
+      if (finger && e.isPrimary !== false) {
+        const opened = controls.current();
+        const openPhrase = phraseOf(opened);
+        const pressed = (e.target as Element | null)?.closest?.(XREF_SELECTOR) ?? null;
+        const pressedPhrase =
+          pressed !== null && resolveRef.current?.(pressed) ? phraseOf(pressed) : null;
+        if (
+          openPhrase !== null &&
+          openPhrase === tappedPhrase.current &&
+          pressedPhrase === openPhrase
+        ) {
+          permit = { phrase: openPhrase, at: e.timeStamp };
+        }
+      }
+      presses.push({
+        type: e.pointerType,
+        pointerId: e.pointerId,
+        at: e.timeStamp,
+        releasedAt: null,
+        permit,
+      });
+      if (presses.length > 16) presses.shift();
+    };
+    const up = (e: PointerEvent) => {
+      for (let i = presses.length - 1; i >= 0; i -= 1) {
+        const press = presses[i];
+        if (
+          press?.pointerId === e.pointerId &&
+          press.type === e.pointerType &&
+          press.releasedAt === null
+        ) {
+          press.releasedAt = e.timeStamp;
+          return;
+        }
+      }
+    };
+    const cancel = (e: PointerEvent) => {
+      /* Keep no authority from a cancelled gesture. Its later compatibility
+         click, if WebKit still sends one, is caught as an unmatched click. */
+      presses = presses.filter((press) => press.pointerId !== e.pointerId);
+    };
+    const click = (e: MouseEvent) => {
+      const own = (e as Partial<PointerEvent>).pointerType;
+      /* A keyboard's, voice's or script's click (useTapReveal.ts § isKeyboardClick). */
+      if (own === "" || e.detail < 1) {
+        for (const press of presses) press.permit = undefined;
+        return;
+      }
+      const pointerId = pointerIdOf(e);
+      const press = takeXrefPress(presses, own, pointerId);
+      /* Match before pruning: a real mouse may be held for more than the
+         touch permit's two-second lifetime and must still remain a mouse. */
+      prune(e.timeStamp);
+      /* A real mouse has a document-level down/up record. With none, this can
+         be a touch-adjusted or post-cancel WebKit click mislabeled `mouse`;
+         the safe answer is reveal. */
+      const finger = press ? isFinger(press.type) : true;
+      const permit = press?.permit;
+      /* A click spends every snapshot made while the same card was open.
+         Grouped clicks may reveal after one jump, but never jump twice. */
+      for (const pending of presses) pending.permit = undefined;
+      if (!finger) return;
+      const el = (e.target as Element | null)?.closest?.(XREF_SELECTOR);
+      if (!el || !resolveRef.current?.(el)) return;
+      /* A click that ends a selection is TableView's to refuse, as for a mouse. */
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) return;
+      if (permit !== undefined && permit.phrase === phraseOf(el) && e.timeStamp - permit.at <= PRESS_MS) {
+        controls.close();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      tappedPhrase.current = phraseOf(el);
+      controls.openNow(el, e.clientY, true);
+    };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("pointerup", up, true);
+    document.addEventListener("pointercancel", cancel, true);
+    document.addEventListener("click", click, true);
+    return () => {
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("pointerup", up, true);
+      document.removeEventListener("pointercancel", cancel, true);
+      document.removeEventListener("click", click, true);
+    };
   }, [controls]);
 
   return card;

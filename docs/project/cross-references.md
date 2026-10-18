@@ -9,7 +9,8 @@ link. Two examples:
 - "Figure 4C" links to the figure.
 
 Hovering or focusing the phrase shows the same card every block link has: the target's section and
-the start of its paragraph. Clicking jumps there, which flashes the target and offers the back chip.
+the start of its paragraph; on a touch screen the first tap does. Clicking jumps there, which
+flashes the target and offers the back chip.
 The links are drawn in every mode. Cross-references are not a mode and have no band. Part of
 [reading-view-overview.md](reading-view-overview.md).
 
@@ -99,7 +100,9 @@ cross-reference: it cannot know the nonce.
   jumps.
 - **Modified clicks**: nothing special. There is no `href`, so ⌘-click is not "open in a new tab"
   here.
-- **Touch**: a tap goes straight there.
+- **Touch**: the first tap shows the card, with "Tap again to go there"; the second goes there.
+  [touch.md § What happens where](touch.md#what-happens-where),
+  [261018e](../plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md).
 
 ## Who sees it
 

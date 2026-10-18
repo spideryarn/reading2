@@ -237,7 +237,9 @@ function mouse(type: string, target: Element, init: MouseEventInit = {}): MouseE
 
 function click(target: Element, init: MouseEventInit = {}): void {
   act(() => {
+    mouse("pointerdown", target, init);
     mouse("mousedown", target, init);
+    mouse("pointerup", target, init);
     mouse("mouseup", target, init);
     mouse("click", target, init);
   });
@@ -353,6 +355,274 @@ describe("following a cross-reference", () => {
   });
 });
 
+/**
+ * **A finger's first tap shows the card, the second goes there** — Greg,
+ * 2026-10-17 (spya-yk33ke): *"I was expecting a single touch on an iPad to show
+ * me a tooltip before taking me there."* Until then a tap jumped blind.
+ * docs/plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md.
+ */
+describe("a cross-reference under a finger", () => {
+  const hint = () => document.querySelector("[role='tooltip'] .tip-tap");
+
+  it("the first tap shows the target's card and goes nowhere; the second goes there", () => {
+    paint();
+    tap(xrefIn(A));
+    expect(jumped).toEqual([]);
+    expect(blockCard()?.textContent).toContain("forged words here");
+    expect(hint()?.textContent).toBe("Tap again to go there");
+    tap(xrefIn(A));
+    expect(jumped).toEqual([C]);
+  });
+
+  it("a tap on another cross-reference shows that one instead of jumping", () => {
+    paint();
+    tap(xrefIn(A));
+    tap(xrefIn(D));
+    expect(jumped).toEqual([]);
+    expect(blockCard()?.textContent).toContain("second experiment");
+    tap(xrefIn(D));
+    expect(jumped).toEqual([B]);
+  });
+
+  /** WebKit bug 282988: on iOS 18.2+ a finger's click says `mouse`; the press said `touch`. */
+  it("reads the finger off the press, not the click", () => {
+    paint();
+    const mark = xrefIn(A);
+    const fire = (type: string, pointerType: string) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY: 10, detail: 1 });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      Object.defineProperty(event, "pointerId", { value: 1 });
+      Object.defineProperty(event, "isPrimary", { value: true });
+      mark.dispatchEvent(event);
+    };
+    act(() => {
+      fire("pointerdown", "touch");
+      fire("pointerup", "touch");
+      fire("click", "mouse");
+    });
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+    act(() => {
+      fire("pointerdown", "touch");
+      fire("pointerup", "touch");
+      fire("click", "mouse");
+    });
+    expect(jumped).toEqual([C]);
+  });
+
+  it("a mouse click still jumps at once, and a hovered card says nothing about tapping", () => {
+    paint();
+    hover(xrefIn(A));
+    expect(hint()).toBeNull();
+    click(xrefIn(A));
+    expect(jumped).toEqual([C]);
+  });
+
+  /** Doubt reveals; it never jumps (GPT Sol, plan review of 261018e). */
+  const fire = (el: Element | Document, type: string, pointerType: string, init: { isPrimary?: boolean; pointerId?: number; timeStamp?: number } = {}) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY: 10, detail: 1 });
+    Object.defineProperty(event, "pointerType", { value: pointerType });
+    Object.defineProperty(event, "pointerId", { value: init.pointerId ?? 1 });
+    Object.defineProperty(event, "isPrimary", { value: init.isPrimary ?? true });
+    if (init.timeStamp !== undefined) Object.defineProperty(event, "timeStamp", { value: init.timeStamp });
+    el.dispatchEvent(event);
+  };
+
+  it("a second tap whose press is too old to be its click's shows the card again, and goes nowhere", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch", { timeStamp: 1000 });
+      fire(xrefIn(A), "click", "mouse", { timeStamp: 9000 });
+    });
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("does not lose a pending finger click when a different mouse pointer presses", () => {
+    paint();
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch", { pointerId: 7 });
+      fire(xrefIn(A), "pointerup", "touch", { pointerId: 7 });
+      fire(row(D), "pointerdown", "mouse", { pointerId: 1 });
+      /* WebKit can put the mouse pointer's id on the delayed finger click. */
+      fire(xrefIn(A), "click", "mouse", { pointerId: 1 });
+    });
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("a MouseEvent-only click follows its fresh mouse press, not an older touch", () => {
+    paint();
+    act(() => {
+      /* No click arrived for this press. Its record must not taint the mouse. */
+      fire(row(D), "pointerdown", "touch", { pointerId: 7 });
+      fire(row(D), "pointerup", "touch", { pointerId: 7 });
+      fire(xrefIn(A), "pointerdown", "mouse", { pointerId: 1 });
+      fire(xrefIn(A), "pointerup", "mouse", { pointerId: 1 });
+      const event = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+      });
+      xrefIn(A).dispatchEvent(event);
+    });
+    expect(jumped).toEqual([C]);
+    expect(blockCard()).toBeNull();
+  });
+
+  it("a mouse held longer than a touch permit still jumps at once", () => {
+    paint();
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "mouse", { timeStamp: 1000 });
+      fire(xrefIn(A), "pointerup", "mouse", { timeStamp: 4000 });
+      fire(xrefIn(A), "click", "mouse", { timeStamp: 4000 });
+    });
+    expect(jumped).toEqual([C]);
+  });
+
+  it("a finger landing beside the mark, its click adjusted onto it, reveals", () => {
+    paint();
+    act(() => {
+      fire(row(A), "pointerdown", "touch");
+      fire(xrefIn(A), "click", "mouse");
+    });
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("a second press that began beside the open mark cannot borrow its permission to jump", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => {
+      fire(row(A), "pointerdown", "touch");
+      fire(xrefIn(A), "click", "mouse");
+    });
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("a click that says touch reveals even with no press seen", () => {
+    paint();
+    act(() => fire(xrefIn(A), "click", "touch"));
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("a cancelled second press does not carry the jump", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch");
+      fire(xrefIn(A), "pointercancel", "touch");
+      fire(xrefIn(A), "click", "mouse");
+    });
+    expect(jumped).toEqual([]);
+  });
+
+  it("two presses whose clicks arrive together: the second click reveals rather than jumping", () => {
+    paint();
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch");
+      fire(xrefIn(A), "pointerup", "touch");
+      fire(xrefIn(A), "pointerdown", "touch");
+      fire(xrefIn(A), "pointerup", "touch");
+      fire(xrefIn(A), "click", "mouse");
+      fire(xrefIn(A), "click", "mouse");
+    });
+    expect(jumped).toEqual([]);
+  });
+
+  it("grouped clicks spend an open card's permission only once", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch", { pointerId: 7 });
+      fire(xrefIn(A), "pointerup", "touch", { pointerId: 7 });
+      fire(xrefIn(A), "pointerdown", "touch", { pointerId: 8 });
+      fire(xrefIn(A), "pointerup", "touch", { pointerId: 8 });
+      fire(xrefIn(A), "click", "mouse", { pointerId: 7 });
+      fire(xrefIn(A), "click", "mouse", { pointerId: 8 });
+    });
+    expect(jumped).toEqual([C]);
+  });
+
+  it("a non-primary contact cannot carry permission to jump", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch", { isPrimary: false, pointerId: 8 });
+      fire(xrefIn(A), "click", "mouse", { pointerId: 8 });
+    });
+    expect(jumped).toEqual([]);
+  });
+
+  it("a second contact revokes the primary finger's permission to jump", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => {
+      fire(xrefIn(A), "pointerdown", "touch", { pointerId: 7 });
+      fire(xrefIn(A), "pointerdown", "touch", { isPrimary: false, pointerId: 8 });
+      fire(xrefIn(A), "pointerup", "touch", { pointerId: 7 });
+      fire(xrefIn(A), "click", "mouse", { pointerId: 7 });
+    });
+    expect(jumped).toEqual([]);
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("a second tap on another piece of the same split phrase goes there", () => {
+    paint();
+    const pieces = row(B).querySelectorAll("mark.xref");
+    expect(pieces.length).toBeGreaterThan(1);
+    tap(pieces[0]!);
+    expect(jumped).toEqual([]);
+    tap(pieces[pieces.length - 1]!);
+    expect(jumped).toEqual([A]);
+  });
+
+  it("a pen can hover to another piece of the open split phrase and press it to go there", () => {
+    paint();
+    const pieces = row(B).querySelectorAll("mark.xref");
+    expect(pieces.length).toBeGreaterThan(1);
+    act(() => {
+      fire(pieces[0]!, "pointerdown", "pen");
+      fire(pieces[0]!, "pointerup", "pen");
+      fire(pieces[0]!, "click", "pen");
+    });
+    expect(jumped).toEqual([]);
+    act(() => {
+      fire(pieces[pieces.length - 1]!, "pointerover", "pen");
+      vi.advanceTimersByTime(1);
+    });
+    expect(hint()?.textContent).toBe("Tap again to go there");
+    act(() => {
+      fire(pieces[pieces.length - 1]!, "pointerdown", "pen");
+      fire(pieces[pieces.length - 1]!, "pointerup", "pen");
+      fire(pieces[pieces.length - 1]!, "click", "pen");
+    });
+    expect(jumped).toEqual([A]);
+  });
+
+  it("the card is still up after the hover card's close delay", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(blockCard()).not.toBeNull();
+  });
+
+  it("after scroll closes a tapped card, a later mouse hover has no tap hint", () => {
+    paint();
+    tap(xrefIn(A));
+    act(() => document.dispatchEvent(new Event("scroll")));
+    act(() => vi.advanceTimersByTime(100));
+    hover(xrefIn(A));
+    expect(blockCard()).not.toBeNull();
+    expect(hint()).toBeNull();
+  });
+});
+
 describe("a mark the article wrote itself", () => {
   it("does nothing on click, Enter or hover", () => {
     paint();
@@ -382,8 +652,12 @@ describe("the xref wins the words it is on", () => {
     expect(proseCard()?.textContent).toContain(TERM.senseHere);
   });
 
-  it("over a glossary term, on a finger: the tap jumps rather than revealing the term", () => {
+  it("over a glossary term, on a finger: the block card, then the jump, never the term", () => {
     paint(LINKS, { withTerm: true });
+    tap(row(D).querySelector("mark.term.xref")!);
+    expect(jumped).toEqual([]);
+    expect(proseCard()).toBeNull();
+    expect(blockCard()?.textContent).toContain("second experiment");
     tap(row(D).querySelector("mark.term.xref")!);
     expect(jumped).toEqual([B]);
     expect(proseCard()).toBeNull();
@@ -400,6 +674,11 @@ describe("the xref wins the words it is on", () => {
     hover(both);
     expect(proseCard()?.textContent ?? "").not.toContain("The Second Experiment Paper");
     expect(blockCard()?.textContent).toContain("reduced recall");
+    act(() => mouse("pointerout", both));
+    act(() => vi.advanceTimersByTime(600));
+    tap(both);
+    expect(jumped).toEqual([]);
+    expect(proseCard()).toBeNull();
     tap(both);
     expect(jumped).toEqual([A]);
   });
@@ -410,6 +689,9 @@ describe("the xref wins the words it is on", () => {
     const both = row(A).querySelector("mark.cmt.xref") as HTMLElement;
     expect(both, "the comment and the xref should share one <mark>").not.toBeNull();
     click(both);
+    expect(openedComments).toEqual([]);
+    expect(jumped).toEqual([C]);
+    tap(both);
     expect(openedComments).toEqual([]);
     expect(jumped).toEqual([C]);
     tap(both);
@@ -430,6 +712,8 @@ describe("the xref wins the words it is on", () => {
     const both = row(A).querySelector("mark.hit.xref") as HTMLElement;
     expect(both, "the hit and the xref should share one <mark>").not.toBeNull();
     click(both);
+    tap(both);
+    expect(jumped).toEqual([C]);
     tap(both);
     expect(jumped).toEqual([C, C]);
   });

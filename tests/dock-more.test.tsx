@@ -212,8 +212,10 @@ describe("the More button on the reading view", () => {
      straight after Skim inside the bands' frame since 2026-10-08, Greg:
      *"just after the skim mode … as part of that group, rather than out on
      their own"* (plan 261008d; tests/dock-groups.test.tsx has the frames);
-     straight after Summary since 2026-10-11 (spya-hdde62, plan 261011x). */
-  it("is not a radio, and stands in the bands' frame straight after Summary", () => {
+     straight after Summary since 2026-10-11 (spya-hdde62, plan 261011x), and
+     one place on, straight after Skim, since 2026-10-18 (spya-c0va9e, plan
+     261018f). */
+  it("is not a radio, and stands in the bands' frame straight after Skim", () => {
     reading();
     const more = moreTrigger(host) as HTMLButtonElement;
     expect(more.getAttribute("role")).toBeNull();
@@ -222,8 +224,8 @@ describe("the More button on the reading view", () => {
     const frame = more.closest(".dock-frame") as HTMLElement;
     const buttons = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
     const at = buttons.indexOf(more);
-    expect(buttons[at - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.summary);
-    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
+    expect(buttons[at - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
+    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.sources);
   });
 
   it("opens a menu of exactly the gathered modes this reader has, in order", () => {
@@ -341,10 +343,10 @@ describe("the More button off the reading view", () => {
     expect(links).toEqual(
       labelsOf(["plain", "structure", "summary", "skim", "sources", "search", "chat", "learn", "marginalia"]),
     );
-    /* In the bands' frame, straight after Summary, as on the reading view. */
+    /* In the bands' frame, straight after Skim, as on the reading view. */
     const frame = more.closest(".dock-frame") as HTMLElement;
     const inFrame = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
-    expect(inFrame[inFrame.indexOf(more) - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.summary);
+    expect(inFrame[inFrame.indexOf(more) - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
   });
 
   it("its items are the links the bar used to draw", () => {

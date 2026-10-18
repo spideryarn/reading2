@@ -70,7 +70,7 @@ property of the region rather than of the gesture. A table too wide for the wind
 panned by hand; you do it from a gist column rather than from the middle of a sentence. See
 [260827t-mobile-reading-view.md § One axis at a time](../plans/260827t-mobile-reading-view.md).
 
-A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Four places reveal
+A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Several places reveal
 first and act second**, and all for the same reason: they carry a hover card, and a surface with
 no hover has to let the first press mean *show me* or the reader commits blind. Since 2026-10-03
 there are two more, both answering Greg's reports (spya-a868zs, spya-vskqfn):
@@ -88,6 +88,19 @@ there are two more, both answering Greg's reports (spya-a868zs, spya-vskqfn):
   gutter column, under every control (gutter.css, the end).
 
 [261003c](../plans/261003c-tap-opens-structure-row-cards-and-the-reading-time-card-on-touch.md).
+
+**And a cross-reference in the prose, since 2026-10-18** — first tap opens the block card of the
+passage it points at ("Tap again to go there"), second goes there. Until then it jumped blind, on
+purpose, and Greg expected otherwise (spya-yk33ke):
+
+> I was expecting a single touch on an iPad to show me a tooltip before taking me there.
+>
+> — Greg, 2026-10-17 (spya-yk33ke)
+
+The finger is read off the `pointerdown` and the jump stopped at the click, the rule below
+(`BlockLinkCard.tsx`, the effect after the reading-time press;
+[261018e](../plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md)).
+
 The four older ones:
 
 - **The spine**, whose bands are proportional, so most are a few pixels tall and tapping one blind

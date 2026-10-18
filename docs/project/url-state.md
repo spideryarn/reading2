@@ -538,6 +538,22 @@ needed. What Greg asked for:
 > — Greg, 2026-09-12 (SPIDERYARN-READING2-41,
 > [260916a](../plans/260916a-back-to-where-you-were-survives-a-mode-change.md))
 
+**Or until it has spent thirty seconds without the reader interacting with it**, since 2026-10-18.
+The *stamp* lives as above; the *chip* fades and takes it off the entry, exactly as its × does, so
+Back is untouched. A mouse resting on it or focus inside it holds the clock, and a new jump restarts
+it:
+
+> But after a while, if I haven't clicked it, probably I'm never gonna. And so maybe we could have,
+> I don't know, 30 second timeout on it, and after that it just disappears, because otherwise I have
+> to dismiss it explicitly, and it's just like a slight distraction.
+>
+> — Greg, 2026-10-17 (spya-vzrjju,
+> [261018e](../plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md))
+
+`RETURN_CHIP_MS` in [`ReturnChip.tsx`](../../src/web/ReturnChip.tsx). The band's own pill,
+*back to ⟨mode⟩*, does not time out: the band is hidden behind it
+([touch.md § A passage link in a covering band](touch.md#a-passage-link-in-a-covering-band-shows-the-passage)).
+
 That is already the design: every band's jump is the `onJump` it is handed, which is `jumpTo` in
 [`reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts), so a mode that uses
 it gets the chip with no code of its own.

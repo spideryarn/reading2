@@ -1,0 +1,5 @@
+Review the plan at docs/plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md, read-only.
+
+Context: two small admin UI tidies in a TypeScript/React app. Relevant code: src/web/GlossaryPanel.tsx § MoreRow (around lines 2240-2340), src/web/Dock.tsx (MORE_AFTER, cutForMore, bandsInOrder, splitForMore), src/web/dock-fit.ts § moreOffTheEdge, src/web/usePressToggle.ts, src/web/modes/referee/RefereeMode.tsx § HowToRead, tests/dock-groups.test.tsx, tests/dock-more-leads.test.tsx, tests/glossary-find-more-keeps-the-lists-profile.test.tsx, docs/project/tooltips.md.
+
+Find real problems: anything that would break (for example where an open gathered mode is drawn relative to More after the move, keyboard/radiogroup order, the off-edge guard's measurement, the Help page and its screenshot), accessibility of the (i) button, and whether a simpler approach is better. Give findings ranked by severity, each with file:line and a concrete fix, then a one-line verdict: APPROVE, APPROVE WITH CHANGES, or REJECT.
