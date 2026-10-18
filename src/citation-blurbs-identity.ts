@@ -18,8 +18,28 @@
 
 import { createHash } from "node:crypto";
 
-import { REGISTRY_NEGATIVE_TTL_MS } from "./citation-evidence.js";
-import type { CitationBlurbEntry, CitationBlurbRegistryWhy, CitationBlurbs, CitedWork } from "./types.js";
+import { parseWorkId } from "./bibliographic.js";
+import { evidenceUrl, REGISTRY_NEGATIVE_TTL_MS } from "./citation-evidence.js";
+import type {
+  Bibliography,
+  CitationBlurbEntry,
+  CitationBlurbRegistryWhy,
+  CitationBlurbs,
+  CitationBlurbSentence,
+  CitedWork,
+  CitedWorkBlurb,
+} from "./types.js";
+
+/** One sentence by default; a second only when the abstract separately supports it (G4). */
+export const BLURB_MAX_SENTENCES = 2;
+/** The whole note, both sentences together. */
+export const BLURB_MAX_CHARS = 400;
+/**
+ * A supporting quote's ceiling in characters, for the read guard only: the
+ * writer's rule is 6–30 words (src/citation-blurbs.ts), and thirty long words
+ * fit well inside this.
+ */
+export const BLURB_QUOTE_MAX_CHARS = 400;
 
 /**
  * The writer's prompt and the schema it answers in — the stamp's
@@ -101,4 +121,121 @@ export function citationBlurbsExpectedHash(
     return entry !== undefined && entry.identity === rowIdentity(row) && registryNegativeExpired(entry, now);
   });
   return due ? `${hash}${RECHECK_SUFFIX}` : hash;
+}
+
+/* ------------------------------------------------------------- the read -- */
+
+const KINDS: readonly CitedWorkBlurb["kind"][] = ["author-abstract", "registry-reconstruction"];
+const SOURCES: readonly CitedWorkBlurb["source"][] = ["crossref", "datacite", "openalex"];
+const VIAS: readonly CitedWorkBlurb["via"][] = ["id", "title"];
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | null {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : null;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/**
+ * **The one read guard: a stored entry as a reader may be shown it, or null.**
+ * The owner's `loadBibliography` (`attachBlurbs`, src/bibliography.ts) and a
+ * visitor's DTO (`publicCitedWork`, src/public/dto.ts) both call it, so the two
+ * cannot show different notes for one row. Plan 261017h stage 3c; the design's
+ * § 2 (*Attach by identity only*) as amended by G5 and G8.
+ *
+ * A note is shown only when **all** of these hold, and nothing is shown
+ * otherwise — declined, no evidence, a failed check, a transient row (never
+ * stored), and anything that does not read as a note:
+ *
+ * - `state` is `blurb`;
+ * - its `identity` equals `rowIdentity` recomputed from the row **as the list
+ *   stores it** (a list made again that changed the title, authors, year, link
+ *   or registry verdict takes the note down);
+ * - its `validationVersion` is today's (G8). **The prompt version and the
+ *   model do not hide it**: a new prompt keeps a paid-for, checked note on
+ *   screen until a run replaces it.
+ *
+ * And every field is rebuilt rather than passed through, because JSONB arrives
+ * unchecked: one or two sentences, each a non-empty text and quote within the
+ * caps; the three labels from their closed lists; `workId` re-parsed by
+ * `parseWorkId`; **`url` built from it by `evidenceUrl`**, never the stored
+ * one; `readAt` a moment that parses, written back as ISO. No hash, no model,
+ * no versions leave here.
+ */
+export function shownBlurb(entry: unknown, row: IdentityRow): CitedWorkBlurb | null {
+  const e = record(entry);
+  if (e === null || e.state !== "blurb") return null;
+  if (e.validationVersion !== CITATION_BLURBS_VALIDATION_VERSION) return null;
+  if (typeof e.identity !== "string" || e.identity !== rowIdentity(row)) return null;
+
+  if (!Array.isArray(e.sentences) || e.sentences.length === 0 || e.sentences.length > BLURB_MAX_SENTENCES) return null;
+  const sentences: CitationBlurbSentence[] = [];
+  for (const raw of e.sentences as unknown[]) {
+    const s = record(raw);
+    const text = typeof s?.text === "string" ? s.text.trim() : "";
+    const quote = typeof s?.quote === "string" ? s.quote.trim() : "";
+    if (text === "" || quote === "" || text.length > BLURB_MAX_CHARS || quote.length > BLURB_QUOTE_MAX_CHARS) return null;
+    sentences.push({ text, quote });
+  }
+  if (sentences.reduce((n, s) => n + s.text.length, 0) + (sentences.length - 1) > BLURB_MAX_CHARS) return null;
+
+  const ev = record(e.evidence);
+  const kind = oneOf(ev?.kind, KINDS);
+  const source = oneOf(ev?.source, SOURCES);
+  const via = oneOf(ev?.via, VIAS);
+  const workId = typeof ev?.workId === "string" ? parseWorkId(ev.workId) : null;
+  const readAt = typeof ev?.readAt === "string" ? Date.parse(ev.readAt) : Number.NaN;
+  if (kind === null || source === null || via === null || workId === null || !Number.isFinite(readAt)) return null;
+  return { sentences, kind, source, via, workId, url: evidenceUrl(workId), readAt: new Date(readAt).toISOString() };
+}
+
+/** The stored artefact's `entries`, or null when the column holds nothing that reads as one. */
+export function storedBlurbEntries(stored: unknown): Readonly<Record<string, unknown>> | null {
+  return record(record(stored)?.entries);
+}
+
+/** The entry stored for one row id — own keys only, so `__proto__` or `constructor` is never an entry. */
+export function storedBlurbEntry(entries: Readonly<Record<string, unknown>>, id: string): unknown {
+  return Object.hasOwn(entries, id) ? entries[id] : undefined;
+}
+
+/**
+ * **Put each cited work's note onto its row, at read time** — the owner's
+ * `loadBibliography` (src/store/pg.ts). `stored` is the `citation_blurbs`
+ * column as it came back, unread; `shownBlurb` decides each row, the guard a
+ * visitor's DTO uses too, so the owner and a visitor are shown one rule.
+ *
+ * **The identity is recomputed from the row as the list stores it**
+ * (`asStored`), not from `shown`, because the step fingerprinted the stored
+ * row, and `attachFinds` (src/bibliography.ts) turns a searched row into a
+ * `web` one — a different link — on the owner's read. Rows are matched by id.
+ * A row that already carries a `blurb` (nothing writes one into the list, but
+ * JSONB is unchecked) loses it unless the column gives it one.
+ *
+ * Here rather than beside `attachFinds` in src/bibliography.ts, where the
+ * brief first put it, because that file importing this one closes an import
+ * cycle (this → citation-evidence → citation-lookup → bibliography).
+ */
+export function attachBlurbs(
+  shown: Bibliography,
+  stored: unknown,
+  asStored: readonly CitedWork[] = shown.citations,
+): Bibliography {
+  const entries = storedBlurbEntries(stored);
+  const byId = new Map(asStored.map((row) => [row.id, row]));
+  let changed = false;
+  const works = shown.citations.map((work) => {
+    const row = byId.get(work.id);
+    const blurb = entries === null || row === undefined ? null : shownBlurb(storedBlurbEntry(entries, work.id), row);
+    if (blurb === null) {
+      if (!("blurb" in work)) return work;
+      changed = true;
+      const { blurb: _dropped, ...rest } = work;
+      return rest;
+    }
+    changed = true;
+    return { ...work, blurb };
+  });
+  return changed ? { ...shown, citations: works } : shown;
 }

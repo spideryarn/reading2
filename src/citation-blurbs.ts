@@ -45,6 +45,8 @@ import { randomBytes } from "node:crypto";
 
 import { openRouterJson, type AiRequestBody } from "./ai-call.js";
 import {
+  BLURB_MAX_CHARS,
+  BLURB_MAX_SENTENCES,
   CITATION_BLURBS_PROMPT_VERSION,
   CITATION_BLURBS_VALIDATION_VERSION,
   PARTIAL_SUFFIX,
@@ -108,10 +110,9 @@ export const DEADLINE_MARGIN_MS = 20_000;
 export const BLURB_MAX_TOKENS = 16_000;
 /** A check call's answer ceiling: some thinking, then a verdict a sentence. */
 export const CHECK_MAX_TOKENS = 4_000;
-/** One sentence by default; a second only when the abstract separately supports it (G4). */
-export const BLURB_MAX_SENTENCES = 2;
-/** The whole note, both sentences together. */
-export const BLURB_MAX_CHARS = 400;
+/* `BLURB_MAX_SENTENCES` and `BLURB_MAX_CHARS` live in the identity module,
+   because the read guard (`shownBlurb`) applies them again to a stored note. */
+export { BLURB_MAX_CHARS, BLURB_MAX_SENTENCES };
 /** A supporting quote, in normalised words (G4). */
 export const QUOTE_MIN_WORDS = 6;
 export const QUOTE_MAX_WORDS = 30;

@@ -502,6 +502,31 @@ describe("what the card says we have read", () => {
     expect(read()).toBe(CITE_PAGE_FOUND);
     expect(read()).not.toMatch(/verif|confirm|from the (paper|work)/i);
   });
+
+  /* Plan 261017h stage 3c: the card is the path Greg's report came by
+     (spya-m53cdk), so it draws the band's own note, label and all. */
+  it("draws the work's note from its abstract, with the band's label, and nothing for a work with none", () => {
+    const noted: CitedWork = {
+      ...TULVING,
+      blurb: {
+        sentences: [{ text: "It separates memory for events from memory for facts.", quote: "a quote from the abstract" }],
+        kind: "author-abstract",
+        source: "crossref",
+        via: "id",
+        workId: "doi:10.1000/tulving",
+        url: "https://doi.org/10.1000/tulving",
+        readAt: "2026-10-18T08:00:00.000Z",
+      },
+    };
+    paint([noted, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    expect(card()?.querySelector(".cite-blurb-text")?.textContent).toBe(
+      "It separates memory for events from memory for facts.",
+    );
+    expect(card()?.querySelector(".cite-blurb-basis")?.textContent).toBe("From the abstract · Crossref");
+    hover(cite(1));
+    expect(card()?.querySelector(".cite-blurb")).toBeNull();
+  });
 });
 
 /* Plan 260929g stage 2 — Greg's *"in the tool tip"*: after *Look it up*, the

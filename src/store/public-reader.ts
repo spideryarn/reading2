@@ -417,6 +417,13 @@ const PUBLIC_PROJECTIONS = {
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     faq: articleRevisions.faq,
     bibliography: articleRevisions.bibliography,
+    /* **Each cited work's note, since 2026-10-18** (plan 261017h stage 3c,
+       design review G5): written from the work's public abstract, never from
+       anything the owner did, so a visitor is shown it. It does not go
+       through the owner's `loadBibliography`: `publicBibliographyList` in
+       ../public/dto.ts attaches it, through the same `shownBlurb` guard, and
+       rebuilds every field — no hash, model, versions or stored address. */
+    citationBlurbs: articleRevisions.citationBlurbs,
     /* **Simple, from the day it was built** (2026-09-30): generated output, so
        a visitor sees the stored one, and only making one is the owner's
        (docs/project/mode.md § The artefact). No profile; the stamp is
@@ -1047,6 +1054,7 @@ export const pgPublicReader: PublicArticleReader = {
         faq: found.revision.faq,
         simpleSummary: found.revision.simpleSummary,
         bibliography: found.revision.bibliography,
+        citationBlurbs: found.revision.citationBlurbs,
         reception: found.revision.reception,
         sourcesClaims: found.revision.sourcesClaims,
         crossrefs,

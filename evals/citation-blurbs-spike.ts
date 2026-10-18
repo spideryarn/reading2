@@ -75,6 +75,9 @@ import { plainWords } from "../src/plain-words.js";
 import { parseJsonAnswer } from "../src/parse-json.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import type { CitedWork } from "../src/types.js";
+import { citationEvidenceDeps, collectEvidence } from "../src/citation-evidence.js";
+import { type BlurbWork, citationBlurbsModelDeps, writeBlurbs } from "../src/citation-blurbs.js";
+import type { Log } from "../src/log.js";
 
 /** The repo's Haiku 5.5 id (src/models.ts), not typed from memory. */
 const HAIKU = FRONT_MATTER_AUTHORS_MODEL;
@@ -875,6 +878,83 @@ async function reportPhase(work: string): Promise<void> {
   console.log(`\nwrote ${file}`);
 }
 
+/* ---------------------------------------------------------- production -- */
+
+/**
+ * **The shipped code on the spike's fixtures** (plan 261017h stage 3c, the
+ * design's § 7 *Eval after the build*): `collectEvidence` and `writeBlurbs`
+ * from src/citation-evidence.ts and src/citation-blurbs.ts, unchanged — the
+ * writer, the code's quote rules, the separate check and its one retry — on
+ * every work of one fixture article. Title search on (the fixtures are all
+ * public-address imports). Writes `production-<slug>.json` into `--work`, with
+ * each work's evidence text so the judge can be shown it; the run's spend is
+ * `withLedger`'s line at the end. Run one article per invocation so each gets
+ * its own spend line.
+ *
+ *     npx tsx evals/citation-blurbs-spike.ts production --fixture <bibliographies.json> --slug <slug> --work <dir>
+ */
+async function productionPhase(fixture: FixtureArticle[], slug: string, work: string): Promise<void> {
+  const article = fixture.find((a) => a.slug === slug);
+  if (!article) throw new Error(`no ${slug} in the fixture`);
+  const rows = article.bibliography.citations;
+  const quiet: Log = { debug() {}, info() {}, warn() {}, error() {}, child: () => quiet } as unknown as Log;
+  const started = Date.now();
+  const evidenceDeps = { ...(await citationEvidenceDeps()), log: quiet };
+  const evidence = await collectEvidence(rows, { titleSearch: true }, evidenceDeps);
+  const lookedUp = Date.now();
+  const works: BlurbWork[] = [];
+  for (const row of rows) {
+    const e = evidence.byEntry.get(row.id);
+    if (e?.state !== "evidence") continue;
+    works.push({
+      id: row.id,
+      title: row.title,
+      ...(row.authors ? { authors: row.authors } : {}),
+      ...(row.year ? { year: row.year } : {}),
+      evidence: e.evidence,
+    });
+  }
+  const written = await writeBlurbs(works, {}, { ...citationBlurbsModelDeps(quiet), log: quiet });
+  const finished = Date.now();
+  const out = rows.map((row) => {
+    const e = evidence.byEntry.get(row.id);
+    const o = written.byEntry.get(row.id);
+    return {
+      id: row.id,
+      title: row.title,
+      authors: row.authors ?? null,
+      year: row.year ?? null,
+      url: row.url,
+      linkFrom: row.linkFrom,
+      evidence:
+        e?.state === "evidence"
+          ? { kind: e.evidence.kind, source: e.evidence.source, via: e.evidence.via, workId: e.evidence.workId, text: e.evidence.text }
+          : { state: e?.state ?? "none", why: e && "why" in e ? e.why : null },
+      outcome: o ?? null,
+    };
+  });
+  const outcomes: Record<string, number> = {};
+  for (const r of out) {
+    const key = r.outcome ? (r.outcome.kind === "blurb" || r.outcome.kind === "declined" ? r.outcome.kind : `${r.outcome.kind}:${r.outcome.why}`) : "no-evidence";
+    outcomes[key] = (outcomes[key] ?? 0) + 1;
+  }
+  const summary = {
+    slug,
+    works: rows.length,
+    evidence: works.length,
+    evidenceOutcomes: evidence.counts.outcomes,
+    titleQueries: evidence.counts.titleQueries,
+    openAlexQueries: evidence.counts.openAlexQueries,
+    outcomes,
+    calls: written.counts,
+    lookupMs: lookedUp - started,
+    modelMs: finished - lookedUp,
+    wallMs: finished - started,
+  };
+  await writeFile(path.join(work, `production-${slug}.json`), JSON.stringify({ summary, rows: out }, null, 2));
+  console.log(JSON.stringify(summary, null, 2));
+}
+
 /* ----------------------------------------------------------------- main -- */
 
 async function main(): Promise<void> {
@@ -895,6 +975,10 @@ async function main(): Promise<void> {
       return judgeInputPhase(work);
     case "report":
       return reportPhase(work);
+    case "production": {
+      const fixture = JSON.parse(await readFile(arg("fixture") ?? "", "utf8")) as FixtureArticle[];
+      return productionPhase(fixture, arg("slug") ?? "", work);
+    }
     default:
       throw new Error(`unknown phase ${phase}`);
   }

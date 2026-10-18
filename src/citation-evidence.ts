@@ -200,6 +200,17 @@ function arxivUrl(id: WorkId): string {
   return `https://arxiv.org/abs/${id.slice("arxiv:".length)}`;
 }
 
+/**
+ * **The work's address, built by code from its identifier** — arxiv.org for an
+ * arXiv id, doi.org for a DOI. The one builder: for the evidence a note is
+ * written from, and for every read that shows the note
+ * (src/citation-blurbs-identity.ts § `shownBlurb`), so a stored address is
+ * never passed through to a reader.
+ */
+export function evidenceUrl(workId: WorkId): string {
+  return workId.startsWith("arxiv:") ? arxivUrl(workId) : doiUrl(doiFor(workId));
+}
+
 function evidenceOf(
   kind: EvidenceKind,
   source: EvidenceSource,
@@ -208,7 +219,7 @@ function evidenceOf(
   readAt: string,
   abstract: string,
 ): Evidence {
-  const url = workId.startsWith("arxiv:") ? arxivUrl(workId) : doiUrl(doiFor(workId));
+  const url = evidenceUrl(workId);
   const text = capped(abstract);
   const evidenceHash = createHash("sha256")
     .update([EVIDENCE_HASH_DOMAIN, kind, source, workId, text].join("\n"), "utf8")

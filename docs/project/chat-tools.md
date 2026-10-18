@@ -326,6 +326,15 @@ Four decisions, each from GPT Sol's plan review
 - **Fenced like `article_links`**: the titles are the publisher's words and the *used for* lines a
   model's, so the rows go inside `untrusted()` and our sentences stay outside it.
 
+**A row with a note from its abstract carries it** (since 2026-10-18, plan
+[261017h](../plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md)
+stage 3c): inside the fence, *abstract note (AI, from the abstract at Crossref, read 2026-10-18): …*,
+cut at about 300 characters — a model's words from a stranger's abstract, so fenced with the row.
+When any row shown has one, our own sentence outside the fence says what a note is and is not (an
+AI's, from the abstract alone; a quick look-up, not a web search and not a reading of the paper; a
+row without one says nothing about the work). The note reaches the tool because `loadBibliography`
+attaches it ([bibliography.md § A note from the abstract](bibliography.md#a-note-from-the-abstract)).
+
 **It reaches every mode that shares `CHAT_TOOLS`** — typed Chat, Learn, Candidates and Live —
 deliberately: it is read-only and article-local, and a per-kind tool list is more machinery than
 that warrants. It does not widen what `read_web_page` may fetch; the citation URLs are one of the

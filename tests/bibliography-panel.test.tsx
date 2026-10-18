@@ -17,6 +17,12 @@ import { citePassageKey } from "../src/web/rows.js";
 import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 import { citedByWords } from "../src/registry-work.js";
 import { DELAY } from "../src/web/Tooltip.js";
+import {
+  BLURB_ASK_IN_CHAT,
+  BLURB_FOUND_BY_TITLE,
+  blurbBasis,
+  CITE_LIST_READ_ABSTRACTS,
+} from "../src/citation-blurb-words.js";
 
 const {
   CAPPED_NOTE,
@@ -2198,4 +2204,111 @@ describe("opening the band on one work", () => {
      drawn (GPT Sol's plan review of 261004b, F1), and that a reader who raised
      the bar afterwards was not fought. Nothing on the client starts a dig since
      plan 261009k, so the effect and its tests went. */
+});
+
+/* -------------------------------------------- a note from the abstract --
+   Plan 261017h stage 3c (design § 4, § 7 item 10). The row draws the note in
+   the model's face, a quiet label says where it came from, and the label's
+   card says what the note is and is not, with the words of the abstract code
+   checked it against. A row with no note draws nothing; the (i) changes its
+   sentence once a row on screen has one. */
+
+const NOTE: NonNullable<CitedWork["blurb"]> = {
+  sentences: [
+    { text: "It shows that loss falls as a power of model size.", quote: "The loss scales as a power-law with model size" },
+  ],
+  kind: "author-abstract",
+  source: "datacite",
+  via: "id",
+  workId: "arxiv:2001.08361",
+  url: "https://arxiv.org/abs/2001.08361",
+  readAt: "2026-10-18T08:00:00.000Z",
+};
+const NOTED = { ...CENTRAL, blurb: NOTE };
+
+describe("a cited work's note from its abstract", () => {
+  it("draws the note under the by-line, with a quiet label saying where it came from", async () => {
+    await draw(owner({ bibliography: artefact([NOTED, FAMOUS]) }));
+    const r = row(NOTED.id);
+    expect(r.querySelector(".cite-blurb-text")?.textContent).toBe(NOTE.sentences[0]!.text);
+    expect(r.querySelector(".cite-blurb-basis")?.textContent).toBe("From the abstract · arXiv");
+    /* Nothing on a row with no note: not a placeholder, not a label. */
+    expect(row(FAMOUS.id).querySelector(".cite-blurb")).toBeNull();
+  });
+
+  it("names Crossref, DataCite, or OpenAlex's copy, by where the abstract came from", () => {
+    expect(blurbBasis({ ...NOTE, source: "crossref", workId: "doi:10.1000/x" })).toBe("From the abstract · Crossref");
+    expect(blurbBasis({ ...NOTE, source: "datacite", workId: "doi:10.5281/x" })).toBe("From the abstract · DataCite");
+    expect(blurbBasis({ ...NOTE, source: "openalex", kind: "registry-reconstruction", workId: "doi:10.1000/x" })).toBe(
+      "From OpenAlex's copy of the abstract",
+    );
+  });
+
+  it("opens a card that says what the note is and is not, which catalogue and day, and the quote it rests on", async () => {
+    await draw(owner({ bibliography: artefact([NOTED]) }));
+    const label = row(NOTED.id).querySelector(".cite-blurb-basis")!;
+    await press(label, "touch", "mouse");
+    const card = document.querySelector('[role="dialog"]');
+    const text = card?.textContent ?? "";
+    expect(text).toContain("A short note an AI wrote from this work's abstract, as arXiv holds it, read on 18 October 2026.");
+    expect(text).toContain("not a web search and not a reading of the paper itself, so it can be wrong");
+    expect(card?.querySelector(".cite-blurb-quote q")?.textContent).toBe(NOTE.sentences[0]!.quote);
+    /* The link is the one code built from the identifier. */
+    expect(card?.querySelector("a")?.getAttribute("href")).toBe("https://arxiv.org/abs/2001.08361");
+    expect(text).toContain(BLURB_ASK_IN_CHAT);
+    expect(text).not.toContain(BLURB_FOUND_BY_TITLE);
+  });
+
+  it("adds the title-match caveat when the work was found by its title", async () => {
+    await draw(owner({ bibliography: artefact([{ ...NOTED, blurb: { ...NOTE, via: "title" } }]) }));
+    await press(row(NOTED.id).querySelector(".cite-blurb-basis")!, "touch", "mouse");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(BLURB_FOUND_BY_TITLE);
+  });
+
+  it("says once, in the (i), what a note is — and the old sentence while no row on screen has one", async () => {
+    await draw(owner({ bibliography: artefact([NOTED, FAMOUS]) }));
+    let about = await aboutText();
+    expect(about.split(CITE_LIST_READ_ABSTRACTS)).toHaveLength(2);
+    expect(about).not.toContain(CITE_LIST_NOT_READ);
+    expect(CITE_LIST_READ_ABSTRACTS).toMatch(/written by an AI from that work's abstract alone/);
+    expect(CITE_LIST_READ_ABSTRACTS).toMatch(/no abstract we could be sure was its own/);
+
+    await draw(owner({ bibliography: artefact([CENTRAL, FAMOUS]) }));
+    about = await aboutText();
+    expect(about).toContain(CITE_LIST_NOT_READ);
+    expect(about).not.toContain(CITE_LIST_READ_ABSTRACTS);
+
+    /* The note's row hidden by the bar: the sentence follows the rows on screen. */
+    await draw(owner({ bibliography: artefact([{ ...PASSING, blurb: NOTE }, CENTRAL]) }));
+    about = await aboutText();
+    expect(about).toContain(CITE_LIST_NOT_READ);
+  });
+
+  it("draws a visitor's note too, with no line about asking in chat", async () => {
+    await drawVisitor({
+      citations: [
+        {
+          id: NOTED.id,
+          title: NOTED.title,
+          why: NOTED.why,
+          relevance: 0.8,
+          influence: 0.8,
+          mentions: [],
+          citedAt: [FIRST],
+          firstCited: FIRST,
+          citedInBody: true,
+          url: NOTED.url,
+          linkFrom: "doi",
+          blurb: NOTE,
+        },
+      ],
+      capped: false,
+    });
+    const r = row(NOTED.id);
+    expect(r.querySelector(".cite-blurb-text")?.textContent).toBe(NOTE.sentences[0]!.text);
+    await press(r.querySelector(".cite-blurb-basis")!, "touch", "mouse");
+    const text = document.querySelector('[role="dialog"]')?.textContent ?? "";
+    expect(text).toContain("A short note an AI wrote");
+    expect(text).not.toContain(BLURB_ASK_IN_CHAT);
+  });
 });

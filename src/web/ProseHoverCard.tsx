@@ -91,6 +91,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  CiteBlurb,
   showsWhy,
   InSpideryarn,
   readNoteOf,
@@ -2256,6 +2257,12 @@ function CiteCard({
           {line.filled && <span title={registryFilledNote(line.filled)}> · {registryFilledMark(line.filled)}</span>}
         </p>
       )}
+      {/* The work's note, from its abstract alone — the band's component, so
+          the two say one thing (plan 261017h stage 3c). This is the path
+          Greg's report came by (spya-m53cdk). No link inside its card: this
+          card is already one the pointer is in (`CiteBlurb` § linked). The
+          owner's line about asking in chat goes with `onAsk`. */}
+      {work.blurb && <CiteBlurb blurb={work.blurb} owned={onAsk !== null} linked={false} />}
       {line.conflict && <p className="prose-card-cite-read">{registryConflictNote(line.conflict)}</p>}
       {/* Already an article here — the band's line, from the band's component
           (plan 261001i). Owner-only, and gated by name as well as by the

@@ -391,6 +391,11 @@ export function useBibliographyRead(slug: string): BibliographyRead {
   /* A run that finishes after the reader left the band still reaches the prose
      and the margin — § An always-mounted read is not an always-fresh read. */
   useStepFinished(slug, "bibliography", refresh);
+  /* **And the notes on its works** (plan 261017h stage 3c): `citation-blurbs`
+     runs after a list is published, in a job of its own, and its notes reach
+     a reader only through this read (`attachBlurbs`). Without this the band
+     would show none of them until it was reopened. */
+  useStepFinished(slug, "citation-blurbs", refresh);
 
   /* The way out of a failed read, and never a generation verb — useFaq.ts §
      `retryRead`. Works already on screen stay there while a failed

@@ -30,6 +30,11 @@ import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
 import { publicArticle, publicAuthorNames } from "../src/public/dto.js";
+import { CITATION_BLURBS_VALIDATION_VERSION, rowIdentity } from "../src/citation-blurbs-identity.js";
+import type {
+  CitationBlurbEntry,
+  CitationBlurbs,
+} from "../src/types.js";
 import type {
   Arc,
   Block,
@@ -74,6 +79,7 @@ const NO_ARTEFACTS = {
   faq: null,
   simpleSummary: null,
   bibliography: null,
+  citationBlurbs: null,
   reception: null,
   sourcesClaims: null,
   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
@@ -1623,6 +1629,67 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **The notes on those works** (plan 261017h stage 3c, G5), one entry a row,
+   * every field set and every run fact a sentinel that must not reach the wire.
+   * Only `w-clean`'s crosses: it is a `blurb`, its identity is the row's as
+   * stored, and its checks are today's. `w-cred`'s passed older checks,
+   * `w-private`'s was written for a row that has since changed, and `w-web`'s
+   * failed its check.
+   */
+  const blurbBase = {
+    validationVersion: CITATION_BLURBS_VALIDATION_VERSION,
+    promptVersion: "blurb-prompt-version-sentinel",
+    model: "blurb-model-sentinel",
+    at: "2026-10-18T09:00:00.000Z",
+  };
+  const blurbEvidence = {
+    kind: "author-abstract" as const,
+    source: "crossref" as const,
+    via: "title" as const,
+    workId: "doi:10.1000/abc",
+    url: "https://stored-blurb-url-sentinel.example/x",
+    host: "stored-blurb-host-sentinel.example",
+    readAt: "2026-10-18T08:00:00.000Z",
+    evidenceHash: "blurbevidencehashsentinel",
+  };
+  const blurbNote = (text: string) => ({
+    state: "blurb" as const,
+    sentences: [{ text, quote: "a quote from the abstract that code found there" }],
+    evidence: blurbEvidence,
+  });
+  const CITATION_BLURBS: CitationBlurbs = {
+    version: "citation-blurbs/1",
+    generator: "blurb-generator-sentinel",
+    slug: "noema",
+    sourceHash: "blurbsourcehashsentinel",
+    entries: {
+      "w-clean": {
+        ...blurbBase,
+        identity: rowIdentity(BIBLIOGRAPHY.citations[0]!),
+        ...blurbNote("The work shows a clean result."),
+        ownerOnlySentinel: "blurb entry extra must not cross",
+      } as CitationBlurbEntry,
+      "w-cred": {
+        ...blurbBase,
+        validationVersion: "citation-blurbs-checks/0",
+        identity: rowIdentity(BIBLIOGRAPHY.citations[1]!),
+        ...blurbNote("old-checks blurb sentinel"),
+      },
+      "w-private": { ...blurbBase, identity: "0123456789abcdef", ...blurbNote("changed-row blurb sentinel") },
+      "w-web": {
+        ...blurbBase,
+        identity: rowIdentity(BIBLIOGRAPHY.citations[3]!),
+        state: "failed-check",
+        why: "not-supported",
+        evidence: blurbEvidence,
+      },
+    },
+    counts: { blurb: 1 },
+    generatedAt: "2026-10-18T09:00:00.000Z",
+    elapsedMs: 1,
+  };
+
+  /**
    * Everything `publicArticle` needs that is not the thing under test, so the
    * comment cases below can name only their comments.
    */
@@ -1667,6 +1734,7 @@ describe("the artefacts a shared link carries", () => {
     faq: FAQ,
     simpleSummary: SIMPLE,
     bibliography: BIBLIOGRAPHY,
+    citationBlurbs: CITATION_BLURBS,
     reception: null,
     sourcesClaims: CLAIM_LIST,
     comments: [],
@@ -2330,6 +2398,18 @@ describe("the artefacts a shared link carries", () => {
         "capped",
         "citations",
         "citations[].authors",
+        /* The note on the work (plan 261017h stage 3c): what the row and its
+           card draw, and nothing about the run. */
+        "citations[].blurb",
+        "citations[].blurb.kind",
+        "citations[].blurb.readAt",
+        "citations[].blurb.sentences",
+        "citations[].blurb.sentences[].quote",
+        "citations[].blurb.sentences[].text",
+        "citations[].blurb.source",
+        "citations[].blurb.url",
+        "citations[].blurb.via",
+        "citations[].blurb.workId",
         "citations[].citedAt",
         "citations[].citedInBody",
         "citations[].firstCited",
@@ -2380,6 +2460,83 @@ describe("the artefacts a shared link carries", () => {
     expect(datacite).not.toHaveProperty("citedBy");
     expect(json).not.toContain("424242");
     expect(built.bibliography?.capped).toBe(true);
+  });
+
+  /**
+   * **A note crosses only as the guard rebuilds it** (plan 261017h stage 3c,
+   * G5): a `blurb` for this row as stored, under today's checks. The address
+   * is built from the re-parsed DOI, never the stored one, and no run fact
+   * crosses — no hash, model, prompt, check version or extra key.
+   */
+  it("carries a work's note only when it is a current blurb for that row, rebuilt", () => {
+    const works = built.bibliography?.citations ?? [];
+    expect(works.find((w) => w.id === "w-clean")?.blurb).toEqual({
+      sentences: [{ text: "The work shows a clean result.", quote: "a quote from the abstract that code found there" }],
+      kind: "author-abstract",
+      source: "crossref",
+      via: "title",
+      workId: "doi:10.1000/abc",
+      url: "https://doi.org/10.1000/abc",
+      readAt: "2026-10-18T08:00:00.000Z",
+    });
+    /* Older checks, a row that changed, a failed check: nothing. */
+    for (const id of ["w-cred", "w-private", "w-web"]) {
+      expect(works.find((w) => w.id === id), id).not.toHaveProperty("blurb");
+    }
+    const json = JSON.stringify(built);
+    for (const sentinel of [
+      "old-checks blurb sentinel",
+      "changed-row blurb sentinel",
+      "stored-blurb-url-sentinel",
+      "stored-blurb-host-sentinel",
+      "blurbevidencehashsentinel",
+      "blurb-model-sentinel",
+      "blurb-prompt-version-sentinel",
+      "blurb-generator-sentinel",
+      "blurbsourcehashsentinel",
+      "blurb entry extra must not cross",
+      "not-supported",
+      CITATION_BLURBS_VALIDATION_VERSION,
+    ]) {
+      expect(json, sentinel).not.toContain(sentinel);
+    }
+  });
+
+  it("carries no note when the stored one does not read as one", () => {
+    const entry = CITATION_BLURBS.entries["w-clean"] as Extract<CitationBlurbEntry, { state: "blurb" }>;
+    const variants: unknown[] = [
+      { ...entry, evidence: { ...entry.evidence, workId: "not an identifier" } },
+      { ...entry, evidence: { ...entry.evidence, source: "semantic-scholar" } },
+      { ...entry, evidence: { ...entry.evidence, readAt: "yesterday-ish" } },
+      { ...entry, sentences: [] },
+      { ...entry, sentences: [{ text: "x".repeat(401), quote: "q" }] },
+      { ...entry, sentences: [{ text: "One.", quote: "" }] },
+      { ...entry, sentences: [1, 2, 3].map(() => ({ text: "A sentence.", quote: "a quote" })) },
+      { ...entry, identity: undefined },
+    ];
+    for (const variant of variants) {
+      const shared = publicArticle({
+        ...ARTICLE_BASE,
+        ...NO_ARTEFACTS,
+        bibliography: BIBLIOGRAPHY,
+        citationBlurbs: { ...CITATION_BLURBS, entries: { "w-clean": variant as CitationBlurbEntry } },
+      });
+      expect(shared.bibliography?.citations[0], JSON.stringify(variant).slice(0, 120)).not.toHaveProperty("blurb");
+    }
+    /* A blurb already on the stored row is never what crosses. */
+    const planted = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      bibliography: {
+        ...BIBLIOGRAPHY,
+        citations: BIBLIOGRAPHY.citations.map((w) => ({
+          ...w,
+          blurb: { sentences: [{ text: "planted", quote: "planted" }], kind: "author-abstract", source: "crossref", via: "id", workId: "doi:10.1000/abc", url: "https://planted.example", readAt: "2026-10-18T08:00:00.000Z" },
+        })) as Bibliography["citations"],
+      },
+      citationBlurbs: null,
+    });
+    expect(JSON.stringify(planted)).not.toContain("planted");
   });
 
   /**
@@ -2562,6 +2719,7 @@ describe("the artefacts a shared link carries", () => {
       faq: null,
       simpleSummary: null,
       bibliography: null,
+      citationBlurbs: null,
       reception: null,
       sourcesClaims: null,
       crossrefs: null,

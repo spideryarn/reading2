@@ -207,6 +207,19 @@ describe("a run that finishes after the reader left the band", () => {
 
     expect(artefactReads().length).toBe(before);
   });
+
+  /* Plan 261017h stage 3c: the notes on cited works are written by a step of
+     their own, after the list is published, and reach a reader only through
+     the Bibliography read's attach — so that read must hear that step too. */
+  it("bibliography: a citation-blurbs run finishing asks the list again", async () => {
+    await act(async () => root.render(createElement(Probe, { use: useBibliographyRead })));
+    await settle();
+    const url = `GET /api/bibliography/${SLUG}`;
+    expect(artefactReads()).toEqual([url]);
+    await runs([job("notes", "citation-blurbs", "running")], [job("notes", "citation-blurbs", "done")]);
+    expect(artefactReads()).toEqual([url, url]);
+    expect(trace.filter((l) => l === "POST /api/jobs")).toEqual([]);
+  });
 });
 
 /** Direct hook calls with the article slug, inside the always-mounted owner.

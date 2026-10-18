@@ -214,6 +214,13 @@ default view, and Claims' line of cited works reads it. Reception's search is th
 the app and often finds nothing, and Claims' list serves a view many readers will not open, so each
 waits for its chip.
 
+**Notes from abstracts follow the list, not a press** (since 2026-10-18): whenever a Bibliography is
+published — on import, a re-make, *Find them again* — a `citation-blurbs` job is queued behind it
+and writes a sentence or two per cited work from its abstract, for about a cent an article. Nothing
+on the band arms it, and the list never waits for it.
+[bibliography.md § A note from the abstract](bibliography.md#a-note-from-the-abstract) has what it
+is and when a row shows one.
+
 **An owner can buy Reception's search again and again**, as every completed step can be re-run:
 Metadata offers each step, and the command bar's *Run again* rows post a forced run. This is
 accepted as it stands (plan 261009l § Reception's spend). Those rows are labelled *Bibliography ›

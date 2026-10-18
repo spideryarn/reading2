@@ -78,6 +78,34 @@
 }
 .cite-first .cite-at:hover { color: var(--highlight-ink); }
 
+/* A short note on the work, from its abstract alone (plan 261017h stage 3c;
+   BibliographyPanel.tsx § `CiteBlurb`). The sentences are the model's, in its
+   face (voices.css); the label under them is ours, quiet, in the row's faint
+   UI ink, and opens the card that says what the note is and is not. The same
+   component draws in the prose hover card, so it carries its own margins. */
+.cite-blurb { margin: 0.2rem 0 0; }
+.cite-blurb-text {
+  margin: 0;
+  font-size: var(--type-body);
+  line-height: 1.4;
+}
+.cite-blurb-basis {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in oklab, var(--ink-faint) 60%, transparent);
+  text-underline-offset: 2px;
+}
+/* The abstract's own words on the card: a stranger's text, left in the UI
+   face (fonts.md § Whose voice is it), marked as quoted by the `<q>`. */
+.cite-blurb-quote { margin: 0.25rem 0 0; font-size: 0.8rem; line-height: 1.4; }
+.prose-card-body > .cite-blurb { margin: -0.1rem 0 0.45rem; }
+
 .cite-why {
   margin: 0.2rem 0 0;
   font-size: var(--type-body);

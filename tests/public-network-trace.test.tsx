@@ -1488,11 +1488,13 @@ describe("a signed-out browser on a shared document", () => {
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_WORK);
     /* A visitor has no verdict and no Dig deeper answer, so never the model's
-       sentence about the work (plan 261003j) — only, once above the list,
-       that we have not read the works (plan 261011c). */
+       sentence about the work (plan 261003j). That we have not read the works
+       was said once above the list (plan 261011c) until 2026-10-17, and is in
+       the band's (i) since (spya-m53cdk, plan 261017h stage 1), so not in the
+       band's own text. */
     expect(text).not.toContain("The theory the piece argues against.");
     expect(text).toContain("Tononi");
-    expect(text.split("we have read none of these works")).toHaveLength(2);
+    expect(text).not.toContain("we have read none of these works");
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Sources is for whoever added this article");

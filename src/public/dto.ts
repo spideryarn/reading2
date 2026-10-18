@@ -61,6 +61,7 @@ import type {
   Citation,
   CitationPlace,
   Bibliography,
+  CitationBlurbs,
   CitedWork,
   ClaimReceptionRow,
   Comment,
@@ -110,6 +111,7 @@ import { ratedDifficultyOf } from "../reading-time.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../reception-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
+import { shownBlurb, storedBlurbEntries, storedBlurbEntry } from "../citation-blurbs-identity.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -669,14 +671,24 @@ function publicPlace(place: CitationPlace): CitationPlace {
  *
  * `key` and `found` are not named, so they do not cross. src/public-types.ts §
  * `PublicCitedWork` has why for each.
+ *
+ * **The note on the work comes from `blurbEntries`, never from `work.blurb`**
+ * (plan 261017h stage 3c, G5): `shownBlurb` keeps only a `blurb` entry whose
+ * identity matches this row as stored and whose checks are today's, and
+ * rebuilds it field by field — `workId` re-parsed, the address built by code.
  */
-function publicCitedWork(work: CitedWork, blockText: ReadonlyMap<string, string>): PublicCitedWork {
+function publicCitedWork(
+  work: CitedWork,
+  blockText: ReadonlyMap<string, string>,
+  blurbEntries: Readonly<Record<string, unknown>> | null,
+): PublicCitedWork {
   /* A named const, so the shorthand `{ url }` below ties the key to it —
      `publicMeta`'s idiom, since `opt()` copies a field and this computes one. */
   const ownerFound = work.linkFrom === "web";
   const url = ownerFound ? null : publicCitationUrl(work.url);
   const linkFrom: PublicCitedWork["linkFrom"] =
     work.linkFrom === "web" ? "search" : work.linkFrom;
+  const blurb = blurbEntries === null ? null : shownBlurb(storedBlurbEntry(blurbEntries, work.id), work);
   return {
     id: work.id,
     title: work.title,
@@ -694,6 +706,7 @@ function publicCitedWork(work: CitedWork, blockText: ReadonlyMap<string, string>
     ...(url === null ? {} : { url }),
     linkFrom,
     ...publicCitationRegistry(work.registry),
+    ...(blurb === null ? {} : { blurb }),
   };
 }
 
@@ -754,9 +767,11 @@ function bothSourcesClaimsKeys(
 function publicBibliographyList(
   bibliography: Bibliography,
   blockText: ReadonlyMap<string, string>,
+  citationBlurbs: CitationBlurbs | null,
 ): PublicBibliography {
+  const blurbEntries = storedBlurbEntries(citationBlurbs);
   return {
-    citations: bibliography.citations.map((work) => publicCitedWork(work, blockText)),
+    citations: bibliography.citations.map((work) => publicCitedWork(work, blockText, blurbEntries)),
     capped: bibliography.capped,
   };
 }
@@ -1319,6 +1334,13 @@ export function publicArticle(row: {
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
   bibliography: Bibliography | null;
+  /**
+   * The notes on cited works, or `null` for none made — read only beside
+   * `bibliography`, through `shownBlurb` (plan 261017h stage 3c). Required, so
+   * a reader that forgot to select it is a type error rather than a visitor's
+   * list that silently never shows a note.
+   */
+  citationBlurbs: CitationBlurbs | null;
   reception: Reception | null;
   /** Debate's claims list, or `null` for none made. */
   sourcesClaims: SourcesClaimList | null;
@@ -1401,7 +1423,7 @@ export function publicArticle(row: {
     /* Under both keys, the same object, for one deploy: `citations` is the
        one a public tab loaded before 2026-10-09 reads (`PublicArticle.citations`;
        plan 261009w F1, removed by its contract). */
-    ...(row.bibliography !== null ? bothBibliographyKeys(publicBibliographyList(row.bibliography, blockText)) : {}),
+    ...(row.bibliography !== null ? bothBibliographyKeys(publicBibliographyList(row.bibliography, blockText, row.citationBlurbs)) : {}),
     /* The article's own address goes in with it: a direct row can carry it in
        its witness and its `linked` signal, and it is judged there by the policy
        `publicMeta` above applies to it. */

@@ -5262,6 +5262,14 @@ export interface CitedWork {
    */
   inSpideryarn?: CitedInSpideryarn;
   /**
+   * **A short note on the work, from its abstract alone** — attached at read
+   * time from the `citation_blurbs` column (`attachBlurbs` in
+   * src/citation-blurbs-identity.ts), never stored in the list, and only while the entry
+   * still belongs to this row and passed today's checks. Plan 261017h stage 3c.
+   * A visitor's row carries it too (`publicCitedWork`, src/public/dto.ts).
+   */
+  blurb?: CitedWorkBlurb;
+  /**
    * **What Crossref or DataCite holds under the row's DOI or arXiv id** —
    * written by the `bibliography` step after the model's list is built
    * (src/citation-registry.ts, plan 261001a stage 5), so it is stored, unlike
@@ -5825,6 +5833,27 @@ export type CitationBlurbEntry = CitationBlurbEntryBase &
     /** `checkedAt` is when the registry said so; the step asks again once it is a week old. */
     | { state: "no-evidence"; why: CitationBlurbRegistryWhy; checkedAt: string }
   );
+
+/**
+ * **A note as a reader is shown it** — `CitedWork.blurb`, the owner's and a
+ * visitor's alike. Rebuilt field by field from a stored `blurb` entry by
+ * `shownBlurb` (src/citation-blurbs-identity.ts): `workId` re-parsed, `url`
+ * built from it by code, every string capped. No hash, no model, no versions:
+ * what the row and its card draw, and nothing else.
+ */
+export interface CitedWorkBlurb {
+  /** One or two, each with the words of the abstract code found it rests on. */
+  sentences: CitationBlurbSentence[];
+  kind: CitationBlurbEvidence["kind"];
+  source: CitationBlurbEvidence["source"];
+  via: CitationBlurbEvidence["via"];
+  /** `doi:…` or `arxiv:…`, re-parsed at the read. */
+  workId: string;
+  /** Built by code from `workId`: doi.org or arxiv.org. */
+  url: string;
+  /** When the abstract was read, ISO. */
+  readAt: string;
+}
 
 /**
  * The artefact. **Transient outcomes are counted, never stored** (a registry
