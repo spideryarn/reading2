@@ -17,7 +17,7 @@ blind pairs, keys and judge verdicts are in `evals/wider-world/out/`.
   - Two plain passages, McCulloch and Pitts, and Nagel, which want no outside note.
   - A reader who has the piece's position backwards.
 - **Arms.** `before1` and `before2` ran on 578e00716, before any prompt change. `after3` and
-  `after4` ran on the two final wordings. `after` and `after2` were earlier drafts, kept as runs.
+  `after4` ran on the two final wordings before the code review, and `after5` on the shipped text after it (12e211203). `after` and `after2` were earlier drafts, kept as runs.
 - **The judge.** A fresh Opus subagent read only the pairs file, with an arm-neutral `facts` line
   for each case. It answered four questions:
   - **Q1 world**: does a reply tell the reader something true and wanted about the world?
@@ -32,7 +32,8 @@ blind pairs, keys and judge verdicts are in `evals/wider-world/out/`.
 |---|---|---|---|---|
 | `before1` vs `before2` (control) | 2–0, 17 same | 2–0, 17 same | 0 of 19 | 2–1, 16 same |
 | `before1` vs `after3` | **after 5–0**, 14 same | after 2–0 | 0 of 19 | **before 6–0** |
-| `before1` vs `after4` (shipped) | **after 5–0**, 14 same | 1–1 | 0 of 19 | before 4–1 |
+| `before1` vs `after4` | **after 5–0**, 14 same | 1–1 | 0 of 19 | before 4–1 |
+| `before1` vs `after5` (shipped, after the code review) | **after 5–0**, 14 same | **after 5–0** | 0 of 19 | before 5–1 |
 
 **The world.** Before the change, only Chat ever flagged the wrong date: once from memory and once
 with linked web sources. Recall, Tutorial and Quiz said nothing, and one Quiz mark worked out
@@ -56,6 +57,15 @@ answer, and Tutorial opens with *"You've described Chalmers's argument correctly
 split on three cases, so this small sample cannot separate those remaining leaks confidently from
 ordinary output variation.
 
+**After the code review** (`after5`, the shipped text), provenance became a clear win (5–0)
+rather than a tie. Mode shape went 5–1 against. Two of those five are the cost of the feature
+itself: the Antikythera note makes the Recall and Tutorial turns longer, and in Tutorial it reads
+as an abrupt line mid-lesson. One is the Quiz McCulloch case grading the reader's answer again
+("doesn't change your answer"). The same leak appeared in `after3`, but not in `after4`. The other
+two are oddities in one run each. The Quiz eval's own marking cases show no more grading phrases
+than before the change (`evals/results/261018h-quiz-marks-after-review.md`). That Quiz leak is the
+thing to watch in real marks: `gradeWords` would not catch "doesn't change your answer".
+
 **The earlier drafts, in brief.** The first draft told the model that a reader who repeated the
 piece "has read it right". Recall then opened "You've got the article right", which is a banned
 phrase, and later "so you've reported it faithfully". Three probes of the next wording gave two
@@ -77,8 +87,7 @@ The results are in `evals/results/261018h-*`.
 
 - **One article and one model.** The trigger has been seen to fire on one checkable error and one
   live dispute. It has not been measured on an article where the error is subtler than a date.
-- **The probes and the second after-arm ran on the wording before the last one.** Only `after4`
-  and the judge's verdict on it are on the shipped text.
+- **Only `after5` is on the shipped text.** The probes and `after2`–`after4` ran on earlier wordings. The `after5` judge was also told outright that Recall's "or" nudge and Quiz's brief "nothing missing" statement are allowed, so its Q4 is not strictly comparable with the earlier judges'.
 - **Search behaviour was not measured.** With our tools off, Recall's and Tutorial's searches are
   the provider's, and the eval cannot see their queries. The privacy rule (never the reader's words
   in a query) is pinned by `tests/wider-world.test.ts`, not measured.
