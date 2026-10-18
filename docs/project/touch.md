@@ -853,8 +853,8 @@ tooltip, it does not say on an iPad.**
 Selecting prose highlights it from `mouseup` (`TableView.tsx` § `onMouseUp`), and a long-press
 selection on iOS and iPadOS fires no `mouseup`. So on an iPad nothing of ours appeared.
 
-**Now a touch selection in the prose, once it has settled, shows one button just below it:
-"Highlight or comment".** The code is
+**Now a touch selection in the prose, once it has settled, shows one button, docked at the screen
+edge with more room between it and the selected words: "Highlight or comment".** The code is
 [`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), mounted in `Reader.tsx` beside the
 boxes it opens; the tests are `tests/touch-selection-chip.test.tsx`.
 
@@ -893,13 +893,22 @@ The rules it keeps:
   input made the selection.
 - **Same floor, same clamp.** It reads the selection with the function mouseup uses, so a selection
   under the floor shows nothing and one that runs into the next paragraph is clamped to the first
-  ([comments.md § Deliberate limits](comments.md#deliberate-limits)). The button sits at the end of
-  the *clamped* words, the ones that will be saved.
-- **Below the words**, because iOS puts its own callout above them. Clamped to the viewport, the
-  safe area and the bottom bar in CSS (`annotations.css` § `.touch-select-chip`). Hidden on scroll,
-  resize, a new touch, or the handles moving, and shown again when things settle. **Not shown at
-  all while the selected words are off screen**: the clamp would otherwise pin it to the screen
-  edge, beside words it has nothing to do with.
+  ([comments.md § Deliberate limits](comments.md#deliberate-limits)). Where the button docks is
+  decided by the *clamped* words, the ones that will be saved.
+- **Docked at the edge with more room, since 2026-10-18**: at the bottom of the screen, above the
+  bottom bar and install hint, when there is more room below the selected words; under the top bar
+  when there is more room above. Measured over the part of the selection on screen, against the
+  layout viewport the fixed button lives in; pinch-zoomed, the button can be off the glass, as it
+  could before. Across, it still follows the end of the words. iOS draws its own selection
+  menu right beside the words, above them when there is room and below when there isn't, and over
+  anything of ours that is there; no supported web API hides or moves it
+  ([261018c](../plans/261018c-touch-selection-chip-docks-away-from-the-ios-callout.md) has the
+  research). Until then the button sat a rem and a quarter below the words, and Greg found the iOS
+  menu over it on an iPhone (spya-bynh22). A selection that fills the screen leaves no clear edge,
+  and gets the larger of two small gaps. Hidden on scroll,
+  resize, a new touch, or the handles moving, and shown again when things settle. **Not shown at all
+  while the selected words are off screen**: a press would open the box on a passage the reader
+  cannot see.
 - **The press is the finger lifting (`pointerup`), not the `click`.** The button prevents its
   `pointerdown` so the selection survives, and Playwright's WebKit then delivers no `click` at all,
   which made the button inert there (browser check and GPT Sol T2, 2026-10-03). `click` remains as
@@ -918,18 +927,14 @@ The rules it keeps:
 
 1. Whether the tap on the button really does collapse the selection first, and whether 300ms is
    long enough when it does.
-2. Whether the button, a rem and a quarter below the last line, clears the lower selection handle
-   or sits where a thumb wants to grab it.
-3. Whether iOS ever puts its own callout *below* the selection (it does when there is no room
-   above), and what the two look like together.
+2. Whether the docked button, away from the words, is found at all, and whether a selection tall
+   enough to leave little room at either edge still has iOS's menu land on it.
+3. Answered by Greg's iPhone on 2026-10-18: iOS does put its menu below the selection, over the
+   button as it then was. The docking above is the fix, and is itself unchecked on a device.
 4. Whether `selectionchange` goes quiet for long enough between handle drags that the button
    flickers in and out.
 5. An Apple Pencil, which should behave as a finger does.
 6. Android Chrome, which nobody has looked at. It has its own selection toolbar, also above.
-
-**One known limit, seen in emulation:** when the selected words are on the last visible line above
-the bottom bar, the clamp pushes the button up over those words. It hides them until the reader
-scrolls a little. Flipping it above the selection would put it under the iOS callout, so it is left.
 
 No colour dots and no copy button in it. The colours are in the box it opens, and so, since
 2026-10-04, is *Copy, don't highlight*.

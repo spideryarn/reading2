@@ -414,7 +414,9 @@ it("Reader.tsx mounts the chip for an owner only, off the same selectProse, and 
   expect(before.endsWith("{owner && ("), "a visitor must not get the chip at all").toBe(true);
 });
 
-it("the fixed chip clears safe areas, the live Dock, and its install strip", () => {
+/* The top and bottom halves of this are the two edge rules, pinned in
+   § docks at the bottom … below. */
+it("the fixed chip is clamped inside the side safe areas", () => {
   const source = readFileSync("src/web/styles/annotations.css", "utf8");
   const at = source.indexOf(".touch-select-chip {");
   expect(at, "the chip's CSS rule has gone").toBeGreaterThan(-1);
@@ -422,9 +424,6 @@ it("the fixed chip clears safe areas, the live Dock, and its install strip", () 
   expect(rule).toContain("position: fixed");
   expect(rule).toContain("var(--safe-left)");
   expect(rule).toContain("var(--safe-right)");
-  expect(rule).toContain("var(--safe-top)");
-  expect(rule).toContain("max(var(--dock-bottom), var(--safe-bottom))");
-  expect(rule).toContain("var(--hint-now)");
 });
 
 /* **Off-screen words get no chip.** The CSS clamps the chip into the viewport,
@@ -480,4 +479,71 @@ it("brings the chip back when the words are scrolled on screen again", async () 
     wait(SETTLE_MS);
     expect(chip(), "the selection is still live and now visible").not.toBeNull();
   });
+});
+
+/* **It docks at the screen edge furthest from the words**, because iOS puts its
+   own selection menu right beside them, above or below as it sees fit, and
+   draws it over anything of ours that is there. Greg, 2026-10-18 (spya-bynh22),
+   on an iPhone: *"I could see the iPhone, like, default standard menu for copy
+   and other stuff on top, and I could see there was something underneath it."*
+   docs/plans/261018c-touch-selection-chip-docks-away-from-the-ios-callout.md */
+it("docks at the bottom for words in the top half of the screen, and at the top for the bottom half", async () => {
+  const text = await mounted();
+  const cases: [number, string][] = [
+    [40, "bottom"],
+    [window.innerHeight / 2 - 40, "bottom"],
+    [window.innerHeight / 2 + 20, "top"],
+    [window.innerHeight - 30, "top"],
+  ];
+  for (const [top, edge] of cases) {
+    withRangeAt(top, () => {
+      pointerDown(text.parentElement!, "touch");
+      select(text, 20);
+      wait(SETTLE_MS);
+      expect(chip()?.getAttribute("data-edge"), `words at y=${top}`).toBe(edge);
+    });
+  }
+});
+
+/* Several rectangles, as a range over lines gives: the extent is what counts. */
+function withRectsAt<T>(spans: [number, number][], run: () => T): T {
+  const proto = Range.prototype as { getClientRects?: unknown };
+  const original = proto.getClientRects;
+  proto.getClientRects = () =>
+    spans.map(([top, bottom]) => ({ left: 40, right: 200, top, bottom, width: 160, height: bottom - top }));
+  try {
+    return run();
+  } finally {
+    if (original) proto.getClientRects = original;
+    else delete proto.getClientRects;
+  }
+}
+
+it("a tall selection docks on the side with more room, counting only what is on screen", async () => {
+  const text = await mounted();
+  const h = window.innerHeight;
+  const cases: [[number, number][], string, string][] = [
+    [[[60, 80], [80, 100], [100, h - 200]], "bottom", "lines from near the top to most of the way down"],
+    [[[200, 220], [220, h - 40]], "top", "lines from a quarter down to near the bottom"],
+    [[[-900, -880], [-880, 120]], "bottom", "entering from above the screen"],
+    [[[h - 120, h - 100], [h - 100, h + 900]], "top", "leaving below the screen"],
+  ];
+  for (const [spans, edge, what] of cases) {
+    withRectsAt(spans, () => {
+      pointerDown(text.parentElement!, "touch");
+      select(text, 20);
+      wait(SETTLE_MS);
+      expect(chip()?.getAttribute("data-edge"), what).toBe(edge);
+    });
+  }
+});
+
+it("the docked chip has one height for each edge, and keeps only its x from the words", () => {
+  const source = readFileSync("src/web/styles/annotations.css", "utf8");
+  expect(source).toMatch(/\.touch-select-chip\[data-edge="top"\]\s*\{[^}]*var\(--bar-bottom\)/);
+  expect(source).toMatch(
+    /\.touch-select-chip\[data-edge="bottom"\]\s*\{[^}]*max\(var\(--dock-bottom\), var\(--safe-bottom\)\)[^}]*var\(--hint-now\)/,
+  );
+  expect(source, "the chip no longer follows the words down the screen").not.toMatch(/--chip-y/);
+  expect(source).toContain("var(--chip-x, 0px)");
 });
