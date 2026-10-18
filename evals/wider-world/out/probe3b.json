@@ -1,0 +1,54 @@
+{
+  "arm": "probe3b",
+  "timestamp": "2026-10-18T08:58:23.470Z",
+  "gitHead": "80943a93c0cb793bc794886946aa98419c64b022",
+  "srcDirty": true,
+  "promptSourceHash": "9d1cbaf07eb69547f8d7045fbb116c3a847f5a7064f9c571265d6821b1a5fa1b",
+  "promptSources": {
+    "src/converse.ts": "f6cba32c3eb63cfcc4f7383d8e75b24ef95f37aa6df0db9d5961c5adaa70c149",
+    "src/quiz-mark.ts": "9973409767e1e91010f799c09c0ce31980d52c4e151893cd64d3319889137e1b",
+    "src/wider-world.ts": "2932ddf19d4bb973f82777412d41e447d9ee5950a4d156bbe64928e8ab3f68d1"
+  },
+  "article": "tests/fixtures/data-root/data/noema-mythology-of-conscious-ai",
+  "cases": [
+    {
+      "name": "wrong-antikythera-learn",
+      "surface": "learn",
+      "want": "outside-note",
+      "facts": "The Antikythera mechanism is usually dated to roughly 150–100 BCE (National Archaeological Museum, Athens), i.e. about 2,000 years ago, not 2,000 BCE.",
+      "blocks": [
+        "spya-zg9me8"
+      ],
+      "input": {
+        "said": "So one thing I remember is, um, the earliest computers weren't digital at all, they were analogue — like the Antikythera mechanism, which he says is about four thousand years old, from around 2000 BC, used for astronomy. And then analogue stuff came back with cybernetics in the fifties."
+      },
+      "reply": "The article puts the Antikythera mechanism at \"around 2,000 BCE\", so you've reported it faithfully. Outside this piece, from memory (and widely agreed), the mechanism is usually dated to the second or first century BCE. That makes it roughly 2,000 years old, not 4,000.\n\nRight after the cybernetics point, the article moves on to two newer approaches: neuromorphic computation and Hinton's \"mortal computation\" [spya-kjfjgm]. What does it say these alternatives share, compared with standard digital computation?\n\nHint: Think back to the software/hardware split, and which side of it these approaches blur [spya-kjfjgm].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": true,
+        "markedSentencesWithId": 0,
+        "words": 92,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 76,
+            "hintWords": 15,
+            "endsInQuestion": true,
+            "questionIds": [],
+            "questionLink": "no-id",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 2,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 8.7
+    }
+  ]
+}

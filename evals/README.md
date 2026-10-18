@@ -200,6 +200,17 @@ text. Run before and after a prompt change —
 [260913b](../docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md)
 § Stage 1 item 5. Counts, not a verdict: read the answers.
 
+## `wider-world.ts` — does a mode say when the piece is wrong, labelled, and only then?
+
+Calls production's `converse` (Chat, Recall, Tutorial) and `markAnswerStream` (Quiz) on the
+committed Seth article. Nineteen cases: a date the piece gets wrong, a contested argument, a view
+the piece already calls a minority one, plain passages that want no outside note, and a reader who
+has the piece backwards. Arms never overwrite one another, and `--pairs` writes a blind,
+`blindCoin`-shuffled sheet with an arm-neutral `facts` line for each case. The results and what
+they showed are in
+[261018c](../docs/investigations/261018c-modes-say-when-the-piece-is-wrong.md); the plan is
+[261018h](../docs/plans/261018h-modes-say-what-the-wider-world-thinks-labelled.md).
+
 ## `chat-commands/` — does chat offer the right button, and only when asked?
 
 ```

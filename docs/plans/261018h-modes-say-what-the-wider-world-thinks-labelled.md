@@ -158,7 +158,8 @@ than ten dollars.
 ## What is left for w99qsz
 
 `widerWorld()` is exported from its own file and takes `{ search: "can" | "cannot", origins?:
-"claim-origins" }`. A marginalia prompt that adds sources and explanations can interpolate it and
+"claim-origins", placement: string }`. `placement` is that prompt's own sentence saying where the
+note goes. marginalia.md points to it. A marginalia prompt that adds sources and explanations can interpolate it and
 get the same three labels and the same "never against the reader" rule. In-sentence labels are the
 scheme it should match until a visible mark exists.
 
@@ -220,3 +221,11 @@ Its findings, and what each one changed. **This section overrides the one above 
 
 - 2026-10-18: plan written. Sol plan review round 1: REVISE, all eight findings taken (above). The
   `before` arms were restarted after the review changed the cases.
+- 2026-10-18, stage 2: committed in 578e00716 (the eval, plus before-runs of the Recall, Tutorial
+  and Quiz evals).
+- 2026-10-18, stage 3: the section and the four prompts landed in 3a4fbb7ec, followed by three
+  wording rounds driven by the eval (80943a93c, 438aa1548, 52fbdee6f). The results are in
+  [261018c](../investigations/261018c-modes-say-when-the-piece-is-wrong.md). The wrong date is
+  now flagged on all four surfaces, not just Chat's one. No outside note appeared where none was
+  wanted, and none was used against the reader. Mode shape cost 4–1 against a 2–1 control.
+- Queued: `qi-6rmzd7xs` (Live), `qi-5ehbcza5` (Explain) and `qi-jfwgfa29` (a visible mark).

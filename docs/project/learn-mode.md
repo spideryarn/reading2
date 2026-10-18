@@ -165,6 +165,13 @@ the prompt *said* correctly and the model did not do:
    "that reading holds up well" is a verdict on the reader wearing a friendly face. The first is
    wanted, the second is the sentence to delete.
 
+**The world is not the article** (2026-10-18). When the model knows the piece is wrong on the
+point at hand, Recall and Tutorial now say so in one labelled sentence before the nudge or the
+task. That never counts against the reader's reading, which the entitlement section still judges
+against the article alone. They may search to check a doubt they already have, but never to hunt
+for an objection. Greg's `spya-h5mteu`;
+[prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
+
 ### What the one-voice runs showed (2026-10-02)
 
 Three runs, Sonnet 5, 13 replies each: `evals/results/remember-recall.261002i-run-1.md`,

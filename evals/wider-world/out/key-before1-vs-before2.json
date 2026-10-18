@@ -1,0 +1,120 @@
+{
+  "a": "before1",
+  "b": "before2",
+  "key": [
+    {
+      "n": 1,
+      "case": "wrong-antikythera-learn",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 2,
+      "case": "wrong-antikythera-quiz",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 3,
+      "case": "wrong-antikythera-chat",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 4,
+      "case": "wrong-antikythera-tutorial",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 5,
+      "case": "disputed-replacement-learn",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 6,
+      "case": "disputed-replacement-quiz",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 7,
+      "case": "disputed-replacement-chat",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 8,
+      "case": "already-situated-learn",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 9,
+      "case": "plain-mcculloch-learn",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 10,
+      "case": "plain-mcculloch-quiz",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 11,
+      "case": "plain-mcculloch-chat",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 12,
+      "case": "plain-mcculloch-tutorial",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 13,
+      "case": "plain-nagel-learn",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 14,
+      "case": "plain-nagel-quiz",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 15,
+      "case": "plain-nagel-chat",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 16,
+      "case": "plain-nagel-tutorial",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 17,
+      "case": "reader-wrong-learn",
+      "reply1": "before1",
+      "reply2": "before2"
+    },
+    {
+      "n": 18,
+      "case": "reader-wrong-quiz",
+      "reply1": "before2",
+      "reply2": "before1"
+    },
+    {
+      "n": 19,
+      "case": "reader-wrong-tutorial",
+      "reply1": "before1",
+      "reply2": "before2"
+    }
+  ]
+}

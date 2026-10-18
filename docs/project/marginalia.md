@@ -238,6 +238,13 @@ owner-only rule as the words, so they ride on the call that was already there, s
   it has the passage's card and the jump flashes the checked target words.
 - **Owner only**, as the words are.
 
+**A note about the world outside the piece** (a source, a correction, how others see a claim)
+would be a note whose content is *not* in the article. The labels and the trigger Chat, Recall,
+Tutorial and Quiz use for that since 2026-10-18 are one shared section, `widerWorld()` in
+[`src/wider-world.ts`](../../src/wider-world.ts):
+[prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
+The relations call keeps to the article today.
+
 **Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase
 to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or
 *Tension* note is the few the model judged worth a sentence. Neither reads the other.

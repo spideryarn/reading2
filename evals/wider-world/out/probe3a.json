@@ -1,0 +1,56 @@
+{
+  "arm": "probe3a",
+  "timestamp": "2026-10-18T08:58:00.202Z",
+  "gitHead": "80943a93c0cb793bc794886946aa98419c64b022",
+  "srcDirty": true,
+  "promptSourceHash": "9d1cbaf07eb69547f8d7045fbb116c3a847f5a7064f9c571265d6821b1a5fa1b",
+  "promptSources": {
+    "src/converse.ts": "f6cba32c3eb63cfcc4f7383d8e75b24ef95f37aa6df0db9d5961c5adaa70c149",
+    "src/quiz-mark.ts": "9973409767e1e91010f799c09c0ce31980d52c4e151893cd64d3319889137e1b",
+    "src/wider-world.ts": "2932ddf19d4bb973f82777412d41e447d9ee5950a4d156bbe64928e8ab3f68d1"
+  },
+  "article": "tests/fixtures/data-root/data/noema-mythology-of-conscious-ai",
+  "cases": [
+    {
+      "name": "wrong-antikythera-learn",
+      "surface": "learn",
+      "want": "outside-note",
+      "facts": "The Antikythera mechanism is usually dated to roughly 150–100 BCE (National Archaeological Museum, Athens), i.e. about 2,000 years ago, not 2,000 BCE.",
+      "blocks": [
+        "spya-zg9me8"
+      ],
+      "input": {
+        "said": "So one thing I remember is, um, the earliest computers weren't digital at all, they were analogue — like the Antikythera mechanism, which he says is about four thousand years old, from around 2000 BC, used for astronomy. And then analogue stuff came back with cybernetics in the fifties."
+      },
+      "reply": "The article gives the date as you remember it: the Antikythera mechanism is \"dating back to around 2,000 BCE\" [spya-zg9me8]. Outside this piece, and from my memory rather than a fresh check, the device is usually dated to roughly the 2nd or 1st century BCE. That makes it about 2,000 years old, not 4,000, so the essay's date looks like a slip. It doesn't affect his point that early computers were analogue.\n\nAfter cybernetics, he lists some recent revivals of computing that isn't standard digital. Do you remember what neuromorphic computation and \"mortal computation\" have in common that digital computing lacks [spya-kjfjgm]?\n\nHint: Think of his contrast with \"substrate-flexible,\" and of what he says happens to a mortal computation when its particular implementation ceases to exist [spya-kjfjgm].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": true,
+        "markedSentencesWithId": 0,
+        "words": 127,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 102,
+            "hintWords": 24,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-kjfjgm"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 3,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 9.1
+    }
+  ]
+}
