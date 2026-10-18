@@ -109,6 +109,7 @@ import { openPgStoreSession } from "../src/store/pg-session.js";
 import { workKeyFor } from "../src/store/jobs.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { Block, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
+import { fakeMatterStep } from "./helpers/fake-matter-step.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import type { HeldRunLock } from "./helpers/run-lock.js";
@@ -395,7 +396,7 @@ function fakeStructure(): PipelineStep<"structure"> {
 }
 
 /** The registry the jobs are driven with: the real steps, with one fake over them. */
-const REGISTRY: StepRegistry = { ...STEPS, structure: fakeStructure() };
+const REGISTRY: StepRegistry = { ...STEPS, structure: fakeStructure(), matter: fakeMatterStep() };
 
 const PARTS: AdvanceParts = {
   power: async () => "standard",
@@ -499,6 +500,23 @@ async function advanceWhenSlotFree(id: string) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`advancing ${id} answered busy for 30s: the concurrency cap is full.`);
+}
+
+/**
+ * **The ingest's `matter` successor, run to its end.** An ingest that cut the
+ * blocks queues it ahead of the labels successor (src/store/pg-revisions.ts §
+ * `publishRevisionIn`, plan 261018a), and `labels` is exclusive, so it would
+ * wait behind it. Run here, before the shelf is read, so the revision each case
+ * compares against is the one the labels job will find.
+ */
+async function settleMatter(slug: string): Promise<void> {
+  const queued = (
+    await db().select().from(jobsTable).where(eq(jobsTable.slug, slug)).orderBy(asc(jobsTable.createdAt))
+  ).filter((row) => row.status === "queued" && row.steps.map((s) => s.name).join() === "matter");
+  expect(queued, "the ingest did not queue exactly one matter job").toHaveLength(1);
+  const ran = await advanceWhenSlotFree(queued[0]!.id);
+  expect(ran?.done, "the matter job did not finish in one claim").toBe(true);
+  expect(ran?.job.status, ran?.job.error).toBe("done");
 }
 
 async function successorOf(slug: string) {
@@ -651,6 +669,7 @@ describe("an ingest that publishes before its labels are bought", () => {
     const advanced = await advanceWhenSlotFree(await queueIngest(slug));
     expect(advanced?.done, "the ingest job did not finish").toBe(true);
     expect(advanced?.job.status).toBe("done");
+    await settleMatter(slug);
 
     /* --- it reached the shelf, and it is a different revision --- */
     const shelf = await onTheShelf(slug);
@@ -809,6 +828,7 @@ describe("an ingest that publishes before its labels are bought", () => {
     labelGate.calls = 0;
     const advanced = await advanceWhenSlotFree(await queueIngest(slug));
     expect(advanced?.done).toBe(true);
+    await settleMatter(slug);
 
     const shelf = await onTheShelf(slug);
     expect(shelf.revision?.navLabelStatus).toBe("pending");
@@ -884,6 +904,7 @@ describe("an ingest that publishes before its labels are bought", () => {
     labelGate.handler = undefined;
     labelGate.calls = 0;
     expect((await advanceWhenSlotFree(await queueIngest(slug)))?.done).toBe(true);
+    await settleMatter(slug);
 
     const shelf = await onTheShelf(slug);
     expect(shelf.revision?.navLabelStatus).toBe("pending");

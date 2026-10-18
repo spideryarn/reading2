@@ -75,6 +75,7 @@ const { advanceJobWith, claimSession, enqueue, retryJob, DEADLINE_MARGIN_MS } = 
 const { STRUCTURE_NOT_BUILT } = await import("../src/messages.js");
 const { runAsOwner } = await import("../src/owner.js");
 const { DEFAULT_INGEST_STEPS, STEPS } = await import("../src/pipeline.js");
+const { fakeMatterStep } = await import("./helpers/fake-matter-step.js");
 const { awaitingStructure } = await import("../src/types.js");
 
 type AdvanceParts = import("../src/jobs.js").AdvanceParts;
@@ -105,6 +106,15 @@ const MODES: StepName[][] = [
   ["crossrefs"],
   ["quotes", "ideas", "skim"],
 ];
+
+/**
+ * **The `matter` successor**, which every publication that cut new blocks
+ * queues ahead of the `structure` and `labels` successors (src/store/pg-revisions.ts
+ * § `publishRevisionIn`; plan 261018a, src/matter-step.ts § Why a successor
+ * job). Named in each queue below rather than filtered out, so a second one,
+ * or one that went missing, is red here too.
+ */
+const MATTER: StepName[] = ["matter"];
 
 let runLock: HeldRunLock | undefined;
 
@@ -153,8 +163,9 @@ interface Calls {
   extract: number;
   glossary: number;
   structure: number;
+  matter: number;
 }
-const calls: Calls = { fetch: 0, extract: 0, glossary: 0, structure: 0 };
+const calls: Calls = { fetch: 0, extract: 0, glossary: 0, structure: 0, matter: 0 };
 
 /** The real `structure` step, counted. */
 function countedStructure(): PipelineStep<"structure"> {
@@ -257,6 +268,9 @@ function partsWith(opts: { failExtract?: boolean; leaseMs?: number } = {}): Adva
     structure: countedStructure(),
     assets: fakeAssets(),
     glossary: tripwireGlossary(),
+    matter: fakeMatterStep(() => {
+      calls.matter += 1;
+    }),
   };
   return {
     power: async () => "standard",
@@ -316,6 +330,13 @@ async function structureJobOn(slug: string) {
   return queued[0]!;
 }
 
+/** The matter job a publication that cut the blocks queued. */
+async function matterJobOn(slug: string) {
+  const queued = (await queuedOn(slug)).filter((row) => names(row).join() === "matter");
+  expect(queued, "the publication did not queue exactly one matter job").toHaveLength(1);
+  return queued[0]!;
+}
+
 const mine = (name: string, body: () => Promise<void>) => it(name, () => runAsOwner(OWNER, body));
 
 /* ------------------------------------------------------------------ tests -- */
@@ -330,7 +351,7 @@ describe("an import that opens before its structure is built", () => {
   });
   beforeEach(() => {
     model.calls = 0;
-    calls.fetch = calls.extract = calls.glossary = calls.structure = 0;
+    calls.fetch = calls.extract = calls.glossary = calls.structure = calls.matter = 0;
   });
 
   afterAll(async () => {
@@ -368,12 +389,25 @@ describe("an import that opens before its structure is built", () => {
 
     const first = await onTheShelf(job.slug);
     expect(awaitingStructure(first.tree), "the import did not publish the stand-in").toBe(true);
-    expect((await queuedOn(job.slug)).map(names), "more than the structure job was queued").toEqual([
+    expect(
+      (await queuedOn(job.slug)).map(names),
+      "more than the matter and structure jobs were queued",
+    ).toEqual([MATTER, ["structure"]]);
+
+    /* The matter job is first in line, and the exclusive structure job waits
+       behind it, so it runs first, as it would. Its publication still carries
+       the stand-in, and the structure job already queued is the one it wants. */
+    const matter = await drive((await matterJobOn(job.slug)).id);
+    expect(matter.job.status, matter.job.error).toBe("done");
+    expect(calls.matter).toBe(1);
+    expect(model.calls, "the fixture's matter step reached the structure model").toBe(0);
+    expect((await queuedOn(job.slug)).map(names), "the matter job queued a second structure job").toEqual([
       ["structure"],
     ]);
 
     /* The job that builds the real tree. Its draft is a copy of the published
-       revision: the stand-in tree, and the import's finished `structure` run. */
+       revision: the stand-in tree, the import's finished `structure` run, and
+       the matter. */
     const successor = await structureJobOn(job.slug);
     const built = await drive(successor.id);
     expect(built.job.status, built.job.error).toBe("done");
@@ -389,13 +423,14 @@ describe("an import that opens before its structure is built", () => {
     expect(second.tree.provisional).toBeUndefined();
     expect(second.tree.nodes[second.tree.rootId]?.gist).toBe("A fixture that says things.");
 
-    /* And only now the labels, and the modes that read the tree. */
+    /* And only now the labels, and the modes that read the tree. No second
+       matter job: the structure job cut no blocks. */
     expect((await queuedOn(job.slug)).map(names)).toEqual([["labels"], ...MODES]);
   });
 
   /* ------------------------------------------------------------------ 2 -- */
 
-  mine("an import that did not ask is one job, as it was", async () => {
+  mine("an import that did not ask builds its structure in its own job, as it was", async () => {
     const job = await enqueue({ slug: `${SLUG_PREFIX}plain`, url: freshUrl(), pump: false });
     expect(structureStep(job)?.headingsFirst).toBeUndefined();
 
@@ -403,7 +438,8 @@ describe("an import that opens before its structure is built", () => {
     expect(imported.job.status, imported.job.error).toBe("done");
     expect(model.calls).toBe(1);
     expect(awaitingStructure((await onTheShelf(job.slug)).tree)).toBe(false);
-    expect((await queuedOn(job.slug)).map(names)).toEqual([["labels"], ...MODES]);
+    /* No structure successor: the matter one alone comes before the labels. */
+    expect((await queuedOn(job.slug)).map(names)).toEqual([MATTER, ["labels"], ...MODES]);
   });
 
   /* ------------------------------------------------------------------ 3 -- */
@@ -511,7 +547,7 @@ describe("an import that opens before its structure is built", () => {
     expect(imported.job.status, imported.job.error).toBe("done");
     expect(model.calls).toBe(0);
     expect(awaitingStructure((await onTheShelf(job.slug)).tree)).toBe(true);
-    expect((await queuedOn(job.slug)).map(names)).toEqual([["structure"]]);
+    expect((await queuedOn(job.slug)).map(names)).toEqual([MATTER, ["structure"]]);
   });
 
   /* ------------------------------------------------------------------ 6 -- */
@@ -528,9 +564,13 @@ describe("an import that opens before its structure is built", () => {
 
     await drive(job.id);
     const successor = await structureJobOn(job.slug);
+    const matter = await matterJobOn(job.slug);
     const ordered = await queuedOn(job.slug);
+    /* The matter job sits between them, ahead of the structure job by design;
+       it reads no structure, so it does not change what is being tested. */
     expect(ordered.map((row) => row.id), "the mode did not precede the successor in the actual queue").toEqual([
       earlierMode.id,
+      matter.id,
       successor.id,
     ]);
 
@@ -538,7 +578,7 @@ describe("an import that opens before its structure is built", () => {
     expect(refused.job.failureKind).toBe("blocked");
     expect(refused.job.error).toBe(STRUCTURE_NOT_BUILT.message);
     expect(calls.glossary, "the earlier mode read the stand-in instead of being refused").toBe(0);
-    expect((await queuedOn(job.slug)).map((row) => row.id)).toEqual([successor.id]);
+    expect((await queuedOn(job.slug)).map((row) => row.id)).toEqual([matter.id, successor.id]);
   });
 
   /**
@@ -549,6 +589,12 @@ describe("an import that opens before its structure is built", () => {
   mine("a step that reads the structure is refused on the stand-in, and assets is not", async () => {
     const job = await addOpeningEarly("gated");
     await drive(job.id);
+    /* The import's matter job is first in line and runs first, as it would.
+       Left queued, it would hold up the exclusive `assets` below; and run after
+       the structure job is gone, its publication would queue another. */
+    const matter = await drive((await matterJobOn(job.slug)).id);
+    expect(matter.job.status, matter.job.error).toBe("done");
+    expect(calls.matter).toBe(1);
     const successor = await structureJobOn(job.slug);
     /* As if it had failed: off the line, the stand-in still published. */
     await db().update(jobsTable).set({ status: "error" }).where(eq(jobsTable.id, successor.id));

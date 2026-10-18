@@ -34,6 +34,7 @@ import path from "node:path";
 
 import pg from "pg";
 
+import { sslDecisionFor } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 
 loadEnvLocal();
@@ -327,7 +328,7 @@ async function main(): Promise<void> {
   const resultsDir = path.join(DIR!, "results");
   mkdirSync(resultsDir, { recursive: true });
   mkdirSync(CACHE_DIR, { recursive: true });
-  const client = new pg.Client({ connectionString: DB });
+  const client = new pg.Client({ connectionString: DB, ssl: sslDecisionFor(DB).ssl });
   await client.connect();
   const skipped: { slug: string; why: string }[] = [];
   const articles: EvalArticle[] = [];

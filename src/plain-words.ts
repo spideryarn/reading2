@@ -132,6 +132,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/structure-deepen.ts": "sends EXPAND_SYSTEM, which lives in src/structure-expand.ts and carries the rule there",
   "src/spend-declarations.ts": "names a model call inside a string, and makes none",
   "scripts/spike-book-structure.ts": "a one-off spike that sends production's own structure prompt",
+  "scripts/matter-eval.ts": "an eval that sends production's own matter prompt, through classifyMatter",
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
   "scripts/eval-pdf-chunk-size.ts":
     "an eval that runs production's own PDF readers and their prompts, unchanged",

@@ -183,6 +183,9 @@ const ROUTELESS_KINDS = [
   "blocks",
   "extractedHtml",
   "labels",
+  /* The front and back matter reaches a reader inside the article read
+     (`loadArticle` § `matterForReader`), never at a URL of its own (plan 261018a). */
+  "matter",
   "meta",
   "raw",
   /* The difficulty rating reaches a reader inside the article's `meta`, never

@@ -128,6 +128,7 @@ import { pgArticleReader } from "../src/store/pg.js";
 import type { ArtifactKind, ArtifactStore } from "../src/store/artifacts.js";
 import type { CheckpointStore } from "../src/store/checkpoints.js";
 import type { Arc, Block, Job, JobStep, StepName, Tree } from "../src/types.js";
+import { fakeMatterStep } from "./helpers/fake-matter-step.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
@@ -536,6 +537,25 @@ async function advanceUntilItRuns(id: string, parts: AdvanceParts) {
   );
 }
 
+/**
+ * **The ingest's `matter` successor, run to its end.** A publication that cut
+ * the blocks queues it (src/store/pg-revisions.ts § `publishRevisionIn`, plan
+ * 261018a), and the next exclusive job on the article waits behind it. Asserted
+ * to exist rather than looked for, so an ingest that stopped queueing it is red.
+ */
+async function settleMatter(slug: string): Promise<void> {
+  const queued = (await db().select().from(jobsTable).where(eq(jobsTable.slug, slug))).filter(
+    (row) => row.status === "queued" && row.steps.map((step) => step.name).join() === "matter",
+  );
+  expect(queued, "the publication did not queue exactly one matter job").toHaveLength(1);
+  const ran = await advanceUntilItRuns(queued[0]!.id, {
+    power: async () => "standard",
+    session: claimSession,
+    steps: { ...STEPS, matter: fakeMatterStep() } as never,
+  });
+  expect(ran?.job.status, ran?.job.error).toBe("done");
+}
+
 /* ---------------------------------------------------------------- the reads -- */
 
 const db = () => getDb();
@@ -678,6 +698,9 @@ describe("a claim under Postgres", () => {
 
     /* **And the whole article went into Postgres and nowhere else.** */
     await assertNothingOnDisk(slug, "the ingest");
+
+    /* The matter successor the publication queued, out of case 2's way. */
+    await settleMatter(slug);
   }, 120_000);
 
   /* ------------------------------------------------------------------ 2 -- */
@@ -840,6 +863,7 @@ describe("a claim under Postgres", () => {
       session: claimSession,
       steps: { ...STEPS, ...first.steps } as never,
     });
+    await settleMatter(slug);
     const r1 = await currentRevisionOf(slug);
     expect(r1).not.toBeNull();
 
@@ -1162,6 +1186,7 @@ describe("a claim under Postgres", () => {
       session: claimSession,
       steps: { ...STEPS, ...before.steps } as never,
     });
+    await settleMatter(slug);
     const r1 = await currentRevisionOf(slug);
     expect(r1, "the fixture ingest published nothing").not.toBeNull();
 
