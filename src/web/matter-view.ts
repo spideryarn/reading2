@@ -38,7 +38,7 @@ export const MATTER_KIND_ORDER: readonly MatterKindName[] = [
   "references",
 ];
 
-/** As much of an article as this reads. A visitor's has no `matter`, and no `authors`. */
+/** As much of an article as this reads. A visitor's has `matter` under the owner's rule (plan 261018l), and no `authors`. */
 export type MatterViewArticle = FrontMatterArticle & { matter?: Article["matter"] | undefined };
 
 /**
@@ -64,11 +64,12 @@ export type MatterRange = Pick<ViewStretch, "start" | "end">;
  * Structure cannot disagree about what is folded:
  *
  * - the stored `matter` when the article carries it (the owner's read hands it
- *   over only when it is valid and about these very blocks; src/matter-step.ts
- *   § `matterForReader`). An empty list is an answer: nothing to fold;
+ *   over only when it is valid and about these very blocks, and a visitor's
+ *   under the same rule; src/matter-current.ts § `matterForReader`). An empty
+ *   list is an answer: nothing to fold;
  * - otherwise today's byline rule (front-matter.ts), as one `authors` stretch,
- *   so every article that folded before this still folds — an old article, a
- *   failed step, and every visitor.
+ *   so every article that folded before this still folds — an old article and
+ *   a failed step, for an owner and a visitor alike.
  *
  * **Resolved by index, never by comparing ids** (block-ids.md § The cost we
  * accepted). A stretch whose ends are not current blocks, or whose `from` comes

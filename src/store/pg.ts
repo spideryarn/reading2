@@ -172,9 +172,8 @@ import {
   CITATION_BLURBS_PROMPT_VERSION,
   citationBlurbsExpectedHash,
 } from "../citation-blurbs-identity.js";
-import { matterInputHash } from "../matter.js";
+import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
 import { isMatterDocument } from "../matter-shape.js";
-import { MATTER_PROMPT_VERSION, matterForReader } from "../matter-step.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { blocksAreWhatTheirHtmlProduces } from "../blocks.js";
@@ -1029,12 +1028,13 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. */
   crossrefs: { metadata: "value", crossrefs: "value" },
-  /* **The owner's article read, the metadata page and the publication**, and
-     no public read: src/public/dto.ts is a listed defence (security-map.md),
-     so a visitor keeps today's byline rule. `article` because the reading view
-     folds what it names, behind `matterForReader`; `metadata` for `isCurrent`'s
-     arm; `publish` because the publication queues the step when the value is
-     not about the blocks it publishes.
+  /* **The owner's article read, the metadata page and the publication.** The
+     public reader selects it independently and src/public/dto.ts, a listed
+     defence (security-map.md), publishes only current `{from, to, kinds}`
+     stretches. `article` because the reading view folds what it names, behind
+     `matterForReader`; `metadata` for `isCurrent`'s arm; `publish` because the
+     publication queues the step when the value is not about the blocks it
+     publishes.
      docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md. */
   matter: { article: "value", metadata: "value", publish: "value" },
   /* Its own reader and the metadata page, and not the library — the call
@@ -1280,7 +1280,7 @@ export const REVISION_PROJECTIONS = {
        policy entry above, and src/db/schema.ts § `navLabelStatus`. */
     navLabelStatus: articleRevisions.navLabelStatus,
     /* The front and back matter to fold, which `loadArticle` hands on only
-       when it is about these blocks (src/matter-step.ts § `matterForReader`). */
+       when it is about these blocks (src/matter-current.ts § `matterForReader`). */
     matter: articleRevisions.matter,
   },
   /**
@@ -3589,7 +3589,7 @@ const rawPgArticleReader: ArticleReader = {
         /* `matterInputHash` of the blocks alone (plan 261018a, review F1) and
            the step's version, **and no model**: `generator` names the value's
            sources (`labels+<model>`, or `labels` after a failed call), and the
-           model is folded into `MATTER_PROMPT_VERSION` (src/matter-step.ts).
+           model is folded into `MATTER_PROMPT_VERSION` (src/matter-current.ts).
            A labels-only or `unavailable` value on these blocks is current, as
            its run row says to the pipeline: a failed call is not retried by
            itself, and a re-run from this page is the way to ask again. */

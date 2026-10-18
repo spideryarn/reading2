@@ -13,8 +13,9 @@
  *   call stores the labels rule's stretches alone, with a closed
  *   `modelUnavailable` code (never the model's words); a failure of the step
  *   itself stores `{ status: "unavailable" }`. The import goes on either way.
- * - `matterForReader` — the owner's article read (src/store/pg.ts §
- *   `loadArticle`). The stored value reaches the reading view only when it is
+ * - `matterForReader` (now in src/matter-current.ts, a leaf) — both article
+ *   reads (src/store/pg.ts and src/store/public-reader.ts § `loadArticle`). The
+ *   stored value reaches the reading view only when it is
  *   about **these** blocks; anything else is `undefined`, which the reading view
  *   reads as *use today's byline rule* (review F2: a draft copies the published
  *   revision's columns, so a stale value is the ordinary case, not a corrupt one).
@@ -48,29 +49,16 @@ import {
   MATTER_KINDS,
   classifyMatter,
   combineMatter,
-  matterInputHash,
   type MatterKind,
   type MatterOptions,
 } from "./matter.js";
+import { MATTER_PROMPT_VERSION, matterInputHash } from "./matter-current.js";
 import { matterByLabels } from "./matter-labels.js";
 import { MATTER_KIND_NAMES, isMatterDocument } from "./matter-shape.js";
 import { MATTER_MODEL } from "./models.js";
-import type { Author, Block, Matter, MatterKindName, MatterModelUnavailable, MatterStretchStored } from "./types.js";
+import type { Author, Block, Matter, MatterKindName, MatterModelUnavailable } from "./types.js";
 import { mastheadEcho } from "./web/masthead-echo.js";
 
-/**
- * **The step's version**, stamped into the artefact and the run row. Bump it
- * when `MATTER_SYSTEM`, the request, the checks in src/matter.ts, the labels
- * rule or `MATTER_MODEL` change what would be stored, so every stored value
- * reads as outdated. **The model is in this version rather than in the stamp**,
- * because a stored value's `generator` names its sources — `labels+<model>`,
- * or `labels` alone after a failed call — not one model, and a stamp that
- * declared a model would clash with the second on every write.
- *
- * Here rather than beside the prompt only because src/matter.ts was being
- * edited by another stage when this was written; it belongs there.
- */
-export const MATTER_PROMPT_VERSION = "matter/2";
 
 /** The `generator` of a value both sources made. */
 export const MATTER_GENERATOR = `labels+${MATTER_MODEL}`;
@@ -193,36 +181,4 @@ export async function buildMatter(input: MatterStepInput, opts: MatterOptions = 
  */
 export function matterSettled(value: unknown, blocks: readonly Block[]): boolean {
   return isMatterDocument(value) && value.version === MATTER_PROMPT_VERSION && value.sourceHash === matterInputHash(blocks);
-}
-
-/**
- * **The stretches the reading view may fold, or `undefined` for *use today's
- * rule*.** Every one of these, or nothing (review F2):
- *
- * 1. the stored shape is valid and its status is `ok`;
- * 2. its version is today's safety-and-prompt version;
- * 3. `sourceHash` equals `matterInputHash` of the blocks on this payload —
- *    so a column a draft carried over changed blocks, or a value copied from
- *    another revision, is withheld;
- * 4. every id is a block here;
- * 5. each `from` is at or before its `to` **by index** (block-ids.md § The
- *    cost we accepted), and the stretches are in document order and do not
- *    overlap.
- *
- * 3 implies 4 and 5 for a value this step wrote; they are checked anyway,
- * because the column is a document anybody with a SQL prompt can write.
- */
-export function matterForReader(value: unknown, blocks: readonly Block[]): MatterStretchStored[] | undefined {
-  if (!isMatterDocument(value) || value.status !== "ok") return undefined;
-  if (value.version !== MATTER_PROMPT_VERSION) return undefined;
-  if (value.sourceHash !== matterInputHash(blocks)) return undefined;
-  const index = new Map(blocks.map((b, i) => [b.id, i]));
-  let last = -1;
-  for (const s of value.stretches) {
-    const a = index.get(s.from);
-    const b = index.get(s.to);
-    if (a === undefined || b === undefined || a > b || a <= last) return undefined;
-    last = b;
-  }
-  return value.stretches.map((s) => ({ from: s.from, to: s.to, kinds: [...s.kinds] }));
 }

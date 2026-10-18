@@ -436,6 +436,9 @@ const WIRE_ROW = {
      prose between its own passages, so they are the text's row, whose sentence
      says so. */
   crossrefs: "text",
+  /* Which stretches fold as front and back matter: ids of blocks in the text
+     and closed kinds, so the text's row, which says so (plan 261018l). */
+  matter: "text",
   /* `bibliography` under its old key, the same object, for one deploy (plan
      261009w F1; removed by its contract). Sources' row, as `bibliography`'s. */
   citations: "sources",

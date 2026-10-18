@@ -453,6 +453,11 @@ const PUBLIC_PROJECTIONS = {
        the owner's own inputs, and `publicCrossrefs` in ../public/dto.ts keeps
        `{from, phrase, to}` per link and nothing else. */
     crossrefs: articleRevisions.crossrefs,
+    /* **Front and back matter, 2026-10-18** — Greg's 2B to q-f7zp3t (plan
+       261018l). Not a mode but where the prose folds. `publicMatter` in
+       ../public/dto.ts asks the owner's freshness rule of it against these
+       blocks and keeps `{from, to, kinds}` per stretch and nothing else. */
+    matter: articleRevisions.matter,
     /* **The seventh, and the one that cost real money to make.** A visitor sees
        the Sketch the owner already paid for; nothing on their side can start
        another. docs/project/security-map.md § the hazard this section is really
@@ -1061,6 +1066,7 @@ export const pgPublicReader: PublicArticleReader = {
         crossrefsFresh,
         sketch: found.revision.sketch,
         navLabelStatus: found.revision.navLabelStatus,
+        matter: found.revision.matter,
         /* The table's CHECKs make a `found` row carry all three; a row that
            somehow did not is no guess, as `toSourceGuess` treats it for the
            owner (src/store/source-guess-row.ts). */

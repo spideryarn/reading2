@@ -82,6 +82,7 @@ import type {
   GlossaryKind,
   Idea,
   IdentificationSignal,
+  MatterStretchStored,
   NavLabelStatus,
   Quote,
   QuoteDrops,
@@ -352,6 +353,20 @@ export interface PublicArticle extends PublicArtefactSet {
    * whole of it, and none of them is about a person.
    */
   navLabelStatus: NavLabelStatus;
+  /**
+   * **The stretches of front and back matter to fold**, as the owner's
+   * `Article.matter` (src/types.ts), under the owner's own rule
+   * (src/matter-current.ts § `matterForReader`): present only when the stored
+   * document is current and about exactly these blocks. Absent means *use the
+   * older byline rule*, as for an owner.
+   *
+   * **Two block ids and closed kind names per stretch, and nothing else.** The
+   * stored document's version, generator, hash and any reason the model's half
+   * is missing do not cross; nothing in it is the model's words, and the labels
+   * and the (i) a visitor sees are the app's. Greg's 2B to q-f7zp3t,
+   * 2026-10-18; docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md.
+   */
+  matter?: MatterStretchStored[];
   /**
    * **Where we think an uploaded paper came from**, for a stranger — the
    * public projection 260929g § Decisions 4 deferred, built by

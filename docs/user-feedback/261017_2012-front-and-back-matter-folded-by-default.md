@@ -2,7 +2,7 @@
 reports: spya-ftsqsn
 addenda: spya-k7gm2b, spya-k0w2q7, spya-vskdap
 ending: shipped
-comment: Shipped: authors, abstract, contents, thanks and references are found at import and each folded to a faint one-line stub with an (i), faint in Structure; the paper now shows its authors and year. Open question: older articles and visitors.
+comment: Shipped: title, authors, abstract, contents, thanks and references found at import and folded to a faint stub with an (i), faint in Structure, for visitors too; the paper shows its authors and year. Older articles stay as they are.
 ---
 
 # Front and back matter, found at import and folded to a stub
@@ -75,11 +75,13 @@ build `614e42c5`, on `arxiv-2308-08708-spya-xax6v4`. A suggestion, with three ad
   stored stretches.
 - **The reported article** was re-imported on the local database, not in production: six stubs,
   19 authors, 2023. A production re-import is Greg's to press after the deploy.
-- **Open:** question [q-f7zp3t](questions/q-f7zp3t.md): whether to run the step over existing
-  articles (a production write), and whether visitors on a shared link get the folds (the public
-  DTO is a listed defence). Each has its own queue entry: `qi-erfq52cg` (existing articles) and
-  `qi-exhw79tc` (visitors). The misses the eval left, and a split of the evidence check the code
-  review asked for, are `qi-nj2cdq8d`.
+- **Answered:** question [q-f7zp3t](questions/q-f7zp3t.md), reply `spya-r8arjm` (2026-10-18):
+  *"1A / 2B"*. Existing articles are left alone (no backfill; `qi-erfq52cg` dropped). Visitors get
+  the same folds, plan
+  [261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)
+  (`qi-8y3tx5tp`, superseding `qi-exhw79tc`). His two principles went into architecture.md
+  § Conventions and security-map.md § The allowlist. The misses the eval left, and a split of the
+  evidence check the code review asked for, are `qi-nj2cdq8d`.
 - **Folded in:** queue items `qi-fddb7wb8` and `qi-ad4wgkaq` asked for this, and are done.
   `qi-2byhh6nc` now says the stretches exist.
 - **Code review:** GPT Sol found three P1s, all fixed. One of its fixes was reverted because it

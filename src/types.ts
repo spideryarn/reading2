@@ -2212,13 +2212,13 @@ export interface Article {
    * *these* blocks: a valid shape, every id a current block, each `from` at or
    * before its `to` by index, the stretches in order, and the stored
    * `sourceHash` equal to `matterInputHash` of the blocks on this payload
-   * (src/matter-step.ts § `matterForReader`; plan 261018a review F2).
+   * (src/matter-current.ts § `matterForReader`; plan 261018a review F2).
    *
    * **Optional, and absent means *use today's rule*** (src/web/front-matter.ts):
    * no step run yet, a failed call, a column carried forward over blocks that
-   * have since changed, or a visitor's payload, which never carries it (the
-   * public DTO is a listed defence; security-map.md). An empty list is not
-   * absence: the step looked and found nothing to fold.
+   * have since changed. A visitor's payload carries it under the same rule,
+   * since 2026-10-18 (`PublicArticle.matter`, plan 261018l). An empty list is
+   * not absence: the step looked and found nothing to fold.
    */
   matter?: MatterStretchStored[];
 
@@ -6861,7 +6861,7 @@ export type MatterModelUnavailable = "call-failed" | "timed-out" | "invalid-answ
 export type MatterUnavailableReason = "no-blocks" | "step-failed";
 
 /**
- * The artefact. **`sourceHash` is `matterInputHash`** (src/matter.ts) over
+ * The artefact. **`sourceHash` is `matterInputHash`** (src/matter-current.ts) over
  * the blocks the step read (review F1), not `hashBlocks`, so a draft that
  * carried an older column forward can never pass it off as current.
  *

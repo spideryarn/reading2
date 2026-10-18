@@ -10,14 +10,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { matterInputHash, type MatterGateway } from "../src/matter.js";
+import { type MatterGateway } from "../src/matter.js";
+import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../src/matter-current.js";
 import { isMatterDocument } from "../src/matter-shape.js";
 import {
   LABELS_ONLY_GENERATOR,
   MATTER_GENERATOR,
-  MATTER_PROMPT_VERSION,
   buildMatter,
-  matterForReader,
   matterSettled,
 } from "../src/matter-step.js";
 import type { Block, Matter } from "../src/types.js";

@@ -1,7 +1,8 @@
 ---
 id: q-f7zp3t
 report: spya-ftsqsn
-status: open
+status: answered
+acted: spya-r8arjm
 asked: 2026-10-18
 title: Front and back matter: fold it on the articles already in your library, and for visitors on a shared link too?
 refs: SPIDERYARN-READING2-JE · qi-bz4tj9df · qi-erfq52cg · qi-exhw79tc · docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md · docs/investigations/261018b-front-and-back-matter-eval.md · docs/user-feedback/261017_2012-front-and-back-matter-folded-by-default.md
@@ -31,3 +32,12 @@ The evidence: an eval of 52 articles in three sets, two of them held out until t
 The authors: your paper's page declares no authors, so the masthead showed none. A page that declares no authors now takes them, and the year, from the arXiv or DOI record of its own id, and only when that record's title matches the page's exactly.
 
 The Abstract is folded, as you leaned. If you would rather it showed open, that is a one-line change; say so in a reply.
+
+Reply spya-r8arjm, Greg, 2026-10-18:
+
+> 1A
+> 2B
+>
+> And let's broadly try and remember these as principles. If we make a change that would affect all of the existing articles, assume that we're not going to re-import all of the existing articles unless I explicitly ask you to, because that would be somewhat expensive and probably a bit disruptive. So assume that we're just going to fix or improve things for new. And, and that, you know, if something's going to make the experience better and that it would be straightforward enough to include for shared articles, and it doesn't incur extra AI processing and it doesn't give away anything sensitive, then, you know, include it for shared articles too. And that way you don't have to ask me these questions every time. So make a minimal update to write this up as a principle in the appropriate docs.
+
+Acted on (queue qi-8y3tx5tp, plan 261018l): 1A, existing articles are left alone and fold the new way when re-imported. 2B, visitors on a shared link now get the same folds, each stretch's two block ids and kinds and nothing else. The two principles are written into architecture.md § Conventions (no re-import by default) and security-map.md § The allowlist (shared articles get it too, on your four conditions).

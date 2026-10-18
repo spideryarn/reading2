@@ -403,9 +403,10 @@ export const REVISION_CARRY_POLICY: Record<
   /* **Carries, like `crossrefs`** (plan 261018a, review F2): the stretches name
      block ids, and their `sourceHash` is `matterInputHash` of the blocks they
      were found in. A carried value over changed blocks is **not drawn** — the
-     owner's article read withholds it (src/matter-step.ts § `matterForReader`)
-     and the reading view falls back to its byline rule — and the publication
-     that changed the blocks queues the step again (`publishRevisionIn`). */
+     owner and public article reads withhold it (src/matter-current.ts §
+     `matterForReader`) and the reading view falls back to its byline rule — and
+     the publication that changed the blocks queues the step again
+     (`publishRevisionIn`). */
   matter: "carry",
   /* **Carries, like `faq`** — a replace-on-rerun artefact whose `sourceHash`
      answers at read time whether the article moved underneath it; the panel

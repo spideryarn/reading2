@@ -569,6 +569,18 @@ on the owner's side could see it, because every test ran where the field exists.
 `tests/public-dto.test.ts` saying what a future author must decide is worth writing — that note is
 the only reason this one was found.
 
+**The default, when you decide, is that a visitor gets it too** — when it makes the shared article
+better, is straightforward to carry across, starts no AI processing a visitor did not already get,
+and gives away nothing sensitive. Then add it, with its row here and its tests, and do not ask
+first. Anything that fails one of the four is still Greg's to decide:
+
+> if something's going to make the experience better and that it would be straightforward enough to
+> include for shared articles, and it doesn't incur extra AI processing and it doesn't give away
+> anything sensitive, then, you know, include it for shared articles too. And that way you don't
+> have to ask me these questions every time.
+>
+> — Greg, 2026-10-18 (`spya-r8arjm`, reply to `q-f7zp3t`)
+
 **The idiom is `opt(source, "key")`, and not a conditional spread.** Until the same date, an optional
 field crossed as `...(x.k === undefined ? {} : { k: x.k })`. That names the key but does not check
 it: spelling it `treatmnt` inside the spread **compiles clean**, because TypeScript's
@@ -621,6 +633,24 @@ adds *"Never address or mention the reader"*. `profileHash` and `dropped` (its `
 `movedIntro` with it) still do not cross, and `tests/public-dto.test.ts` and
 `tests/public-visibility-pg.test.ts` assert both
 ([261012a](../plans/261012a-skim-pass-intros-cross-to-visitors.md)).
+
+**`PublicArticle` gained `matter` on 2026-10-18**: which stretches of the article fold as its front
+and back matter ([front-and-back-matter.md](front-and-back-matter.md)). The question was whether a
+visitor gets the folds ([q-f7zp3t](../user-feedback/questions/q-f7zp3t.md)):
+
+> 2B
+>
+> — Greg, 2026-10-18 (`spya-r8arjm`)
+
+What crosses is, per stretch, `{from, to, kinds}`: two ids of blocks already in the payload and kind
+names from a closed list. They are a model's classification, held to the stored text by code, but no
+model prose crosses. The stored document's `version`, `generator`, `sourceHash`,
+`modelUnavailable` and `reason` stay behind. `publicMatter` in [`src/public/dto.ts`](../../src/public/dto.ts)
+asks the owner's own rule (`matterForReader`, [`src/matter-current.ts`](../../src/matter-current.ts),
+a leaf so the public graph stays clear of the gateway), so a stale or malformed column crosses as no
+key. `tests/public-dto-matter.test.ts` and `tests/public-visibility-pg.test.ts` assert both, the
+second through the real route, owner and visitor side by side
+([261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)).
 
 ## The fleet dashboard, which is a different product on the same box
 

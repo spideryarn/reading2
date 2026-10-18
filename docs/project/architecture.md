@@ -491,7 +491,11 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   back and rerun everything on all the existing articles because it's too much of a hassle and
   expense. Instead we're almost always going to be content just to fix them going forwards unless I
   explicitly say otherwise, or if it's really important it's okay to ask me, but otherwise just
-  default to this."*
+  default to this."* **Re-importing existing articles is the same backfill**, and needs the same
+  explicit yes. Greg, 2026-10-18 (`spya-r8arjm`): *"assume that we're not going to re-import all of
+  the existing articles unless I explicitly ask you to, because that would be somewhat expensive
+  and probably a bit disruptive. So assume that we're just going to fix or improve things for
+  new."*
 - **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
   do it has been said in prose several ways in this repo, each a count copied out of the code, and
   none stayed right. The answer is in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`: a step

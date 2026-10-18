@@ -28,9 +28,8 @@
  *
  * Nothing here removes or rewrites a block; it says which to fold.
  */
-import { createHash } from "node:crypto";
-
 import { openRouterJson, type AiRequestBody } from "./ai-call.js";
+import type { MatterBlock } from "./matter-current.js";
 import { withChatJsonSchema } from "./messages-structured-output.js";
 import { MATTER_MODEL } from "./models.js";
 import { sectionRanges } from "./section-ranges.js";
@@ -60,16 +59,6 @@ export interface MatterStretch {
   kinds: MatterKind[];
 }
 
-/** As much of a block as the pass reads. Every `Block` satisfies it. */
-export interface MatterBlock {
-  id: BlockId;
-  kind: string;
-  level?: number | null | undefined;
-  text: string;
-  words: number;
-  /** Stage 3's role: a `footnote` is the article's own note and is never folded as matter. */
-  role?: string | null | undefined;
-}
 
 /** As much of an article as the pass reads. */
 export interface MatterArticle {
@@ -163,24 +152,6 @@ export const LABEL_MAX_WORDS = 8;
  */
 export const REFERENCE_GAP = 2;
 
-/** Prefixes the version of everything `matterInputHash` reads; bump it when that changes. */
-export const MATTER_HASH_VERSION = "m1";
-
-// ───────────────────────────────────────────────────────────────── the hash
-
-/**
- * **What the pass read, fingerprinted** (plan review F1): ordered `[id, text,
- * kind, level, words, role]` (role because the checks read it: a footnote is
- * never folded). `hashBlocks` (src/source-hash.ts) reads id, text, role
- * and treatment; a re-extraction that turned a paragraph into a heading would
- * leave it unchanged while what the model saw had changed. JSON over
- * fixed-position arrays, for `hashBlocks`' reason: no delimiter a page could
- * contain.
- */
-export function matterInputHash(blocks: readonly MatterBlock[]): string {
-  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, b.role ?? null]));
-  return `${MATTER_HASH_VERSION}:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
-}
 
 // ────────────────────────────────────────────────────────────── the windows
 

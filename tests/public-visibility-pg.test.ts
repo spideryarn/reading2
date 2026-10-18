@@ -58,10 +58,11 @@ import { publicHeadOf } from "./helpers/public-head.js";
 import { blockHashQuery } from "../src/store/pg.js";
 import { inputFingerprint as crossrefsFingerprint } from "../src/crossrefs-fingerprint.js";
 import { citedMetaFingerprintOf } from "../src/source-hash.js";
+import { MATTER_PROMPT_VERSION, matterInputHash } from "../src/matter-current.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Bibliography, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
+import type { Bibliography, Block, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -1445,6 +1446,52 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         .update(articleRevisions)
         .set({ ...original!, crossrefs: null })
         .where(eq(articleRevisions.id, REVISION_ID));
+    }
+  });
+
+  /**
+   * **The front and back matter folds, through the real reader and route**
+   * (Greg's 2B to q-f7zp3t, plan 261018l). The hash is taken from the
+   * owner's own payload, so this asks the question that matters: do the two
+   * reads agree that a stored value is about these blocks? A heading with a
+   * `level` is in the fixture, the field a mapper could drop unnoticed. And
+   * the stale case, so a reader hardwired to *withhold* cannot pass.
+   */
+  it("folds for a visitor exactly what it folds for the owner", async () => {
+    const db = getDb();
+    const owned = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
+    expect(owned.status).toBe(200);
+    const current = matterInputHash((owned.body as { blocks: Block[] }).blocks);
+    const stretches = [{ from: HEADING_ID, to: HEADING_ID, kinds: ["title"] }];
+    try {
+      for (const [sourceHash, expected] of [
+        [current, stretches],
+        ["m1:0000000000000000", undefined],
+      ] as const) {
+        await db
+          .update(articleRevisions)
+          .set({
+            matter: {
+              status: "ok",
+              version: MATTER_PROMPT_VERSION,
+              generator: "labels+matter-generator-sentinel",
+              sourceHash,
+              modelUnavailable: "timed-out",
+              stretches: [...stretches],
+            } as never,
+          })
+          .where(eq(articleRevisions.id, REVISION_ID));
+        const owner = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
+        const visitor = await call("GET", `/api/public/article/${SLUG}`);
+        expect(visitor.status).toBe(200);
+        expect((owner.body as { matter?: unknown }).matter, "the owner's folds").toEqual(expected);
+        expect((visitor.body as { matter?: unknown }).matter, "a visitor's folds").toEqual(expected);
+        for (const leak of ["matter-generator-sentinel", sourceHash, MATTER_PROMPT_VERSION]) {
+          expect(visitor.text, leak).not.toContain(leak);
+        }
+      }
+    } finally {
+      await db.update(articleRevisions).set({ matter: null }).where(eq(articleRevisions.id, REVISION_ID));
     }
   });
 

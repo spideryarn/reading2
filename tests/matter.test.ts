@@ -12,7 +12,6 @@ import {
   MAX_STRETCHES,
   type MatterAnswerItem,
   type MatterArticle,
-  type MatterBlock,
   type MatterGateway,
   OPENING_MAX_BLOCKS,
   RECORD_MAX_CHARS,
@@ -22,10 +21,10 @@ import {
   holdStretches,
   labelKinds,
   matterInput,
-  matterInputHash,
   matterWindows,
   parseMatterAnswer,
 } from "../src/matter.js";
+import { type MatterBlock, matterInputHash } from "../src/matter-current.js";
 import { matterByLabels, type LabelsArticle } from "../src/matter-labels.js";
 import type { Block } from "../src/types.js";
 
@@ -105,7 +104,7 @@ describe("matterWindows", () => {
 });
 
 describe("matterInputHash", () => {
-  it("is versioned, stable, and changes with kind, level, words and text", () => {
+  it("is versioned, stable, and changes with id, kind, level, words, text and role", () => {
     const a = paper();
     const h = matterInputHash(a.blocks);
     expect(h).toMatch(/^m1:[0-9a-f]{16}$/u);
@@ -115,6 +114,11 @@ describe("matterInputHash", () => {
     expect(changed((b) => ({ ...b, level: 3 }))).not.toBe(h);
     expect(changed((b) => ({ ...b, words: 9 }))).not.toBe(h);
     expect(changed((b) => ({ ...b, text: "Summary" }))).not.toBe(h);
+    expect(changed((b) => ({ ...b, id: "spya-zzzzzz" as MatterBlock["id"] }))).not.toBe(h);
+    expect(changed((b) => ({ ...b, role: "footnote" }))).not.toBe(h);
+    /* An absent level or role and a `null` one are the same block: the owner's
+       read and a visitor's map optional columns differently (plan 261018l). */
+    expect(changed((b) => ({ ...b, level: null, role: null }))).toBe(changed((b) => ({ ...b, level: undefined, role: undefined })));
   });
 });
 

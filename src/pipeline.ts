@@ -197,8 +197,8 @@ import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, T
 import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
-import { matterInputHash } from "./matter.js";
-import { buildMatter, MATTER_PROMPT_VERSION } from "./matter-step.js";
+import { MATTER_PROMPT_VERSION, matterInputHash } from "./matter-current.js";
+import { buildMatter } from "./matter-step.js";
 import {
   ARTICLE_RENDERER,
   type ArticleStage,
@@ -3377,7 +3377,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     /**
      * `matterInputHash` of the blocks (review F1) and the step's version, and
      * **no model**: the stored `generator` names its sources, and the model is
-     * folded into `MATTER_PROMPT_VERSION` (src/matter-step.ts).
+     * folded into `MATTER_PROMPT_VERSION` (src/matter-current.ts).
      */
     stamp: async (ctx, store) => {
       const file = await store.read(ctx.slug, "blocks", "blocks");

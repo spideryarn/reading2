@@ -5200,7 +5200,8 @@ export const ALWAYS_SHARED = [
     label: "The article's text",
     detail:
       "Every paragraph, heading, list and footnote we extracted, in full, with its formatting and " +
-      "its links — not a summary of it — and the links we drew between its own passages, where there are any.",
+      "its links — not a summary of it — and the links we drew between its own passages, where there are any. " +
+      "The parts we found to be its front and back matter, such as the authors and the references, start folded, as they do for you.",
   },
   {
     key: "pictures",

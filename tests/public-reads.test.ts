@@ -217,6 +217,8 @@ describe("the public revision read", () => {
       "bibliography",
       "reception",
       "simple_summary",
+      /* Not an artefact, but it rides here for the same reason (plan 261018l). */
+      "matter",
     ]) {
       expect(article, column).toContain(`"${column}"`);
     }

@@ -142,7 +142,7 @@ type Field = "inputHash" | "promptVersion" | "model";
 const CASES: Partial<Record<StepName, readonly Field[]>> = {
   blocks: [],
   /* No model: the stored `generator` names its sources, and the model is in
-     `MATTER_PROMPT_VERSION` (src/matter-step.ts). */
+     `MATTER_PROMPT_VERSION` (src/matter-current.ts). */
   matter: ["inputHash", "promptVersion"],
   structure: ["inputHash"],
   labels: ["inputHash", "promptVersion", "model"],

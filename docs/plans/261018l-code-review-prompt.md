@@ -1,0 +1,7 @@
+Code review of plan docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md (read it, including its § The plan review; your plan review is docs/plans/261018l-plan-review-sol.md).
+
+The diff is docs/plans/261018l-code-review.diff (the worktree against HEAD). Review the code as built: the new leaf src/matter-current.ts (moved from src/matter.ts and src/matter-step.ts), src/public/dto.ts § publicMatter, src/public-types.ts PublicArticle.matter, src/store/public-reader.ts (projection + loadArticle), src/messages.ts copy, the tests (tests/public-dto-matter.test.ts, tests/public-visibility-pg.test.ts new case, tests/public-reads.test.ts, tests/matter.test.ts, tests/shared-inventory.test.ts), and the docs (security-map.md, front-and-back-matter.md, architecture.md, mode.md).
+
+src/public/dto.ts is a listed security defence. Check: nothing beyond {from,to,kinds} crosses; the public import graph stays clear of the gateway (tests/public-imports.test.ts); owner and visitor agree; failure direction is towards absence; nothing in the client needs changing (src/web/article/access.ts spreads the payload; src/web/matter-view.ts reads article.matter); stale comments.
+
+House workflow: fix what you find inside this scope directly in the working tree (small, clear fixes), and report anything wider for me to decide. Do not commit. Run `npm run typecheck` and the touched test files (`npx vitest run <files>`) after any fix. Write findings with severity (P1/P2/P3), file:line, and what you changed. End with "VERDICT: ship" or "VERDICT: fix first".

@@ -113,6 +113,7 @@ const NONE = {
   simpleSummary: null,
   bibliography: null,
   citationBlurbs: null,
+  matter: null,
   reception: null,
   sourcesClaims: null,
   crossrefs: null,

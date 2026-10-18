@@ -66,6 +66,8 @@ For things this checklist does not hold:
   [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md); the threat
   model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`
   below and [§ The artefact](#the-artefact-if-the-mode-shows-one)'s `PUBLIC_PROJECTIONS` bullet.
+  Whether a new field reaches a visitor at all defaults to yes, on four conditions:
+  [security-map.md § The allowlist](security-map.md#the-allowlist-has-two-failure-directions-and-only-one-of-them-is-loud).
 - **A mode can start without being opened.** Besides the first press
   ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), an import's publication
   queues every main mode — the modes outside `MODE_CATALOG`'s `experimental` flag. The server

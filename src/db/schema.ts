@@ -1177,11 +1177,12 @@ export const articleRevisions = spideryarn.table(
      * labels rule's stretches alone (`modelUnavailable` says why), and a
      * failure of the step itself `{ status: "unavailable" }`, rather than null
      * (review F2).
-     * `sourceHash` is `matterInputHash` over the blocks it read, and the owner's
-     * article read withholds the stretches unless it equals the current blocks'
-     * (src/store/pg.ts § `loadArticle`). **Owner only**: it is in no public
-     * projection, because src/public/dto.ts is a listed defence. No foreign key
-     * from a stretch's ids to `revision_blocks`, on the argument its neighbours make.
+     * `sourceHash` is `matterInputHash` over the blocks it read, and both article
+     * reads withhold the stretches unless it equals the current blocks'
+     * (src/matter-current.ts § `matterForReader`). The public DTO is the listed
+     * defence: it publishes only each current stretch's `{from, to, kinds}`. No
+     * foreign key from a stretch's ids to `revision_blocks`, on the argument its
+     * neighbours make.
      */
     matter: jsonb("matter").$type<Matter>(),
 

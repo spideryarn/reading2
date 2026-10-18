@@ -1,0 +1,1156 @@
+diff --git a/docs/plans/261018l-plan-review-prompt.md b/docs/plans/261018l-plan-review-prompt.md
+new file mode 100644
+index 000000000..3d30f8f70
+--- /dev/null
++++ b/docs/plans/261018l-plan-review-prompt.md
+@@ -0,0 +1,9 @@
++Review the plan docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md (read-only review).
++
++Context: the repo is Spideryarn. Plan 261018a built front/back matter folds for the owner. Greg has now approved (reply quoted in the plan) letting visitors on a shared link get the same folds. src/public/dto.ts is a listed security defence (docs/project/security-map.md § The allowlist has two failure directions). The public import graph must not reach the model gateway (tests/public-imports.test.ts).
++
++Read: the plan; src/matter-step.ts (matterForReader, MATTER_PROMPT_VERSION); src/matter.ts (matterInputHash, MatterBlock); src/matter-shape.ts; src/store/pg.ts loadArticle around line 2940-3000 and blocksFor; src/store/public-reader.ts (PUBLIC_PROJECTIONS, loadArticle, publicBlocksQuery); src/public/dto.ts (publicArticle, opt); src/public-types.ts (PublicArticle); src/web/article/access.ts (resolveAccess); src/web/matter-view.ts; tests/public-imports.test.ts.
++
++Questions: Is anything sensitive or model-written crossing? Will the hash computed on the public side agree with the owner's (sanitised blocks vs raw rows; do public blocks carry every field matterInputHash reads: id, text, kind, level, words, role)? Is the leaf move sound for the public import graph? Anything the plan misses (other public surfaces, export, head/OG page, tests that pin the projection or DTO keys)? Is there a simpler design?
++
++Answer with numbered findings, each with severity (P1/P2/P3), file:line evidence, and a fix. End with a line "VERDICT: proceed" or "VERDICT: revise".
+diff --git a/docs/plans/261018l-plan-review-sol.md b/docs/plans/261018l-plan-review-sol.md
+new file mode 100644
+index 000000000..3f1a216fd
+--- /dev/null
++++ b/docs/plans/261018l-plan-review-sol.md
+@@ -0,0 +1,13 @@
++1. **P1 — The plan misses the total `PublicArticle` key inventory.** Adding optional `matter` to `PublicArticle` will fail typechecking because `WIRE_ROW` must cover every key ([tests/shared-inventory.test.ts:353](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/tests/shared-inventory.test.ts:353), [tests/shared-inventory.test.ts:446](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/tests/shared-inventory.test.ts:446)). The plan’s test list does not mention this ([plan:58](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md:58)). **Fix:** add `matter` to `WIRE_ROW`, probably mapped to `"text"`, and amend that inventory row’s copy to disclose that stored front/back-matter classifications affect folding ([src/messages.ts:5197](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/messages.ts:5197)). Add `tests/shared-inventory.test.ts` to the plan.
++
++2. **P2 — “Nothing the model wrote” is materially inaccurate.** The model answers with ranges/sections, block IDs and kinds ([src/matter.ts:73](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/matter.ts:73)); those judgments are combined and stored as the stretches proposed for publication ([src/matter-step.ts:133](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/matter-step.ts:133), [src/matter-step.ts:139](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/matter-step.ts:139)). What does *not* cross is free-form model prose, provider output, generator, versions, hashes and failure reasons. The IDs already identify public blocks and kinds are closed, so I see no sensitive disclosure—but structured model-derived classification does cross. **Fix:** replace the claim at [plan:31](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md:31) with that narrower statement, and reflect it in the sharing inventory.
++
++3. **P2 — The provenance-withholding test is assigned to the wrong boundary, and the hash-parity positive control is underspecified.** The proposed DTO receives only `MatterStretchStored[]`; `version`, `generator`, `sourceHash`, `modelUnavailable` and `reason` have already been discarded by `matterForReader`, which reconstructs each stretch field by field ([src/matter-current.ts:83](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/matter-current.ts:83), [src/matter-current.ts:95](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/matter-current.ts:95)). A DTO-only test cannot prove the stored document’s top-level fields stay behind. **Fix:** in the public-reader/Postgres test, store a full current document containing every provenance field and assert the returned public payload contains only `{from,to,kinds}`. Compute its hash from the owner read, then load it publicly using fixture blocks with a non-null `level` and `role`; those optional fields are the easiest for a mapper to omit without a type error. Keep the DTO test for planted extra fields inside individual stretches.
++
++4. **P3 — The plan’s raw-versus-sanitised hash explanation is false, although the proposed implementation is sound.** `matterInputHash` reads only `id, text, kind, level, words, role` ([src/matter-current.ts:52](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/matter-current.ts:52)); sanitisation changes only `html` ([src/sanitize.ts:167](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/sanitize.ts:167)). Therefore raw rows and sanitised blocks produce the same matter hash. The public query does carry all six fields—`blockId` supplies `id`, followed by `kind`, `level`, `text`, `words`, and `role` ([src/store/public-reader.ts:885](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/public-reader.ts:885))—matching the owner query ([src/store/pg.ts:1656](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/pg.ts:1656)). **Fix:** correct [plan:74](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md:74): using `blocks` is preferable because they are already the payload being validated, not because sanitisation changes the hash. Extend the hash unit test to cover `id` and `role`, which its current field-change test omits ([tests/matter.test.ts:106](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/tests/matter.test.ts:106)).
++
++5. **P3 — The leaf move has more stale source references than the plan lists.** Besides `types.ts` and `matter-view.ts`, comments still locate `matterForReader` or `MATTER_PROMPT_VERSION` in `matter-step.ts`, including [src/store/pg.ts:1282](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/pg.ts:1282), [src/store/pg-revisions.ts:404](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/pg-revisions.ts:404), and [tests/freshness-deciders-agree.test.ts:142](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/tests/freshness-deciders-agree.test.ts:142). **Fix:** include an `rg` sweep for the moved symbol names and update every ownership/source reference to `matter-current.ts`.
++
++The leaf itself is sound: `node:crypto`, `matter-shape.ts`, and type-only imports do not reach a gateway, while importing either old module would. `resolveAccess` already spreads the public payload into the common `Article`, so no additional client seam is needed. The head/OG read is deliberately a separate projection without blocks or rendering data ([src/store/public-reader.ts:534](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/public-reader.ts:534)), so it should not receive `matter`. Export already selects every active revision column and writes non-separated columns into `content/revision.json` ([src/store/revision-columns.ts:33](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/revision-columns.ts:33), [src/store/export-bundle.ts:413](/var/tmp/spideryarn-worktrees/qi-8y3tx5tp-public-matter-folds/src/store/export-bundle.ts:413)); `matter` therefore already exports. I do not see a simpler design than the pure leaf without duplicating freshness policy.
++
++VERDICT: revise
+\ No newline at end of file
+diff --git a/docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md b/docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md
+new file mode 100644
+index 000000000..23c48a898
+--- /dev/null
++++ b/docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md
+@@ -0,0 +1,100 @@
++# Visitors on a shared link get the front and back matter folds
++
++Queue item `qi-8y3tx5tp`. Report `spya-ftsqsn` (`SPIDERYARN-READING2-JE`), question
++[q-f7zp3t](../user-feedback/questions/q-f7zp3t.md), note
++[261017_2012](../user-feedback/261017_2012-front-and-back-matter-folded-by-default.md). Follows
++[261018a](261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md), which built the
++folds for the owner only.
++
++## What Greg said
++
++> 1A / 2B / And let's broadly try and remember these as principles. If we make a change that would
++> affect all of the existing articles, assume that we're not going to re-import all of the existing
++> articles unless I explicitly ask you to, because that would be somewhat expensive and probably a
++> bit disruptive. So assume that we're just going to fix or improve things for new. And, and that,
++> you know, if something's going to make the experience better and that it would be straightforward
++> enough to include for shared articles, and it doesn't incur extra AI processing and it doesn't give
++> away anything sensitive, then, you know, include it for shared articles too. And that way you don't
++> have to ask me these questions every time. So make a minimal update to write this up as a principle
++> in the appropriate docs.
++>
++> — Greg, 2026-10-18 (`spya-r8arjm`, reply to `q-f7zp3t`)
++
++- **1A**: existing articles are left alone; they fold the new way when re-imported. No backfill
++  (`qi-erfq52cg` was dropped by the sweep).
++- **2B**: a visitor gets the same folds. That is his say-so for this one edit to the public DTO, a
++  listed defence (`qi-exhw79tc` superseded).
++- **The two principles**, written up minimally where they belong (below).
++
++## What crosses, and what does not
++
++`PublicArticle.matter?: MatterStretchStored[]` — per stretch `{ from, to, kinds }`: two block ids
++the visitor already has, and closed kind names from `MATTER_KIND_NAMES`. They are the model's
++classification (combined with the labels rule and held to the text by code), but **no model prose**
++crosses (plan review F2): the stored document's `version`, `generator`, `sourceHash`,
++`modelUnavailable` and any `unavailable` reason stay behind. The labels and the (i) text a visitor sees are the app's own words.
++
++It crosses under exactly the owner's rule, `matterForReader`: only a valid `ok` document of today's
++version whose `sourceHash` equals `matterInputHash` of the blocks on this payload, every id a block
++here, the stretches in order. Otherwise the key is absent and the client falls back to the older
++byline rule, as today. No paid call: the read only reads a column.
++
++## Build
++
++1. **A leaf for the reader's half.** `matterForReader` lives in `src/matter-step.ts` and
++   `matterInputHash` in `src/matter.ts`; both import the model gateway, which the public import graph
++   forbids (`tests/public-imports.test.ts`, `SPENDS`). Move `matterForReader`, `matterInputHash`,
++   `MATTER_HASH_VERSION`, `MatterBlock` and `MATTER_PROMPT_VERSION` into a new pure leaf,
++   `src/matter-current.ts` (node:crypto, `matter-shape.ts`, types). Update the importers directly
++   rather than re-exporting (six files). The version constant's comment already says it is not where
++   it belongs; it moves with the check that reads it.
++2. **The read.** `PUBLIC_PROJECTIONS.article` selects `articleRevisions.matter`. `loadArticle` in
++   `src/store/public-reader.ts` calls `matterForReader(found.revision.matter, blocks)` over the
++   sanitised `blocks`, the same input the owner's `loadArticle` hashes (`blocksFor` sanitises too).
++3. **The DTO.** `publicArticle` takes the raw column (`matter: unknown`, required so a reader that
++   forgot it is a type error) and `publicMatter` asks `matterForReader` of it against the row's
++   blocks, then builds each stretch field by field. The policy is then in the DTO, where a unit test
++   can hand it a whole stored document and ask what crossed (review F3).
++4. **The client** needs nothing: `resolveAccess` spreads the public payload into the `Article`, and
++   `matterStretches` (src/web/matter-view.ts) already reads `article.matter`. Correct the comments
++   that say a visitor never has it (types.ts, matter-view.ts, front-and-back-matter.md).
++5. **Tests**, each seen red first: `tests/public-dto.test.ts` (the stretches cross, the document's
++   other fields do not, absent stays absent); `tests/public-reads.test.ts` (the article query
++   selects `"matter"` on the filtered row); `tests/public-visibility-pg.test.ts` or a new pg test
++   (a stored current document reaches a visitor; a stale one does not).
++6. **Docs.** security-map.md: a paragraph under the allowlist section, Greg's words, what crosses and
++   what does not. The two principles:
++   - **No re-import by default**: architecture.md § Conventions already has the 2026-10-11 rule; add
++     today's quote to that bullet, which extends it to re-imports.
++   - **Shared articles get it too**: security-map.md § The allowlist has two failure directions
++     ("come here and decide") gains the default, with his conditions (better experience,
++     straightforward, no extra AI processing, nothing sensitive) and his words; mode.md's visitor
++     bullet points there.
++
++7. **The owner's sharing inventory** (review F1): `WIRE_ROW` in `tests/shared-inventory.test.ts`
++   is total over `PublicArticle`, so `matter` maps to the *text* row, and that row's sentence in
++   `src/messages.ts` now says the front and back matter start folded.
++
++## The simpler option passed over
++
++Re-export from the old modules instead of updating importers: fewer lines touched, but two names for
++one thing, which the rename rule here asks us not to leave. Rejected. Hashing the raw rows or the
++sanitised blocks gives the same answer, since the sanitiser changes only `html` (review F4); the
++blocks are used because they are what the payload carries.
++
++## Risk
++
++Low. The stretches are ids into blocks the visitor already holds, and kinds from a closed list. The
++failure direction worth testing is the quiet one: the key never crosses and the visitor sees today's
++behaviour, which every owner-side test would miss.
++
++## The plan review
++
++GPT Sol, read-only, [261018l-plan-review-sol.md](261018l-plan-review-sol.md): *revise*, five
++findings, all taken. F1 (the sharing inventory's total record, and its sentence) is step 7. F2 (the
++stretches *are* the model's classification; what stays behind is its prose and provenance) is in
++§ What crosses. F3 (test provenance where the whole document is visible) is why the DTO takes the
++raw column, plus a Postgres case comparing owner and visitor through the real routes with a
++non-null `level` in the fixture. F4 (the sanitiser does not touch the hash's fields) corrected
++§ The simpler option; the hash test now also covers `id` and `role`. F5 (stale references to the
++moved symbols) was a sweep.
+diff --git a/docs/project/architecture.md b/docs/project/architecture.md
+index 8b2822bef..22c53d996 100644
+--- a/docs/project/architecture.md
++++ b/docs/project/architecture.md
+@@ -491,7 +491,11 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
+   back and rerun everything on all the existing articles because it's too much of a hassle and
+   expense. Instead we're almost always going to be content just to fix them going forwards unless I
+   explicitly say otherwise, or if it's really important it's okay to ask me, but otherwise just
+-  default to this."*
++  default to this."* **Re-importing existing articles is the same backfill**, and needs the same
++  explicit yes. Greg, 2026-10-18 (`spya-r8arjm`): *"assume that we're not going to re-import all of
++  the existing articles unless I explicitly ask you to, because that would be somewhat expensive
++  and probably a bit disruptive. So assume that we're just going to fix or improve things for
++  new."*
+ - **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
+   do it has been said in prose several ways in this repo, each a count copied out of the code, and
+   none stayed right. The answer is in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`: a step
+diff --git a/docs/project/front-and-back-matter.md b/docs/project/front-and-back-matter.md
+index e42593eb3..ea7254bd6 100644
+--- a/docs/project/front-and-back-matter.md
++++ b/docs/project/front-and-back-matter.md
+@@ -66,8 +66,10 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
+   on every read); otherwise, and for every article imported before this existed, the reading view
+   uses the older byline rule ([`src/web/front-matter.ts`](../../src/web/front-matter.ts), plan
+   261007d) as one *Authors* stretch.
+-- **Visitors** (the public page) get only that older rule: `src/public/dto.ts` is a listed defence
+-  and carries no `matter` ([security-map.md](security-map.md)).
++- **Visitors** (the public page) get the same folds, under the same rule, since 2026-10-18:
++  `PublicArticle.matter` carries each stretch's two ids and kinds and nothing else of the stored
++  document ([security-map.md](security-map.md) § `PublicArticle` gained `matter`; plan
++  [261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)).
+ 
+ ## The evidence, and where to change it
+ 
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index 4f80f856f..61c626b7b 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -66,6 +66,8 @@ For things this checklist does not hold:
+   [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md); the threat
+   model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`
+   below and [§ The artefact](#the-artefact-if-the-mode-shows-one)'s `PUBLIC_PROJECTIONS` bullet.
++  Whether a new field reaches a visitor at all defaults to yes, on four conditions:
++  [security-map.md § The allowlist](security-map.md#the-allowlist-has-two-failure-directions-and-only-one-of-them-is-loud).
+ - **A mode can start without being opened.** Besides the first press
+   ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), an import's publication
+   queues every main mode — the modes outside `MODE_CATALOG`'s `experimental` flag. The server
+diff --git a/docs/project/security-map.md b/docs/project/security-map.md
+index 1ad4a2089..a10100109 100644
+--- a/docs/project/security-map.md
++++ b/docs/project/security-map.md
+@@ -569,6 +569,18 @@ on the owner's side could see it, because every test ran where the field exists.
+ `tests/public-dto.test.ts` saying what a future author must decide is worth writing — that note is
+ the only reason this one was found.
+ 
++**The default, when you decide, is that a visitor gets it too** — when it makes the shared article
++better, is straightforward to carry across, starts no AI processing a visitor did not already get,
++and gives away nothing sensitive. Then add it, with its row here and its tests, and do not ask
++first. Anything that fails one of the four is still Greg's to decide:
++
++> if something's going to make the experience better and that it would be straightforward enough to
++> include for shared articles, and it doesn't incur extra AI processing and it doesn't give away
++> anything sensitive, then, you know, include it for shared articles too. And that way you don't
++> have to ask me these questions every time.
++>
++> — Greg, 2026-10-18 (`spya-r8arjm`, reply to `q-f7zp3t`)
++
+ **The idiom is `opt(source, "key")`, and not a conditional spread.** Until the same date, an optional
+ field crossed as `...(x.k === undefined ? {} : { k: x.k })`. That names the key but does not check
+ it: spelling it `treatmnt` inside the spread **compiles clean**, because TypeScript's
+@@ -622,6 +634,24 @@ adds *"Never address or mention the reader"*. `profileHash` and `dropped` (its `
+ `tests/public-visibility-pg.test.ts` assert both
+ ([261012a](../plans/261012a-skim-pass-intros-cross-to-visitors.md)).
+ 
++**`PublicArticle` gained `matter` on 2026-10-18**: which stretches of the article fold as its front
++and back matter ([front-and-back-matter.md](front-and-back-matter.md)). The question was whether a
++visitor gets the folds ([q-f7zp3t](../user-feedback/questions/q-f7zp3t.md)):
++
++> 2B
++>
++> — Greg, 2026-10-18 (`spya-r8arjm`)
++
++What crosses is, per stretch, `{from, to, kinds}`: two ids of blocks already in the payload and kind
++names from a closed list. They are a model's classification, held to the stored text by code, but no
++model prose crosses. The stored document's `version`, `generator`, `sourceHash`,
++`modelUnavailable` and `reason` stay behind. `publicMatter` in [`src/public/dto.ts`](../../src/public/dto.ts)
++asks the owner's own rule (`matterForReader`, [`src/matter-current.ts`](../../src/matter-current.ts),
++a leaf so the public graph stays clear of the gateway), so a stale or malformed column crosses as no
++key. `tests/public-dto-matter.test.ts` and `tests/public-visibility-pg.test.ts` assert both, the
++second through the real route, owner and visitor side by side
++([261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)).
++
+ ## The fleet dashboard, which is a different product on the same box
+ 
+ `tools/fleet/` is the agent dashboard on port 8787, not Spideryarn, and its threat model is its own:
+diff --git a/src/matter-current.ts b/src/matter-current.ts
+new file mode 100644
+index 000000000..7b319ff58
+--- /dev/null
++++ b/src/matter-current.ts
+@@ -0,0 +1,96 @@
++/**
++ * **Whether a stored `matter` value is about the blocks on screen** — the half
++ * of the `matter` step that a read needs, and nothing that makes a call.
++ *
++ * A leaf, so that both article reads may import it: the owner's
++ * (src/store/pg.ts § `loadArticle`) and a visitor's
++ * (src/store/public-reader.ts § `loadArticle`), which must not reach the model
++ * gateway that src/matter.ts and src/matter-step.ts import
++ * (tests/public-imports.test.ts). The two reads hand the same check the same
++ * sanitised blocks, so an owner and a visitor fold the same stretches.
++ * docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md,
++ * docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md.
++ */
++import { createHash } from "node:crypto";
++
++import { isMatterDocument } from "./matter-shape.js";
++import type { BlockId, MatterStretchStored } from "./types.js";
++
++/**
++ * **The step's version**, stamped into the artefact and the run row. Bump it
++ * when `MATTER_SYSTEM`, the request, the checks in src/matter.ts, the labels
++ * rule or `MATTER_MODEL` change what would be stored, so every stored value
++ * reads as outdated. **The model is in this version rather than in the stamp**,
++ * because a stored value's `generator` names its sources — `labels+<model>`,
++ * or `labels` alone after a failed call — not one model, and a stamp that
++ * declared a model would clash with the second on every write.
++ *
++ * Here, in a leaf, rather than beside the prompt in src/matter.ts, because
++ * `matterForReader` below reads it and the public article read
++ * (src/store/public-reader.ts) calls that: src/matter.ts imports the model
++ * gateway, which the public import graph may not reach
++ * (tests/public-imports.test.ts). Plan 261018l.
++ */
++export const MATTER_PROMPT_VERSION = "matter/2";
++
++/** As much of a block as the pass reads. Every `Block` satisfies it. */
++export interface MatterBlock {
++  id: BlockId;
++  kind: string;
++  level?: number | null | undefined;
++  text: string;
++  words: number;
++  /** Stage 3's role: a `footnote` is the article's own note and is never folded as matter. */
++  role?: string | null | undefined;
++}
++
++/** Prefixes the version of everything `matterInputHash` reads; bump it when that changes. */
++export const MATTER_HASH_VERSION = "m1";
++
++// ───────────────────────────────────────────────────────────────── the hash
++
++/**
++ * **What the pass read, fingerprinted** (plan review F1): ordered `[id, text,
++ * kind, level, words, role]` (role because the checks read it: a footnote is
++ * never folded). `hashBlocks` (src/source-hash.ts) reads id, text, role
++ * and treatment; a re-extraction that turned a paragraph into a heading would
++ * leave it unchanged while what the model saw had changed. JSON over
++ * fixed-position arrays, for `hashBlocks`' reason: no delimiter a page could
++ * contain.
++ */
++export function matterInputHash(blocks: readonly MatterBlock[]): string {
++  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, b.role ?? null]));
++  return `${MATTER_HASH_VERSION}:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
++}
++
++/**
++ * **The stretches the reading view may fold, or `undefined` for *use today's
++ * rule*.** Every one of these, or nothing (review F2):
++ *
++ * 1. the stored shape is valid and its status is `ok`;
++ * 2. its version is today's safety-and-prompt version;
++ * 3. `sourceHash` equals `matterInputHash` of the blocks on this payload —
++ *    so a column a draft carried over changed blocks, or a value copied from
++ *    another revision, is withheld;
++ * 4. every id is a block here;
++ * 5. each `from` is at or before its `to` **by index** (block-ids.md § The
++ *    cost we accepted), and the stretches are in document order and do not
++ *    overlap.
++ *
++ * 3 implies 4 and 5 for a value this step wrote; they are checked anyway,
++ * because the column is a document anybody with a SQL prompt can write.
++ */
++export function matterForReader(value: unknown, blocks: readonly MatterBlock[]): MatterStretchStored[] | undefined {
++  if (!isMatterDocument(value) || value.status !== "ok") return undefined;
++  if (value.version !== MATTER_PROMPT_VERSION) return undefined;
++  if (value.sourceHash !== matterInputHash(blocks)) return undefined;
++  const index = new Map(blocks.map((b, i) => [b.id, i]));
++  let last = -1;
++  for (const s of value.stretches) {
++    const a = index.get(s.from);
++    const b = index.get(s.to);
++    if (a === undefined || b === undefined || a > b || a <= last) return undefined;
++    last = b;
++  }
++  return value.stretches.map((s) => ({ from: s.from, to: s.to, kinds: [...s.kinds] }));
++}
+diff --git a/src/matter-step.ts b/src/matter-step.ts
+index 6c8edf102..82289a007 100644
+--- a/src/matter-step.ts
++++ b/src/matter-step.ts
+@@ -13,7 +13,7 @@
+  *   call stores the labels rule's stretches alone, with a closed
+  *   `modelUnavailable` code (never the model's words); a failure of the step
+  *   itself stores `{ status: "unavailable" }`. The import goes on either way.
+- * - `matterForReader` — the owner's article read (src/store/pg.ts §
++ * - `matterForReader` (now in src/matter-current.ts, a leaf) — the owner's article read (src/store/pg.ts §
+  *   `loadArticle`). The stored value reaches the reading view only when it is
+  *   about **these** blocks; anything else is `undefined`, which the reading view
+  *   reads as *use today's byline rule* (review F2: a draft copies the published
+@@ -48,29 +48,16 @@ import {
+   MATTER_KINDS,
+   classifyMatter,
+   combineMatter,
+-  matterInputHash,
+   type MatterKind,
+   type MatterOptions,
+ } from "./matter.js";
++import { MATTER_PROMPT_VERSION, matterInputHash } from "./matter-current.js";
+ import { matterByLabels } from "./matter-labels.js";
+ import { MATTER_KIND_NAMES, isMatterDocument } from "./matter-shape.js";
+ import { MATTER_MODEL } from "./models.js";
+-import type { Author, Block, Matter, MatterKindName, MatterModelUnavailable, MatterStretchStored } from "./types.js";
++import type { Author, Block, Matter, MatterKindName, MatterModelUnavailable } from "./types.js";
+ import { mastheadEcho } from "./web/masthead-echo.js";
+ 
+-/**
+- * **The step's version**, stamped into the artefact and the run row. Bump it
+- * when `MATTER_SYSTEM`, the request, the checks in src/matter.ts, the labels
+- * rule or `MATTER_MODEL` change what would be stored, so every stored value
+- * reads as outdated. **The model is in this version rather than in the stamp**,
+- * because a stored value's `generator` names its sources — `labels+<model>`,
+- * or `labels` alone after a failed call — not one model, and a stamp that
+- * declared a model would clash with the second on every write.
+- *
+- * Here rather than beside the prompt only because src/matter.ts was being
+- * edited by another stage when this was written; it belongs there.
+- */
+-export const MATTER_PROMPT_VERSION = "matter/2";
+ 
+ /** The `generator` of a value both sources made. */
+ export const MATTER_GENERATOR = `labels+${MATTER_MODEL}`;
+@@ -195,34 +182,3 @@ export function matterSettled(value: unknown, blocks: readonly Block[]): boolean
+   return isMatterDocument(value) && value.version === MATTER_PROMPT_VERSION && value.sourceHash === matterInputHash(blocks);
+ }
+ 
+-/**
+- * **The stretches the reading view may fold, or `undefined` for *use today's
+- * rule*.** Every one of these, or nothing (review F2):
+- *
+- * 1. the stored shape is valid and its status is `ok`;
+- * 2. its version is today's safety-and-prompt version;
+- * 3. `sourceHash` equals `matterInputHash` of the blocks on this payload —
+- *    so a column a draft carried over changed blocks, or a value copied from
+- *    another revision, is withheld;
+- * 4. every id is a block here;
+- * 5. each `from` is at or before its `to` **by index** (block-ids.md § The
+- *    cost we accepted), and the stretches are in document order and do not
+- *    overlap.
+- *
+- * 3 implies 4 and 5 for a value this step wrote; they are checked anyway,
+- * because the column is a document anybody with a SQL prompt can write.
+- */
+-export function matterForReader(value: unknown, blocks: readonly Block[]): MatterStretchStored[] | undefined {
+-  if (!isMatterDocument(value) || value.status !== "ok") return undefined;
+-  if (value.version !== MATTER_PROMPT_VERSION) return undefined;
+-  if (value.sourceHash !== matterInputHash(blocks)) return undefined;
+-  const index = new Map(blocks.map((b, i) => [b.id, i]));
+-  let last = -1;
+-  for (const s of value.stretches) {
+-    const a = index.get(s.from);
+-    const b = index.get(s.to);
+-    if (a === undefined || b === undefined || a > b || a <= last) return undefined;
+-    last = b;
+-  }
+-  return value.stretches.map((s) => ({ from: s.from, to: s.to, kinds: [...s.kinds] }));
+-}
+diff --git a/src/matter.ts b/src/matter.ts
+index 66bd5a39d..af93ef6b4 100644
+--- a/src/matter.ts
++++ b/src/matter.ts
+@@ -28,9 +28,8 @@
+  *
+  * Nothing here removes or rewrites a block; it says which to fold.
+  */
+-import { createHash } from "node:crypto";
+-
+ import { openRouterJson, type AiRequestBody } from "./ai-call.js";
++import type { MatterBlock } from "./matter-current.js";
+ import { withChatJsonSchema } from "./messages-structured-output.js";
+ import { MATTER_MODEL } from "./models.js";
+ import { sectionRanges } from "./section-ranges.js";
+@@ -60,16 +59,6 @@ export interface MatterStretch {
+   kinds: MatterKind[];
+ }
+ 
+-/** As much of a block as the pass reads. Every `Block` satisfies it. */
+-export interface MatterBlock {
+-  id: BlockId;
+-  kind: string;
+-  level?: number | null | undefined;
+-  text: string;
+-  words: number;
+-  /** Stage 3's role: a `footnote` is the article's own note and is never folded as matter. */
+-  role?: string | null | undefined;
+-}
+ 
+ /** As much of an article as the pass reads. */
+ export interface MatterArticle {
+@@ -163,24 +152,6 @@ export const LABEL_MAX_WORDS = 8;
+  */
+ export const REFERENCE_GAP = 2;
+ 
+-/** Prefixes the version of everything `matterInputHash` reads; bump it when that changes. */
+-export const MATTER_HASH_VERSION = "m1";
+-
+-// ───────────────────────────────────────────────────────────────── the hash
+-
+-/**
+- * **What the pass read, fingerprinted** (plan review F1): ordered `[id, text,
+- * kind, level, words, role]` (role because the checks read it: a footnote is
+- * never folded). `hashBlocks` (src/source-hash.ts) reads id, text, role
+- * and treatment; a re-extraction that turned a paragraph into a heading would
+- * leave it unchanged while what the model saw had changed. JSON over
+- * fixed-position arrays, for `hashBlocks`' reason: no delimiter a page could
+- * contain.
+- */
+-export function matterInputHash(blocks: readonly MatterBlock[]): string {
+-  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, b.role ?? null]));
+-  return `${MATTER_HASH_VERSION}:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
+-}
+ 
+ // ────────────────────────────────────────────────────────────── the windows
+ 
+diff --git a/src/messages.ts b/src/messages.ts
+index 91c8090a2..38e7a136e 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -5200,7 +5200,8 @@ export const ALWAYS_SHARED = [
+     label: "The article's text",
+     detail:
+       "Every paragraph, heading, list and footnote we extracted, in full, with its formatting and " +
+-      "its links — not a summary of it — and the links we drew between its own passages, where there are any.",
++      "its links — not a summary of it — and the links we drew between its own passages, where there are any. " +
++      "The parts we found to be its front and back matter, such as the authors and the references, start folded, as they do for you.",
+   },
+   {
+     key: "pictures",
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index eae338dea..e3914ec11 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -197,8 +197,8 @@ import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, T
+ import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
+ import type { CheckpointStore } from "./store/checkpoints.js";
+ import { log } from "./log.js";
+-import { matterInputHash } from "./matter.js";
+-import { buildMatter, MATTER_PROMPT_VERSION } from "./matter-step.js";
++import { MATTER_PROMPT_VERSION, matterInputHash } from "./matter-current.js";
++import { buildMatter } from "./matter-step.js";
+ import {
+   ARTICLE_RENDERER,
+   type ArticleStage,
+@@ -3377,7 +3377,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+     /**
+      * `matterInputHash` of the blocks (review F1) and the step's version, and
+      * **no model**: the stored `generator` names its sources, and the model is
+-     * folded into `MATTER_PROMPT_VERSION` (src/matter-step.ts).
++     * folded into `MATTER_PROMPT_VERSION` (src/matter-current.ts).
+      */
+     stamp: async (ctx, store) => {
+       const file = await store.read(ctx.slug, "blocks", "blocks");
+diff --git a/src/public-types.ts b/src/public-types.ts
+index 988ef829e..a646f7fbf 100644
+--- a/src/public-types.ts
++++ b/src/public-types.ts
+@@ -82,6 +82,7 @@ import type {
+   GlossaryKind,
+   Idea,
+   IdentificationSignal,
++  MatterStretchStored,
+   NavLabelStatus,
+   Quote,
+   QuoteDrops,
+@@ -352,6 +353,20 @@ export interface PublicArticle extends PublicArtefactSet {
+    * whole of it, and none of them is about a person.
+    */
+   navLabelStatus: NavLabelStatus;
++  /**
++   * **The stretches of front and back matter to fold**, as the owner's
++   * `Article.matter` (src/types.ts), under the owner's own rule
++   * (src/matter-current.ts § `matterForReader`): present only when the stored
++   * document is current and about exactly these blocks. Absent means *use the
++   * older byline rule*, as for an owner.
++   *
++   * **Two block ids and closed kind names per stretch, and nothing else.** The
++   * stored document's version, generator, hash and any reason the model's half
++   * is missing do not cross; nothing in it is the model's words, and the labels
++   * and the (i) a visitor sees are the app's. Greg's 2B to q-f7zp3t,
++   * 2026-10-18; docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md.
++   */
++  matter?: MatterStretchStored[];
+   /**
+    * **Where we think an uploaded paper came from**, for a stranger — the
+    * public projection 260929g § Decisions 4 deferred, built by
+diff --git a/src/public/dto.ts b/src/public/dto.ts
+index e265c0a69..a19df1537 100644
+--- a/src/public/dto.ts
++++ b/src/public/dto.ts
+@@ -141,6 +141,7 @@ import type {
+   PublicTweets,
+ } from "../public-types.js";
+ import { hostOf, publicCitationUrl, publicSourceUrl } from "../urls.js";
++import { matterForReader } from "../matter-current.js";
+ 
+ /**
+  * The masthead.
+@@ -1357,6 +1358,13 @@ export function publicArticle(row: {
+   sketch: Sketch | null;
+   /** Where the paragraph nav labels are — the column, `not null`, so no `| null`. */
+   navLabelStatus: NavLabelStatus;
++  /**
++   * The stored `article_revisions.matter` document, unread. `publicMatter`
++   * asks the owner's rule of it against `blocks` above. Required, so a reader
++   * that forgot to select it is a type error rather than a visitor who never
++   * gets a fold (plan 261018l).
++   */
++  matter: unknown;
+   /**
+    * A `found` guess at an upload's source, or `null` for none — the columns
+    * `publicSourceGuessQuery` (src/store/public-reader.ts) selects, **not yet
+@@ -1405,6 +1413,7 @@ export function publicArticle(row: {
+        The enum crosses whole and nothing else does — no reason, no provider
+        message, no timestamp. See `PublicArticle.navLabelStatus`. */
+     navLabelStatus: row.navLabelStatus,
++    ...publicMatter(row.matter, row.blocks),
+     /* `!== null` rather than truthiness, on all four. An artefact is an object
+        and so always truthy, so the two agree today — but the day one of these
+        becomes a value that can be falsy while present, truthiness silently
+@@ -1452,6 +1461,24 @@ export function publicArticle(row: {
+   };
+ }
+ 
++/**
++ * **The folds over the front and back matter**, for a stranger — Greg's 2B to
++ * q-f7zp3t, 2026-10-18 (plan 261018l).
++ *
++ * The owner's rule decides whether there are any: `matterForReader`
++ * (src/matter-current.ts) over the same sanitised blocks the owner's read
++ * hashes, so an owner and a visitor fold the same stretches, and a stale,
++ * foreign or malformed document folds nothing. Then each stretch is built
++ * field by field: two ids of blocks in this payload, and kind names from a
++ * closed list. The document's `version`, `generator`, `sourceHash` and
++ * `modelUnavailable` do not cross.
++ */
++function publicMatter(stored: unknown, blocks: readonly (Block | PublicBlock)[]): Pick<PublicArticle, "matter"> {
++  const stretches = matterForReader(stored, blocks);
++  if (stretches === undefined) return {};
++  return { matter: stretches.map((s) => ({ from: s.from, to: s.to, kinds: [...s.kinds] })) };
++}
++
+ /** The columns of a `found` `upload_source_guesses` row the public read selects. */
+ type SourceGuessRow = {
+   url: string;
+diff --git a/src/store/pg-revisions.ts b/src/store/pg-revisions.ts
+index de3ea7c21..fd9ba7391 100644
+--- a/src/store/pg-revisions.ts
++++ b/src/store/pg-revisions.ts
+@@ -403,7 +403,7 @@ export const REVISION_CARRY_POLICY: Record<
+   /* **Carries, like `crossrefs`** (plan 261018a, review F2): the stretches name
+      block ids, and their `sourceHash` is `matterInputHash` of the blocks they
+      were found in. A carried value over changed blocks is **not drawn** — the
+-     owner's article read withholds it (src/matter-step.ts § `matterForReader`)
++     owner's article read withholds it (src/matter-current.ts § `matterForReader`)
+      and the reading view falls back to its byline rule — and the publication
+      that changed the blocks queues the step again (`publishRevisionIn`). */
+   matter: "carry",
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 53686d726..0a1e3622c 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -172,9 +172,8 @@ import {
+   CITATION_BLURBS_PROMPT_VERSION,
+   citationBlurbsExpectedHash,
+ } from "../citation-blurbs-identity.js";
+-import { matterInputHash } from "../matter.js";
++import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
+ import { isMatterDocument } from "../matter-shape.js";
+-import { MATTER_PROMPT_VERSION, matterForReader } from "../matter-step.js";
+ import { currentOwnerId } from "../owner.js";
+ import { STEP_ORDER, STEPS } from "../pipeline.js";
+ import { blocksAreWhatTheirHtmlProduces } from "../blocks.js";
+@@ -1280,7 +1279,7 @@ export const REVISION_PROJECTIONS = {
+        policy entry above, and src/db/schema.ts § `navLabelStatus`. */
+     navLabelStatus: articleRevisions.navLabelStatus,
+     /* The front and back matter to fold, which `loadArticle` hands on only
+-       when it is about these blocks (src/matter-step.ts § `matterForReader`). */
++       when it is about these blocks (src/matter-current.ts § `matterForReader`). */
+     matter: articleRevisions.matter,
+   },
+   /**
+@@ -3589,7 +3588,7 @@ const rawPgArticleReader: ArticleReader = {
+         /* `matterInputHash` of the blocks alone (plan 261018a, review F1) and
+            the step's version, **and no model**: `generator` names the value's
+            sources (`labels+<model>`, or `labels` after a failed call), and the
+-           model is folded into `MATTER_PROMPT_VERSION` (src/matter-step.ts).
++           model is folded into `MATTER_PROMPT_VERSION` (src/matter-current.ts).
+            A labels-only or `unavailable` value on these blocks is current, as
+            its run row says to the pipeline: a failed call is not retried by
+            itself, and a re-run from this page is the way to ask again. */
+diff --git a/src/store/public-reader.ts b/src/store/public-reader.ts
+index 84f22a517..5288fcf84 100644
+--- a/src/store/public-reader.ts
++++ b/src/store/public-reader.ts
+@@ -453,6 +453,11 @@ const PUBLIC_PROJECTIONS = {
+        the owner's own inputs, and `publicCrossrefs` in ../public/dto.ts keeps
+        `{from, phrase, to}` per link and nothing else. */
+     crossrefs: articleRevisions.crossrefs,
++    /* **Front and back matter, 2026-10-18** — Greg's 2B to q-f7zp3t (plan
++       261018l). Not a mode but where the prose folds. `publicMatter` in
++       ../public/dto.ts asks the owner's freshness rule of it against these
++       blocks and keeps `{from, to, kinds}` per stretch and nothing else. */
++    matter: articleRevisions.matter,
+     /* **The seventh, and the one that cost real money to make.** A visitor sees
+        the Sketch the owner already paid for; nothing on their side can start
+        another. docs/project/security-map.md § the hazard this section is really
+@@ -1061,6 +1066,7 @@ export const pgPublicReader: PublicArticleReader = {
+         crossrefsFresh,
+         sketch: found.revision.sketch,
+         navLabelStatus: found.revision.navLabelStatus,
++        matter: found.revision.matter,
+         /* The table's CHECKs make a `found` row carry all three; a row that
+            somehow did not is no guess, as `toSourceGuess` treats it for the
+            owner (src/store/source-guess-row.ts). */
+diff --git a/src/types.ts b/src/types.ts
+index b4a5d544e..a638065e5 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -2212,13 +2212,13 @@ export interface Article {
+    * *these* blocks: a valid shape, every id a current block, each `from` at or
+    * before its `to` by index, the stretches in order, and the stored
+    * `sourceHash` equal to `matterInputHash` of the blocks on this payload
+-   * (src/matter-step.ts § `matterForReader`; plan 261018a review F2).
++   * (src/matter-current.ts § `matterForReader`; plan 261018a review F2).
+    *
+    * **Optional, and absent means *use today's rule*** (src/web/front-matter.ts):
+    * no step run yet, a failed call, a column carried forward over blocks that
+-   * have since changed, or a visitor's payload, which never carries it (the
+-   * public DTO is a listed defence; security-map.md). An empty list is not
+-   * absence: the step looked and found nothing to fold.
++   * have since changed. A visitor's payload carries it under the same rule,
++   * since 2026-10-18 (`PublicArticle.matter`, plan 261018l). An empty list is
++   * not absence: the step looked and found nothing to fold.
+    */
+   matter?: MatterStretchStored[];
+ 
+diff --git a/src/web/matter-view.ts b/src/web/matter-view.ts
+index 4cb0f81ae..64bb0dc4d 100644
+--- a/src/web/matter-view.ts
++++ b/src/web/matter-view.ts
+@@ -38,7 +38,7 @@ export const MATTER_KIND_ORDER: readonly MatterKindName[] = [
+   "references",
+ ];
+ 
+-/** As much of an article as this reads. A visitor's has no `matter`, and no `authors`. */
++/** As much of an article as this reads. A visitor's has `matter` under the owner's rule (plan 261018l), and no `authors`. */
+ export type MatterViewArticle = FrontMatterArticle & { matter?: Article["matter"] | undefined };
+ 
+ /**
+@@ -64,11 +64,12 @@ export type MatterRange = Pick<ViewStretch, "start" | "end">;
+  * Structure cannot disagree about what is folded:
+  *
+  * - the stored `matter` when the article carries it (the owner's read hands it
+- *   over only when it is valid and about these very blocks; src/matter-step.ts
+- *   § `matterForReader`). An empty list is an answer: nothing to fold;
++ *   over only when it is valid and about these very blocks, and a visitor's
++ *   under the same rule; src/matter-current.ts § `matterForReader`). An empty
++ *   list is an answer: nothing to fold;
+  * - otherwise today's byline rule (front-matter.ts), as one `authors` stretch,
+- *   so every article that folded before this still folds — an old article, a
+- *   failed step, and every visitor.
++ *   so every article that folded before this still folds — an old article and
++ *   a failed step, for an owner and a visitor alike.
+  *
+  * **Resolved by index, never by comparing ids** (block-ids.md § The cost we
+  * accepted). A stretch whose ends are not current blocks, or whose `from` comes
+diff --git a/tests/block-roles.test.ts b/tests/block-roles.test.ts
+index 76468ac66..9eced6efb 100644
+--- a/tests/block-roles.test.ts
++++ b/tests/block-roles.test.ts
+@@ -477,6 +477,7 @@ describe("all five roles", () => {
+       simpleSummary: null,
+       bibliography: null,
+       citationBlurbs: null,
++      matter: null,
+       reception: null,
+       sourcesClaims: null,
+       crossrefs: null,
+diff --git a/tests/freshness-deciders-agree.test.ts b/tests/freshness-deciders-agree.test.ts
+index 796b9f8f3..557f024d8 100644
+--- a/tests/freshness-deciders-agree.test.ts
++++ b/tests/freshness-deciders-agree.test.ts
+@@ -142,7 +142,7 @@ type Field = "inputHash" | "promptVersion" | "model";
+ const CASES: Partial<Record<StepName, readonly Field[]>> = {
+   blocks: [],
+   /* No model: the stored `generator` names its sources, and the model is in
+-     `MATTER_PROMPT_VERSION` (src/matter-step.ts). */
++     `MATTER_PROMPT_VERSION` (src/matter-current.ts). */
+   matter: ["inputHash", "promptVersion"],
+   structure: ["inputHash"],
+   labels: ["inputHash", "promptVersion", "model"],
+diff --git a/tests/matter-step-pg.test.ts b/tests/matter-step-pg.test.ts
+index f7782eaba..b0c11f329 100644
+--- a/tests/matter-step-pg.test.ts
++++ b/tests/matter-step-pg.test.ts
+@@ -22,8 +22,8 @@ import { closeDb, getDb } from "../src/db/client.js";
+ import { articleRevisions, articles, jobs } from "../src/db/schema.js";
+ import { loadEnvLocal } from "../src/env.js";
+ import { mintId } from "../src/ids.js";
+-import { matterInputHash } from "../src/matter.js";
+-import { MATTER_GENERATOR, MATTER_PROMPT_VERSION } from "../src/matter-step.js";
++import { MATTER_PROMPT_VERSION, matterInputHash } from "../src/matter-current.js";
++import { MATTER_GENERATOR } from "../src/matter-step.js";
+ import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
+ import { STEPS } from "../src/pipeline.js";
+ import { mintAttempt } from "../src/store/jobs.js";
+diff --git a/tests/matter-step.test.ts b/tests/matter-step.test.ts
+index 2a5948eec..bd2b8db4c 100644
+--- a/tests/matter-step.test.ts
++++ b/tests/matter-step.test.ts
+@@ -10,14 +10,13 @@
+  */
+ import { describe, expect, it } from "vitest";
+ 
+-import { matterInputHash, type MatterGateway } from "../src/matter.js";
++import { type MatterGateway } from "../src/matter.js";
++import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../src/matter-current.js";
+ import { isMatterDocument } from "../src/matter-shape.js";
+ import {
+   LABELS_ONLY_GENERATOR,
+   MATTER_GENERATOR,
+-  MATTER_PROMPT_VERSION,
+   buildMatter,
+-  matterForReader,
+   matterSettled,
+ } from "../src/matter-step.js";
+ import type { Block, Matter } from "../src/types.js";
+diff --git a/tests/matter.test.ts b/tests/matter.test.ts
+index 81dc5c5fa..b80796b50 100644
+--- a/tests/matter.test.ts
++++ b/tests/matter.test.ts
+@@ -12,7 +12,6 @@ import {
+   MAX_STRETCHES,
+   type MatterAnswerItem,
+   type MatterArticle,
+-  type MatterBlock,
+   type MatterGateway,
+   OPENING_MAX_BLOCKS,
+   RECORD_MAX_CHARS,
+@@ -22,10 +21,10 @@ import {
+   holdStretches,
+   labelKinds,
+   matterInput,
+-  matterInputHash,
+   matterWindows,
+   parseMatterAnswer,
+ } from "../src/matter.js";
++import { type MatterBlock, matterInputHash } from "../src/matter-current.js";
+ import { matterByLabels, type LabelsArticle } from "../src/matter-labels.js";
+ import type { Block } from "../src/types.js";
+ 
+@@ -105,7 +104,7 @@ describe("matterWindows", () => {
+ });
+ 
+ describe("matterInputHash", () => {
+-  it("is versioned, stable, and changes with kind, level, words and text", () => {
++  it("is versioned, stable, and changes with id, kind, level, words, text and role", () => {
+     const a = paper();
+     const h = matterInputHash(a.blocks);
+     expect(h).toMatch(/^m1:[0-9a-f]{16}$/u);
+@@ -115,6 +114,11 @@ describe("matterInputHash", () => {
+     expect(changed((b) => ({ ...b, level: 3 }))).not.toBe(h);
+     expect(changed((b) => ({ ...b, words: 9 }))).not.toBe(h);
+     expect(changed((b) => ({ ...b, text: "Summary" }))).not.toBe(h);
++    expect(changed((b) => ({ ...b, id: "spya-zzzzzz" as MatterBlock["id"] }))).not.toBe(h);
++    expect(changed((b) => ({ ...b, role: "footnote" }))).not.toBe(h);
++    /* An absent level or role and a `null` one are the same block: the owner's
++       read and a visitor's map optional columns differently (plan 261018l). */
++    expect(changed((b) => ({ ...b, level: null, role: null }))).toBe(changed((b) => ({ ...b, level: undefined, role: undefined })));
+   });
+ });
+ 
+diff --git a/tests/pipeline-artifact-store.test.ts b/tests/pipeline-artifact-store.test.ts
+index d3ce098df..79d92cbdb 100644
+--- a/tests/pipeline-artifact-store.test.ts
++++ b/tests/pipeline-artifact-store.test.ts
+@@ -142,8 +142,8 @@ import {
+   PROMPT_VERSION as TWEETS_VERSION,
+ } from "../src/tweets.js";
+ import { splitIntoBlocks } from "../src/blocks.js";
+-import { matterInputHash } from "../src/matter.js";
+-import { MATTER_GENERATOR, MATTER_PROMPT_VERSION } from "../src/matter-step.js";
++import { MATTER_PROMPT_VERSION, matterInputHash } from "../src/matter-current.js";
++import { MATTER_GENERATOR } from "../src/matter-step.js";
+ import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
+ import {
+   articleFingerprint,
+diff --git a/tests/public-dto-matter.test.ts b/tests/public-dto-matter.test.ts
+new file mode 100644
+index 000000000..eb923df91
+--- /dev/null
++++ b/tests/public-dto-matter.test.ts
+@@ -0,0 +1,144 @@
++/**
++ * **The front and back matter folds, as a visitor receives them** — Greg's 2B
++ * to q-f7zp3t, 2026-10-18, plan
++ * docs/plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md.
++ *
++ * Three things: a current document's stretches cross, as `{from, to, kinds}`
++ * and nothing else; a document the owner's rule would withhold crosses as no
++ * key at all, so the visitor falls back to the byline rule as the owner does;
++ * and the folds a visitor gets are the folds the owner gets, for the same
++ * stored value over the same blocks.
++ */
++import { describe, expect, it } from "vitest";
++
++import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../src/matter-current.js";
++import { publicArticle } from "../src/public/dto.js";
++import type { Block, BlockId, NodeId, Tree } from "../src/types.js";
++
++const block = (id: string, text: string, extra: Partial<Block> = {}): Block => ({
++  id: id as BlockId,
++  tag: "p",
++  kind: "text",
++  text,
++  words: text.split(/\s+/u).length,
++  html: `<p>${text}</p>`,
++  gistable: true,
++  ...extra,
++});
++
++/* `level` and `role` set on purpose: they are the fields of the hash a mapper
++   can drop without a type error (plan review F3). */
++const TITLE = block("spya-ttaaaa", "A title", { tag: "h1", kind: "heading", level: 1 });
++const AUTHORS = block("spya-auaaaa", "Ada Lovelace, Charles Babbage");
++const BODY = block("spya-bdaaaa", "The argument itself, at some length, which is not folded.");
++const NOTE = block("spya-ntaaaa", "1. A footnote.", { role: "footnote" });
++const REF = block("spya-rfaaaa", "Lovelace, A. (1843). Notes. Taylor's Scientific Memoirs, 3, 666–731.");
++const BLOCKS = [TITLE, AUTHORS, BODY, NOTE, REF];
++
++const TREE: Tree = {
++  version: "tree/1",
++  generator: "g",
++  slug: "piece",
++  rootId: "n0" as NodeId,
++  nodes: {
++    ["n0" as NodeId]: { id: "n0" as NodeId, depth: 0, parent: null, children: [], range: [TITLE.id, REF.id], title: "The piece" },
++  },
++};
++
++const STRETCHES = [
++  { from: TITLE.id, to: AUTHORS.id, kinds: ["title", "authors"] },
++  { from: REF.id, to: REF.id, kinds: ["references"] },
++];
++
++/** Every field a stored document can carry, so a test can ask which of them crossed. */
++const CURRENT = {
++  status: "ok",
++  version: MATTER_PROMPT_VERSION,
++  generator: "labels+provider/model-sentinel",
++  sourceHash: matterInputHash(BLOCKS),
++  modelUnavailable: "timed-out",
++  stretches: STRETCHES,
++};
++
++const NONE = {
++  slug: "piece",
++  title: "The piece",
++  byline: null,
++  siteName: null,
++  lang: null,
++  excerpt: null,
++  journal: null,
++  publishedAt: null,
++  publishedYear: null,
++  readingLanguage: null,
++  readingIdeas: null,
++  readingDifficultyReason: null,
++  headingTitle: null,
++  finalUrl: null,
++  blocks: BLOCKS,
++  tree: TREE,
++  arc: null,
++  assets: null,
++  glossary: null,
++  ideas: null,
++  quotes: null,
++  tweets: null,
++  timeline: null,
++  skim: null,
++  faq: null,
++  simpleSummary: null,
++  bibliography: null,
++  citationBlurbs: null,
++  matter: null,
++  reception: null,
++  sourcesClaims: null,
++  crossrefs: null,
++  crossrefsFresh: false,
++  comments: [],
++  searches: [],
++  sketch: null,
++  navLabelStatus: "ready" as const,
++  sharedBy: "public" as const,
++  sourceGuess: null,
++};
++
++describe("the front and back matter on a shared link", () => {
++  it("sends a current document's stretches, and only their ids and kinds", () => {
++    const built = publicArticle({ ...NONE, matter: CURRENT });
++    expect(built.matter).toEqual(STRETCHES);
++    for (const stretch of built.matter ?? []) expect(Object.keys(stretch).sort()).toEqual(["from", "kinds", "to"]);
++    const wire = JSON.stringify(built);
++    for (const leak of ["provider/model-sentinel", CURRENT.sourceHash, MATTER_PROMPT_VERSION, "timed-out"]) {
++      expect(wire, leak).not.toContain(leak);
++    }
++  });
++
++  it("drops a field planted inside a stretch", () => {
++    const planted = { ...CURRENT, stretches: [{ ...STRETCHES[0], note: "planted-sentinel" }] };
++    const built = publicArticle({ ...NONE, matter: planted });
++    expect(built.matter).toEqual([STRETCHES[0]]);
++    expect(JSON.stringify(built)).not.toContain("planted-sentinel");
++  });
++
++  /* Absent, never `[]`: `[]` means *the step looked and found nothing*, and
++     the reading view would then drop the byline rule's fold too. */
++  it.each([
++    ["no column", null],
++    ["an unavailable document", { status: "unavailable", version: MATTER_PROMPT_VERSION, sourceHash: CURRENT.sourceHash, reason: "step-failed" }],
++    ["an older version", { ...CURRENT, version: "matter/1" }],
++    ["a hash of other blocks", { ...CURRENT, sourceHash: matterInputHash(BLOCKS.slice(1)) }],
++    ["an id that is not a block here", { ...CURRENT, stretches: [{ from: "spya-zzzzzz", to: REF.id, kinds: ["references"] }] }],
++    ["a malformed document", { status: "ok", stretches: "all of it" }],
++  ])("sends no key for %s", (_label, stored) => {
++    const built = publicArticle({ ...NONE, matter: stored });
++    expect("matter" in built).toBe(false);
++  });
++
++  it("sends an empty list as an empty list: the step looked and found nothing", () => {
++    expect(publicArticle({ ...NONE, matter: { ...CURRENT, stretches: [] } }).matter).toEqual([]);
++  });
++
++  it("folds what the owner's read folds, for the same stored value over the same blocks", () => {
++    expect(publicArticle({ ...NONE, matter: CURRENT }).matter).toEqual(matterForReader(CURRENT, BLOCKS));
++  });
++});
+diff --git a/tests/public-dto-owner-only-fields.test.ts b/tests/public-dto-owner-only-fields.test.ts
+index 1042925e2..0545009f1 100644
+--- a/tests/public-dto-owner-only-fields.test.ts
++++ b/tests/public-dto-owner-only-fields.test.ts
+@@ -113,6 +113,7 @@ const NONE = {
+   simpleSummary: null,
+   bibliography: null,
+   citationBlurbs: null,
++  matter: null,
+   reception: null,
+   sourcesClaims: null,
+   crossrefs: null,
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index 206c9ece0..a025fb628 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -80,6 +80,7 @@ const NO_ARTEFACTS = {
+   simpleSummary: null,
+   bibliography: null,
+   citationBlurbs: null,
++  matter: null,
+   reception: null,
+   sourcesClaims: null,
+   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
+@@ -1717,6 +1718,7 @@ describe("the artefacts a shared link carries", () => {
+     sharedBy: "public" as const,
+     crossrefs: null,
+     crossrefsFresh: false,
++    matter: null,
+     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
+        `publicArticle` will not take — and vitest would never have said so,
+        because it does not typecheck. `npm run typecheck` is the only thing that
+@@ -2535,6 +2537,7 @@ describe("the artefacts a shared link carries", () => {
+         })) as Bibliography["citations"],
+       },
+       citationBlurbs: null,
++      matter: null,
+     });
+     expect(JSON.stringify(planted)).not.toContain("planted");
+   });
+@@ -2720,6 +2723,7 @@ describe("the artefacts a shared link carries", () => {
+       simpleSummary: null,
+       bibliography: null,
+       citationBlurbs: null,
++      matter: null,
+       reception: null,
+       sourcesClaims: null,
+       crossrefs: null,
+diff --git a/tests/public-reads.test.ts b/tests/public-reads.test.ts
+index 06cacd095..18fc2c991 100644
+--- a/tests/public-reads.test.ts
++++ b/tests/public-reads.test.ts
+@@ -217,6 +217,8 @@ describe("the public revision read", () => {
+       "bibliography",
+       "reception",
+       "simple_summary",
++      /* Not an artefact, but it rides here for the same reason (plan 261018l). */
++      "matter",
+     ]) {
+       expect(article, column).toContain(`"${column}"`);
+     }
+diff --git a/tests/public-visibility-pg.test.ts b/tests/public-visibility-pg.test.ts
+index c0a3aaca4..7bde88829 100644
+--- a/tests/public-visibility-pg.test.ts
++++ b/tests/public-visibility-pg.test.ts
+@@ -58,10 +58,11 @@ import { publicHeadOf } from "./helpers/public-head.js";
+ import { blockHashQuery } from "../src/store/pg.js";
+ import { inputFingerprint as crossrefsFingerprint } from "../src/crossrefs-fingerprint.js";
+ import { citedMetaFingerprintOf } from "../src/source-hash.js";
++import { MATTER_PROMPT_VERSION, matterInputHash } from "../src/matter-current.js";
+ import { documentTitle } from "../src/title-text.js";
+ import { safePublicCanonical } from "../src/urls.js";
+ import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
+-import type { Bibliography, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
++import type { Bibliography, Block, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
+ 
+ loadEnvLocal();
+ 
+@@ -1448,6 +1449,52 @@ describe("sharing one article", { timeout: 60_000 }, () => {
+     }
+   });
+ 
++  /**
++   * **The front and back matter folds, through the real reader and route**
++   * (Greg's 2B to q-f7zp3t, plan 261018l). The hash is taken from the
++   * owner's own payload, so this asks the question that matters: do the two
++   * reads agree that a stored value is about these blocks? A heading with a
++   * `level` is in the fixture, the field a mapper could drop unnoticed. And
++   * the stale case, so a reader hardwired to *withhold* cannot pass.
++   */
++  it("folds for a visitor exactly what it folds for the owner", async () => {
++    const db = getDb();
++    const owned = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
++    expect(owned.status).toBe(200);
++    const current = matterInputHash((owned.body as { blocks: Block[] }).blocks);
++    const stretches = [{ from: HEADING_ID, to: HEADING_ID, kinds: ["title"] }];
++    try {
++      for (const [sourceHash, expected] of [
++        [current, stretches],
++        ["m1:0000000000000000", undefined],
++      ] as const) {
++        await db
++          .update(articleRevisions)
++          .set({
++            matter: {
++              status: "ok",
++              version: MATTER_PROMPT_VERSION,
++              generator: "labels+matter-generator-sentinel",
++              sourceHash,
++              modelUnavailable: "timed-out",
++              stretches: [...stretches],
++            } as never,
++          })
++          .where(eq(articleRevisions.id, REVISION_ID));
++        const owner = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
++        const visitor = await call("GET", `/api/public/article/${SLUG}`);
++        expect(visitor.status).toBe(200);
++        expect((owner.body as { matter?: unknown }).matter, "the owner's folds").toEqual(expected);
++        expect((visitor.body as { matter?: unknown }).matter, "a visitor's folds").toEqual(expected);
++        for (const leak of ["matter-generator-sentinel", sourceHash, MATTER_PROMPT_VERSION]) {
++          expect(visitor.text, leak).not.toContain(leak);
++        }
++      }
++    } finally {
++      await db.update(articleRevisions).set({ matter: null }).where(eq(articleRevisions.id, REVISION_ID));
++    }
++  });
++
+   /**
+    * **Where and when it was published, from the real columns** — the journal
+    * and the publication date cross, at the precision we hold; the DOI and the
+diff --git a/tests/reception-navigation.test.tsx b/tests/reception-navigation.test.tsx
+index 3346226d6..7f53d21a1 100644
+--- a/tests/reception-navigation.test.tsx
++++ b/tests/reception-navigation.test.tsx
+@@ -83,7 +83,7 @@ function publish(reception: Reception): PublicReception {
+     headingTitle: null, finalUrl: "https://example.org/piece",
+     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
+     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,
+-    timeline: null, skim: null, faq: null, simpleSummary: null, bibliography: null, citationBlurbs: null, reception, sourcesClaims: null,
++    timeline: null, skim: null, faq: null, simpleSummary: null, bibliography: null, citationBlurbs: null, matter: null, reception, sourcesClaims: null,
+     crossrefs: null, crossrefsFresh: false, comments: [], searches: [], sketch: null,
+     navLabelStatus: "ready", sourceGuess: null,
+     sharedBy: "public",
+diff --git a/tests/shared-inventory.test.ts b/tests/shared-inventory.test.ts
+index c58fbc75a..04964d354 100644
+--- a/tests/shared-inventory.test.ts
++++ b/tests/shared-inventory.test.ts
+@@ -436,6 +436,9 @@ const WIRE_ROW = {
+      prose between its own passages, so they are the text's row, whose sentence
+      says so. */
+   crossrefs: "text",
++  /* Which stretches fold as front and back matter: ids of blocks in the text
++     and closed kinds, so the text's row, which says so (plan 261018l). */
++  matter: "text",
+   /* `bibliography` under its old key, the same object, for one deploy (plan
+      261009w F1; removed by its contract). Sources' row, as `bibliography`'s. */
+   citations: "sources",

@@ -141,6 +141,7 @@ import type {
   PublicTweets,
 } from "../public-types.js";
 import { hostOf, publicCitationUrl, publicSourceUrl } from "../urls.js";
+import { matterForReader } from "../matter-current.js";
 
 /**
  * The masthead.
@@ -1358,6 +1359,13 @@ export function publicArticle(row: {
   /** Where the paragraph nav labels are — the column, `not null`, so no `| null`. */
   navLabelStatus: NavLabelStatus;
   /**
+   * The stored `article_revisions.matter` document, unread. `publicMatter`
+   * asks the owner's rule of it against `blocks` above. Required, so a reader
+   * that forgot to select it is a type error rather than a visitor who never
+   * gets a fold (plan 261018l).
+   */
+  matter: unknown;
+  /**
    * A `found` guess at an upload's source, or `null` for none — the columns
    * `publicSourceGuessQuery` (src/store/public-reader.ts) selects, **not yet
    * published**: `publicSourceGuess` below is the policy. Required, so a reader
@@ -1405,6 +1413,7 @@ export function publicArticle(row: {
        The enum crosses whole and nothing else does — no reason, no provider
        message, no timestamp. See `PublicArticle.navLabelStatus`. */
     navLabelStatus: row.navLabelStatus,
+    ...publicMatter(row.matter, row.blocks),
     /* `!== null` rather than truthiness, on all four. An artefact is an object
        and so always truthy, so the two agree today — but the day one of these
        becomes a value that can be falsy while present, truthiness silently
@@ -1450,6 +1459,24 @@ export function publicArticle(row: {
     searches: publicSearches(row.searches),
     ...optionalSourceGuess(row.sourceGuess),
   };
+}
+
+/**
+ * **The folds over the front and back matter**, for a stranger — Greg's 2B to
+ * q-f7zp3t, 2026-10-18 (plan 261018l).
+ *
+ * The owner's rule decides whether there are any: `matterForReader`
+ * (src/matter-current.ts) over the same sanitised blocks the owner's read
+ * hashes, so an owner and a visitor fold the same stretches, and a stale,
+ * foreign or malformed document folds nothing. Then each stretch is built
+ * field by field: two ids of blocks in this payload, and kind names from a
+ * closed list. The document's `version`, `generator`, `sourceHash` and
+ * `modelUnavailable` do not cross.
+ */
+function publicMatter(stored: unknown, blocks: readonly (Block | PublicBlock)[]): Pick<PublicArticle, "matter"> {
+  const stretches = matterForReader(stored, blocks);
+  if (stretches === undefined) return {};
+  return { matter: stretches.map((s) => ({ from: s.from, to: s.to, kinds: [...s.kinds] })) };
 }
 
 /** The columns of a `found` `upload_source_guesses` row the public read selects. */

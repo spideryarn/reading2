@@ -66,8 +66,10 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
   on every read); otherwise, and for every article imported before this existed, the reading view
   uses the older byline rule ([`src/web/front-matter.ts`](../../src/web/front-matter.ts), plan
   261007d) as one *Authors* stretch.
-- **Visitors** (the public page) get only that older rule: `src/public/dto.ts` is a listed defence
-  and carries no `matter` ([security-map.md](security-map.md)).
+- **Visitors** (the public page) get the same folds, under the same rule, since 2026-10-18:
+  `PublicArticle.matter` carries each stretch's two ids and kinds and nothing else of the stored
+  document ([security-map.md](security-map.md) § `PublicArticle` gained `matter`; plan
+  [261018l](../plans/261018l-visitors-on-a-shared-link-get-the-front-and-back-matter-folds.md)).
 
 ## The evidence, and where to change it
 

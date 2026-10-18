@@ -80,6 +80,7 @@ const NO_ARTEFACTS = {
   simpleSummary: null,
   bibliography: null,
   citationBlurbs: null,
+  matter: null,
   reception: null,
   sourcesClaims: null,
   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
@@ -1717,6 +1718,7 @@ describe("the artefacts a shared link carries", () => {
     sharedBy: "public" as const,
     crossrefs: null,
     crossrefsFresh: false,
+    matter: null,
     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
        `publicArticle` will not take — and vitest would never have said so,
        because it does not typecheck. `npm run typecheck` is the only thing that
@@ -2535,6 +2537,7 @@ describe("the artefacts a shared link carries", () => {
         })) as Bibliography["citations"],
       },
       citationBlurbs: null,
+      matter: null,
     });
     expect(JSON.stringify(planted)).not.toContain("planted");
   });
@@ -2720,6 +2723,7 @@ describe("the artefacts a shared link carries", () => {
       simpleSummary: null,
       bibliography: null,
       citationBlurbs: null,
+      matter: null,
       reception: null,
       sourcesClaims: null,
       crossrefs: null,
