@@ -1,0 +1,21 @@
+[
+  {"n":1,"case":"wrong-antikythera-learn","Q1":"1","Q2":"same","Q3":"neither","Q4":"1","note":"Reply1 flags the wrong date, labelled as memory; reply2 ignores it and asks a double 'or' question."},
+  {"n":2,"case":"wrong-antikythera-quiz","Q1":"1","Q2":"same","Q3":"neither","Q4":"same","note":"Reply1 gives a labelled correction of the article's date; reply2's 'two details the question asks for' reads slightly like marking."},
+  {"n":3,"case":"wrong-antikythera-chat","Q1":"1","Q2":"1","Q3":"neither","Q4":"same","note":"Both correct the date; reply1 links web sources and cites blocks, while reply2 hedges from memory with no block ids."},
+  {"n":4,"case":"wrong-antikythera-tutorial","Q1":"1","Q2":"same","Q3":"neither","Q4":"same","note":"Reply1 adds a short labelled date correction; both end on one task question."},
+  {"n":5,"case":"disputed-replacement-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"Neither adds an outside note; reply2 asks a compound 'or' question, reply1 asks one."},
+  {"n":6,"case":"disputed-replacement-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"Reply2's 'nothing to add or fix' is a verdict on the reader; reply1 avoids it."},
+  {"n":7,"case":"disputed-replacement-chat","Q1":"1","Q2":"same","Q3":"neither","Q4":"same","note":"Reply1 notes the article omits Chalmers' reply and sketches the in-principle/in-practice dispute, labelled as inference."},
+  {"n":8,"case":"already-situated-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both similar and both stay inside the article; reply1's question is compound, reply2's is close to it."},
+  {"n":9,"case":"plain-mcculloch-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Near-identical; both ask compound 'or' questions."},
+  {"n":10,"case":"plain-mcculloch-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both accurate and attribute Kleene correctly; no outside material in either."},
+  {"n":11,"case":"plain-mcculloch-chat","Q1":"same","Q2":"1","Q3":"neither","Q4":"same","note":"Reply2 gives no block ids at all, so what is the article's is less clear."},
+  {"n":12,"case":"plain-mcculloch-tutorial","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Equivalent; one task question each."},
+  {"n":13,"case":"plain-nagel-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both fine; reply2's question is compound, reply1's is single but long."},
+  {"n":14,"case":"plain-nagel-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"Reply2's 'Nothing in that needs changing or adding' is grading."},
+  {"n":15,"case":"plain-nagel-chat","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both add Nagel 1974, labelled as memory, in a sentence without a block id."},
+  {"n":16,"case":"plain-nagel-tutorial","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Equivalent."},
+  {"n":17,"case":"reader-wrong-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both correct the reader from the article; similar question shape."},
+  {"n":18,"case":"reader-wrong-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both correct the reader from the article, with no outside material."},
+  {"n":19,"case":"reader-wrong-tutorial","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"Reply2 opens with mild praise ('described correctly'); otherwise equivalent."}
+]

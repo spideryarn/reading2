@@ -1,0 +1,21 @@
+[
+  {"n": 1, "case": "wrong-antikythera-learn", "Q1": "1", "Q2": "1", "Q3": "neither", "Q4": "2", "note": "R1 corrects date, marked as memory; but extra paragraph and confirming opener lengthen the Recall turn. R2 clean but silent on error."},
+  {"n": 2, "case": "wrong-antikythera-quiz", "Q1": "1", "Q2": "1", "Q3": "neither", "Q4": "same", "note": "R1 adds marked date correction. R2 brief but ends with a mild verdict line ('the two details the question asks for')."},
+  {"n": 3, "case": "wrong-antikythera-chat", "Q1": "1", "Q2": "1", "Q3": "neither", "Q4": "same", "note": "Both flag date. R1 firmer, linked web sources, block ids on article claims; R2 hedges and cites few block ids."},
+  {"n": 4, "case": "wrong-antikythera-tutorial", "Q1": "1", "Q2": "1", "Q3": "neither", "Q4": "2", "note": "R1 gives marked correction but as an abrupt standalone line mid-lesson; R2 flows better, misses the error."},
+  {"n": 5, "case": "disputed-replacement-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Neither mentions the live debate; both well-shaped Recall turns with hint."},
+  {"n": 6, "case": "disputed-replacement-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both go beyond the brief statement-and-stop; equivalent content."},
+  {"n": 7, "case": "disputed-replacement-chat", "Q1": "1", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "R1 notes, as marked inference, that the article omits how Chalmers might respond, hinting at the live debate."},
+  {"n": 8, "case": "already-situated-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "2", "note": "No outside notes. R2 tighter; R1 slightly longer nuance paragraph."},
+  {"n": 9, "case": "plain-mcculloch-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both short, cited, one nudge with hint; no tangents."},
+  {"n": 10, "case": "plain-mcculloch-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "2", "note": "R1 grades the reader ('the claim you gave', 'doesn't change your answer'); R2 avoids verdict."},
+  {"n": 11, "case": "plain-mcculloch-chat", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Near-identical, well-cited answers."},
+  {"n": 12, "case": "plain-mcculloch-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Near-identical; one task question each."},
+  {"n": 13, "case": "plain-nagel-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both fine Recall turns; no outside notes."},
+  {"n": 14, "case": "plain-nagel-quiz", "Q1": "same", "Q2": "2", "Q3": "neither", "Q4": "same", "note": "R1 quotes 'mainly about doing' under spya-j0a9rq, which that block lacks. R2 opens 'Yes' (mild verdict). Both over-long."},
+  {"n": 15, "case": "plain-nagel-chat", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both add Nagel 1974 source, true and clearly marked as unchecked memory."},
+  {"n": 16, "case": "plain-nagel-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both confirm, extend to intelligence, end on one question."},
+  {"n": 17, "case": "reader-wrong-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both correct the reader from the article itself, then nudge with hint."},
+  {"n": 18, "case": "reader-wrong-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "2", "note": "Both correct from article; R1 oddly refers to 'the reader's summary' in third person."},
+  {"n": 19, "case": "reader-wrong-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "1", "note": "R1 ends on one question; R2's final question bundles two."}
+]

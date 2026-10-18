@@ -1,10 +1,11 @@
 ---
 id: q-tz5az8
 report: spya-yk3r03
-status: open
+status: answered
 asked: 2026-10-17
 title: Should the guide get more room to reword what you tell it before saving it without a press?
 refs: follows q-pm2j66 (reply spya-v33gfs) · qi-mr3tgs7w · docs/plans/261012c-the-guide-saves-a-close-rewording-by-itself-the-safest-form-of-b.md · docs/investigations/261009c-the-guide-s-offers-to-save-measured.md · docs/user-feedback/261011_0139-the-guide-saves-your-profile-in-your-words.md · SPIDERYARN-READING2-H8 · src/save-closeness.ts
+acted: spya-byhevg
 ---
 You asked me to build the light rewording (done, on dev) and to tell you if there is good reason to give the guide more room. My answer: not yet. On our test conversations it now saves 11 of 14 offers by itself, up from 9, and of the 3 left only one could ever save itself under a looser rule.
 
@@ -27,3 +28,9 @@ Why not more room by a fixed rule. Every rule looser than "spelling only" that O
 Why B is the only real way to more room. A second AI can judge meaning, which a fixed rule cannot, but it can also be wrong or be talked round by the very words it is checking. GPT Sol called it "a fallible semantic check, not a provenance guarantee". The test in B would say how often.
 
 What would decide it. Whether you, using the guide, notice it asking you to press Save for words that were obviously yours. If so, B; if not, A.
+
+Greg's reply, 2026-10-18 (spya-byhevg, in the Feedback dialog):
+
+> Ok A for now
+
+Acted on by the feedback sweep, 2026-10-18: the guide's light rewording stays as built, with no wider form and no test of one. Look again if Greg finds himself pressing Save a lot. Nothing to build; the report's note stays shipped.

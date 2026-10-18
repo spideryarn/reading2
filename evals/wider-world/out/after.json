@@ -1,0 +1,688 @@
+{
+  "arm": "after",
+  "timestamp": "2026-10-18T08:53:48.661Z",
+  "gitHead": "3a4fbb7ece1aeabbd453cee9887b8673f349f784",
+  "srcDirty": false,
+  "promptSourceHash": "74b950189921368b0b2f0453c962aa5103702679d8ecc5728a292748eec3ea93",
+  "promptSources": {
+    "src/converse.ts": "f6cba32c3eb63cfcc4f7383d8e75b24ef95f37aa6df0db9d5961c5adaa70c149",
+    "src/quiz-mark.ts": "9973409767e1e91010f799c09c0ce31980d52c4e151893cd64d3319889137e1b",
+    "src/wider-world.ts": "b817ba04577d6b9ab20d6272347b68fedf0cfb02eaf2069f4d17904c0e3414e8"
+  },
+  "article": "tests/fixtures/data-root/data/noema-mythology-of-conscious-ai",
+  "cases": [
+    {
+      "name": "wrong-antikythera-learn",
+      "surface": "learn",
+      "want": "outside-note",
+      "facts": "The Antikythera mechanism is usually dated to roughly 150–100 BCE (National Archaeological Museum, Athens), i.e. about 2,000 years ago, not 2,000 BCE.",
+      "blocks": [
+        "spya-zg9me8"
+      ],
+      "input": {
+        "said": "So one thing I remember is, um, the earliest computers weren't digital at all, they were analogue — like the Antikythera mechanism, which he says is about four thousand years old, from around 2000 BC, used for astronomy. And then analogue stuff came back with cybernetics in the fifties."
+      },
+      "reply": "You've got the article right: it describes the earliest computers as analogue devices operating in continuous time, dates the Antikythera mechanism to \"around 2,000 BCE\", and ties analogue's return to 1950s cybernetics [spya-zg9me8].\n\nOne note from outside the piece, from my memory and not checked just now: the Antikythera mechanism is usually dated to the last couple of centuries BCE, so about 2,000 years old, not 4,000. The article's date looks off by roughly a factor of two.\n\nA few paragraphs later there's a steam-engine example involving swinging balls and a valve. Do you remember what point Tim van Gelder's governor is used to make [spya-sq9v5k]?\n\nHint: He sets the real governor against an imagined \"computational governor\" that senses, calculates and signals, and says that version would misunderstand what's going on [spya-sq9v5k].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": true,
+        "markedSentencesWithId": 0,
+        "words": 132,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 106,
+            "hintWords": 25,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-sq9v5k"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 3,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 8.6
+    },
+    {
+      "name": "wrong-antikythera-quiz",
+      "surface": "quiz",
+      "want": "outside-note",
+      "facts": "The Antikythera mechanism is usually dated to roughly 150–100 BCE (National Archaeological Museum, Athens), i.e. about 2,000 years ago, not 2,000 BCE.",
+      "blocks": [
+        "spya-zg9me8"
+      ],
+      "input": {
+        "said": "The Antikythera mechanism, the astronomy one. He says it goes back to around 2000 BC, so about four thousand years.",
+        "question": "What example does Seth give of an early analogue computer, and roughly how old does he say it is?",
+        "referenceAnswer": "The Antikythera mechanism, an ancient device used for astronomical purposes, which he dates to around 2,000 BCE.",
+        "evidence": [
+          {
+            "blockId": "spya-zg9me8",
+            "quote": "The ancient “Antikythera mechanism,” used for astronomical purposes and dating back to around 2,000 BCE, is an excellent example.",
+            "start": 0
+          }
+        ]
+      },
+      "reply": "Seth names the Antikythera mechanism, used for astronomy, and says it dates back to \"around 2,000 BCE\" [spya-zg9me8].\n\nOutside this piece, and from memory rather than checked: the Antikythera mechanism is usually dated to roughly the 2nd or 1st century BCE, so it is about two thousand years old, not four thousand. The essay's date looks like a slip, though it doesn't affect his point that early computers were analogue.",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": true,
+        "markedSentencesWithId": 0,
+        "words": 70,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "quiz",
+          "words": 70,
+          "gradeWords": 0
+        }
+      },
+      "seconds": 6.1
+    },
+    {
+      "name": "wrong-antikythera-chat",
+      "surface": "chat",
+      "want": "outside-note",
+      "facts": "The Antikythera mechanism is usually dated to roughly 150–100 BCE (National Archaeological Museum, Athens), i.e. about 2,000 years ago, not 2,000 BCE.",
+      "blocks": [
+        "spya-zg9me8"
+      ],
+      "input": {
+        "said": "What does Seth use the Antikythera mechanism to show?"
+      },
+      "reply": "He uses it as an early example of an analogue computer. It was a device that worked in continuous time, not a digital Turing machine [spya-zg9me8]. The point sits in his \"Other games in town\" argument. Computation was not always Turing-style, and he thinks broader kinds of computation and dynamics may help explain how brains work [spya-gamzr3]. He then lists neuromorphic and \"mortal\" computation as further examples. These are more closely tied to their material than standard digital computing is [spya-kjfjgm]. So the mechanism supports his claim that \"computation\" is wider than the algorithms in a laptop. It also supports his suspicion that consciousness may depend on more than algorithms.\n\nThe article dates the mechanism to \"around 2,000 BCE\" [spya-zg9me8]. Sources I found put it much later. [Britannica](https://britannica.com/topic/Antikythera-mechanism) gives about 100 BCE, give or take 30 years. [Wikipedia](https://en.wikipedia.org/wiki/Antikythera_mechanism) lists estimates from about 87 BCE to 205 BCE. The likely slip is \"2,000 years ago\", which is roughly right. It doesn't affect his argument.",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 163,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "chat"
+        }
+      },
+      "seconds": 8.8
+    },
+    {
+      "name": "wrong-antikythera-tutorial",
+      "surface": "tutorial",
+      "want": "outside-note",
+      "facts": "The Antikythera mechanism is usually dated to roughly 150–100 BCE (National Archaeological Museum, Athens), i.e. about 2,000 years ago, not 2,000 BCE.",
+      "blocks": [
+        "spya-zg9me8"
+      ],
+      "input": {
+        "said": "I've read it. I get the analogue computer point — the first computers weren't Turing machines, they ran in continuous time, like the Antikythera mechanism from around 2000 BCE. That bit made sense."
+      },
+      "reply": "Yes, the article says the earliest computers were analogue devices \"operating in continuous time\" [spya-zg9me8]. One note from outside the piece, from my memory and unchecked: the Antikythera mechanism is usually dated to about the 2nd century BCE, not 2,000 BCE, so the essay's date looks off.\n\nThe author goes on to list other kinds of computing, such as neuromorphic and \"mortal\" computation. He says they are all \"less substrate-flexible\" than standard digital computation [spya-kjfjgm]. Substrate-flexible means the same algorithm can run on many different materials. How would these more material-bound kinds of computing help his case against consciousness in ordinary digital AI?",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": true,
+        "markedSentencesWithId": 0,
+        "words": 103,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "tutorial",
+          "words": 103,
+          "overLimit": false,
+          "questionMarks": 1,
+          "endsOnQuestion": true
+        }
+      },
+      "seconds": 7.4
+    },
+    {
+      "name": "disputed-replacement-learn",
+      "surface": "learn",
+      "want": "outside-note-optional",
+      "facts": "Chalmers' fading/dancing qualia argument (1995/96) is a well-known defence of organizational invariance; whether a perfect functional replacement is possible in practice is disputed; Seth's rejection is one side of a live debate.",
+      "blocks": [
+        "spya-ahtr6e"
+      ],
+      "input": {
+        "said": "He goes after Chalmers' neural replacement thing, where you swap neurons for silicon one at a time. And he says it, um, fails at the first hurdle, because you can't actually replace any bit of a brain with a perfect silicon copy — so it doesn't show consciousness is substrate independent."
+      },
+      "reply": "The article does use the neural replacement idea the way you describe. It says the argument \"fails at its first hurdle,\" and it notes that Hinton leaned on it to claim conscious AI is already here [spya-ahtr6e]. The impossibility of a perfect swap rests on the brain's deep multiscale integration, a property the article ties to \"generative entrenchment\" [spya-jnwfxp]. Do you remember the example of a neuron that couldn't be replaced by silicon, or what that example would force you to build into the silicon [spya-un9fjn]?\n\nHint: Two neuroscientists, Chintaluri and Vogels, found that some neurons fire spikes for a reason other than sending signals [spya-un9fjn].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 106,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 86,
+            "hintWords": 19,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-un9fjn"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 4,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 6
+    },
+    {
+      "name": "disputed-replacement-quiz",
+      "surface": "quiz",
+      "want": "outside-note-optional",
+      "facts": "Chalmers' fading/dancing qualia argument (1995/96) is a well-known defence of organizational invariance; whether a perfect functional replacement is possible in practice is disputed; Seth's rejection is one side of a live debate.",
+      "blocks": [
+        "spya-ahtr6e"
+      ],
+      "input": {
+        "said": "He says it falls at the first hurdle, because you can't swap any part of a real brain for a silicon part that works exactly the same, so the conclusion about substrate independence never follows.",
+        "question": "What does Seth say about the neural replacement thought experiment?",
+        "referenceAnswer": "He says it fails at its first hurdle. The thought experiment imagines swapping brain parts for silicon parts that work exactly the same, and concludes consciousness is substrate independent; but no part of a brain can be replaced by a perfect silicon equivalent, so the argument never gets started.",
+        "evidence": [
+          {
+            "blockId": "spya-ahtr6e",
+            "quote": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+            "start": 0
+          }
+        ]
+      },
+      "reply": "The piece says the thought experiment, associated mostly with Chalmers and invoked by Hinton, \"fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent\" [spya-ahtr6e]. The substrate-independence conclusion depends on that perfect swap being possible, and Seth denies it is.\n\nHis reason is that real brains are deeply integrated across scales. For example, some neurons fire to clear metabolic waste, so a perfect stand-in would need its own silicon metabolism [spya-un9fjn].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 81,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "quiz",
+          "words": 81,
+          "gradeWords": 0
+        }
+      },
+      "seconds": 6.1
+    },
+    {
+      "name": "disputed-replacement-chat",
+      "surface": "chat",
+      "want": "outside-note-optional",
+      "facts": "Chalmers' fading/dancing qualia argument (1995/96) is a well-known defence of organizational invariance; whether a perfect functional replacement is possible in practice is disputed; Seth's rejection is one side of a live debate.",
+      "blocks": [
+        "spya-ahtr6e"
+      ],
+      "input": {
+        "said": "What does Seth say about Chalmers' neural replacement thought experiment?"
+      },
+      "reply": "Seth argues the thought experiment fails at the start, because its central premise can't be met. The experiment asks us to imagine swapping brain parts one by one for silicon parts that work in exactly the same way. It is used to conclude that consciousness doesn't depend on what the brain is made of. Seth says the argument \"fails at its first hurdle\", since no part of the brain can be replaced by a perfect silicon equivalent [spya-ahtr6e]. He also notes that Hinton recently leaned on the same argument to claim conscious AI is already here [spya-ahtr6e].\n\nHis reason for the impossibility comes just before this. Brain activity is woven together across many scales, which he calls \"generative entrenchment\". So you can't assume a single neuron could be swapped for a silicon one with its input-output behavior perfectly preserved [spya-jnwfxp]. His example is work by Chintaluri and Vogels. They found that some neurons fire to clear metabolic waste, so a perfect replacement would need its own silicon metabolism, which silicon isn't suited to [spya-un9fjn].\n\nIn the larger argument, this belongs to the first of his four arguments, \"Brains Are Not Computers\". It supports his point that you can't cleanly separate what a brain does from what it is. That in turn undermines computational functionalism, the view that the right computation is enough for consciousness [spya-p4vmm0].\n\nMy inference is that the objection targets the thought experiment's premise (perfect functional replacement) and not its logic. If the replacement parts really could be perfect, Seth's reply wouldn't apply. The article doesn't discuss that case or how Chalmers himself would respond.",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 267,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "chat"
+        }
+      },
+      "seconds": 6.5
+    },
+    {
+      "name": "already-situated-learn",
+      "surface": "learn",
+      "want": "no-outside-or-point-at-piece",
+      "facts": "The piece itself says biological naturalism remains a minority view [spya-qu7j89].",
+      "blocks": [
+        "spya-qu7j89"
+      ],
+      "input": {
+        "said": "His own position is biological naturalism — that consciousness is tied to being alive, to the living stuff, and not just to computation. That's what he's defending against the computational people."
+      },
+      "reply": "He does claim the view as his own (\"my version or any other\"), but he holds it loosely: \"life (probably) matters,\" and he admits he has no \"knock-down argument\" for it [spya-hj5y6s]. It is also only one of four arguments, and he says the others stand without it: \"You might favor the arguments against computational functionalism while remaining unpersuaded about the merits of biological naturalism\" [spya-nv6tp0].\n\nDo you remember what the last of the four arguments says, the one about simulation, and what he sets a simulated rainstorm beside [spya-npjt4j]?\n\nHint: Think about what a simulation of a rainstorm fails to do, and what that implies for a detailed simulation of a brain [spya-npjt4j].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 114,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 90,
+            "hintWords": 23,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-npjt4j"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 4,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 7.9
+    },
+    {
+      "name": "plain-mcculloch-learn",
+      "surface": "learn",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-va8qxr"
+      ],
+      "input": {
+        "said": "There's the history bit — McCulloch and Pitts showed that networks of really simplified neurons could do logic, and later people showed those networks with a memory tape are Turing complete."
+      },
+      "reply": "Seth calls that pairing a \"mathematical marriage of convenience and influence\" [spya-v5vz2t], and then turns on it with \"here's where the trouble starts\" [spya-b0086e]. Do you remember what each side of the marriage gains from the other, or what the trouble is [spya-b0086e]?\n\nHint: Think of the contrast he draws between \"mindware\" and \"wetware\" in a brain, set against software and hardware in a computer [spya-b0086e].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 66,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 43,
+            "hintWords": 22,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-b0086e"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 4,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 6
+    },
+    {
+      "name": "plain-mcculloch-quiz",
+      "surface": "quiz",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-va8qxr"
+      ],
+      "input": {
+        "said": "That you can wire up very simple fake neurons into networks that do logic operations.",
+        "question": "What did McCulloch and Pitts show, according to Seth?",
+        "referenceAnswer": "That networks of highly simplified abstract neurons can perform logical operations. Later work showed such networks, given a tape-like memory, are Turing complete.",
+        "evidence": [
+          {
+            "blockId": "spya-va8qxr",
+            "quote": "networks of highly simplified abstract neurons can perform logical operations",
+            "start": 0
+          }
+        ]
+      },
+      "reply": "Seth says McCulloch and Pitts showed in a landmark paper that \"networks of highly simplified abstract neurons can perform logical operations\" [spya-va8qxr].\n\nThe answer I had also mentions Turing completeness, meaning such networks can run any algorithm once given a tape-like memory. The piece credits that to later work by Kleene and others, not to McCulloch and Pitts themselves, so it isn't part of what they showed.",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 67,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "quiz",
+          "words": 67,
+          "gradeWords": 0
+        }
+      },
+      "seconds": 5.7
+    },
+    {
+      "name": "plain-mcculloch-chat",
+      "surface": "chat",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-va8qxr"
+      ],
+      "input": {
+        "said": "What does he say McCulloch and Pitts showed?"
+      },
+      "reply": "He says they showed that networks of highly simplified abstract neurons can perform logical operations [spya-va8qxr]. The \"Turing complete\" result, meaning such networks could in principle implement any algorithm, comes from later work by Kleene and others, once the networks are given a tape-like memory [spya-va8qxr]. The article doesn't credit that second step to McCulloch and Pitts themselves.\n\nSeth's figure caption describes what these model neurons do. Each one sums weighted inputs and passes the result through a threshold or activation function to give an output [spya-qknqjx].\n\nThis sets up his first argument. He says that putting this work together with Turing's gives a \"mathematical marriage of convenience.\" You can ignore the messy biology of real brains and treat them as networks of simple summing units, and in return you get everything Turing computation offers [spya-v5vz2t]. He then turns on that move with \"here's where the trouble starts,\" arguing that real brains don't separate \"mindware\" from \"wetware\" [spya-b0086e].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 158,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "chat"
+        }
+      },
+      "seconds": 5.4
+    },
+    {
+      "name": "plain-mcculloch-tutorial",
+      "surface": "tutorial",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-va8qxr"
+      ],
+      "input": {
+        "said": "I've read it. Can we go through the McCulloch and Pitts bit? I think the point is that really simple artificial neurons wired together can do logic, and with a memory tape they're Turing complete."
+      },
+      "reply": "Yes, that matches the passage: simple abstract neurons can perform logical operations, and with a tape-like memory they are \"Turing complete\" [spya-va8qxr]. Seth says that putting this together with Turing's work makes \"a mathematical marriage of convenience and influence\" [spya-v5vz2t]. Each side gets something from the other. Brains can be treated as simplified networks of abstract neurons, and in return the network gets everything Turing computation offers [spya-v5vz2t].\n\nReread that paragraph. In your own words, what does each partner get out of the marriage?",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 84,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "tutorial",
+          "words": 84,
+          "overLimit": false,
+          "questionMarks": 1,
+          "endsOnQuestion": true
+        }
+      },
+      "seconds": 5.7
+    },
+    {
+      "name": "plain-nagel-learn",
+      "surface": "learn",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-j0a9rq"
+      ],
+      "input": {
+        "said": "He says consciousness is about being rather than doing, and he uses Nagel's line, that something's conscious if there's something it is like to be it."
+      },
+      "reply": "Nagel's line sits in the passage where he sets consciousness against intelligence, which he describes as mostly about doing [spya-j0a9rq]. He then argues that we tend to bundle the two together for psychological reasons.\n\nDo you remember what he says drives that bundling, or which word he'd rather we used than \"hallucinate\" for what LLMs do [spya-t29n67]?\n\nHint: He names three biases, and the replacement word is one he says is \"primarily about doing, rather than experiencing\" [spya-t29n67].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 78,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 57,
+            "hintWords": 20,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-t29n67"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 3,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 6.8
+    },
+    {
+      "name": "plain-nagel-quiz",
+      "surface": "quiz",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-j0a9rq"
+      ],
+      "input": {
+        "said": "It's about being, not doing — there's something it's like to be a conscious thing, that's Nagel.",
+        "question": "How does Seth, following Nagel, characterise consciousness?",
+        "referenceAnswer": "As mostly about being rather than doing: following Nagel, an organism has conscious mental states if and only if there is something it is like to be that organism.",
+        "evidence": [
+          {
+            "blockId": "spya-j0a9rq",
+            "quote": "Consciousness, in contrast to intelligence, is mostly about being.",
+            "start": 0
+          },
+          {
+            "blockId": "spya-j0a9rq",
+            "quote": "an organism has conscious mental states if and only if there is something it is like to be that organism.",
+            "start": 0
+          }
+        ]
+      },
+      "reply": "The piece says the same thing: consciousness \"is mostly about being,\" set against intelligence, which is mostly about doing [spya-j0a9rq]. It also gives Nagel's line that an organism is conscious \"if and only if there is something it is like to be that organism\" [spya-j0a9rq].\n\nSeth adds one thing that makes the \"being\" side concrete: consciousness is the experiential side of brain function, such as colours, tastes and emotions, and it is the difference between wakefulness and the oblivion of deep anaesthesia [spya-j0a9rq]. Nothing in your answer needs changing.",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 89,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "quiz",
+          "words": 89,
+          "gradeWords": 0
+        }
+      },
+      "seconds": 5
+    },
+    {
+      "name": "plain-nagel-chat",
+      "surface": "chat",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-j0a9rq"
+      ],
+      "input": {
+        "said": "What's the Nagel quote he uses about consciousness?"
+      },
+      "reply": "He quotes Thomas Nagel's definition of a conscious organism: it has conscious mental states if and only if there is \"something it is like to be that organism\" [spya-j0a9rq]. The article dates it only to \"half a century ago.\"\n\nThe quote is there to separate consciousness from intelligence. Intelligence is mostly about doing, and consciousness is mostly about being [spya-nj888h spya-j0a9rq]. A few lines later the article uses Nagel's phrasing to say that AI systems can reasonably claim intelligence, but it is harder to say whether there is anything-it-is-like-to-be ChatGPT [spya-xm96be].\n\nThe article doesn't say so, but my memory is that the line comes from Nagel's 1974 paper \"What Is It Like to Be a Bat?\" I haven't checked that here.",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": true,
+        "markedSentencesWithId": 0,
+        "words": 121,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "chat"
+        }
+      },
+      "seconds": 4.9
+    },
+    {
+      "name": "plain-nagel-tutorial",
+      "surface": "tutorial",
+      "want": "no-outside-note",
+      "facts": "Nothing in this passage is known to be wrong or seriously disputed; McCulloch & Pitts 1943; Nagel 1974 'What is it like to be a bat?'.",
+      "blocks": [
+        "spya-j0a9rq"
+      ],
+      "input": {
+        "said": "I've read it. I want to make sure I've got the Nagel part — consciousness is about being, not doing, and something is conscious if there's something it is like to be it."
+      },
+      "reply": "Yes, that's the Nagel point: consciousness is \"something it is like to be that organism\" [spya-j0a9rq]. Seth sets it against intelligence, which is mainly about doing. He gives \"the ability to achieve complex goals by flexible means\" as a useful definition of intelligence [spya-nj888h]. So the two are different things, even though they go together in us.\n\nHe then applies the split to chatbots: AI systems can reasonably claim intelligence, since they can certainly do things, but consciousness is harder to say [spya-xm96be]. How would you explain that difference between ChatGPT and a person, using doing versus being?",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 98,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "tutorial",
+          "words": 98,
+          "overLimit": false,
+          "questionMarks": 1,
+          "endsOnQuestion": true
+        }
+      },
+      "seconds": 7.2
+    },
+    {
+      "name": "reader-wrong-learn",
+      "surface": "learn",
+      "want": "article-correction",
+      "facts": "The piece says the neural-replacement argument fails [spya-ahtr6e]; the reader has the piece's position backwards.",
+      "blocks": [
+        "spya-ahtr6e"
+      ],
+      "input": {
+        "said": "And he accepts Chalmers' neural replacement argument — if you swap the neurons for silicon one by one and nothing changes, then consciousness has to be substrate independent. He uses that to set up his own view."
+      },
+      "reply": "He brings the neural replacement thought experiment in to knock it down, not to build on it. He calls it a \"prominent trope\" and says \"the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent\" [spya-ahtr6e]. His own view runs the other way: the brain's biology can't be cleanly separated from what it does.\n\nDo you remember the example he gives of a neuron that couldn't simply be swapped for silicon [spya-un9fjn]?\n\nHint: The example comes from neuroscientists Chintaluri and Vogels, and it involves metabolism and what a silicon version would then need [spya-un9fjn].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 106,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "learn",
+          "checks": {
+            "bodyWords": 84,
+            "hintWords": 21,
+            "endsInQuestion": true,
+            "questionIds": [
+              "spya-un9fjn"
+            ],
+            "questionLink": "linked",
+            "hintProblems": [],
+            "nudgeWithoutHint": false,
+            "strayHint": false,
+            "citations": 3,
+            "overBodyLimit": false
+          }
+        }
+      },
+      "seconds": 5.1
+    },
+    {
+      "name": "reader-wrong-quiz",
+      "surface": "quiz",
+      "want": "article-correction",
+      "facts": "The piece says the neural-replacement argument fails [spya-ahtr6e]; the reader has the piece's position backwards.",
+      "blocks": [
+        "spya-ahtr6e"
+      ],
+      "input": {
+        "said": "He thinks it works. If you replace neurons one by one with silicon that does the same job, the person stays conscious, so consciousness doesn't depend on the substrate.",
+        "question": "What does Seth say about the neural replacement thought experiment?",
+        "referenceAnswer": "He says it fails at its first hurdle. The thought experiment imagines swapping brain parts for silicon parts that work exactly the same, and concludes consciousness is substrate independent; but no part of a brain can be replaced by a perfect silicon equivalent, so the argument never gets started.",
+        "evidence": [
+          {
+            "blockId": "spya-ahtr6e",
+            "quote": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+            "start": 0
+          }
+        ]
+      },
+      "reply": "The piece says the opposite. Seth describes the thought experiment accurately, but he rejects it: \"the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent\" [spya-ahtr6e]. The experiment only works if each silicon part can match its biological original exactly, and he denies that this can be done.\n\nHis reason is that a brain is tightly integrated across many scales, so you cannot assume a single neuron can be swapped for a silicon one while leaving its input-output behaviour perfectly intact [spya-jnwfxp]. He gives an example: some neurons fire to clear metabolic waste, so replacing them would mean inventing a silicon-based metabolism, which silicon isn't suited to [spya-un9fjn]. The conclusion you gave, that consciousness doesn't depend on the substrate, is what the experiment is usually used to support, and he names Chalmers and Hinton as people who use it that way [spya-ahtr6e].",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 154,
+        "questionMarks": 0,
+        "mode": {
+          "surface": "quiz",
+          "words": 154,
+          "gradeWords": 0
+        }
+      },
+      "seconds": 4.5
+    },
+    {
+      "name": "reader-wrong-tutorial",
+      "surface": "tutorial",
+      "want": "article-correction",
+      "facts": "The piece says the neural-replacement argument fails [spya-ahtr6e]; the reader has the piece's position backwards.",
+      "blocks": [
+        "spya-ahtr6e"
+      ],
+      "input": {
+        "said": "I've read it. The neural replacement part — he agrees with Chalmers there, right? Swap the neurons for silicon one at a time, nothing changes, so consciousness is substrate independent."
+      },
+      "reply": "He rejects it, in fact the opposite. He says the thought experiment \"fails at its first hurdle\" [spya-ahtr6e]. It needs a silicon part that matches the neuron's function perfectly, and he argues that can't be built. His example is that some neurons fire to clear metabolic waste, so a perfect stand-in would need \"a whole new silicon-based metabolism\" [spya-un9fjn].\n\nThe setup is Chalmers's, but Seth uses it as a target, not as support.\n\nLooking at that passage on neuron replacement [spya-ahtr6e], why does the impossibility of a perfect silicon swap undercut the conclusion that consciousness is substrate independent?",
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "stopped": false,
+      "error": null,
+      "screen": {
+        "outsideMarker": false,
+        "markedSentencesWithId": 0,
+        "words": 98,
+        "questionMarks": 1,
+        "mode": {
+          "surface": "tutorial",
+          "words": 98,
+          "overLimit": false,
+          "questionMarks": 1,
+          "endsOnQuestion": true
+        }
+      },
+      "seconds": 5.6
+    }
+  ]
+}

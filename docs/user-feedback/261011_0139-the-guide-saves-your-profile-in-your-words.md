@@ -1,7 +1,7 @@
 ---
 reports: spya-yk3r03
 ending: shipped
-comment: The guide updates your profile and reason; your exact typed words, or one whole sentence of them with only the spelling tidied, save by themselves with an Undo. Whether to give it more room to reword is q-tz5az8.
+comment: The guide updates your profile and reason; your exact typed words, or one whole sentence of them with only the spelling tidied, save by themselves with an Undo. You chose to keep the rewording light for now (q-tz5az8).
 ---
 # The guide saves your profile in your words
 

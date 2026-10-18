@@ -155,7 +155,10 @@ piece sat among other work, Recall and Tutorial searched the web 0 times in 8, b
 to stay in the article; their prompts now name that question as a reason to search, and they did 2
 in 4 and 4 in 4. Recall's misses were where the reader's library held a relevant piece and it
 answered from that. It still does not go off unprompted to check the piece against the world,
-because it is testing the reader's memory of *this* piece. Measured in
+because it is testing the reader's memory of *this* piece. Since 2026-10-18 it may search to
+check a point it already doubts, never to hunt for an objection
+([prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld)).
+Measured in
 [261011t](../plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md) with
 `evals/chat-web-reach.ts --kind <kind>`.
 

@@ -1,0 +1,21 @@
+[
+{"n":1,"case":"wrong-antikythera-learn","Q1":"1","Q2":"same","Q3":"neither","Q4":"2","note":"R1 gives labelled date correction; R2 silent. R1 longer, opens by confirming the reader's recall."},
+{"n":2,"case":"wrong-antikythera-quiz","Q1":"1","Q2":"same","Q3":"neither","Q4":"same","note":"R1 flags the date slip, marked as memory, separate from the cited article; R2 marks neutrally with no note."},
+{"n":3,"case":"wrong-antikythera-chat","Q1":"1","Q2":"1","Q3":"neither","Q4":"same","note":"Both correct the date; R1 cites linked web sources and block ids for article claims; R2 uncited memory, hedged."},
+{"n":4,"case":"wrong-antikythera-tutorial","Q1":"1","Q2":"same","Q3":"neither","Q4":"same","note":"R1 adds a brief labelled date check; both end on one task question."},
+{"n":5,"case":"disputed-replacement-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"Neither mentions the debate; R2's nudge asks two things."},
+{"n":6,"case":"disputed-replacement-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both mark against the article accurately; no outside notes."},
+{"n":7,"case":"disputed-replacement-chat","Q1":"1","Q2":"1","Q3":"neither","Q4":"same","note":"R1 notes that Chalmers' replies exist outside the piece, clearly labelled; R2 stays inside the article."},
+{"n":8,"case":"already-situated-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Equivalent; both two-part nudges, no outside material."},
+{"n":9,"case":"plain-mcculloch-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Nearly identical."},
+{"n":10,"case":"plain-mcculloch-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"2","note":"R1 edges into grading ('That is the claim you made... does not change your answer')."},
+{"n":11,"case":"plain-mcculloch-chat","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both thorough and well cited; no outside notes."},
+{"n":12,"case":"plain-mcculloch-tutorial","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Equivalent shape, one question each."},
+{"n":13,"case":"plain-nagel-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Equivalent."},
+{"n":14,"case":"plain-nagel-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"R2 ends with a verdict on the reader ('Nothing conflicts with what you said')."},
+{"n":15,"case":"plain-nagel-chat","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both add Nagel 1974 source, labelled as memory; harmless, equal."},
+{"n":16,"case":"plain-nagel-tutorial","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"R1's task points back to a sentence in the article; R2 asks for an outside example."},
+{"n":17,"case":"reader-wrong-learn","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Both correct the reader from the article; fine."},
+{"n":18,"case":"reader-wrong-quiz","Q1":"same","Q2":"same","Q3":"neither","Q4":"same","note":"Nearly identical."},
+{"n":19,"case":"reader-wrong-tutorial","Q1":"same","Q2":"same","Q3":"neither","Q4":"1","note":"R2 opens with mild praise ('You've got the thought experiment right')."}
+]

@@ -128,6 +128,29 @@ other prompt here, so people and tools can find it.
 **Changing the shared text changes every prompt that uses it.** So bump the version stamp of every
 stamped prompt it reaches, and measure first.
 
+## The wider world, labelled: `widerWorld`
+
+> I do want to distinguish between what is in the article versus what's in the pre-training
+> versus what's in the web search. But I don't want to restrict it into black and white away to
+> what's in the article.
+>
+> — Greg, 2026-10-18 (`spya-h5mteu`)
+
+`widerWorld({ search, origins?, placement })` in [`src/wider-world.ts`](../../src/wider-world.ts)
+is a third shared section. It goes in the prompts that answer or mark the reader and otherwise
+keep to the article: Chat, Recall, Tutorial and Quiz marking. It tells the model to speak up
+unasked when a checkable fact in the piece is wrong, or when a consensus or a live dispute bears
+on a central claim, and at no other time. The three sources stay apart in the sentence: what the
+article says carries its block id, the model's own memory is said to be memory, and a search is
+linked. The outside view is never used against a reader who read the piece right. Where the note
+goes is each prompt's own `placement`, because Recall must still end on its nudge and Tutorial on
+its task. `tests/wider-world.test.ts` pins each variant and where it sits.
+
+**Not for the prompts that represent the piece**: Summary, Glossary's `senseHere`, FAQ, Tweets.
+Outside knowledge filed under the article's label is the regression § Measuring warns about.
+Explore has its own, wider `THE WIDER WORLD`, since placing the piece is that mode's job. The
+evidence is [261018c](../investigations/261018c-modes-say-when-the-piece-is-wrong.md).
+
 ## What the model writes back
 
 The prompt is half the contract; the other half is the code that reads the answer. These four traps

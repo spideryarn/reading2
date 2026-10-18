@@ -213,6 +213,12 @@ contradicts the reader *by itself*, disagreeing with the author is not getting i
 shorter answer is not a worse one. What Quiz adds is the case Recall does not have: the question has
 a right answer and the reader missed it. Even then the reply states what the article says and stops.
 
+**When the piece itself is wrong** (since 2026-10-18, Greg's `spya-h5mteu`), the mark adds one
+sentence after what the article says, labelled as from memory and unchecked. For example: the
+date the piece gives is not the usual one. The mark cannot search. The reader's answer is still
+judged against the article alone, so a reader who repeated the piece's wrong date is not told
+they are wrong. [prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
+
 ### The rule is counted, not enforced
 
 The prompt names the grading words by hand — *"correctly"*, *"tracks the article"*, *"holds up"* —

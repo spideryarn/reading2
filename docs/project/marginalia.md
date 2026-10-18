@@ -240,6 +240,15 @@ owner-only rule as the words, so they ride on the call that was already there, s
   it has the passage's card and the jump flashes the checked target words.
 - **Owner only**, as the words are.
 
+**A note about the world outside the piece** (a source, a correction, how others see a claim)
+would be a note whose content is *not* in the article. The labels and the trigger Chat, Recall,
+Tutorial and Quiz use for that since 2026-10-18 are one shared section, `widerWorld()` in
+[`src/wider-world.ts`](../../src/wider-world.ts):
+[prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
+The relations call does not use it: its four article kinds keep to the article, and its one
+memory kind, *Origin* below, is about where a quotation comes from rather than whether the piece
+is right, and is labelled *AI memory, unchecked* on the note.
+
 ### Origin notes: where a quote or allusion comes from, from memory
 
 > the annotations should be the useful stuff, the stuff that saves the user a click, the things that

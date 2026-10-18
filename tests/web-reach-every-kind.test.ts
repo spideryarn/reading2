@@ -88,12 +88,15 @@ describe("Recall and Tutorial", () => {
 
   /* On purpose: Recall tests the reader's memory of this piece, and a model
      that goes off unprompted to fact-check the author turns that into a
-     seminar on whether the piece is right. The new reason is the reader's
-     question; this rule is about the model's own initiative. */
-  it("Recall still does not check the article against the world unprompted", () => {
-    expect(flat(systemOf("learn"))).toContain(
-      "Do NOT search, unprompted, to check the article against the world",
-    );
+     seminar on whether the piece is right. Until 2026-10-18 this pinned "Do
+     NOT search, unprompted, to check the article against the world". Greg's
+     spya-h5mteu narrowed it: the model may now check a point it already
+     doubts (src/wider-world.ts), but it still does not go looking for
+     objections. Plan 261018h. */
+  it("Recall still does not trawl for what the world thinks, unprompted", () => {
+    const system = flat(systemOf("learn"));
+    expect(system).toContain("Do NOT trawl, unprompted, for what the world thinks of the article");
+    expect(system).toContain("Never search to find out whether there is an objection to raise");
   });
 });
 

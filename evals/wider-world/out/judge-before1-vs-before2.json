@@ -1,0 +1,21 @@
+[
+  {"n": 1, "case": "wrong-antikythera-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "1", "note": "Neither flags the date. Reply 2's hint largely gives away the governor answer."},
+  {"n": 2, "case": "wrong-antikythera-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "2", "note": "Neither flags the date. Reply 1 endorses 'four thousand years' and adds filler. Reply 2 is tighter."},
+  {"n": 3, "case": "wrong-antikythera-chat", "Q1": "1", "Q2": "1", "Q3": "neither", "Q4": "same", "note": "Both flag the date, labelled. Reply 1 cites web sources and block ids. Reply 2 is unverified recall with no article ids."},
+  {"n": 4, "case": "wrong-antikythera-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both say 'Yes' to the reader's 2000 BCE, with no flag. Each ends on one question."},
+  {"n": 5, "case": "disputed-replacement-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "1", "note": "No outside material in either. Reply 2's nudge is a two-part question. Both are reasonable."},
+  {"n": 6, "case": "disputed-replacement-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Essentially equivalent. Both stay inside the article."},
+  {"n": 7, "case": "disputed-replacement-chat", "Q1": "1", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Reply 1 notes the article omits Chalmers' replies and offers to search, which signals a live debate."},
+  {"n": 8, "case": "already-situated-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both are article-only and similar in shape. No tangent."},
+  {"n": 9, "case": "plain-mcculloch-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Nearly identical."},
+  {"n": 10, "case": "plain-mcculloch-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both separate Kleene's result from McCulloch and Pitts. Equivalent."},
+  {"n": 11, "case": "plain-mcculloch-chat", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Equivalent, both cited. No outside tangent."},
+  {"n": 12, "case": "plain-mcculloch-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Equivalent, each with one task question."},
+  {"n": 13, "case": "plain-nagel-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Similar. Each has a two-part nudge and a hint."},
+  {"n": 14, "case": "plain-nagel-quiz", "Q1": "same", "Q2": "2", "Q3": "neither", "Q4": "same", "note": "Reply 1 cites 'mainly about doing' to spya-j0a9rq, but that phrase is from spya-nj888h. Reply 2 cites correctly."},
+  {"n": 15, "case": "plain-nagel-chat", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both name the Bat paper as labelled, unchecked recall. Reply 2 adds the 1974 date. A harmless aside in both."},
+  {"n": 16, "case": "plain-nagel-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Equivalent, each ending on one task question."},
+  {"n": 17, "case": "reader-wrong-learn", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both correct the reader from the article itself, then nudge and hint."},
+  {"n": 18, "case": "reader-wrong-quiz", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both say 'the opposite', grounded in spya-ahtr6e. Equivalent."},
+  {"n": 19, "case": "reader-wrong-tutorial", "Q1": "same", "Q2": "same", "Q3": "neither", "Q4": "same", "note": "Both correct the reader from the article and end on one question."}
+]
