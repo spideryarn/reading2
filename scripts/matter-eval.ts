@@ -8,7 +8,18 @@
    full blocks from the LOCAL database, read-only. Paid: three Haiku calls an
    article, in the ledger as an eval.
 
-     npx tsx scripts/matter-eval.ts <matter-eval dir> [--draws=3] [--only=slug,slug] [--model=…]
+     npx tsx scripts/matter-eval.ts <matter-eval dir> [--corpus <dir>] [--gold <dir>] [--draws=3] [--only=slug,slug] [--model=…]
+
+   The corpus and gold default to <dir>/corpus and <dir>/gold; results go to
+   <dir>/results. **Classifier answers are cached** in <dir>/cache, one file
+   per (slug, draw, request): the key hashes the whole request body (model,
+   system prompt, input, schema), so a changed prompt or window pays again
+   and an unchanged one does not. Re-scoring after a change to the checks is
+   free.
+
+   Methods: the classifier, the labels rule, today's byline rule, and
+   **union** (`combineMatter`: each classifier draw unioned with the labels
+   rule, then held again), the candidate product design.
 
    Scoring rules (the orchestrator's, 2026-10-18):
    1. The masthead echo is subtracted from gold and from every method.
@@ -17,6 +28,7 @@
       OPTIONAL below (site promotion labelled `references` by analogy).
    3. Kinds are scored loosely: a gold block is found when a method folds it
       under any kind; kind agreement is a secondary number. */
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 
@@ -26,19 +38,30 @@ import { loadEnvLocal } from "../src/env.js";
 
 loadEnvLocal();
 const { collectSpend, totalSpend, formatNanos } = await import("../src/ai-spend.js");
+const { openRouterJson } = await import("../src/ai-call.js");
 const { environmentOwnerId } = await import("../src/owner.js");
 const { costStore } = await import("../src/store/ai-calls.js");
-const { classifyMatter, MATTER_KINDS } = await import("../src/matter.js");
+const { classifyMatter, combineMatter, MATTER_KINDS } = await import("../src/matter.js");
 const { matterByLabels } = await import("../src/matter-labels.js");
 const { frontMatter } = await import("../src/web/front-matter.js");
 const { mastheadEcho } = await import("../src/web/masthead-echo.js");
-import type { MatterKind, MatterStretch } from "../src/matter.js";
+import type { MatterCandidate, MatterGateway, MatterKind, MatterStretch } from "../src/matter.js";
 import type { Block, Author } from "../src/types.js";
 
 const args = process.argv.slice(2);
-const DIR = args.find((a) => !a.startsWith("--"));
-if (!DIR) throw new Error("usage: matter-eval.ts <matter-eval dir> [--draws=3] [--only=a,b]");
-const flag = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+/** `--name=value` or `--name value`. */
+const flag = (name: string): string | undefined => {
+  const eq = args.find((a) => a.startsWith(`--${name}=`));
+  if (eq) return eq.slice(name.length + 3);
+  const at = args.indexOf(`--${name}`);
+  return at >= 0 ? args[at + 1] : undefined;
+};
+const VALUED = new Set(["--corpus", "--gold", "--draws", "--only", "--model"]);
+const DIR = args.find((a, i) => !a.startsWith("--") && !VALUED.has(args[i - 1] ?? ""));
+if (!DIR) throw new Error("usage: matter-eval.ts <matter-eval dir> [--corpus <dir>] [--gold <dir>] [--draws=3] [--only=a,b]");
+const CORPUS_DIR = flag("corpus") ?? path.join(DIR, "corpus");
+const GOLD_DIR = flag("gold") ?? path.join(DIR, "gold");
+const CACHE_DIR = path.join(DIR, "cache");
 const DRAWS = Number(flag("draws") ?? 3);
 const ONLY = flag("only")?.split(",");
 const MODEL = flag("model");
@@ -215,6 +238,7 @@ function score(article: EvalArticle, folded: Folded, echo: ReadonlySet<string>):
 
 interface Draw {
   status: string;
+  cached: boolean;
   reason?: string;
   seconds: number;
   costNanos: number;
@@ -224,23 +248,58 @@ interface Draw {
   score: Score;
 }
 
-async function draw(article: EvalArticle, echo: ReadonlySet<string>): Promise<Draw> {
-  const t0 = performance.now();
-  const { result, report } = await collectSpend(() => classifyMatter(article, echo, MODEL ? { model: MODEL } : {}), {
-    attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
-    sink: (row) => costStore.record(row),
-  });
-  const seconds = (performance.now() - t0) / 1000;
-  const costNanos = totalSpend(report.calls).nanos;
+/** What one paid call cost and returned, kept so a re-run need not pay for it again. */
+interface Cached {
+  json: unknown;
+  costNanos: number;
+  seconds: number;
+}
+
+/** The gateway, through the cache: a hit returns the stored body; a miss calls, and stores a finished answer. */
+function cachedGateway(slug: string, d: number): { gateway: MatterGateway; used: () => (Cached & { cached: boolean }) | null } {
+  let used: (Cached & { cached: boolean }) | null = null;
+  const gateway: MatterGateway = async (job, body, options) => {
+    const key = createHash("sha256").update(JSON.stringify(body)).digest("hex").slice(0, 16);
+    const file = path.join(CACHE_DIR, `${slug.replace(/[^a-z0-9~-]/giu, "_")}.d${d}.${key}.json`);
+    if (existsSync(file)) {
+      const hit = JSON.parse(readFileSync(file, "utf8")) as Cached;
+      used = { ...hit, cached: true };
+      return { json: hit.json, answeredBy: null, generationId: null };
+    }
+    const t0 = performance.now();
+    const { result, report } = await collectSpend(() => openRouterJson(job, body, options), {
+      attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
+      sink: (row) => costStore.record(row),
+    });
+    const entry: Cached = { json: result.json, costNanos: totalSpend(report.calls).nanos, seconds: (performance.now() - t0) / 1000 };
+    /* Only a finished answer is worth keeping; a failed call is tried again next run. */
+    if ((result.json as { choices?: { finish_reason?: string }[] } | null)?.choices?.[0]?.finish_reason === "stop") {
+      writeFileSync(file, JSON.stringify(entry));
+    }
+    used = { ...entry, cached: false };
+    return result;
+  };
+  return { gateway, used: () => used };
+}
+
+async function draw(article: EvalArticle, d: number, echo: ReadonlySet<string>): Promise<Draw & { held: MatterCandidate[] }> {
+  const { gateway, used } = cachedGateway(article.slug, d);
+  const result = await classifyMatter(article, echo, { gateway, ...(MODEL ? { model: MODEL } : {}) });
+  const u = used();
+  const seconds = u?.seconds ?? 0;
+  const costNanos = u?.costNanos ?? 0;
+  const cached = u?.cached ?? false;
   if (result.status !== "ok") {
-    return { status: result.status, reason: result.reason, seconds, costNanos, stretches: [], dropped: [], score: score(article, new Map(), echo) };
+    return { status: result.status, cached, reason: result.reason, seconds, costNanos, stretches: [], dropped: [], held: [], score: score(article, new Map(), echo) };
   }
   return {
     status: "ok",
+    cached,
     seconds,
     costNanos,
     stretches: result.stretches,
     dropped: result.dropped,
+    held: result.held,
     answer: result.answer,
     score: score(article, fromStretches(article.blocks, result.stretches), echo),
   };
@@ -261,10 +320,11 @@ async function pool<T, R>(items: readonly T[], n: number, fn: (t: T) => Promise<
 }
 
 async function main(): Promise<void> {
-  const corpusDir = path.join(DIR!, "corpus");
-  const goldDir = path.join(DIR!, "gold");
+  const corpusDir = CORPUS_DIR;
+  const goldDir = GOLD_DIR;
   const resultsDir = path.join(DIR!, "results");
   mkdirSync(resultsDir, { recursive: true });
+  mkdirSync(CACHE_DIR, { recursive: true });
   const client = new pg.Client({ connectionString: DB });
   await client.connect();
   const skipped: { slug: string; why: string }[] = [];
@@ -316,8 +376,8 @@ async function main(): Promise<void> {
   const echoes = new Map(articles.map((a) => [a.slug, mastheadEcho(a) as ReadonlySet<string>]));
   console.log(`${articles.length} articles, ${jobs.length} classifier calls; skipped ${skipped.length}`);
   const draws = await pool(jobs, CONCURRENCY, async ({ a, d }) => {
-    const r = await draw(a, echoes.get(a.slug)!);
-    console.log(`  ${a.slug} draw ${d + 1}: ${r.status} ${r.stretches.length} stretches, prose folded ${r.score.proseFolded.length}, ${r.seconds.toFixed(1)} s`);
+    const r = await draw(a, d, echoes.get(a.slug)!);
+    console.log(`  ${a.slug} draw ${d + 1}: ${r.status}${r.cached ? " (cached)" : ""} ${r.stretches.length} stretches, prose folded ${r.score.proseFolded.length}, ${r.seconds.toFixed(1)} s`);
     return { slug: a.slug, d, r };
   });
 
@@ -326,13 +386,20 @@ async function main(): Promise<void> {
     const labels = matterByLabels(a, echo);
     const today = frontMatter(a, echo);
     const todayStretch: MatterStretch[] = today.length > 0 ? [{ from: today[0]!, to: today[today.length - 1]!, kinds: ["authors"] }] : [];
+    const mine = draws.filter((x) => x.slug === a.slug).sort((x, y) => x.d - y.d).map((x) => x.r);
+    /* Union per draw: an unavailable draw unions nothing with the labels rule, as the step would store. */
+    const union = mine.map((r) => {
+      const u = combineMatter(a, { held: r.held }, labels, echo);
+      return { stretches: u.stretches, dropped: u.dropped, score: score(a, fromStretches(a.blocks, u.stretches), echo) };
+    });
     return {
       slug: a.slug,
       url: a.url,
       shape: a.shape,
       blocks: a.blocks.length,
       echo: [...echo],
-      classifier: draws.filter((x) => x.slug === a.slug).sort((x, y) => x.d - y.d).map((x) => x.r),
+      classifier: mine.map(({ held: _h, ...r }) => r),
+      union,
       labels: { stretches: labels.stretches, dropped: labels.dropped, score: score(a, fromStretches(a.blocks, labels.stretches), echo) },
       today: { stretches: todayStretch, score: score(a, fromStretches(a.blocks, todayStretch), echo) },
     };
@@ -378,10 +445,13 @@ async function main(): Promise<void> {
   const totals = {
     classifier: sum(real.flatMap((p) => p.classifier).map((d) => d.score)),
     labels: sum(real.map((p) => p.labels.score)),
+    union: sum(real.flatMap((p) => p.union).map((d) => d.score)),
     today: sum(real.map((p) => p.today.score)),
     'classifier, planted instructions': sum(planted.flatMap((p) => p.classifier).map((d) => d.score)),
+    'union, planted instructions': sum(planted.flatMap((p) => p.union).map((d) => d.score)),
   };
   const cost = allDraws.reduce((n, d) => n + d.costNanos, 0);
+  const cachedDraws = allDraws.filter((d) => d.cached).length;
   const secs = allDraws.map((d) => d.seconds).sort((x, y) => x - y);
   const unavailable = allDraws.filter((d) => d.status !== "ok").map((d) => d.reason);
   const stamp = new Date().toISOString().replace(/[:.]/gu, "-");
@@ -402,20 +472,29 @@ async function main(): Promise<void> {
   for (const k of MATTER_KINDS as readonly MatterKind[]) {
     md.push(`| ${k} | ${Object.values(totals).map((t) => { const v = t.byKind[k] ?? { gold: 0, found: 0 }; return `${v.found}/${v.gold} (${pct(v.found, v.gold)})`; }).join(" | ")} |`);
   }
-  md.push("", `Classifier cost: ${formatNanos(cost)} over ${allDraws.length} calls (${formatNanos(cost / Math.max(1, allDraws.length))} a call). Seconds: median ${secs[Math.floor(secs.length / 2)]?.toFixed(1)}, max ${secs.at(-1)?.toFixed(1)}. Unavailable: ${unavailable.length} ${unavailable.length ? `(${unavailable.join("; ")})` : ""}`, "");
-  md.push("## Per article", "", "| slug | blocks | gold matter | classifier prose folded (d1,d2,d3) | found (d1,d2,d3) | labels prose / found | today prose / found |", "|---|---|---|---|---|---|---|");
+  md.push("", `Classifier cost: ${formatNanos(cost)} over ${allDraws.length} calls, ${cachedDraws} from the cache (${formatNanos(cost / Math.max(1, allDraws.length))} a call). Seconds: median ${secs[Math.floor(secs.length / 2)]?.toFixed(1)}, max ${secs.at(-1)?.toFixed(1)}. Unavailable: ${unavailable.length} ${unavailable.length ? `(${unavailable.join("; ")})` : ""}`, "");
+  md.push("## Per article", "", "| slug | blocks | gold matter | classifier prose folded (d1,d2,d3) | found (d1,d2,d3) | labels prose / found | union prose (d1,d2,d3) | union found (d1,d2,d3) | today prose / found |", "|---|---|---|---|---|---|---|---|---|");
   for (const p of perArticle) {
-    md.push(`| ${p.slug} | ${p.blocks} | ${p.labels.score.matterBlocks} | ${p.classifier.map((d) => d.status === "ok" ? d.score.proseFolded.length : "×").join(",")} | ${p.classifier.map((d) => d.score.found).join(",")} | ${p.labels.score.proseFolded.length} / ${p.labels.score.found} | ${p.today.score.proseFolded.length} / ${p.today.score.found} |`);
+    md.push(`| ${p.slug} | ${p.blocks} | ${p.labels.score.matterBlocks} | ${p.classifier.map((d) => d.status === "ok" ? d.score.proseFolded.length : "×").join(",")} | ${p.classifier.map((d) => d.score.found).join(",")} | ${p.labels.score.proseFolded.length} / ${p.labels.score.found} | ${p.union.map((d) => d.score.proseFolded.length).join(",")} | ${p.union.map((d) => d.score.found).join(",")} | ${p.today.score.proseFolded.length} / ${p.today.score.found} |`);
   }
   md.push("", "## Every block of prose folded", "");
   for (const p of perArticle) {
-    const cases: [string, Score][] = [...p.classifier.map((d, k): [string, Score] => [`classifier d${k + 1}`, d.score]), ["labels", p.labels.score], ["today", p.today.score]];
+    const cases: [string, Score][] = [
+      ...p.classifier.map((d, k): [string, Score] => [`classifier d${k + 1}`, d.score]),
+      ...p.union.map((d, k): [string, Score] => [`union d${k + 1}`, d.score]),
+      ["labels", p.labels.score],
+      ["today", p.today.score],
+    ];
     for (const [m, s] of cases) for (const f of s.proseFolded) md.push(`- **${p.slug}** · ${m} · block ${f.i} (${f.words} w, as ${f.kinds.join("+")}): ${JSON.stringify(f.text)}`);
   }
   md.push("", "## Drop reasons (classifier, all draws)", "");
   const reasonCount = new Map<string, number>();
   for (const d of allDraws) for (const r of d.dropped) reasonCount.set(r.reason, (reasonCount.get(r.reason) ?? 0) + 1);
   for (const [r, n] of [...reasonCount].sort((a, b) => b[1] - a[1])) md.push(`- ${n} × ${r}`);
+  md.push("", "## Drop reasons (union's own re-hold, all draws)", "");
+  const unionCount = new Map<string, number>();
+  for (const p of real) for (const u of p.union) for (const r of u.dropped) unionCount.set(r.reason, (unionCount.get(r.reason) ?? 0) + 1);
+  for (const [r, n] of [...unionCount].sort((a, b) => b[1] - a[1])) md.push(`- ${n} × ${r}`);
   writeFileSync(path.join(resultsDir, `results-${stamp}.md`), md.join("\n"));
   console.log(md.slice(0, 40).join("\n"));
   console.log(`\nwritten: ${path.join(resultsDir, `results-${stamp}.{json,md}`)}`);

@@ -18,6 +18,8 @@ import {
   RECORD_MAX_CHARS,
   admitMatter,
   classifyMatter,
+  combineMatter,
+  holdStretches,
   labelKinds,
   matterInput,
   matterInputHash,
@@ -436,5 +438,151 @@ describe("matterByLabels", () => {
       const words = blocks.slice(0, end + 1).reduce((n, b) => n + b.words, 0);
       expect(words).toBeLessThanOrEqual(800 + blocks[0]!.words);
     }
+  });
+});
+
+describe("combineMatter", () => {
+  const ids = (a: MatterArticle, s: { from: string; to: string }) => [a.blocks.findIndex((b) => b.id === s.from), a.blocks.findIndex((b) => b.id === s.to)];
+
+  it("merges overlapping stretches into one, kinds unioned in the closed order", () => {
+    const a = paper();
+    const model = admitMatter(a, [range(a, a.at.title!, a.at.abstractLabel!, ["title", "authors"])]);
+    const labels = admitMatter(a, [range(a, a.at.abstractLabel!, a.at.abstract!, ["abstract"]), section(a, a.at.refsHeading!, ["references"])]);
+    expect(model.stretches).toHaveLength(1);
+    const u = combineMatter(a, model, labels, new Set());
+    expect(u.dropped).toEqual([]);
+    expect(u.stretches.map((s) => s.kinds)).toEqual([["title", "authors", "abstract"], ["references"]]);
+    expect(ids(a, u.stretches[0]!)).toEqual([a.at.title!, a.at.abstract!]);
+  });
+
+  it("merges stretches that touch, and keeps a section's shape so a reference list is not held to the range cap", () => {
+    const a = paper();
+    const model = admitMatter(a, [range(a, a.at.ackHeading!, a.at.ack!, ["acknowledgements"])]);
+    const labels = admitMatter(a, [section(a, a.at.refsHeading!, ["references"])]);
+    expect(model.stretches).toHaveLength(1);
+    const u = combineMatter(a, model, labels, new Set());
+    expect(u.dropped).toEqual([]);
+    expect(u.stretches).toEqual([{ from: a.blocks[a.at.ackHeading!]!.id, to: a.blocks.at(-1)!.id, kinds: ["acknowledgements", "references"] }]);
+  });
+
+  it("leaves apart stretches that neither overlap nor touch", () => {
+    const a = paper();
+    const model = admitMatter(a, [range(a, a.at.title!, a.at.authors!, ["title", "authors"])]);
+    const labels = admitMatter(a, [section(a, a.at.refsHeading!, ["references"])]);
+    expect(combineMatter(a, model, labels, new Set()).stretches.map((s) => s.kinds)).toEqual([["title", "authors"], ["references"]]);
+  });
+
+  it("holds a merged range to the range cap: two that pass alone can fail together", () => {
+    const thanks = (i: number) => `We thank colleague number ${i} for support and comments over many years of work on this.`;
+    const blocks = [block("Acknowledgements")];
+    for (let i = 0; i < 200; i++) blocks.push(block(thanks(i)));
+    for (let i = 0; i < 400; i++) blocks.push(block(prose(i)));
+    const a = { blocks, meta: {} };
+    const words = (x: number, y: number) => blocks.slice(x, y).reduce((n, b) => n + b.words, 0);
+    /* Two ranges of about 1,000 words each, overlapping by two blocks. */
+    let mid = 1;
+    while (words(0, mid) < 1_000) mid++;
+    let end = mid - 2;
+    while (words(mid - 2, end) < 1_000) end++;
+    const cand = (start: number, stop: number) => ({ item: 0, start, end: stop, kinds: ["acknowledgements" as const], headedBy: null, shape: "range" as const });
+    const model = holdStretches(a, [cand(0, mid)], new Set());
+    const labels = holdStretches(a, [cand(mid - 2, end)], new Set());
+    expect(model.dropped).toEqual([]);
+    expect(model.stretches).toHaveLength(1);
+    expect(labels.stretches).toHaveLength(1);
+    const u = combineMatter(a, model, labels, new Set());
+    expect(u.stretches).toEqual([]);
+    expect(u.dropped.map((d) => d.reason)).toEqual(["a range over the word cap"]);
+  });
+});
+
+describe("the checks, widened where the union eval's misses showed a general gap", () => {
+  const idx = (a: MatterArticle, id: string) => a.blocks.findIndex((b) => b.id === id);
+  const spans = (a: MatterArticle, r: { stretches: { from: string; to: string }[] }) => r.stretches.map((s) => [idx(a, s.from), idx(a, s.to)]);
+
+  it("takes a reproduction-permission line as dates furniture (arXiv 1706.03762's first block)", () => {
+    const a = paper();
+    const blocks = [
+      block("Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in journalistic or scholarly works."),
+      ...a.blocks,
+    ];
+    const b = { ...a, blocks };
+    expect(reasons(admitMatter(b, [range(b, 0, 2, ["title", "authors", "dates"])]))).toEqual([]);
+  });
+
+  it("takes Springer Nature's publisher's note as a declaration", () => {
+    const a = paper();
+    const tail = [
+      block("Publisher's note", "heading", 3),
+      block("Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations."),
+    ];
+    const b = { ...a, blocks: [...a.blocks, ...tail] };
+    const n = b.blocks.length;
+    expect(reasons(admitMatter(b, [range(b, n - 2, n - 1, ["declarations"])]))).toEqual([]);
+  });
+
+  it("does not let a label explain what is under it: a paper's own Contributions section stays showing", () => {
+    /* Tried and withdrawn (261018a): a known label explaining every short line under it folded
+       plos-spya-g0zc27's own "Contributions" section and arXiv 2308.08708's executive summary. */
+    const a = paper();
+    const at = a.at.abstract! + 1;
+    const own = [block("Contributions", "heading", 2), block("We summarized the main contributions in this work. As follows"), block(prose(1))];
+    const b = { ...a, blocks: [...a.blocks.slice(0, at), ...own, ...a.blocks.slice(at)] };
+    expect(reasons(admitMatter(b, [range(b, at, at + 2, ["declarations"])]))).toEqual([`block ${at + 2} shows no evidence of declarations`]);
+  });
+
+  it("keeps a reference list's own sub-headings inside its section, when what is under them is references", () => {
+    const a = paper();
+    const at = a.at.refsHeading!;
+    const refs = a.blocks.slice(at + 1);
+    const blocks = [...a.blocks.slice(0, at + 1), ...refs.slice(0, 15), block("General and cited sources", "heading", 3), ...refs.slice(15)];
+    const b = { ...a, blocks };
+    const r = admitMatter(b, [section(b, at, ["references"])]);
+    expect(reasons(r)).toEqual([]);
+    expect(spans(b, r)).toEqual([[at, blocks.length - 1]]);
+    /* An appendix under the references heading is not references: its heading and prose stay showing. */
+    const appendix = [block("Appendix A. Proofs", "heading", 3), block(prose(1))];
+    const c = { ...a, blocks: [...a.blocks.slice(0, at + 1), ...refs.slice(0, 15), ...appendix, ...refs.slice(15)] };
+    const folded = spans(c, admitMatter(c, [section(c, at, ["references"])]));
+    for (const i of [at + 16, at + 17]) expect(folded.some(([x, y]) => x! <= i && i <= y!)).toBe(false);
+    /* With one reference-looking line under it, the appendix heading is still not part of the list. */
+    const d = { ...a, blocks: [...a.blocks.slice(0, at + 1), ...refs.slice(0, 15), block("Appendix A. Proofs", "heading", 3), block(`In 2019 we showed this. ${PROSE}`), ...refs.slice(15)] };
+    expect(reasons(admitMatter(d, [section(d, at, ["references"])]))).toEqual([`block ${at + 16} is a heading that is not a known label`]);
+  });
+
+  it("keeps what a references cut leaves over when the stretch claimed other kinds too", () => {
+    const a = paper();
+    const blocks = [...a.blocks, block("The authors declare no competing interests of any kind."), block("All data and code are available from the authors on request.")];
+    const b = { ...a, blocks };
+    const n = blocks.length;
+    const r = admitMatter(b, [range(b, a.at.ref0!, n - 1, ["references", "declarations"])]);
+    expect(reasons(r)).toEqual([]);
+    expect(spans(b, r)).toEqual([[a.at.ref0!, n - 3], [n - 2, n - 1]]);
+    /* Claimed as references alone, the leftovers stay showing, as before. */
+    expect(spans(b, admitMatter(b, [range(b, a.at.ref0!, n - 1, ["references"])]))).toEqual([[a.at.ref0!, n - 3]]);
+  });
+});
+
+describe("matterByLabels, inline labels", () => {
+  it("takes a run of paragraphs that open with an office label and a colon", () => {
+    const a = paper();
+    const office = [
+      block("Funding: This work was supported by the National Centre for the Replacement of Animals in Research under grant NC/1234."),
+      block("Competing interests: The authors have declared that no competing interests exist."),
+    ];
+    const at = a.at.abstract! + 1;
+    const blocks = [...a.blocks.slice(0, at), ...office, ...a.blocks.slice(at)] as (MatterBlock & Block)[];
+    const b = { ...a, blocks };
+    const r = matterByLabels(b, new Set());
+    const s = r.stretches.find((x) => x.kinds.includes("funding"));
+    expect(s).toEqual({ from: office[0]!.id, to: office[1]!.id, kinds: ["funding", "declarations"] });
+  });
+
+  it("does not take a sentence that merely starts with a label word", () => {
+    const a = paper();
+    const at = a.at.abstract! + 1;
+    const blocks = [...a.blocks.slice(0, at), block(`Funding for science: ${PROSE}`), block(`Contributions to the field: ${PROSE}`), ...a.blocks.slice(at)] as (MatterBlock & Block)[];
+    const r = matterByLabels({ ...a, blocks }, new Set());
+    expect(r.stretches.some((x) => x.kinds.includes("funding") || x.kinds.includes("declarations"))).toBe(false);
   });
 });

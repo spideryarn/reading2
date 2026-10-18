@@ -17,6 +17,8 @@
  *   its evidence holds. Each with positional evidence: front kinds in the
  *   opening window, references in the trailing part, the acknowledgements,
  *   funding and declarations family in either.
+ * - **Inline labels**: a run of paragraphs that open "Funding: …",
+ *   "Competing interests: …" (that family only), as one stretch.
  */
 import {
   BACK_MATTER_FROM_SHARE,
@@ -94,5 +96,53 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
     while (end > i + 1 && stretchEvidence(article, i, end, kinds) !== null) end--;
     candidates.push({ item: item++, start: i, end, kinds: [...kinds], headedBy: null, shape: "range" });
   }
+  for (const run of inlineLabelRuns(blocks, placed)) candidates.push({ item: item++, ...run, headedBy: null, shape: "range" });
   return holdStretches(article, candidates, echo);
+}
+
+const MATTER_ORDER: readonly MatterKind[] = ["acknowledgements", "funding", "declarations"];
+
+/**
+ * **Inline labels**: runs of paragraphs that each open with a known label of
+ * the acknowledgements, funding and declarations family and a colon
+ * ("Funding: …", "Competing interests: …"), as PLOS, PMC and eLife print
+ * them. One stretch a run, so two short lines make one stub; empty blocks
+ * between them do not break it.
+ */
+function inlineLabelRuns(
+  blocks: readonly Block[],
+  placed: (i: number, kinds: readonly MatterKind[]) => boolean,
+): { start: number; end: number; kinds: MatterKind[] }[] {
+  const n = blocks.length;
+  const at = (i: number): readonly MatterKind[] | null => {
+    const kinds = i < n ? inlineLabel(blocks[i]!) : null;
+    return kinds !== null && placed(i, kinds) ? kinds : null;
+  };
+  const runs: { start: number; end: number; kinds: MatterKind[] }[] = [];
+  for (let i = 0; i < n; i++) {
+    const first = at(i);
+    if (first === null) continue;
+    const all = new Set<MatterKind>(first);
+    let end = i + 1;
+    for (;;) {
+      let j = end;
+      while (j < n && blocks[j]!.words === 0) j++;
+      const next = at(j);
+      if (next === null) break;
+      for (const k of next) all.add(k);
+      end = j + 1;
+    }
+    runs.push({ start: i, end, kinds: MATTER_ORDER.filter((k) => all.has(k)) });
+    i = end - 1;
+  }
+  return runs;
+}
+
+/** The office kinds of a paragraph that opens "Label: …", or `null`. */
+function inlineLabel(block: Block): readonly MatterKind[] | null {
+  if (block.kind !== "text") return null;
+  const m = /^([^:\n]{1,80}):\s+\S/u.exec(block.text.trim());
+  if (!m) return null;
+  const kinds = labelKinds(m[1]!);
+  return kinds?.every((k) => EITHER.has(k)) ? kinds : null;
 }

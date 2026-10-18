@@ -358,7 +358,7 @@ const ABSTRACT_LABEL = /^\s*abstract\b/iu;
 const KEYWORDS_LABEL = /^\s*(?:key\s?words?|index terms|subjects?|jel|msc|ams|acm|ccs|classification|mesh)\b/iu;
 /** Words that only furniture uses, enough on their own in a long block. */
 const DATES_STRONG =
-  /\bdoi\b|doi\.org|\breceived:|\baccepted:|\bpublished:|copyright|©|licen[cs]ed? under|creative commons|cite this|\bissn\b|open access|version of record|all rights reserved/iu;
+  /\bdoi\b|doi\.org|\breceived:|\baccepted:|\bpublished:|copyright|©|licen[cs]ed? under|creative commons|cite this|\bissn\b|open access|version of record|all rights reserved|permission to (?:reproduce|reprint|republish)|reprinted (?:with|by) permission/iu;
 /** Weaker ones, a year or a link among them, enough only in a short line. */
 const DATES =
   /\bdoi\b|doi\.org|\breceived\b|\baccepted\b|\bpublished\b|\brevised\b|copyright|©|licen[cs]e|creative commons|\bcite\b|citation|\bissn\b|\bvol(?:ume)?\b|\barxiv\b|\b(?:19|20)\d\d\b|\beditor\b|peer[- ]review|open access|reprints|permissions|publisher|version of record|https?:/iu;
@@ -370,7 +370,7 @@ const ABSTRACT_PARTS = new Set([
 const ACKNOWLEDGEMENTS = /acknowledg|thank|grateful|indebted/iu;
 const FUNDING = /fund|grant|support|fellowship|award|sponsor|financ|foundation/iu;
 const DECLARATIONS =
-  /contribut|competing|conflict|interest|availab|ethic|declar|consent|authorship|disclos|approv|reproducib|repositor|github|zenodo/iu;
+  /jurisdictional claims|contribut|competing|conflict|interest|availab|ethic|declar|consent|authorship|disclos|approv|reproducib|repositor|github|zenodo/iu;
 const REFERENCE = /\b(?:1[5-9]|20)\d\d[a-z]?\b|\bdoi\b|https?:|www\.|et al|\bpp?\.\s*\d/iu;
 /** A dates line is furniture, not a paragraph. */
 const DATES_MAX_WORDS = 200;
@@ -453,6 +453,28 @@ function entryText(text: string): string {
 }
 /** A keywords list under its label is short. */
 const KEYWORDS_MAX_WORDS = 60;
+/** Few sentence words: a citation, not a sentence. notProse's first test, alone (titles are lower case). */
+function fewSentenceWords(text: string): boolean {
+  const all = tokens(text);
+  return all.filter((w) => SENTENCE_WORDS.has(bare(w).toLowerCase())).length <= Math.max(2, 0.04 * all.length);
+}
+
+/**
+ * Whether the blocks under heading `h`, to the next heading or `end`, are a
+ * list of references: at least one, every one with reference evidence, few
+ * sentence words, and none a footnote. Lets "General and cited sources" sit
+ * inside a "References" section; an appendix under one still stops it.
+ */
+function referencesUnder(blocks: readonly MatterBlock[], h: number, end: number): boolean {
+  let n = 0;
+  for (let i = h + 1; i < end && blocks[i]!.kind !== "heading"; i++) {
+    const b = blocks[i]!;
+    if (b.words === 0) continue;
+    if (b.role === "footnote" || !REFERENCE.test(b.text) || !fewSentenceWords(b.text)) return false;
+    n++;
+  }
+  return n > 0;
+}
 
 /**
  * **Does a stretch's every block have evidence for one of the kinds it
@@ -495,6 +517,7 @@ export function stretchEvidence(
   }
   let abstractFrom = -1;
   let abstractWords = 0;
+  const sectionLevel = headedBy !== null && blocks[start]?.kind === "heading" ? (blocks[start]!.level ?? null) : null;
   for (let i = start; i < end; i++) {
     const block = blocks[i]!;
     if (has("abstract") && abstractFrom < 0 && ABSTRACT_LABEL.test(block.text)) abstractFrom = i;
@@ -502,8 +525,13 @@ export function stretchEvidence(
     if (block.words === 0) continue;
     if (block.role === "footnote") return `block ${i} is a footnote`;
     if (block.kind === "heading") {
-      if (isLabel(block) || (has("title") && isTitle(block, i, article.meta.title))) continue;
+      if (isLabel(block)) continue;
       if (i === start && headedBy !== null) continue;
+      /* The sub-headings of a labelled reference list ("General and cited sources"), when what is under each is references. */
+      if (has("references") && headedBy?.includes("references") && sectionLevel !== null && (block.level ?? 0) > sectionLevel && referencesUnder(blocks, i, end)) {
+        continue;
+      }
+      if (has("title") && isTitle(block, i, article.meta.title)) continue;
       if (inAbstract && ABSTRACT_PARTS.has(normaliseLabel(block.text))) continue;
       if (has("authors") && /^by\s/iu.test(block.text.trim()) && block.words <= 12) continue;
       return `block ${i} is a heading that is not a known label`;
@@ -720,6 +748,8 @@ export interface MatterDrop {
 export interface MatterAdmitted {
   stretches: MatterStretch[];
   dropped: MatterDrop[];
+  /** The stretches as the checks kept them, with their shape and label: what `combineMatter` merges. */
+  held: MatterCandidate[];
 }
 
 /** A stretch resolved to indices, before the checks every source shares. */
@@ -735,6 +765,12 @@ export interface MatterCandidate {
   shape: "range" | "section";
   /** Today's byline rule (src/web/front-matter.ts) has its own evidence test. */
   trusted?: boolean;
+  /**
+   * Merged from these by `combineMatter`, each already held. The evidence is
+   * re-checked part by part (each on its own blocks, kinds and label), and a
+   * merged stretch is not cut to its references again: its parts were.
+   */
+  parts?: readonly MatterCandidate[];
 }
 
 const sumWords = (blocks: readonly MatterBlock[], start: number, end: number): number => {
@@ -815,7 +851,7 @@ export function admitMatter(article: MatterArticle, answer: readonly MatterAnswe
     candidates.push({ item: k, ...section, kinds: [...item.kinds], shape: "section" });
   });
   const held = holdStretches(article, candidates, echo);
-  return { stretches: held.stretches, dropped: [...dropped, ...held.dropped] };
+  return { ...held, dropped: [...dropped, ...held.dropped] };
 }
 
 /**
@@ -824,7 +860,8 @@ export function admitMatter(article: MatterArticle, answer: readonly MatterAnswe
  * not splits it in two, so notes and appendices that sit among or after the
  * references stay showing. Headings, labels and empty blocks are neutral.
  * Any other stretch, or one with no reference in it, is returned as it is
- * (its evidence check then decides).
+ * (its evidence check then decides). What the cut leaves over keeps the
+ * stretch's other kinds, if it claimed any.
  */
 export function referenceSegments(blocks: readonly MatterBlock[], c: MatterCandidate): MatterCandidate[] {
   if (!c.kinds.includes("references")) return [c];
@@ -848,7 +885,23 @@ export function referenceSegments(blocks: readonly MatterBlock[], c: MatterCandi
   }
   if (lastRef < 0) return [c];
   out.push({ ...c, start: segStart, end: lastRef + 1 });
-  return out.map((seg, k) => (k === 0 ? seg : { ...seg, headedBy: null }));
+  const segments = out.map((seg, k) => (k === 0 ? seg : { ...seg, headedBy: null }));
+  /* What the cut leaves over, when the stretch claimed other kinds too, is
+     offered with those kinds: the author information after a reference list
+     the model claimed together with it. Each piece is held to its own
+     evidence; a stretch claimed as references alone leaves its leftovers
+     showing, as before. */
+  const rest = c.kinds.filter((k) => k !== "references");
+  if (rest.length === 0) return segments;
+  const leftovers: MatterCandidate[] = [];
+  let from = c.start;
+  for (const seg of [...segments, { start: c.end, end: c.end }]) {
+    if (seg.start > from && blocks.slice(from, seg.start).some((b) => b.words > 0)) {
+      leftovers.push({ ...c, start: from, end: seg.start, kinds: rest, headedBy: null });
+    }
+    from = seg.end;
+  }
+  return [...segments, ...leftovers];
 }
 
 /**
@@ -868,7 +921,7 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
   const n = blocks.length;
   const dropped: MatterDrop[] = [];
   const passed: MatterCandidate[] = [];
-  for (const c0 of candidates.flatMap((c) => referenceSegments(blocks, c))) {
+  for (const c0 of candidates.flatMap((c) => (c.parts ? [c] : referenceSegments(blocks, c)))) {
     const drop = (reason: string) => dropped.push({ item: c0.item, reason });
     let start = c0.start;
     const end = c0.end;
@@ -886,7 +939,11 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
       drop("a range over the word cap");
       continue;
     }
-    const evidence = c0.trusted ? null : stretchEvidence(article, start, end, c0.kinds, c0.headedBy);
+    const evidenceOf = (c: MatterCandidate, from: number): string | null =>
+      c.trusted ? null : stretchEvidence(article, from, c.end, c.kinds, c.headedBy);
+    const evidence = c0.parts
+      ? (c0.parts.map((p) => evidenceOf(p, Math.max(p.start, start))).find((e) => e !== null) ?? null)
+      : evidenceOf(c0, start);
     if (evidence !== null) {
       drop(evidence);
       continue;
@@ -928,7 +985,53 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
   return {
     stretches: kept.map((c) => ({ from: blocks[c.start]!.id, to: blocks[c.end - 1]!.id, kinds: c.kinds })),
     dropped,
+    held: kept,
   };
+}
+
+/**
+ * **The union of two sources' stretches** — the classifier's and the labels
+ * rule's (src/matter-labels.ts), the candidate product design: the label rule
+ * is free and strong on references and contents, the model on titles, authors
+ * and dates. Stretches that overlap or touch become one, their kinds unioned
+ * (in `MATTER_KINDS` order), so the reader gets one stub, not two.
+ *
+ * The merged stretches are held again (`holdStretches`): a merged range is
+ * held to `MAX_RANGE_WORDS` as a whole, the share cap counts everything
+ * folded, and each part's evidence is checked again. A merged stretch that
+ * fails is dropped whole — measured in the eval before anything gentler is
+ * built. A stretch is a range only if every part was.
+ */
+export function combineMatter(
+  article: MatterArticle,
+  classified: Pick<MatterAdmitted, "held">,
+  labelled: Pick<MatterAdmitted, "held">,
+  echo: ReadonlySet<BlockId>,
+): MatterAdmitted {
+  const all = [...classified.held, ...labelled.held].sort((a, b) => a.start - b.start || b.end - a.end);
+  const groups: MatterCandidate[][] = [];
+  let end = -1;
+  for (const c of all) {
+    const last = groups[groups.length - 1];
+    if (last && c.start <= end) last.push(c);
+    else groups.push([c]);
+    end = Math.max(end, c.end);
+  }
+  const order = (k: MatterKind) => MATTER_KINDS.indexOf(k);
+  const merged = groups.map((g, item): MatterCandidate => {
+    if (g.length === 1) return { ...g[0]!, item };
+    const start = g[0]!.start;
+    return {
+      item,
+      start,
+      end: Math.max(...g.map((c) => c.end)),
+      kinds: [...new Set(g.flatMap((c) => c.kinds))].sort((a, b) => order(a) - order(b)),
+      headedBy: g.find((c) => c.start === start && c.headedBy !== null)?.headedBy ?? null,
+      shape: g.every((c) => c.shape === "range") ? "range" : "section",
+      parts: g,
+    };
+  });
+  return holdStretches(article, merged, echo);
 }
 
 // ───────────────────────────────────────────────────────────────── the call
