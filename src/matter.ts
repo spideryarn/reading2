@@ -112,7 +112,7 @@ export const TIMEOUT_MS = 30_000;
 
 /** A `range` folds at most this many words, whatever kinds it claims. */
 export const MAX_RANGE_WORDS = 1_500;
-/** A labelled `section` other than references folds at most this many words. */
+/** A labelled `section` other than references or contents folds at most this many words. */
 export const MAX_LABELLED_SECTION_WORDS = 1_500;
 /**
  * The blocks an abstract label explains, from the label on. The eval's
@@ -136,6 +136,13 @@ export const BACK_MATTER_FROM_SHARE = 0.25;
 export const CONTENTS_MAX_ENTRY_WORDS = 25;
 /** Under a list-of-figures or list-of-tables label, an entry is the caption repeated, "Fig. 2 …", up to this many words. */
 export const CONTENTS_MAX_LISTED_CAPTION_WORDS = 100;
+/**
+ * … and one that also ends in a page number, "2.2 An example of … . . . 18",
+ * up to this many: LaTeX lists a figure by its number alone, with the whole
+ * caption, however long (main-spya-csp5bm's run to 335 words). No paragraph
+ * of prose ends in a bare page number.
+ */
+export const CONTENTS_MAX_PAGED_CAPTION_WORDS = 400;
 /**
  * One line between two entries that is not itself one may stay in the run if
  * it is this short: a section name whose heading the extraction did not keep
@@ -180,8 +187,17 @@ export interface MatterWindows {
   closeStart: number;
 }
 
+/** Dot leaders, ". . . . ." in a PDF's contents: four dots or more, spaced or not. */
+const LEADERS = /(?:\s?\.){4,}/gu;
+
+/**
+ * A block's text as the model sees it: one line, dot leaders shown as "…" (a
+ * PDF's contents line is otherwise 200 characters of dots, and forty of them
+ * spent the opening's character cap before its contents ended:
+ * main-spya-csp5bm), cut to `max`.
+ */
 const cut = (text: string, max: number): string => {
-  const flat = text.replace(/\s+/gu, " ").trim();
+  const flat = text.replace(/\s+/gu, " ").replace(LEADERS, " …").replace(/\s+/gu, " ").trim();
   return flat.length > max ? flat.slice(0, max) : flat;
 };
 
@@ -314,7 +330,7 @@ const LABELS: ReadonlyMap<string, readonly MatterKind[]> = new Map<string, Matte
 
 /**
  * A label's words, lower case, without a section number in front ("7.",
- * "VII.", "A.") or punctuation at either end, and with apostrophes dropped
+ * "VII.", "A.", an appendix's "A.1.1") or punctuation at either end, and with apostrophes dropped
  * ("Authors' contributions").
  */
 export function normaliseLabel(text: string): string {
@@ -324,7 +340,7 @@ export function normaliseLabel(text: string): string {
     .replace(/\s+/gu, " ")
     .trim()
     .replace(/^[^\p{L}\p{N}]+/u, "")
-    .replace(/^(?:\d+(?:\.\d+)*|[ivx]+|[a-z])(?:[.):]\s*|\s+)(?=\p{L})/u, "")
+    .replace(/^(?:\d+(?:\.\d+)*|[ivx]+|[a-z](?:\.\d+)*)(?:[.):]\s*|\s+)(?=\p{L})/u, "")
     .replace(/[^\p{L}\p{N}]+$/u, "");
 }
 
@@ -360,6 +376,8 @@ const SECTION_KINDS: ReadonlySet<MatterKind> = new Set([
 /** Section kinds that belong near the opening; the rest are back matter (or, for authors and dates, either). */
 const LEADING_KINDS: ReadonlySet<MatterKind> = new Set(["contents", "abstract", "keywords"]);
 const EITHER_END: ReadonlySet<MatterKind> = new Set(["authors", "dates"]);
+/** Office kinds a section may claim under its own label inside the opening (`labelledSection`). */
+const FRONT_OFFICE: ReadonlySet<MatterKind> = new Set(["acknowledgements", "funding"]);
 /** Kinds a "Details"-like group mixes freely: one of them under a label for another is compatible. */
 const OFFICE: ReadonlySet<MatterKind> = new Set(["acknowledgements", "funding", "declarations"]);
 
@@ -476,8 +494,12 @@ function entryText(text: string): string {
 
 /** A section number in front: "2", "1.2.3", "IV.", "A)", "Part 1:", "Appendix B:". */
 const ENTRY_NUMBER = /^\s*(?:\d+(?:\.\d+)*\.?|[IVXLCivxlc]+[.)]|[A-Za-z][.)]|(?:part|chapter|section|appendix|annex)\s+(?:\d+|[IVXLC]+|[A-Z])\b[.:]?)\s+\S/u;
-/** A page number at the end, or dot leaders. */
-const ENTRY_PAGE = /\s\d{1,4}\s*$|(?:\.\s*){3,}\s*\d*\s*$/u;
+/**
+ * A page number at the end, or dot leaders. A thesis or a book pages its
+ * front matter in lower-case roman numerals ("Abstract iv": main-spya-csp5bm),
+ * a well-formed one only, so a word made of those letters ("civil") is not one.
+ */
+const ENTRY_PAGE = /\s(?:\d{1,4}|(?=[ivxlc])c{0,3}(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3}))\s*$|(?:\.\s*){3,}\s*\d*\s*$/u;
 /** A listed table or figure: "Table 1 …", "Fig. 2 …", "Figure 3: …". */
 const LISTED_CAPTION = /^\s*(?:fig(?:ure)?s?\.?|tables?|tab\.)\s*\d+/iu;
 /** The labels whose entries repeat captions. */
@@ -493,12 +515,16 @@ function headingNames(blocks: readonly MatterBlock[]): Set<string> {
  * one of the article's own headings (as `entryText` normalises both; a
  * truncated entry may name the start of one), or that carries a section
  * number or a page number. Under a list-of-figures label, a listed caption
- * ("Fig. 2 …") may be longer, since the list repeats the caption.
+ * ("Fig. 2 …", or "2.2 …" ending in its page number) may be longer, since
+ * the list repeats the caption.
  */
 function isContentsEntry(block: MatterBlock, headings: ReadonlySet<string>, listsCaptions: boolean): boolean {
   if (block.kind === "heading" || block.words === 0) return false;
   const text = block.text;
   if (listsCaptions && LISTED_CAPTION.test(text) && block.words <= CONTENTS_MAX_LISTED_CAPTION_WORDS) return true;
+  if (listsCaptions && (LISTED_CAPTION.test(text) || ENTRY_NUMBER.test(text)) && ENTRY_PAGE.test(text) && block.words <= CONTENTS_MAX_PAGED_CAPTION_WORDS) {
+    return true;
+  }
   const name = entryText(text);
   if (name === "" || tokens(name).length > CONTENTS_MAX_ENTRY_WORDS) return false;
   if (ENTRY_NUMBER.test(text) || ENTRY_PAGE.test(text) || LISTED_CAPTION.test(text)) return true;
@@ -641,6 +667,8 @@ const stretchEntries = (blocks: readonly MatterBlock[], start: number, end: numb
  *   `contents` explains a contents label and the entries that follow it
  *   (`contentsRun`), never the first block after them; `references` explains every entry once `REFERENCE_EVIDENCE_SHARE`
  *   of them look like references.
+ * - Under an acknowledgements label, one block without the family's words
+ *   between two with them stands.
  */
 export function stretchEvidence(
   article: MatterArticle,
@@ -663,6 +691,12 @@ export function stretchEvidence(
   if (has("abstract") && !headedBy?.includes("abstract") && !slice.some((b) => ABSTRACT_LABEL.test(b.text))) {
     return "an abstract with no abstract label";
   }
+  /* Under its own acknowledgements label, one block between two with the
+     family's words may lack them: a thesis's list of friends' names
+     (main-spya-csp5bm), "Drew Hamlin, …, who gave us some design input"
+     (arXiv 2307.09288). Two in a row, or one at the end, still fail. */
+  const thanksLabelled = office && headedBy?.includes("acknowledgements") === true;
+  let gap = -1;
   let abstractFrom = -1;
   let abstractWords = 0;
   const sectionLevel = headedBy !== null && blocks[start]?.kind === "heading" ? (blocks[start]!.level ?? null) : null;
@@ -703,9 +737,14 @@ export function stretchEvidence(
          three tests serves any of the three kinds. */
       (office && (ACKNOWLEDGEMENTS.test(text) || FUNDING.test(text) || DECLARATIONS.test(text))) ||
       refsHold;
-    if (!explained) return `block ${i} shows no evidence of ${kinds.join(", ")}`;
+    if (explained) {
+      gap = -1;
+      continue;
+    }
+    if (!thanksLabelled || gap >= 0) return `block ${gap >= 0 ? gap : i} shows no evidence of ${kinds.join(", ")}`;
+    gap = i;
   }
-  return null;
+  return gap >= 0 ? `block ${gap} shows no evidence of ${kinds.join(", ")}` : null;
 }
 
 // ──────────────────────────────────────────────────────────────── the input
@@ -926,17 +965,13 @@ export interface MatterCandidate {
  * **A contents stretch ends at its last entry.** A stretch claiming only
  * contents is cut where its first run of entries ends (`contentsRun`), so a
  * range that ran on into a picture and its caption folds the list and not
- * them; any stretch claiming contents loses the empty blocks at its end. A
+ * them (the empty blocks at any stretch's edges go in `holdStretches`). A
  * merged stretch is not cut again: its parts were.
  */
 function contentsCut(blocks: readonly MatterBlock[], c: MatterCandidate, start: number, end: number): number {
-  if (c.parts || !c.kinds.includes("contents")) return end;
-  if (c.kinds.length === 1) {
-    const run = contentsExplained(blocks, start, end, c.headedBy, stretchEntries(blocks, start, end));
-    if (run.firstEnd > start) end = run.firstEnd;
-  }
-  while (end > start + 1 && blocks[end - 1]!.words === 0) end--;
-  return end;
+  if (c.parts || c.kinds.length !== 1 || c.kinds[0] !== "contents") return end;
+  const run = contentsExplained(blocks, start, end, c.headedBy, stretchEntries(blocks, start, end));
+  return run.firstEnd > start ? run.firstEnd : end;
 }
 
 const sumWords = (blocks: readonly MatterBlock[], start: number, end: number): number => {
@@ -967,10 +1002,17 @@ export function labelledSection(
   if (kinds.some((x) => LEADING_KINDS.has(x)) && !(r.start < w.openEnd || r.start < n * CONTENTS_LEADING_SHARE)) {
     return "a front-matter section far from the opening";
   }
-  if (kinds.some((x) => !LEADING_KINDS.has(x) && !EITHER_END.has(x)) && r.start < n * BACK_MATTER_FROM_SHARE) {
+  /* Thanks and funding under their own label inside the opening are a thesis's
+     or a report's front matter (main-spya-csp5bm); not declarations, whose
+     "Contributions" there is as often the paper's own list of what it adds. */
+  const frontThanks = r.start < w.openEnd && kinds.every((x) => FRONT_OFFICE.has(x));
+  if (!frontThanks && kinds.some((x) => !LEADING_KINDS.has(x) && !EITHER_END.has(x)) && r.start < n * BACK_MATTER_FROM_SHARE) {
     return "a back-matter section before the trailing part";
   }
-  if (!kinds.includes("references") && sumWords(blocks, r.start, r.end) > MAX_LABELLED_SECTION_WORDS) {
+  /* References and contents are lists whose every entry is held to being one;
+     a 22-entry list of figures repeating long captions runs past the cap. */
+  const listed = kinds.includes("references") || kinds.every((x) => x === "contents");
+  if (!listed && sumWords(blocks, r.start, r.end) > MAX_LABELLED_SECTION_WORDS) {
     return "a labelled section over the word cap";
   }
   return { start: r.start, end: r.end, headedBy: label };
@@ -1098,6 +1140,11 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
       continue;
     }
     end = contentsCut(blocks, c0, start, end);
+    /* An empty block explains itself by any kind only between two that are
+       matter: at an edge it may be the article's own picture
+       (2015-08-understanding-lstms-spya-njc24t's range ended on one). */
+    while (end > start + 1 && blocks[end - 1]!.words === 0) end--;
+    while (start < end - 1 && blocks[start]!.words === 0) start++;
     const withWords = blocks.slice(start, end).filter((b) => b.words > 0);
     /* A union's segment is not dropped for being small: its parts each passed
        this already, and the cut is what made it small (`combineMatter`). */

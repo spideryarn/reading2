@@ -735,3 +735,141 @@ describe("a contents stretch is a label and its entries", () => {
     expect(labelKinds("List of Abbreviations")).toBeNull();
   });
 });
+
+/**
+ * Trimmed copies of the second held-out set's misses (2026-10-18): a PDF
+ * thesis's front matter (main-spya-csp5bm), the appendix-numbered
+ * contributions and acknowledgements of arXiv 2307.09288, and the empty
+ * picture an essay's acknowledgements range ended on
+ * (2015-08-understanding-lstms-spya-njc24t).
+ */
+describe("the second held-out set's misses, where the gap was general", () => {
+  const spans = (a: MatterArticle, r: { stretches: { from: string; to: string }[] }) =>
+    r.stretches.map((s) => [a.blocks.findIndex((b) => b.id === s.from), a.blocks.findIndex((b) => b.id === s.to)]);
+  const covers = (sp: number[][], from: number, to: number) => sp.some(([x, y]) => x! <= from && to <= y!);
+  const leaders = (n: number) => Array.from({ length: n }, () => ".").join(" ");
+  const caption = (num: string, words: number, page: number) =>
+    `${num} ${Array.from({ length: words }, (_, k) => (k % 7 === 0 ? "The" : "diagram")).join(" ")}. ${leaders(8)} ${page}`;
+
+  /** main-spya-csp5bm, blocks 0–100 trimmed: a thesis's front matter, then its chapters. */
+  function thesis(): LabelsArticle & { at: Record<string, number> } {
+    const blocks: (MatterBlock & Block)[] = [];
+    const at: Record<string, number> = {};
+    const push = (name: string | null, b: MatterBlock & Block) => {
+      if (name) at[name] = blocks.length;
+      blocks.push(b);
+    };
+    push(null, block("CONNECTING IMAGES AND NATURAL LANGUAGE", "heading", 1));
+    push(null, block("Andrej Karpathy"));
+    push(null, block("Abstract", "heading", 1));
+    push(null, block(prose(0)));
+    push("ack", block("Acknowledgments", "heading", 1));
+    push(null, block("There are many people I must thank for contributing to the five wonderful years of my experience as a PhD student."));
+    push(null, block("I would like to thank my close collaborators who I have had the distinct pleasure of working with and learning from."));
+    /* No thanks word in it: a list of friends, between two paragraphs of thanks. */
+    push("friends", block("There are many others who I was fortunate to get to know and become friends with: Ben Poole, Sida Wang, Volodymyr Kuleshov, Jake Lussier."));
+    push("ackEnd", block("A big thank you to my sister who always believes in me ten times more than I do."));
+    push("toc", block("Contents", "heading", 1));
+    /* The front matter is paged in roman numerals; the rest have dot leaders. */
+    for (const t of ["Abstract iv", "Acknowledgments vi", "1 Introduction 1", `1.1 Overview ${leaders(40)} 1`, `1.2 Related Work ${leaders(40)} 4`, "2 Matching Images and Sentences 10", "Bibliography 71"]) {
+      push(null, block(t));
+    }
+    at.tocEnd = blocks.length - 1;
+    push("tables", block("List of Tables", "heading", 1));
+    /* LaTeX lists a table by its number alone, with the whole caption. */
+    push(null, block(caption("3.1", 60, 39)));
+    push(null, block(caption("4.1", 40, 48)));
+    push("figures", block("List of Figures", "heading", 1));
+    push(null, block(caption("1.1", 50, 2)));
+    push(null, block(caption("2.1", 150, 13), "media"));
+    push(null, block(caption("2.2", 300, 18)));
+    push(null, block(caption("2.3", 120, 20)));
+    for (let k = 0; k < 12; k++) push(null, block(caption(`3.${k + 1}`, 110, 30 + k)));
+    at.figuresEnd = blocks.length - 1;
+    for (const [k, h] of ["1 Introduction", "1.1 Overview", "1.2 Related Work", "2 Matching Images and Sentences", "6 Conclusions"].entries()) {
+      push(k === 0 ? "intro" : null, block(h, "heading", 1));
+      for (let j = 0; j < 40; j++) push(null, block(prose(k * 40 + j)));
+    }
+    return { blocks, meta: { title: "Connecting Images and Natural Language", byline: "Andrej Karpathy" }, at };
+  }
+
+  it("shows the model a PDF's contents without its dot leaders, so the opening reaches past them", () => {
+    const a = thesis();
+    const input = matterInput(a);
+    expect(input).not.toContain(". . . .");
+    expect(input).toContain("1.1 Overview … 1");
+  });
+
+  it("takes a thesis's contents paged in roman numerals, and its lists of tables and figures numbered without the word", () => {
+    const a = thesis();
+    const sp = spans(a, matterByLabels(a, new Set()));
+    expect(covers(sp, a.at.toc!, a.at.tocEnd!)).toBe(true);
+    expect(covers(sp, a.at.tables!, a.at.figures! - 1)).toBe(true);
+    /* Over the labelled-section word cap, and still taken: every block is an entry. */
+    expect(covers(sp, a.at.figures!, a.at.figuresEnd!)).toBe(true);
+    expect(sp.some(([, y]) => y! >= a.at.intro!)).toBe(false);
+    /* The model's range over the contents is not cut back to its label. */
+    expect(spans(a, admitMatter(a, [range(a, a.at.toc!, a.at.tocEnd!, ["contents"])]))).toEqual([[a.at.toc!, a.at.tocEnd!]]);
+  });
+
+  it("does not take a long numbered paragraph as a listed caption unless it ends in a page number", () => {
+    const a = thesis();
+    const blocks = [...a.blocks];
+    blocks.splice(a.at.figuresEnd! + 1, 0, block(`3.13 ${PROSE} ${PROSE} ${PROSE}`));
+    const b = { ...a, blocks };
+    const sp = spans(b, matterByLabels(b, new Set()));
+    expect(sp.some(([x, y]) => x! <= a.at.figuresEnd! + 1 && a.at.figuresEnd! + 1 <= y!)).toBe(false);
+  });
+
+  it("takes acknowledgements at the front of a thesis under their own label, with one line between thanks that has no thanks word", () => {
+    const a = thesis();
+    const sp = spans(a, matterByLabels(a, new Set()));
+    expect(sp).toContainEqual([a.at.ack!, a.at.ackEnd!]);
+    /* Two such lines in a row, or one at the end, and the section stays showing. */
+    const two = [...a.blocks];
+    two.splice(a.at.friends! + 1, 0, block("Ben and Sida were always there on the long evenings at the lab, and the food was good."));
+    const b = { ...a, blocks: two };
+    expect(spans(b, matterByLabels(b, new Set())).some(([x]) => x === a.at.ack)).toBe(false);
+    const last = [...a.blocks];
+    last.splice(a.at.ackEnd! + 1, 0, block("Ben and Sida were always there on the long evenings at the lab, and the food was good."));
+    const c = { ...a, blocks: last };
+    expect(spans(c, matterByLabels(c, new Set())).some(([x]) => x === a.at.ack)).toBe(false);
+  });
+
+  it("does not take a paper's own Contributions section near its opening", () => {
+    const a = paper();
+    const at = a.at.abstract! + 1;
+    const own = [block("1.1 Contributions", "heading", 3), block("Our main contributions are the following, and we contribute three things."), block(prose(1)), block("We contribute a benchmark.")];
+    const b = { ...a, blocks: [...a.blocks.slice(0, at), ...own, ...a.blocks.slice(at)] as (MatterBlock & Block)[] };
+    expect(spans(b, matterByLabels(b, new Set())).some(([x]) => x === at)).toBe(false);
+  });
+
+  it("knows an appendix-numbered label: A.1 Contributions, A.1.1 Acknowledgments", () => {
+    expect(labelKinds("A.1 Contributions")).toEqual(["declarations"]);
+    expect(labelKinds("A.1.1 Acknowledgments")).toEqual(["acknowledgements"]);
+    expect(labelKinds("A.1 Proofs")).toBeNull();
+    const a = paper();
+    const tail = [
+      block("Appendix A Appendix", "heading", 2),
+      block("A.1.1 Acknowledgments", "heading", 4),
+      block("This work was made possible by a large group of contributors. We extend our gratitude to the following people for their assistance:"),
+      block("• Our human annotators, whose work is key to improving tuned model performance, and the leads who supported them: Eric Alamillo, Tamara Best."),
+      block("• Drew Hamlin, Chantal Mora, and Aran Mun, who gave us some design input on the figures in the paper."),
+      block("• Vijai Mohan for the discussions about RLHF that inspired our Figure 20, and his contribution to the internal demo."),
+      block("A.2 Additional Details for Pretraining", "heading", 3),
+      block(prose(900)),
+    ];
+    const b = { ...a, blocks: [...a.blocks, ...tail] };
+    const n = a.blocks.length;
+    expect(spans(b, matterByLabels(b, new Set()))).toContainEqual([n + 1, n + 5]);
+  });
+
+  it("does not end a stretch on an empty block: the picture after an essay's thanks stays showing", () => {
+    const a = paper();
+    const at = a.at.ackHeading!;
+    const blocks = [...a.blocks];
+    blocks.splice(at + 2, 0, block("", "media"));
+    const b = { ...a, blocks };
+    expect(spans(b, admitMatter(b, [range(b, at, at + 2, ["acknowledgements"])]))).toEqual([[at, at + 1]]);
+  });
+});
