@@ -72,7 +72,7 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
 ## The evidence, and where to change it
 
 [261018b](../investigations/261018b-front-and-back-matter-eval.md) measured it on 52 articles in
-three sets, two held out: no prose folded, 71–96% of matter found, about $0.0013 an article. **A
+three sets, two held out: no prose folded, 67–96% of matter found, about $0.0013 an article. **A
 change to a check or the prompt is re-run on all three sets** with `scripts/matter-eval.ts` before
 it lands; the gold labels' guide is in that investigation's folder. The reasoning, the plan review
 and what building changed are in

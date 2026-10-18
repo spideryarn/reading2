@@ -110,6 +110,12 @@ describe("the owner's article read", () => {
     expect(read.matter).toBeUndefined();
   });
 
+  it("withholds a value from an older safety rule even when its blocks still match", async () => {
+    const read0 = await asOwner(() => loadArticle(SLUG));
+    await setMatter(await currentRevisionId(), { ...valid(read0.blocks), version: "matter/1" });
+    expect((await asOwner(() => loadArticle(SLUG))).matter).toBeUndefined();
+  });
+
   it("withholds a malformed value and a backwards range even with the right hash", async () => {
     const read0 = await asOwner(() => loadArticle(SLUG));
     const blocks = read0.blocks;
@@ -179,5 +185,14 @@ describe("the publication queues the step", () => {
     const published = await asOwner(() => publishRevision({ slug: SLUG, revisionId, job }));
     expect(published.matterSuccessor).toBeNull();
     expect(await matterJobs(job.id)).toEqual([]);
+  });
+
+  it("queues it when the stored value is about these blocks but belongs to an older safety rule", async () => {
+    const read = await asOwner(() => loadArticle(SLUG));
+    await setMatter(await currentRevisionId(), { ...valid(read.blocks), version: "matter/1" });
+    const { job, revisionId } = await draftUnderJob(["extract", "blocks"]);
+    const published = await asOwner(() => publishRevision({ slug: SLUG, revisionId, job }));
+    expect(published.matterSuccessor?.kind).toBe("queued");
+    expect(await matterJobs(job.id)).toHaveLength(1);
   });
 });

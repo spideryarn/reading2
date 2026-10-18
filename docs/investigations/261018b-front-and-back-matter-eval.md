@@ -16,9 +16,9 @@ the final code, and the union of a free label rule and one Haiku call finding mo
 
 | set | articles | union: prose folded | union: matter blocks found | label rule alone | model alone | today's rule (261007d) |
 |---|---|---|---|---|---|---|
-| development | 33 | **0** | 82% | 72% | 67% | 1% |
+| development | 33 | **0** | 79% | 71% | 62% | 1% |
 | held-out 1 | 10 | **0** | 96% | 85% | 94% | 4% |
-| held-out 2 | 9 | **0** | 71% | 70% | 46% | 0% |
+| held-out 2 | 9 | **0** | 67% | 67% | 45% | 0% |
 
 Matter here means front and back matter: the title block, authors and affiliations, the abstract,
 keywords, the piece's own table of contents, publication details, acknowledgements, funding,
@@ -95,6 +95,17 @@ found was then fixed with a general rule and re-measured on all three.
 4. **Held-out 2, on frozen code**: no prose (one empty picture block), but only 50% found. The
    thesis lost its contents to the model's window (dot leaders) and to entry rules that did not
    know roman page numbers or LaTeX's list-of-figures lines. **Fixed**, 50% → 71%.
+5. **The code review** (GPT Sol) built synthetic cases that folded prose through paths no corpus
+   article happened to take: an abstract label explaining every unheaded paragraph after it up to
+   350 words, the same for keywords, a DOI inside a prose paragraph as a dates line, broad
+   *support* or *contribution* wording as office matter, any first heading as the title. Each was
+   closed (an unstructured abstract is its label and one body block; a title must match exactly;
+   office words without an office label need the strong forms). The cost was recall: development
+   82% → 79%, held-out 2 71% → 67%, held-out 1 unchanged, still no prose. Its change to split a
+   reference list at every single non-reference entry was **reverted**: it folded two figure
+   notes on the NBER paper (184 words, under a *References* heading whose entries the reader had
+   dropped) and broke the reported paper's bibliography into seven stubs. A lone paragraph inside
+   a reference list still folds with it; that is accepted.
 
 What is still missed, and left: Wikipedia's citation lists (stored as footnotes, beside real
 notes); journal page chrome above the title (badges, an empty *Figures* carousel); an abstract

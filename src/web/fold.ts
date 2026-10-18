@@ -581,18 +581,30 @@ export function visibleFrom(id: string): string | null {
  * it** — for the reading position alone. A reader at the stub of a trailing
  * *References* has scrolled to the end of the piece; writing no position
  * would send a reload back to the top, and writing the stub would open the
- * stretch. The last block before it is on screen beside them. `null` only
- * when there is nothing on either side.
+ * stretch. The last visible position before it is on screen beside them:
+ * walking back over another shut stretch and the masthead echo, and naming a
+ * real fold's heading rather than a block it hides. `null` only when there is
+ * nothing on either side.
  */
 export function visibleNear(id: string): string | null {
   const ahead = visibleFrom(id);
   if (ahead !== null || !article) return ahead;
-  let ids = shutStretchOf(id as BlockId);
-  while (ids !== undefined) {
-    const before = article.blocks[(article.index.get(ids[0]!) ?? 0) - 1]?.id;
-    if (before === undefined) return null;
-    ids = shutStretchOf(before);
-    if (ids === undefined) return before;
+  const first = shutStretchOf(id as BlockId)?.[0];
+  let at = first === undefined ? -1 : (article.index.get(first) ?? 0) - 1;
+  while (at >= 0) {
+    const before = article.blocks[at]!.id;
+    const previous = shutStretchOf(before);
+    if (previous !== undefined) {
+      at = (article.index.get(previous[0]!) ?? 0) - 1;
+      continue;
+    }
+    /* An echo has no row. A real fold does: `visibleFrom` maps a block it
+       hides to the fold heading, which is the position actually on screen. */
+    if (article.echo.has(before)) {
+      at--;
+      continue;
+    }
+    return visibleFrom(before);
   }
   return null;
 }

@@ -306,11 +306,6 @@ checked in the browser first.
 4. The authors on the reported article.
 5. Browser pass and screenshots, docs, GPT Sol code review, push, question, note, queue.
 
-## Ledger
-
-- 2026-10-18: prior-work check; the reported article read from production (read-only); code
-  mapped; plan written.
-
 ## The plan review
 
 GPT Sol, read-only, 2026-10-18 ([the review](261018a-plan-review-sol.md)), verdict *revise before
@@ -357,19 +352,54 @@ decided in Stage 2 from how long it takes against what the reader waits for alre
 - **`matter` is a successor job, not in `DEFAULT_INGEST_STEPS`**: a call of ~6 s (17 s worst)
   would lengthen the wait before a pasted URL first opens by a third. Until it lands the reading
   view uses the 261007d rule.
-- **The stamp has no model** (`promptVersion: "matter/1"` names it), because the generator varies
+- **The stamp has no model** (`promptVersion: "matter/2"` names it), because the generator varies
   between `labels+<model>` and `labels`.
 - **The union keeps the finer partition** so the abstract has its own stub; the first union merged
   touching stretches and gave the reported article one stub for blocks 0–38.
 - **Stage 4 was an authors fix in the registry**, not the masthead: the masthead already shows
   three names and *+ N more*, each with a hover card of affiliations, and the year on the same
   line. The reported article declared no authors, so nothing reached it.
+- **One stub per stretch, and the masthead's "Show authors and details" is gone**: its stretch has
+  a stub of its own. The browser pass found stubs back to back spaced as paragraphs (now a compact
+  list), two stubs both called *Authors and affiliations* (one now *Title and authors*), and a
+  Structure row that opened only the first of the stretches it covered (now every one).
+- **An older article may fold nothing**: 1706.03762 was never folded by the 261007d rule (its first
+  block is a permission line) and has no stored `matter` until re-imported. Not a regression.
+
+## The code review
+
+GPT Sol, write-capable, 2026-10-18 ([prompt](261018a-code-review-prompt.md),
+[the review](261018a-code-review-sol.md)). Its verdict line, *do not push*, was on the code before
+its fixes, and its sandbox could not reach the local database. Every fix was read, the gates run,
+and the eval re-run on all three sets from cached answers.
+
+| | Sev | Finding | Outcome |
+|---|---|---|---|
+| C1 | P1 | A stored value of an older rule version, on the same blocks, was still shown and counted as settled | Kept: the version is checked at the read and at the successor; `matter/2` |
+| C2 | P1 | Synthetic paths that fold prose: an abstract or keywords label explaining the unheaded paragraphs after it; a DOI in prose as dates; broad *support*/*contribution* wording as office matter; any first heading as the title; a lone paragraph inside a reference list | Kept, except the reference-list part, **reverted**: splitting at every single non-reference entry folded 184 words of figure notes on NBER (held-out 1) and cut the reported paper's bibliography into seven stubs. A lone paragraph among references still folds with them (accepted; test in `tests/matter.test.ts`); NBER is now a regression test, seen red. The rest cost recall: development 82% → 79%, held-out 2 71% → 67%, no prose anywhere |
+| C3 | P1 | Behind trailing references, `visibleNear` could name a block hidden by a real fold | Kept, with its test |
+| C4 | P2 | Two different works with identical titles could share registry authors | Accepted as Stage 4's trade-off: page-origin id and exact title both required |
+| C5 | P2 | `stretchEvidence` is too complex to audit (cognitive complexity 73) | Not now: splitting per-kind validators is a refactor for its own change, re-run on the eval |
+| C6 | P3 | Lint advisories in `admitMatter` | Kept |
 
 ## Ledger
 
+- 2026-10-18: prior-work check; the reported article read from production (read-only); code
+  mapped; plan written.
 - 2026-10-18: corpus of 33 local articles; gold labels by two Opus subagents, spot-checked.
 - 2026-10-18: Stage 1 (f85e5cdfd, f87620ee9, 1bd7e790f): classifier, label rule, union, eval; two
   held-out sets, the first finding one false fold, fixed by a general rule.
 - 2026-10-18: Stage 4 (2dbca0050): registry names and year for a page that declares no authors.
 - 2026-10-18: Stage 2 (80e7358e8): the step and column. Not migrated locally yet: the shared
   ledger holds two unlanded migrations of session fbm53cdk; asked it to land them.
+- 2026-10-18: merged origin/dev (4d0b93f72), the migration regenerated after theirs and applied
+  locally. Union fix (7471493c3); second held-out set (03251c96b); eval write-up and area doc
+  (91002ae13).
+- 2026-10-18: Stage 3 (49c065cae, 634920506): the stubs, Structure's faint rows, a browser pass
+  and screenshots (`261018a-shot-*.png`). The reported article re-imported locally: six stubs, 19
+  authors, 2023.
+- 2026-10-18: the queue tests drive the `matter` successor explicitly (cf14ec4fa). Full suite: the
+  only red files left came from origin/dev (citation-blurbs' `messages`, `command-pick-catalogue`,
+  `cacheable-covers-artefact-routes`).
+- 2026-10-18: merged origin/dev (07cb5235a); GPT Sol code review and its fixes, one reverted (§ The
+  code review); eval tables refreshed.

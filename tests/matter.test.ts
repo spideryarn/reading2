@@ -300,11 +300,46 @@ describe("admitMatter", () => {
     expect(reasons(r)).toEqual(["an abstract with no abstract label"]);
   });
 
+  it("does not let an abstract label explain the article's following unheaded prose", () => {
+    const a = paper();
+    const own = block(prose(999));
+    const blocks = [...a.blocks.slice(0, a.at.intro!), own, ...a.blocks.slice(a.at.intro!)];
+    const b = { ...a, blocks };
+    expect(reasons(admitMatter(b, [range(b, a.at.abstractLabel!, a.at.intro!, ["abstract"])]))).toEqual([
+      `block ${a.at.intro!} shows no evidence of abstract`,
+    ]);
+  });
+
+  it("does not let a keywords label explain the article's following unheaded prose", () => {
+    const a = paper();
+    const keywords = [block("Keywords"), block("consciousness; artificial intelligence; sentience"), block(prose(999))];
+    const blocks = [...a.blocks.slice(0, a.at.intro!), ...keywords, ...a.blocks.slice(a.at.intro!)] as (MatterBlock & Block)[];
+    const b = { ...a, blocks };
+    expect(reasons(admitMatter(b, [range(b, a.at.intro!, a.at.intro! + 2, ["keywords"])]))).toEqual([
+      `block ${a.at.intro! + 2} shows no evidence of keywords`,
+    ]);
+    expect(matterByLabels(b, new Set()).stretches.some((s) => s.to === keywords[2]!.id)).toBe(false);
+  });
+
   it("refuses a references section whose entries do not look like references", () => {
     const a = paper();
     const blocks = [...a.blocks.slice(0, a.at.refsHeading! + 1), ...Array.from({ length: 30 }, (_, i) => block(prose(i)))];
     const b = { ...a, blocks };
     expect(reasons(admitMatter(b, [section(b, a.at.refsHeading!, ["references"])]))[0]).toMatch(/no evidence of references/u);
+  });
+
+  it("folds no figure notes under a References heading whose entries the reader dropped (NBER, held-out set 1)", () => {
+    const a = paper();
+    const note = (n: number) => block(`Notes: These figures plot the coefficients and 95% confidence intervals from event study regressions using the Sun and Abraham (2021) estimator, panel ${n}.`);
+    const tail = [block("Figure 1: Sample output", "media"), note(1), block("Figure 2: Raw distributions", "media"), note(2), block("Figure 3: Event studies", "media"), note(3)];
+    const blocks = [...a.blocks.slice(0, a.at.refsHeading! + 1), ...tail];
+    const b = { ...a, blocks };
+    const folded = admitMatter(b, [section(b, a.at.refsHeading!, ["references"])]).stretches.flatMap((s) => [
+      blocks.findIndex((x) => x.id === s.from),
+      blocks.findIndex((x) => x.id === s.to),
+    ]);
+    expect(folded.some((i) => i > a.at.refsHeading!)).toBe(false);
+    expect(matterByLabels(b, new Set()).stretches.some((s) => blocks.findIndex((x) => x.id === s.to) > a.at.refsHeading!)).toBe(false);
   });
 
   it("cuts a references section to its references: notes between, an appendix after, and footnotes stay showing", () => {
@@ -323,6 +358,19 @@ describe("admitMatter", () => {
     const withFootnote = [...a.blocks.slice(0, a.at.refsHeading! + 1), { ...block("See Mallat (1999) for an introduction."), role: "footnote" }, ...refs];
     const c = { ...a, blocks: withFootnote };
     expect(reasons(admitMatter(c, [section(c, a.at.refsHeading!, ["references"])]))).toEqual([`block ${a.at.refsHeading! + 1} is a footnote`]);
+
+    /* One entry that fails the cheap test does not split a list (REFERENCE_GAP
+       is 2): in a real list it is usually a book with no year, and splitting at
+       one gave the reported article seven References stubs. The cost, accepted
+       in the code review of 261018a: a lone paragraph among references folds
+       with them. */
+    const oneNote = [...a.blocks.slice(0, a.at.refsHeading! + 1), ...refs.slice(0, 10), block(PROSE), ...refs.slice(10)];
+    const d = { ...a, blocks: oneNote };
+    const dSpans = admitMatter(d, [section(d, a.at.refsHeading!, ["references"])]).stretches.map((s) => [
+      oneNote.findIndex((x) => x.id === s.from),
+      oneNote.findIndex((x) => x.id === s.to),
+    ]);
+    expect(dSpans).toEqual([[a.at.refsHeading!, oneNote.length - 1]]);
   });
 
   it("lets short page furniture ride in a title, authors or dates stretch, but not a sentence", () => {
@@ -343,6 +391,30 @@ describe("admitMatter", () => {
     /* A year is a dates word only in a short line: a paragraph of history is not furniture. */
     const d = { blocks: [block("Published: 15 April 2023"), block(`In December 2016, a letter was sold. ${PROSE}`), ...rest], meta: {} };
     expect(reasons(admitMatter(d, [range(d, 0, 1, ["dates"])]))).toEqual(["block 1 shows no evidence of dates"]);
+    /* A DOI in the article's prose is not publication furniture. */
+    const e = { blocks: [block("Published: 15 April 2023"), block(`${PROSE} We discuss doi:10.1000/example in the next section.`), ...rest], meta: {} };
+    expect(reasons(admitMatter(e, [range(e, 0, 1, ["dates"])]))).toEqual(["block 1 shows no evidence of dates"]);
+    /* Nor may any unknown three-word opening be treated as a label. */
+    const f = { blocks: [block("We explain this"), block("Published: 15 April 2023"), ...rest], meta: {} };
+    expect(reasons(admitMatter(f, [range(f, 0, 1, ["dates"])]))).toEqual(["block 0 shows no evidence of dates"]);
+  });
+
+  it("does not treat an arbitrary first heading as the article title", () => {
+    const blocks = [block("Editor's introduction", "heading", 1), block("Jane Doe, University of Oxford"), ...Array.from({ length: 30 }, (_, i) => block(prose(i)))];
+    const a = { blocks, meta: { title: "The article's real title", authors: [{ name: "Jane Doe", affiliations: [] }] } };
+    expect(reasons(admitMatter(a, [range(a, 0, 1, ["title", "authors"])]))).toEqual(["block 0 is a heading that is not a known label"]);
+  });
+
+  it("does not treat an unlabelled conclusion about contributions or support as office matter", () => {
+    const own = [
+      block("Evidence supports a computational account across diverse experiments, observations, disciplines, methods, settings, populations, laboratories, and theoretical traditions."),
+      block("This contribution advances a unified explanation across neuroscience, psychology, philosophy, engineering, medicine, education, law, economics, and public policy."),
+    ];
+    const blocks = [...Array.from({ length: 30 }, (_, i) => block(prose(i))), ...own];
+    const a = { blocks, meta: {} };
+    expect(reasons(admitMatter(a, [range(a, blocks.length - 2, blocks.length - 1, ["declarations"])]))).toEqual([
+      `block ${blocks.length - 2} shows no evidence of declarations`,
+    ]);
   });
 
   it("takes a contents list with no label when its entries are the article's own headings", () => {
@@ -385,7 +457,10 @@ describe("admitMatter", () => {
 
   it("leaves at least half the non-reference words showing", () => {
     /* A short article whose two windows are all thanks: folding both would fold 80% of it. */
-    const blocks = Array.from({ length: 10 }, (_, i) => (i === 4 || i === 5 ? block(prose(i)) : block(`We thank many people for their support. ${PROSE}`)));
+    const thanks = "Thanks to Alice Brown, Ben Green, Chris White, Dana Black, Erin Grey, Fran Gold, Gene Silver, Hope Azure, Ivan Violet, Jane Rose, and colleagues across every participating laboratory.";
+    const blocks = Array.from({ length: 10 }, (_, i) =>
+      i === 0 || i === 6 ? block("Acknowledgements") : i === 4 || i === 5 ? block(prose(i)) : block(`${thanks} ${thanks}`),
+    );
     const a = { blocks, meta: {} };
     const r = admitMatter(a, [range(a, 0, 3, ["acknowledgements"]), range(a, 6, 9, ["acknowledgements"])]);
     expect(r.stretches).toHaveLength(1);
@@ -572,7 +647,7 @@ describe("the checks, widened where the union eval's misses showed a general gap
     const at = a.at.abstract! + 1;
     const own = [block("Contributions", "heading", 2), block("We summarized the main contributions in this work. As follows"), block(prose(1))];
     const b = { ...a, blocks: [...a.blocks.slice(0, at), ...own, ...a.blocks.slice(at)] };
-    expect(reasons(admitMatter(b, [range(b, at, at + 2, ["declarations"])]))).toEqual([`block ${at + 2} shows no evidence of declarations`]);
+    expect(reasons(admitMatter(b, [range(b, at, at + 2, ["declarations"])]))).toEqual([`block ${at + 1} shows no evidence of declarations`]);
   });
 
   it("keeps a reference list's own sub-headings inside its section, when what is under them is references", () => {
@@ -591,7 +666,8 @@ describe("the checks, widened where the union eval's misses showed a general gap
     for (const i of [at + 16, at + 17]) expect(folded.some(([x, y]) => x! <= i && i <= y!)).toBe(false);
     /* With one reference-looking line under it, the appendix heading is still not part of the list. */
     const d = { ...a, blocks: [...a.blocks.slice(0, at + 1), ...refs.slice(0, 15), block("Appendix A. Proofs", "heading", 3), block(`In 2019 we showed this. ${PROSE}`), ...refs.slice(15)] };
-    expect(reasons(admitMatter(d, [section(d, at, ["references"])]))).toEqual([`block ${at + 16} is a heading that is not a known label`]);
+    const dFolded = spans(d, admitMatter(d, [section(d, at, ["references"])]));
+    for (const i of [at + 16, at + 17]) expect(dFolded.some(([x, y]) => x! <= i && i <= y!)).toBe(false);
   });
 
   it("keeps what a references cut leaves over when the stretch claimed other kinds too", () => {

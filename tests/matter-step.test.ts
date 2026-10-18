@@ -121,6 +121,10 @@ describe("matterForReader — the stretches reach the reading view only about th
     expect(matterForReader(okValue(blocks, []), blocks)).toEqual([]);
   });
 
+  it("withholds a value written by an older safety rule", () => {
+    expect(matterForReader({ ...okValue(blocks, [{ from: a, to: b }]), version: "matter/1" }, blocks)).toBeUndefined();
+  });
+
   it("withholds a value carried over blocks that have since changed", () => {
     const stored = okValue(blocks, [{ from: a, to: b }]);
     const edited = blocks.map((x, i) => (i === 5 ? { ...x, text: `${x.text} And one more.` } : x));
@@ -147,17 +151,17 @@ describe("matterForReader — the stretches reach the reading view only about th
   it("withholds an invalid shape, an unknown kind, and an unavailable value", () => {
     const hash = matterInputHash(blocks);
     expect(matterForReader(null, blocks)).toBeUndefined();
-    expect(matterForReader({ status: "ok", version: "matter/1", sourceHash: hash, stretches: [] }, blocks)).toBeUndefined();
+    expect(matterForReader({ status: "ok", version: MATTER_PROMPT_VERSION, sourceHash: hash, stretches: [] }, blocks)).toBeUndefined();
     expect(
       matterForReader(
-        { status: "ok", version: "matter/1", generator: "x", sourceHash: hash, stretches: [{ from: a, to: b, kinds: ["appendix"] }] },
+        { status: "ok", version: MATTER_PROMPT_VERSION, generator: "x", sourceHash: hash, stretches: [{ from: a, to: b, kinds: ["appendix"] }] },
         blocks,
       ),
     ).toBeUndefined();
     expect(
-      matterForReader({ status: "ok", version: "matter/1", generator: "x", sourceHash: hash, stretches: [], modelUnavailable: "the model said no" }, blocks),
+      matterForReader({ status: "ok", version: MATTER_PROMPT_VERSION, generator: "x", sourceHash: hash, stretches: [], modelUnavailable: "the model said no" }, blocks),
     ).toBeUndefined();
-    expect(matterForReader({ status: "unavailable", version: "matter/1", sourceHash: hash, reason: "step-failed" }, blocks)).toBeUndefined();
+    expect(matterForReader({ status: "unavailable", version: MATTER_PROMPT_VERSION, sourceHash: hash, reason: "step-failed" }, blocks)).toBeUndefined();
   });
 });
 
@@ -166,7 +170,12 @@ describe("matterSettled — whether a publication still needs the step", () => {
   it("is settled by any stored value about these blocks, a failure included, and by nothing else", () => {
     expect(matterSettled(null, blocks)).toBe(false);
     expect(matterSettled(okValue(blocks, []), blocks)).toBe(true);
-    expect(matterSettled({ status: "unavailable", version: "matter/1", sourceHash: matterInputHash(blocks), reason: "step-failed" }, blocks)).toBe(true);
+    expect(matterSettled({ status: "unavailable", version: MATTER_PROMPT_VERSION, sourceHash: matterInputHash(blocks), reason: "step-failed" }, blocks)).toBe(true);
     expect(matterSettled(okValue(paper(), []), blocks)).toBe(false);
+  });
+
+  it("queues a successor when the stored value belongs to an older rule", () => {
+    expect(matterSettled({ ...okValue(blocks, []), version: "matter/1" }, blocks)).toBe(false);
+    expect(matterSettled({ status: "unavailable", version: "matter/1", sourceHash: matterInputHash(blocks), reason: "step-failed" }, blocks)).toBe(false);
   });
 });

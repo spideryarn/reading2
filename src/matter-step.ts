@@ -70,10 +70,10 @@ import { mastheadEcho } from "./web/masthead-echo.js";
  * Here rather than beside the prompt only because src/matter.ts was being
  * edited by another stage when this was written; it belongs there.
  */
-export const MATTER_PROMPT_VERSION = "matter/1";
+export const MATTER_PROMPT_VERSION = "matter/2";
 
 /** The `generator` of a value both sources made. */
-export const MATTER_GENERATOR = "labels+" + MATTER_MODEL;
+export const MATTER_GENERATOR = `labels+${MATTER_MODEL}`;
 /** The `generator` of a value the call failed for: the labels rule's alone. */
 export const LABELS_ONLY_GENERATOR = "labels";
 
@@ -168,7 +168,7 @@ export async function buildMatter(input: MatterStepInput, opts: MatterOptions = 
       matter: {
         status: "ok",
         version: MATTER_PROMPT_VERSION,
-        generator: opts.model ? "labels+" + opts.model : MATTER_GENERATOR,
+        generator: opts.model ? `labels+${opts.model}` : MATTER_GENERATOR,
         sourceHash,
         stretches,
       },
@@ -184,14 +184,15 @@ export async function buildMatter(input: MatterStepInput, opts: MatterOptions = 
 }
 
 /**
- * **Is this stored value about these blocks** — `ok` (with or without the
- * model's half) or `unavailable`, with the hash of these blocks. What decides
+ * **Is this stored value about these blocks under today's rule** — `ok` (with
+ * or without the model's half) or `unavailable`, with today's version and the
+ * hash of these blocks. What decides
  * whether a publication queues the step: a failed call or a failed step on
  * the same blocks is not retried by every publication (a re-run is a press on
  * Metadata), and the step's own publication never queues another.
  */
 export function matterSettled(value: unknown, blocks: readonly Block[]): boolean {
-  return isMatterDocument(value) && value.sourceHash === matterInputHash(blocks);
+  return isMatterDocument(value) && value.version === MATTER_PROMPT_VERSION && value.sourceHash === matterInputHash(blocks);
 }
 
 /**
@@ -199,19 +200,21 @@ export function matterSettled(value: unknown, blocks: readonly Block[]): boolean
  * rule*.** Every one of these, or nothing (review F2):
  *
  * 1. the stored shape is valid and its status is `ok`;
- * 2. `sourceHash` equals `matterInputHash` of the blocks on this payload —
+ * 2. its version is today's safety-and-prompt version;
+ * 3. `sourceHash` equals `matterInputHash` of the blocks on this payload —
  *    so a column a draft carried over changed blocks, or a value copied from
  *    another revision, is withheld;
- * 3. every id is a block here;
- * 4. each `from` is at or before its `to` **by index** (block-ids.md § The
+ * 4. every id is a block here;
+ * 5. each `from` is at or before its `to` **by index** (block-ids.md § The
  *    cost we accepted), and the stretches are in document order and do not
  *    overlap.
  *
- * 2 implies 3 and 4 for a value this step wrote; they are checked anyway,
+ * 3 implies 4 and 5 for a value this step wrote; they are checked anyway,
  * because the column is a document anybody with a SQL prompt can write.
  */
 export function matterForReader(value: unknown, blocks: readonly Block[]): MatterStretchStored[] | undefined {
   if (!isMatterDocument(value) || value.status !== "ok") return undefined;
+  if (value.version !== MATTER_PROMPT_VERSION) return undefined;
   if (value.sourceHash !== matterInputHash(blocks)) return undefined;
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   let last = -1;

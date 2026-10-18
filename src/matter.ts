@@ -157,6 +157,9 @@ export const LABEL_MAX_WORDS = 8;
  * A run of this many entries that do not look like references, inside a
  * references stretch, splits it there: Wikipedia's notes between its
  * citations and its sources, an appendix run on under a references heading.
+ * One is not enough: a single entry in a real list often fails the cheap test
+ * (a book with no year), and splitting there gave the reported article seven
+ * *References* stubs (code review, 261018a).
  */
 export const REFERENCE_GAP = 2;
 
@@ -410,6 +413,10 @@ const ACKNOWLEDGEMENTS = /acknowledg|thank|grateful|indebted/iu;
 const FUNDING = /fund|grant|support|fellowship|award|sponsor|financ|foundation/iu;
 const DECLARATIONS =
   /jurisdictional claims|contribut|competing|conflict|interest|availab|ethic|declar|consent|authorship|disclos|approv|reproducib|repositor|github|zenodo/iu;
+/** Evidence specific enough to stand without an authored office label. */
+const FUNDING_STRONG = /\bfund(?:ed|ing)\b|\bgrants?\b|financial support|supported by|fellowship|awarded by|sponsor/iu;
+const DECLARATIONS_STRONG =
+  /(?:competing|conflicts?) interests?|data (?:and code )?(?:are |is )?availab|code (?:is |are )?availab|ethic|consent|authors? (?:contribut|declar)|authorship|disclos|repositor|github|zenodo|jurisdictional claims/iu;
 const REFERENCE = /\b(?:1[5-9]|20)\d\d[a-z]?\b|\bdoi\b|https?:|www\.|et al|\bpp?\.\s*\d/iu;
 /** A dates line is furniture, not a paragraph. */
 const DATES_MAX_WORDS = 200;
@@ -469,14 +476,11 @@ function authorEvidence(text: string, names: readonly string[]): boolean {
 }
 
 /** Whether a block is the title repeated. */
-function isTitle(block: MatterBlock, index: number, title: string | null | undefined): boolean {
+function isTitle(block: MatterBlock, title: string | null | undefined): boolean {
   const letters = (x: string) => ` ${x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
   const t = letters(title ?? "");
   const b = letters(block.text);
-  if (t.length >= 5 && b.length >= 5 && (b === t || (b.includes(t) && b.length <= t.length * 1.5) || (t.includes(b) && (b.length >= t.length * 0.5 || block.kind === "heading")))) {
-    return true;
-  }
-  return index === 0 && block.kind === "heading" && block.words <= 30;
+  return t.length >= 5 && b.length >= 5 && b === t;
 }
 
 const isLabel = (block: MatterBlock): boolean => labelKinds(block.text) !== null;
@@ -616,6 +620,87 @@ function fewSentenceWords(text: string): boolean {
   return all.filter((w) => SENTENCE_WORDS.has(bare(w).toLowerCase())).length <= Math.max(2, 0.04 * all.length);
 }
 
+/** An office statement may be a sentence, but not ordinary argumentative prose. */
+function fewOfficeSentenceWords(text: string): boolean {
+  const all = tokens(text);
+  return all.filter((w) => SENTENCE_WORDS.has(bare(w).toLowerCase())).length <= Math.max(3, 0.08 * all.length);
+}
+
+/** A reference entry, rather than article prose that happens to contain a year or DOI. */
+function isReferenceEntry(block: MatterBlock): boolean {
+  return block.role !== "footnote" && REFERENCE.test(block.text) && fewSentenceWords(block.text);
+}
+
+/**
+ * Blocks an abstract label can explain. An unstructured abstract is its label
+ * and one body block; more unheaded prose may already be the article proper.
+ * A structured abstract may also contain its named sub-headings and bodies.
+ */
+function abstractExplained(blocks: readonly MatterBlock[], start: number, end: number): Set<number> {
+  const explained = new Set<number>();
+  let found = false;
+  let structured = false;
+  let bodies = 0;
+  let words = 0;
+  for (let i = start; i < end; i++) {
+    const block = blocks[i]!;
+    if (!found) {
+      if (!ABSTRACT_LABEL.test(block.text)) continue;
+      found = true;
+      explained.add(i);
+      words += block.words;
+      const afterLabel = block.text.replace(/^\s*abstract\b\s*[:.\-–—]?\s*/iu, "").trim();
+      if (afterLabel !== "") bodies++;
+      continue;
+    }
+    words += block.words;
+    if (words > MAX_ABSTRACT_WORDS) continue;
+    if (block.words === 0) {
+      explained.add(i);
+      continue;
+    }
+    if (block.kind === "heading") {
+      if (ABSTRACT_PARTS.has(normaliseLabel(block.text))) {
+        structured = true;
+        explained.add(i);
+      }
+      continue;
+    }
+    if (structured || bodies === 0) {
+      explained.add(i);
+      bodies++;
+    }
+  }
+  return explained;
+}
+
+/** A keyword label and its one list block; later unheaded prose is the article. */
+function keywordsExplained(blocks: readonly MatterBlock[], start: number, end: number): Set<number> {
+  const explained = new Set<number>();
+  let found = false;
+  let hasList = false;
+  for (let i = start; i < end; i++) {
+    const block = blocks[i]!;
+    if (!found) {
+      if (!KEYWORDS_LABEL.test(block.text)) continue;
+      found = true;
+      explained.add(i);
+      const afterLabel = block.text.replace(/^\s*(?:key\s?words?|index terms|subjects?|jel|msc|ams|acm|ccs|classification|mesh)\b\s*[:.\-–—]?\s*/iu, "").trim();
+      hasList = afterLabel !== "";
+      continue;
+    }
+    if (block.words === 0) {
+      explained.add(i);
+      continue;
+    }
+    if (!hasList && block.kind !== "heading" && block.words <= KEYWORDS_MAX_WORDS) {
+      explained.add(i);
+      hasList = true;
+    }
+  }
+  return explained;
+}
+
 /**
  * Whether the blocks under heading `h`, to the next heading or `end`, are a
  * list of references: at least one, every one with reference evidence, few
@@ -627,7 +712,7 @@ function referencesUnder(blocks: readonly MatterBlock[], h: number, end: number)
   for (let i = h + 1; i < end && blocks[i]!.kind !== "heading"; i++) {
     const b = blocks[i]!;
     if (b.words === 0) continue;
-    if (b.role === "footnote" || !REFERENCE.test(b.text) || !fewSentenceWords(b.text)) return false;
+    if (!isReferenceEntry(b)) return false;
     n++;
   }
   return n > 0;
@@ -663,7 +748,8 @@ const stretchEntries = (blocks: readonly MatterBlock[], start: number, end: numb
  * - A heading in a range is only ever a known label or the title: anything
  *   else would fold the start of the article's own section.
  * - Kinds with a per-block test explain the blocks that pass it. `abstract`
- *   explains the blocks from an abstract label on, up to `MAX_ABSTRACT_WORDS`;
+ *   explains its label and one body block, or the named parts of a structured
+ *   abstract, within `MAX_ABSTRACT_WORDS`; `keywords` likewise takes one list;
  *   `contents` explains a contents label and the entries that follow it
  *   (`contentsRun`), never the first block after them; `references` explains every entry once `REFERENCE_EVIDENCE_SHARE`
  *   of them look like references.
@@ -684,9 +770,21 @@ export function stretchEvidence(
   const entries = stretchEntries(blocks, start, end);
   const refShare = entries.length === 0 ? 0 : entries.filter((b) => REFERENCE.test(b.text)).length / entries.length;
   const refsHold = has("references") && refShare >= REFERENCE_EVIDENCE_SHARE;
+  const abstract = has("abstract") ? abstractExplained(blocks, start, end) : new Set<number>();
   const contents = has("contents") ? contentsExplained(blocks, start, end, headedBy, entries).explained : new Set<number>();
-  const keywordsLabelled = has("keywords") && (headedBy?.includes("keywords") || slice.some((b) => labelKinds(b.text)?.includes("keywords")));
+  const keywords = has("keywords") ? keywordsExplained(blocks, start, end) : new Set<number>();
   const office = kinds.some((k) => OFFICE.has(k));
+  const labelText = (text: string): string | null => {
+    if (labelKinds(text)?.some((k) => OFFICE.has(k))) return normaliseLabel(text);
+    const prefix = /^([^:\n]{1,80}):\s+\S/u.exec(text.trim());
+    return prefix && labelKinds(prefix[1]!)?.some((k) => OFFICE.has(k)) ? normaliseLabel(prefix[1]!) : null;
+  };
+  const officeLabels = slice.map((b) => labelText(b.text)).filter((x): x is string => x !== null);
+  /* Bare "Contributions" is also often a section of the argument. Its label
+     cannot relax the evidence; "Author contributions" can. */
+  const officeLabelled = office &&
+    (headedBy?.some((k) => OFFICE.has(k)) === true || officeLabels.length > 0) &&
+    !officeLabels.includes("contributions");
   const authorsSeen = has("authors") && slice.some((b) => b.words <= AUTHORS_MAX_WORDS && authorEvidence(b.text, names) && notProse(b.text));
   if (has("abstract") && !headedBy?.includes("abstract") && !slice.some((b) => ABSTRACT_LABEL.test(b.text))) {
     return "an abstract with no abstract label";
@@ -697,13 +795,9 @@ export function stretchEvidence(
      (arXiv 2307.09288). Two in a row, or one at the end, still fail. */
   const thanksLabelled = office && headedBy?.includes("acknowledgements") === true;
   let gap = -1;
-  let abstractFrom = -1;
-  let abstractWords = 0;
   const sectionLevel = headedBy !== null && blocks[start]?.kind === "heading" ? (blocks[start]!.level ?? null) : null;
   for (let i = start; i < end; i++) {
     const block = blocks[i]!;
-    if (has("abstract") && abstractFrom < 0 && ABSTRACT_LABEL.test(block.text)) abstractFrom = i;
-    const inAbstract = abstractFrom >= 0 && (abstractWords += block.words) <= MAX_ABSTRACT_WORDS;
     if (block.words === 0) continue;
     if (block.role === "footnote") return `block ${i} is a footnote`;
     if (block.kind === "heading") {
@@ -713,29 +807,32 @@ export function stretchEvidence(
       if (has("references") && headedBy?.includes("references") && sectionLevel !== null && (block.level ?? 0) > sectionLevel && referencesUnder(blocks, i, end)) {
         continue;
       }
-      if (has("title") && isTitle(block, i, article.meta.title)) continue;
-      if (inAbstract && ABSTRACT_PARTS.has(normaliseLabel(block.text))) continue;
+      if (has("title") && isTitle(block, article.meta.title)) continue;
+      if (abstract.has(i)) continue;
       if (has("authors") && /^by\s/iu.test(block.text.trim()) && block.words <= 12) continue;
       return `block ${i} is a heading that is not a known label`;
     }
     if (isLabel(block)) continue;
-    if (i === start && block.words <= 3) continue;
+    if (i === start && block.words <= 3 && notProse(block.text)) continue;
     const text = block.text;
     const furniture =
       block.words <= FURNITURE_MAX_WORDS && (has("title") || has("authors") || has("dates")) && !tokens(text).some((w) => SENTENCE_WORDS.has(bare(w)));
     const explained =
       furniture ||
-      (has("title") && isTitle(block, i, article.meta.title)) ||
+      (has("title") && isTitle(block, article.meta.title)) ||
       (has("authors") && block.words <= AUTHORS_MAX_WORDS && notProse(text) &&
         (authorEvidence(text, names) || (authorsSeen && block.words <= AUTHORS_BARE_LINE_WORDS))) ||
-      inAbstract ||
-      (has("keywords") && (KEYWORDS_LABEL.test(text) || (keywordsLabelled && block.words <= KEYWORDS_MAX_WORDS))) ||
+      abstract.has(i) ||
+      keywords.has(i) ||
       contents.has(i) ||
-      (has("dates") && block.words <= DATES_MAX_WORDS && (DATES_STRONG.test(text) || (block.words <= DATES_WEAK_MAX_WORDS && DATES.test(text)))) ||
+      (has("dates") && block.words <= DATES_MAX_WORDS && fewSentenceWords(text) &&
+        (DATES_STRONG.test(text) || (block.words <= DATES_WEAK_MAX_WORDS && DATES.test(text)))) ||
       /* The acknowledgements, funding and declarations family mix in one
          paragraph ("Acknowledgments: CH was supported by …"), so any of the
          three tests serves any of the three kinds. */
-      (office && (ACKNOWLEDGEMENTS.test(text) || FUNDING.test(text) || DECLARATIONS.test(text))) ||
+      (office && fewOfficeSentenceWords(text) && (officeLabelled
+        ? ACKNOWLEDGEMENTS.test(text) || FUNDING.test(text) || DECLARATIONS.test(text)
+        : ACKNOWLEDGEMENTS.test(text) || FUNDING_STRONG.test(text) || DECLARATIONS_STRONG.test(text))) ||
       refsHold;
     if (explained) {
       gap = -1;
@@ -1039,25 +1136,40 @@ export function admitMatter(article: MatterArticle, answer: readonly MatterAnswe
   const dropped: MatterDrop[] = [];
   const candidates: MatterCandidate[] = [];
 
-  answer.forEach((item, k) => {
+  for (const [k, item] of answer.entries()) {
     const drop = (reason: string): void => {
       dropped.push({ item: k, reason });
     };
     if (item.type === "range") {
       const a = index.get(item.from);
       const b = index.get(item.to);
-      if (a === undefined || b === undefined || !inWindow(a) || !inWindow(b)) return drop("an id the model was not shown");
-      if (a > b) return drop("from comes after to");
-      if (!(b < w.openEnd) && !(a >= w.closeStart)) return drop("a range across the opening and the close");
+      if (a === undefined || b === undefined || !inWindow(a) || !inWindow(b)) {
+        drop("an id the model was not shown");
+        continue;
+      }
+      if (a > b) {
+        drop("from comes after to");
+        continue;
+      }
+      if (!(b < w.openEnd) && !(a >= w.closeStart)) {
+        drop("a range across the opening and the close");
+        continue;
+      }
       candidates.push({ item: k, start: a, end: b + 1, kinds: [...item.kinds], headedBy: null, shape: "range" });
-      return;
+      continue;
     }
     const h = index.get(item.heading);
-    if (h === undefined || (!inWindow(h) && !listed.has(item.heading))) return drop("a heading the model was not shown");
+    if (h === undefined || (!inWindow(h) && !listed.has(item.heading))) {
+      drop("a heading the model was not shown");
+      continue;
+    }
     const section = labelledSection(article, h, item.kinds);
-    if (typeof section === "string") return drop(section);
+    if (typeof section === "string") {
+      drop(section);
+      continue;
+    }
     candidates.push({ item: k, ...section, kinds: [...item.kinds], shape: "section" });
-  });
+  }
   const held = holdStretches(article, candidates, echo);
   return { ...held, dropped: [...dropped, ...held.dropped] };
 }

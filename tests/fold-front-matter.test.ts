@@ -356,6 +356,13 @@ describe("visibleFrom: where a block in a shut stretch lands", () => {
     expect(visibleNear("spya-r1")).toBe("spya-abs1");
   });
 
+  it("visibleNear names the visible fold heading, not a hidden block before a trailing stretch", () => {
+    setFoldArticle("slug", blocks, echo, both);
+    toggleFold(id("a"));
+    expect(isRowHidden("spya-a1")).toBe(true);
+    expect(visibleNear("spya-r1")).toBe("spya-a");
+  });
+
   it("is the outermost folded heading for a block a fold hides, and the block again once it is open", () => {
     /* sub (h3) under a (h2): both folded, and a1x is under both. */
     const nested = [...blocks.slice(0, 8), h("sub", 3), p("a1x")];

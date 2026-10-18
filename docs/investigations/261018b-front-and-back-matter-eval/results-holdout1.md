@@ -1,4 +1,4 @@
-# Front and back matter eval — 2026-10-18T02:35:30.652Z
+# Front and back matter eval — 2026-10-18T05:02:33.740Z
 
 10 articles; classifier MATTER_MODEL × 3 draws; skipped: none.
 
