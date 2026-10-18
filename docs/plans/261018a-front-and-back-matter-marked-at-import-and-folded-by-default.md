@@ -336,3 +336,40 @@ evidence, and no model call — **joins the eval as a second baseline.** If it m
 classifier with no prose folded, it is built instead, and the model call is not. Its point on the
 critical path is taken too: whether `matter` is in `DEFAULT_INGEST_STEPS` or a successor job is
 decided in Stage 2 from how long it takes against what the reader waits for already.
+
+## What building changed
+
+- **The design is the union, not one method.** The eval (261018b) measured the model call and the
+  label rule each folding no prose but finding different things (model: authors, titles, dates,
+  abstracts; label rule: reference lists and contents). The step runs the free label rule and the
+  model call, merges them and holds the result through the same checks. A failed call stores the
+  label rule's stretches alone (`generator: "labels"`, a closed `modelUnavailable` reason).
+- **Haiku needs `effort: "low"`** and a higher token ceiling; at the provider default it spent the
+  whole budget thinking and never answered.
+- **Back matter starts at 25% of the article, not 40%**: real acknowledgements and references sat at
+  32–34%. A `section` may carry any kind but `title`.
+- **A contents list ends at its last entry**, an entry being a short line that names one of the
+  article's own headings or carries a section or page number. Found by the first held-out set,
+  where the label rule ran a Contents list into an image and its caption.
+- **Footnotes are never folded**, though Wikipedia's citation lists are stored as footnotes and
+  are the biggest remaining miss: real notes sit in the same list, and the reading view already
+  draws footnotes as their own region.
+- **`matter` is a successor job, not in `DEFAULT_INGEST_STEPS`**: a call of ~6 s (17 s worst)
+  would lengthen the wait before a pasted URL first opens by a third. Until it lands the reading
+  view uses the 261007d rule.
+- **The stamp has no model** (`promptVersion: "matter/1"` names it), because the generator varies
+  between `labels+<model>` and `labels`.
+- **The union keeps the finer partition** so the abstract has its own stub; the first union merged
+  touching stretches and gave the reported article one stub for blocks 0–38.
+- **Stage 4 was an authors fix in the registry**, not the masthead: the masthead already shows
+  three names and *+ N more*, each with a hover card of affiliations, and the year on the same
+  line. The reported article declared no authors, so nothing reached it.
+
+## Ledger
+
+- 2026-10-18: corpus of 33 local articles; gold labels by two Opus subagents, spot-checked.
+- 2026-10-18: Stage 1 (f85e5cdfd, f87620ee9, 1bd7e790f): classifier, label rule, union, eval; two
+  held-out sets, the first finding one false fold, fixed by a general rule.
+- 2026-10-18: Stage 4 (2dbca0050): registry names and year for a page that declares no authors.
+- 2026-10-18: Stage 2 (80e7358e8): the step and column. Not migrated locally yet: the shared
+  ledger holds two unlanded migrations of session fbm53cdk; asked it to land them.
