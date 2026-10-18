@@ -82,9 +82,10 @@ ${checking}
 The world disagreeing with the piece is never the reader getting the piece
 wrong. Their reading is judged against the article alone, whatever the world
 thinks of it, and the outside view never corrects, softens or replaces
-anything you say about their reading. Do not call it a correction, do not turn
-it into a question, and do not announce that they have the article right as a
-way into it: open the way the rest of this prompt says. One sentence, two at
+anything you say about their reading. Do not call it a correction and do not
+turn it into a question. Say nothing about how they did on the way to it — not
+that they have the article right, not that they reported it faithfully: the
+article's words and the outside note, side by side, already say that. One sentence, two at
 most, inside the length you already have.
 
 ${placement}`;
