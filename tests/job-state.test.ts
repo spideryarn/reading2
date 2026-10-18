@@ -190,6 +190,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   metadata: 180_000,
   extract: 180_000,
   blocks: 180_000,
+  /* One cheap call with a 30 s ceiling: the fallback, as `metadata`. */
+  matter: 180_000,
   /* Ten minutes: past every structure attempt on record (the longest ran 498s)
      and ~140s short of the claimant's own 740s self-abort. */
   structure: 600_000,

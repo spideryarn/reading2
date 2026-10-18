@@ -196,6 +196,7 @@ const LAYOUT: {
   "sources-claims": { "sources-claims": (at) => path.join(at.dir, "sources-claims.json") },
   bibliography: { bibliography: (at) => path.join(at.dir, "citations.json") },
   crossrefs: { crossrefs: (at) => path.join(at.dir, "crossrefs.json") },
+  matter: { matter: (at) => path.join(at.dir, "matter.json") },
   simple: { simple: (at) => path.join(at.dir, "simple-summary.json") },
 };
 

@@ -189,11 +189,14 @@ import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, T
 import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
+import { matterInputHash } from "./matter.js";
+import { buildMatter, MATTER_PROMPT_VERSION } from "./matter-step.js";
 import {
   ARTICLE_RENDERER,
   type ArticleStage,
   CAPABLE_MODEL,
   generatorFor,
+  MATTER_MODEL,
   type ModelPower,
   modelFor,
   powerFor,
@@ -547,6 +550,12 @@ export function cacheArticleForStep(steps: readonly StepName[], index: number): 
  *
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+  /* It reads the blocks alone and nothing in the pipeline reads what it
+     writes; its `stamp` compares `matterInputHash` of the blocks, so blocks a
+     forced `blocks` really changed re-run it without the cascade, and blocks
+     that came out the same keep their stretches rather than buying the call
+     again. docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md. */
+  "matter",
   /* **`labels` is deliberately NOT in this set, and that is the opposite call
      from `arc`'s one row down.**
 
@@ -3328,6 +3337,76 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           readingDifficulty: await ratedReadingDifficulty(ctx, run.blocks),
         },
         detail: `${total} blocks, ${minted} new ids (${kept} kept)`,
+      };
+    },
+  },
+
+  /* Stage 3.5 — the front and back matter: one cheap call over the stored
+     blocks, held to them by code, stored as stretches for the reading view to
+     fold. **Off DEFAULT_INGEST_STEPS, on purpose**: the publication that
+     changed the blocks queues it as a free successor
+     (src/store/pg-revisions.ts § `publishRevisionIn`), so the article opens
+     without waiting for the call — src/matter-step.ts § Why a successor job.
+
+     **It fails soft**: a refused, failed or timed-out call stores the labels
+     rule's stretches alone, with a closed `modelUnavailable` code; a failure
+     of the step itself stores `{ status: "unavailable" }`, and the reading
+     view falls back to today's byline rule. Either way the step succeeds.
+     Cost goes to the `matter` job (src/cost-categories.ts, step-driven).
+     docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md. */
+  matter: {
+    name: "matter",
+    label: "Finding the front and back matter",
+    produces: ["matter"],
+    /**
+     * `matterInputHash` of the blocks (review F1) and the step's version, and
+     * **no model**: the stored `generator` names its sources, and the model is
+     * folded into `MATTER_PROMPT_VERSION` (src/matter-step.ts).
+     */
+    stamp: async (ctx, store) => {
+      const file = await store.read(ctx.slug, "blocks", "blocks");
+      if (!file?.blocks) return null;
+      return { inputHash: matterInputHash(file.blocks), promptVersion: MATTER_PROMPT_VERSION };
+    },
+    async run(ctx, store) {
+      /* The blocks from their own step, not `readArticle`, which wants the tree
+         too: this step reads nothing `structure` makes. No blocks is stored as
+         `unavailable` (`no-blocks`) rather than thrown. */
+      const file = await store.read(ctx.slug, "blocks", "blocks");
+      const blocks = file?.blocks ?? [];
+      const meta = await store.read(ctx.slug, "extract", "meta");
+      const started = Date.now();
+      const { matter, dropped } = await buildMatter({ blocks, meta: meta ?? null }, { signal: ctx.signal });
+      const stretches = matter.status === "ok" ? matter.stretches.length : 0;
+      const labelsOnly = matter.status === "ok" ? matter.modelUnavailable : undefined;
+      const said =
+        matter.status === "unavailable"
+          ? `unavailable (${matter.reason})`
+          : `${stretches} stretches` + (labelsOnly ? `, labels only (${labelsOnly})` : "");
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "matter",
+          model: MATTER_MODEL,
+          ms: Date.now() - started,
+          blocks: blocks.length,
+          status: matter.status,
+          /* Closed codes, never the model's words. */
+          ...(matter.status === "unavailable" ? { reason: matter.reason } : {}),
+          ...(labelsOnly ? { modelUnavailable: labelsOnly } : {}),
+          stretches,
+          /* Counts only. Many drops beside few stretches is the checks refusing
+             the model, which nothing on screen would say. */
+          dropped,
+        },
+        `matter ${ctx.slug}: ${said}`,
+      );
+      return {
+        parts: { matter },
+        detail:
+          matter.status === "ok"
+            ? `${stretches} ${stretches === 1 ? "stretch" : "stretches"} to fold`
+            : "not found this time; the reading view uses its usual rule",
       };
     },
   },

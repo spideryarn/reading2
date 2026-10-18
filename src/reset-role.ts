@@ -58,6 +58,11 @@ export const RESET_ROLE = {
   blocks: "import",
   structure: "import",
   labels: "successor",
+  /* Not dropped by hand, like `labels`: the reset's publication queues it when
+     the blocks it re-made are not the ones the stored matter is about
+     (src/matter-step.ts § `matterSettled`). Re-extracted blocks that came out
+     the same keep the same stretches, which is the right answer. */
+  matter: "successor",
   assets: "import",
   arc: "extra",
   tweets: "extra",

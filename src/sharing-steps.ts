@@ -74,6 +74,10 @@ export const STEP_SHARING = {
   metadata: "exclusive",
   extract: "exclusive",
   blocks: "exclusive",
+  /* One column of its own, reading only the blocks and the metadata, which no
+     sharing step writes. Sharing so that its successor runs beside the
+     main-mode jobs an import queues rather than in line behind them. */
+  matter: { column: "matter", reads: [] },
   structure: "exclusive",
   labels: "exclusive",
   assets: "exclusive",

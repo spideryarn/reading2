@@ -93,6 +93,7 @@ import type {
   Relations,
   SourcesClaimList,
   Crossrefs,
+  Matter,
   SimpleSummary,
   Skim,
   FeedbackDiagnosticsPayload,
@@ -1165,6 +1166,23 @@ export const articleRevisions = spideryarn.table(
      * `revision_blocks`, on the argument its neighbours make.
      */
     crossrefs: jsonb("crossrefs").$type<Crossrefs>(),
+
+    /**
+     * An article's front and back matter, as stretches of blocks to fold —
+     * `Matter`, src/types.ts, written by the `matter` step (src/matter-step.ts).
+     * docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md.
+     *
+     * The WHOLE artefact, like its neighbours. A failed call stores the free
+     * labels rule's stretches alone (`modelUnavailable` says why), and a
+     * failure of the step itself `{ status: "unavailable" }`, rather than null
+     * (review F2).
+     * `sourceHash` is `matterInputHash` over the blocks it read, and the owner's
+     * article read withholds the stretches unless it equals the current blocks'
+     * (src/store/pg.ts § `loadArticle`). **Owner only**: it is in no public
+     * projection, because src/public/dto.ts is a listed defence. No foreign key
+     * from a stretch's ids to `revision_blocks`, on the argument its neighbours make.
+     */
+    matter: jsonb("matter").$type<Matter>(),
 
     /**
      * Simple: a plain-words orientation to the piece — `SimpleSummary`,
@@ -3580,7 +3598,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",

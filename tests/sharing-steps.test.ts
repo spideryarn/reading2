@@ -132,6 +132,9 @@ describe("the policy", () => {
         "relations",
         /* 2026-10-08, the same: Debate's claims list — plan 261008i. */
         "sources-claims",
+        /* 2026-10-18, a whole column that reads only the blocks: the front
+           and back matter — plan 261018a. */
+        "matter",
       ].sort(),
     );
   });

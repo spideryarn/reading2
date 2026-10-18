@@ -141,6 +141,9 @@ type Field = "inputHash" | "promptVersion" | "model";
  */
 const CASES: Partial<Record<StepName, readonly Field[]>> = {
   blocks: [],
+  /* No model: the stored `generator` names its sources, and the model is in
+     `MATTER_PROMPT_VERSION` (src/matter-step.ts). */
+  matter: ["inputHash", "promptVersion"],
   structure: ["inputHash"],
   labels: ["inputHash", "promptVersion", "model"],
   assets: ["inputHash", "promptVersion"],
@@ -344,6 +347,8 @@ function minimal(step: StepName): Artefact {
       return { ...made, citations: [] };
     case "crossrefs":
       return { ...made, links: [] };
+    case "matter":
+      return { status: "ok", version: "to be stamped", generator: "labels", sourceHash: "to be stamped", stretches: [] };
     case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":
@@ -936,7 +941,8 @@ describe("when the article itself moves, every step gets the same answer from bo
       /* Three stamped steps do not read a paragraph's text, on either side:
          `assets` hashes each block's HTML for its figures, `skim` hashes the
          quotes it was offered, and `illustrated` hashes the sketch. */
-      expect(stale).toEqual(inOrder(["blocks", "labels", ...READS_THE_HEAD]));
+      /* `matter` hashes the blocks alone (`matterInputHash`), so it goes too. */
+      expect(stale).toEqual(inOrder(["blocks", "matter", "labels", ...READS_THE_HEAD]));
     } finally {
       await getDb().update(revisionBlocks).set({ text: target.text }).where(where);
     }

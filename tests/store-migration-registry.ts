@@ -3621,6 +3621,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/pdf-quality-pg.test.ts": "private-postgres",
   "tests/export-meta-abstract-pg.test.ts": "private-postgres",
   "tests/metadata-rerun-keeps-extract-pg.test.ts": "private-postgres",
+  /* The owner's article read of `article_revisions.matter`, and the
+     publication that queues the `matter` successor (plan 261018a). */
+  "tests/matter-step-pg.test.ts": "private-postgres",
 };
 
 /**

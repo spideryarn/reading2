@@ -689,6 +689,11 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      claim's deadline before its own, and a cancelled step is the one thing
      that call lets fail an import. GPT Sol, code review of plan 261005j. */
   blocks: 25_000,
+  /* **A CEILING for the call, MEASURED for the rest.** One call that gives up
+     after `TIMEOUT_MS` in src/matter.ts, 30 s; the eval's draws took 5.8 s at
+     the median and ~17 s at worst (plan 261018a, Stage 1). The checks and the
+     write are milliseconds. So 30 s and 10 s more. */
+  matter: 40_000,
   /* **A CEILING, and the reasoning is `extract`'s above, for the same reason.**
      ⟨measured 2026-09-04 on Kuhn, *A Landscape of Consciousness*, 142 pages⟩
 

@@ -49,6 +49,10 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
     name: "Blocks",
     what: "The text cut into paragraphs, headings, quotes and figures, each given a lasting name the reading view can point to",
   },
+  matter: {
+    name: "Front and back matter",
+    what: "The authors, abstract, contents, acknowledgements and references, found so the reading view can fold them away",
+  },
   structure: { mode: "structure" },
   labels: {
     name: "Paragraph labels",
