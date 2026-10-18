@@ -586,3 +586,108 @@ describe("matterByLabels, inline labels", () => {
     expect(r.stretches.some((x) => x.kinds.includes("funding") || x.kinds.includes("declarations"))).toBe(false);
   });
 });
+
+/**
+ * Trimmed copies of the two contents misses in the held-out eval
+ * (2026-10-18): a contents run that went on past its entries into a picture
+ * and its caption (simulators-spya-q2xbny), and a report's Table of Contents
+ * with a List of Tables and a List of Figures under it that neither method
+ * found (nist-ai-100-1-spya-a36pz9).
+ */
+describe("a contents stretch is a label and its entries", () => {
+  const sectionBody = (from: number) => Array.from({ length: 12 }, (_, k) => block(prose(from + k)));
+
+  /** simulators-spya-q2xbny, blocks 0–32 trimmed, then the sections its entries name. */
+  function simulators(): LabelsArticle & { at: Record<string, number> } {
+    const blocks: (MatterBlock & Block)[] = [];
+    const at: Record<string, number> = {};
+    const push = (name: string | null, b: MatterBlock & Block) => {
+      if (name) at[name] = blocks.length;
+      blocks.push(b);
+    };
+    push(null, block("Link post"));
+    push("label", block("Contents"));
+    /* "Meta" names no heading: the extraction kept it as a line of the Summary. */
+    for (const t of ["Summary", "Meta", "The limit of sequence modeling", "Tool /​ genie GPT", "Next steps", "Appendix: Quasi-simulators"]) push(null, block(t));
+    at.lastEntry = blocks.length - 1;
+    push("thanks", block("Thanks to Chris Scammell, Adam Shimi, Lee Sharkey, Evan Hubinger, Nicholas Dupuis, Leo Gao, Johannes Treutlein, and Jonathan Low for feedback on drafts."));
+    push(null, block("This work was carried out while at Conjecture."));
+    push("media", block("", "media"));
+    push("caption", block("“Moebius illustration of a simulacrum living in an AI-generated story discovering it is in a simulation” by DALL-E 2"));
+    for (const [k, h] of ["Summary", "The limit of sequence modeling", "Tool /​ genie GPT", "Next steps", "Appendix: Quasi-simulators"].entries()) {
+      push(null, block(h, "heading", 2));
+      for (const b of sectionBody(k * 20)) push(null, b);
+    }
+    return { blocks, meta: { title: "Simulators", byline: "janus" }, at };
+  }
+
+  /** nist-ai-100-1-spya-a36pz9, blocks 0–46 trimmed, then the sections its entries name. */
+  function nist(): LabelsArticle & { at: Record<string, number> } {
+    const blocks: (MatterBlock & Block)[] = [];
+    const at: Record<string, number> = {};
+    const push = (name: string | null, b: MatterBlock & Block) => {
+      if (name) at[name] = blocks.length;
+      blocks.push(b);
+    };
+    push(null, block("Certain commercial entities, equipment, or materials may be identified in this document in order to describe an experimental procedure or concept adequately."));
+    push("toc", block("Table of Contents", "heading", 1));
+    for (const t of ["Executive Summary 1", "Part 1: Foundational Information 4", "1 Framing Risk 4", "1.1 Understanding and Addressing Risks, Impacts, and Harms 4", "2 Audience 9", "Appendix A: Descriptions of AI Actor Tasks from Figures 2 and 3 35"]) {
+      push(null, block(t));
+    }
+    push("tables", block("List of Tables", "heading", 2));
+    for (const t of ["Table 1 Categories and subcategories for the GOVERN function. 22", "Table 2 Categories and subcategories for the MAP function. 26"]) push(null, block(t));
+    push("figures", block("List of Figures", "heading", 2));
+    push(null, block("Fig. 1 Examples of potential harms related to AI systems. Trustworthy AI systems and their responsible use can mitigate negative risks and contribute to benefits for people, organizations, and ecosystems. 5", "caption"));
+    push("lastEntry", block("Fig. 2 Lifecycle and Key Dimensions of an AI System. Modified from OECD (2022) OECD Framework for the Classification of AI systems — OECD Digital Economy Papers. The two inner circles show AI systems’ key dimensions and the outer circle shows AI lifecycle stages. Ideally, risk management efforts start with the Plan and Design function in the application context and are performed throughout the AI", "caption"));
+    push("exec", block("Executive Summary", "heading", 1));
+    for (const b of sectionBody(0)) push(null, b);
+    for (const [k, h] of ["Part 1: Foundational Information", "1. Framing Risk", "1.1 Understanding and Addressing Risks, Impacts, and Harms", "2. Audience"].entries()) {
+      push(null, block(h, "heading", k < 2 ? 1 : 2));
+      for (const b of sectionBody(k * 20 + 100)) push(null, b);
+    }
+    return { blocks, meta: { title: "Artificial Intelligence Risk Management Framework (AI RMF 1.0)" }, at };
+  }
+
+  const spans = (a: MatterArticle, r: { stretches: { from: string; to: string; kinds: string[] }[] }) =>
+    r.stretches.filter((s) => s.kinds.includes("contents")).map((s) => [a.blocks.findIndex((b) => b.id === s.from), a.blocks.findIndex((b) => b.id === s.to)]);
+
+  it("ends a labelled contents run at its last entry: not the thanks, the picture or its caption after it", () => {
+    const a = simulators();
+    const want = [[a.at.label!, a.at.lastEntry!]];
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual(want);
+    /* The model's range over all of it is cut to the entries, not taken whole. */
+    const model = admitMatter(a, [range(a, a.at.label!, a.at.caption!, ["contents"])]);
+    expect(spans(a, model)).toEqual(want);
+    expect(spans(a, combineMatter(a, model, matterByLabels(a, new Set()), new Set()))).toEqual(want);
+  });
+
+  it("does not take a short line that names no heading and carries no number", () => {
+    const a = simulators();
+    const blocks = [...a.blocks];
+    blocks.splice(a.at.lastEntry! + 1, 0, block("Read the whole thing slowly"));
+    const b = { ...a, blocks };
+    expect(spans(b, matterByLabels(b, new Set()))).toEqual([[a.at.label!, a.at.lastEntry!]]);
+  });
+
+  it("takes a Table of Contents with its List of Tables and List of Figures, by either method", () => {
+    const a = nist();
+    const want = [[a.at.toc!, a.at.lastEntry!]];
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual(want);
+    expect(spans(a, admitMatter(a, [range(a, a.at.toc!, a.at.lastEntry!, ["contents"])]))).toEqual(want);
+  });
+
+  it("lets a long caption be an entry only under a list-of-figures label", () => {
+    const a = nist();
+    /* Without the two list labels, Fig. 1 and Fig. 2 are long captions, not entries, and the run ends at Table 2. */
+    const blocks = a.blocks.filter((_, i) => i !== a.at.tables && i !== a.at.figures);
+    const b = { ...a, blocks };
+    const fig2 = a.at.lastEntry! - 2;
+    expect(spans(b, admitMatter(b, [range(b, a.at.toc!, fig2, ["contents"])]))).toEqual([[a.at.toc!, fig2 - 2]]);
+  });
+
+  it("knows List of Tables and List of Figures as contents labels, and not a list of abbreviations", () => {
+    expect(labelKinds("List of Tables")).toEqual(["contents"]);
+    expect(labelKinds("List of Figures")).toEqual(["contents"]);
+    expect(labelKinds("List of Abbreviations")).toBeNull();
+  });
+});

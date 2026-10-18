@@ -134,6 +134,14 @@ export const CONTENTS_LEADING_SHARE = 0.25;
 export const BACK_MATTER_FROM_SHARE = 0.25;
 /** A contents entry is at most this many words. */
 export const CONTENTS_MAX_ENTRY_WORDS = 25;
+/** Under a list-of-figures or list-of-tables label, an entry is the caption repeated, "Fig. 2 …", up to this many words. */
+export const CONTENTS_MAX_LISTED_CAPTION_WORDS = 100;
+/**
+ * One line between two entries that is not itself one may stay in the run if
+ * it is this short: a section name whose heading the extraction did not keep
+ * ("Meta" in simulators-spya-q2xbny's contents).
+ */
+export const CONTENTS_GAP_MAX_WORDS = 6;
 /** At least this share of a reference stretch's entries look like references. */
 export const REFERENCE_EVIDENCE_SHARE = 0.6;
 /** A label is at most this many words ("Authors' disclosures of potential conflicts of interest"). */
@@ -273,7 +281,20 @@ const LABELS: ReadonlyMap<string, readonly MatterKind[]> = new Map<string, Matte
     "article information",
     "persistent url",
   ].map((l): [string, MatterKind[]] => [l, ["dates"]]),
-  ...["contents", "table of contents"].map((l): [string, MatterKind[]] => [l, ["contents"]]),
+  /* A report's lists of tables and figures are more of its table of contents:
+     each entry points at a place in the piece and says nothing of its own
+     (nist-ai-100-1-spya-a36pz9). A list of abbreviations or acronyms is not
+     here: it explains the piece's terms, which a reader looks up while
+     reading, so it is content, as a glossary is. */
+  ...[
+    "contents",
+    "table of contents",
+    "list of tables",
+    "list of figures",
+    "list of illustrations",
+    "list of figures and tables",
+    "list of tables and figures",
+  ].map((l): [string, MatterKind[]] => [l, ["contents"]]),
   ...["abstract"].map((l): [string, MatterKind[]] => [l, ["abstract"]]),
   ...["keywords", "key words", "index terms"].map((l): [string, MatterKind[]] => [l, ["keywords"]]),
   ...[
@@ -442,14 +463,124 @@ function isTitle(block: MatterBlock, index: number, title: string | null | undef
 
 const isLabel = (block: MatterBlock): boolean => labelKinds(block.text) !== null;
 
-/** A contents entry or heading compared without its number, dot leaders and page number. */
+/** A contents entry or heading compared without its section number, dot leaders, page number, case or punctuation. */
 function entryText(text: string): string {
   return text
     .toLowerCase()
     .replace(/(?:\.\s*){3,}\s*\d*\s*$/u, " ")
+    .replace(/\s\d{1,4}\s*$/u, "")
     .replace(/^\s*(?:\d+(?:\.\d+)*|[ivxlc]+|[a-z])(?:[.):]\s*|\s+)/u, "")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+/** A section number in front: "2", "1.2.3", "IV.", "A)", "Part 1:", "Appendix B:". */
+const ENTRY_NUMBER = /^\s*(?:\d+(?:\.\d+)*\.?|[IVXLCivxlc]+[.)]|[A-Za-z][.)]|(?:part|chapter|section|appendix|annex)\s+(?:\d+|[IVXLC]+|[A-Z])\b[.:]?)\s+\S/u;
+/** A page number at the end, or dot leaders. */
+const ENTRY_PAGE = /\s\d{1,4}\s*$|(?:\.\s*){3,}\s*\d*\s*$/u;
+/** A listed table or figure: "Table 1 …", "Fig. 2 …", "Figure 3: …". */
+const LISTED_CAPTION = /^\s*(?:fig(?:ure)?s?\.?|tables?|tab\.)\s*\d+/iu;
+/** The labels whose entries repeat captions. */
+const CAPTION_LIST = /^list of (?:tables|figures|illustrations)\b/u;
+
+/** The article's own headings, as entries are compared with them. */
+function headingNames(blocks: readonly MatterBlock[]): Set<string> {
+  return new Set(blocks.filter((b) => b.kind === "heading").map((b) => entryText(b.text)).filter((t) => t !== ""));
+}
+
+/**
+ * **Is this block an entry of a table of contents?** A short line that names
+ * one of the article's own headings (as `entryText` normalises both; a
+ * truncated entry may name the start of one), or that carries a section
+ * number or a page number. Under a list-of-figures label, a listed caption
+ * ("Fig. 2 …") may be longer, since the list repeats the caption.
+ */
+function isContentsEntry(block: MatterBlock, headings: ReadonlySet<string>, listsCaptions: boolean): boolean {
+  if (block.kind === "heading" || block.words === 0) return false;
+  const text = block.text;
+  if (listsCaptions && LISTED_CAPTION.test(text) && block.words <= CONTENTS_MAX_LISTED_CAPTION_WORDS) return true;
+  const name = entryText(text);
+  if (name === "" || tokens(name).length > CONTENTS_MAX_ENTRY_WORDS) return false;
+  if (ENTRY_NUMBER.test(text) || ENTRY_PAGE.test(text) || LISTED_CAPTION.test(text)) return true;
+  if (headings.has(name)) return true;
+  return name.length >= 12 && [...headings].some((h) => h.startsWith(name));
+}
+
+/**
+ * **The blocks of `[start, end)` a table of contents explains.** A run
+ * begins at a contents label (a heading or a label line; `headed` when the
+ * stretch is a section under one, `unlabelled` when its entries proved
+ * themselves without one) and holds its entries; it ends at the first
+ * non-empty block that is not an entry, so what follows a contents list (a
+ * thank-you, a picture, its caption) is not explained by it. One short line
+ * between two entries stays (`CONTENTS_GAP_MAX_WORDS`). Empty blocks between
+ * entries are explained; empty blocks after a run's last entry are not.
+ * `firstEnd` is one past the last entry of the first run (or `start` when
+ * there is none): where a stretch claiming only contents is cut.
+ */
+export function contentsRun(
+  blocks: readonly MatterBlock[],
+  start: number,
+  end: number,
+  opts: { headed?: boolean; unlabelled?: boolean } = {},
+): { explained: Set<number>; firstEnd: number } {
+  const headings = headingNames(blocks);
+  const explained = new Set<number>();
+  let inRun = opts.unlabelled === true;
+  let captions = false;
+  /* Blocks that join the run only if an entry follows them: empty ones, and the one short gap line. */
+  let pending: number[] = [];
+  let gapUsed = false;
+  let lastWasEntry = false;
+  let last = -1;
+  let firstEnd = -1;
+  const take = (i: number) => {
+    for (const p of pending) explained.add(p);
+    pending = [];
+    explained.add(i);
+    last = i;
+  };
+  const stop = () => {
+    if (inRun && firstEnd < 0 && last >= 0) firstEnd = last + 1;
+    inRun = false;
+    pending = [];
+    lastWasEntry = false;
+  };
+  for (let i = start; i < end; i++) {
+    const b = blocks[i]!;
+    if (b.words === 0) {
+      if (inRun) pending.push(i);
+      continue;
+    }
+    if ((b.kind === "heading" || b.kind === "text") && labelKinds(b.text)?.includes("contents")) {
+      inRun = true;
+      captions = CAPTION_LIST.test(normaliseLabel(b.text));
+      lastWasEntry = false;
+      gapUsed = false;
+      take(i);
+      continue;
+    }
+    if (i === start && opts.headed === true) {
+      inRun = true;
+      take(i);
+      continue;
+    }
+    if (!inRun) continue;
+    if (isContentsEntry(b, headings, captions)) {
+      take(i);
+      lastWasEntry = true;
+      gapUsed = false;
+      continue;
+    }
+    if (!gapUsed && lastWasEntry && b.kind !== "heading" && b.words <= CONTENTS_GAP_MAX_WORDS) {
+      pending.push(i);
+      gapUsed = true;
+      continue;
+    }
+    stop();
+  }
+  stop();
+  return { explained, firstEnd: firstEnd < 0 ? start : firstEnd };
 }
 /** A keywords list under its label is short. */
 const KEYWORDS_MAX_WORDS = 60;
@@ -477,6 +608,27 @@ function referencesUnder(blocks: readonly MatterBlock[], h: number, end: number)
 }
 
 /**
+ * The blocks of `[start, end)` a table of contents explains (`contentsRun`):
+ * from a label, or, with none, from the start when most of the entries are
+ * the article's own headings, so a contents list proves itself.
+ */
+function contentsExplained(
+  blocks: readonly MatterBlock[],
+  start: number,
+  end: number,
+  headedBy: readonly MatterKind[] | null,
+  entries: readonly MatterBlock[],
+): ReturnType<typeof contentsRun> {
+  const headings = headingNames(blocks);
+  const unlabelled = entries.length > 0 && entries.filter((b) => headings.has(entryText(b.text))).length / entries.length >= REFERENCE_EVIDENCE_SHARE;
+  return contentsRun(blocks, start, end, { headed: headedBy?.includes("contents") === true, unlabelled });
+}
+
+/** The entries `stretchEvidence` weighs: blocks with words that are neither headings nor labels. */
+const stretchEntries = (blocks: readonly MatterBlock[], start: number, end: number): MatterBlock[] =>
+  blocks.slice(start, end).filter((b) => b.words > 0 && b.kind !== "heading" && !isLabel(b));
+
+/**
  * **Does a stretch's every block have evidence for one of the kinds it
  * claims?** Read from the full stored text. A reason when not, else `null`.
  *
@@ -486,8 +638,8 @@ function referencesUnder(blocks: readonly MatterBlock[], h: number, end: number)
  *   else would fold the start of the article's own section.
  * - Kinds with a per-block test explain the blocks that pass it. `abstract`
  *   explains the blocks from an abstract label on, up to `MAX_ABSTRACT_WORDS`;
- *   `contents` explains short entries when a contents label is in the stretch
- *   or heads it; `references` explains every entry once `REFERENCE_EVIDENCE_SHARE`
+ *   `contents` explains a contents label and the entries that follow it
+ *   (`contentsRun`), never the first block after them; `references` explains every entry once `REFERENCE_EVIDENCE_SHARE`
  *   of them look like references.
  */
 export function stretchEvidence(
@@ -501,14 +653,10 @@ export function stretchEvidence(
   const names = knownNames(article.meta);
   const has = (k: MatterKind) => kinds.includes(k);
   const slice = blocks.slice(start, end);
-  const entries = slice.filter((b) => b.words > 0 && b.kind !== "heading" && !isLabel(b));
+  const entries = stretchEntries(blocks, start, end);
   const refShare = entries.length === 0 ? 0 : entries.filter((b) => REFERENCE.test(b.text)).length / entries.length;
   const refsHold = has("references") && refShare >= REFERENCE_EVIDENCE_SHARE;
-  const contentsLabelled = has("contents") && (headedBy?.includes("contents") || slice.some((b) => labelKinds(b.text)?.includes("contents")));
-  /* With no label, a contents list proves itself: most of its entries are the article's own headings. */
-  const headingTexts = new Set(blocks.filter((b) => b.kind === "heading").map((b) => entryText(b.text)));
-  const contentsMatch =
-    has("contents") && entries.length > 0 && entries.filter((b) => headingTexts.has(entryText(b.text))).length / entries.length >= REFERENCE_EVIDENCE_SHARE;
+  const contents = has("contents") ? contentsExplained(blocks, start, end, headedBy, entries).explained : new Set<number>();
   const keywordsLabelled = has("keywords") && (headedBy?.includes("keywords") || slice.some((b) => labelKinds(b.text)?.includes("keywords")));
   const office = kinds.some((k) => OFFICE.has(k));
   const authorsSeen = has("authors") && slice.some((b) => b.words <= AUTHORS_MAX_WORDS && authorEvidence(b.text, names) && notProse(b.text));
@@ -548,7 +696,7 @@ export function stretchEvidence(
         (authorEvidence(text, names) || (authorsSeen && block.words <= AUTHORS_BARE_LINE_WORDS))) ||
       inAbstract ||
       (has("keywords") && (KEYWORDS_LABEL.test(text) || (keywordsLabelled && block.words <= KEYWORDS_MAX_WORDS))) ||
-      ((contentsLabelled || contentsMatch) && tokens(entryText(text)).length <= CONTENTS_MAX_ENTRY_WORDS) ||
+      contents.has(i) ||
       (has("dates") && block.words <= DATES_MAX_WORDS && (DATES_STRONG.test(text) || (block.words <= DATES_WEAK_MAX_WORDS && DATES.test(text)))) ||
       /* The acknowledgements, funding and declarations family mix in one
          paragraph ("Acknowledgments: CH was supported by …"), so any of the
@@ -773,6 +921,23 @@ export interface MatterCandidate {
   parts?: readonly MatterCandidate[];
 }
 
+/**
+ * **A contents stretch ends at its last entry.** A stretch claiming only
+ * contents is cut where its first run of entries ends (`contentsRun`), so a
+ * range that ran on into a picture and its caption folds the list and not
+ * them; any stretch claiming contents loses the empty blocks at its end. A
+ * merged stretch is not cut again: its parts were.
+ */
+function contentsCut(blocks: readonly MatterBlock[], c: MatterCandidate, start: number, end: number): number {
+  if (c.parts || !c.kinds.includes("contents")) return end;
+  if (c.kinds.length === 1) {
+    const run = contentsExplained(blocks, start, end, c.headedBy, stretchEntries(blocks, start, end));
+    if (run.firstEnd > start) end = run.firstEnd;
+  }
+  while (end > start + 1 && blocks[end - 1]!.words === 0) end--;
+  return end;
+}
+
 const sumWords = (blocks: readonly MatterBlock[], start: number, end: number): number => {
   let n = 0;
   for (let i = start; i < end; i++) n += blocks[i]!.words;
@@ -924,12 +1089,13 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
   for (const c0 of candidates.flatMap((c) => (c.parts ? [c] : referenceSegments(blocks, c)))) {
     const drop = (reason: string) => dropped.push({ item: c0.item, reason });
     let start = c0.start;
-    const end = c0.end;
+    let end = c0.end;
     while (start < end && echo.has(blocks[start]!.id)) start++;
     if (start >= end) {
       drop("only the masthead's echo");
       continue;
     }
+    end = contentsCut(blocks, c0, start, end);
     const withWords = blocks.slice(start, end).filter((b) => b.words > 0);
     if (withWords.length <= 1 && sumWords(blocks, start, end) < ONE_BLOCK_MIN_WORDS) {
       drop("one short block is not worth a stub");
@@ -939,16 +1105,16 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
       drop("a range over the word cap");
       continue;
     }
-    const evidenceOf = (c: MatterCandidate, from: number): string | null =>
-      c.trusted ? null : stretchEvidence(article, from, c.end, c.kinds, c.headedBy);
+    const evidenceOf = (c: MatterCandidate, from: number, to: number): string | null =>
+      c.trusted ? null : stretchEvidence(article, from, to, c.kinds, c.headedBy);
     const evidence = c0.parts
-      ? (c0.parts.map((p) => evidenceOf(p, Math.max(p.start, start))).find((e) => e !== null) ?? null)
-      : evidenceOf(c0, start);
+      ? (c0.parts.map((p) => evidenceOf(p, Math.max(p.start, start), p.end)).find((e) => e !== null) ?? null)
+      : evidenceOf(c0, start, end);
     if (evidence !== null) {
       drop(evidence);
       continue;
     }
-    passed.push({ ...c0, start });
+    passed.push({ ...c0, start, end });
   }
 
   passed.sort((a, b) => a.start - b.start);
