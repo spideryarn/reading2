@@ -33,8 +33,10 @@ import {
   isStale,
   renderPrompt,
   noteCap,
+  sourceCap,
   toNotes,
   toRelations,
+  toSourceNotes,
 } from "../src/relations.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -488,6 +490,82 @@ describe("toNotes", () => {
     expect(noteCap(24)).toBe(3);
     expect(noteCap(1000)).toBe(8);
   });
+
+  /* Plan 261018i (Sol F1): an origin note is from memory, so it lives in its
+     own array and the model cannot file one under an article-only kind. */
+  it("refuses a `source` kind in the article-only list", () => {
+    const { notes, dropped } = toNotes([{ ...explain, kind: "source" }], body, 8);
+    expect(notes).toEqual([]);
+    expect(dropped.offList).toBe(1);
+  });
+});
+
+/* Greg, spya-w99qsz: "where does that come from". Plan 261018i stage 2. */
+describe("toSourceNotes", () => {
+  const body = [
+    block("spya-aaaaaa", { text: "As the man said, the past is a foreign country; they do things differently there." }),
+    block("spya-bbbbbb", { text: "Calibration means the stated odds match how often things happen." }),
+  ];
+  const origin = {
+    blockId: "spya-aaaaaa",
+    quote: "the past is a foreign country",
+    text: "The opening line of L. P. Hartley's novel The Go-Between (1953).",
+  };
+
+  it("keeps a good row, stamped `source` by code, with no other passage", () => {
+    const { notes, dropped } = toSourceNotes([{ ...origin, quote: "the past  is a foreign country" }], body, 2, new Set());
+    expect(notes).toEqual([
+      { blockId: "spya-aaaaaa", kind: "source", text: origin.text, quote: "the past is a foreign country", to: null, toQuote: null },
+    ]);
+    expect(Object.values(dropped).every((n) => n === 0)).toBe(true);
+  });
+
+  it("drops a quote that is not in its passage, an unknown passage, and an empty or long note", () => {
+    const { notes, dropped } = toSourceNotes(
+      [
+        { ...origin, quote: "the past is a strange land" },
+        { ...origin, blockId: "spya-zzzzzz" },
+        { ...origin, text: "" },
+        { ...origin, text: Array.from({ length: NOTE_MAX_WORDS + 1 }, () => "w").join(" ") },
+        "not an object",
+      ],
+      body,
+      4,
+      new Set(),
+    );
+    expect(notes).toEqual([]);
+    expect(dropped).toMatchObject({ unquoted: 1, unknown: 1, badText: 2, malformed: 1 });
+  });
+
+  it("shares one note per passage with the article-only notes, and applies its own cap last", () => {
+    const taken = new Set<string>();
+    const first = toNotes(
+      [{ blockId: "spya-bbbbbb", kind: "explain", quote: "stated odds", text: "Seventy per cent should happen seven times in ten.", to: null, toQuote: null }],
+      body,
+      8,
+      taken,
+    );
+    expect(first.notes).toHaveLength(1);
+    const { notes, dropped } = toSourceNotes(
+      [{ ...origin, blockId: "spya-bbbbbb", quote: "Calibration" }, origin, { ...origin, quote: "foreign country" }],
+      body,
+      1,
+      taken,
+    );
+    expect(notes.map((n) => n.blockId)).toEqual(["spya-aaaaaa"]);
+    expect(dropped).toMatchObject({ repeated: 2, overCap: 0 });
+    expect(toSourceNotes([origin, { ...origin, blockId: "spya-bbbbbb", quote: "Calibration" }], body, 1, new Set()).dropped.overCap).toBe(1);
+  });
+
+  it("reads a missing list as none, and never throws", () => {
+    expect(toSourceNotes(undefined, body, 2, new Set()).notes).toEqual([]);
+  });
+
+  it("allows two to four per article, one per sixteen paragraphs", () => {
+    expect(sourceCap(1)).toBe(2);
+    expect(sourceCap(48)).toBe(3);
+    expect(sourceCap(1000)).toBe(4);
+  });
 });
 
 describe("generateRelations, with notes", () => {
@@ -534,15 +612,40 @@ describe("generateRelations, with notes", () => {
     expect(run.relations.notes).toEqual([]);
   });
 
+  it("stores origin notes with the others, stamped `source`, and counts their drops apart", async () => {
+    answer = JSON.stringify({
+      notes: [],
+      sourceNotes: [
+        { blockId: "spya-aaaaaa", quote: "the headline claim", text: "A newspaper's word for the claim it leads with." },
+        { blockId: "spya-bbbbbb", quote: "nowhere in it", text: "x" },
+      ],
+      relations: [
+        { blockId: "spya-bbbbbb", relation: "but" },
+        { blockId: "spya-cccccc", relation: "and-also" },
+      ],
+    });
+    const run = await generateRelations({ article: article(blocks), power: "standard" });
+    expect(run.relations.notes?.map((n) => [n.blockId, n.kind, n.to])).toEqual([["spya-aaaaaa", "source", null]]);
+    expect(run.relations.sourceNotesDropped?.unquoted).toBe(1);
+    expect(run.relations.notesDropped?.unquoted).toBe(0);
+  });
+
+  it("keeps the article-only rule for the notes, and memory to the origin notes", () => {
+    expect(RELATIONS_OUTPUT_SCHEMA.properties.notes.items.properties.kind.enum).not.toContain("source");
+    expect(Object.keys(RELATIONS_OUTPUT_SCHEMA.properties.sourceNotes.items.properties)).toEqual(["blockId", "quote", "text"]);
+    expect(RELATIONS_SYSTEM).toContain("Use only the article");
+    expect(RELATIONS_SYSTEM).toMatch(/never say why the author/i);
+  });
+
   it("asks for the notes first, in the schema and in the user message", () => {
-    expect(Object.keys(RELATIONS_OUTPUT_SCHEMA.properties)).toEqual(["notes", "relations"]);
+    expect(Object.keys(RELATIONS_OUTPUT_SCHEMA.properties)).toEqual(["notes", "sourceNotes", "relations"]);
     const user = renderPrompt([{ id: "spya-bbbbbb" as BlockId, previous: "spya-aaaaaa" as BlockId }]);
     expect(user.indexOf("margin notes")).toBeLessThan(user.indexOf("bears on the paragraph before it"));
     expect(RELATIONS_OUTPUT_SCHEMA.properties.notes.items.properties.to).toEqual({ type: ["string", "null"] });
   });
 
   it("budgets for a full set of notes at their longest, as well as the words", () => {
-    expect(answerTokens(64)).toBeGreaterThanOrEqual(64 * 30 + noteCap(64) * 300);
+    expect(answerTokens(64)).toBeGreaterThanOrEqual(64 * 30 + (noteCap(64) + sourceCap(64)) * 300);
   });
 
   it("carries the plain-words rule, now that the step writes prose a reader sees", () => {

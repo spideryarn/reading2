@@ -218,7 +218,7 @@ second call and no new step: the notes need the same article, the same freshness
 owner-only rule as the words, so they ride on the call that was already there, stored in the same
 `article_revisions.relations` row as `notes` (no migration; a row from before reads as none).
 
-- **Four kinds**, the four Greg named: `tension` (this passage and another seem not to agree),
+- **Four kinds from the article alone**, the four Greg named: `tension` (this passage and another seem not to agree),
   `recall` (what a passage far from here said, which this one leans on), `explain` (a step likely
   to confuse) and `aside` (anything else, rarely). The stamp says *Tension*, *Recall* or *Note*;
   its card says what the kind is and that AI wrote it (`NOTE_TIPS` in `tips.ts`).
@@ -239,6 +239,36 @@ owner-only rule as the words, so they ride on the call that was already there, s
   only thing a note has to say. A link to the other passage is the one block link (`BlockRef`), so
   it has the passage's card and the jump flashes the checked target words.
 - **Owner only**, as the words are.
+
+### Origin notes: where a quote or allusion comes from, from memory
+
+> the annotations should be the useful stuff, the stuff that saves the user a click, the things that
+> they would have looked up. So it could be a combination of, you know, oh, where does that come
+> from, or why did they choose that quote, or what's that citation say
+>
+> — Greg, 2026-10-17 (spya-w99qsz)
+
+**Since `relations/4` the same call may write a few *Origin* notes**: beside a passage that
+quotes, alludes to or names something the article leaves bare, where it comes from. Plan
+[261018i](../plans/261018i-marginalia-notes-that-save-a-click.md).
+
+- **The only notes that may use the model's own knowledge**, so they are their own array in the
+  answer, `sourceNotes`, with no `kind` field: code stamps `source` (`toSourceNotes`). The four
+  kinds above stay "use only the article", and the model cannot file a note from memory under one of
+  them. Stored in the same `notes` list, told apart by kind.
+- **Marked on the note, not only in its card**: the stamp *Origin* and, after the words, *AI memory,
+  unchecked* (`SOURCE_NOTE_LABEL`), quiet and never a warning, as Glossary's *background* is
+  ([glossary.md § Provenance is the label](glossary.md#provenance-is-the-label-not-a-badge)).
+  Nothing checks the attribution; the quote check proves only where the note sits.
+- **The prompt's bar**: only what the piece leaves bare (a phrase used without its source, a
+  quotation without its author, a person named with no word of who they are), not what it
+  already says or what nearly every reader knows; an attribution only as specific as the model is
+  sure of, disputed ones said to be disputed; **never why the author chose it.**
+- **Their own small cap**, `sourceCap`: one per sixteen paragraphs, two to four, beside the
+  article-only notes' `noteCap`, and still one note per passage across both.
+- **Measured** on six local articles (the plan's § Measurement): no wrong attribution in four
+  runs, none on the Transformer paper, and a blind judge found 10 of 14 useful, 4 redundant, none
+  harmful. The redundant ones name famous works the piece already names.
 
 **Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase
 to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or

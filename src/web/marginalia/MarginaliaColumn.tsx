@@ -50,7 +50,16 @@ import {
 } from "./notes.js";
 import { type MarginNotesList, type RelationsByBlock, useRelations } from "../useRelations.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
-import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, NOTE_TIPS, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
+import {
+  ARC_ORIGIN,
+  IDEA_ORIGIN,
+  MARG_TIPS,
+  type MargTipKey,
+  NOTE_TIPS,
+  PATH_ORIGIN,
+  RELATION_TIPS,
+  SOURCE_NOTE_LABEL,
+} from "./tips.js";
 import { BlockRef } from "../BlockRef.js";
 import type { JumpAim } from "../flash.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
@@ -231,6 +240,15 @@ function AsideNote({
         </button>
       </Tooltip>{" "}
       <span className={withVoice("marg-aside-text", "ai")}>{note.text}</span>
+      {/* The one kind from outside the article: said on the note, not only in
+          its card, as Glossary's *background* is a visible label (plan
+          261018i, Sol F2). Ours, so in the app's face. */}
+      {note.kind === "source" && (
+        <>
+          {" "}
+          <span className="marg-aside-memory">{SOURCE_NOTE_LABEL}</span>
+        </>
+      )}
       {note.to !== null && (
         <>
           {" "}

@@ -662,7 +662,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs, and may add a few short notes where something is confusing or another passage matters. One model call makes both, the first time the article's owner opens the column. The other notes are read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs, and may add a few short notes where something is confusing or another passage matters, and a few saying where a quotation, allusion or name comes from, which are from the AI's memory and marked unchecked. One model call makes all of them, the first time the article's owner opens the column. The other notes are read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */

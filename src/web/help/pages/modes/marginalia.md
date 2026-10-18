@@ -33,4 +33,9 @@ pressing **Marginalia** again swaps the notes in for it.
   item or a count; press it to open it.
 - **Note, Recall or Tension** is a short AI-written note. Recall and Tension link to the other
   passage they refer to; press the link to go there and check its words.
+- **Origin** says where a quotation, an allusion or a name in the passage comes from, when the
+  article does not say. It is written from the AI's memory, not from the article, and nothing has
+  checked it, so it is marked *AI memory, unchecked*: treat it as a lead.
+- **Cites**, opened, can also show a short note on what the cited work says, written by AI from the
+  work's abstract and checked against it.
 - The top of the column shows where you are, and where the argument has got to.

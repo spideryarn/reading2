@@ -145,7 +145,19 @@ export const NOTE_TIPS: Record<MarginNoteKind, MargTip & { stamp: string }> = {
     what: "A short note the AI thought would help at this point in the article.",
     how: NOTE_ORIGIN,
   },
+  /* Greg, spya-w99qsz: "where does that come from". The one kind not from the
+     article, so its card says so first, and the note says it too (plan
+     261018i, Sol F2). Not "Source": that could read as a source consulted. */
+  source: {
+    stamp: "Origin",
+    head: "Origin",
+    what: "Where a quotation, an allusion or a name in this passage comes from, which the article itself does not say.",
+    how: "Written by AI for Marginalia from what it already knows, not from the article, and nothing has checked it. Treat it as a lead to follow, not a fact.",
+  },
 };
+
+/** The words after an origin note's text: whose they are, and that nothing checked them. */
+export const SOURCE_NOTE_LABEL = "AI memory, unchecked";
 
 export function isMargTipKey(key: string | null): key is MargTipKey {
   return key !== null && Object.hasOwn(MARG_TIPS, key);

@@ -203,6 +203,57 @@ Each gets an overseer-queue entry before the note may say shipped.
 - The extra cap is a small product choice inside Greg's explicit ask ("the useful stuff"); it is
   reversible by a constant.
 
+## Measurement
+
+Arms in `evals/results/margin-notes/w99-*.json` (each records `PROMPT_VERSION` and the hash of
+`src/relations.ts`); `npx tsx evals/marginalia-sources/report.ts <arms>` prints the table and
+every note. The manifest is [`evals/marginalia-sources/cases.md`](../../evals/marginalia-sources/cases.md),
+written by a subagent before any after arm ran, each attribution web-checked. The blind file,
+key and verdicts are `evals/marginalia-sources/judge-*`. The article dumps the manifest was
+written from are not committed (they are the articles' prose); `dump.ts` makes them again.
+
+| Arm | Prompt | Origin notes (6 articles) | Article-only notes | Words agreeing with `w99-before` |
+|---|---|---|---|---|
+| `w99-before` | `relations/3` | — | 17 | — |
+| `w99-before-2` (control) | `relations/3` | — | 18 | 86.9% |
+| `w99-after`, `-2` | first `relations/4` | 9, 12 | 15, 19 | 85.1%, 84.2% |
+| **`w99-after3`, `-4`** | **what shipped** | **6, 8** | 14, 15 | **85.3%, 84.4%** |
+
+What it says:
+
+- **No wrong attribution in any of the 35 origin notes**, checked one by one against the manifest
+  and the judge. None of the three traps was mis-attributed: *"Argue with idiots"* (often pinned on
+  Twain, with no evidence) and *"with us or against us"* got no note at all, and every Alberti note
+  says only who Alberti was, never which work the quotation is from (the manifest could not trace
+  one). No note said why the author chose anything.
+- **The Transformer paper got none**, in four runs.
+- **The first prompt wrote notes the piece did not need**: ten of 21 on the manifest's negatives (six passages),
+  all correct but saying what the passage already said (Montaigne, *Pygmalion*, *Lord of the Flies*,
+  Arthur Miller, Wotton, *Fight Club*). The shipped prompt names the cases worth writing (what the
+  piece leaves bare) and says to read the surrounding sentences first. Three of 14 then landed on
+  a negative.
+- **Blind usefulness** (gate 8; an Opus subagent saw only the 14 shipped-prompt notes, shuffled,
+  with their passages): **10 useful, 4 redundant, 0 harmful, all accurate.** The redundant four
+  repeat the passage (Marx on *Capital*, Miller, Wotton) or are common knowledge (*Fight Club*).
+- **The relation words did not move beyond the control**: 84–85% agreement against the control's
+  86.9%, inside gate 6's 8 points.
+- **Article-only notes**: counts within ±2 of the control per article. Reading every one for memory
+  leaking in found one marginal case, an *explain* calling the Fight Club line "a joke borrowed from
+  the film", the same register as the control's explain notes, so not a regression this caused.
+- **Misses**: the manifest's best positives were mostly bare phrases (*"the American century"*,
+  *"military-industrial complex"*, Oresme, Michelangelo's nose). The model prefers named people and
+  works. Recall is the weak side, not precision.
+
+**Gate 3 (zero notes on a negative) overruled**, after two prompt rounds: three redundant notes in
+fourteen, none wrong, and the judge found none harmful. Redundancy fell from six to three; a third
+round would fit the prompt to these six articles. Watch it in use.
+**Wotton, overruling the manifest**: the passage names him with no word of who he was, which is
+the prompt's own case for a note; the manifest's negative was about the quotation, which the piece
+attributes.
+
 ## Progress
 
-- 2026-10-18: plan written; eval articles chosen.
+- 2026-10-18: plan written; eval articles chosen; GPT Sol plan review REVISE, F1–F7 taken (above).
+- Stage 1 landed (`86cb811de`): the *Cites* line opens to the checked note.
+- Stage 2 built: `sourceNotes`, `toSourceNotes`, `sourceCap`, `relations/4`, the *Origin* card and
+  label, help, catalogue, export description and docs; measured above.
