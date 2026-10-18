@@ -306,9 +306,11 @@ searches (or the cooldown one had left); the shared limiter then cools Crossref 
 cooling-down`: **9 of 19, 11 of 33, and 36 of 70**, which left Butlin at **13 notes (19%)** instead of 28.
 A transient row is retried only by the next run, and by G2 only a publication or a press starts
 one, so on a real article those works would show nothing until the owner made the list again or
-pressed *Notes on cited works*. Two ways out, neither built: wait out a short cooldown inside the
-run when the budget allows, or let the band's open read queue one more run for a `:partial`
-artefact. It is a product call (it spends a second run's cent), so it is raised, not decided.
+pressed *Notes on cited works*. At the time, neither way out was built. The Stage 3 code review
+then took the first: wait out a short shared cooldown inside the run when the lookup budget and
+claim deadline allow, respecting Crossref's `Retry-After`; each retry still counts towards the
+60-query cap. Letting the band's open read queue another run for a `:partial` artefact remains
+unbuilt: it spends another model call, so it is a product decision rather than a review fix.
 
 **Spend for this section: $0.045** over five runs (`withLedger`'s lines: $0.0107, $0.0090,
 $0.0161, $0.0092, and $0 for the essay twice). The judge was a Claude subagent, not in it.

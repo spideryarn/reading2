@@ -726,8 +726,9 @@ it from its abstract ([261017h § stage 3](../plans/261017h-stage-3-design-citat
   — **only for an article imported from a public web address**. An uploaded file (a PDF or an HTML
   file, which may be a confidential manuscript) gets identifier lookups only: its reference list may
   name its authors' own unpublished work, and a word list cannot prove a work is published (the
-  design review's G6). The signal is `meta.filename` (`raw_filename`, set for everything that came
-  off a disk) together with an http(s) address; anything without both counts as an upload. The
+  design review's G6). The signal for a public-address import is an http(s) address and no
+  `meta.filename` (`raw_filename`, set for everything that came off a disk); everything else counts
+  as an upload. The
   *in preparation / under review / submitted / forthcoming / unpublished* skip is a second guard,
   not the claim.
 - **The model** (Claude Haiku, Anthropic through OpenRouter) is shown each cited work's title,

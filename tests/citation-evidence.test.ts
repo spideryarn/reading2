@@ -399,14 +399,82 @@ describe("which title-only rows are searched", () => {
     expect(out.counts.titleQueries).toBe(MAX_TITLE_SEARCHES);
   });
 
-  it("is transient, and cools Crossref for everybody, on a 429", async () => {
+  it("cools Crossref for everybody on a 429, but does not wait past the lookup budget", async () => {
+    const clock = 0;
     const { result, lim } = await one(TITLE_ROW, {
+      now: () => clock,
+      budgetMs: 1_000,
       json: (url) => {
         throw new FetchFailure("rate-limited", url, "HTTP 429", { status: 429, retryAfterMs: null });
       },
     });
-    expect(result).toEqual({ state: "transient", why: "cooling-down" });
+    expect(result).toEqual({ state: "transient", why: "over-budget" });
     expect(lim.cooled).toEqual(["crossref"]);
+  });
+
+  it("waits out Crossref's Retry-After inside the lookup budget, then asks the row again", async () => {
+    let clock = 0;
+    let coolingUntil = 0;
+    let requests = 0;
+    const sleeps: number[] = [];
+    const x = deps({
+      now: () => clock,
+      budgetMs: 10_000,
+      json: (url) => {
+        requests++;
+        if (requests === 1) {
+          throw new FetchFailure("rate-limited", url, "HTTP 429", { status: 429, retryAfterMs: 2_500 });
+        }
+        return searchAnswer([CROSSREF_ITEM]);
+      },
+    });
+    x.d.limiter = {
+      ...x.lim,
+      coolingDown: async (service) => service === "crossref" && clock < coolingUntil,
+      coolDown: async (service, forMs) => {
+        if (service === "crossref") coolingUntil = Math.max(coolingUntil, clock + forMs);
+      },
+    };
+    x.d.sleep = async (ms) => {
+      sleeps.push(ms);
+      clock += ms;
+    };
+
+    const out = await collectEvidence([TITLE_ROW], { titleSearch: true }, x.d);
+
+    expect(out.byEntry.get(TITLE_ROW.id)).toMatchObject({ state: "evidence" });
+    expect(requests).toBe(2);
+    expect(out.counts.titleQueries).toBe(2);
+    expect(sleeps.reduce((sum, ms) => sum + ms, 0)).toBeGreaterThanOrEqual(2_500);
+    expect(clock).toBeLessThan(10_000);
+  });
+
+  it("does not wait through Retry-After when the claim's deadline margin is nearer", async () => {
+    let clock = 0;
+    let requests = 0;
+    const sleeps: number[] = [];
+    const x = deps({
+      now: () => clock,
+      budgetMs: 10_000,
+      json: (url) => {
+        requests++;
+        throw new FetchFailure("rate-limited", url, "HTTP 429", { status: 429, retryAfterMs: 2_500 });
+      },
+    });
+    x.d.sleep = async (ms) => {
+      sleeps.push(ms);
+      clock += ms;
+    };
+
+    const out = await collectEvidence(
+      [TITLE_ROW],
+      { titleSearch: true, deadlineAt: 3_000, deadlineMarginMs: 1_000 },
+      x.d,
+    );
+
+    expect(out.byEntry.get(TITLE_ROW.id)).toEqual({ state: "transient", why: "over-budget" });
+    expect(requests).toBe(1);
+    expect(sleeps).toEqual([]);
   });
 });
 

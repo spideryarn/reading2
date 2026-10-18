@@ -1,0 +1,5 @@
+Review complete: **ship after fixes (made)**.
+
+I fixed the Crossref cooldown issue with bounded, `Retry-After`-aware retries covered by red-first tests. The focused suite passed 379 tests, and the equivalent typecheck passed all 3,790 source files. Database-backed tests were blocked by sandbox access to local Postgres.
+
+Full findings and gate output: [261017h-stage-3-code-review-sol.md](/var/tmp/spideryarn-worktrees/fbm53cdk-sources-scroll-and-blurbs/docs/plans/261017h-stage-3-code-review-sol.md)

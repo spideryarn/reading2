@@ -81,7 +81,7 @@ import type { CitedWork } from "./types.js";
 export const MAX_TITLE_SEARCHES = 60;
 /** Identifier lookups in flight at once, and title searches at once, each. */
 export const EVIDENCE_CONCURRENCY = 2;
-/** After this long no new lookup starts; the rows left are transient. One already started keeps its own bounds. */
+/** After this long no lookup or cooldown wait starts; the rows left are transient. */
 export const LOOKUP_BUDGET_MS = 120_000;
 /** The most of an abstract a prompt is given. */
 export const EVIDENCE_CAP = 2_500;
@@ -152,6 +152,10 @@ export interface EvidenceOptions {
    * uploaded file gets identifier lookups alone.
    */
   titleSearch: boolean;
+  /** The step claim's deadline. A caller may omit it outside a claimed job. */
+  deadlineAt?: number;
+  /** Time kept clear before `deadlineAt` for publication and later work. */
+  deadlineMarginMs?: number;
 }
 
 export interface EvidenceDeps {
@@ -391,6 +395,8 @@ interface Run {
   openAlexOff: boolean;
   titleQueries: number;
   openAlexQueries: number;
+  /** No lookup or cooldown wait continues at or after this moment. */
+  stopAt: number;
 }
 
 function negative(why: RegistryWhy, run: Run): RowEvidence {
@@ -459,12 +465,20 @@ async function byIdentifier(row: EvidenceRow, id: WorkId, run: Run): Promise<Row
   return await fromOpenAlex(row.id, id, run);
 }
 
-/** A title-only row: one Crossref search, the strict rule, the matching item's abstract. */
-async function byTitle(row: EvidenceRow, surname: string, run: Run): Promise<RowEvidence> {
+type TitleAttempt =
+  | { kind: "json"; json: unknown }
+  | { kind: "transient"; why: TransientWhy; cooldownMs?: number }
+  | { kind: "refused"; why: "cooling-down" | "busy" };
+
+/** One Crossref title request, including the shared limiter and the hard query cap. */
+async function titleAttempt(row: EvidenceRow, surname: string, run: Run): Promise<TitleAttempt> {
   const { d } = run;
-  run.titleQueries++;
-  type Got = { kind: "json"; json: unknown } | { kind: "transient"; why: TransientWhy };
-  const turn = await inServiceTurn("crossref", { store: d.limiter, sleep: d.sleep }, async (): Promise<Got> => {
+  const turn = await inServiceTurn("crossref", { store: d.limiter, sleep: d.sleep }, async (): Promise<TitleAttempt> => {
+    /* Retries count against the same hard cap as first attempts: the stated
+       exception is at most sixty network queries, not sixty rows plus
+       however many a provider asks us to repeat. */
+    if (run.titleQueries >= MAX_TITLE_SEARCHES) return { kind: "transient", why: "over-cap" };
+    run.titleQueries++;
     try {
       return { kind: "json", json: await d.fetchJson(crossrefSearchUrl(titleQuery(row, surname))) };
     } catch (err) {
@@ -474,12 +488,17 @@ async function byTitle(row: EvidenceRow, surname: string, run: Run): Promise<Row
         { row: row.id, service: "crossref", what: "title-search", status: err.status, code: err.code, outcome: cooldownMs !== null ? "cooling-down" : "error" },
         "citation evidence",
       );
-      return { kind: "transient", why: cooldownMs !== null ? "cooling-down" : "error" };
+      return cooldownMs === null
+        ? { kind: "transient", why: "error" }
+        : { kind: "transient", why: "cooling-down", cooldownMs: Math.max(cooldownMs, 1_000) };
     }
   });
-  if (turn.kind === "refused") return { state: "transient", why: turn.why };
-  if (turn.value.kind === "transient") return { state: "transient", why: turn.value.why };
-  const items = list(record(record(turn.value.json)?.message)?.items);
+  return turn.kind === "refused" ? { kind: "refused", why: turn.why } : turn.value;
+}
+
+/** A successful Crossref search through the strict rule, into evidence or a registry negative. */
+function titleAnswer(json: unknown, row: EvidenceRow, run: Run): RowEvidence {
+  const items = list(record(record(json)?.message)?.items);
   for (const raw of items) {
     if (!crossrefItemIdentifies(raw, row)) continue;
     const item = record(raw);
@@ -490,6 +509,43 @@ async function byTitle(row: EvidenceRow, surname: string, run: Run): Promise<Row
     return { state: "evidence", evidence: evidenceOf("author-abstract", "crossref", "title", id, run.checkedAt(), abstract) };
   }
   return negative("not-found", run);
+}
+
+/** A title-only row: one Crossref search, or a bounded retry after a short cooldown. */
+async function byTitle(row: EvidenceRow, surname: string, run: Run): Promise<RowEvidence> {
+  for (;;) {
+    if (run.d.now() >= run.stopAt) return { state: "transient", why: "over-budget" };
+    const attempt = await titleAttempt(row, surname, run);
+    if (attempt.kind === "json") return titleAnswer(attempt.json, row, run);
+    if (attempt.why !== "cooling-down") return { state: "transient", why: attempt.why };
+    const minimum = attempt.kind === "transient" ? (attempt.cooldownMs ?? 0) : 0;
+    if (!(await waitOutCooldown("crossref", run, minimum))) {
+      return { state: "transient", why: "over-budget" };
+    }
+  }
+}
+
+/**
+ * Wait until the shared limiter says a provider's cooldown has ended, but
+ * never beyond this run's lookup budget or the claim deadline margin. A
+ * cooldown set by the request that called us supplies its `Retry-After` as a
+ * minimum wait; an inherited cooldown is polled because the store owns its
+ * exact end time.
+ */
+async function waitOutCooldown(service: "crossref", run: Run, minimumMs = 0): Promise<boolean> {
+  const { d } = run;
+  let allowance = run.stopAt - d.now();
+  if (allowance <= 0 || minimumMs > allowance) return false;
+  if (minimumMs > 0) await d.sleep(minimumMs);
+  allowance -= minimumMs;
+  while (await d.limiter.coolingDown(service)) {
+    const remaining = Math.min(allowance, run.stopAt - d.now());
+    if (remaining <= 0) return false;
+    const pause = Math.min(1_000, remaining);
+    await d.sleep(pause);
+    allowance -= pause;
+  }
+  return d.now() < run.stopAt;
 }
 
 /** One worker's call, with a throw from a dependency read as a transient error rather than a lost run. */
@@ -529,6 +585,12 @@ export async function collectEvidence(
     openAlexOff: false,
     titleQueries: 0,
     openAlexQueries: 0,
+    stopAt: Math.min(
+      started + budget,
+      options.deadlineAt === undefined
+        ? Number.POSITIVE_INFINITY
+        : options.deadlineAt - (options.deadlineMarginMs ?? 0),
+    ),
   };
   const byEntry = new Map<string, RowEvidence>();
   const ids: { row: EvidenceRow; id: WorkId }[] = [];
@@ -540,7 +602,7 @@ export async function collectEvidence(
     else if (titles.length < MAX_TITLE_SEARCHES) titles.push({ row, surname: route.surname });
     else byEntry.set(row.id, { state: "transient", why: "over-cap" });
   }
-  const mayStart = () => d.now() - started < budget;
+  const mayStart = () => d.now() < run.stopAt;
   const [byId, byTitles] = await Promise.all([
     mapLimited(ids, EVIDENCE_CONCURRENCY, ({ row, id }) => guarded(row.id, run, () => byIdentifier(row, id, run)), mayStart),
     mapLimited(titles, EVIDENCE_CONCURRENCY, ({ row, surname }) => guarded(row.id, run, () => byTitle(row, surname, run)), mayStart),

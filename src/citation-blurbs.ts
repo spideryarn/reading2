@@ -724,7 +724,16 @@ export async function generateCitationBlurbs(
   const found =
     todo.length === 0
       ? { byEntry: new Map<string, RowEvidence>(), counts: null }
-      : await collectEvidence(evidenceRows, { titleSearch: input.titleSearch }, deps.evidence);
+      : await collectEvidence(
+          evidenceRows,
+          {
+            titleSearch: input.titleSearch,
+            ...(options.deadlineAt !== undefined
+              ? { deadlineAt: options.deadlineAt, deadlineMarginMs: DEADLINE_MARGIN_MS }
+              : {}),
+          },
+          deps.evidence,
+        );
 
   const works: BlurbWork[] = [];
   const evidenceOf = new Map<string, Evidence>();
