@@ -168,10 +168,10 @@ Three things worth carrying to whatever is built next:
 - **But More is never past the edge.** A scrolling row hides whatever is beyond the fold, and the
   one button that must not be there is More, which holds five modes. On a phone the row is at its
   44px floor, so its buttons stand at the same x at 390, 375 and 360, and with Diagram drawn More's
-  place after Skim was x 354–398 (WebKit, 2026-10-09). No label rung fits 360. Since 2026-10-11
-  More's place is after Summary, two buttons earlier
-  ([261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md)), which every phone
-  measured so far shows; the guard stays, because it is measured, not keyed to a state. When that place is
+  place after Skim was x 354–398 (WebKit, 2026-10-09). No label rung fits 360. More stood after
+  Summary from 2026-10-11, two buttons earlier, and is after Skim again since 2026-10-18 at Greg's
+  request ([261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md)),
+  so with Diagram drawn on a phone this guard is what puts it in view. It is measured, not keyed to a state. When that place is
   past the bar's edge, More moves to the front of the bands' frame, in the DOM as well as on screen.
   The test is where More's *home* ends, never where it is drawn, or moving it would send it straight
   back: `moreOffTheEdge` in [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), `bandsInOrder` in

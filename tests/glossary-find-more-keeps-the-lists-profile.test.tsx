@@ -18,6 +18,8 @@
  * The stage's half — that `more(false)` reaches the request as
  * `useProfile: false` — is tests/step-job-force.test.tsx.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,6 +44,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { GlossaryPanel } = await import("../src/web/GlossaryPanel.js");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 const noop = () => {};
 
@@ -238,15 +241,68 @@ describe("where the run row is, and what it says", () => {
 
   /* The server's verdict wins over the panel's own fact: it also sees a
      changed or cleared profile, which `stale` does not (`panelRunKind`, GPT
-     Sol's plan review of 261003c, P1). The reason is on screen, not only in a
-     tooltip a touch screen never shows. */
-  it("says Write a new list, and why, when the server says the press rewrites", async () => {
+     Sol's plan review of 261003c, P1). The reason is behind an (i) since
+     2026-10-18 (Greg, spya-xtkv73: *"Hide this behind a button or something
+     with a tooltip so it doesn't take up valuable screen real estate"*), and a
+     press opens it, because a touch screen never hovers (plan 261018f). */
+  it("says Write a new list, and why behind an (i) a press opens, when the server says the press rewrites", async () => {
     await mount(owner(glossary("a-profile"), { panelRun: "rewrite" }));
     expect(moreButton()?.textContent).toMatch(/write a new list/i);
-    const note = host.querySelector(".gloss-more-note")?.textContent ?? "";
-    expect(note).toMatch(/replaces the list/i);
-    expect(note).toMatch(/terms you added are kept/i);
+    expect(host.querySelector(".gloss-more-note"), "the reason is no longer a line on screen").toBeNull();
+    expect(host.textContent).not.toMatch(/replaces the list/i);
+    const why = host.querySelector<HTMLButtonElement>("button.gloss-more-why");
+    expect(why?.getAttribute("aria-label")).toBe("Why a new list?");
+    expect(why?.getAttribute("aria-expanded")).toBe("false");
+    expect(why?.classList.contains("tap-target"), "a finger needs 40px to hit it").toBe(true);
+    await act(async () => why?.click());
+    expect(why?.getAttribute("aria-expanded")).toBe("true");
+    const card = document.querySelector<HTMLElement>(".gloss-more-why-card");
+    expect(card?.textContent).toMatch(/replaces the list/i);
+    expect(card?.textContent).toMatch(/terms you added are kept/i);
+    const tooltip = card?.closest<HTMLElement>('[role="tooltip"]');
+    expect(tooltip?.id, "the card needs the id named by the button's accessible description").toBeTruthy();
+    expect(why?.getAttribute("aria-describedby")?.split(/\s+/)).toContain(tooltip?.id);
     expect(host.textContent).not.toMatch(/find terms again/i);
+  });
+
+  it("closes and forgets the reason card when the run row changes branch", async () => {
+    await mount(owner(glossary("a-profile"), { panelRun: "rewrite" }));
+    const why = host.querySelector<HTMLButtonElement>("button.gloss-more-why");
+    await act(async () => why?.click());
+    expect(why?.getAttribute("aria-expanded")).toBe("true");
+
+    await mount(owner(glossary(null), { panelRun: "append" }));
+    expect(host.querySelector(".gloss-more-why")).toBeNull();
+    expect(document.querySelector(".gloss-more-why-card"), "the portalled card stayed open").toBeNull();
+
+    await mount(owner(glossary("a-profile"), { panelRun: "rewrite" }));
+    const fresh = host.querySelector<HTMLButtonElement>("button.gloss-more-why");
+    expect(fresh?.getAttribute("aria-expanded"), "a remounted row inherited the old open state").toBe("false");
+    await act(async () => fresh?.focus());
+    expect(fresh?.getAttribute("aria-expanded"), "keyboard focus should reveal the same reason").toBe("true");
+  });
+
+  it("keeps the (i)'s 40px coarse-pointer target clear of Write a new list at every supported root size", () => {
+    const css = readFileSync(path.join(ROOT, "src/web/styles/footnotes.css"), "utf8");
+    const gapRem = Number(/\.gloss-actions\s*{[^}]*\bgap:\s*([\d.]+)rem/s.exec(css)?.[1]);
+    const margin =
+      /@media\s*\(any-pointer:\s*coarse\)\s*{[^}]*\.gloss-more-why\s*{[^}]*margin-left:\s*([\d.]+)(px|rem)/s.exec(
+        css,
+      );
+    expect(gapRem, "no rem gap on `.gloss-actions`").toBeGreaterThan(0);
+    expect(margin, "no coarse-pointer clearance beside `.gloss-more-why`").not.toBeNull();
+    for (const rootSize of [12, 16]) {
+      const marginPx = Number(margin?.[1]) * (margin?.[2] === "rem" ? rootSize : 1);
+      const buttonWidth = 13 + 0.5 * rootSize + 2; // icon + two 0.25rem pads + borders
+      const targetOverhang = (40 - buttonWidth) / 2;
+      expect(gapRem * rootSize + marginPx, `${rootSize}px root: the (i) target overlaps the run button`)
+        .toBeGreaterThanOrEqual(targetOverhang);
+    }
+  });
+
+  it("draws no (i) when the press adds to the list", async () => {
+    await mount(owner(glossary(null), { panelRun: "append" }));
+    expect(host.querySelector(".gloss-more-why")).toBeNull();
   });
 
   it("says Find more when the server says the press appends, even on an outdated list", async () => {

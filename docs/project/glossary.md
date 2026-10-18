@@ -266,9 +266,13 @@ appendable list whose article and profile have not changed. That was already so 
 since *Start again* went ([below](#there-was-a-start-again-beside-it-and-it-went)). *Hide* takes an
 entry off the reader's own view.
 
-**The rewrite that is left says why, on screen**: under *Write a new list* is one sentence (the
-article, the profile or how we write glossaries has changed, so this replaces the list; terms you
-added are kept). A tooltip alone was not enough: a touch screen never shows one. And **a *Find
+**The rewrite that is left says why, one press away**: beside *Write a new list* is an (i),
+*Why a new list?*, whose card holds one sentence (the article, the profile or how we write glossaries
+has changed, so this replaces the list; terms you added are kept). It was a line under the button
+until 2026-10-18, when Greg asked for it *"behind a button or something with a tooltip so it doesn't
+take up valuable screen real estate"* (spya-xtkv73,
+[261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md)).
+A tap opens the card as well as a hover, because a touch screen never shows a hover card. And **a *Find
 more* that found nothing says so** (*No more terms worth adding turned up*), from `lastAdded` on
 the artefact, as Quotes does.
 That includes the case `profileChanged` leaves out on purpose: a list written for a profile the

@@ -50,6 +50,19 @@ any surface a visitor can see, the owner is whoever added this article, never *y
 asks the reader to do something unless the control it sits on does it (Greg approved, 2026-10-02;
 [261002e](../plans/261002e-sharing-mark-tooltip-separates-state-from-action.md)).
 
+**A warning or note the reader does not need in order to act goes in a card, not a line.**
+
+> And minimal update to relevant doc to prefer warnings and related non-critical notes in tooltips
+> etc so they don't distract/take up space
+>
+> — Greg, 2026-10-17 (`spya-xtkv73`), about the Glossary's *"this replaces the list"* sentence
+
+So put it on an (i) beside the control it explains. Where a phone reader still needs it, use a card
+a tap opens as well as a hover, the `usePressToggle` shape in § Where the code is: the Glossary's
+*Why a new list?* is one ([261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md)).
+What stays a line is the answer to a press the reader just made, such as *No more terms worth adding
+turned up*, because without it the button looks like it did nothing.
+
 ## Prefer the rich card to a native `title`
 
 > make a note somewhere that we always prefer to use our rich tooltip machinery because they're just
@@ -178,6 +191,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone; the state is [`usePressToggle`](../../src/web/usePressToggle.ts), shared with `HowToRead` below, which is what stops a quick double press being undone by a hover timer that was already pending. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
 | [`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx) | **the profile icon's card**, since 2026-10-04 — the one card on a button that also opens a panel about the same subject. It is `enabled` only while the panel is closed, controlled so a finger's tap opens only the panel, and ignores the one focus event the panel returns on close; a later hover or keyboard visit opens it normally |
 | [`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `HowToRead` | **the same controlled shape on a panel rather than a band**: Referee's *How to read this* button, which holds the sentences that say a list of passages is not a verdict. A tap toggles it, because those sentences must reach a phone ([referee-mode.md](referee-mode.md) § How to read a panel) |
+| [`src/web/GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx) § `WhyANewList` | **the same shape again, icon only**: the (i) beside *Write a new list*, holding why that press replaces the list. It was a line under the button until 2026-10-18 (§ When something needs one) |
 | [`src/web/BackLink.tsx`](../../src/web/BackLink.tsx) | the icon-only way back (an arrow) or home (a house) at the top of a page, since 2026-09-29 — the card says the destination and opens to the *right*, because a card below covered the heading. Name in `aria-label`, words in a `TipNote` |
 | [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 

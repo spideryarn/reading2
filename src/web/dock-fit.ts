@@ -190,8 +190,8 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
 export const MORE_HOME_ATTR = "data-more-home";
 
 /**
- * **Whether More's own place, straight after Summary (after Skim until
- * 2026-10-11), is past the bar's visible
+ * **Whether More's own place, straight after Skim (after Summary from
+ * 2026-10-11 to 2026-10-18), is past the bar's visible
  * edge with the row at rest** — and so whether More leads the bands' frame
  * instead (queue item `qi-t22r9mt4`;
  * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
@@ -199,8 +199,8 @@ export const MORE_HOME_ATTR = "data-more-home";
  * Measured in WebKit, 2026-10-09: every phone width sits on the last rung with
  * the row at its 44px floor, so the buttons have the same x at 390, 375 and
  * 360. With Diagram drawn, More's old place after Skim was x 354–398 — off the
- * edge of all three. Since 2026-10-11 its place after Summary is two buttons
- * earlier. No label rung fits 360, so this is not a rung: it changes no width,
+ * edge of all three, and since 2026-10-18 that is its place again (spya-c0va9e),
+ * so with Diagram drawn on a phone More leads. No label rung fits 360, so this is not a rung: it changes no width,
  * only where More stands, and the ladder's measurement is untouched by it.
  *
  * **The answer must not depend on which order is drawn**, or moving More would
