@@ -27,7 +27,7 @@
  */
 import type { BlockId, NodeId } from "../types.js";
 import { navLabelVoice, nodeLabel, titleVoice, type SummaryNode } from "./tree.js";
-import { type MatterRange, withinOneStretch } from "./matter-view.js";
+import { type MatterRange, coveredByStretches } from "./matter-view.js";
 import type { Voice } from "./voice.js";
 
 /**
@@ -188,12 +188,13 @@ export interface StructureRow {
   /** The apparatus — one row, never expanded, never given a gist. */
   supplement: boolean;
   /**
-   * **Wholly inside one stretch of front or back matter** — the abstract, the
-   * references — which the prose folds to a stub (matter-view.ts). Drawn faint
-   * with the stub's ⓘ; its number and label are kept, because it is still
-   * part of the piece, and pressing it jumps there, which opens the stretch.
-   * By index containment in one stretch, never by comparing ids, and never in
-   * the union of two (plan review of 261018a, F9).
+   * **Wholly front or back matter** — the abstract, the references — which
+   * the prose folds to stubs (matter-view.ts): inside one stretch, or inside
+   * stretches back to back. Drawn faint with the stub's ⓘ; its number and
+   * label are kept, because it is still part of the piece, and pressing it
+   * opens every stretch within it and jumps there (fold.ts §
+   * `openStretchesWithin`). By index, never by comparing ids
+   * (matter-view.ts § `coveredByStretches`; plan review of 261018a, F9).
    */
   matter: boolean;
 }
@@ -317,7 +318,7 @@ function makeRow(
     here,
     before: entry.endRow < focusRow,
     supplement,
-    matter: withinOneStretch(entry.startRow, entry.endRow, matter),
+    matter: coveredByStretches(entry.startRow, entry.endRow, matter),
   };
 }
 

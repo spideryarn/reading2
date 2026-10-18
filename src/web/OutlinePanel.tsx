@@ -17,6 +17,7 @@ import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState
 import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
 import { FigureMark } from "./FigureMark.js";
+import { jumpToRow } from "./fold.js";
 import type { MatterRange } from "./matter-view.js";
 import { MATTER_ROW_NOTE, MatterMark } from "./MatterMark.js";
 import {
@@ -509,7 +510,7 @@ export function OutlinePanel({
 
   const jump = useCallback(
     (row: OutlineRow | undefined) => {
-      if (row) onJump(row.blockId);
+      if (row) jumpToRow(row, onJump);
     },
     [onJump],
   );

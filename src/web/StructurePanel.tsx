@@ -58,6 +58,7 @@ import {
 import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
 import { FigureMark } from "./FigureMark.js";
+import { jumpToRow } from "./fold.js";
 import type { MatterRange } from "./matter-view.js";
 import { MATTER_ROW_NOTE, MatterMark } from "./MatterMark.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -371,7 +372,7 @@ function Row({
            and no `useTapReveal`, whose first finger tap would otherwise arm a
            card that does not exist and leave the row silently needing two.
            GPT Sol, plan review of 261003c. */
-        button({ onClick: () => onJump(row.blockId) })
+        button({ onClick: () => jumpToRow(row, onJump) })
       ) : (
         <CardRow row={row} card={card} button={button} onJump={onJump} />
       )}
@@ -459,7 +460,7 @@ function CardRow({
             onPointerDown: reveal.onPointerDown,
             onPointerCancel: reveal.onPointerCancel,
             onClick: (e) => {
-              if (reveal.commit(e)) onJump(row.blockId);
+              if (reveal.commit(e)) jumpToRow(row, onJump);
             },
           })}
         </Tooltip>

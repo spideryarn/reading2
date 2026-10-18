@@ -24,14 +24,17 @@ of it in place.
 ## What the reader sees
 
 - **A stub per stretch**: one faint line, in the interface face, with a chevron, a label made from
-  what is in it (*Abstract*; *Authors and affiliations*; *Acknowledgements, funding and
-  declarations*; *References*), a count, and an ⓘ saying what it is and that nothing is removed.
+  what is in it (*Abstract*; *Authors and affiliations*; *Title and authors* when the title is in
+  it; *Acknowledgements, funding and declarations*; *References*), a count, and an ⓘ saying what it is and that nothing is removed.
   Pressing it opens the stretch in place; a fold chevron in its first row's gutter shuts it again.
 - **Shut on every arrival**, and not remembered. A jump into a stretch (a search hit, a Structure
   row, a comment, a pasted `?at=`) opens it. The reading position never names a block inside a
   shut stretch, so a reload does not open one.
 - **Structure keeps its rows**, faint and with the same ⓘ, numbered as before; pressing one opens
-  the stretch and goes there.
+  every stretch within it and goes there. A row is faint when stretches cover it, one or several
+  back to back (*Title and Abstract* is two); a row that only partly overlaps one is not.
+- **Stubs back to back sit as a compact list**, normal paragraph space only before the first and
+  after the last (fold.ts writes the tight sides; prose.css owns the size).
 - **Nothing is taken out of the article.** Search, exports, chat and every model still read every
   block. Leaving the paperwork out of what automatic modes *say* is the prompts' job
   ([`src/paperwork.ts`](../../src/paperwork.ts), plans 261003c and 261003d); taking it out of what

@@ -78,8 +78,10 @@ export type MatterRange = Pick<ViewStretch, "start" | "end">;
  *
  * **The masthead's echo is subtracted** (plan review F7). The echo is hidden
  * for good and never revealed, so a stub on an echo row could never be seen or
- * opened. What is left of a stretch keeps its kinds; a stretch that was only
- * echo is dropped.
+ * opened. What is left of a stretch keeps its kinds, bar the title: the echo
+ * is the title, and the masthead shows it, so a stub over the byline that is
+ * left reads *Authors and affiliations*, not *Title and authors*. A stretch
+ * that was only echo is dropped.
  */
 export function matterStretches(
   article: MatterViewArticle,
@@ -108,8 +110,15 @@ export function matterStretches(
        that cannot happen and keeps a stretch contiguous if it ever does. */
     let run: BlockId[] = [];
     let runStart = -1;
+    /* The echo is the title, so a stretch that lost its echo row no longer
+       holds the title: the masthead shows it. Its stub would otherwise read
+       *Title and authors* over the byline alone. */
+    let kinds: readonly MatterKindName[] = s.kinds;
+    if (kinds.length > 1 && blocks.slice(from, to + 1).some((b) => echo.has(b.id))) {
+      kinds = kinds.filter((k) => k !== "title");
+    }
     const flush = (endAt: number) => {
-      if (run.length > 0) out.push({ ids: run, start: runStart, end: endAt, kinds: [...s.kinds] });
+      if (run.length > 0) out.push({ ids: run, start: runStart, end: endAt, kinds: [...kinds] });
       run = [];
     };
     for (let i = from; i <= to; i++) {
@@ -131,13 +140,22 @@ function indexOf(blocks: readonly Block[]): Map<BlockId, number> {
 }
 
 /**
- * **Whether a row from `start` to `end` (indices, inclusive) lies wholly
- * inside one stretch** — Structure's faint rows (plan review F9). Inside one,
- * not inside the union of several: a row spanning two adjacent stretches names
- * something that is two things, and pressing it opens only the first.
+ * **Whether a row from `start` to `end` (indices, inclusive) is wholly
+ * matter** — Structure's faint rows (plan review F9): inside one stretch, or
+ * inside stretches back to back with no block between them. "Title and
+ * Abstract" is two stretches and nothing else, and pressing it opens both
+ * (fold.ts § `openStretchesWithin`); the browser pass of 261018a found it
+ * drawn as body text while everything it names was folded. A row that only
+ * partly overlaps, or that crosses a gap between two, is not faint. By index,
+ * never by comparing ids.
  */
-export function withinOneStretch(start: number, end: number, stretches: readonly MatterRange[]): boolean {
-  return stretches.some((s) => start >= s.start && end <= s.end);
+export function coveredByStretches(start: number, end: number, stretches: readonly MatterRange[]): boolean {
+  let next = start;
+  for (const s of stretches) {
+    if (s.start <= next && s.end >= next) next = s.end + 1;
+    if (next > end) return true;
+  }
+  return false;
 }
 
 /* ------------------------------------------------------------ the stub -- */
@@ -174,22 +192,28 @@ const KIND_WHAT: Record<MatterKindName, string> = {
 const LABEL_KINDS = 3;
 
 /**
- * The kinds a stub names, in `MATTER_KIND_ORDER`: the title left out when
- * anything else is there (it is the masthead's job), and the first three.
+ * The kinds a stub names, in `MATTER_KIND_ORDER` (so the title, when it is
+ * there, comes first), and the first three.
  */
 export function namedKinds(kinds: readonly MatterKindName[]): MatterKindName[] {
-  const ordered = MATTER_KIND_ORDER.filter((k) => kinds.includes(k));
-  const named = ordered.length > 1 ? ordered.filter((k) => k !== "title") : ordered;
-  return named.slice(0, LABEL_KINDS);
+  return MATTER_KIND_ORDER.filter((k) => kinds.includes(k)).slice(0, LABEL_KINDS);
 }
 
 /**
  * **The stub's label**, sentence case: *Abstract*; *Authors and affiliations,
- * abstract and keywords*. Only from the closed kinds, never from the article
- * or the model.
+ * abstract and keywords*; *Title and authors*. Only from the closed kinds,
+ * never from the article or the model.
+ *
+ * **A stretch with the title in it says so first**, and calls its authors just
+ * *authors*. The browser pass of 261018a found the title-and-byline stretch and
+ * the authors' list further down both reading *Authors and affiliations*, two
+ * stubs a reader could not tell apart; and *Title and authors and
+ * affiliations* does not read.
  */
 export function stubLabel(kinds: readonly MatterKindName[]): string {
-  const named = namedKinds(kinds).map((k, i) => (i === 0 ? KIND_LABEL[k] : lowerFirst(KIND_LABEL[k])));
+  const titled = kinds.includes("title");
+  const label = (k: MatterKindName) => (titled && k === "authors" ? "Authors" : KIND_LABEL[k]);
+  const named = namedKinds(kinds).map((k, i) => (i === 0 ? label(k) : lowerFirst(label(k))));
   if (named.length === 0) return "Folded";
   if (named.length === 1) return named[0]!;
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;

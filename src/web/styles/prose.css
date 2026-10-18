@@ -210,7 +210,8 @@ td.text.kind-heading:has(> .fold-toggle) {
   max-width: clamp(45ch, 90vw, var(--reading-measure));
   margin-inline: auto;
   display: flex;
-  align-items: center;
+  /* The ⓘ on the stub's last line, where the count ends — § below. */
+  align-items: flex-end;
   gap: 0.15rem;
 }
 .matter-stub > button {
@@ -225,27 +226,58 @@ td.text.kind-heading:has(> .fold-toggle) {
   color: var(--ink-faint);
   cursor: pointer;
 }
+/* **Inline text, not a flex row**, so a label that wraps on a phone carries
+   the count with its last words — *declarations · 15 lines* — rather than
+   leaving the count a column of its own beside it (browser pass of 261018a, at
+   390px). The chevron hangs in the indent, so a second line starts under the
+   label, not under the chevron. */
 .matter-stub-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
+  display: block;
   min-width: 0;
   text-align: start;
+  padding-inline-start: calc(0.2rem + 14px + 0.3rem);
+  text-indent: calc(-14px - 0.3rem);
 }
-.matter-stub-open svg { width: 14px; height: 14px; flex: none; }
+.matter-stub-open svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: -0.15em;
+  margin-inline-end: 0.3rem;
+}
+.matter-stub-count { white-space: nowrap; }
 /* The dot between the label and the count is drawn, not written, so a screen
    reader hears "Abstract, 200 words" rather than a symbol. */
-.matter-stub-count::before { content: "·"; margin-inline-end: 0.3rem; }
-.matter-stub-info { display: inline-grid; place-items: center; opacity: 0.6; }
+.matter-stub-count::before { content: "·"; margin-inline: 0.3rem; }
+/* One line tall, and on the stub's last line (`.matter-stub` aligns its
+   children to the end), so it ends the line the count ends rather than
+   floating beside a wrapped label's middle. */
+.matter-stub-info {
+  display: inline-grid;
+  place-items: center;
+  height: calc(0.8rem * 1.4 + 0.2rem);
+  opacity: 0.6;
+}
 .matter-stub-info svg { width: 13px; height: 13px; }
 .matter-stub > button:hover,
 .matter-stub > button:focus-visible,
 .matter-stub-info.on { opacity: 1; color: var(--highlight-text); }
-/* A stub on a heading's row is one quiet line like any other, not a heading's
-   doubled space above. */
+/* **A stub's row is one quiet line**: one pad above and below on a heading's
+   row as on any other (not a heading's doubled space), and no row floor —
+   gutter.css floors every row at one gutter slot, and a stub row has no
+   gutter on screen.
+
+   **Stubs back to back are a compact list** (browser pass of 261018a: four
+   stubs spaced like paragraphs pushed the article to mid-screen). fold.ts
+   marks which side of a stub faces another shut stub (§ `tightStubs`) by
+   setting `--stub-above` / `--stub-below` to `--stub-tight`, half a pad, so a
+   list of them is about 1.6 lines of prose per stub and the paragraph space
+   stays before the first and after the last. */
+td.text:has(> .matter-stub),
 td.text.kind-heading:has(> .matter-stub) {
-  padding-top: var(--block-pad);
-  padding-bottom: var(--block-pad);
+  --stub-tight: calc(var(--block-pad) / 2);
+  padding-top: var(--stub-above, var(--block-pad));
+  padding-bottom: var(--stub-below, var(--block-pad));
+  height: auto;
   --blk-top: calc(var(--block-pad) + 0.2rem);
 }
 

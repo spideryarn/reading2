@@ -17,7 +17,7 @@ import {
   stubHow,
   stubLabel,
   stubWhat,
-  withinOneStretch,
+  coveredByStretches,
 } from "../src/web/matter-view.js";
 import { outlineProjection } from "../src/web/outline.js";
 import { structureProjection } from "../src/web/structure.js";
@@ -85,10 +85,17 @@ describe("matterStretches: where the stretches come from", () => {
     expect(out.map((x) => x.ids)).toEqual([[id("nam"), id("abh")], [id("ref")]]);
   });
 
-  it("leaves the masthead's echo out, keeps the kinds, and drops a stretch that was only echo", () => {
+  it("leaves the masthead's echo out, keeps the kinds bar the title it was, and drops a stretch that was only echo", () => {
     const echo = new Set([id("ttl")]);
     expect(matterStretches(art([s("ttl", "nam", "title", "authors")]), echo)).toEqual([
-      { ids: [id("nam")], start: 1, end: 1, kinds: ["title", "authors"] },
+      { ids: [id("nam")], start: 1, end: 1, kinds: ["authors"] },
+    ]);
+    expect(matterStretches(art([s("ttl", "nam", "title", "authors")]), NO_ECHO)).toEqual([
+      { ids: [id("ttl"), id("nam")], start: 0, end: 1, kinds: ["title", "authors"] },
+    ]);
+    expect(matterStretches(art([s("nam", "abs", "authors", "abstract")]), echo)[0]?.kinds).toEqual([
+      "authors",
+      "abstract",
     ]);
     expect(matterStretches(art([s("ttl", "ttl", "title")]), echo)).toEqual([]);
   });
@@ -103,12 +110,20 @@ describe("the stub's label", () => {
     expect(stubLabel(["title"])).toBe("Title");
   });
 
-  it("names up to three, in the closed order, in sentence case, and leaves the title out when others are there", () => {
+  it("names up to three, in the closed order, in sentence case", () => {
     expect(stubLabel(["funding", "acknowledgements"])).toBe("Acknowledgements and funding");
-    expect(stubLabel(["title", "authors"])).toBe("Authors and affiliations");
     expect(stubLabel(["declarations", "funding", "acknowledgements", "authors"])).toBe(
       "Authors and affiliations, acknowledgements and funding",
     );
+  });
+
+  /* Browser pass of 261018a: a title-and-byline stretch and the authors'
+     list further down both read "Authors and affiliations". */
+  it("starts with the title when the title is among them, and calls the authors just that", () => {
+    expect(stubLabel(["title", "authors"])).toBe("Title and authors");
+    expect(stubLabel(["authors", "title"])).toBe("Title and authors");
+    expect(stubLabel(["title", "abstract"])).toBe("Title and abstract");
+    expect(stubLabel(["title", "authors", "abstract", "keywords"])).toBe("Title, authors and abstract");
   });
 });
 
@@ -157,30 +172,40 @@ describe("the stub's ⓘ", () => {
 });
 
 /* Plan review of 261018a, F9. */
-describe("withinOneStretch: Structure's faint rows", () => {
+describe("coveredByStretches: Structure's faint rows", () => {
   const stretches = [
     { start: 2, end: 5 },
     { start: 6, end: 9 },
+    { start: 12, end: 14 },
   ];
 
   it("is a row wholly inside one stretch, its ends included", () => {
-    expect(withinOneStretch(2, 5, stretches)).toBe(true);
-    expect(withinOneStretch(3, 4, stretches)).toBe(true);
-    expect(withinOneStretch(7, 7, stretches)).toBe(true);
+    expect(coveredByStretches(2, 5, stretches)).toBe(true);
+    expect(coveredByStretches(3, 4, stretches)).toBe(true);
+    expect(coveredByStretches(7, 7, stretches)).toBe(true);
   });
 
   it("is not a row that only partly overlaps one", () => {
-    expect(withinOneStretch(1, 3, stretches)).toBe(false);
-    expect(withinOneStretch(9, 10, stretches)).toBe(false);
+    expect(coveredByStretches(1, 3, stretches)).toBe(false);
+    expect(coveredByStretches(9, 10, stretches)).toBe(false);
+    expect(coveredByStretches(11, 13, stretches)).toBe(false);
   });
 
-  it("is not a row spanning two adjacent stretches, though their union covers it", () => {
-    expect(withinOneStretch(4, 7, stretches)).toBe(false);
-    expect(withinOneStretch(2, 9, stretches)).toBe(false);
+  /* Browser pass of 261018a: "Title and Abstract" is two stretches, back to
+     back, and is all matter; pressing it opens both (fold.ts §
+     `openStretchesWithin`). */
+  it("is a row spanning stretches back to back, which together cover it", () => {
+    expect(coveredByStretches(4, 7, stretches)).toBe(true);
+    expect(coveredByStretches(2, 9, stretches)).toBe(true);
+  });
+
+  it("is not a row across a gap between two stretches", () => {
+    expect(coveredByStretches(8, 13, stretches)).toBe(false);
+    expect(coveredByStretches(2, 14, stretches)).toBe(false);
   });
 
   it("is nothing without stretches", () => {
-    expect(withinOneStretch(0, 0, [])).toBe(false);
+    expect(coveredByStretches(0, 0, [])).toBe(false);
   });
 });
 
@@ -218,7 +243,7 @@ describe("the matter flag on Structure's rows, in both faces", () => {
     expect(proj.columnA.rows.every((r) => !r.matter)).toBe(true);
   });
 
-  it("does not mark a row that spans two stretches back to back", () => {
+  it("marks a row that spans two stretches back to back, and its rows", () => {
     const proj = structureProjection({
       root: tree(),
       focusRow: 6,
@@ -230,7 +255,7 @@ describe("the matter flag on Structure's rows, in both faces", () => {
         { start: 6, end: 9 },
       ],
     });
-    expect(proj.columnA.rows.find((r) => r.text === "The body")?.matter).toBe(false);
+    expect(proj.columnA.rows.find((r) => r.text === "The body")?.matter).toBe(true);
     expect(proj.columnB.rows.map((r) => [r.text, r.matter])).toEqual([
       ["Method", true],
       ["Results", true],

@@ -22,6 +22,8 @@ import {
   isContentHidden,
   isFoldedAway,
   isRowHidden,
+  jumpToRow,
+  openStretchesWithin,
   revealBlock,
   setFoldArticle,
   subscribeFold,
@@ -459,5 +461,95 @@ describe("the stretches and the mounted table", () => {
     act(() => root.render(createElement(Harness, { key: "next", slug: "next", list: both })));
     expect(state().shut).toEqual(["spya-lab", "spya-refs"]);
     act(() => root.unmount());
+  });
+});
+
+/*   lab (h2) n, aff     | three stretches back to back: one list of stubs
+ *   abs (h2) abs1       |
+ *   ack, fund           |
+ *   a (h2) a1             the body
+ *   refs (h2) r1, r2      a fourth, on its own
+ * Browser pass of 261018a: four stubs spaced like paragraphs pushed the
+ * article to mid-screen; consecutive stubs sit as a compact list. */
+describe("stubs back to back: a compact list", () => {
+  const run: Block[] = [
+    h("t", 1),
+    h("lab", 2),
+    p("n"),
+    p("aff"),
+    h("abs", 2),
+    p("abs1"),
+    p("ack"),
+    p("fund"),
+    h("a", 2),
+    p("a1"),
+    h("refs", 2),
+    p("r1"),
+    p("r2"),
+  ];
+  const four = [ids("lab", "n", "aff"), ids("abs", "abs1"), ids("ack", "fund"), ids("refs", "r1", "r2")];
+  const above = (s: string) => `tr[data-block="spya-${s}"]>td{--stub-above:var(--stub-tight)}\n`;
+  const below = (s: string) => `tr[data-block="spya-${s}"]>td{--stub-below:var(--stub-tight)}\n`;
+
+  it("draws each stub tight against the shut stub beside it, and the ends of the list with normal space", () => {
+    setFoldArticle("slug", run, echo, four);
+    const css = style();
+    expect(css).toContain(below("lab"));
+    expect(css).toContain(above("abs"));
+    expect(css).toContain(below("abs"));
+    expect(css).toContain(above("ack"));
+    expect(css).not.toContain(above("lab"));
+    expect(css).not.toContain(below("ack"));
+    expect(css).not.toContain(above("refs"));
+    expect(css).not.toContain(below("refs"));
+  });
+
+  it("is not tight against a stretch that is open, whose first row is prose again", () => {
+    setFoldArticle("slug", run, echo, four);
+    toggleStretch(id("abs"));
+    const css = style();
+    expect(css).not.toContain(below("lab"));
+    expect(css).not.toContain(above("ack"));
+    expect(css).not.toMatch(/spya-abs"\]>td\{--stub/);
+  });
+});
+
+/* Browser pass of 261018a: Structure's "Title and Abstract" spans two
+   stretches, and pressing it opened only the first. */
+describe("openStretchesWithin: a Structure row opens everything it names", () => {
+  it("opens every stretch that lies wholly within the row's range, by index, and no other", () => {
+    setFoldArticle("slug", blocks, echo, both);
+    openStretchesWithin(0, 5);
+    expect(state().shut).toEqual(["spya-refs"]);
+    clearFoldArticle();
+    setFoldArticle("slug", blocks, echo, both);
+    openStretchesWithin(2, 10); // the front stretch only partly: left shut
+    expect(state().shut).toEqual(["spya-lab"]);
+    clearFoldArticle();
+    setFoldArticle("slug", blocks, echo, both);
+    openStretchesWithin(0, 10);
+    expect(state().shut).toEqual([]);
+  });
+
+  it("is what a row's press does first, before its jump, in both faces", () => {
+    setFoldArticle("slug", blocks, echo, both);
+    const shutAtJump: string[][] = [];
+    jumpToRow({ blockId: id("t"), startRow: 0, endRow: 5 }, (to) => {
+      expect(to).toBe(id("t"));
+      shutAtJump.push(state().shut);
+    });
+    expect(shutAtJump).toEqual([["spya-refs"]]);
+  });
+
+  it("tells a subscriber once, and not at all when there is nothing to open", () => {
+    setFoldArticle("slug", blocks, echo, both);
+    let heard = 0;
+    const off = subscribeFold(() => heard++);
+    openStretchesWithin(0, 10);
+    expect(heard).toBe(1);
+    openStretchesWithin(0, 10);
+    openStretchesWithin(4, 7);
+    expect(heard).toBe(1);
+    off();
   });
 });

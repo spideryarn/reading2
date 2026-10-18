@@ -175,6 +175,8 @@ let opened: ReadonlySet<string> = new Set();
 let hidden: ReadonlySet<BlockId> = new Set();
 /** The stubs of shut stretches whose rows are on screen: the row stays, its content does not. */
 let stubbed: ReadonlySet<BlockId> = new Set();
+/** The stubs drawn tight against a neighbouring stub — `tightStubs`. */
+let tight: TightStubs = { above: [], below: [] };
 /** The rows a folded heading hides, the echo not among them unless a fold covers it too. */
 let foldedAway: ReadonlySet<BlockId> = new Set();
 const listeners = new Set<() => void>();
@@ -238,7 +240,57 @@ function writeStyle(): void {
     el.setAttribute(FOLD_STYLE_ATTR, "");
     document.head.appendChild(el);
   }
-  el.textContent = foldCss(hidden) + stubCss(stubbed);
+  el.textContent = foldCss(hidden) + stubCss(stubbed) + tightCss(tight);
+}
+
+/** The stub rows drawn tight against the shut stub above them, and below them. */
+interface TightStubs {
+  above: readonly BlockId[];
+  below: readonly BlockId[];
+}
+
+/**
+ * **Which stubs sit next to another stub**, with nothing on screen between:
+ * the rows between two stubs are a shut stretch's own, or the echo, or a fold,
+ * all of them hidden. Stubs back to back read as one compact list rather than
+ * a paragraph each (browser pass of 261018a: four stubs pushed the article to
+ * mid-screen). An open stretch's first row is prose again, so a stub beside it
+ * keeps its normal space.
+ */
+function tightStubs(
+  blocks: readonly Block[],
+  rows: ReadonlySet<BlockId>,
+  stubs: ReadonlySet<BlockId>,
+): TightStubs {
+  const above: BlockId[] = [];
+  const below: BlockId[] = [];
+  let previous: BlockId | null = null; // the last row on screen, if it was a stub
+  for (const b of blocks) {
+    if (rows.has(b.id)) continue;
+    const isStub = stubs.has(b.id);
+    if (isStub && previous !== null) {
+      above.push(b.id);
+      below.push(previous);
+    }
+    previous = isStub ? b.id : null;
+  }
+  return { above, below };
+}
+
+/**
+ * The tight sides as custom properties on the cell, which prose.css reads
+ * (§ a stretch of front or back matter): this says which side, the stylesheet
+ * says how much.
+ */
+function tightCss({ above, below }: TightStubs): string {
+  let css = "";
+  for (const id of below) {
+    if (SAFE_ID.test(id)) css += `tr[data-block="${id}"]>td{--stub-below:var(--stub-tight)}\n`;
+  }
+  for (const id of above) {
+    if (SAFE_ID.test(id)) css += `tr[data-block="${id}"]>td{--stub-above:var(--stub-tight)}\n`;
+  }
+  return css;
 }
 
 /** What "the same stretch" means: the same blocks in the same order. */
@@ -269,6 +321,7 @@ function commit(folded: ReadonlySet<BlockId>): void {
   }
   hidden = rows;
   stubbed = stubs;
+  tight = tightStubs(blocks, rows, stubs);
   writeStyle();
   for (const l of listeners) l();
 }
@@ -397,14 +450,56 @@ export function revealBlock(id: string): void {
  * uncovered commits nothing, so a subscriber hears only real changes.
  */
 function openStretch(n: number): void {
+  openStretches([n]);
+}
+
+/** Open stretches `ns` in one commit, as `openStretch` opens one. */
+function openStretches(ns: readonly number[]): void {
   if (!article) return;
-  const ids = article.stretches[n];
-  if (ids === undefined) return;
-  const key = stretchKey(ids);
-  const covering = new Set(foldsHiding(article.blocks, state.folded, ids[0]!));
-  if (opened.has(key) && covering.size === 0) return;
-  opened = new Set([...opened, key]);
+  const covering = new Set<BlockId>();
+  const keys: string[] = [];
+  for (const n of ns) {
+    const ids = article.stretches[n];
+    if (ids === undefined) continue;
+    const over = foldsHiding(article.blocks, state.folded, ids[0]!);
+    for (const h of over) covering.add(h);
+    if (!opened.has(stretchKey(ids)) || over.length > 0) keys.push(stretchKey(ids));
+  }
+  if (keys.length === 0) return;
+  opened = new Set([...opened, ...keys]);
   commit(new Set([...state.folded].filter((h) => !covering.has(h))));
+}
+
+/**
+ * **Open every stretch that lies wholly within blocks `start` to `end`**
+ * (indices, inclusive) — what a Structure row does before its jump, so the
+ * reader sees everything the row names. *Title and Abstract* is two stretches,
+ * and the jump's own reveal opens only the one its first block is in (browser
+ * pass of 261018a). A stretch only partly inside is left to the reveal. By
+ * index, never by comparing ids. One commit, and none when all are open.
+ */
+export function openStretchesWithin(start: number, end: number): void {
+  if (!article) return;
+  const ns: number[] = [];
+  article.stretches.forEach((ids, n) => {
+    const first = article!.index.get(ids[0]!);
+    const last = article!.index.get(ids[ids.length - 1]!);
+    if (first !== undefined && last !== undefined && first >= start && last <= end) ns.push(n);
+  });
+  openStretches(ns);
+}
+
+/**
+ * **A Structure row's press**, in either face (StructurePanel.tsx,
+ * OutlinePanel.tsx): open every stretch within the row, then jump to its first
+ * block. One function so the two faces cannot drift apart.
+ */
+export function jumpToRow(
+  row: { blockId: BlockId; startRow: number; endRow: number },
+  onJump: (id: BlockId) => void,
+): void {
+  openStretchesWithin(row.startRow, row.endRow);
+  onJump(row.blockId);
 }
 
 /**
