@@ -177,11 +177,28 @@ stall clock is refreshed by every SSE read, so 20 s is safe).
 - **F3 (low), no Reader-level test of Learn → Chat.** Covered by the browser check instead: the path
   is `handToChat`, unchanged and already exercised by Summary's button.
 
+## GPT Sol's code review
+
+[261018b-…-code-review-sol.md](261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat-code-review-sol.md),
+SHIP AFTER FIXES (made). It tightened two tests: the ceiling test now pins 4,000 exactly, and the
+panel test edits the box before pressing Discuss, checking that the quoted answer is the marked one.
+It found nothing that still depends on 1,200 (spend, admission, timeouts). Not fixed: no test
+would notice if Reader's `"wait"` became `"send"`. That is accepted, and the browser check covers it.
+
 ## Progress
 
 - [x] Plan reviewed by GPT Sol
 - [x] Stage 1 built, tests green
 - [x] Stage 2 built, tests green
-- [ ] Code reviewed by GPT Sol
-- [ ] Browser check
-- [ ] Notes, queue entries, pushed to dev
+- [x] Code reviewed by GPT Sol
+- [x] Browser check (Sonnet subagent, Playwright, local dev, fowler-phrenology). All passed. The
+  icon is absent while a mark streams and appears when it finishes. The press opens
+  `?mode=chat&thread=…` with the seed in one composer, unsent, and the mark is quoted whole with
+  its block ids. Sending gets a reply. At 390px the four icons fit with no overflow. Five marks
+  arrived whole. One oddity, not reproduced: on one run a mark's Discuss icon never appeared within
+  90 s, and the question showed unanswered after a reload. A later answer to the same question
+  marked in 7 s, and the cause was not captured. Screenshots:
+  [shot 2](261018b-shot-2-chat-seed-and-reply.png), [shot 3](261018b-shot-3-phone-step-row.png).
+- [x] Notes ([261018_0009](../user-feedback/261018_0009-quiz-mark-cut-off-by-the-models-thinking.md),
+  [261018_0010](../user-feedback/261018_0010-discuss-a-quiz-mark-in-chat.md)), queue entries
+  `qi-vva8v98m` (ceiling sweep) and `qi-8bh8r2vg` (a stored quiz origin), pushed to dev

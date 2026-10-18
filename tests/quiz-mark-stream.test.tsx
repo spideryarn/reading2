@@ -565,7 +565,10 @@ describe("the room a mark is given", () => {
     );
 
     await drain(markAnswerStream(MARK));
-    expect(sent?.max_tokens).toBeGreaterThanOrEqual(832 + 1_200);
+    /* The product decision is 4,000, not merely "more than the observed
+       failure needed". A 2,032-token request would satisfy that arithmetic
+       and quietly give back almost half the margin this change is for. */
+    expect(sent?.max_tokens).toBe(4_000);
   });
 });
 

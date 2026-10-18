@@ -1982,10 +1982,15 @@ describe("discuss a mark in chat", () => {
   it("is offered on a whole mark, and hands all three to chat", () => {
     seeds.length = 0;
     paintWith(owner({ quiz: batch([Q, question(2)]), attempt: attempt({}) }));
+    /* The box is editable after a mark lands. The discussion must quote the
+       answer that mark was computed on, not launder a newer, unmarked draft
+       into the old feedback. */
+    type("An edited, unmarked answer.");
     press("Discuss this in chat");
     expect(seeds).toHaveLength(1);
     expect(seeds[0]).toContain(Q.question);
     expect(seeds[0]).toContain("My answer.");
+    expect(seeds[0]).not.toContain("An edited, unmarked answer.");
     expect(seeds[0]).toContain("Half of it.");
   });
 
