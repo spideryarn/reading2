@@ -607,6 +607,11 @@ describe("the bundle is the faithful projection", () => {
     expect(bundled.get("README.md")).toContain("The block id contract");
     expect(bundled.get("README.md")).toContain("What the Dig deeper action wrote about cited works");
     expect(bundled.get("README.md")).not.toContain("What Investigate wrote about cited works");
+    /* Plan 261018i: `kind: "source"` means model memory, not a source the app
+       consulted. The export hands the raw note to another reader or program,
+       so its file description must carry the warning the margin draws. */
+    expect(bundled.get("README.md")).toContain("AI memory, unchecked");
+    expect(bundled.get("index.html")).toContain("AI memory, unchecked");
     expect(bundled.has("augmentations/tree.json")).toBe(true);
     // No glossary was ever generated for this article, so there is no file.
     expect(bundled.has("augmentations/glossary.json")).toBe(false);

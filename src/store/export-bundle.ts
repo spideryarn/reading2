@@ -678,7 +678,8 @@ one thing that will make the rest of these files make sense.
       quiz.json            Questions generated from the article.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
       relations.json       How each paragraph bears on the one before it, one word each, and a few margin
-                           notes, including where a quotation or allusion comes from.
+                           notes. A note with kind "source" says where a quotation or allusion comes
+                           from, from AI memory, unchecked.
       sources-claims.json  The claims the article rests on that someone outside could argue with,
                            each in the article's words and the model's.
       skim.json            A route through the quotes, in the order to read them, at three depths.
@@ -881,7 +882,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
   "augmentations/relations.json":
-    "How each paragraph bears on the one before it, one word each, and a few margin notes, including where a quotation or allusion comes from.",
+    'How each paragraph bears on the one before it, one word each, and a few margin notes. A note with kind "source" says where a quotation or allusion comes from, from AI memory, unchecked.',
   "augmentations/sources-claims.json":
     "The claims the article rests on that someone outside could argue with, each in the article's words and the model's.",
   "augmentations/skim.json":

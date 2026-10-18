@@ -170,7 +170,9 @@ Cost: about $0.05 per article per arm, so a few dollars with a rerun.
 
 ## What is deferred, and queued
 
-Each gets an overseer-queue entry before the note may say shipped.
+Each gets an overseer-queue entry before the note may say shipped. Queued 2026-10-18 as proposals:
+1 `qi-am9ern9p`, 2 `qi-y8s68xd9` (marked needs-Greg: a new mode, or Glossary widened?),
+3 `qi-3mmccm5n`, 4 `qi-k3a48hvn`, 5 `qi-b6gnkcya`.
 
 1. **"Does it really say what they say it says?"** — check the article's sentence that cites a work
    against that work's abstract, and say in the margin when the abstract does not support it. Needs
@@ -243,6 +245,10 @@ What it says:
 - **Misses**: the manifest's best positives were mostly bare phrases (*"the American century"*,
   *"military-industrial complex"*, Oresme, Michelangelo's nose). The model prefers named people and
   works. Recall is the weak side, not precision.
+- **Origin-note validation drops were not recorded in these arms.** The eval runner recorded
+  `notesDropped` but omitted `sourceNotesDropped`, so gate 7 cannot be checked from the committed
+  files. The code-review fix records it for future arms; proving it for these arms would require a
+  paid rerun.
 
 **Gate 3 (zero notes on a negative) overruled**, after two prompt rounds: three redundant notes in
 fourteen, none wrong, and the judge found none harmful. Redundancy fell from six to three; a third
@@ -257,3 +263,29 @@ attributes.
 - Stage 1 landed (`86cb811de`): the *Cites* line opens to the checked note.
 - Stage 2 built: `sourceNotes`, `toSourceNotes`, `sourceCap`, `relations/4`, the *Origin* card and
   label, help, catalogue, export description and docs; measured above.
+- Stage 2 committed (`e86448f5a`); full `npm test` green (46151 passed), typecheck clean.
+- Browser check (Sonnet, Playwright, local): an *Origin* note with its label at 1280 and 1100px on
+  `nerds-spya-m034gh`, made by the model unaided; the tooltip; an opened *Cites* line with and
+  without a blurb on `arxiv-1706-03762v7-spya-wv4w9s`. No console errors, no data changed.
+- GPT Sol code review: **REVISE**
+  ([261018i-code-review-sol.md](261018i-code-review-sol.md)); answered below.
+- Deferred items queued (§ What is deferred).
+
+## Code review, and what was done with it
+
+- **P1, an `explain` note leaks memory (*Fight Club* "the film"); split the call.** Checked, and
+  **not taken**. The control arms do the same: their `explain` notes gloss *nil admirari* ("Latin
+  for 'to be astonished at nothing'"), *diff* ("the programmer's term") and the Latin root of
+  *tact*, none from the article. A gloss from general knowledge is what `explain` has always done
+  on relations/3, so this is not a leak the shared call caused. Gate 5's "zero allowed" was stricter
+  than the baseline it was measured against; that was the gate's mistake. Splitting the call would
+  add a second paid call per article and would not change it. Whether `explain` should itself be
+  held to the article word for word is a separate question, which nothing in this report asks.
+  Sol's sentence in marginalia.md, which overclaimed, has been corrected to say this.
+- **P2, gate 3 failed.** Already overruled in § Measurement, with the reason. Greg can reverse it;
+  the prompt is one constant.
+- **P2, export description.** Taken (Sol's fix): `relations.json` now says a `source` note is "AI
+  memory, unchecked", in the README and the HTML index, with a test.
+- **P2, eval runner dropped `sourceNotesDropped`.** Taken (Sol's fix): future arms record
+  `sourceNote.*`, and report.ts says "origin drops unrecorded" for the committed ones. Gate 7 for
+  these arms rests on `toSourceNotes`' unit tests, not on the arms.

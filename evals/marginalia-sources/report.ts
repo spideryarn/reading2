@@ -65,7 +65,17 @@ for (const arm of changes) {
   for (const a of arm.articles) {
     const origins = a.notes.filter((n) => n.kind === "source");
     const dropped = Object.entries(a.dropped).filter(([k, v]) => k.startsWith("note.") && v > 0);
-    console.log(`- ${a.slug}: ${origins.length}${dropped.length ? `, article-only drops ${JSON.stringify(Object.fromEntries(dropped))}` : ""}`);
+    const sourceDropEntries = Object.entries(a.dropped).filter(([k]) => k.startsWith("sourceNote."));
+    const sourceDropped = sourceDropEntries.filter(([, v]) => v > 0);
+    const sourceDropSummary =
+      sourceDropEntries.length === 0
+        ? ", origin drops unrecorded"
+        : sourceDropped.length
+          ? `, origin drops ${JSON.stringify(Object.fromEntries(sourceDropped))}`
+          : ", origin drops 0";
+    console.log(
+      `- ${a.slug}: ${origins.length}${sourceDropSummary}${dropped.length ? `, article-only drops ${JSON.stringify(Object.fromEntries(dropped))}` : ""}`,
+    );
     for (const n of origins) console.log(`    ${n.blockId} «${n.quote}» → ${n.text}`);
   }
   console.log(`\n=== Article-only notes, ${arm.arm} (read for memory leaking in)`);

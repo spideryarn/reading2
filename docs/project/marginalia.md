@@ -252,10 +252,13 @@ owner-only rule as the words, so they ride on the call that was already there, s
 quotes, alludes to or names something the article leaves bare, where it comes from. Plan
 [261018i](../plans/261018i-marginalia-notes-that-save-a-click.md).
 
-- **The only notes that may use the model's own knowledge**, so they are their own array in the
+- **The only notes allowed to use the model's own knowledge**, so they are their own array in the
   answer, `sourceNotes`, with no `kind` field: code stamps `source` (`toSourceNotes`). The four
-  kinds above stay "use only the article", and the model cannot file a note from memory under one of
-  them. Stored in the same `notes` list, told apart by kind.
+  kinds above stay "use only the article", and the model cannot choose `source` as their kind.
+  This field boundary does not keep their prose inside the article: an `explain` note may still
+  gloss a word or name from general knowledge (*Fight Club* "the film"; before this, the control's
+  "Latin for 'to be astonished at nothing'"), as it always has — plan § Code review. Stored in the
+  same `notes` list, told apart by kind.
 - **Marked on the note, not only in its card**: the stamp *Origin* and, after the words, *AI memory,
   unchecked* (`SOURCE_NOTE_LABEL`), quiet and never a warning, as Glossary's *background* is
   ([glossary.md § Provenance is the label](glossary.md#provenance-is-the-label-not-a-badge)).

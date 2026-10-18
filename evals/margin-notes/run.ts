@@ -87,6 +87,11 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
                   ([k, v]) => [`note.${k}`, v],
                 ),
               ),
+              ...Object.fromEntries(
+                Object.entries((run.relations.sourceNotesDropped ?? {}) as Record<string, number>).map(
+                  ([k, v]) => [`sourceNote.${k}`, v],
+                ),
+              ),
             },
             inputTokens: run.inputTokens,
             outputTokens: run.outputTokens,
