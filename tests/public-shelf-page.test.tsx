@@ -606,6 +606,22 @@ describe("the topic pills", () => {
     expect(cards(page)).toHaveLength(4);
   });
 
+  it("draws six pills, and the rest behind All N topics, as a reader's row does (plan 261018k)", async () => {
+    const keys = Array.from({ length: 8 }, (_, i) => `t${i}`);
+    const MANY: PublicLibrary = {
+      entries: [card("a-spya-aaaaaa", "Everything", keys)],
+      topics: keys.map((key) => ({ key, label: key.toUpperCase(), granularity: 0 })),
+      truncated: false,
+    };
+    const page = await show(() => MANY);
+    expect(pills(page).map((b) => b.textContent)).toEqual(["T01", "T11", "T21", "T31", "T41", "T51"]);
+    const all = [...page.querySelectorAll<HTMLButtonElement>("[data-public-topics] button")].find((b) =>
+      b.textContent?.startsWith("All 8 topics"),
+    );
+    await act(async () => all?.click());
+    expect(pills(page)).toHaveLength(8);
+  });
+
   it("draws no row when the server sent no topics", async () => {
     const page = await show();
     expect(page.querySelector("[data-public-topics]")).toBeNull();
