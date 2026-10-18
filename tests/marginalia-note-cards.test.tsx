@@ -16,7 +16,7 @@
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CitedWork, FaqQuestion, TimelineEvent } from "../src/types.js";
+import type { BlockId, CitedWork, FaqQuestion, TimelineEvent } from "../src/types.js";
 import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
 import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
 import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
@@ -157,6 +157,29 @@ describe("a note in the margin", () => {
     act(() => root.render(createElement(MarginNotesSlot, props)));
     act(() => host.querySelector<HTMLAnchorElement>(".marg-aside-to")?.click());
     expect(onJump).toHaveBeenCalledWith("spya-bbbbbb", { quotes: ["an 8% reduction in errors"] });
+  });
+
+  /* Plan 261018i (Sol F2): an origin note is the AI's memory and nothing
+     checked it, so that is visible on the note, not only in its card. The
+     article-only kinds carry no such label. */
+  it("marks an origin note as the AI's memory, unchecked, where the reader can see it", () => {
+    const note = (kind: "source" | "explain") => ({
+      kind: "aside" as const,
+      note: { blockId: "spya-aaaaaa" as BlockId, kind, text: "The opening line of a 1953 novel.", quote: "the past", to: null, toQuote: null },
+    });
+    const draw = (kind: "source" | "explain") =>
+      act(() =>
+        root.render(
+          createElement(MarginNotesSlot, { blockId: "spya-aaaaaa", notes: [note(kind)], viewer: "owner" } as ComponentProps<
+            typeof MarginNotesSlot
+          >),
+        ),
+      );
+    draw("source");
+    expect(host.querySelector(".marg-aside-stamp")?.textContent).toBe("Origin");
+    expect(host.querySelector(".marg-aside-memory")?.textContent).toBe("AI memory, unchecked");
+    draw("explain");
+    expect(host.querySelector(".marg-aside-memory")).toBeNull();
   });
 });
 

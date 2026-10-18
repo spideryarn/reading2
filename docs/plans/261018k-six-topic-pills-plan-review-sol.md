@@ -1,0 +1,11 @@
+1. **High — `docs/plans/261018k-six-topic-pills-by-default-above-the-shelf.md:31`; `src/shelf-terms/model-topics.ts:80`; `docs/project/shelf-terms.md:302`** — Item 3 is scope creep and violates the pointer-stability requirement. A chosen topic may have up to 20 direct children, so the “collapsed” row can grow from six to 20–40+ pills. Pressing a child can also make earlier siblings count zero and disappear, shifting the pressed pill left; `withinChosenFirst` prevents explicit reordering but not movement caused by `availableTopics`. Prefer the constant-only change: `withinChosenFirst` already brings the first few children forward, and **All N topics** exposes the rest.
+
+2. **Medium — `src/web/ShelfTerms.tsx:339`; `src/web/PublicShelfTopics.tsx:109`** — The plan must change the **All N topics** condition, not merely its numeric threshold. With “first six + chosen + children,” all available topics may already be visible even when `available.length > 6`, leaving an All button that reveals nothing. Base the condition on whether the collapsed result actually omits anything, and test this case in both rows.
+
+3. **Medium — `tests/shelf-topics-detail.test.tsx:40`; `tests/shelf-topics-detail.test.tsx:157`** — The plan misses this test file’s explicit “collapsed twelve” fixture and `KEYS.slice(0, 12)` assertion. It will fail deterministically after the cap changes.
+
+4. **Low — `docs/project/shelf-terms.md:310`; `docs/project/shelf-terms.md:324`** — The documentation work names only § Two views and § Where the code is, but § A topic with nothing to show also says “first twelve” twice and describes where `withinChosenFirst` runs.
+
+5. **Low — `src/shelf-terms/choose.ts:815`; `scripts/shelf-terms-report.ts:250`** — The quality metrics still describe the first twelve as “what a reader sees first,” and the report measures adjacency only over the first twelve. Historical @12 metrics may remain, but the wording must stop claiming they represent the collapsed row; ideally add an @6 measure. No affected help-page reference was found.
+
+VERDICT: revise

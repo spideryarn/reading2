@@ -307,10 +307,10 @@ disabled in place, on the argument that a row reshuffling under the pointer is w
 chip; Greg's report weighed it the other way. The order is still the server's rank order — the
 survivors keep their places relative to each other, and each keeps its colour.
 
-**The zeros go first, then the first twelve** (`availableTopics` in
+**The zeros go first, then the first six** (`availableTopics` in
 [`shelf-narrow.ts`](../../src/web/shelf-narrow.ts); GPT Sol R5 on plan
 [260929a](../plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)):
-taking twelve and then dropping zeros would leave the row short with live pills waiting beyond it.
+taking six and then dropping zeros would leave the row short with live pills waiting beyond it.
 *"All N topics"* counts the pills it would show, not every topic the server chose.
 
 **Then the topics inside a chosen one move up beside it** (`withinChosenFirst`, same file), for
@@ -321,7 +321,10 @@ sits ahead of *Vision*. So the topics **directly** inside a chosen one are gathe
 last chosen pill that is not itself inside a chosen one, broad first; nothing else moves, and a topic
 two levels down waits until its parent is chosen. **A pill never moves when it is pressed**: a pill
 chosen from that group stays in it. With nothing chosen, and for phrase topics, the order is
-untouched. It runs after the zeros go and before the first twelve.
+untouched. It runs after the zeros go and before the first six, so the first of the finer topics
+fill the slots after the chosen pill and the rest are behind *"All N topics"*. Keeping all of them
+in the collapsed row was weighed and dropped: a subject can have twenty, and the row would stop
+being a half dozen (plan [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)).
 
 ## Archived
 
@@ -359,10 +362,19 @@ The word **Topics** at the head of the row has a card saying how they are picked
 Greg, `spya-tw6zxw`, 2026-09-29 — and the sort row above it has no visible *Sort* label (the legend
 is still read to a screen reader). [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 3.
 
-- **Pills**, the default: the first twelve topics in the server's rank order, plus any chosen one
+- **Pills**, the default: the first six topics in the server's rank order, plus any chosen one
   further down, in its own place — never re-sorted by count, so nothing moves when you press one.
-  **"All N topics"** expands the same row to every pill; it is shown only when there are more than
-  twelve.
+  **"All N topics"** expands the same row to every pill; while collapsed, it is shown only when the
+  collapsed row leaves some out. Once expanded it stays until pressed again, even if narrowing
+  temporarily leaves only six, so expansion cannot linger invisibly and return when that filter is
+  cleared. Six since 2026-10-18, twelve before (`COLLAPSED_CHIPS` and `collapsedTopics` in
+  [`shelf-narrow.ts`](../../src/web/shelf-narrow.ts), plan
+  [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)):
+
+  > By default, initially just show a half dozen or so topic pills on the logged in page above the
+  > shelf.
+  >
+  > — Greg, 2026-10-18 (`spya-qawppt`)
 - **More detail** (`?topicsView=detail`): every topic, in rank order, one compact row each — a colour
   swatch, the chip, a bar for its live count (relative to the largest count shown, so the bars line
   up in one column and compare at a glance, with a card saying so), and the three articles that use
@@ -541,7 +553,7 @@ tag edit in flight or an archive still loading cannot eat the reader's filter.
 | storage, the owner-scoped set, the bounded fill; the `shelf_topic_sets` row and its claim (and the older `shelf_topic_scores`) | [`src/store/pg-shelf-terms.ts`](../../src/store/pg-shelf-terms.ts) |
 | `GET /api/library/terms` (`?archived=1` for active + archived), `private, no-store` | [`src/routes.ts`](../../src/routes.ts); the shape is `LibraryTermsResponse` in [`src/types.ts`](../../src/types.ts) |
 | the fetch, the ask-again loop, which URL keys apply | [`src/web/useShelfTerms.ts`](../../src/web/useShelfTerms.ts) |
-| the narrowing and the count formula, pure | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
+| the narrowing and the count formula, pure; how many pills the collapsed row draws (`COLLAPSED_CHIPS`, `collapsedTopics`) | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
 | the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
 | one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
 | the More-detail rows: swatch, chip, count bar, links with the paper card | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |

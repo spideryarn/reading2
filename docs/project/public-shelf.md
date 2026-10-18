@@ -214,7 +214,9 @@ What that is, as built (plan
 [261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md)):
 
 - **The same row of pills as a reader's shelf** above the cards (`PublicShelfTopics.tsx`, the same
-  `TermChip` and the same AND narrowing), with no "More detail" view and no URL state. It arrives in
+  `TermChip` and the same AND narrowing), with no "More detail" view and no URL state. It
+  collapses to the same six pills and *"All N topics"* by the same function (`collapsedTopics`,
+  plan [261018k](../plans/261018k-six-topic-pills-by-default-above-the-shelf.md)). It arrives in
   the page's one request; nothing is worked out or spent for the visitor.
 - **Named from the shared articles' titles and one-line summaries only**, by the same model and
   coordinator as a reader's topics ([shelf-terms.md](shelf-terms.md)), stored under the **site

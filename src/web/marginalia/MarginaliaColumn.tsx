@@ -30,7 +30,7 @@ import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
-import { byLineOf } from "../BibliographyPanel.js";
+import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
 import { rowWork } from "../ReceptionAndClaimsPanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
 import { captureClientFailure } from "../monitoring.js";
@@ -50,7 +50,16 @@ import {
 } from "./notes.js";
 import { type MarginNotesList, type RelationsByBlock, useRelations } from "../useRelations.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
-import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, NOTE_TIPS, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
+import {
+  ARC_ORIGIN,
+  IDEA_ORIGIN,
+  MARG_TIPS,
+  type MargTipKey,
+  NOTE_TIPS,
+  PATH_ORIGIN,
+  RELATION_TIPS,
+  SOURCE_NOTE_LABEL,
+} from "./tips.js";
 import { BlockRef } from "../BlockRef.js";
 import type { JumpAim } from "../flash.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
@@ -231,6 +240,15 @@ function AsideNote({
         </button>
       </Tooltip>{" "}
       <span className={withVoice("marg-aside-text", "ai")}>{note.text}</span>
+      {/* The one kind from outside the article: said on the note, not only in
+          its card, as Glossary's *background* is a visible label (plan
+          261018i, Sol F2). Ours, so in the app's face. */}
+      {note.kind === "source" && (
+        <>
+          {" "}
+          <span className="marg-aside-memory">{SOURCE_NOTE_LABEL}</span>
+        </>
+      )}
       {note.to !== null && (
         <>
           {" "}
@@ -527,14 +545,20 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
       {items.map((work) => {
         const by = byLineOf(work);
         return (
-          /* The article's own words about the work and nothing of ours: the
-             by-line and its reference entry, never the model's `why` (Greg,
-             spya-zmdb7y, plan 261003j). A lone work with neither repeats its
-             title, so the note never opens to nothing. */
+          /* The article's own words about the work: the by-line and its
+             reference entry, never the model's `why` (Greg, spya-zmdb7y, plan
+             261003j). A lone work with neither repeats its title, so the note
+             never opens to nothing. Under them, the one AI note allowed: the
+             checked note on what the work says, from its abstract (261017h),
+             the Sources band's own component — Greg, spya-w99qsz: "what's that
+             citation say" (plan 261018i). The column is owner-only and reads a
+             fresh Bibliography, so `owned`; an open panel is no tooltip, so the
+             card may link. */
           <div key={work.id} className="marg-open-item">
             {(!only || (!by && !work.entry)) && <p className="marg-open-head">{work.title}</p>}
             {by && <p className="marg-open-by">{by}</p>}
             {work.entry && <p className="marg-cite-entry">{work.entry}</p>}
+            {work.blurb && <CiteBlurb blurb={work.blurb} owned linked />}
           </div>
         );
       })}

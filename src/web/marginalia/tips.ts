@@ -65,9 +65,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "Cites",
     /* "Press this line", not "Press it" (Greg, spya-xf6m2u: *"I don't see
        anything to press"*): the line is the button. And only what opens — the
-       by-line and the reference entry, never the model's reason (261003j). */
-    what: "A work the article cites, at the first place it does. Press this line to open it and see what the article gives for the work: who wrote it, and its entry in the reference list.",
-    how: "From Sources' Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words.",
+       by-line, the reference entry and, where there is one, the checked note
+       from the work's abstract (261017h, 261018i); never the model's reason
+       (261003j). */
+    what: "A work the article cites, at the first place it does. Press this line to open it and see who wrote it, its entry in the reference list, and, where we found its abstract, a short note on what the work says.",
+    how: "From Sources' Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words. The note on what the work says was written by AI from the work's abstract alone, and checked against it.",
   },
   "comment-own": {
     head: "Yours",
@@ -143,7 +145,19 @@ export const NOTE_TIPS: Record<MarginNoteKind, MargTip & { stamp: string }> = {
     what: "A short note the AI thought would help at this point in the article.",
     how: NOTE_ORIGIN,
   },
+  /* Greg, spya-w99qsz: "where does that come from". The one kind not from the
+     article, so its card says so first, and the note says it too (plan
+     261018i, Sol F2). Not "Source": that could read as a source consulted. */
+  source: {
+    stamp: "Origin",
+    head: "Origin",
+    what: "Where a quotation, an allusion or a name in this passage comes from, which the article itself does not say.",
+    how: "Written by AI for Marginalia from what it already knows, not from the article, and nothing has checked it. Treat it as a lead to follow, not a fact.",
+  },
 };
+
+/** The words after an origin note's text: whose they are, and that nothing checked them. */
+export const SOURCE_NOTE_LABEL = "AI memory, unchecked";
 
 export function isMargTipKey(key: string | null): key is MargTipKey {
   return key !== null && Object.hasOwn(MARG_TIPS, key);

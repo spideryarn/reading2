@@ -172,6 +172,14 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* An origin note's provenance, after its words (plan 261018i): quiet, in the
+   app's face, and never a warning — for an allusion, memory is the product
+   (glossary.md § Provenance is the label, not a badge). */
+.marg-aside-memory {
+  font-size: 0.6875rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
 .marg-aside-stamp:focus-visible {
   outline: 2px solid var(--highlight-text);
   outline-offset: 2px;

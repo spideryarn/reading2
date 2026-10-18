@@ -827,7 +827,9 @@ export interface ShelfTermHeadMetrics {
  * **What a reader sees first** (plan 260928d § Stage 1): coverage of the first
  * few topics **in the order given** — pass the order the row draws them in —
  * and how much the first twelve restate each other. Physical articles, only
- * those in `articleSlugs`, like `shelfTermMetrics`.
+ * those in `articleSlugs`, like `shelfTermMetrics`. The @12 figures are from
+ * when the collapsed row drew twelve; it draws six since 2026-10-18
+ * (`COLLAPSED_CHIPS`, plan 261018k), which @5 and @8 bracket.
  */
 export function shelfTermHeadMetrics(
   terms: ShelfTerm[],

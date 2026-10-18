@@ -65,7 +65,7 @@ import { paperwork } from "./paperwork.js";
 import { plainWords } from "./plain-words.js";
 import { findQuote } from "./quote-match.js";
 import {
-  MARGIN_NOTE_KINDS,
+  ARTICLE_NOTE_KINDS,
   RELATIONS,
   type MarginNote,
   type MarginNoteKind,
@@ -82,7 +82,7 @@ import {
 export type { Relation, Relations, RelationsDropped } from "./types.js";
 
 /** Bumped whenever the prompt changes what a relation *is*, or which paragraphs are asked about. */
-export const PROMPT_VERSION = "relations/3";
+export const PROMPT_VERSION = "relations/4";
 
 /**
  * A sentence's worth: fewer words than this is a heading, a date or a byline.
@@ -140,7 +140,11 @@ export const TOKENS_PER_PARAGRAPH = 30;
  */
 export const TOKENS_PER_NOTE = 300;
 export function answerTokens(paragraphs: number): number {
-  return 200 + paragraphs * TOKENS_PER_PARAGRAPH + noteCap(paragraphs) * TOKENS_PER_NOTE;
+  return (
+    200 +
+    paragraphs * TOKENS_PER_PARAGRAPH +
+    (noteCap(paragraphs) + sourceCap(paragraphs)) * TOKENS_PER_NOTE
+  );
 }
 
 /**
@@ -290,10 +294,20 @@ export function noteCap(paragraphs: number): number {
   return Math.min(8, Math.max(2, Math.ceil(paragraphs / 8)));
 }
 
+/**
+ * **How many origin notes an article may have**, beside `noteCap`: one per
+ * sixteen paragraphs, at least two and at most four. Their own allowance so
+ * they never crowd out a *tension*, and a small one, because each is the
+ * model's memory and nothing checks it (plan 261018i, Sol F4).
+ */
+export function sourceCap(paragraphs: number): number {
+  return Math.min(4, Math.max(2, Math.ceil(paragraphs / 16)));
+}
+
 /** Kinds that must name the other passage; `explain` must not; `aside` may. */
 const NEEDS_TARGET: ReadonlySet<MarginNoteKind> = new Set(["recall", "tension"]);
 const NO_TARGET: ReadonlySet<MarginNoteKind> = new Set(["explain"]);
-const NOTE_KIND_SET: ReadonlySet<string> = new Set(MARGIN_NOTE_KINDS);
+const NOTE_KIND_SET: ReadonlySet<string> = new Set(ARTICLE_NOTE_KINDS);
 
 export function emptyNotesDropped(): MarginNotesDropped {
   return { malformed: 0, unknown: 0, offList: 0, badTarget: 0, unquoted: 0, badText: 0, repeated: 0, overCap: 0 };
@@ -320,16 +334,20 @@ function located(block: Pick<Block, "text">, typed: string): string | null {
  *
  * Every rule runs before the cap, so a malformed row never uses up a slot.
  * Never throws: a missing or malformed `notes` is no notes.
+ *
+ * `taken` is the passages that already have a note; this adds to it, so
+ * `toSourceNotes` run after it with the same set keeps one note per passage
+ * across both arrays.
  */
 export function toNotes(
   raw: unknown,
   body: readonly Pick<Block, "id" | "text">[],
   cap: number,
+  taken: Set<string> = new Set(),
 ): { notes: MarginNote[]; dropped: MarginNotesDropped } {
   const dropped = emptyNotesDropped();
   if (!Array.isArray(raw)) return { notes: [], dropped };
   const byId = new Map(body.map((b) => [b.id as string, b]));
-  const taken = new Set<string>();
   const notes: MarginNote[] = [];
   for (const row of raw as readonly unknown[]) {
     if (!row || typeof row !== "object") {
@@ -371,8 +389,7 @@ export function toNotes(
       dropped.unquoted++;
       continue;
     }
-    const text = str(r.text).replace(/\s+/g, " ");
-    const words = text === "" ? 0 : text.split(" ").length;
+    const { text, words } = noteText(r.text);
     if (words === 0 || words > NOTE_MAX_WORDS) {
       dropped.badText++;
       continue;
@@ -387,6 +404,71 @@ export function toNotes(
     }
     taken.add(blockId);
     notes.push({ blockId: block.id, kind: k, text, quote, to: target?.id ?? null, toQuote });
+  }
+  return { notes, dropped };
+}
+
+/** A note's words, one space apart, and how many there are. */
+function noteText(v: unknown): { text: string; words: number } {
+  const text = str(v).replace(/\s+/g, " ");
+  return { text, words: text === "" ? 0 : text.split(" ").length };
+}
+
+/**
+ * **Origin notes**: where a quote, allusion or named reference in a passage
+ * comes from, from the model's memory (Greg, spya-w99qsz; plan 261018i). Pure.
+ *
+ * The rows carry no kind: code stamps `source`, so a note from memory can
+ * never be filed as one of the article-only kinds, nor one of those as this
+ * (Sol F1). No other passage. The same checks as `toNotes` otherwise: the
+ * passage is in the body, `quote` is in it, the words fit, one note per
+ * passage — `taken` is shared with `toNotes` — and the cap last.
+ *
+ * **The quote proves where the note sits, not that the attribution is true.**
+ * Nothing here can check that; the label the margin draws says so.
+ */
+export function toSourceNotes(
+  raw: unknown,
+  body: readonly Pick<Block, "id" | "text">[],
+  cap: number,
+  taken: Set<string>,
+): { notes: MarginNote[]; dropped: MarginNotesDropped } {
+  const dropped = emptyNotesDropped();
+  if (!Array.isArray(raw)) return { notes: [], dropped };
+  const byId = new Map(body.map((b) => [b.id as string, b]));
+  const notes: MarginNote[] = [];
+  for (const row of raw as readonly unknown[]) {
+    if (!row || typeof row !== "object") {
+      dropped.malformed++;
+      continue;
+    }
+    const r = row as Record<string, unknown>;
+    const blockId = str(r.blockId);
+    const block = byId.get(blockId);
+    if (!block) {
+      dropped.unknown++;
+      continue;
+    }
+    const quote = located(block, str(r.quote));
+    if (quote === null) {
+      dropped.unquoted++;
+      continue;
+    }
+    const { text, words } = noteText(r.text);
+    if (words === 0 || words > NOTE_MAX_WORDS) {
+      dropped.badText++;
+      continue;
+    }
+    if (taken.has(blockId)) {
+      dropped.repeated++;
+      continue;
+    }
+    if (notes.length >= cap) {
+      dropped.overCap++;
+      continue;
+    }
+    taken.add(blockId);
+    notes.push({ blockId: block.id, kind: "source", text, quote, to: null, toQuote: null });
   }
   return { notes, dropped };
 }
@@ -490,15 +572,87 @@ The rules for notes:
   with it, or to label an ordinary step in the argument. Do not try to use
   every kind.
 
+WHERE IT COMES FROM — A SEPARATE LIST, OPTIONAL
+
+Pieces quote lines, allude to stories, and name people and works in passing,
+often without saying where they come from. A reader then stops, and goes to
+look it up. In "sourceNotes" you may save them that trip: a few short notes,
+each beside a passage, saying where a quotation, allusion or named reference
+comes from.
+
+These are the only notes that may use what you know from outside the
+article. The reader will see each one marked as from the AI's memory and
+unchecked. So everything in them must be something you are sure of.
+
+The ones worth writing are the ones the piece leaves bare:
+
+- a phrase it uses without saying it is a quotation or someone's coinage
+  ("the American century", "the medium is the message");
+- a quotation it gives without saying whose it is, or from where;
+- a person it names with no word of who they are;
+- a story, event or work it alludes to without naming.
+
+Write one only when all of these are true:
+
+- **The piece does not already say it.** Read the passage and the sentences
+  around it first. If they say who said it, which book or play it is from,
+  or who the person is, there is nothing to add: write nothing, even though
+  you know more. A work named with its author, or explained in the next
+  sentence, needs no note.
+- A careful general reader might not know it. A book, film or person almost
+  every reader knows (Lord of the Flies, 1984, Shakespeare) needs no note.
+- Knowing it helps them read this passage.
+- It is not a formal citation to the piece's own references or footnotes.
+  Those are listed elsewhere.
+- You are sure of the answer at the level you give it.
+
+How specific to be:
+
+- Name an exact work, line or date only when you are sure of that exact work,
+  line or date.
+- Otherwise give only what you are sure of: the author, the tradition, the
+  period. "A saying often credited to Mark Twain, though there is no record
+  of him saying it" is a good note; "From Twain's Notebook (1902)" is a bad
+  one unless you know it is true.
+- If an attribution is disputed, or is commonly made but wrong, say so. That
+  is often the most useful thing to say.
+- Do not quote the original's wording from memory as though it were exact.
+- If you are not sure where it comes from, write nothing. A wrong source is
+  worse than none.
+
+What to say:
+
+- Where it comes from, and, if it helps, in a few words what the original was
+  about.
+- **Never say why the author chose it, what they meant by it, or what they
+  were trying to do.** You cannot know, and the reader can judge the fit
+  themselves.
+- Not a definition of an ordinary word, and not a summary of the passage.
+
+Each origin note has:
+
+- "blockId": the passage it sits beside.
+- "quote": the words in that passage it is about, copied exactly.
+- "text": one or two short sentences, at most 25 words.
+
+No more than the user message allows, most useful first, and never beside a
+passage that already has a note in "notes". Most pieces need none or very
+few. Do not put an origin note in "notes", and do not put anything from
+outside the article in "notes".
+
 ${plainWords("explain")}
 
 OUTPUT
 
 JSON only, no prose, no code fence. The notes come first, while the whole
-piece is in mind; "notes" is always present, and may be an empty list:
+piece is in mind; "notes" and "sourceNotes" are always present, and either
+may be an empty list:
 
 {"notes": [
   {"blockId": "spya-w4n8hc", "kind": "tension", "quote": "cut errors by 12%", "text": "Here errors fall by 12%; the results give 8% for the same group and period.", "to": "spya-r2d6tm", "toQuote": "an 8% reduction in errors"}
+],
+"sourceNotes": [
+  {"blockId": "spya-h6c2vq", "quote": "the past is a foreign country", "text": "The opening line of L. P. Hartley's novel The Go-Between (1953), about a man looking back on a childhood summer."}
 ],
 "relations": [
   {"blockId": "spya-k3m9qt", "relation": "but"},
@@ -509,6 +663,8 @@ piece is in mind; "notes" is always present, and may be an empty list:
 export function renderPrompt(paragraphs: readonly EligibleParagraph[]): string {
   const lines = paragraphs.map((p) => `${p.id} (the paragraph before it: ${p.previous})`);
   return `First write at most ${noteCap(paragraphs.length)} margin notes, or none.
+
+Then at most ${sourceCap(paragraphs.length)} origin notes, or none.
 
 Then say how each of these ${paragraphs.length} paragraphs bears on the paragraph before it. Answer every one, once, in this order.
 
@@ -535,13 +691,28 @@ export const RELATIONS_OUTPUT_SCHEMA = {
         type: "object",
         properties: {
           blockId: { type: "string" },
-          kind: { type: "string", enum: [...MARGIN_NOTE_KINDS] },
+          kind: { type: "string", enum: [...ARTICLE_NOTE_KINDS] },
           quote: { type: "string" },
           text: { type: "string" },
           to: { type: ["string", "null"] },
           toQuote: { type: ["string", "null"] },
         },
         required: ["blockId", "kind", "quote", "text", "to", "toQuote"],
+        additionalProperties: false,
+      },
+    },
+    /* Origin notes, from memory (plan 261018i). No `kind`: code stamps
+       `source`, so the article-only rule above is a field (Sol F1). */
+    sourceNotes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          blockId: { type: "string" },
+          quote: { type: "string" },
+          text: { type: "string" },
+        },
+        required: ["blockId", "quote", "text"],
         additionalProperties: false,
       },
     },
@@ -558,7 +729,7 @@ export const RELATIONS_OUTPUT_SCHEMA = {
       },
     },
   },
-  required: ["notes", "relations"],
+  required: ["notes", "sourceNotes", "relations"],
   additionalProperties: false,
 } as const;
 
@@ -610,6 +781,7 @@ export async function generateRelations(opts: {
     relations: Record<BlockId, Relation>,
     dropped: RelationsDropped,
     notes: { notes: MarginNote[]; dropped: MarginNotesDropped },
+    origins: { notes: MarginNote[]; dropped: MarginNotesDropped },
   ): Relations => ({
     version: PROMPT_VERSION,
     generator: generatorFor(opts.power),
@@ -617,8 +789,10 @@ export async function generateRelations(opts: {
     sourceHash,
     relations,
     dropped: { ...dropped },
-    notes: notes.notes,
+    /* One list for the client, which tells them apart by kind. */
+    notes: [...notes.notes, ...origins.notes],
     notesDropped: { ...notes.dropped },
+    sourceNotesDropped: { ...origins.dropped },
     generatedAt: new Date().toISOString(),
     elapsedMs: Date.now() - started,
   });
@@ -628,7 +802,12 @@ export async function generateRelations(opts: {
   if (paragraphs.length === 0) {
     const dropped = emptyDropped();
     return {
-      relations: artefact({} as Record<BlockId, Relation>, dropped, { notes: [], dropped: emptyNotesDropped() }),
+      relations: artefact(
+        {} as Record<BlockId, Relation>,
+        dropped,
+        { notes: [], dropped: emptyNotesDropped() },
+        { notes: [], dropped: emptyNotesDropped() },
+      ),
       called: false,
       paragraphs: 0,
       dropped,
@@ -692,13 +871,19 @@ export async function generateRelations(opts: {
   }
   const raw = finishedText(message, "relations", maxTokens, answer);
 
-  const parsed = parseJsonAnswer<{ relations?: unknown; notes?: unknown }>(raw, "the model's answer");
+  const parsed = parseJsonAnswer<{ relations?: unknown; notes?: unknown; sourceNotes?: unknown }>(
+    raw,
+    "the model's answer",
+  );
   const { relations, dropped } = toRelations(parsed.relations, eligibleIds);
-  const notes = toNotes(parsed.notes, evidence, noteCap(paragraphs.length));
+  /* The article-only notes first, so on a passage both name, theirs wins. */
+  const taken = new Set<string>();
+  const notes = toNotes(parsed.notes, evidence, noteCap(paragraphs.length), taken);
+  const origins = toSourceNotes(parsed.sourceNotes, evidence, sourceCap(paragraphs.length), taken);
 
   /* Nothing is written here — the caller writes through the store. */
   return {
-    relations: artefact(relations, dropped, notes),
+    relations: artefact(relations, dropped, notes, origins),
     called: true,
     paragraphs: paragraphs.length,
     dropped,

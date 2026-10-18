@@ -59,7 +59,9 @@ one would otherwise be missed; it would not be, so it is not
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
-  reference entry for a citation (not the model's reason, since 261003j), or, for a comment, the
+  reference entry for a citation (not the model's reason, since 261003j) and, where there is one,
+  the checked note on what the work says from its abstract, the Sources band's own `CiteBlurb`
+  (since 2026-10-18, [261018i](../plans/261018i-marginalia-notes-that-save-a-click.md)), or, for a comment, the
   first lines of its AI answer. A lone comment's own words are its line and are not said again
   underneath: pressing a comment with no answer only lets a long line wrap (Greg, `spya-a0wpv4`;
   [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)).
@@ -216,7 +218,7 @@ second call and no new step: the notes need the same article, the same freshness
 owner-only rule as the words, so they ride on the call that was already there, stored in the same
 `article_revisions.relations` row as `notes` (no migration; a row from before reads as none).
 
-- **Four kinds**, the four Greg named: `tension` (this passage and another seem not to agree),
+- **Four kinds from the article alone**, the four Greg named: `tension` (this passage and another seem not to agree),
   `recall` (what a passage far from here said, which this one leans on), `explain` (a step likely
   to confuse) and `aside` (anything else, rarely). The stamp says *Tension*, *Recall* or *Note*;
   its card says what the kind is and that AI wrote it (`NOTE_TIPS` in `tips.ts`).
@@ -243,7 +245,42 @@ would be a note whose content is *not* in the article. The labels and the trigge
 Tutorial and Quiz use for that since 2026-10-18 are one shared section, `widerWorld()` in
 [`src/wider-world.ts`](../../src/wider-world.ts):
 [prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
-The relations call keeps to the article today.
+The relations call does not use it: its four article kinds keep to the article, and its one
+memory kind, *Origin* below, is about where a quotation comes from rather than whether the piece
+is right, and is labelled *AI memory, unchecked* on the note.
+
+### Origin notes: where a quote or allusion comes from, from memory
+
+> the annotations should be the useful stuff, the stuff that saves the user a click, the things that
+> they would have looked up. So it could be a combination of, you know, oh, where does that come
+> from, or why did they choose that quote, or what's that citation say
+>
+> — Greg, 2026-10-17 (spya-w99qsz)
+
+**Since `relations/4` the same call may write a few *Origin* notes**: beside a passage that
+quotes, alludes to or names something the article leaves bare, where it comes from. Plan
+[261018i](../plans/261018i-marginalia-notes-that-save-a-click.md).
+
+- **The only notes allowed to use the model's own knowledge**, so they are their own array in the
+  answer, `sourceNotes`, with no `kind` field: code stamps `source` (`toSourceNotes`). The four
+  kinds above stay "use only the article", and the model cannot choose `source` as their kind.
+  This field boundary does not keep their prose inside the article: an `explain` note may still
+  gloss a word or name from general knowledge (*Fight Club* "the film"; before this, the control's
+  "Latin for 'to be astonished at nothing'"), as it always has — plan § Code review. Stored in the
+  same `notes` list, told apart by kind.
+- **Marked on the note, not only in its card**: the stamp *Origin* and, after the words, *AI memory,
+  unchecked* (`SOURCE_NOTE_LABEL`), quiet and never a warning, as Glossary's *background* is
+  ([glossary.md § Provenance is the label](glossary.md#provenance-is-the-label-not-a-badge)).
+  Nothing checks the attribution; the quote check proves only where the note sits.
+- **The prompt's bar**: only what the piece leaves bare (a phrase used without its source, a
+  quotation without its author, a person named with no word of who they are), not what it
+  already says or what nearly every reader knows; an attribution only as specific as the model is
+  sure of, disputed ones said to be disputed; **never why the author chose it.**
+- **Their own small cap**, `sourceCap`: one per sixteen paragraphs, two to four, beside the
+  article-only notes' `noteCap`, and still one note per passage across both.
+- **Measured** on six local articles (the plan's § Measurement): no wrong attribution in four
+  runs, none on the Transformer paper, and a blind judge found 10 of 14 useful, 4 redundant, none
+  harmful. The redundant ones name famous works the piece already names.
 
 **Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase
 to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or

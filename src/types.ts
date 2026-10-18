@@ -6326,17 +6326,31 @@ export interface Relations {
    * reads as none. Never more than `noteCap` (src/relations.ts), and often none.
    */
   notes?: MarginNote[];
-  /** What validation threw away from `notes`. Absent with them. */
+  /** What validation threw away from the model's article-only `notes`. Absent with them. */
   notesDropped?: MarginNotesDropped;
+  /**
+   * What validation threw away from its `sourceNotes` (`relations/4`, plan
+   * 261018i), which reach `notes` as kind `source`. Absent before then.
+   */
+  sourceNotesDropped?: MarginNotesDropped;
   generatedAt: string;
   elapsedMs: number;
 }
 
 /**
- * **What kind of note the model wrote**: the four Greg asked for (spya-qyuet0).
- * `recall` and `tension` always point at another passage; `aside` may.
+ * **The kinds the model may write from the article alone**: the four Greg
+ * asked for (spya-qyuet0). `recall` and `tension` always point at another
+ * passage; `aside` may. The schema's `kind` enum is this list.
  */
-export const MARGIN_NOTE_KINDS = ["explain", "recall", "tension", "aside"] as const;
+export const ARTICLE_NOTE_KINDS = ["explain", "recall", "tension", "aside"] as const;
+/**
+ * **Every kind a stored note can have**: the four, and `source` — where a
+ * quote, allusion or named reference comes from, from the model's memory
+ * (Greg, spya-w99qsz; plan 261018i). The model never writes `source` as a
+ * kind: it writes those rows in an array of their own and code stamps them,
+ * so the article-only rule is a field, not a word in a mixed list.
+ */
+export const MARGIN_NOTE_KINDS = [...ARTICLE_NOTE_KINDS, "source"] as const;
 export type MarginNoteKind = (typeof MARGIN_NOTE_KINDS)[number];
 
 /** One note in the margin, written by the `relations` call. */
@@ -6360,7 +6374,7 @@ export interface MarginNotesDropped {
   malformed: number;
   /** `blockId` or `to` is not a passage of the article's body. */
   unknown: number;
-  /** A kind outside `MARGIN_NOTE_KINDS`. */
+  /** A kind outside `ARTICLE_NOTE_KINDS` (`source` included: it has its own array). Always 0 for origin notes. */
   offList: number;
   /** `to`/`toQuote` disagree on null, or `to` is self, absent when required, or present on `explain`. */
   badTarget: number;
@@ -6368,7 +6382,7 @@ export interface MarginNotesDropped {
   unquoted: number;
   /** Empty, or longer than `NOTE_MAX_WORDS`. */
   badText: number;
-  /** A second note beside a passage that already has one; the first wins. */
+  /** A second note beside a passage that already has one, of either array; the first wins. */
   repeated: number;
   /** Past the cap, after every other rule, in the model's order. */
   overCap: number;
