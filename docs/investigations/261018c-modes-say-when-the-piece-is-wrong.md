@@ -34,11 +34,12 @@ blind pairs, keys and judge verdicts are in `evals/wider-world/out/`.
 | `before1` vs `after3` | **after 5–0**, 14 same | after 2–0 | 0 of 19 | **before 6–0** |
 | `before1` vs `after4` (shipped) | **after 5–0**, 14 same | 1–1 | 0 of 19 | before 4–1 |
 
-**The world.** Before the change, only Chat ever flagged the wrong date. In both arms it did so in
-the Chat case, from memory. Recall, Tutorial and Quiz said nothing, and one Quiz mark worked out
-"roughly four thousand years" from the piece's date. After the change, all four surfaces flag it in
-one labelled sentence. Chat searched and linked Britannica and Wikipedia. The others said "from my
-memory, unchecked". The only other case the judge counted was Chat noting that the
+**The world.** Before the change, only Chat ever flagged the wrong date: once from memory and once
+with linked web sources. Recall, Tutorial and Quiz said nothing, and one Quiz mark worked out
+"roughly four thousand years" from the piece's date. After the change, all four surfaces flag it
+with the origin labelled. Chat searched and linked web sources; the other three labelled the point
+as outside the piece and from memory. Their outside notes ranged from one to three sentences, despite
+the prompt's target of one or two. The only other case the judge counted was Chat noting that the
 neural-replacement argument is disputed. No reply on a plain passage gained an outside note, and
 no outside sentence carried a block id. No reply used the outside view against the reader, and the
 judge flagged no false fact in either arm.
@@ -48,11 +49,12 @@ nothing to flag, it primed sentences about the reader's answer: "That is the cla
 "does not change your answer", "Nothing in the article conflicts with what you said". Those lost
 6–0 on mode shape, against a control spread of 2–1. The section's last paragraph talked about the
 reader's reading four times. It was rewritten to say the note is about the piece, not about them
-(52fbdee6f). That brought mode shape to 4–1. Two of those four are verdicts the judge gave against
-the prompts' own rules: Quiz asks for *"If nothing is missing and nothing is contradicted, say so
-in one sentence and stop"*, and Recall allows a nudge offering *"two directions joined by 'or'"*.
-The two remaining are a mild opener in Tutorial ("You've described Chalmers's argument correctly")
-and one Quiz mark. Both are within what two runs of the old prompt differ by.
+(52fbdee6f). That brought mode shape to 4–1. One of the four losses is a judge false positive: it
+objects to a Recall nudge with two directions joined by *"or"*, which the prompt explicitly allows.
+The other three are real leaks against the prompts' own rules: two Quiz replies judge the reader's
+answer, and Tutorial opens with *"You've described Chalmers's argument correctly"*. The control also
+split on three cases, so this small sample cannot separate those remaining leaks confidently from
+ordinary output variation.
 
 **The earlier drafts, in brief.** The first draft told the model that a reader who repeated the
 piece "has read it right". Recall then opened "You've got the article right", which is a banned

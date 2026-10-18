@@ -226,6 +226,7 @@ Its findings, and what each one changed. **This section overrides the one above 
 - 2026-10-18, stage 3: the section and the four prompts landed in 3a4fbb7ec, followed by three
   wording rounds driven by the eval (80943a93c, 438aa1548, 52fbdee6f). The results are in
   [261018c](../investigations/261018c-modes-say-when-the-piece-is-wrong.md). The wrong date is
-  now flagged on all four surfaces, not just Chat's one. No outside note appeared where none was
-  wanted, and none was used against the reader. Mode shape cost 4–1 against a 2–1 control.
+  now flagged on all four surfaces, not just Chat's one. No new outside note appeared in a negative
+  case (the Nagel Chat note appeared in both the baseline and the changed arm), and none was used
+  against the reader. Mode shape cost 4–1 against a 2–1 control.
 - Queued: `qi-6rmzd7xs` (Live), `qi-5ehbcza5` (Explain) and `qi-jfwgfa29` (a visible mark).

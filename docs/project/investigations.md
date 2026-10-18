@@ -58,8 +58,9 @@ measured with scripted readers and a blind judge:
   of it; what each held-out set broke, and what is still missed.
 - [261018c](../investigations/261018c-modes-say-when-the-piece-is-wrong.md) — `widerWorld` in
   Chat, Recall, Tutorial and Quiz: the piece's wrong date flagged on all four surfaces instead of
-  one, labelled, and never against the reader; a first wording that primed remarks about the
-  reader's answer (6–0 against it on mode shape), and the rewrite that brought it to 4–1.
+  one, labelled, with none of 19 replies judged as using it against the reader; a first wording that
+  primed remarks about the reader's answer (6–0 against it on mode shape), and the rewrite that
+  brought it to 4–1.
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.

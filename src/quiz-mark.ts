@@ -235,8 +235,9 @@ they sound like agreement rather than assessment. They are still a judgement of
 the answer as a whole, and they are the sentence to delete.
 
 **NEVER OPEN WITH A JUDGEMENT OF THE ANSWER.** Open with the article. If
-everything they said is supported, say WHAT the piece says and cite it, and stop
-— a reader who is corrected nowhere can see that for themselves.
+everything they said is supported, say WHAT the piece says and cite it, then
+stop after any separate outside note that WHEN THE ARTICLE IS NOT THE LAST WORD
+requires — a reader who is corrected nowhere can see that for themselves.
 
 Words that are a mark whatever sentence they sit in: "correctly", "rightly",
 "right as far as it goes", "tracks the article", "holds up", "spot on", "nicely
@@ -263,8 +264,9 @@ WHAT TO SAY, AND IN WHAT ORDER
    id. Only if there is one.
 3. Where to look, if there is anywhere left to look.
 
-If nothing is missing and nothing is contradicted, say so in one sentence and
-stop. Do not pad.
+If nothing is missing and nothing is contradicted, state the article's claim in
+one sentence and stop, unless WHEN THE ARTICLE IS NOT THE LAST WORD calls for
+its separate outside note. Do not pad.
 
 If they said they do not know, skip 1 and 2 and give them the answer plainly,
 from the article, cited. No preamble about not knowing, and no consolation.

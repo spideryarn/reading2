@@ -11,9 +11,16 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { hasOutsideMarker } from "../evals/wider-world-screen.js";
 import { buildConverseMessages } from "../src/converse.js";
 import { QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
-import type { Block, ChatMessage, Meta, ThreadKind } from "../src/types.js";
+import {
+  THREAD_KINDS,
+  type Block,
+  type ChatMessage,
+  type Meta,
+  type ThreadKind,
+} from "../src/types.js";
 import { WIDER_WORLD_HEADING, widerWorld } from "../src/wider-world.js";
 
 const blocks: Block[] = [
@@ -40,6 +47,7 @@ const CANNOT = "You cannot search here";
 const OWN_LABELS = "Keep the three sources apart in the sentence itself";
 const POINTS_AT_ORIGINS = "Mark where it came from, as WHERE EACH CLAIM CAME FROM says";
 const NEVER_AGAINST = "The world disagreeing with the piece is never the reader getting the piece wrong";
+const WORLD_SECTION = `${WIDER_WORLD_HEADING} The article is what you and the reader are working through`;
 
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 
@@ -67,16 +75,32 @@ describe("widerWorld", () => {
   it("ends with the prompt's own placement", () => {
     expect(widerWorld({ search: "can", placement: "PLACEMENT-MARK" }).trimEnd()).toMatch(/PLACEMENT-MARK$/);
   });
+
+  it("leaves stopping to each prompt's placement rule", () => {
+    expect(flat(widerWorld({ search: "can", placement: "Continue with the mode's closing task." }))).not.toContain(
+      "put what the article says and the note side by side, and stop",
+    );
+  });
+
+  it("recognises the memory label the eval actually elicited", () => {
+    expect(hasOutsideMarker("One date to check, from my memory rather than the piece: it is later.")).toBe(true);
+  });
 });
 
 describe("in each prompt", () => {
-  it("is in Chat, Recall, Tutorial and Quiz marking exactly once, and not in Explore", () => {
-    for (const kind of ["chat", "learn", "tutorial"] as const) {
-      expect(count(systemOf(kind), WIDER_WORLD_HEADING), kind).toBe(1);
+  it("is in only Chat, Recall and Tutorial among conversation kinds, exactly once", () => {
+    const expected = {
+      chat: 1,
+      learn: 1,
+      tutorial: 1,
+      explore: 0,
+      candidates: 0,
+      guide: 0,
+    } satisfies Record<ThreadKind, number>;
+    for (const kind of THREAD_KINDS) {
+      expect(count(flat(systemOf(kind)), WORLD_SECTION), kind).toBe(expected[kind]);
     }
-    expect(count(QUIZ_MARK_SYSTEM, WIDER_WORLD_HEADING)).toBe(1);
-    /* Explore has its own, wider THE WIDER WORLD; two would be two rules. */
-    expect(count(systemOf("explore"), WIDER_WORLD_HEADING)).toBe(0);
+    expect(count(flat(QUIZ_MARK_SYSTEM), WORLD_SECTION)).toBe(1);
   });
 
   it("Chat: after CLAIM_ORIGINS, pointing at it", () => {
@@ -91,9 +115,12 @@ describe("in each prompt", () => {
     const entitled = s.indexOf("WHAT YOU ARE AND ARE NOT ENTITLED TO SAY");
     const tone = s.indexOf("TONE", entitled);
     const worldBullet = s.indexOf("THE WORLD IS NOT THE ARTICLE");
+    const worldSection = s.indexOf(WORLD_SECTION);
     expect(entitled).toBeGreaterThan(-1);
     expect(worldBullet).toBeGreaterThan(entitled);
     expect(worldBullet).toBeLessThan(tone);
+    expect(worldBullet).toBeLessThan(worldSection);
+    expect(s.indexOf("CITING THE ARTICLE — THE ONE RULE THAT MATTERS")).toBeLessThan(worldSection);
     expect(s).toContain("then the nudge, which is still the last sentence before the hint");
     expect(s).toContain(OWN_LABELS);
     expect(s).toContain(SEARCHES);
@@ -103,18 +130,24 @@ describe("in each prompt", () => {
 
   it("Tutorial: the task stays last", () => {
     const s = flat(systemOf("tutorial"));
+    const worldSection = s.indexOf(WORLD_SECTION);
+    expect(s.indexOf("CITING THE ARTICLE — THE ONE RULE THAT MATTERS")).toBeLessThan(worldSection);
     expect(s).toContain("then the task, which is still last");
+    expect(s).toContain("A check you already have reason to make is the narrow exception below");
     expect(s).toContain(SEARCHES);
     expect(s).toContain(PRIVATE);
   });
 
   it("Quiz marking: cannot search, article first, and no advert for Chat", () => {
     const s = flat(QUIZ_MARK_SYSTEM);
+    const worldSection = s.indexOf(WORLD_SECTION);
     expect(s).toContain(CANNOT);
     expect(s).not.toContain(SEARCHES);
     expect(s).toContain("what the article says first, as WHAT TO SAY says");
     expect(s).toContain("Do not tell them where to check it");
-    expect(s.indexOf("WHAT TO SAY, AND IN WHAT ORDER")).toBeLessThan(s.indexOf(WIDER_WORLD_HEADING));
+    expect(s.indexOf("WHAT TO SAY, AND IN WHAT ORDER")).toBeLessThan(worldSection);
+    expect(s.indexOf("CITING THE ARTICLE — THE ONE RULE THAT MATTERS")).toBeLessThan(worldSection);
+    expect(s).toContain("unless WHEN THE ARTICLE IS NOT THE LAST WORD calls for its separate outside note");
     expect(s).toContain(NEVER_AGAINST);
   });
 });

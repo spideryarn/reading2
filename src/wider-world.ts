@@ -83,8 +83,8 @@ The world disagreeing with the piece is never the reader getting the piece
 wrong. The outside note is about the piece, not about them: it changes nothing
 the rest of this prompt tells you to say, or not say, about their words. It is
 not a correction and not a question, and it needs no sentence about their
-answer to lead into it — put what the article says and the note side by side,
-and stop. One sentence, two at most, inside the length you already have.
+answer to lead into it. Put what the article says and the note side by side.
+The note is one sentence, two at most, inside the length you already have.
 
 ${placement}`;
 }

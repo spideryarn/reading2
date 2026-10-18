@@ -69,6 +69,7 @@ import { FIXTURE_ROOT } from "../tests/helpers/require-fixture.js";
 import { fallbackHeadTitle } from "../src/source-hash.js";
 import { blindCoin } from "./plain-words/run.js";
 import { BODY_WORD_LIMIT, checkReply, type ReplyChecks } from "./learn-recall-checks.js";
+import { hasOutsideMarker } from "./wider-world-screen.js";
 import type { Block, Meta, QuizEvidence } from "../src/types.js";
 
 const REPO = path.resolve(import.meta.dirname, "..");
@@ -344,9 +345,6 @@ const CASES: readonly Case[] = [
  * Phrases a labelled outside sentence tends to carry. A screen: it misses an
  * unlabelled outside claim entirely, which is the worse fault.
  */
-const OUTSIDE_MARKER =
-  /outside (?:this|the) (?:piece|article)|the (?:article|piece) (?:doesn['’]t|does not) say|doesn['’]t say so, but|from memory|unchecked|unverified|not from the (?:article|piece)|most historians|usually dated|generally dated|most scholars|beyond the (?:article|piece)/i;
-
 const ID = /\bspya-[a-z0-9]+\b/;
 
 /** Tutorial's word ceiling, from `TUTORIAL_SYSTEM`'s "never over 140" (src/converse.ts). */
@@ -378,7 +376,7 @@ const ENDS_ON_QUESTION = /[?？](?:["'”’»)]|\s*\[[^\]\n]*\])*\s*$/;
 
 function screen(text: string, surface: Surface, knownIds: ReadonlySet<string>): Screen {
   const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter((s) => s.trim());
-  const marked = sentences.filter((s) => OUTSIDE_MARKER.test(s));
+  const marked = sentences.filter(hasOutsideMarker);
   const words = text.split(/\s+/).filter(Boolean).length;
   const questionMarks = (text.match(/[?？]/g) ?? []).length;
   let mode: ModeScreen;
