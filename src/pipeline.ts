@@ -140,7 +140,7 @@ import {
   PROMPT_VERSION as BIBLIOGRAPHY_PROMPT_VERSION,
   previousBibliographyFrom,
 } from "./bibliography.js";
-import { ownIdsOfPdf, withRegistryFacts } from "./article-registry.js";
+import { ownIdsOfPdf, withRegistryFacts, type OwnIds } from "./article-registry.js";
 import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
@@ -2367,7 +2367,7 @@ async function ratedReadingDifficulty(ctx: StepContext, blocks: readonly Block[]
  * (src/article-registry.ts). After the extractor, outside any model call, and
  * it never fails the step: an unreachable registry leaves `meta` as it was.
  */
-async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata", meta: Meta, ownIds: readonly WorkId[]): Promise<Meta> {
+async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata", meta: Meta, ownIds: OwnIds): Promise<Meta> {
   const started = Date.now();
   const facts = await withRegistryFacts(meta, ownIds, { lookup: (id) => articleRegistryDeps.lookup(id), signal: ctx.signal });
   /* Counts and the outcome, never a title or an identifier's record. */
@@ -2376,7 +2376,7 @@ async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata
       slug: ctx.slug,
       step,
       registryOutcome: facts.outcome,
-      registryCandidates: ownIds.length,
+      registryCandidates: ownIds.ids.length,
       registryAsked: facts.asked,
       registryJournal: facts.meta.journal !== undefined,
       registryDay: facts.meta.publishedAt !== meta.publishedAt,
@@ -2776,7 +2776,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              rule's evidence of which title words are acronyms. */
           tidied: await stepTitleTidier(ctx, store)(paperTitle(paper), { body: found.abstract }),
         }),
-        [],
+        /* No candidates but the DOI read off the document's own text, which
+           may be a cited work's: the author check stands. */
+        { from: "printed", ids: [] },
       );
       const meta = metadataOverPrevious(await store.read(ctx.slug, "extract", "meta"), made);
       /* Counts and the branch, never a word of the paper (docs/project/logging.md). */
@@ -2977,7 +2979,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           }
           const kept = await keptPaperMetadata(ctx, store, result.meta);
           return {
-            parts: { extractedHtml: result.extractedHtml, meta: await withArticleRegistry(ctx, "extract", kept, result.ownIds) },
+            parts: {
+              extractedHtml: result.extractedHtml,
+              /* The page's own address and declared DOI: they name this page
+                 (src/article-registry.ts § the exception). */
+              meta: await withArticleRegistry(ctx, "extract", kept, { from: "page", ids: result.ownIds }),
+            },
             detail: result.meta.title,
           };
         } catch (err) {
@@ -3108,7 +3115,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: {
           extractedHtml: result.extractedHtml,
-          meta: await withArticleRegistry(ctx, "extract", kept, ownIdsOfPdf(result.transcript)),
+          meta: await withArticleRegistry(ctx, "extract", kept, { from: "printed", ids: ownIdsOfPdf(result.transcript) }),
         },
         detail: result.meta.title,
       };
