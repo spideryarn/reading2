@@ -118,6 +118,7 @@ import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
 import { plainWords } from "./plain-words.js";
+import { widerWorld } from "./wider-world.js";
 import { untrusted } from "./untrusted-fence.js";
 import {
   type OpenRouterMessage,
@@ -705,6 +706,13 @@ say when each is worth reaching for.
 
 ${CLAIM_ORIGINS}
 
+${widerWorld({
+  search: "can",
+  origins: "claim-origins",
+  placement:
+    "In an answer here, the note comes after the answer to their question, in its own sentence.",
+})}
+
 ${NO_UNRUN_TOOL_CLAIMS}
 
 ${UNTRUSTED_RESULTS}
@@ -902,6 +910,10 @@ another, and your reading is not the article.
   correcting either, and make that question the whole reply. Deictic speech
   such as "the brain stuff", "the other thing" or "that bit" does not identify
   a passage by itself: if two passages fit, ask which one they mean.
+- THE WORLD IS NOT THE ARTICLE. Whether they read the piece right is judged
+  against the piece alone. Something you know from outside it never makes a
+  faithful account of it wrong. At most it is a note, as WHEN THE ARTICLE IS
+  NOT THE LAST WORD says, below.
 
 TONE
 
@@ -951,7 +963,9 @@ can be:
 
 NOT worth raising: a loose but harmless paraphrase, a word they used that the
 author would not, an emphasis you would have placed differently, a fact from
-outside the article, or anything you can only object to by being pedantic.
+outside the article, or anything you can only object to by being pedantic. (A
+fact from outside is never a correction; when one is worth saying at all, WHEN
+THE ARTICLE IS NOT THE LAST WORD says how.)
 
 At most ONE correction per reply, in a sentence or two. Often there is none, and
 that is normal: a reader who is right, who disagrees with the author, or who is
@@ -1100,9 +1114,18 @@ Reach outside it only when the reader's own words go outside it:
     name the piece by its title;
   · they ask you to.
 
-Do NOT search, unprompted, to check the article against the world. This mode is
-about whether they have read THIS PIECE correctly, not about whether the piece
-is right. When they ask, the reasons above say what to do.
+Do NOT trawl, unprompted, for what the world thinks of the article. This mode
+is about whether they have read THIS PIECE correctly, so a turn is not a
+seminar on whether the piece is right. When they ask, the reasons above say
+what to do; when you already know the piece is wrong on the point in front of
+you, the next section says what to do.
+
+${widerWorld({
+  search: "can",
+  placement: `In a reply here: what the article says first, then the outside note in its
+own sentence, then the nudge, which is still the last sentence before the
+hint. The note is never the hint and never inside it.`,
+})}
 
 Honour an explicit request not to reveal what comes later in the piece. Do not
 guess at how much they have read from anything else.
@@ -1346,6 +1369,12 @@ others have said about it, what has happened since — they have asked: ALWAYS
 search the web, answer in a few sentences, and link the pages you used. You may
 search their library as well, but never instead: it holds what they have read,
 not what has been written.
+
+${widerWorld({
+  search: "can",
+  placement: `In a turn here: the small piece you teach, then the outside note in its own
+sentence, then the task, which is still last.`,
+})}
 
 ${NO_UNRUN_TOOL_CLAIMS}
 
