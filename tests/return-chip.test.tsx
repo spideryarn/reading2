@@ -40,7 +40,7 @@ import {
 import { beginJump, beginReturn } from "../src/web/keynav.js";
 import { atParam } from "../src/web/params.js";
 import type { Section } from "../src/web/position.js";
-import { ReturnChip } from "../src/web/ReturnChip.js";
+import { RETURN_CHIP_MS, ReturnChip } from "../src/web/ReturnChip.js";
 import {
   dismissJumpOrigin,
   onAddressChange,
@@ -767,5 +767,164 @@ describe("pressing the chip leaves the modes alone", () => {
     await goBack();
     expect(param("at")).toBe(block(25));
     expect(label()).toBe("↩ back to The middle bit");
+  });
+});
+
+/**
+ * **It goes by itself after thirty seconds** — Greg, 2026-10-17 (spya-vzrjju):
+ * *"after a while, if I haven't clicked it, probably I'm never gonna … 30
+ * second timeout on it, and after that it just disappears"*. It goes the way
+ * the × goes, so Back is untouched; it is held while the reader is on it.
+ * docs/plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md.
+ */
+describe("the chip times out", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  /** A pointer of this type crossing the chip's edge, as React's enter/leave reads it. */
+  const cross = (type: "pointerover" | "pointerout", pointerType = "mouse") =>
+    act(() => {
+      const event = new MouseEvent(type, { bubbles: true, relatedTarget: document.body });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      chip()?.dispatchEvent(event);
+    });
+  const going = () => chip()?.classList.contains("return-chip-going") ?? false;
+
+  it("is gone thirty seconds after it appears, the stamp stripped as the × strips it", () => {
+    jumped(at(block(15)), block(25));
+    const entries = history.length;
+    const address = location.pathname + location.search;
+    const back = vi.spyOn(history, "back");
+    wait(RETURN_CHIP_MS - 1);
+    expect(chip()).not.toBeNull();
+    expect(going()).toBe(false);
+    wait(1);
+    /* Fading, and still there to be pressed while it fades. */
+    expect(going()).toBe(true);
+    wait(1000);
+    expect(chip()).toBeNull();
+    expect(readStamp(history.state)).toBeNull();
+    expect(history.length).toBe(entries);
+    expect(location.pathname + location.search).toBe(address);
+    expect(back).not.toHaveBeenCalled();
+  });
+
+  it("starts the thirty seconds again for a new jump", () => {
+    jumped(at(block(15)), block(25));
+    wait(RETURN_CHIP_MS - 5000);
+    jumped(at(block(25)), block(2));
+    wait(10_000);
+    expect(label()).toBe("↩ back to How it ends");
+    wait(RETURN_CHIP_MS);
+    expect(chip()).toBeNull();
+  });
+
+  it("does not take a newer way back with it when an older clock runs out", () => {
+    jumped(at(block(15)), block(25));
+    wait(RETURN_CHIP_MS - 1);
+    jumped(at(block(25)), block(2));
+    wait(1000);
+    expect(label()).toBe("↩ back to How it ends");
+    expect(going()).toBe(false);
+  });
+
+  it("starts again for a new journey from the same block, and the old clock does not strip it", () => {
+    jumped(at(block(15)), block(25));
+    wait(RETURN_CHIP_MS - 1);
+    jumped(at(block(15)), block(2));
+    wait(1000);
+    expect(chip()).not.toBeNull();
+    expect(going()).toBe(false);
+    expect(readStamp(history.state)).not.toBeNull();
+    wait(RETURN_CHIP_MS);
+    expect(chip()).toBeNull();
+  });
+
+  it("a pointer coming onto it while it fades brings it back", () => {
+    jumped(at(block(15)), block(25));
+    wait(RETURN_CHIP_MS + 100);
+    expect(going()).toBe(true);
+    cross("pointerover");
+    expect(going()).toBe(false);
+    wait(RETURN_CHIP_MS * 2);
+    expect(chip()).not.toBeNull();
+  });
+
+  it("holds while a mouse is on it, and gives a fresh thirty seconds after", () => {
+    jumped(at(block(15)), block(25));
+    wait(RETURN_CHIP_MS - 1000);
+    cross("pointerover");
+    wait(RETURN_CHIP_MS * 2);
+    expect(chip()).not.toBeNull();
+    expect(going()).toBe(false);
+    cross("pointerout");
+    wait(RETURN_CHIP_MS - 1);
+    expect(going()).toBe(false);
+    wait(2000);
+    expect(chip()).toBeNull();
+  });
+
+  it("keeps holding when a new journey appears under the pointer", () => {
+    jumped(at(block(15)), block(25));
+    cross("pointerover");
+    jumped(at(block(25)), block(2));
+    wait(RETURN_CHIP_MS * 2);
+    expect(label()).toBe("↩ back to How it ends");
+    cross("pointerout");
+    wait(RETURN_CHIP_MS + 2000);
+    expect(chip()).toBeNull();
+  });
+
+  it("is not held by a finger, which leaves no pointer resting on it", () => {
+    jumped(at(block(15)), block(25));
+    cross("pointerover", "touch");
+    wait(RETURN_CHIP_MS + 2000);
+    expect(chip()).toBeNull();
+  });
+
+  it("goes immediately at thirty seconds when reduced motion removes the fade", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    jumped(at(block(15)), block(25));
+    wait(RETURN_CHIP_MS);
+    expect(chip()).toBeNull();
+  });
+
+  it("holds while focus is inside it", () => {
+    jumped(at(block(15)), block(25));
+    act(() => host.querySelector<HTMLButtonElement>(".return-chip-go")?.focus());
+    wait(RETURN_CHIP_MS * 2);
+    expect(chip()).not.toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>(".return-chip-go")?.blur());
+    wait(RETURN_CHIP_MS + 2000);
+    expect(chip()).toBeNull();
+  });
+
+  it("does not carry focus from a dismissed chip into a later journey", () => {
+    jumped(at(block(15)), block(25));
+    act(() => host.querySelector<HTMLButtonElement>(".return-chip-close")?.focus());
+    act(() => host.querySelector<HTMLButtonElement>(".return-chip-close")?.click());
+    expect(chip()).toBeNull();
+
+    jumped(at(block(2)), block(25));
+    wait(RETURN_CHIP_MS + 2000);
+    expect(chip()).toBeNull();
+  });
+
+  it("cancels both clock callbacks when it unmounts", () => {
+    jumped(at(block(15)), block(25));
+    const stamp = readStamp(history.state);
+    act(() => root.unmount());
+    host.remove();
+    wait(RETURN_CHIP_MS + 2000);
+    expect(readStamp(history.state)).toEqual(stamp);
+
+    /* Leave the shared harness mounted for the outer cleanup. */
+    mount();
   });
 });

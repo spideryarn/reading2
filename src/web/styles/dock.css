@@ -362,6 +362,16 @@
   font-family: var(--font-ui);
   font-size: 0.75rem;
   line-height: 1.4;
+  transition: opacity 0.5s ease;
+}
+
+/* Thirty seconds unpressed, and it fades for half a second before it goes
+   (ReturnChip.tsx § RETURN_CHIP_MS) — a pill that vanishes in the corner of the
+   eye is its own small distraction. Still pressable while it fades; a pointer
+   coming onto it brings it back. */
+.return-chip-going { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .return-chip { transition: none; }
 }
 
 .return-chip-go {
