@@ -239,6 +239,7 @@ async function writeRawDocument(
     rawSha256: string | null;
     rawByteCount: number | null;
     rawFilename: string | null;
+    savedFromUrl: string | null;
     rawSourceSha256: string | null;
     rawSourceKind: string | null;
     requestedUrl: string | null;
@@ -301,6 +302,9 @@ async function writeRawDocument(
     ...(revision.requestedUrl === null ? {} : { requestedUrl: revision.requestedUrl }),
     ...(revision.finalUrl === null ? {} : { url: revision.finalUrl }),
     ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
+    /* Where an uploaded page says it was saved from — a claim, kept as
+       `savedFrom` and never as `url` (src/fetch.ts § `RawManifest.savedFrom`). */
+    ...(revision.savedFromUrl === null ? {} : { savedFrom: revision.savedFromUrl }),
     contentType: revision.rawContentType,
     encoding: revision.rawEncoding,
     bytes: revision.rawByteCount ?? bytes.byteLength,

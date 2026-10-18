@@ -48,21 +48,27 @@ import {
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { type FigureLocator, openRouterFigureLocator } from "./pdf-figure-locate.js";
-import { ChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
+import { ChallengePage, isChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
   cameFromAnUpload,
+  type ConvertedHtml,
   decodeHtml,
   type DocumentKind,
+  type EuropePmcXml,
   FetchFailure,
   type FetchedDocument,
   fetchDocument,
+  fetchEuropePmc,
   type RawManifest,
   RawDocumentUnavailable,
   readRawBytes,
   storedDocumentBytes,
   uploadedFormat,
+  writeConvertedRaw,
   writeRaw,
 } from "./fetch.js";
+import { findOpenCopy, paperIdsInUrls } from "./europe-pmc.js";
+import { JatsRefused, jatsToHtml } from "./jats.js";
 import { convertUpload } from "./upload-convert.js";
 import type { ConvertedFormat } from "./uploads.js";
 import {
@@ -155,7 +161,7 @@ import { citationEvidenceDeps } from "./citation-evidence.js";
 import { attachReceptionRegistry, receptionRegistryDeps } from "./reception-registry.js";
 import { declaredFailure, stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
-import { type ResolvedPaper, resolvePaperSource } from "./paper-sources.js";
+import { europePmcPaper, type ResolvedPaper, resolvePaperSource } from "./paper-sources.js";
 import { sameTarget } from "./urls.js";
 import { modelTitleTidier } from "./title-tidy-model.js";
 import { plainTitle } from "./html.js";
@@ -193,6 +199,7 @@ import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
+import { savedFromInHtml } from "./saved-from.js";
 import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
@@ -1769,6 +1776,12 @@ async function acquireUpload(
      helper is supposed to prevent. GPT Sol, 2026-08-27. */
   const { sha256: storedSha256, outcome: promotion } = await storeRawSource(storedBytes, kind);
 
+  /* **Where an uploaded web page says it was saved from**, for an `.html` file
+     only: a converted text, Markdown or Word file is a page we made, and its
+     "head" is ours. A claim, checked by `savedSource` and never fetched —
+     src/saved-from.ts, and `RawManifest.savedFrom` for why it is not `url`. */
+  const savedFrom = format === "html" && decoded !== null ? savedFromInHtml(decoded.text) : null;
+
   const manifest: RawManifest = {
     kind,
     /* A restatement of `kind` rather than a path — nothing writes this file any
@@ -1783,6 +1796,7 @@ async function acquireUpload(
     origin: "upload",
     uploadId: upload.id,
     filename: upload.filename,
+    ...(savedFrom === null ? {} : { savedFrom }),
     /* **Ours, not the browser's.** For a fetched document this field is the
        origin's own header verbatim; an upload has none, and the browser's claim
        on the PUT is not a header a server sent. So it records the type of the
@@ -2196,7 +2210,7 @@ export const metadataReaders = {
  *   does not find leaves what was there — `metadataOverPrevious` says how,
  *   because three of them travel in pairs.
  * - **`kept`**: the step never says it. Those not in `metaColumns` (`url`,
- *   `fetchedAt`, `filename`, `rawSha256`, `readingDifficulty`) ride along and
+ *   `fetchedAt`, `filename`, `savedFrom`, `rawSha256`, `readingDifficulty`) ride along and
  *   the write ignores them.
  *
  * A `Record` over `keyof Meta`, so a new field does not compile until somebody
@@ -2222,6 +2236,7 @@ export const METADATA_STEP_FIELDS: Readonly<Record<keyof Meta, "made" | "filled"
   excerpt: "kept",
   note: "kept",
   filename: "kept",
+  savedFrom: "kept",
   rawSha256: "kept",
   method: "kept",
   pages: "kept",
@@ -2575,8 +2590,11 @@ async function fetchFromPaperSource(
 ): Promise<{ doc: FetchedDocument; candidate: FetchCandidate; tried: number }> {
   let asked = 0;
   let lastWasAbsent = false;
+  /* A `"jats"` candidate is not fetched as a document: `fetchPaper` sends a
+     source that has one to `fetchEuropePmcPaper` instead, so none arrives here. */
+  const candidates = paper.candidates.flatMap((c): FetchCandidate[] => (c.expect === "jats" ? [] : [{ ...c, expect: c.expect }]));
   try {
-    return await fetchFirstCandidate(paper.candidates, {
+    return await fetchFirstCandidate(candidates, {
       signal: ctx.signal,
       fetchDocument: async (address, options) => {
         asked += 1;
@@ -2645,13 +2663,165 @@ export async function fetchByAddress(
   url: string,
   ctx: { slug: string; signal: AbortSignal },
   fetcher: DocumentFetcher = fetchDocument,
-): Promise<{ doc: FetchedDocument; tried: number; paper: ResolvedPaper | null }> {
+): Promise<Acquired> {
   const named = resolvePaperSource(url);
-  if (named !== null) return { ...(await fetchFromPaperSource(named, ctx, { fetchDocument: fetcher })), paper: named };
-  const first = await fetchFirstCandidate([{ url }], { signal: ctx.signal, fetchDocument: fetcher });
-  const paper = sameTarget(first.doc.url, url) ? null : resolvePaperSource(first.doc.url);
-  if (paper === null) return { ...first, paper: null };
-  return { ...(await fetchFromPaperSource(paper, ctx, { fetchDocument: fetcher, held: first.doc })), paper };
+  if (named !== null) return await fetchPaper(named, ctx, { fetchDocument: fetcher });
+  /* **The one address, with its raw outcome kept** (GPT Sol's S2 on plan
+     261018j). This was `fetchFirstCandidate([{ url }])`, which maps a failure
+     before anything here could see it; with one candidate that promises
+     nothing it is exactly this call and `fetchStepFailure`, so nothing changes
+     for an address that is not refused. */
+  let first: FetchedDocument;
+  try {
+    first = await fetcher(url, { signal: ctx.signal });
+  } catch (err) {
+    /* **A site that refused us**: Europe PMC's free copy if there is one, and
+       otherwise the same failure, mapped exactly as it always was — the same
+       sentence, the Upload button and the bookmarklet. A 404, a timeout and
+       every other failure never ask. */
+    if (err instanceof FetchFailure && (err.code === "forbidden" || err.code === "unauthorized") && !ctx.signal.aborted) {
+      const copy = await europePmcFallback([url, err.url], ctx, "refused");
+      if (copy !== null) return copy;
+    }
+    throw fetchStepFailure(err);
+  }
+  const paper = sameTarget(first.url, url) ? null : resolvePaperSource(first.url);
+  if (paper !== null) return await fetchPaper(paper, ctx, { fetchDocument: fetcher, held: first });
+  /* **A bot check served with a 200** — Springer's "Client Challenge" — is a
+     refusal too. Asked only of an address that names a paper, so an ordinary
+     page is never parsed here; when it is asked, the page is parsed once more
+     by stage 2, which stays the refusal. A miss hands back this same object. */
+  if (first.kind === "html" && paperIdsInUrls([url, first.url]).length > 0 && isChallengePage(first.text, first.url)) {
+    const copy = await europePmcFallback([url, first.url], ctx, "challenge");
+    if (copy !== null) return copy;
+  }
+  return { doc: first, tried: 1, paper: null };
+}
+
+/**
+ * What `fetchByAddress` acquired: the document, how many addresses it took,
+ * and the paper source it came through. The document is either what arrived
+ * or, for Europe PMC, the page built from what arrived (src/fetch.ts §
+ * `ConvertedHtml`), and the fetch step stores the two through different seams.
+ */
+export type Acquired = { doc: FetchedDocument | ConvertedHtml; tried: number; paper: ResolvedPaper | null };
+
+/** A paper source's fetch: its candidates in order, or — Europe PMC's one candidate — its XML, converted. */
+async function fetchPaper(
+  paper: ResolvedPaper,
+  ctx: { slug: string; signal: AbortSignal },
+  deps: { fetchDocument: DocumentFetcher; held?: FetchedDocument },
+): Promise<Acquired> {
+  const jats = paper.candidates.find((c) => c.expect === "jats");
+  if (jats === undefined) return { ...(await fetchFromPaperSource(paper, ctx, deps)), paper };
+  try {
+    return { doc: await fetchEuropePmcPaper(paper, jats.url, ctx), tried: 1, paper };
+  } catch (err) {
+    if (ctx.signal.aborted) throw err;
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "fetch",
+        source: paper.source,
+        tried: 1,
+        code: codeOfMessage(declaredFailure(err)?.message ?? "") ?? "undeclared",
+      },
+      `fetch ${ctx.slug}: the paper source's fetch failed`,
+    );
+    throw err;
+  }
+}
+
+/**
+ * **Europe PMC's full text, as a page.** The XML through its fixed door
+ * (src/fetch.ts § `fetchEuropePmc`), converted by src/jats.ts. A 404 is the
+ * paper source's missing-paper sentence, as for every source; a conversion
+ * refused is a page that did not arrive in a usable form.
+ */
+async function fetchEuropePmcPaper(
+  paper: ResolvedPaper,
+  address: string,
+  ctx: { signal: AbortSignal },
+): Promise<ConvertedHtml> {
+  let xml: EuropePmcXml;
+  try {
+    xml = await fetchEuropePmc(address, "xml", { signal: ctx.signal });
+  } catch (err) {
+    if (saysItIsNotThere(err)) {
+      throw stageFailure(FETCH_PAPER_MISSING, { authored: `Europe PMC had no full text for the paper: ${paper.source}, 1 asked.` });
+    }
+    throw fetchStepFailure(err);
+  }
+  let html: string;
+  try {
+    html = jatsToHtml(xml.text, paper.workId);
+  } catch (err) {
+    if (!(err instanceof JatsRefused)) throw err;
+    throw stageFailure(fetchFailed("http-error", null), {
+      authored: `Europe PMC's full text could not be converted: ${err.reason}.`,
+    });
+  }
+  return {
+    kind: "html",
+    convertedFrom: "jats",
+    requestedUrl: address,
+    url: paper.canonicalUrl,
+    text: html,
+    source: { contentType: xml.contentType, bytes: xml.bytes },
+    fetchedAt: xml.fetchedAt,
+  };
+}
+
+/**
+ * **A refused paper's free copy**, or `null` — and on `null` the caller's
+ * original outcome stands, unchanged. Plan 261018j § Stage 2.
+ *
+ * The identifiers come off both the pasted address and the one the refusal
+ * came from, so a `doi.org` link that ended at a refusing publisher is read by
+ * its DOI. Every failure along the way is a miss: the reader is no worse off
+ * than before this existed.
+ *
+ * **Logged, without prose**: the host refused, why (`refused` or `challenge`),
+ * which kind of identifier was found, and where it ended. No address and no
+ * identifier — a log of which papers a reader tried is a reading history
+ * (docs/project/logging.md).
+ */
+async function europePmcFallback(
+  urls: readonly string[],
+  ctx: { slug: string; signal: AbortSignal },
+  why: "refused" | "challenge",
+): Promise<Acquired | null> {
+  const host = hostOf(urls[0] ?? "");
+  const said =(fields: Record<string, unknown>) =>
+    plog.info({ slug: ctx.slug, step: "fetch", host, why, ...fields }, `fetch ${ctx.slug}: Europe PMC fallback`);
+  const copy = await findOpenCopy(urls, { signal: ctx.signal });
+  if (!copy.found) {
+    said({ idKind: copy.idKind, endedAt: copy.endedAt });
+    return null;
+  }
+  const paper = europePmcPaper(copy.pmcid);
+  const address = paper?.candidates[0]?.url;
+  if (paper === null || address === undefined) {
+    said({ idKind: copy.idKind, endedAt: "no-open-copy" });
+    return null;
+  }
+  try {
+    const doc = await fetchEuropePmcPaper(paper, address, ctx);
+    said({ idKind: copy.idKind, endedAt: "imported" });
+    return { doc, tried: 2, paper };
+  } catch (err) {
+    said({ idKind: copy.idKind, endedAt: "full-text-failed", error: err instanceof Error ? err.name : typeof err });
+    return null;
+  }
+}
+
+/** The hostname of an address, or `""`. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
 }
 
 /** How a paper source is written on the job card. One the table does not know is shown by its registry name. */
@@ -2663,6 +2833,7 @@ const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = {
   cvf: "CVF",
   jmlr: "JMLR",
   nber: "NBER",
+  europepmc: "Europe PMC",
 };
 
 /**
@@ -2670,8 +2841,13 @@ const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = {
  * of its renderings was used (`1040 KB, arXiv PDF`). An ordinary address gets
  * the size alone, as it always has.
  */
-export function fetchDetail(kb: number, via: { source: string; format: FetchedDocument["kind"] } | null): string {
+export function fetchDetail(
+  kb: number,
+  via: { source: string; format: FetchedDocument["kind"] | ConvertedHtml["convertedFrom"] } | null,
+): string {
   if (via === null) return `${kb} KB`;
+  /* Europe PMC's XML is not a rendering the reader would recognise by its format's name. */
+  if (via.format === "jats") return `${kb} KB, ${PAPER_SOURCE_LABEL[via.source] ?? via.source}'s free full text`;
   return `${kb} KB, ${PAPER_SOURCE_LABEL[via.source] ?? via.source} ${via.format === "pdf" ? "PDF" : "HTML"}`;
 }
 
@@ -2712,13 +2888,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* A paper source's candidates, the one address that was pasted, or the
          paper a pasted link turned out to lead to: `fetchByAddress`. */
       const { doc, tried, paper } = await fetchByAddress(url, ctx);
-      const via = paper === null ? null : { source: paper.source, format: doc.kind };
+      const converted = "convertedFrom" in doc ? doc : null;
+      const via = paper === null ? null : { source: paper.source, format: converted?.convertedFrom ?? doc.kind };
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on
          what stage 1 decided the bytes *are*, never on the address — a `.pdf`
          URL that served a Cloudflare challenge is HTML (docs/project/fetching.md).
          No upload record here, so nothing to mark. */
-      if (doc.kind === "pdf") await refuseAnOverlongPdf(ctx, doc.bytes);
+      if (!("convertedFrom" in doc) && doc.kind === "pdf") await refuseAnOverlongPdf(ctx, doc.bytes);
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
@@ -2726,7 +2903,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          files, and since `npm run fetch` was replaced by `npm run ingest` on
          2026-09-05 its only remaining caller is a test — it dies in stage G.
          docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md. */
-      const manifest = await writeRaw(doc);
+      /* A page built from what arrived (Europe PMC's JATS) goes through its own
+         seam, which stores the page and describes the XML: src/fetch.ts §
+         `ConvertedHtml`. */
+      const manifest = "convertedFrom" in doc ? await writeConvertedRaw(doc) : await writeRaw(doc);
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
          history, and nothing writes one down: the enqueue line in src/jobs.ts

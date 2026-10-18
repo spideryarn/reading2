@@ -1,7 +1,7 @@
 ---
 reports: spya-x5e966, spya-tqsw3u
-ending: awaiting
-comment: A failed import now offers a Save for Spideryarn bookmarklet that saves the page for you to upload. A free copy found automatically, and a saved page keeping its address, are a question for you (q-emrf2p).
+ending: shipped
+comment: A refused paper link now imports Europe PMC's free full text instead; your cell.com link comes in this way. Otherwise the Save for Spideryarn bookmarklet saves the page to upload, and it keeps its address.
 ---
 # cell.com refused the app: a better way round now, and a question about the bigger fixes
 
@@ -30,9 +30,10 @@ research:
 
 (#581 says the same, without the bot-check sentence and the Sonnet line.)
 
-**Ending: Awaiting Greg**, on [q-emrf2p](questions/q-emrf2p.md) since 2026-10-17 (before that
-[q-fp8tqr](questions/q-fp8tqr.md), now answered), with what is built shipped on `dev` and not
-deployed.
+**Ending: Shipped**, 2026-10-18, on `dev` and not yet deployed, after Greg answered
+[q-emrf2p](questions/q-emrf2p.md) (and before it [q-fp8tqr](questions/q-fp8tqr.md)). Nothing is
+left deferred: the one open item is Greg trying the bookmarklet on a walled page once it is live,
+which is a trial, not unbuilt work.
 
 What we did:
 
@@ -61,3 +62,16 @@ for a way that's clean and good for the user."*), queue item `qi-q62g96s9`, plan
   refused as bot checks (`[jb-bot-check]`, with the Upload button), not as too little text.
 - **Asked** (q-emrf2p): build A; and let a saved page keep its address, which is an upload-path
   change.
+
+**After Greg's reply** (`spya-qy8mgg`, 2026-10-18, to q-emrf2p: *"try Europe PMC first and then
+fall back to the bookmarklet … As for number two, Yes, keep the address."*), queue item
+`qi-pfnjyj6d`, plan
+[261018j](../plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md):
+
+- **Built A**: a refused paper address (a DOI in the path, or an Elsevier PII looked up in
+  Crossref) is looked up in Europe PMC, and its open-access JATS is converted to a web page and
+  imported, through a new fixed door in the fetch guard. Seen on a local server: the cell.com link
+  imports with its authors, date, headings and three figures, linked to its Europe PMC page, and
+  pasting it again finds it; a closed paper ends with the refusal and the bookmarklet as before.
+- **Kept the address**: the bookmarklet writes the page's address into the file; the upload records
+  it as *Saved from &lt;host&gt;*, a link that is never fetched, and pasting it again finds the copy.

@@ -44,6 +44,7 @@
 import { useState } from "react";
 
 import type { Meta } from "../types.js";
+import { savedSource } from "../urls.js";
 import { codeOfMessage } from "../messages.js";
 import { apiFetch } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -85,6 +86,23 @@ export function webSource(meta: Meta): string | null {
   const url = meta.url?.trim();
   if (!url) return null;
   return /^https?:\/\//i.test(url) ? url : null;
+}
+
+/**
+ * **Where an uploaded page says it was saved from, or `null`** — and only when
+ * the article has no web source of its own, because a fetched address always
+ * wins.
+ *
+ * `meta.savedFrom` is the owner's `Meta.savedFrom` (through `savedSource` on
+ * the server) or a visitor's `PublicMeta.savedFrom` (through `publicSourceUrl`),
+ * and `savedSource` is asked once more here, at the sink, for the reason
+ * `webSource` gives about imported rows. **A claim out of a file**, so every
+ * caller words it as *"Saved from <host>"* and never as the original; it is
+ * never fetched. Plan 261018j § Stage 3.
+ */
+export function savedFromSource(meta: Meta): string | null {
+  if (webSource(meta) !== null) return null;
+  return savedSource(meta.savedFrom);
 }
 
 /**

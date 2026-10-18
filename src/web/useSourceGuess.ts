@@ -43,7 +43,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Article, SourceGuess } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { cameOffADisk, webSource } from "./SourceLink.js";
+import { cameOffADisk, savedFromSource, webSource } from "./SourceLink.js";
 
 /** A settled answer — the only kind worth layering over the payload. */
 export type SettledGuess = Extract<SourceGuess, { status: "found" | "none" }>;
@@ -54,6 +54,9 @@ export type SettledGuess = Extract<SourceGuess, { status: "found" | "none" }>;
  */
 export function wantsSourceGuess(article: Article): boolean {
   if (!cameOffADisk(article.meta) || webSource(article.meta) !== null) return false;
+  /* Not when the file said where it was saved from: the address is known, and
+     the masthead draws "Saved from <host>" in its place. Plan 261018j § Stage 3. */
+  if (savedFromSource(article.meta) !== null) return false;
   const guess = article.sourceGuess;
   return guess === undefined || guess.status === "searching";
 }

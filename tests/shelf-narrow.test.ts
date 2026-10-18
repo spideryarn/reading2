@@ -12,6 +12,8 @@ import type { LibraryEntry } from "../src/types.js";
 import {
   availableTopics,
   chosenTopics,
+  COLLAPSED_CHIPS,
+  collapsedTopics,
   isArchived,
   isModelNamed,
   MAX_TOPIC_DEPTH,
@@ -214,6 +216,24 @@ describe("a three-level tree of model-named topics", () => {
     expect(withinChosenFirst(TREE, new Set())).toEqual(TREE);
     const phrases = [term("a"), term("b"), term("c")];
     expect(withinChosenFirst(phrases, new Set(["b"]))).toEqual(phrases);
+  });
+
+  /* Plan 261018k: the row collapses to six. */
+  it("collapses to the first six, plus a chosen one further down", () => {
+    expect(COLLAPSED_CHIPS).toBe(6);
+    const broad = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8"].map((k) => named(k, 0, undefined, "a"));
+    const inner = ["f1", "f2", "f3", "f4"].map((k) => named(k, 0.5, "b5", "a"));
+    const deeper = named("g1", 0.75, "f1", "a");
+    const wide = [...broad, ...inner, deeper];
+    expect(keys(collapsedTopics(wide, new Set()))).toEqual(["b1", "b2", "b3", "b4", "b5", "b6"]);
+    /* b5 chosen: its finer topics come up beside it and fill the slot after
+       it; the rest wait behind "All N topics", and the pressed pill does not
+       move. */
+    const one = new Set(["b5"]);
+    expect(keys(collapsedTopics(withinChosenFirst(wide, one), one))).toEqual(["b1", "b2", "b3", "b4", "b5", "f1"]);
+    /* A chosen one further down is kept in its place. */
+    const two = new Set(["b5", "f3", "b8"]);
+    expect(keys(collapsedTopics(withinChosenFirst(wide, two), two))).toEqual(["b1", "b2", "b3", "b4", "b5", "b6", "b8", "f3"]);
   });
 
   it("reads a topic's depth off the within chain, capped, and 0 for a phrase", () => {

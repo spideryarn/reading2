@@ -13,8 +13,8 @@
  * what hovering would have told you is in the rows.
  *
  * **Two views** (plan 260928d § Stage 2). Pills, the default: the first
- * COLLAPSED_CHIPS in rank order plus any chosen further down, and "All N
- * topics" expands the same row to every pill in place. Detail
+ * COLLAPSED_CHIPS in rank order plus any chosen further down
+ * (`collapsedTopics`), and "All N topics" expands the same row to every pill in place. Detail
  * (`?topicsView=detail`): every topic, in rank order, one row each —
  * ShelfTermsDetail.tsx. Each topic wears a hue chosen by which articles it
  * shares with the others, so related topics look alike (topic-colour.ts,
@@ -34,13 +34,12 @@ import { useQueryState } from "nuqs";
 import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
 import type { ArticleTopics } from "./article-topics.js";
 import { libraryTopicsViewParam } from "./params.js";
-import { availableTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
+import { availableTopics, COLLAPSED_CHIPS, collapsedTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope, QUIET_BUTTON, TERMS_ROW } from "./ShelfTermChip.js";
 import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
-/** How many chips the collapsed row draws, besides any chosen ones. */
-export const COLLAPSED_CHIPS = 12;
+export { COLLAPSED_CHIPS } from "./shelf-narrow.js";
 
 /** Below this many distinct works the server chooses no topics at all. */
 export const MIN_WORKS = 8;
@@ -63,7 +62,7 @@ export function mightHaveTopics(articleCount: number): boolean {
  * outlines wrap where the pills will. One fewer than COLLAPSED_CHIPS, because
  * the spinner and its words take the first pill's place.
  */
-const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6, 8, 4, 6.5, 7, 5.5, 6];
+const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6];
 
 /**
  * **The word *Topics*, with a card saying how they are picked and ordered.**
@@ -144,9 +143,10 @@ function TopicsLabel({ modelNamed }: { modelNamed: boolean }) {
  */
 export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
   const ghostPills = mightHaveTopics(articleCount);
-  /* The chooser returns at most one topic per distinct work. More than twelve
-     article rows is therefore necessary — though not sufficient — for the
-     real row's conditional "All N topics" button. */
+  /* The chooser returns at most one topic per distinct work. More than
+     COLLAPSED_CHIPS article rows is therefore necessary — though not
+     sufficient — for the real row's conditional "All N topics" button. Since
+     the row went to six (plan 261018k) every shelf with outlines passes it. */
   const mightHaveAllTopics = articleCount > COLLAPSED_CHIPS;
   return (
     <div
@@ -277,22 +277,21 @@ export function ShelfTerms({
   const slotOf = (key: string) => hues.get(key) ?? 0;
   /* **The server's rank order**, never re-sorted (plan 260928d): the chooser
      ranks for coverage, so the first few chips are the few that reach most of
-     the shelf. **Zeros go first, then the first twelve** (plan 260929a, Sol
-     R5): a topic with nothing left to show is dropped unless chosen, and only
-     then does the row take the first COLLAPSED_CHIPS, plus any chosen topic
-     further down, in its place — or, with "All N topics", every one. Taking
-     twelve and then dropping zeros would leave the row short with pills
-     waiting beyond it. The colour is computed over every topic, above, so a chip
-     keeps its dot when its neighbours come and go. */
+     the shelf. **Zeros go first, then the first COLLAPSED_CHIPS** (plan
+     260929a, Sol R5): a topic with nothing left to show is dropped unless
+     chosen, and only then does the row take the first COLLAPSED_CHIPS, plus
+     any chosen topic further down, in its place — or, with "All N topics",
+     every one. Taking the first few and then dropping zeros would leave the
+     row short with pills waiting beyond it. The colour is computed over every
+     topic, above, so a chip keeps its dot when its neighbours come and go. */
   /* Then the finer topics inside a chosen one move up beside it
      (`withinChosenFirst`): the identity with nothing chosen, and for phrase
-     topics. Before the first twelve, so the next step down is never beyond
-     the fold. */
+     topics. Before the first COLLAPSED_CHIPS, so the first of the next step
+     down are in the collapsed row; the rest are behind "All N topics". */
   const available = withinChosenFirst(availableTopics(terms, count, chosen), chosen);
   const byKey = new Map(terms.map((t) => [t.key, t]));
-  const shown = all
-    ? available
-    : available.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
+  const collapsed = collapsedTopics(available, chosen);
+  const shown = all ? available : collapsed;
   const tipScope: TermTipScope = {
     inScope,
     scopeWord: archived ? "on the shelf and in the archive" : "on the shelf",
@@ -336,7 +335,10 @@ export function ShelfTerms({
         {available.length === 0 && (
           <span className="tw:text-xs tw:text-muted-foreground">None of the topics is in this view.</span>
         )}
-        {!detail && available.length > COLLAPSED_CHIPS && (
+        {/* Once expanded, keep the control available even when narrowing
+            temporarily leaves no extra pills. Otherwise `all` stays true
+            invisibly and clearing that filter surprise-expands the row. */}
+        {!detail && (all || available.length > collapsed.length) && (
           <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className={QUIET_BUTTON}>
             All {available.length} topics
             <ChevronRight size={12} className={`tw:transition-transform ${all ? "tw:rotate-90" : ""}`} />

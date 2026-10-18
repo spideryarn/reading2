@@ -2,10 +2,11 @@
 id: q-emrf2p
 report: spya-x5e966
 repeats: spya-tqsw3u
-status: open
+status: answered
+acted: spya-qy8mgg
 asked: 2026-10-17
 title: A site that refuses us: build the free-copy lookup, and let a saved page keep its address?
-refs: qi-q62g96s9 · q-fp8tqr · spya-wm83gt · SPIDERYARN-READING2-J0 · SPIDERYARN-READING2-J2 · docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md · docs/investigations/261017a-which-refused-paper-links-have-a-free-copy-the-server-can-read.md · docs/user-feedback/261015_1711-cell-com-refused-the-app-a-better-way-round-and-a-question.md
+refs: qi-q62g96s9 · qi-pfnjyj6d · docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md · q-fp8tqr · spya-wm83gt · SPIDERYARN-READING2-J0 · SPIDERYARN-READING2-J2 · docs/plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md · docs/investigations/261017a-which-refused-paper-links-have-a-free-copy-the-server-can-read.md · docs/user-feedback/261015_1711-cell-com-refused-the-app-a-better-way-round-and-a-question.md
 ---
 Short version: you said "A and/or B as you see fit". B is built: a "Save for Spideryarn" bookmarklet. On a page that turns us away, you click it, it saves the page you are looking at as a web page file, and you upload that file with the Upload button that now sits under the failure message. It works on any page you can see, papers or not, and costs nothing to read (a PDF costs a model call). A is measured but not built, because building it means changing the part of the server that guards what we fetch, which I may not change without you. Two questions:
 
@@ -32,3 +33,11 @@ What else was fixed on the way. Three of the 29 sites (IEEE, Springer and JSTOR)
 What I tried, and what I could not. A browser on the server saved PLOS and Nature articles with the bookmarklet, and the PLOS file uploaded on a failed add page came in as the article in about 15 seconds, with its headings, authors and in-page links right. Not tried: a real walled page (the box cannot pass the human check), whether pictures from a walled site come through (they may not, since our server fetches them and the site refuses it), and Safari and Firefox.
 
 What would decide them. Question 1: how often refused papers come up for readers, and whether two clicks is a burden worth a day's work. Question 2: whether you want saved pages to behave like added links (source link, Refresh, no duplicates).
+
+Greg's reply, 2026-10-18 (spya-qy8mgg):
+
+> maybe the best thing for the user would be to try Europe PMC first and then fall back to the bookmarklet. Let's do that if it's not too complex. Because I guess actually the XML format might be better than a PDF anyway. Run some spikes and if it's not too complex, let's try and do A and then B for number one.
+>
+> As for number two, Yes, keep the address. I assume that's better. I think we had a way with (eg) Arxiv to keep track both of the page they originally tried to download from *and* the page that we actually downloaded from. See if that makes sense in this context too.
+
+Acted on in plan 261018j, on dev: (1) a refused paper comes from Europe PMC (your cell.com link does), else the bookmarklet; (2) a saved page shows "Saved from <host>", never fetched.

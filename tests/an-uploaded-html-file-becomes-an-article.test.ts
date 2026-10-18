@@ -138,6 +138,40 @@ describe("acquiring an uploaded web page", () => {
   });
 
   /**
+   * **A page saved by the bookmarklet keeps where it was saved from** — as
+   * `savedFrom`, a claim, and never as `url` or `requestedUrl`, which are what
+   * stage 2 resolves against and Refresh fetches. Plan 261018j § Stage 3.
+   */
+  it("records where a saved page says it came from, as savedFrom and nothing else", async () => {
+    const saved = A_PAGE.replace(
+      '<meta charset="utf-8">',
+      '<meta charset="utf-8"><meta name="spideryarn-saved-from" content="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0000001">',
+    );
+    const bytes = new TextEncoder().encode(saved);
+    const { ctx } = await readyToVerify(bytes, "A saved paper.html");
+    rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "html")));
+
+    const manifest = (await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).parts?.raw;
+    expect(manifest?.savedFrom).toBe(
+      "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0000001",
+    );
+    expect(manifest?.url).toBeUndefined();
+    expect(manifest?.requestedUrl).toBeUndefined();
+  });
+
+  it("reads no saved-from address out of a converted file, whose page is ours", async () => {
+    const bytes = new TextEncoder().encode(
+      '# Notes\n\n<meta name="spideryarn-saved-from" content="https://journals.plos.org/x">\n\nSome prose.\n',
+    );
+    const { ctx } = await readyToVerify(bytes, "notes.md");
+    const manifest = (await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).parts?.raw;
+    if (!manifest) throw new Error("the step returned no manifest");
+    rubbish.push(() => blobs.remove(canonicalKey(manifest.storedSha256 ?? "", "html")));
+    rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "markdown")));
+    expect(manifest.savedFrom).toBeUndefined();
+  });
+
+  /**
    * **The invariant that fails silently.** `writeRaw` stores the decoded string
    * for HTML, and stage 2 decodes what it reads as UTF-8 with no encoding
    * branch. Byte `0x93` is U+201C — a left curly quote — in windows-1252, and is

@@ -75,4 +75,19 @@ describe("finding a paper whose candidate redirects outside the registry's patte
     query.rows = [{ slug: "draft", url: null, requestedUrl: "https://arxiv.org/html/1706.03762", askedUrl: ASKED }];
     expect(await slugForUrlKey(urlKey(ASKED))).toBeUndefined();
   });
+
+  /* Plan 261018j § The two addresses: a refused publisher's link, read from
+     Europe PMC, is found again by the link the reader pasted, because the
+     address it was kept under resolves as a paper source. */
+  it("finds a refused paper read from Europe PMC by the publisher's link that was pasted", async () => {
+    const asked = "https://www.cell.com/fulltext/S1364-6613(15)00180-1";
+    query.rows = [{
+      slug: "europepmc-pmc4595480",
+      url: "https://europepmc.org/article/PMC/PMC4595480",
+      requestedUrl: "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC4595480/fullTextXML",
+      askedUrl: asked,
+    }];
+    expect(await slugForUrlKey(urlKey(asked))).toBe("europepmc-pmc4595480");
+    expect(await slugForUrlKey(urlKey("https://europepmc.org/abstract/PMC/PMC4595480"))).toBe("europepmc-pmc4595480");
+  });
 });

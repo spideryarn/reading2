@@ -31,7 +31,8 @@ import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref, TAKEDOWN_HREF, type ArticleView } from "./router.js";
 import { publishedLabel } from "./relative-time.js";
-import { journalBesideSite, webSource } from "./SourceLink.js";
+import { journalBesideSite, savedFromSource, webSource } from "./SourceLink.js";
+import { hostOf } from "../urls.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
@@ -49,7 +50,32 @@ import { articleTitleVoice, withVoice } from "./voice.js";
  * because on that one the absence is a fact about their own library
  * (src/web/Metadata.tsx § `Origin`).
  */
-function SourceRow({ url, guess }: { url: string | null; guess: SourceGuess | undefined }) {
+function SourceRow({
+  url,
+  savedFrom,
+  guess,
+}: {
+  url: string | null;
+  /** `savedFromSource`: a claim out of the uploaded file, worded as one and never fetched. */
+  savedFrom: string | null;
+  guess: SourceGuess | undefined;
+}) {
+  if (url === null && savedFrom !== null) {
+    return (
+      <p className="tw:m-0 tw:mb-6 tw:text-xs tw:text-muted-foreground">
+        Saved from{" "}
+        <a
+          href={savedFrom}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight-text"
+        >
+          {hostOf(savedFrom) || savedFrom}
+          <ExternalLink size={12} className="tw:shrink-0" />
+        </a>
+      </p>
+    );
+  }
   if (url !== null) {
     return (
       <p className="tw:m-0 tw:mb-6 tw:text-xs">
@@ -174,7 +200,7 @@ export function PublicMetadataPage({
             here means an upload *or* an address the policy withheld. Only a
             separately projected found guess can add a source link; it still
             does not disclose which absence was behind it. */}
-        <SourceRow url={webSource(meta)} guess={article.sourceGuess} />
+        <SourceRow url={webSource(meta)} savedFrom={savedFromSource(meta)} guess={article.sourceGuess} />
 
         {/* The banner carries the private-copy offer, which is what puts it on
             this page, where Greg suggested it (plan 261007m). */}

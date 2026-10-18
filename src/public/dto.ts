@@ -184,12 +184,20 @@ function publicMeta(row: {
    * in code a reviewer reads. `publicSourceUrl` is the policy.
    */
   finalUrl: string | null;
+  /**
+   * Where an uploaded page says it was saved from — a claim out of a file,
+   * **still not the thing that goes out**. Through the same `publicSourceUrl`
+   * as `finalUrl`, so a signed query, a credential or a private host is never
+   * published. Plan 261018j, Sol's S3.
+   */
+  savedFromUrl?: string | null;
 }): PublicMeta {
   /* A named const rather than the expression inline, so the shorthand `{ url }`
      below ties the published key to it. `opt()` cannot be used here — it copies
      a field, and this computes one — and the spread it saves you from is the one
      that compiles clean with the key misspelled. */
   const url = row.finalUrl === null ? null : publicSourceUrl(row.finalUrl);
+  const savedFrom = row.savedFromUrl == null ? null : publicSourceUrl(row.savedFromUrl);
   /* **The day, not the stored string**, and a day or a year, never both
      (plan 261004h). Computed like `url`, so named consts and shorthand keys
      for its reason. A stored string that does not start with a real day sends
@@ -227,6 +235,8 @@ function publicMeta(row: {
        differently, and a "we have one but will not show you" would be a fact
        about us rather than about the piece. src/urls.ts § `publicSourceUrl`. */
     ...(url === null ? {} : { url }),
+    /* The same two ways to get no key as `url`, through the same policy. */
+    ...(savedFrom === null ? {} : { savedFrom }),
     /* A model's judgement of the published text: the levels and its sentence
        (plan 261005j). Computed, so a shorthand key, like `url`. */
     ...(readingDifficulty === null ? {} : { readingDifficulty }),
@@ -1322,6 +1332,13 @@ export function publicArticle(row: {
   headingTitle: string | null;
   /** Stage 1's post-redirect address — `publicMeta` decides what of it is published. */
   finalUrl: string | null;
+  /**
+   * An upload's saved-from claim — `publicMeta` decides what of it is published.
+   * **Optional, unlike `finalUrl`**, only so the many hand-built fixtures that
+   * predate it need not spell it; leaving it out withholds it, which is the
+   * safe direction. The one real caller, src/store/public-reader.ts, passes it.
+   */
+  savedFromUrl?: string | null;
   blocks: (Block | PublicBlock)[];
   tree: Tree;
   arc: Arc | null;

@@ -37,7 +37,7 @@ Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 enableHistorySync();
 
-/* Fourteen topics, so "All 14" has two more than the collapsed twelve. Topic
+/* Fourteen topics, so "All 14" has eight more than the collapsed six. Topic
    i is used by articles a{i}, a{i+1}, a{i+2}; its live count is 14 − i, so the
    first (rank 0) has the largest count and the bars can be checked. */
 const KEYS = Array.from({ length: 14 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
@@ -154,7 +154,7 @@ async function click(el: HTMLElement | undefined | null) {
 describe("All N topics", () => {
   it("expands the same row of pills to every topic, in rank order, with no list", async () => {
     await show("/");
-    expect(pills().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(KEYS.slice(0, 12));
+    expect(pills().map((b) => b.getAttribute("aria-label")?.split(" ")[0])).toEqual(KEYS.slice(0, 6));
     const row = pills()[0]?.parentElement;
 
     await click(button("All 14 topics"));

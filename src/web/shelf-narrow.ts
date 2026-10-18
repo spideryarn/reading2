@@ -186,7 +186,7 @@ export function topicCountsForVisible(
  * to an empty shelf is noise. A **chosen** topic at zero stays, or it could not
  * be removed. Plan 260929a § Stage 2.
  *
- * Applied **before** the collapsed row takes its first twelve (GPT Sol R5), so
+ * Applied **before** the collapsed row takes its first few (GPT Sol R5), so
  * the row has no holes where zeros used to be, and "All N topics" counts what
  * it would show.
  */
@@ -255,8 +255,7 @@ export function topicDepth(
  * *Vision* back to its rank place would jump it out from under the pointer.
  *
  * With nothing chosen, and for phrase topics (no `within`), it is the
- * identity. Applied after `availableTopics` and before the row takes its
- * first twelve.
+ * identity. Applied after `availableTopics` and before `collapsedTopics`.
  */
 export function withinChosenFirst<T extends { key: string; within?: string }>(
   terms: readonly T[],
@@ -272,6 +271,26 @@ export function withinChosenFirst<T extends { key: string; within?: string }>(
   const head = terms.slice(0, last + 1).filter((t) => !inside(t));
   const tail = terms.slice(last + 1).filter((t) => !inside(t));
   return [...head, ...terms.filter(inside), ...tail];
+}
+
+/**
+ * How many pills a collapsed Topics row draws, besides the ones below.
+ * Greg, 2026-10-18 (`spya-qawppt`): *"By default, initially just show a half
+ * dozen or so topic pills"*. It was twelve. The reader's row and the public
+ * shelf's both use it. Plan 261018k.
+ */
+export const COLLAPSED_CHIPS = 6;
+
+/**
+ * **The collapsed row**: the first COLLAPSED_CHIPS of what `withinChosenFirst`
+ * returns, plus any chosen topic further down, in its place. One copy for the
+ * reader's row and the public shelf's. A chosen subject's finer topics fill
+ * the slots after it and the rest wait behind "All N topics": keeping them all
+ * was weighed and dropped, because a subject can have twenty, and the row
+ * would no longer be a half dozen (GPT Sol on plan 261018k).
+ */
+export function collapsedTopics<T extends { key: string }>(terms: readonly T[], chosen: ReadonlySet<string>): T[] {
+  return terms.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
 }
 
 /**

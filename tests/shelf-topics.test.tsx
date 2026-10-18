@@ -10,7 +10,7 @@
  *  - the chips' counts follow the one formula (shelf-narrow.ts) as the view
  *    narrows, and two chosen topics AND;
  *  - an unchosen chip at zero is not drawn at all, a chosen one at zero is,
- *    and the first twelve are the first twelve that have something to show
+ *    and the first six are the first six that have something to show
  *    (plan 260929a, Greg's report 4Y);
  *  - the "n of m" line equals the cards drawn, and the table obeys the filter;
  *  - `?archived=1` widens the topics' scope and merges the archived articles
@@ -546,21 +546,12 @@ describe("the Topics row", () => {
     // The spinner and its words take the first pill's place.
     expect(ghosts).toHaveLength(COLLAPSED_CHIPS - 1);
     for (const g of ghosts) expect(g.getAttribute("aria-hidden")).toBe("true");
-    // Eight article rows can produce at most eight topics, so the real
-    // collapsed row cannot have its conditional "All N topics" control.
-    expect(reservedControl(status, "All")).toBeUndefined();
+    // Eight article rows can produce up to eight topics, more than the
+    // collapsed row's six, so the real row may have its conditional "All N
+    // topics" control and the outlines reserve its width (plan 261018k).
+    expect(MIN_WORKS).toBeGreaterThan(COLLAPSED_CHIPS);
+    expect(reservedControl(status, "All")?.getAttribute("aria-hidden")).toBe("true");
     expect(reservedControl(status, "More detail")?.getAttribute("aria-hidden")).toBe("true");
-  });
-
-  it("reserves the conditional All-topics control only when more than twelve topics are possible", async () => {
-    activeArticles = Array.from({ length: COLLAPSED_CHIPS + 1 }, (_, i) => ({
-      ...ACTIVE[i % ACTIVE.length]!,
-      slug: `many-${i}`,
-    }));
-    answer = () => new Promise(() => {});
-    await show("/");
-    const all = reservedControl(topicsLoading(), "All");
-    expect(all?.getAttribute("aria-hidden")).toBe("true");
   });
 });
 
@@ -636,7 +627,7 @@ describe("the archive in scope", () => {
     expect(order()).toEqual(["neuron", "memory"]);
   });
 
-  it("draws the first twelve by rank, plus a chosen one further down in its own place", async () => {
+  it("draws the first six by rank, plus a chosen one further down in its own place", async () => {
     const keys = Array.from({ length: 14 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
     answer = async () => ({
       ...ACTIVE_TERMS,
@@ -649,14 +640,15 @@ describe("the archive in scope", () => {
         .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
         .filter((k) => /^topic\d\d$/.test(k ?? ""));
     await waitFor(() => order().length > 0, "the chips");
-    expect(order()).toEqual([...keys.slice(0, 12), "topic13"]);
+    expect(COLLAPSED_CHIPS).toBe(6);
+    expect(order()).toEqual([...keys.slice(0, COLLAPSED_CHIPS), "topic13"]);
   });
 
-  it("takes the first twelve from the pills that have something to show — no holes (Sol R5)", async () => {
-    /* Sixteen topics; the odd-numbered ones use only "startups", so choosing
+  it("takes the first six from the pills that have something to show — no holes (Sol R5)", async () => {
+    /* Twelve topics; the odd-numbered ones use only "startups", so choosing
        topic00 (palaces + neurons) zeroes them. The row must then be the first
-       twelve *available* — ten even ones by rank would leave holes. */
-    const keys = Array.from({ length: 16 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+       six *available* — three even ones by rank would leave holes. */
+    const keys = Array.from({ length: 12 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
     answer = async () => ({
       ...ACTIVE_TERMS,
       terms: keys.map((k, i) => (i % 2 ? term(k, ["startups", 3]) : term(k, ["palaces", 3], ["neurons", 2]))),
@@ -670,7 +662,7 @@ describe("the archive in scope", () => {
     await waitFor(() => order().length > 0, "the chips");
     const even = keys.filter((_, i) => i % 2 === 0);
     expect(order()).toEqual(even);
-    // Eight available, so no "All N topics" to offer.
+    // Six available, so no "All N topics" to offer.
     expect([...host.querySelectorAll("button")].some((b) => /^All \d+ topics/.test(b.textContent ?? ""))).toBe(false);
   });
 
@@ -696,6 +688,36 @@ describe("the archive in scope", () => {
       .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
       .filter((k) => /^topic\d\d$/.test(k ?? ""));
     expect(drawn).toEqual(keys.slice(0, 15));
+  });
+
+  it("keeps the All control while an expanded row narrows to six, so expansion cannot linger invisibly", async () => {
+    const keys = Array.from({ length: 8 }, (_, i) => `topic${String(i).padStart(2, "0")}`);
+    answer = async () => ({
+      ...ACTIVE_TERMS,
+      terms: keys.map((k, i) => (i < 6 ? term(k, ["palaces", 3]) : term(k, ["startups", 3]))),
+    });
+    await show("/");
+    const all = () => [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => /^All \d+ topics/.test(b.textContent ?? ""));
+    await waitFor(() => !!all(), "the All button");
+    click(all()!);
+    await settle();
+    expect(all()?.getAttribute("aria-expanded")).toBe("true");
+
+    click(chip("topic00"));
+    await settle();
+    expect(all()?.textContent).toMatch(/^All 6 topics/);
+    expect(all()?.getAttribute("aria-expanded")).toBe("true");
+
+    click(all()!);
+    await settle();
+    click(chip("topic00"));
+    await settle();
+    expect(all()?.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")]
+        .map((b) => (b.getAttribute("aria-label") ?? "").split(" ")[0])
+        .filter((k) => /^topic\d\d$/.test(k ?? "")),
+    ).toEqual(keys.slice(0, COLLAPSED_CHIPS));
   });
 
   it("shows topics when every article is archived and the active shelf is empty", async () => {
@@ -807,6 +829,26 @@ describe("topics a model named", () => {
     click(chip("Memory"));
     await settle();
     expect(labels()).toEqual(["Neuroscience", "Memory", "Mnemonics", "Business"]);
+  });
+
+  it("collapses to six with a subject chosen too: its finer topics fill the slots after it, the rest behind All (plan 261018k)", async () => {
+    const broad = ["B1", "B2", "B3", "B4", "B5"].map((l) => named(l, 0, undefined, "neurons", "startups"));
+    const finer = ["F1", "F2", "F3", "F4"].map((l) => named(l, 0.5, "neuroscience", "neurons"));
+    answer = async () => ({
+      ...NAMED_TERMS,
+      terms: [...broad, named("Neuroscience", 0, undefined, "neurons", "palaces"), ...finer],
+    });
+    await show("/");
+    const allButton = () => [...host.querySelectorAll("button")].find((b) => /^All \d+ topics/.test(b.textContent ?? ""));
+    expect(labels()).toEqual(["B1", "B2", "B3", "B4", "B5", "Neuroscience"]);
+    expect(allButton()?.textContent).toMatch(/^All 10 topics/);
+    click(chip("Neuroscience"));
+    await settle();
+    expect(labels()).toEqual(["B1", "B2", "B3", "B4", "B5", "Neuroscience"]);
+    expect(allButton()?.textContent).toMatch(/^All 10 topics/);
+    click(allButton()!);
+    await settle();
+    expect(labels()).toEqual(["B1", "B2", "B3", "B4", "B5", "Neuroscience", "F1", "F2", "F3", "F4"]);
   });
 
   it("says which broader topic a finer one is inside, and never 'used N times'", async () => {

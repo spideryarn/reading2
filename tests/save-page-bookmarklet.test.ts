@@ -395,6 +395,55 @@ describe("savePageForSpideryarn", () => {
     expect(saved.blobs).toEqual([]);
   });
 
+  /** The `spideryarn-saved-from` metas in a saved file, in order. */
+  function savedFrom(html: string): string[] {
+    const doc = new JSDOM(html).window.document;
+    return [...doc.querySelectorAll('head meta[name="spideryarn-saved-from"]')].map(
+      (m) => m.getAttribute("content") ?? "",
+    );
+  }
+
+  it("writes where the page was saved from into its head, without the fragment", async () => {
+    const { saved } = await save(
+      article(),
+      "https://www.cell.com/trends/cognitive-sciences/fulltext/S1364-6613(15)00180-1?rss=yes#sec1",
+    );
+    expect(savedFrom(await text(saved.blobs[0]!))).toEqual([
+      "https://www.cell.com/trends/cognitive-sciences/fulltext/S1364-6613(15)00180-1?rss=yes",
+    ]);
+  });
+
+  it("replaces a saved-from meta the page itself carried, wherever it was", async () => {
+    const { saved } = await save(
+      article(
+        `<meta name="spideryarn-saved-from" content="https://evil.example/">`,
+        `<meta name="Spideryarn-Saved-From" content="https://evil.example/body">`,
+      ),
+      "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0000001",
+    );
+    const html = await text(saved.blobs[0]!);
+    expect(savedFrom(html)).toEqual([
+      "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0000001",
+    ]);
+    expect(html).not.toContain("evil.example");
+  });
+
+  const unsavable: [string, string][] = [
+    ["a file: page", "file:///home/someone/paper.html"],
+    ["an address with credentials", "https://user:secret@www.cell.com/article"],
+  ];
+  for (const [name, url] of unsavable) {
+    it(`${name}: no saved-from meta at all, and any the page carried is gone`, async () => {
+      const { saved } = await save(
+        article(`<meta name="spideryarn-saved-from" content="https://evil.example/">`),
+        url,
+      );
+      const html = await text(saved.blobs[0]!);
+      expect(savedFrom(html)).toEqual([]);
+      expect(html).not.toContain("evil.example");
+    });
+  }
+
   const titles: [string, string][] = [
     [`A/B: "tests" <live> | why?*`, "A B tests live why.html"],
     ["Line\none\ttwo\u0007", "Line one two.html"],

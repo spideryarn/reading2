@@ -159,6 +159,12 @@ describe("useSourceGuess", () => {
     expect(posts).toHaveLength(1);
   });
 
+  /** The file said where it was saved from, so there is nothing to guess (plan 261018j § Stage 3). */
+  it("never asks for an uploaded page that says where it was saved from", async () => {
+    await mount(article({ filename: "page.html", savedFrom: "https://journals.plos.org/plosone/x" }, undefined));
+    expect(posts).toEqual([]);
+  });
+
   it("is silent on failure, and does not retry on the same page", async () => {
     answer = async () => new Response(JSON.stringify({ error: "busy" }), { status: 429 });
     await mount(article(UPLOAD, undefined));

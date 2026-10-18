@@ -20,12 +20,17 @@ import { useMemo, useState } from "react";
 
 import type { PublicLibrary } from "../public-library-types.js";
 import { articleTopics } from "./article-topics.js";
-import { type ShelfTerm, availableTopics, topicCounts, topicMembers, withTopics, withinChosenFirst } from "./shelf-narrow.js";
+import {
+  type ShelfTerm,
+  availableTopics,
+  collapsedTopics,
+  topicCounts,
+  topicMembers,
+  withTopics,
+  withinChosenFirst,
+} from "./shelf-narrow.js";
 import { QUIET_BUTTON, TERMS_ROW, TermChip, type TermTipScope } from "./ShelfTermChip.js";
 import { TooltipGroup } from "./Tooltip.js";
-
-/** As many pills as the reader's row shows before "All N topics" (ShelfTerms.tsx § `COLLAPSED_CHIPS`). */
-const COLLAPSED = 12;
 
 
 /** The wire's topics as the reader's shelf's terms: each with the slugs of its cards. */
@@ -73,7 +78,9 @@ export function PublicShelfTopics({
   const count = (key: string) => counts.get(key) ?? 0;
   const on = new Set(chosen);
   const available = withinChosenFirst(availableTopics(terms, count, on), on);
-  const shown = all ? available : available.filter((t, i) => i < COLLAPSED || on.has(t.key));
+  /* As many as the reader's row collapses to, by the same rule (plan 261018k). */
+  const collapsed = collapsedTopics(available, on);
+  const shown = all ? available : collapsed;
   const titles = new Map(shelf.entries.map((e) => [e.slug, e.title]));
   const labels = new Map(terms.map((t) => [t.key, t.label]));
   const scope: TermTipScope = {
@@ -106,7 +113,10 @@ export function PublicShelfTopics({
           Clear
         </button>
       )}
-      {available.length > COLLAPSED && (
+      {/* Once expanded, keep the control available even when narrowing
+          temporarily leaves no extra pills. Otherwise `all` stays true
+          invisibly and clearing that filter surprise-expands the row. */}
+      {(all || available.length > collapsed.length) && (
         <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className={QUIET_BUTTON}>
           All {available.length} topics
           <ChevronRight size={12} className={`tw:transition-transform ${all ? "tw:rotate-90" : ""}`} />

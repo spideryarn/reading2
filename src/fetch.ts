@@ -171,6 +171,17 @@ export interface RawManifest {
   /** Upload only — our id for the attempt, and the reader's own name for the file. */
   uploadId?: string;
   filename?: string;
+  /**
+   * **Upload only: where the uploaded page says it was saved from** — the
+   * `<meta name="spideryarn-saved-from">` the bookmarklet writes, read by
+   * `savedFromInHtml` (src/saved-from.ts) and checked by `savedSource`
+   * (src/urls.ts). Stored as `article_revisions.saved_from_url`.
+   *
+   * **A claim from a file, so deliberately not `url`**: `url` is the base stage
+   * 2 resolves against and what Refresh fetches, and this must be neither. It
+   * is shown and matched on the uploader's own shelf, and never fetched.
+   */
+  savedFrom?: string;
   contentType: string | null;
   encoding: string | null;
   bytes: number;
@@ -2683,6 +2694,175 @@ export async function fetchBibliographicJson(
     { ...options, ...BIBLIOGRAPHIC_LIMITS },
     { headers: bibliographicHeaders, read: readJson },
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Europe PMC: the second fixed door
+ * ------------------------------------------------------------------ *
+ *
+ * **For a paper a publisher refuses us**, whose open-access copy Europe PMC
+ * holds as JATS XML. Built exactly as `fetchBibliographicJson` above is, and
+ * for the same reason: one fixed, public API, asked about an identifier, so its
+ * host and path are checked before any DNS lookup and no redirect is followed.
+ * src/europe-pmc.ts is the only caller.
+ * docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md
+ * § Stage 1, with Greg's permission for the door (his reply `spya-qy8mgg`,
+ * 2026-10-18). docs/project/security-map.md has its row.
+ */
+
+/** The one host. Not `ebi.ac.uk`, and not `europepmc.org`, whose pages are not the API. */
+export const EUROPE_PMC_HOST = "www.ebi.ac.uk";
+/** And the common prefix of the two allowed paths: EBI serves a great deal else from that host. */
+export const EUROPE_PMC_PATH_PREFIX = "/europepmc/webservices/rest/";
+/** The only two REST resources this door needs. A prefix check alone lets encoded separators hide traversal. */
+const EUROPE_PMC_PATH_PREFIX_RE = EUROPE_PMC_PATH_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const EUROPE_PMC_PATH = new RegExp(
+  `^(?:${EUROPE_PMC_PATH_PREFIX_RE}search|${EUROPE_PMC_PATH_PREFIX_RE}PMC\\d{1,9}/fullTextXML)$`,
+);
+
+/** The authority as supplied, before URL parsing erases an explicit default port. */
+function suppliedAuthority(input: string): string | null {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/?#]*)/.exec(input.trim())?.[1] ?? null;
+}
+
+/**
+ * The bounds, fixed, per kind of answer. A search answer is a page of JSON;
+ * the full text of the six papers measured on 2026-10-18 was 130–480 KB of
+ * XML, so 20 MiB is forty times the largest and still bounded. One attempt
+ * and no redirects, as for the registries above.
+ */
+export const EUROPE_PMC_LIMITS = {
+  json: { timeoutMs: 8_000, maxBytes: 1024 * 1024, attempts: 1, maxRedirects: 0 },
+  xml: { timeoutMs: 30_000, maxBytes: 20 * 1024 * 1024, attempts: 1, maxRedirects: 0 },
+} as const;
+
+/** What the XML door hands back: the bytes as they arrived, and their strict UTF-8 decoding. */
+export interface EuropePmcXml {
+  url: string;
+  contentType: string | null;
+  bytes: Uint8Array;
+  text: string;
+  fetchedAt: string;
+}
+
+function europePmcHeaders(as: "json" | "xml"): () => Record<string, string> {
+  return () => ({
+    "User-Agent": BIBLIOGRAPHIC_USER_AGENT,
+    Accept: as === "json" ? "application/json" : "application/xml, text/xml",
+  });
+}
+
+/** Whether an HTTP charset label is one of the aliases the Encoding Standard maps to UTF-8. */
+function isUtf8Charset(label: string): boolean {
+  try {
+    return new TextDecoder(label).encoding === "utf-8";
+  } catch {
+    return false;
+  }
+}
+
+async function readEuropePmcXml(res: Response, finalUrl: string, _chain: string[], opts: Resolved): Promise<EuropePmcXml> {
+  const bytes = await readBody(res, finalUrl, opts);
+  const contentType = res.headers.get("content-type");
+  const mediaType = mimeType(contentType);
+  if (mediaType !== "application/xml" && mediaType !== "text/xml") {
+    throw new FetchFailure("unsupported-type", finalUrl, "Europe PMC did not answer with XML.", { status: res.status });
+  }
+  const charset = charsetFromContentType(contentType);
+  if (charset !== null && !isUtf8Charset(charset)) {
+    throw new FetchFailure("unsupported-type", finalUrl, "Europe PMC's XML was not UTF-8.", { status: res.status });
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new FetchFailure("unsupported-type", finalUrl, "Europe PMC's XML was not UTF-8.", { status: res.status });
+  }
+  return { url: finalUrl, contentType, bytes, text, fetchedAt: opts.now().toISOString() };
+}
+
+/**
+ * **One GET to Europe PMC's REST API**: a search as JSON, or a paper's full
+ * text as XML. Refused before DNS unless it is `https:`, no port, no
+ * credentials, host exactly `EUROPE_PMC_HOST` and one of the two resource paths
+ * this caller uses. Matching the whole path, rather than only
+ * `EUROPE_PMC_PATH_PREFIX`, also refuses encoded slashes and double-encoded dot
+ * segments before a server or proxy gets a chance to decode them. Then the same
+ * guarded `fetchBytes` as every other request: the address guard and its pin,
+ * one deadline, the byte cap on what arrives.
+ */
+export async function fetchEuropePmc(input: string, as: "json", options?: BibliographicFetchOptions): Promise<unknown>;
+export async function fetchEuropePmc(input: string, as: "xml", options?: BibliographicFetchOptions): Promise<EuropePmcXml>;
+export async function fetchEuropePmc(
+  input: string,
+  as: "json" | "xml",
+  options: BibliographicFetchOptions = {},
+): Promise<unknown> {
+  const target = parseTarget(input);
+  const authority = suppliedAuthority(input);
+  if (
+    target.protocol !== "https:" ||
+    authority?.toLowerCase() !== EUROPE_PMC_HOST ||
+    target.port !== "" ||
+    target.username !== "" ||
+    target.password !== "" ||
+    target.hostname.toLowerCase() !== EUROPE_PMC_HOST ||
+    !EUROPE_PMC_PATH.test(target.pathname)
+  ) {
+    throw new FetchFailure("blocked-address", input.trim(), "Only Europe PMC's REST API is asked for a paper's free copy.");
+  }
+  const limits = EUROPE_PMC_LIMITS[as];
+  return as === "json"
+    ? await fetchBytes(target.toString(), { ...options, ...limits }, { headers: europePmcHeaders(as), read: readJson })
+    : await fetchBytes(target.toString(), { ...options, ...limits }, { headers: europePmcHeaders(as), read: readEuropePmcXml });
+}
+
+/**
+ * **A web page we built from what arrived**, rather than what arrived — today
+ * only Europe PMC's JATS, turned into HTML by src/jats.ts.
+ *
+ * Not a `FetchedHtml`, whose `text` is the decoding of its `bytes`: here the
+ * two are different documents, and a value claiming otherwise would have
+ * `writeRaw` hash one and store the other. `writeConvertedRaw` below is its own
+ * seam for that reason, as `acquireUpload` (src/pipeline.ts) is for a
+ * converted upload. GPT Sol's S1 on plan 261018j.
+ */
+export interface ConvertedHtml {
+  kind: "html";
+  /** What it was built from. A name of the method, not a `DocumentKind`: what is stored is HTML. */
+  convertedFrom: "jats";
+  /** The address the source document was fetched from. */
+  requestedUrl: string;
+  /** The address the article is known by — the base, the source link, what Refresh resolves. */
+  url: string;
+  /** The page we built. */
+  text: string;
+  /** What arrived: its bytes and the type the server gave them. Hashed and counted, not stored. */
+  source: { contentType: string | null; bytes: Uint8Array };
+  fetchedAt: string;
+}
+
+/**
+ * Store a `ConvertedHtml`'s page, and write the manifest that names it: the
+ * stored object is the page as UTF-8, kind `html`; `bytes`, `sha256` and
+ * `contentType` describe what arrived, as they do for every fetched document.
+ */
+export async function writeConvertedRaw(doc: ConvertedHtml, store?: RawSourceStore): Promise<StoredRawManifest> {
+  const storedBytes = storedDocumentBytes({ kind: "html", text: doc.text });
+  const stored = await storeRawSource(storedBytes, "html", store ?? blobStore());
+  return {
+    kind: "html",
+    file: "raw.html",
+    requestedUrl: doc.requestedUrl,
+    url: doc.url,
+    contentType: doc.source.contentType,
+    encoding: "UTF-8",
+    bytes: doc.source.bytes.byteLength,
+    sha256: createHash("sha256").update(doc.source.bytes).digest("hex"),
+    storedSha256: stored.sha256,
+    storedBytes: storedBytes.byteLength,
+    fetchedAt: doc.fetchedAt,
+  };
 }
 
 /**

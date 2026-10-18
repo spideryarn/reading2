@@ -324,6 +324,18 @@ link. The cure lives in stage 2 —
 — and **the check that finds the next one** is comparing the pictures in the live source's figures
 with the ones stage 2 keeps, which is how these were found.
 
+## PMC's open-data bucket
+
+A paper read from Europe PMC ([fetching.md § A paper a site refuses](fetching.md#a-paper-a-site-refuses-europe-pmcs-free-copy))
+is a page we built from its JATS, so its pictures have whatever address that page gives them:
+`https://pmc-oa-opendata.s3.amazonaws.com/<PMCID>.<version>/<file>`, PMC's public open-access
+bucket, with the version from the XML's `pmcid-ver` and `.1` where it has none, and the file name
+encoded as one path segment ([`src/jats.ts`](../../src/jats.ts) § `bucketUrl`). It answered 200 for
+the three papers tried on 2026-10-18; `europepmc.org/articles/…/bin/…` answers 403 to us. The
+bucket serves `binary/octet-stream`, which is fine: this step trusts the bytes, not the header
+(`sniffImage`). Nothing here knows the bucket by name — it is an ordinary `https` image, fetched
+and stored like any other.
+
 ## Freshness
 
 `assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image

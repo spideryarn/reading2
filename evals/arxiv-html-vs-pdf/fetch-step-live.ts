@@ -15,7 +15,7 @@ import { fetchDocument } from "../../src/fetch.js";
 import { normaliseUrl, slugFromUrl, urlKey } from "../../src/ingest.js";
 import { resolvePaperSource } from "../../src/paper-sources.js";
 import { pass0 } from "../../src/pdf.js";
-import { fetchFirstCandidate } from "../../src/pipeline.js";
+import { type FetchCandidate, fetchFirstCandidate } from "../../src/pipeline.js";
 
 const DEFAULTS = [
   "https://arxiv.org/abs/2608.13566?utm_campaign=ai-tinkerers__paperclub&utm_content=link1&utm_medium=ai-tinkerers&utm_source=paperclub",
@@ -30,7 +30,11 @@ for (const raw of given.length > 0 ? given : DEFAULTS) {
   const paper = resolvePaperSource(url);
   console.log(`\n${raw.slice(0, 80)}`);
   console.log(`  key ${urlKey(url)}   slug ${slugFromUrl(url)}   source ${paper?.source ?? "(none)"}`);
-  const candidates = paper?.candidates ?? [{ url }];
+  /* Documents only: Europe PMC's `"jats"` candidate is fetched through its own door, not this one. */
+  const candidates: FetchCandidate[] =
+    paper === null
+      ? [{ url }]
+      : paper.candidates.flatMap((c): FetchCandidate[] => (c.expect === "jats" ? [] : [{ ...c, expect: c.expect }]));
   console.log(`  candidates: ${candidates.map((c) => c.url).join("  then  ")}`);
   try {
     const { doc, candidate, tried } = await fetchFirstCandidate(candidates, {

@@ -56,6 +56,7 @@ const READ_IN_FULL: Required<Omit<Meta, "publishedYear">> = {
   doi: "10.1234/extract",
   journal: "Extract Journal",
   filename: "paper.pdf",
+  savedFrom: "https://example.org/saved",
   rawSha256: "b".repeat(64),
   source: "pdf",
   method: "model:pages",

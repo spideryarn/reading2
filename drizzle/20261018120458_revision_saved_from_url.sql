@@ -1,0 +1,11 @@
+-- Where an uploaded page says it was saved from — stage 3 of
+-- docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md.
+--
+-- One nullable column, no default, no backfill: additive.
+--
+-- `saved_from_url` is a CLAIM read out of the uploaded file's own
+-- `<meta name="spideryarn-saved-from">` (the "Save for Spideryarn" bookmarklet
+-- writes it). It is never fetched, never an extraction base, never what Refresh
+-- fetches: it is shown ("Saved from <host>") and matched against a later paste
+-- on the uploader's own shelf only. That is why it is not `final_url`.
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "saved_from_url" text;

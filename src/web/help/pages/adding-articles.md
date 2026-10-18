@@ -30,6 +30,12 @@ private even if you share the article; anything Spideryarn extracts into the art
 what you share. Pictures may not come through, because they are fetched from the same site that
 turned us away.
 
+The file also remembers the address it was saved from, so the article says **Saved from** and the
+site's name under its title, as a link back to that page. Spideryarn never fetches that address:
+it is the file's word for where it came from. If you share the article, readers see that line too,
+unless the address has a `?` in it, which can carry a sign-in, so it is then left off. Pasting the
+same address later opens the article you already uploaded instead of trying the site again.
+
 While an article is coming in, you see each stage tick past. **Keep a Spideryarn tab open until it
 finishes**: the work is driven by your browser, and if you close every tab it pauses until you come
 back. Adding sends the text to an AI provider to be processed.

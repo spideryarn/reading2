@@ -54,6 +54,12 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
  *    Frames (video embeds the sanitiser keeps), `<noscript>` (lazy images'
  *    fallbacks), `<textarea>` and `<select>` (visible text) stay. The page as
  *    shown is otherwise what is saved, and Help says so.
+ * 3a. **Where it was saved from**, as `<meta name="spideryarn-saved-from">`
+ *    in `<head>`: `location.href` without its fragment, and only for an
+ *    `http:`/`https:` address with no credentials. Any such meta the page
+ *    carried is removed first, so the only one is ours. The upload path reads
+ *    it as a claim to show ("Saved from <host>") and to match a later paste on
+ *    the reader's own shelf, and never fetches it — docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md § Stage 3.
  * 4. Over the upload cap, counted in bytes, it says so and stops.
  * 5. A temporary `<a download>` on a blob URL, clicked, removed, and the URL
  *    revoked a tick later so the download has started.
@@ -154,6 +160,31 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
   const charsetEl = doc.createElement("meta");
   charsetEl.setAttribute("charset", "utf-8");
   head.insertBefore(charsetEl, head.firstChild);
+
+  const claimed = copy.querySelectorAll("meta[name]");
+  for (let i = 0; i < claimed.length; i++) {
+    if ((claimed[i]!.getAttribute("name") || "").trim().toLowerCase() === "spideryarn-saved-from") {
+      claimed[i]!.remove();
+    }
+  }
+  let savedFrom: URL | null = null;
+  try {
+    savedFrom = new win.URL(win.location.href);
+  } catch (_) {
+    savedFrom = null;
+  }
+  if (
+    savedFrom &&
+    (savedFrom.protocol === "http:" || savedFrom.protocol === "https:") &&
+    savedFrom.username === "" &&
+    savedFrom.password === ""
+  ) {
+    savedFrom.hash = "";
+    const savedFromEl = doc.createElement("meta");
+    savedFromEl.setAttribute("name", "spideryarn-saved-from");
+    savedFromEl.setAttribute("content", savedFrom.href);
+    head.insertBefore(savedFromEl, charsetEl.nextSibling);
+  }
 
   const scripts = copy.querySelectorAll("script");
   for (let i = 0; i < scripts.length; i++) {

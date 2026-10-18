@@ -68,6 +68,32 @@ describe("the base a fetched page's relative links resolve against", () => {
     expect(html).not.toContain("https://arxiv.org/abs/2608.13566v1/");
   });
 
+  /**
+   * **Nothing, for a saved page, whatever the file says it was saved from.**
+   * `savedFrom` is a claim out of the uploaded file, and it must never become
+   * the base a link resolves against nor `meta.url` (plan 261018j § Stage 3).
+   */
+  it("is nothing for an uploaded page, even one that says where it was saved from", async () => {
+    const store = memoryArtefacts();
+    store.plant("s", "fetch", "raw", {
+      kind: "html", file: "raw.html", origin: "upload", uploadId: "up_saved",
+      filename: "Entropy.html", savedFrom: "https://saved-from.example.org/html/2608.13566",
+      contentType: "text/html", encoding: "utf-8", bytes: 100, sha256: "a".repeat(64),
+      storedSha256: "a".repeat(64), storedBytes: 100, fetchedAt: "2026-10-18T00:00:00Z",
+    } satisfies RawManifest);
+    vi.mocked(readRawBytes).mockResolvedValue(new TextEncoder().encode(PAGE));
+    vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
+    vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
+    const result = await STEPS.extract.run({
+      slug: "s", upload: { id: "up_saved", filename: "Entropy.html" }, report: () => {}, preview: () => {},
+      signal: new AbortController().signal, cacheArticle: false, power: "standard",
+    }, store, nullCheckpointStore());
+    const html = result.parts?.extractedHtml ?? "";
+    expect(html).toContain("The apparatus");
+    expect(html).not.toContain("saved-from.example.org");
+    expect(result.parts?.meta?.url).toBeUndefined();
+  });
+
   it("is the job's address when the manifest has none", async () => {
     const html = await extracted(undefined);
     expect(html).toContain('src="https://arxiv.org/abs/2608.13566v1/x1.png"');
