@@ -135,9 +135,10 @@ readers never are.
 
 **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
 FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands straight
-after Summary, inside the Structure–Summary run, since 2026-10-11 (Greg: *"to the right of the
-summary"*, [261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md); it stood after
-Skim from 2026-10-08, and alone after the other modes until
+after Skim, at the end of the Structure–Summary–Skim run, since 2026-10-18 (Greg: *"after Skim but
+still in the same group"*, [261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md);
+it stood after Summary from 2026-10-11, [261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md),
+after Skim from 2026-10-08, and alone after the other modes until
 2026-10-08, when Greg asked for it *"as part of that group, rather than out on their own"*, which
 puts a menu button inside the modes' radiogroup —
 [261008d § D2](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md)

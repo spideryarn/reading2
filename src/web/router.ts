@@ -2029,6 +2029,23 @@ export function useJumpOrigin(): JumpOrigin | null {
 }
 
 /**
+ * **The whole stamp on the entry the reader is on, as a string** — its origin
+ * *and* the journeys behind it — or `""` for none. The return chip's timeout
+ * keys on this rather than on `useJumpOrigin`, because a second jump from the
+ * same block has the same origin and a new journey, and a clock started for the
+ * first must neither run on into the second nor strip it (GPT Sol, plan review
+ * of 261018e). A string, so `Object.is` compares it by value.
+ */
+export function jumpStampKey(): string {
+  if (isJumpArmed()) return "";
+  const stamp = readStamp(history.state);
+  return stamp === null ? "" : JSON.stringify(stamp);
+}
+export function useJumpStampKey(): string {
+  return useSyncExternalStore(subscribeToJumpStamp, jumpStampKey, () => "");
+}
+
+/**
  * That address with one parameter taken out, ready for a link to write its own.
  *
  * `"/read/x?cols=0,2&at=spya-old"` → `"/read/x?cols=0,2"`, and

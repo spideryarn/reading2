@@ -47,9 +47,14 @@
  * hide rule of any other kind** — not distance, not "you are already in that
  * section", and since 2026-09-16 not a depth limit either. A citation five
  * paragraphs away is a genuine pushed jump inside one section, and hiding the
- * chip there would suppress a real return: GPT Sol F2, 2026-09-06. The two
- * things that *do* remove it are the reader leaving the article and the reader
- * saying so (the ×).
+ * chip there would suppress a real return: GPT Sol F2, 2026-09-06. The things
+ * that *do* remove it are the reader leaving the article, the reader saying so
+ * (the ×), and since 2026-10-18 thirty seconds without interacting with it,
+ * which is the × pressed for them (`RETURN_CHIP_MS`, Greg's number). Hover or
+ * focus pauses that clock. That is time, not an inferred place, so F2's reason
+ * does not reach it: a reader who has left it alone for thirty seconds is not
+ * going to press it (spya-vzrjju).
+ * docs/plans/261018e-a-tap-on-a-cross-reference-shows-its-card-first-and-the-way-back-chip-goes-after-thirty-seconds.md.
  *
  * A stamp naming a block this article no longer has — the reader jumped, the
  * piece was re-extracted, the id went — draws nothing rather than a button that
@@ -57,11 +62,30 @@
  * stale `?at=`.
  */
 import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
 import { type Section, sectionIndexContaining } from "./position.js";
-import { dismissJumpOrigin, useJumpOrigin } from "./router.js";
+import { dismissJumpOrigin, jumpStampKey, useJumpOrigin, useJumpStampKey } from "./router.js";
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * **How long the chip waits to be pressed before it goes by itself** — Greg,
+ * 2026-10-17 (spya-vzrjju): *"after a while, if I haven't clicked it, probably
+ * I'm never gonna … 30 second timeout on it, and after that it just
+ * disappears"*. It goes as the × does, so Back is untouched.
+ */
+export const RETURN_CHIP_MS = 30_000;
+/** Its fade on the way out, `.return-chip-going` in dock.css. */
+const FADE_MS = 500;
 
 export function ReturnChip({
   sections,
@@ -76,14 +100,70 @@ export function ReturnChip({
 }) {
   const origin = useJumpOrigin();
   const label = origin === null ? null : labelFor(origin, sections, rowOf);
+  const stampKey = useJumpStampKey();
   if (label === null) return null;
+
+  /* The stateful half unmounts whenever the chip disappears, which resets
+     hover/focus before any later journey. Removing a focused or hovered DOM
+     node does not promise a blur/pointerleave, so keeping these states in this
+     always-mounted wrapper could exempt the next journey from its timeout
+     forever. It stays mounted across a new journey that remains visible, so a
+     pointer or focus still on the chip continues to hold it. */
+  return <VisibleReturnChip label={label} stampKey={stampKey} onReturn={onReturn} />;
+}
+
+function VisibleReturnChip({
+  label,
+  stampKey,
+  onReturn,
+}: {
+  label: string;
+  stampKey: string;
+  onReturn: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const held = hovered || focused;
+  const [going, setGoing] = useState(false);
+
+  /* The clock, per journey: keyed on the whole stamp, so a new jump starts it
+     again even from the same block, and the cleanup plus the check at the end
+     mean an older journey's clock can never strip a newer one's stamp (GPT
+     Sol, plan review). Held while the reader is on the chip; a fresh thirty
+     seconds once they leave it. Under reduced motion it goes without the fade. */
+  useEffect(() => {
+    setGoing(false);
+    if (held || stampKey === "") return;
+    const fadeMs = prefersReducedMotion() ? 0 : FADE_MS;
+    const fade = setTimeout(() => setGoing(true), RETURN_CHIP_MS);
+    const gone = setTimeout(() => {
+      if (jumpStampKey() === stampKey) dismissJumpOrigin();
+    }, RETURN_CHIP_MS + fadeMs);
+    return () => {
+      clearTimeout(fade);
+      clearTimeout(gone);
+    };
+  }, [stampKey, held]);
 
   return (
     /* `role="note"` and no live region, for `InstallHint`'s reason: this is a
        standing affordance rather than an announcement, and interrupting a
        screen-reader user mid-sentence to describe a pill they can reach in the
        ordinary tab order would be the wrong trade. */
-    <div className="return-chip" role="note">
+    <div
+      className={going ? "return-chip return-chip-going" : "return-chip"}
+      role="note"
+      /* A mouse or a pen resting on it holds it; a finger rests nowhere, and on
+         iOS its tap leaves a hover behind that would hold it for ever. */
+      onPointerEnter={(e) => {
+        if (e.pointerType !== "touch") setHovered(true);
+      }}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
       <button
         type="button"
         className="return-chip-go"

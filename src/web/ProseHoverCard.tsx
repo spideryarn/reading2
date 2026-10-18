@@ -658,10 +658,10 @@ function HoverCard({
        a foot button here, the precedence between a term and a citation on one
        `<mark>` would have to be decided; there is not, so it does not. */
     /* `:not(.xref)` for the selector's reason, and here it decides more than a
-       card: a tap this hook claims is a reveal, so a term under a
-       cross-reference would take the first tap and the jump would need a second.
-       Excluded, the tap falls through to TableView's click and jumps, as a
-       `BlockRef` does. */
+       card: a tap this hook claims is a reveal of *this* card, so a term under a
+       cross-reference would show the term. Excluded, the tap is
+       BlockLinkCard's: its first tap shows the target passage, its second falls
+       through to TableView's click and jumps (plan 261018e, spya-yk33ke). */
     tapSelector: `mark.term:not(.xref), mark.cite:not(.xref), a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch

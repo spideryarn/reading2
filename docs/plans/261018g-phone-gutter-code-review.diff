@@ -1,0 +1,224 @@
+diff --git a/docs/project/touch.md b/docs/project/touch.md
+index 8015acfc3..582807c52 100644
+--- a/docs/project/touch.md
++++ b/docs/project/touch.md
+@@ -517,6 +517,15 @@ has the numbers.
+ [261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
+ depends on the side.)
+ 
++**On a narrow touch screen there is no column, since 2026-10-18.** Under
++`(max-width: 731px) and (hover: none)` the right pad shrinks to a 1.25rem strip. At rest it holds
++only state: the marks, without their counts, and the reading-time hairline at the outer edge. The
++tap that selects a row turns the gutter into a horizontal bar above the paragraph. Everything below
++about which row is selected still holds; only where the icons are drawn changes. Greg, on a phone:
++*"we only need it when there's an explicit action"* (spya-k49y3q,
++[261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). The iPad keeps the
++column.
++
+ **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
+ The bookmark and the blue chat mark are facts about the article and are always there; the permalink,
+ the chat door, the "?" and the "…" wait to be asked for. A finger has no hover, so on 2026-09-04 the
+diff --git a/src/web/styles/gutter.css b/src/web/styles/gutter.css
+index cdbf740d4..43426bd43 100644
+--- a/src/web/styles/gutter.css
++++ b/src/web/styles/gutter.css
+@@ -1085,3 +1085,97 @@ td.text.kind-heading .blk-gutter[data-open] {
+     width: calc(min(var(--read, 0), 1) * (100% + 1.25rem));
+   }
+ }
++
++/* -------------------------------------- a narrow screen and a finger -----
++   **On a phone the column of icons is gone, and a tap brings them up in a bar
++   above the paragraph instead**, since 2026-10-18. Greg, on a phone in
++   portrait (spya-k49y3q):
++
++   > it does seem like a waste that there's a bit of space to the right of
++   > every single paragraph on a portrait mobile phone where that horizontal
++   > real estate is really precious that we're not using most of the time, and
++   > that we only need it when there's an explicit action.
++
++   The condition is narrow-window.css's, plus a finger: the same query shrinks
++   the right pad there to 1.25rem, which holds only what the column shows at
++   rest. docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md
++   has the measurements and the options passed over.
++
++   **At rest it is the same element, flush with the cell's right edge**
++   (`--blk-gutter-x` is 0 here) and still a 24px-wide box, so a mark keeps its
++   24px target. The box reaches a few px past the pad into the prose, which costs
++   nothing because the empty slots are `pointer-events: none`. Only a row with a
++   mark has a target there. The glyph is pushed to the box's right so it is drawn
++   inside the pad, and the reading-time hairline moves to the cell's outer edge,
++   because the pad has no room for both a gap and a glyph. The counts wait for
++   the bar.
++
++   **A tap turns the same element into the bar.** It is the same element, so it
++   has the same handlers and the same one copy of every control (§ What "…"
++   opens says why that matters). Everything this file says about how many
++   controls a row has room for is switched off for it. The bar is one row, never
++   more than four controls (the mark and the bookmark button share one, see
++   BlockGutter.tsx), and each control is shown by name rather than left to the
++   container queries. Those stop matching once the box is no longer a size
++   container (GPT Sol, plan review). So there is no "…" here.
++
++   It overhangs **upward**, over the gap and the right-hand end of the line
++   before. The finger is on the paragraph, and the lines below are the ones
++   being read. It is opaque, and it takes its own hits for the reason the open
++   panel does: `.blk-gutter` is in TableView's `NOT_A_BLOCK_SELECTION`, so a tap
++   on its padding selects nothing underneath.
++
++   **Specificity:** `tr.row-active td.text .blk-gutter` is (0,3,2), above a
++   heading's bottom-aligned box and a footnote's offset (both (0,2,1)). The
++   opacities are left alone: § the touch reveal's 0.705 is measured against
++   `--page`, which is what the bar paints. */
++@media (max-width: 731px) and (hover: none) {
++  .blk-gutter > * {
++    justify-content: flex-end;
++    padding-inline-end: 4px;
++  }
++  .blk-gutter .blk-n,
++  .blk-gutter .block-chat-n { display: none; }
++  .blk-gutter > span.blk-read {
++    right: 0;
++    width: calc(min(var(--read, 0), 1) * 2px);
++  }
++  .blk-gutter > span.blk-read::before {
++    width: calc(min(var(--read, 0), 1) * var(--text-pad-r));
++  }
++
++  tr.row-active td.text .blk-gutter {
++    container-type: normal;
++    top: auto;
++    bottom: calc(100% - var(--blk-top) + 2px);
++    width: auto;
++    height: auto;
++    grid-auto-flow: column;
++    grid-template-columns: none;
++    grid-auto-columns: auto;
++    grid-template-rows: var(--blk-slot);
++    column-gap: max(0.5rem, 8px);
++    align-content: center;
++    padding: 2px 6px;
++    z-index: 3;
++    background: var(--page);
++    border: 1px solid var(--border);
++    border-radius: 4px;
++    box-shadow: 0 2px 8px oklch(0 0 0 / calc(0.35 * var(--shadow-strength)));
++    pointer-events: auto;
++  }
++  tr.row-active td.text .blk-gutter > :is(.blk-cmt, .blk-permalink, .block-chat, .blk-bookmark, .blk-help) {
++    display: inline-flex;
++    justify-content: center;
++    padding: 0;
++    min-width: var(--blk-slot);
++  }
++  tr.row-active td.text .blk-gutter > .blk-cmt {
++    opacity: 1;
++    pointer-events: auto;
++  }
++  tr.row-active td.text .blk-gutter > .blk-more,
++  tr.row-active td.text .blk-gutter > span.blk-read { display: none; }
++  tr.row-active td.text .blk-gutter .blk-n,
++  tr.row-active td.text .blk-gutter .block-chat-n { display: inline; }
++}
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index fc357879b..cb474e947 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -120,6 +120,31 @@
+      the merge that introduced the second and third readers, 2026-09-05. */
+   .reader { --text-pad-l: 0.9rem; }
+ 
++  /* **On a finger, the column of icons gives its room back to the prose**,
++     since 2026-10-18. Greg, on a phone in portrait: *"it does seem like a
++     waste that there's a bit of space to the right of every single paragraph
++     … where that horizontal real estate is really precious that we're not
++     using most of the time"* (spya-k49y3q). The icons come up in a bar above
++     the paragraph a tap selects (gutter.css § a narrow screen and a finger),
++     so the right pad only has to hold the state the column shows at rest: a
++     15px mark and the reading-time hairline. And the text edges towards the
++     spine, as he asked. About 20px more line at 390 wide.
++
++     `(hover: none)` because a narrow window with a mouse has no tap to
++     select a row, and keeps the column it reveals on hover. That also means
++     an iPad in a narrow split view gets this, which is right: the question
++     is room and a finger, not the device. `--blk-gutter-x` goes to zero
++     because the gutter's box now sits flush with the cell's right edge, and
++     every rule that offsets by it (the gutter, a footnote's gutter) follows.
++     docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md. */
++  @media (hover: none) {
++    .reader {
++      --text-pad-l: 0.6rem;
++      --text-pad-r: 1.25rem;
++      --blk-gutter-x: 0px;
++    }
++  }
++
+   /* ------------------------------------------------------------------------
+      The two bars that were silently eating their own controls.
+ 
++/**
++ * **On a narrow touch screen the gutter's column gives its room to the prose,
++ * and a tap brings the icons up in a bar above the paragraph** — gutter.css
++ * § a narrow screen and a finger, narrow-window.css's matching pad tokens.
++ * docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md.
++ *
++ * The browser check is the real evidence (a desktop Chrome harness never
++ * matches `(hover: none)`); this pins the declarations it depends on, so a
++ * later edit that quietly drops one is caught here rather than on a phone.
++ */
++import { describe, expect, it } from "vitest";
++import { mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
++
++const css = readerCssNoComments();
++const PHONE = "(max-width: 731px) and (hover: none)";
++
++/** The declarations of one rule inside `block`, whitespace flattened. */
++function rule(block: string, selector: string): string {
++  for (const m of block.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
++    const whole = (m[1] ?? "").replace(/\s+/g, " ").trim();
++    // Split at top-level commas only, so an `:is(a, b)` stays one selector.
++    const parts = whole.split(/,(?![^()]*\))/).map((p) => p.trim());
++    if (whole === selector || parts.includes(selector)) return (m[2] ?? "").replace(/\s+/g, " ").trim();
++  }
++  throw new Error(`no rule for \`${selector}\``);
++}
++
++describe("a narrow touch screen: the gutter as a bar above the paragraph", () => {
++  const block = mediaBlock(css, PHONE, ".blk-permalink");
++  const BAR = "tr.row-active td.text .blk-gutter";
++
++  it("narrows both pads, and only under a finger", () => {
++    const narrow = mediaBlock(css, "(max-width: 731px)", "--text-pad-l: 0.9rem");
++    const touch = mediaBlock(narrow, "(hover: none)", "--text-pad-r");
++    expect(touch).toMatch(/--text-pad-l:\s*0\.6rem/);
++    expect(touch).toMatch(/--text-pad-r:\s*1\.25rem/);
++    expect(touch).toMatch(/--blk-gutter-x:\s*0px/);
++  });
++
++  it("makes the selected row's gutter one horizontal row that takes its own taps", () => {
++    const bar = rule(block, BAR);
++    expect(bar).toContain("grid-auto-flow: column");
++    expect(bar).toContain("container-type: normal");
++    expect(bar).toContain("pointer-events: auto");
++    expect(bar).toContain("top: auto");
++    expect(bar).toMatch(/bottom: calc\(100% - var\(--blk-top\)/);
++    expect(bar).toContain("z-index: 3");
++  });
++
++  it("shows every control by name, because the container queries no longer apply", () => {
++    const shown = rule(
++      block,
++      `${BAR} > :is(.blk-cmt, .blk-permalink, .block-chat, .blk-bookmark, .blk-help)`,
++    );
++    expect(shown).toContain("display: inline-flex");
++    expect(rule(block, `${BAR} > .blk-more`)).toContain("display: none");
++    const mark = rule(block, `${BAR} > .blk-cmt`);
++    expect(mark).toContain("opacity: 1");
++    expect(mark).toContain("pointer-events: auto");
++  });
++
++  it("hides the counts at rest and gives them back in the bar", () => {
++    expect(rule(block, ".blk-gutter .blk-n")).toContain("display: none");
++    expect(rule(block, `${BAR} .block-chat-n`)).toContain("display: inline");
++  });
++});

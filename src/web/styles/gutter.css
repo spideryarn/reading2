@@ -1085,3 +1085,100 @@ td.text.kind-heading .blk-gutter[data-open] {
     width: calc(min(var(--read, 0), 1) * (100% + 1.25rem));
   }
 }
+
+/* -------------------------------------- a narrow screen and a finger -----
+   **On a phone the column of icons is gone, and a tap brings them up in a bar
+   above the paragraph instead**, since 2026-10-18. Greg, on a phone in
+   portrait (spya-k49y3q):
+
+   > it does seem like a waste that there's a bit of space to the right of
+   > every single paragraph on a portrait mobile phone where that horizontal
+   > real estate is really precious that we're not using most of the time, and
+   > that we only need it when there's an explicit action.
+
+   The condition is narrow-window.css's, plus a finger: the same query shrinks
+   the right pad there to a narrow strip, which holds only what the column shows
+   at rest. docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md
+   has the measurements and the options passed over.
+
+   **At rest it is the same element, flush with the cell's right edge**
+   (`--blk-gutter-x` is 0 here) and still a 24px-wide box, so a mark keeps its
+   24px target. The box reaches a few px past the pad into the prose, which costs
+   nothing because the empty slots are `pointer-events: none`. Only a row with a
+   mark has a target there. The glyph is pushed to the box's right so it is drawn
+   inside the pad, and the reading-time hairline moves to the cell's outer edge,
+   because the pad has no room for both a gap and a glyph. The counts wait for
+   the bar.
+
+   **A tap turns the same element into the bar.** It is the same element, so it
+   has the same handlers and the same one copy of every control (§ What "…"
+   opens says why that matters). Everything this file says about how many
+   controls a row has room for is switched off for it. The bar is one row, never
+   more than four controls (the mark and the bookmark button share one, see
+   BlockGutter.tsx), and each control is shown by name rather than left to the
+   container queries. Those stop matching once the box is no longer a size
+   container (GPT Sol, plan review). So there is no "…" here.
+
+   It overhangs **upward**, over the gap and the right-hand end of the line
+   before. The finger is on the paragraph, and the lines below are the ones
+   being read. It is opaque, and it takes its own hits for the reason the open
+   panel does: `.blk-gutter` is in TableView's `NOT_A_BLOCK_SELECTION`, so a tap
+   on its padding selects nothing underneath.
+
+   **Specificity:** `tr.row-active td.text .blk-gutter` is (0,3,2), above a
+   heading's bottom-aligned box and a footnote's offset (both (0,3,1)). The
+   opacities are left alone: § the touch reveal's 0.705 is measured against
+   `--page`, which is what the bar paints. */
+@media (max-width: 731px) and (hover: none) {
+  .blk-gutter > * {
+    justify-content: flex-end;
+    padding-inline-end: 4px;
+  }
+  .blk-gutter .blk-n,
+  .blk-gutter .block-chat-n { display: none; }
+  .blk-gutter > span.blk-read {
+    right: 0;
+    width: calc(min(var(--read, 0), 1) * 2px);
+  }
+  .blk-gutter > span.blk-read::before {
+    /* Keep the coarse-pointer target at the same 24px-or-larger floor as the
+       controls. It overhangs the visual pad by the same few pixels as their
+       targets, and their z-index keeps a visible control on top. */
+    width: calc(min(var(--read, 0), 1) * var(--blk-slot));
+  }
+
+  tr.row-active td.text .blk-gutter {
+    container-type: normal;
+    top: auto;
+    bottom: calc(100% - var(--blk-top) + 2px);
+    width: auto;
+    height: auto;
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: auto;
+    grid-template-rows: var(--blk-slot);
+    column-gap: max(0.5rem, 8px);
+    align-content: center;
+    padding: 2px 6px;
+    z-index: 3;
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px oklch(0 0 0 / calc(0.35 * var(--shadow-strength)));
+    pointer-events: auto;
+  }
+  tr.row-active td.text .blk-gutter > :is(.blk-cmt, .blk-permalink, .block-chat, .blk-bookmark, .blk-help) {
+    display: inline-flex;
+    justify-content: center;
+    padding: 0;
+    min-width: var(--blk-slot);
+  }
+  tr.row-active td.text .blk-gutter > .blk-cmt {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  tr.row-active td.text .blk-gutter > .blk-more,
+  tr.row-active td.text .blk-gutter > span.blk-read { display: none; }
+  tr.row-active td.text .blk-gutter .blk-n,
+  tr.row-active td.text .blk-gutter .block-chat-n { display: inline; }
+}

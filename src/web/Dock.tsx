@@ -701,8 +701,8 @@ interface Props {
  * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
  * mode icon into the same group after structure and summary"* (spya-wm5gu2,
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
- * The More button stands in the same run, straight after Summary since
- * 2026-10-11 (`MORE_AFTER`).
+ * The More button stands in the same run, at its end straight after Skim since
+ * 2026-10-18 (`MORE_AFTER`).
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
@@ -1210,18 +1210,20 @@ function drawnCount(bar: DockBar): number {
 }
 
 /**
- * **The row More stands straight after: Summary.** Greg, 2026-10-11
- * (spya-hdde62): *"the triple dot more button that displays more modes. Let's
- * move that to the right of the summary, and maybe, maybe to the right of the
- * skim mode."* It had stood after Skim, at the end of the shape run, since
- * 2026-10-08 (spya-mcs4gb, plan 261008d); it is still inside that run, so no
- * line stands either side of it, and Diagram and Skim follow it.
- * docs/plans/261011x-more-button-after-summary-in-the-bottom-bar.md.
- * **Wherever that place can be seen** — on a phone where it is off the edge,
- * More leads the frame instead (`bandsInOrder`, plan 261009c), which since
- * this move no phone the bar has been measured on needs.
+ * **The row More stands straight after: Skim**, the last of the shape run.
+ * Greg, 2026-10-17 (spya-c0va9e): *"Move the three dots mode one to the right
+ * in the bottom bar after Skim but still in the same group"*. It is still
+ * inside that run, so no line stands between Skim and More; the shape run's
+ * line stands straight after More, before the next run.
+ * docs/plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md.
+ * History: after Skim from 2026-10-08 (spya-mcs4gb, plan 261008d), after
+ * Summary from 2026-10-11 (spya-hdde62, plan 261011x), and after Skim again
+ * since 2026-10-18.
+ * **Wherever that place can be seen** — on a phone with Diagram drawn it is
+ * off the edge (plan 261009c measured x 354–398), and More leads the frame
+ * instead (`bandsInOrder`).
  */
-const MORE_AFTER: Mode = "summary";
+const MORE_AFTER: Mode = "skim";
 
 /**
  * **The bands' frame, cut where More goes**: everything up to the drawn row of
@@ -3094,7 +3096,7 @@ function DockModes({
      the radiogroup. Greg then asked for it *"just after the skim mode … as part
      of that group, rather than out on their own"* (spya-mcs4gb), so it stands
      inside the bands' frame in the shape run (`cutForMore`; straight after
-     Summary since 2026-10-11, spya-hdde62) — and
+     Skim since 2026-10-18, spya-c0va9e) — and
      so inside the `role="radiogroup"`, which 261007c D6 had kept it out of.
      It is between two radios in reading order, so in the DOM it has to be;
      the cost and the options weighed are in
@@ -3472,7 +3474,7 @@ type MorePick =
  * **Not a radio, but inside the radiogroup since 2026-10-08**, in the bands'
  * frame (`cutForMore`), because Greg asked for it *"just after the skim mode …
  * as part of that group, rather than out on their own"* (spya-mcs4gb), and
- * straight after Summary since 2026-10-11 (`MORE_AFTER`, spya-hdde62) — or first in that frame where its place is off a phone's
+ * straight after Skim since 2026-10-18 (`MORE_AFTER`, spya-c0va9e) — or first in that frame where its place is off a phone's
  * edge (`bandsInOrder`, plan 261009c). It had a frame of its own after the radiogroup for a day
  * (261007c D6), kept out because a menu button is not one of *what the middle
  * column shows*. Between two radios in reading order, the DOM has to put it

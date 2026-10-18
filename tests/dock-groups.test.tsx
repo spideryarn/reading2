@@ -15,6 +15,10 @@
  * And, 2026-10-11, inside that group: *"Let's move that to the right of the
  * summary, and maybe, maybe to the right of the skim mode."* (spya-hdde62;
  * docs/plans/261011x-more-button-after-summary-in-the-bottom-bar.md).
+ *
+ * And, 2026-10-17, one place on: *"Move the three dots mode one to the right
+ * in the bottom bar after Skim but still in the same group"* (spya-c0va9e;
+ * docs/plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md).
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -88,31 +92,31 @@ const frames = () =>
 const L = MODE_LABEL;
 
 describe("the reading view's frames", () => {
-  it("draws More straight after Summary in Structure's frame, and Comments after Marginalia", () => {
+  it("draws More straight after Skim in Structure's frame, and Comments after Marginalia", () => {
     reading();
     expect(frames()).toEqual([
       [L.plain],
-      [L.structure, L.summary, "More", L.skim, L.sources, L.search, L.chat, L.learn],
+      [L.structure, L.summary, L.skim, "More", L.sources, L.search, L.chat, L.learn],
       [L.marginalia, "Comments"],
     ]);
     const home = host.querySelector<HTMLElement>(`[${MORE_HOME_ATTR}]`);
-    expect(home?.getAttribute("aria-label")).toBe(L.summary);
+    expect(home?.getAttribute("aria-label")).toBe(L.skim);
     expect(host.querySelectorAll(`[${MORE_HOME_ATTR}]`)).toHaveLength(1);
   });
 
-  it("with the switch on, More still stands after Summary, before Diagram and Skim", () => {
+  it("with the switch on, More still stands after Skim, after Summary and Diagram", () => {
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, "More", L.diagram, L.skim]);
+    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
   });
 
   it("a gathered mode drawn while open stands after the shape run, as a run of its own", () => {
     reading({ mode: "glossary" });
-    expect(frames()[1]).toEqual([L.structure, L.summary, "More", L.skim, L.glossary, L.sources, L.search, L.chat, L.learn]);
+    expect(frames()[1]).toEqual([L.structure, L.summary, L.skim, "More", L.glossary, L.sources, L.search, L.chat, L.learn]);
     const glossary = host.querySelector(`[aria-label="${L.glossary}"]`) as HTMLElement;
     expect(glossary.classList.contains("dock-group-start")).toBe(true);
   });
 
-  it("every gathered mode, open, stands straight after Skim, switch on or off, and More after Summary", () => {
+  it("every gathered mode, open, stands straight after Skim and More, switch on or off", () => {
     for (const [experimental, modes] of [
       [EXPERIMENTAL_OFF, ["quotes", "glossary", "ideas"]],
       [EXPERIMENTAL_ON, ["quotes", "glossary", "faq", "ideas", "timeline"]],
@@ -120,19 +124,20 @@ describe("the reading view's frames", () => {
       for (const mode of modes) {
         reading({ experimental, mode });
         const bands = frames()[1] ?? [];
-        expect(bands[bands.indexOf(L.skim) + 1], `${mode}, switch ${experimental.on}`).toBe(L[mode]);
-        expect(bands[bands.indexOf("More") - 1], `${mode}, switch ${experimental.on}`).toBe(L.summary);
+        expect(bands[bands.indexOf("More") - 1], `${mode}, switch ${experimental.on}`).toBe(L.skim);
+        expect(bands[bands.indexOf("More") + 1], `${mode}, switch ${experimental.on}`).toBe(L[mode]);
       }
     }
   });
 
-  it("draws no line either side of More, and one after Skim", () => {
+  it("draws no line between Skim and More, then a line after the shape run", () => {
     reading();
     const more = moreTrigger(host) as HTMLElement;
     expect(more.classList.contains("dock-group-start")).toBe(false);
     const skim = host.querySelector(`[aria-label="${L.skim}"]`) as HTMLElement;
     expect(skim.classList.contains("dock-group-start")).toBe(false);
     const sources = host.querySelector(`[aria-label="${L.sources}"]`) as HTMLElement;
+    expect(more.nextElementSibling, "Sources follows More directly").toBe(sources);
     expect(sources.classList.contains("dock-group-start")).toBe(true);
     const search = host.querySelector(`[aria-label="${L.search}"]`) as HTMLElement;
     expect(search.classList.contains("dock-group-start")).toBe(true);
@@ -170,15 +175,15 @@ describe("the reading view's frames", () => {
 });
 
 describe("off the reading view, the same frames as links", () => {
-  it("draws More after Summary and the Comments link after Marginalia", () => {
+  it("draws More after Skim and the Comments link after Marginalia", () => {
     loose();
     expect(frames()).toEqual([
       [L.plain],
-      [L.structure, L.summary, "More", L.skim, L.sources, L.search, L.chat, L.learn],
+      [L.structure, L.summary, L.skim, "More", L.sources, L.search, L.chat, L.learn],
       [L.marginalia, "Comments"],
     ]);
     const home = host.querySelector<HTMLElement>(`[${MORE_HOME_ATTR}]`);
-    expect(home?.getAttribute("aria-label")).toBe(L.summary);
+    expect(home?.getAttribute("aria-label")).toBe(L.skim);
     expect(host.querySelectorAll(`[${MORE_HOME_ATTR}]`)).toHaveLength(1);
     const comments = host.querySelector<HTMLElement>('[aria-label="Comments"]') as HTMLElement;
     expect(comments.tagName).toBe("A");
@@ -188,7 +193,7 @@ describe("off the reading view, the same frames as links", () => {
 describe("More's fallback when its named home is absent", () => {
   it("puts More at the end and marks the last drawn row as its home", () => {
     const bands = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter(
-      (m) => m.group !== "exit" && m.mode !== "marginalia" && m.mode !== "summary",
+      (m) => m.group !== "exit" && m.mode !== "marginalia" && m.mode !== "skim",
     );
     const [lead, rest] = cutForMore(bands);
     expect(lead).toEqual(bands);

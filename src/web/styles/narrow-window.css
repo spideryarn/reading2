@@ -120,6 +120,33 @@
      the merge that introduced the second and third readers, 2026-09-05. */
   .reader { --text-pad-l: 0.9rem; }
 
+  /* **On a finger, the column of icons gives its room back to the prose**,
+     since 2026-10-18. Greg, on a phone in portrait: *"it does seem like a
+     waste that there's a bit of space to the right of every single paragraph
+     … where that horizontal real estate is really precious that we're not
+     using most of the time"* (spya-k49y3q). The icons come up in a bar above
+     the paragraph a tap selects (gutter.css § a narrow screen and a finger),
+     so the right pad only has to hold the state the column shows at rest: a
+     15px mark, its 4px end inset and the reading-time hairline. The 19px floor
+     keeps those fixed-pixel pieces inside the pad at the smaller browser roots
+     the reader supports; 1.25rem still wins at the ordinary 16px root. And the
+     text edges towards the spine, as he asked. About 20px more line at 390 wide.
+
+     `(hover: none)` because a narrow window with a mouse has no tap to
+     select a row, and keeps the column it reveals on hover. That also means
+     an iPad in a narrow split view gets this, which is right: the question
+     is room and a finger, not the device. `--blk-gutter-x` goes to zero
+     because the gutter's box now sits flush with the cell's right edge, and
+     every rule that offsets by it (the gutter, a footnote's gutter) follows.
+     docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md. */
+  @media (hover: none) {
+    .reader {
+      --text-pad-l: 0.6rem;
+      --text-pad-r: max(1.25rem, 19px);
+      --blk-gutter-x: 0px;
+    }
+  }
+
   /* ------------------------------------------------------------------------
      The two bars that were silently eating their own controls.
 

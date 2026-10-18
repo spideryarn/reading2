@@ -112,7 +112,7 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     shows: "The bottom bar alone, Plain open, on the admin’s own copy of a public article.",
     article: "Great Hackers (gh-spya-whnhkx)",
     window: "1440×900 at 2×",
-    taken: "2026-10-07",
+    taken: "2026-10-18",
   },
   "spine-walk.gif": {
     src: spineWalkGif,

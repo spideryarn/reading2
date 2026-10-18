@@ -306,8 +306,9 @@ td.text.note-open {
   padding: 0.5rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
-/* The sentence under the button: why this press replaces the list, or that the
-   last one found nothing (plan 261004f). */
+/* The sentence under the button: that the last press found nothing (plan
+   261004f). Why a press replaces the list is behind `.gloss-more-why` since
+   plan 261018f. */
 .gloss-more-note {
   margin: 0.35rem 0 0;
   color: var(--ink-faint);
@@ -315,6 +316,28 @@ td.text.note-open {
   font-size: 0.8rem;
   line-height: 1.35;
 }
+/* The (i) beside *Write a new list*: Referee's `.ref-rules` without a word. */
+.gloss-more-why {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.gloss-more-why:hover { color: var(--ink); border-color: var(--rule); }
+.gloss-more-why.on { color: var(--ink); border-color: var(--rule-strong); }
+.gloss-more-why:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* `.tap-target` gives a finger 40px, reaching as much as 9.5px past this
+   button at the supported 12px root. The 6px margin plus `.gloss-actions`'s
+   0.35rem gap leaves 10.2px there, so it cannot take *Write a new list*'s
+   right edge (controls.md § `.tap-target` owes its caller room). */
+@media (any-pointer: coarse) {
+  .gloss-more-why { margin-left: 6px; }
+}
+.gloss-more-why-card { max-width: min(24rem, calc(100vw - 1.75rem)); }
 .gloss-actions {
   display: flex;
   flex-wrap: wrap;

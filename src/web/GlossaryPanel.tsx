@@ -89,6 +89,7 @@ import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
+import { usePressToggle } from "./usePressToggle.js";
 import {
   ASK_ENTRY_IN_CHAT,
   AskInChatButton,
@@ -2235,8 +2236,9 @@ function MoreRow({
    * `existingFor` (src/glossary.ts) refuses to merge when the article or the
    * profile differs, or the list is one today's prompt may not add to
    * (`appendableVersion`), so a button saying "more" would replace the list.
-   * It says *Write a new list* instead, with the reason under it, and its
-   * tooltip says the rest plainly: some terms may go. Terms the reader added survive (they are outside the
+   * It says *Write a new list* instead, with the reason behind the adjacent
+   * (i). Its card says the rest plainly: some terms may go. Terms the reader
+   * added survive (they are outside the
    * document, `glossary_lookups.added_name`), and so does anything keyed to an
    * entry the new run finds again under the same name, when the article has
    * not changed (`idsByTerm`); a `?term=` link, a *Dig deeper* answer or a hide
@@ -2264,8 +2266,9 @@ function MoreRow({
   /* *Find terms again* until 2026-10-04, when Greg could not tell what it did
      (spya-try2v7). It is rare now — an appendable list an older prompt wrote
      is added to (src/glossary.ts § `appendableVersion`) — and what is left
-     says what it does in the label, and why in a sentence beside it rather
-     than only in a tooltip, which a touch screen never shows. Plan 261004f. */
+     says what it does in the label, and why behind an (i) whose card a tap
+     opens too (`WhyANewList`) — a line under the button from plan 261004f
+     until plan 261018f. */
   const label = rewrites ? "Write a new list" : "Find more";
   const title = rewrites
     ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"
@@ -2324,19 +2327,48 @@ function MoreRow({
           <Search size={12} />
           {label}
         </Button>
+        {rewrites ? <WhyANewList /> : null}
       </div>
-      {rewrites ? (
-        <p className="gloss-more-note">
-          The article, your profile or how we write glossaries has changed since these terms were
-          found, so this replaces the list. Terms you added are kept.
-        </p>
-      ) : foundNothing ? (
+      {!rewrites && foundNothing ? (
         /* Said, because a *Find more* that found nothing otherwise looks like
            a button that did nothing — QuotesPanel.tsx § `Foot` has the same
            line for the same reason. */
         <p className="gloss-more-note">No more terms worth adding turned up.</p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * **Why *Write a new list* replaces rather than adds**, behind an (i) beside
+ * it. It was a line under the button (plan 261004f) until Greg, 2026-10-17
+ * (spya-xtkv73): *"Hide this behind a button or something with a tooltip so it
+ * doesn't take up valuable screen real estate"*. A press toggles the card, as
+ * Referee's *How to read this* does, because a touch screen never hovers and
+ * 261004f's reason for the line still holds. Plan 261018f.
+ */
+function WhyANewList() {
+  // usePressToggle.ts says why a press that closes has to be remembered.
+  const { open, onOpenChange, trigger } = usePressToggle();
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={onOpenChange}
+      className="gloss-more-why-card"
+      content="The article, your profile or how we write glossaries has changed since these terms were found, so this replaces the list. Terms you added are kept."
+    >
+      <button
+        type="button"
+        className={`gloss-more-why tap-target${open ? " on" : ""}`}
+        aria-label="Why a new list?"
+        aria-expanded={open}
+        {...trigger}
+      >
+        <Info size={13} aria-hidden="true" />
+      </button>
+    </Tooltip>
   );
 }
 
