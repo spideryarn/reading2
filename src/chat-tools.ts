@@ -54,8 +54,8 @@
  * the browser and a model can ask for a tool it was never shown. A caller that
  * says no kind gets the shared eight and nothing else. Until 2026-10-07 only
  * `reader_notes` was checked, which was enough while every other kind was
- * offered all eight; the guide is offered five (`GUIDE_TOOLS`), so the check
- * moved to the top of the dispatcher (GPT Sol's F1 on
+ * offered all eight; the guide is offered its own list (`GUIDE_TOOLS`, and more
+ * when typed), so the check moved to the top of the dispatcher (GPT Sol's F1 on
  * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md).
  *
  * ## What may be logged from this file
@@ -93,7 +93,7 @@ import { guideModeKeys } from "./guide.js";
 import { checkNextSteps, MAX_ASK_CHARS, MAX_CHAT_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
-import { FetchFailure, fetchDocument } from "./fetch.js";
+import { FetchBeforeRequestVeto, FetchFailure, fetchDocument } from "./fetch.js";
 import { findPassages } from "./search.js";
 import { fold, parseQuery } from "./library-search.js";
 import { termPattern } from "./term-match.js";
@@ -255,10 +255,17 @@ export interface ToolContext {
   /**
    * What kind of conversation the turn is in — and so which tools it may run
    * (`toolsFor`). **Absent means the shared eight only**, which is what Live's
-   * endpoint gets by passing none: it has no thread to name. Fails closed, so a
+   * endpoint passes for every session but a guide's. Fails closed, so a
    * new caller that forgets this cannot reach a kind-gated tool by accident.
    */
   kind?: ThreadKind | undefined;
+  /**
+   * **A live session's call**, gated by what Live offers (`spokenToolsFor`),
+   * not by the typed kind's list. Since 2026-10-18 the two differ by a web
+   * fetch: the typed guide reads pages, a spoken guide does not, and
+   * `read_web_page` is a name Live's endpoint accepts for Chat's sessions.
+   */
+  spoken?: true | undefined;
   /**
    * The conversation the turn is in. `reader_notes` leaves it out of what it
    * lists and refuses to read it back: it is already in front of the model.
@@ -616,7 +623,9 @@ const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL,
  * `read_web_page`, no reads of the reader's other articles, no notes, and no
  * OpenRouter web search (`webSearchTool` in src/converse.ts). The article tools
  * stay, so it can say where in the piece something is. These are also what Live
- * is offered; the typed guide adds `SEARCH_WEB_TOOL` and its two offers.
+ * is offered (`spokenToolsFor`); the typed guide adds `SEARCH_WEB_TOOL`, since
+ * 2026-10-18 `read_web_page` (`READ_WEB_PAGE_TOOL`, Greg's reply B to
+ * q-g492eq), and its two offers.
  *
  * Named here and picked out of `CHAT_TOOLS`, so a definition has one home and
  * a name with no definition fails at load rather than offering nothing.
@@ -811,8 +820,41 @@ export const SEARCH_WEB_PER_TURN = 2;
  */
 const searchesThisTurn = new WeakMap<ToolContext, number>();
 
-/** What `toolsFor("guide")` offers a typed guide: its article tools, its search, then the two offers. Built once, for the cached prefix. */
-const GUIDE_TYPED_TOOLS: FunctionTool[] = [...GUIDE_TOOLS, SEARCH_WEB_TOOL, OFFER_TO_SAVE_TOOL, OFFER_NEXT_STEPS_TOOL];
+/**
+ * **`read_web_page` for the typed guide: Chat's tool, Chat's checks, any
+ * address** — Greg's reply B (`spya-cab6zp`, 2026-10-18) to q-g492eq, plan
+ * docs/plans/261017e-bring-a-web-page-into-chat.md § Stage 2. The allowlist
+ * of handed addresses that plan first proposed was declined, so a hostile
+ * article can have the guide put what it holds, About you included, into an
+ * address it fetches: risk R29 in docs/project/security-risks.md, accepted.
+ *
+ * Picked out of `CHAT_TOOLS` by name, as `GUIDE_TOOLS` is, so the description
+ * has one home.
+ */
+const READ_WEB_PAGE_TOOL: FunctionTool = (() => {
+  const tool = CHAT_TOOLS.find((t) => t.function.name === "read_web_page");
+  if (!tool) throw new Error("CHAT_TOOLS no longer defines read_web_page");
+  return tool;
+})();
+
+/**
+ * At most this many pages a guide turn; a second is refused before any fetch.
+ * The guide's answers are meant to be short, and a page is up to 12,000
+ * characters and 20 seconds (GPT Sol's F6 on plan 261017e). Chat is uncapped.
+ */
+export const READ_WEB_PAGE_PER_TURN_GUIDE = 1;
+
+/** Guide reads that reached their first HTTP request, per turn, keyed as `searchesThisTurn` is. */
+const guideReadsThisTurn = new WeakMap<ToolContext, number>();
+
+/** What `toolsFor("guide")` offers a typed guide: its article tools, its search and page-reading, then the two offers. Built once, for the cached prefix. */
+const GUIDE_TYPED_TOOLS: FunctionTool[] = [
+  ...GUIDE_TOOLS,
+  SEARCH_WEB_TOOL,
+  READ_WEB_PAGE_TOOL,
+  OFFER_TO_SAVE_TOOL,
+  OFFER_NEXT_STEPS_TOOL,
+];
 
 /**
  * The tools of ours a conversation of this kind is offered.
@@ -841,9 +883,18 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
   }
 }
 
-/** The tools a `runTool` caller has: its kind's, or the shared eight when it names none. */
-const toolsOf = (kind: ThreadKind | undefined): FunctionTool[] =>
-  kind === undefined ? CHAT_TOOLS : toolsFor(kind);
+/**
+ * The tools a live (spoken) session of this kind is offered: a guide's article
+ * tools (`GUIDE_TOOLS`, no web), or the shared eight. src/live.ts § `liveTools`
+ * offers these, and `runTool` gates a `spoken` call by them.
+ */
+export function spokenToolsFor(kind: ThreadKind | undefined): FunctionTool[] {
+  return kind === "guide" ? GUIDE_TOOLS : CHAT_TOOLS;
+}
+
+/** The tools a `runTool` caller has: Live's for a spoken call, else its kind's, or the shared eight when it names none. */
+const toolsOf = (ctx: Pick<ToolContext, "kind" | "spoken">): FunctionTool[] =>
+  ctx.spoken ? spokenToolsFor(ctx.kind) : ctx.kind === undefined ? CHAT_TOOLS : toolsFor(ctx.kind);
 
 /* ------------------------------------------------------------- the fence --
  */
@@ -1313,8 +1364,16 @@ export function articleLinks(blocks: Block[], baseUrl?: string): ArticleLink[] {
  * persuaded to read `http://169.254.169.254/`" is a real request shape), the
  * redirect limit, the size cap and the type sniff. Writing a `fetch` here
  * instead would have been three lines and an SSRF hole.
+ *
+ * `beforeFetch` is asked once every check has passed — including
+ * `fetchDocument`'s URL and address guard — and immediately before its first
+ * HTTP request. An outcome from it is returned instead of the page.
  */
-async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome> {
+async function readWebPage(
+  url: unknown,
+  ctx: ToolContext,
+  beforeFetch?: () => ToolOutcome | null,
+): Promise<ToolOutcome> {
   if (typeof url !== "string" || url.trim() === "") {
     return { label: "read a page", detail: "no URL given", content: "No URL was given." };
   }
@@ -1391,6 +1450,7 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
   }
 
   const started = Date.now();
+  let budgetOutcome: ToolOutcome | null = null;
   try {
     const doc = await fetchDocument(url, {
       timeoutMs: TOOL_TIMEOUT_MS,
@@ -1402,6 +1462,14 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
       // watching it; a reader is watching this.
       attempts: 1,
       ...(ctx.signal ? { signal: ctx.signal } : {}),
+      ...(beforeFetch
+        ? {
+            beforeFirstRequest: () => {
+              budgetOutcome = beforeFetch();
+              return budgetOutcome === null;
+            },
+          }
+        : {}),
     });
     if (doc.kind === "pdf") {
       log("model").info({ tool: "read_web_page", host, kind: doc.kind }, "chat tool: not HTML");
@@ -1462,6 +1530,7 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
       ),
     };
   } catch (err) {
+    if (err instanceof FetchBeforeRequestVeto && budgetOutcome !== null) return budgetOutcome;
     /* A dead link is an ordinary outcome, so the model is told in words and the
        answer carries on. `FetchFailure.code` is the classified reason — the
        whole point of that class is that every network failure in Node otherwise
@@ -2516,11 +2585,11 @@ function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
 }
 
 /** What a model that asked for a tool it does not have is told: the ones it does. */
-function noSuchTool(name: string, kind: ThreadKind | undefined): ToolOutcome {
+function noSuchTool(name: string, ctx: Pick<ToolContext, "kind" | "spoken">): ToolOutcome {
   return {
     label: `tried ${name}`,
     detail: "no such tool",
-    content: `There is no tool called "${name}". The tools you have are: ${toolsOf(kind)
+    content: `There is no tool called "${name}". The tools you have are: ${toolsOf(ctx)
       .map((t) => t.function.name)
       .join(", ")}.`,
   };
@@ -2544,16 +2613,16 @@ function noSuchTool(name: string, kind: ThreadKind | undefined): ToolOutcome {
  * **A tool this kind of conversation is not offered is an unknown name** (rule
  * 4 in the header), and gets that same sentence: `reader_notes` asked for in a
  * Recall thread or through Live's endpoint, or `read_web_page` asked for in a
- * guide, runs nothing — no fetch, no store read — and is told there is no such
- * tool. The check is ahead of the whole `switch`, for every name and every
- * kind, so no `case` can be reached round it.
+ * spoken guide (`ToolContext.spoken`), runs nothing — no fetch, no store read —
+ * and is told there is no such tool. The check is ahead of the whole `switch`,
+ * for every name and every kind, so no `case` can be reached round it.
  */
 export async function runTool(
   name: string,
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<ToolOutcome> {
-  if (!toolsOf(ctx.kind).some((t) => t.function.name === name)) return noSuchTool(name, ctx.kind);
+  if (!toolsOf(ctx).some((t) => t.function.name === name)) return noSuchTool(name, ctx);
   switch (name) {
     case "search_article_words":
       return searchWords(args, ctx);
@@ -2569,8 +2638,30 @@ export async function runTool(
       return readGlossary(ctx);
     case "article_citations":
       return readCitations(args, ctx);
-    case "read_web_page":
-      return readWebPage(args.url, ctx);
+    case "read_web_page": {
+      if (ctx.kind !== "guide") return readWebPage(args.url, ctx);
+      /* **A hard budget for the guide, as `search_web`'s is** (plan 261017e
+         § Stage 2). The first check stops an ordinary second call before even
+         its address lookup. The callback checks again at the first HTTP-request
+         boundary, after an initial refusal that should not spend the read; that
+         second check is what makes two concurrent calls unable to pass. */
+      const limitReached = (): ToolOutcome => ({
+        label: describeCall("read_web_page", args),
+        detail: "limit reached",
+        content:
+          "You have already read one page this turn, which is the limit. Answer from what you have, " +
+          "and if another page would help, offer a chat step so Chat can read it.",
+      });
+      if ((guideReadsThisTurn.get(ctx) ?? 0) >= READ_WEB_PAGE_PER_TURN_GUIDE) {
+        return limitReached();
+      }
+      return readWebPage(args.url, ctx, () => {
+        const used = guideReadsThisTurn.get(ctx) ?? 0;
+        if (used >= READ_WEB_PAGE_PER_TURN_GUIDE) return limitReached();
+        guideReadsThisTurn.set(ctx, used + 1);
+        return null;
+      });
+    }
     case "search_web": {
       /* **A hard budget, not advice** (GPT Sol on plan 261012g, F3). A query
          is text leaving for Exa, and a hostile article can ask for several in
@@ -2589,7 +2680,7 @@ export async function runTool(
       return searchWeb(args.query, {
         power: ctx.power,
         signal: ctx.signal,
-        canReadPages: toolsOf(ctx.kind).some((t) => t.function.name === "read_web_page"),
+        canReadPages: toolsOf(ctx).some((t) => t.function.name === "read_web_page"),
       });
     }
     case "read_cited_work":
@@ -2601,6 +2692,6 @@ export async function runTool(
     case "offer_next_steps":
       return offerNextSteps(args);
     default:
-      return noSuchTool(name, ctx.kind);
+      return noSuchTool(name, ctx);
   }
 }

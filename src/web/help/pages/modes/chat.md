@@ -76,7 +76,10 @@ first, then bring it in once it is ready.
 this article with Spideryarn, rather than about what it says. A new article opens on it when there
 is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
 until you send something. When the guide suggests a mode or a passage, it gives you a button and
-says what pressing it will do; it never opens anything or moves you by itself. Its
+says what pressing it will do; it never opens anything or moves you by itself. To help you decide
+how to read the piece, it can search the web for what others have said about it, and read one web
+page in an answer, such as one you paste in; a question about the subject itself, it hands to a new
+Chat. Its
 greeting asks why you are reading the piece: answer in the box below as you would any message. When
 you say why, or something about yourself, the guide offers to save it, as close to your own words
 as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is

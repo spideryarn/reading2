@@ -790,6 +790,12 @@ export interface FetchOptions {
   userAgent?: string;
   /** Cancellation from above — the ingest queue's, in practice. */
   signal?: AbortSignal;
+  /**
+   * Asked exactly once, after the first target has passed its address guard and
+   * immediately before this logical fetch's first HTTP request. `false` stops
+   * without a request. Retries and redirects do not ask again.
+   */
+  beforeFirstRequest?: () => boolean;
   /* --- seams, for tests --- */
   fetchImpl?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
@@ -807,6 +813,7 @@ interface Resolved {
   maxRedirects: number;
   userAgent: string;
   signal: AbortSignal | null;
+  beforeFirstRequest: (() => boolean) | null;
   fetchImpl: FetchLike;
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
@@ -838,12 +845,21 @@ function withDefaults(options: FetchOptions): Resolved {
     maxRedirects: bounded(options.maxRedirects, DEFAULTS.maxRedirects, 0, 20),
     userAgent: options.userAgent ?? DEFAULTS.userAgent,
     signal: options.signal ?? null,
+    beforeFirstRequest: options.beforeFirstRequest ?? null,
     fetchImpl: options.fetchImpl ?? ((url, init) => fetch(url, init)),
     sleep: options.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms))),
     now: options.now ?? (() => new Date()),
     resolve: options.resolve ?? defaultResolve,
     random: options.random ?? Math.random,
   };
+}
+
+/** A caller stopped a fetch at `beforeFirstRequest`; not a network failure and never retryable. */
+export class FetchBeforeRequestVeto extends Error {
+  constructor() {
+    super("The caller stopped the fetch before its first request.");
+    this.name = "FetchBeforeRequestVeto";
+  }
 }
 
 /**
@@ -2204,11 +2220,18 @@ interface BytesSpec<T> {
 async function fetchBytes<T>(input: string, options: FetchOptions, spec: BytesSpec<T>): Promise<T> {
   const opts = withDefaults(options);
   const target = parseTarget(input);
+  let firstRequestPending = true;
+  const beforeFirstRequest = () => {
+    if (!firstRequestPending) return;
+    if (opts.beforeFirstRequest?.() === false) throw new FetchBeforeRequestVeto();
+    firstRequestPending = false;
+  };
 
   for (let attempt = 1; ; attempt++) {
     try {
-      return await attemptFetch(target, input.trim(), opts, spec);
+      return await attemptFetch(target, input.trim(), opts, spec, beforeFirstRequest);
     } catch (err) {
+      if (err instanceof FetchBeforeRequestVeto) throw err;
       const failure = classifyNetworkError(err, input.trim());
       if (!failure.retryable || attempt >= opts.attempts) throw failure;
       /* Under the caller's signal, not the attempt's: each attempt gets a fresh
@@ -2322,6 +2345,7 @@ async function attemptFetch<T>(
   requestedUrl: string,
   opts: Resolved,
   spec: BytesSpec<T>,
+  beforeFirstRequest: () => void,
 ): Promise<T> {
   /* One deadline for the whole attempt, redirects included — a chain of five
      hops that are each just under the limit is still a page nobody is waiting
@@ -2348,6 +2372,7 @@ async function attemptFetch<T>(
     }
     const here = current.toString();
     chain.push(here);
+    beforeFirstRequest();
 
     /* Classified here, against `here`, rather than in the retry loop above
        against the URL that was typed. After a redirect those are different

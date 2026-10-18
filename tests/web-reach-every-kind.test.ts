@@ -56,15 +56,15 @@ describe("web search", () => {
     const guide = flat(systemOf("guide"));
     expect(guide).toContain("ALWAYS use it when the reader asks for outside evidence about how to read this piece");
     expect(guide).toContain("Search even when the piece gives its own answer");
-    expect(guide).toContain("A response to this piece is about the piece and belongs in your search");
+    expect(guide).toContain("A response to this piece is about the piece and belongs to you");
     expect(guide).toContain("search for outside evidence about this piece");
     expect(guide).not.toContain("Chat is the place for the web");
-    expect(guide).toMatch(/or gives you a page to read, do not search/);
+    expect(guide).toContain("do not search or open a page");
   });
 
   it("is Chat's to do when the guide is asked about the world, and the guide says so", () => {
     const guide = flat(systemOf("guide"));
-    expect(guide).toContain("Chat can do what you cannot: open a page, and look into the subject itself");
+    expect(guide).toContain("Chat is where the subject itself is looked into");
     /* Since plan 261012f, as a chat step carrying their question, rather than Chat's list. */
     expect(guide).toMatch(/offer a chat step carrying their question/);
     expect(checkNextStep({ kind: "chat", words: "What have others said about it?" })).toEqual({ kind: "chat", words: "What have others said about it?" });
@@ -101,14 +101,21 @@ describe("Recall and Tutorial", () => {
 });
 
 /* Every kind but the guide already read a page the reader handed over, 2 of 2
-   times in the plan's baseline, so no wording changed for it. The guide's page
-   tool waits on Greg (q-madusw). */
+   times in the plan's baseline, so no wording changed for it. The typed guide
+   reads one since 2026-10-18: Greg's reply B to q-g492eq, plan 261017e
+   § Stage 2. */
 describe("an address the reader gives", () => {
-  it("can be read in every kind but the guide", () => {
+  it("can be read in every kind", () => {
     for (const kind of THREAD_KINDS) {
-      const names = toolsFor(kind).map((t) => t.function.name);
-      if (kind === "guide") expect(names, kind).not.toContain("read_web_page");
-      else expect(names, kind).toContain("read_web_page");
+      expect(toolsFor(kind).map((t) => t.function.name), kind).toContain("read_web_page");
     }
+  });
+
+  it("the guide reads for how to read the piece, once an answer, and links only what a tool returned", () => {
+    const guide = flat(systemOf("guide"));
+    expect(guide).toContain("read_web_page opens and reads one page. You may use it once in each answer");
+    expect(guide).toContain("worth reading alongside, or fair to the piece");
+    expect(guide).not.toContain("You cannot read a web page");
+    expect(guide).toContain("NEVER invent a URL. Link only an address that came back from a tool on this turn");
   });
 });

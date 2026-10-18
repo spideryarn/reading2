@@ -11,13 +11,14 @@
  * fetcher tested against the live web is tested against whatever the web is
  * doing this morning.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   charsetFromContentType,
   classifyNetworkError,
   classifyStatus,
   decodeHtml,
   DEFAULTS,
+  FetchBeforeRequestVeto,
   fetchDocument,
   FetchFailure,
   fetchHtml,
@@ -220,6 +221,27 @@ describe("the address guard", () => {
     expect(err.code).toBe("blocked-address");
     expect(err.message).toContain("10.0.0.5");
     expect(calls).toHaveLength(0);
+  });
+
+  it("asks a caller's gate only after the address guard, immediately before HTTP", async () => {
+    const blocked = scripted([]);
+    const blockedGate = vi.fn(() => true);
+    await failureFrom(
+      fetchDocument("https://sneaky.example/", opts({
+        fetchImpl: blocked.impl,
+        resolve: async () => ["10.0.0.5"],
+        beforeFirstRequest: blockedGate,
+      })),
+    );
+    expect(blockedGate).not.toHaveBeenCalled();
+
+    const vetoed = scripted([]);
+    const veto = fetchDocument("https://example.com/", opts({
+      fetchImpl: vetoed.impl,
+      beforeFirstRequest: () => false,
+    }));
+    await expect(veto).rejects.toBeInstanceOf(FetchBeforeRequestVeto);
+    expect(vetoed.calls).toHaveLength(0);
   });
 });
 
@@ -1754,6 +1776,25 @@ describe("retryDelayMs", () => {
 });
 
 describe("retrying", () => {
+  it("asks the first-request gate once across retries and redirects", async () => {
+    const { impl, calls } = scripted([
+      new Response("busy", { status: 503 }),
+      new Response(null, { status: 302, headers: { location: "/after-retry" } }),
+      html("<html><p>at last"),
+    ]);
+    let gates = 0;
+    await fetchDocument("https://example.com/", opts({
+      fetchImpl: impl,
+      attempts: 2,
+      beforeFirstRequest: () => {
+        gates++;
+        return true;
+      },
+    }));
+    expect(gates).toBe(1);
+    expect(calls).toHaveLength(3);
+  });
+
   it("tries again after a 503 and takes the second answer", async () => {
     const { impl, calls } = scripted([
       new Response("busy", { status: 503 }),

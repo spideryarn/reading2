@@ -42,11 +42,14 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
-import { converse } from "../src/converse.js";
+import { converse, jobFor } from "../src/converse.js";
+import { runTool } from "../src/chat-tools.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { environmentOwnerId, runAsOwner } from "../src/owner.js";
 import { isMain } from "../src/is-main.js";
 import { askAboutBlock, HELP_QUESTION } from "../src/web/chat-handoff.js";
+import { collectSpend, totalSpend } from "../src/ai-spend.js";
+import { costStore } from "../src/store/ai-calls.js";
 import { renderProfile } from "../src/profile.js";
 import type { Block, ChatAnchor, Meta } from "../src/types.js";
 
@@ -80,7 +83,7 @@ const ARTICLES: readonly { slug: string; blockId: string; word: string; page: st
 
 type CaseName =
   | "help" | "broader" | "since" | "plain" | "word" | "situate" | "url" | "remember"
-  | "reception" | "alongside" | "author";
+  | "reception" | "alongside" | "author" | "given";
 
 interface Case {
   readonly name: CaseName;
@@ -189,6 +192,9 @@ const OTHER_KIND_CASES: readonly Case[] = [
  *   reception  is it well regarded, contested, superseded — TARGET
  *   alongside  what to read before or with it — TARGET
  *   author     who wrote it, and how far to trust them on this — TARGET
+ *   given      a page the reader hands over, worth reading alongside? — TARGET
+ *              for `read_web_page`, which the typed guide has since plan
+ *              261017e § Stage 2 (2B); before it, the guide could only search
  *   since      what has happened with the idea since — CONTROL (Chat's)
  *   word       does the article use the word X — CONTROL
  */
@@ -213,6 +219,13 @@ const GUIDE_CASES: readonly Case[] = [
     help: false,
     anchored: false,
     typed: () => "Who is the author, and how far should I trust them on this subject?",
+  },
+  {
+    name: "given",
+    role: "target",
+    help: false,
+    anchored: false,
+    typed: (_word, page) => `I found this page: ${page} Is it worth reading alongside this piece?`,
   },
   { ...OTHER_KIND_CASES.find((c) => c.name === "since")!, role: "control" },
   OTHER_KIND_CASES.find((c) => c.name === "word")!,
@@ -260,6 +273,15 @@ interface Outcome {
   seconds: number;
   words: number;
   text: string;
+  /* Since plan 261017e § Stage 2 (GPT Sol's F3 on it): what a read cost and
+     where it went, the next steps offered, and the turn's spend. Absent in
+     results written before. */
+  reads?: { requestedUrl: string | null; fetched: boolean; label: string; ms: number | null; detail: string }[];
+  stepKinds?: string[];
+  inputTokens?: number | null;
+  dollars?: number;
+  rounds?: number;
+  modelCalls?: number;
   error?: string;
 }
 
@@ -299,6 +321,7 @@ async function ask(
   help: boolean,
   kind: EvalKind,
 ): Promise<Omit<Outcome, "kind" | "run" | "slug" | "blockId" | "case" | "role" | "question" | "seconds">> {
+  const readRequests: { requestedUrl: string | null; fetched: boolean }[] = [];
   for await (const event of converse({ power: "standard",
     meta,
     blocks,
@@ -314,12 +337,33 @@ async function ask(
       saved: { purpose: PURPOSE, profile: null },
       experience: "a-few" as const,
     }),
+    runToolWith: async (name, args, ctx) => {
+      const outcome = await runTool(name, args, ctx);
+      if (name === "read_web_page") {
+        readRequests.push({
+          requestedUrl: typeof args.url === "string" ? args.url : null,
+          fetched: outcome.content.startsWith("<<<UNTRUSTED WEB PAGE"),
+        });
+      }
+      return outcome;
+    },
     useTools: true,
   })) {
     if (event.type !== "done") continue;
     return {
       searches: event.searches,
       tools: event.tools.map((t) => t.name),
+      reads: event.tools
+        .filter((t) => t.name === "read_web_page")
+        .map((t, i) => ({
+          requestedUrl: readRequests[i]?.requestedUrl ?? null,
+          fetched: readRequests[i]?.fetched ?? false,
+          label: t.label,
+          ms: t.ms ?? null,
+          detail: t.detail ?? "",
+        })),
+      stepKinds: event.tools.flatMap((t) => (t.steps ?? []).map((st) => st.kind)),
+      inputTokens: event.usage.inputTokens,
       links: distinct(event.text, LINK),
       blockIds: distinct(event.text, BLOCK_ID),
       sources: event.citations.length,
@@ -406,9 +450,16 @@ async function main(): Promise<void> {
         const started = performance.now();
         let outcome: Outcome;
         try {
-          const got = await runAsOwner(owner, () =>
-            ask(meta, blocks, a.slug, question, anchor, c.help, opts.kind),
+          /* Its own collector, so each turn has its dollars; the sink keeps
+             the ledger rows the outer `withLedger` would otherwise have
+             written (an inner collector shadows the outer, src/ai-spend.ts). */
+          const { result: got, report } = await collectSpend(
+            () => runAsOwner(owner, () => ask(meta, blocks, a.slug, question, anchor, c.help, opts.kind)),
+            { attribution: { scopeKind: "eval", ownerId: owner }, sink: (row) => costStore.record(row) },
           );
+          got.dollars = Number((totalSpend(report.calls).nanos / 1e9).toFixed(5));
+          got.rounds = report.calls.filter((call) => call.job === jobFor(opts.kind)).length;
+          got.modelCalls = report.calls.length;
           outcome = {
             kind: opts.kind,
             run,
@@ -457,14 +508,14 @@ async function main(): Promise<void> {
   }
 
   console.log(`\n## Summary (${opts.kind})`);
-  console.log("case     role     searched  read-page  said-unsearched  over-60  mean-searches  mean-links  mean-blockIds  mean-words");
+  console.log("case     role     searched  read-page  said-unsearched  over-60  mean-searches  mean-links  mean-blockIds  mean-words  mean-seconds  rounds  calls  chat-step  mean-$");
   for (const c of casesFor(opts.kind)) {
     const rows = outcomes.filter((o) => o.case === c.name && !o.error);
     const n = rows.length || 1;
     const mean = (f: (o: Outcome) => number) =>
       (rows.reduce((s, o) => s + f(o), 0) / n).toFixed(2);
     console.log(
-      `${c.name.padEnd(8)} ${c.role.padEnd(8)} ${rows.filter(searched).length}/${rows.length}       ${rows.filter((o) => o.tools.includes("read_web_page")).length}/${rows.length}        ${rows.filter((o) => searched(o) && SAID_UNSEARCHED.test(o.text)).length}/${rows.length}            ${rows.filter((o) => o.words > 60).length}/${rows.length}      ${mean((o) => o.searches).padStart(6)}        ${mean((o) => o.links.length).padStart(6)}      ${mean((o) => o.blockIds.length).padStart(6)}      ${mean((o) => o.words).padStart(6)}`,
+      `${c.name.padEnd(8)} ${c.role.padEnd(8)} ${rows.filter(searched).length}/${rows.length}       ${rows.filter((o) => o.reads?.some((read) => read.fetched)).length}/${rows.length}        ${rows.filter((o) => searched(o) && SAID_UNSEARCHED.test(o.text)).length}/${rows.length}            ${rows.filter((o) => o.words > 60).length}/${rows.length}      ${mean((o) => o.searches).padStart(6)}        ${mean((o) => o.links.length).padStart(6)}      ${mean((o) => o.blockIds.length).padStart(6)}      ${mean((o) => o.words).padStart(6)}      ${mean((o) => o.seconds).padStart(6)}  ${mean((o) => o.rounds ?? 0).padStart(6)} ${mean((o) => o.modelCalls ?? 0).padStart(6)}      ${rows.filter((o) => o.stepKinds?.includes("chat")).length}/${rows.length}      ${(rows.reduce((t, o) => t + (o.dollars ?? 0), 0) / n).toFixed(4)}`,
     );
   }
 
@@ -476,6 +527,8 @@ async function main(): Promise<void> {
     "utf-8",
   );
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);
+  /* The ledger's own total below reads zero: each turn had its own collector. */
+  console.log(`Spent: $${outcomes.reduce((t, o) => t + (o.dollars ?? 0), 0).toFixed(4)} over ${outcomes.length} turns`);
   if (outcomes.some((o) => o.error)) process.exitCode = 1;
 }
 

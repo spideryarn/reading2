@@ -59,7 +59,7 @@ import { createHash } from "node:crypto";
 import { answerAsSeen } from "./recall-hint.js";
 import type { Block, ChatMessage, Meta, MicPlacement, ThreadKind } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
-import { CHAT_TOOLS, GUIDE_TOOLS } from "./chat-tools.js";
+import { CHAT_TOOLS, spokenToolsFor } from "./chat-tools.js";
 import { spokenModeWords } from "./guide.js";
 import { recentHistory } from "./converse.js";
 import { withoutBlockIds } from "./answer-opening.js";
@@ -450,12 +450,13 @@ export const SHOW_PASSAGE_TOOL = {
  */
 export function liveTools(kind?: ThreadKind): unknown[] {
   /* A guide is offered `GUIDE_TOOLS`, its article only, no web — plan 261009i.
-     Not `toolsFor("guide")`: the typed guide adds `search_web` and its two
-     offers, none of which Live has (plan 261012g). Every other kind keeps the
-     eight. */
+     Not `toolsFor("guide")`: the typed guide adds `search_web`, `read_web_page`
+     and its two offers, none of which Live has (plans 261012g, 261017e). Every
+     other kind keeps the eight. `spokenToolsFor` is also the gate a live call
+     is run through (`ToolContext.spoken`), so what is offered is what runs. */
   return [
     SHOW_PASSAGE_TOOL,
-    ...(kind === "guide" ? GUIDE_TOOLS : CHAT_TOOLS).map((t) => ({
+    ...spokenToolsFor(kind).map((t) => ({
       type: "function" as const,
       name: t.function.name,
       description: t.function.description,

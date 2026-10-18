@@ -4343,7 +4343,8 @@ export const LEARN_STANCES: readonly LearnStance[] = [
  * with Spideryarn, opened in the Chat band, one per article. Single-thread like
  * Learn's three but not one of them (`LearnKind` below), and not a chat either:
  * its own prompt (`GUIDE_SYSTEM`, src/converse.ts), its own tools
- * (`GUIDE_TOOLS`, src/chat-tools.ts), its own web search (`search_web`), no `visible` blocks.
+ * (`GUIDE_TOOLS`, src/chat-tools.ts), its own web search (`search_web`) and typed
+ * page read (`read_web_page`), no `visible` blocks.
  * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
  */
 export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore" | "guide";

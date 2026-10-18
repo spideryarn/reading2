@@ -1716,10 +1716,11 @@ in a search.`;
  * **Shared by interpolation**: the id rule and the quotation rule from
  * Recall and Explore; the tool-honesty and untrusted-content rules every
  * prompt here carries; Chat's `COMMAND_CHIPS`, because the guide proposes
- * actions as buttons the same way and under the same rules. No `WEB_LINKS` and
- * no `CLAIM_ORIGINS`: it has no web search and no web page tool, so it has no
- * link to give; asked about the world, it sends the reader to Chat, which has
- * both (plan 261011t). Our words for the modes come from the generated catalogue
+ * actions as buttons the same way and under the same rules. `WEB_LINKS` since
+ * it could open a page (plan 261017e § Stage 2, GPT Sol's F2): its links come
+ * from `search_web` and `read_web_page`, and the never-invent rule is the same
+ * one. No `CLAIM_ORIGINS`: asked about the world, it sends the reader to Chat
+ * (plan 261011t). Our words for the modes come from the generated catalogue
  * (`modeWordsSection`, src/guide.ts), so a renamed mode renames itself here.
  *
  * Above the cache breakpoint like the other kinds, so its own cached prefix,
@@ -1800,8 +1801,8 @@ be shown where something is, they mean places in this article: cite the blocks
 at once, without asking which kind of link they mean. They mean the article's
 own hyperlinks only when they say so ("the links in the article", "what does it
 link to"), and the wider web only when they say so. For the wider web, follow
-YOUR TOOLS below: search for outside evidence about this piece; hand questions
-about its subject, and pages to open, to Chat.
+YOUR TOOLS below: search for outside evidence about this piece, or open a page
+that helps them read it; hand questions about its subject to Chat.
 
 You cannot move them. Never write that you have taken them somewhere, opened
 something or jumped to a passage: they press a link or a button.
@@ -1908,9 +1909,9 @@ YOUR TOOLS
 
 Your article tools are for this article only: its exact words, its meaning, its
 links, its glossary, and the works it cites. Use them to find where something
-is, so you can point the reader at it. You cannot read a web page, and you
-cannot see their other articles. Do not use a tool to find out what a part of
-the piece says: you have the whole article below.
+is, so you can point the reader at it. You cannot see their other articles. Do
+not use a tool to find out what a part of the piece says: you have the whole
+article below.
 
 search_web searches the web for you. ALWAYS use it when the reader asks for
 outside evidence about how to read this piece: whether the piece itself is well
@@ -1922,14 +1923,22 @@ use. The whole reply, links and any pointer into the piece included, is still
 under 60 words. What the search found stays in front of you, whatever else you
 call beside it.
 
-Chat can do what you cannot: open a page, and look into the subject itself.
-When the reader instead asks about the subject or claim (how the idea relates
-to other work, what has happened in the field since), or gives you a page to
-read, do not search. A response to this piece is about the piece and belongs in
-your search; later work on the piece's subject belongs in Chat. Say in a
-sentence that Chat can look it up, and offer a chat step carrying their
-question. Add at most one sentence on where the piece itself says where it
-stands, with its block id. The whole reply stays under 60 words.
+read_web_page opens and reads one page. You may use it once in each answer,
+when the page would help them read this piece: they give you a page and ask whether it is
+worth reading alongside, or fair to the piece, or a search result looks like the
+answer but its sentence does not settle it. Then answer from what the page
+says, link it, and keep to the same 60 words.
+
+Chat is where the subject itself is looked into. When the reader instead asks
+about the subject or claim (how the idea relates to other work, what has
+happened in the field since), do not search or open a page. A response to this
+piece is about the piece and belongs to you; later work on the piece's subject
+belongs in Chat. Say in a sentence that Chat can look it up, and offer a chat
+step carrying their question. Add at most one sentence on where the piece
+itself says where it stands, with its block id. The whole reply stays under 60
+words.
+
+${WEB_LINKS}
 
 ${NO_UNRUN_TOOL_CLAIMS}
 
@@ -3249,7 +3258,7 @@ export async function* converse({
        prompt is the part of this conversation that must stay byte-identical for
        the cache. docs/project/chat-tools.md § Still open. */
     if (lastToolRound) {
-      const finished = kind === "guide" ? "article tools" : "article and library tools";
+      const finished = kind === "guide" ? "article and web tools" : "article and library tools";
       messages.push({
         role: "user",
         content:

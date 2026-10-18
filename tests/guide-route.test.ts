@@ -203,7 +203,7 @@ describe("a guide turn", () => {
     expect(head).toBe(first);
   });
 
-  it("is offered no OpenRouter search and no tool that leaves the article but search_web", async () => {
+  it("is offered no OpenRouter search and no tool that leaves the article but search_web and read_web_page", async () => {
     vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
     await post({ threadId: "spya-gdrtc2", question: "What should I read closely?", kind: "guide" });
     const { tools } = lastRequest();
@@ -215,6 +215,9 @@ describe("a guide turn", () => {
       "article_citations",
       /* A web search whose results come back as a tool message (plan 261012g). */
       "search_web",
+      /* One page a turn, with Chat's checks: Greg's reply B to q-g492eq
+         (plan 261017e § Stage 2). */
+      "read_web_page",
       /* Its own, and it saves nothing (plan 261009q). */
       "offer_to_save",
       /* And its next steps, which run nothing (plan 261009u). */

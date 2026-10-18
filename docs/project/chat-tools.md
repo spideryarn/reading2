@@ -123,8 +123,9 @@ Live, share. The other three are added by `toolsFor(kind)` in [`src/chat-tools.t
 for the kinds that function names and no others. **The guide** (plan
 [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
 `GUIDE_TOOLS`: the article's own — no `read_web_page`, no library, no notes. The typed guide adds
-one way out, `search_web`, since 2026-10-12 ([below](#the-guide-searches-through-a-subagent-search_web));
-Live's guide does not.
+two ways out: `search_web` since 2026-10-12 ([below](#the-guide-searches-through-a-subagent-search_web)),
+and `read_web_page` since 2026-10-18, one page a turn ([§ The guide](#the-guide)). Live's guide has
+neither, and a live call is gated by what Live offers (`spokenToolsFor`), not by the typed list.
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -193,12 +194,9 @@ replayed into the next round whatever else the guide called beside it, which is 
   well regarded, what to read alongside it, who the author is and how far to trust them. It
   searches even when the piece gives its own account; a byline is not outside evidence. A
   question about what the world says on the subject goes to Chat.
-- **No page-reading for the guide, yet.** Greg said yes to it on 2026-10-17 (2A on q-madusw). The
-  plan limits it to addresses the guide was handed — a search result, the reader's own words, the
-  article's links — and one read a turn
-  ([261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2a-the-guide-may-open-a-page-planned-asked-not-built)).
-  It edits a listed defence, so whether an unattended agent may build it is q-g492eq. Until then
-  the result tells it only to link what it uses.
+- **The guide can open one of the results** since 2026-10-18 (`read_web_page`, one a turn), so the
+  result now says how, as Chat's does (`canReadPages`, asked of the turn's own tool list).
+  [§ The guide](#the-guide) has the rest.
 - **Chat keeps OpenRouter's search.** The comparison in 261012g § Stage 2 found the subagent about
   15% cheaper, but 11 seconds slower on every searching answer and without Chat's citation chips.
 
@@ -465,11 +463,12 @@ conversation in full. Why each of the others is left out (PR-3):
   prompt. Either can be added later, with a check of how it behaves.
 - **Candidates** is Referee machinery.
 
-**The offer is not the gate.** `runTool` asks `toolsFor` again before it runs **any** name, ahead
-of the whole dispatch, and a caller that names no kind has the shared eight. So a Recall model that
-asks for `reader_notes` anyway, or a guide model that asks for `read_web_page`, is told there is no
-such tool and nothing is fetched or read; and so is Live's endpoint, which also refuses the name
-before that because `LIVE_SERVER_TOOLS` is built from `CHAT_TOOLS`. Until 2026-10-07 only
+**The offer is not the gate.** `runTool` asks the applicable list again before it runs **any** name,
+ahead of the whole dispatch, and a caller that names no kind has the shared eight. So a Recall model
+that asks for `reader_notes` anyway, or a spoken guide model that asks for `read_web_page`, is told
+there is no such tool and nothing is fetched or read. Live's first route gate accepts
+`read_web_page` for Chat, so its second gate uses `spokenToolsFor`: the spoken guide still gets only
+`GUIDE_TOOLS`, while the typed guide's `toolsFor("guide")` includes the page reader. Until 2026-10-07 only
 `reader_notes` was checked, on its own `case`; the guide's narrower set moved the check to the top
 (GPT Sol's F1, plan 261007j). Each guard was switched off and the tests watched go red
 (`tests/guide-tool-gate.test.ts`, `tests/reader-notes-tool.test.ts`).
@@ -813,7 +812,14 @@ profile or the piece. Chat has had that exposure since it had search, and its bo
 `max_uses`, which OpenRouter does not honour
 ([`webSearchTool`](../../src/converse.ts)). **The guide gained it on 2026-10-12** with
 `search_web`, and because that tool is ours its bounds are real: two calls a turn and 300
-characters a query, both refused in code before anything is sent. `PROFILE_RULES` still tells every
+characters a query, both refused in code before anything is sent.
+
+**And since 2026-10-18 the guide has the URL channel too**, as Chat has it: `read_web_page` with
+the same caps, any address, one page a turn. With its two searches that is three model-issued
+calls a turn that can carry text out (one search may run several provider searches, and a fetch
+may follow redirects), the page read the widest. The guide holds the reader's reason and About
+you on every turn. Greg chose this over an allowlist of handed addresses (reply B to q-g492eq),
+and it is risk [R29](security-risks.md#r29). `PROFILE_RULES` still tells every
 conversation never to put the profile into a query, and that is prompt text, not a boundary.
 
 What *does* still hold, and is worth keeping true: nothing chat can call writes a file or deletes
@@ -1226,9 +1232,15 @@ shown a button, not a token. A token that was drawn as text is copied as text.
 the subject goes to Chat, offered as a button (*Ask in Chat*, below); but when the guide does try
 something, a missing tool or a refusal should not be what stops it. So a question about adding a
 capability to the guide starts from yes, and what is weighed is the boundary, not whether the guide
-should be able to. The first case is page-reading, planned in
-[261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2a-the-guide-may-open-a-page-planned-asked-not-built)
-and asked of Greg as q-g492eq, because the tool list is a defence.
+should be able to. The first case was page-reading: Greg said yes on 2026-10-17 (2A on q-madusw),
+and on 2026-10-18 chose that it work as Chat's does, any address, over an allowlist of handed ones
+(*"B"*, reply `spya-cab6zp` to q-g492eq;
+[261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2b-the-guide-may-open-a-page-as-chat-does)).
+So the typed guide has `read_web_page`, Chat's tool with Chat's checks and nothing more, at most
+one page a turn (`READ_WEB_PAGE_PER_TURN_GUIDE`; a second is refused before any fetch, and an
+address refused for what it is costs no read). Its prompt uses it for how to read the piece: a
+page the reader hands over, or a search result whose sentence does not settle it; the subject
+itself still goes to Chat. The risk this accepts is [R29](security-risks.md#r29).
 
 **Built 2026-10-07** ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)).
 A thread kind of its own, `guide`, one per article (`chat_threads_one_guide`), opened in Chat's band
@@ -1244,7 +1256,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
 - **Its tools** are `GUIDE_TOOLS` (§ The eleven above), `search_web` since 2026-10-12
   ([§ The guide searches through a subagent](#the-guide-searches-through-a-subagent-search_web)),
-  and one of its own since
+  `read_web_page` since 2026-10-18 (above), and one of its own since
   2026-10-09: **`offer_to_save`**, which saves nothing
   ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
   Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
@@ -1636,8 +1648,8 @@ alone, in order.
   did.
 - **`search_library` is literal.** See the top of this file; the fix is
   [260826n-semantic-search.md](../plans/260826n-semantic-search.md) and it lands behind the store contract.
-- **`read_web_page` can still be used to send a little.** The query cap above bounds it; it does not
-  close it. The fix is an **allowlist**: fetch only URLs that are already in play — links in this
+- **`read_web_page` can still be used to send a little**, in Chat and, since 2026-10-18, in the
+  typed guide (R29). The query cap above bounds it; it does not close it. The fix is an **allowlist**: fetch only URLs that are already in play — links in this
   article's blocks, URLs the reader typed into the conversation, and the citation URLs OpenRouter's
   web search returned this turn (which `converse` already collects). That covers every legitimate use
   these tools were designed for and closes the channel rather than narrowing it. Not built because it

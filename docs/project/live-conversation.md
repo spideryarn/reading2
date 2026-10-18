@@ -641,13 +641,15 @@ What differs is what the session is told and given, on both engines:
   ([261011aa](../plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md)).
   Worded without a tool or a token, because the GPT-Live voice model is given this too and has
   neither.
-- **The tools** are the typed guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
-  the typed guide's `offer_to_save` or `offer_next_steps` (a card or a row of buttons, which a voice has nowhere to put;
-  `LIVE_SERVER_TOOLS` refuses it too, and a spoken turn's stored runs never carry an offer,
+- **The tools** are the guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
+  the typed guide's `search_web`, `read_web_page`, `offer_to_save` or `offer_next_steps` (web work,
+  a card or a row of buttons, which this voice does not offer; `LIVE_SERVER_TOOLS` refuses the
+  search and offers, and the spoken guide's second gate refuses the page reader, while a spoken
+  turn's stored runs never carry an offer,
   [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) and
   [261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md)). The page says the
-  session's kind on every `/live-tool` call and the route hands it to `runTool`, so the guide's gate
-  (`toolsFor`) applies to a spoken guide as it does to a typed one. The model chooses only a name.
+  session's kind on every `/live-tool` call and the route marks the context `spoken`, so `runTool`
+  applies `spokenToolsFor` rather than the typed list. The model chooses only a name.
 - **The kind** is the stored thread's; for a guide that exists only in the tab, the page sends it
   with the ticket (`LiveOptions.kindOf`), and a kind that contradicts a stored thread is refused
   before anything is minted (`liveKind` in [`src/routes.ts`](../../src/routes.ts)). A spoken turn

@@ -1,7 +1,7 @@
 ---
 reports: spya-vc6uzm
-ending: awaiting
-comment: The guide searches the web, and a web page can now be brought into a Chat with a button, as an @-mention. Letting the guide open pages is planned; whether an agent may build it is q-g492eq.
+ending: shipped
+comment: The guide searches the web and can now open a web page, as Chat does; and a web page can be brought into a Chat with a button, as an @-mention.
 ---
 # Web search through a subagent, and results loaded into a Chat
 
@@ -9,8 +9,7 @@ comment: The guide searches the web, and a web page can now be brought into a Ch
 `feedback-reporter.ts` exit 0 on the production row), filed 2026-10-12 10:07 UTC from
 `/read/cf58f84d46a4a76bf5a5b039ac695fba6b80041c-spya-y4kxvy?margin=1&mode=search`. Taken
 together with his reply `spya-q2z37j` to [q-w26r6u](questions/q-w26r6u.md), queue item
-`qi-ht2wtjg8`. This session had no Sentry sign-in and did not write the Sentry status; the next
-feedback sweep does. Plan, reviews and measurements:
+`qi-ht2wtjg8`. Sentry status: `resolved`, written 2026-10-18 by the `qi-qsy8nqyt` session. Plan, reviews and measurements:
 [261012g](../plans/261012g-web-search-through-a-subagent-for-chat-and-the-guide.md); spikes:
 [261012b](../investigations/261012b-web-search-subagent-spikes.md).
 
@@ -20,9 +19,11 @@ feedback sweep does. Plan, reviews and measurements:
 > could be loaded into the Chat's context, so that I could ask stuff like 'where is this article
 > situated in the wider literature?' etc.
 
-**Ending: Awaiting Greg**, now on [q-g492eq](questions/q-g492eq.md) (the guide opening pages),
-with the search half and *Bring into this chat* shipped on `dev`. [q-madusw](questions/q-madusw.md)
-is answered.
+**Ending: Shipped** (2026-10-18). The search half and *Bring into this chat* landed first; the
+guide opening pages landed under `qi-qsy8nqyt` after Greg chose B on
+[q-g492eq](questions/q-g492eq.md) (any address, as Chat; risk R29 accepted),
+[261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2b-the-guide-may-open-a-page-as-chat-does).
+[q-madusw](questions/q-madusw.md) and q-g492eq are answered.
 
 What we did:
 

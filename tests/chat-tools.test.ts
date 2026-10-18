@@ -432,6 +432,70 @@ describe("runTool — what goes back to the model", () => {
     expect(dns.lookup).toHaveBeenCalledWith("example.com", { all: true });
   });
 
+  it("does not spend a guide's read on an address refused before an HTTP request", async () => {
+    const turn = { ...ctx, kind: "guide" as const };
+    expect((await runTool("read_web_page", { url: "not a URL" }, turn)).detail).toBe(
+      "invalid-url",
+    );
+    expect((await runTool("read_web_page", { url: "file:///etc/passwd" }, turn)).detail).toBe(
+      "unsupported-scheme",
+    );
+    expect((await runTool("read_web_page", { url: "http://127.0.0.1/private" }, turn)).detail).toBe(
+      "blocked-address",
+    );
+    dns.lookup.mockResolvedValueOnce([{ address: "10.0.0.5", family: 4 }]);
+    expect((await runTool("read_web_page", { url: "https://private.example/secret" }, turn)).detail).toBe(
+      "blocked-address",
+    );
+
+    dns.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    const fetched = vi.fn<typeof fetch>(async () =>
+      new Response("<html><body><main>A readable public page.</main></body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetched);
+    const valid = await runTool("read_web_page", { url: "https://example.com/public" }, turn);
+    expect(valid.detail).not.toBe("limit reached");
+    expect(fetched).toHaveBeenCalledOnce();
+  });
+
+  it("lets only one of two concurrent guide reads reach HTTP", async () => {
+    const turn = { ...ctx, kind: "guide" as const };
+    dns.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    const fetched = vi.fn<typeof fetch>(async () =>
+      new Response("<html><body><main>A readable public page.</main></body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetched);
+
+    const outcomes = await Promise.all([
+      runTool("read_web_page", { url: "https://one.example/public" }, turn),
+      runTool("read_web_page", { url: "https://two.example/public" }, turn),
+    ]);
+    expect(outcomes.filter((out) => out.detail === "limit reached")).toHaveLength(1);
+    expect(fetched).toHaveBeenCalledOnce();
+  });
+
+  it("spends the guide's read once an HTTP request is dispatched, even when it fails", async () => {
+    const turn = { ...ctx, kind: "guide" as const };
+    dns.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+    const fetched = vi.fn<typeof fetch>().mockRejectedValue(new Error("connection failed"));
+    vi.stubGlobal("fetch", fetched);
+
+    expect((await runTool("read_web_page", { url: "https://one.example/public" }, turn)).detail).toBe(
+      "connection",
+    );
+    expect((await runTool("read_web_page", { url: "https://two.example/public" }, turn)).detail).toBe(
+      "limit reached",
+    );
+    expect(fetched).toHaveBeenCalledOnce();
+    expect(dns.lookup).toHaveBeenCalledOnce();
+  });
+
   it("refuses a slug that is not one before it reaches the store", async () => {
     // A path segment chosen by a model. docs/project/security.md § the
     // traversal that got in by exactly this shape.
@@ -1353,7 +1417,7 @@ describe("the last round, where our tool use is disabled", () => {
     await drain("guide");
 
     const last = lastMessage(sent[MAX_TOOL_ROUNDS] as Record<string, unknown>);
-    expect(last).toContain("article tools are finished");
+    expect(last).toContain("article and web tools are finished");
     expect(last).not.toContain("library tools");
   });
 

@@ -320,6 +320,17 @@ describe("the tool a live session may ask us to run", () => {
     expect(own.body.detail).not.toBe("no such tool");
   });
 
+  /* Since 2026-10-18 the typed guide reads web pages (plan 261017e § Stage 2)
+     and Live's does not: a spoken guide is gated by what Live offers it
+     (`spokenToolsFor`), not by `toolsFor("guide")`, or `read_web_page` — which
+     is in `LIVE_SERVER_TOOLS` for Chat's sessions — would run unoffered. */
+  it("does not let a guide's session read a web page", async () => {
+    const refused = await tool({ name: "read_web_page", args: { url: "https://example.com/x" }, kind: "guide" });
+    expect(refused.status).toBe(200);
+    expect(refused.body.detail).toBe("no such tool");
+    expect(JSON.stringify(refused.body)).not.toContain("search_web");
+  });
+
   it("refuses a kind that takes no live conversation", async () => {
     expect((await tool({ name: "search_article_words", args: { query: "the" }, kind: "explore" })).status).toBe(400);
   });

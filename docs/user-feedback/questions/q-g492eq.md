@@ -1,10 +1,11 @@
 ---
 id: q-g492eq
 report: spya-vc6uzm
-status: open
+status: answered
 asked: 2026-10-17
 title: May an agent build the guide opening pages, limited to addresses it was handed?
-refs: qi-jbfehgss · q-madusw · reply spya-eqtvhz · docs/plans/261017e-bring-a-web-page-into-chat.md · docs/user-feedback/261012_1007-web-search-through-a-subagent.md · SPIDERYARN-READING2-HY
+acted: spya-cab6zp
+refs: qi-qsy8nqyt · docs/project/security-risks.md#r29 · docs/investigations/261018d-guide-reads-web-pages-measured.md · qi-jbfehgss · q-madusw · reply spya-eqtvhz · docs/plans/261017e-bring-a-web-page-into-chat.md · docs/user-feedback/261012_1007-web-search-through-a-subagent.md · SPIDERYARN-READING2-HY
 ---
 You said yes to the guide opening pages (2A). Because it changes one of our security checks, an agent working on its own does not make that change without your say-so. The plan is written; may an agent build it?
 
@@ -27,3 +28,7 @@ The risk, plainly. Opening a page means sending a request to an address. The gui
 Cost and speed. A page adds up to 12,000 characters to the answer's input and up to 20 seconds of waiting. One page per answer keeps that bounded; the guide's eval will measure how often it reads, how long answers take and what they cost, before and after.
 
 If yes. An agent builds it from the plan, with tests that a made-up address is refused before anything is fetched, runs the guide eval, has GPT Sol review the code, and lands it on dev for the Overseer to deploy.
+
+Greg's reply, 2026-10-18 10:28 UTC (spya-cab6zp): "B"
+
+Acted on in qi-qsy8nqyt: the typed guide opens any address with Chat's checks, one page an answer; Live's guide does not. The risk is R29 in docs/project/security-risks.md, accepted with this reply quoted. Plan docs/plans/261017e-bring-a-web-page-into-chat.md § Stage 2; measured in docs/investigations/261018d-guide-reads-web-pages-measured.md.

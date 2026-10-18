@@ -4983,9 +4983,9 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  *
  * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
  * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
- * context below names either `guide` or no kind, so `runTool`'s guide list or
- * default `CHAT_TOOLS` would call it an unknown tool even if the first check
- * went. This endpoint has no thread to leave out of that tool's list —
+ * context below is marked `spoken`, so `runTool`'s `spokenToolsFor` list would
+ * call it an unknown tool even if the first check went. This endpoint has no
+ * thread to leave out of that tool's list —
  * docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
@@ -4993,9 +4993,9 @@ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   if (typeof name !== "string" || !LIVE_SERVER_TOOLS.has(name)) {
     throw httpError(400, "That is not a tool a live session may run");
   }
-  /* **The session's kind, so `runTool`'s own gate applies** (`toolsFor`): a
-     guide's model that names a tool the guide is not offered is answered as
-     an unknown tool, exactly as in a typed guide (plan 261009i). Said by the
+  /* **The session's kind, so `runTool`'s own spoken gate applies**: a guide's
+     model that names a tool the spoken guide is not offered is answered as an
+     unknown tool (plan 261009i). Said by the
      reader's own page, which read it from the conversation it started; the
      model chooses only the name. Absent is a chat's or Learn's session, which
      run the shared eight as before. */
@@ -5005,6 +5005,9 @@ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   const article = await loadArticle(slug);
   return runTool(name, (args ?? {}) as Record<string, unknown>, {
     ...(kind === "guide" ? { kind } : {}),
+    /* Gated by what Live offers (`spokenToolsFor`), not the typed guide's
+       list, which since plan 261017e reads web pages. */
+    spoken: true,
     slug,
     meta: article.meta,
     blocks: article.blocks,

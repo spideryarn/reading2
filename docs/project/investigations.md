@@ -64,6 +64,10 @@ measured with scripted readers and a blind judge:
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.
+- [261018d](../investigations/261018d-guide-reads-web-pages-measured.md) — the guide given
+  `read_web_page`: it opened a page the reader handed it 6 of 6 times (0 before), opened no search
+  result and kept sending the subject to Chat, at about $0.025 and 5 s a read; a planted read of the
+  reader's About you tried 0 of 3 times; answers a few words longer.
 - [261012a](../investigations/261012a-guide-hands-off-to-chat-and-shorter-measured.md) — the guide
   hands a content question to a new Chat (6 of 6 content turns, none of 14 reading turns) and says
   less: median 105 words to 55 on the next-steps eval, 103 to 64 on the broader one.

