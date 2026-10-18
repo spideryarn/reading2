@@ -459,7 +459,8 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
 - **`src/html.ts` § `escapeHtml`, `plainTitle`** — untrusted text becoming markup. `src/pdf-read.ts`
   still has a private `escapeHtml` that misses `'`.
 - **`src/paper-sources.ts` § `resolvePaperSource`, `arxivIdOf`, `ARXIV_ID_PATTERN`** — whether an
-  address names a paper a source knows (arXiv today), its one key and slug, and the addresses to
+  address names a paper a source knows (arXiv and its mirrors, and Europe PMC since 2026-10-18),
+  its one key and slug, and the addresses to
   fetch it from. The one copy of the arXiv id pattern for addresses; a new source is one object in
   `SOURCES` ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)).
 - **`src/doi-url.ts` § `doiUrl`, `doiOfUrl`, `doiPath`** — a DOI becoming a doi.org link or a
