@@ -237,6 +237,38 @@ findings, all taken. **They override the stage text above where they differ**:
 - **S9** One integration matrix for both routes: requested, final and saved addresses, base,
   source link, Refresh and duplicate, with a second owner and a force-extract successor revision.
 
+## Built, 2026-10-18
+
+Two Opus subagents in parallel, one per half, in `d5aafcd19`.
+
+- **Europe PMC** (`src/europe-pmc.ts`, `src/jats.ts`, `fetchEuropePmc` in `src/fetch.ts`, the
+  paper source, the fallback in `fetchByAddress`). The challenge check runs only on an address that
+  already names a paper, so an ordinary page is not parsed twice. Identifier routes: `/doi/…` on the
+  sample's Atypon hosts, `/article/<doi>` on Springer, PIIs on ScienceDirect, cell.com and the
+  Lancet: 21 of the 29 refused links (the plan said 20; the Lancet's makes 7 PIIs). The XML itself
+  is not kept; the manifest's `bytes`/`sha256`/`contentType` describe it, `storedBytes`/
+  `storedSha256` the page. The key keeps Europe PMC's upper-case `PMC`, because a key must match
+  what `urlKey` gave the address before the source existed. **Live from the box**: cell.com (by
+  PII), PNAS and SAGE (by DOI) each come in with title, authors, date, journal, figures (3, 5, 8)
+  and the source link `europepmc.org/article/PMC/…`; the closed Cell paper and the Neuron paper end
+  `no-open-copy`, i.e. today's failure. Red first: the fallback stubbed to `null` turned 10 of 16
+  fallback tests red.
+- **Saved page** (`src/saved-from.ts`, `savedSource` in `src/urls.ts`, migration
+  `20261018120458_revision_saved_from_url`, applied locally only, `Target: 127.0.0.1:54362`). One
+  meta exactly, or none believed. The masthead says *Saved from &lt;host&gt;* in place of *Uploaded
+  from a file*. **A saved address with a query (PLOS's `?id=…`) gets no public line**, because
+  `publicSourceUrl` refuses any query; the owner still sees it; Help says so. The private-copy offer
+  on a public page still uses only a fetched address. Article transfer runs the claim through
+  `publicSourceUrl`. **Seen in a browser** (Sonnet, Playwright, own dev server): a PLOS article
+  saved with the bookmarklet's function and uploaded shows *Saved from journals.plos.org*, and
+  pasting the PLOS address then finds it on the shelf instead of importing again.
+- **Sol's code review** ([261018j-code-review-sol.md](261018j-code-review-sol.md), *SHIP AFTER
+  FIXES (MADE)*): C1 the path checked whole, not by prefix (encoded separators); C2 an explicit
+  `:443` refused; C3 XML declared as another charset refused; C4 a nesting-depth bound before the
+  recursive converter. Each red first. Nothing found in the fallback, the manifest, the saved-address
+  lifecycle or the public boundary. It could not reach the database or bind sockets in its sandbox;
+  those suites were re-run here, green.
+
 ## The simpler options passed over
 
 - **For (1), the bookmarklet alone** (q-emrf2p's recommended answer). Greg chose otherwise: no step

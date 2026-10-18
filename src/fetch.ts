@@ -2712,8 +2712,18 @@ export async function fetchBibliographicJson(
 
 /** The one host. Not `ebi.ac.uk`, and not `europepmc.org`, whose pages are not the API. */
 export const EUROPE_PMC_HOST = "www.ebi.ac.uk";
-/** And the one path under it: EBI serves a great deal else from that host. */
+/** And the common prefix of the two allowed paths: EBI serves a great deal else from that host. */
 export const EUROPE_PMC_PATH_PREFIX = "/europepmc/webservices/rest/";
+/** The only two REST resources this door needs. A prefix check alone lets encoded separators hide traversal. */
+const EUROPE_PMC_PATH_PREFIX_RE = EUROPE_PMC_PATH_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const EUROPE_PMC_PATH = new RegExp(
+  `^(?:${EUROPE_PMC_PATH_PREFIX_RE}search|${EUROPE_PMC_PATH_PREFIX_RE}PMC\\d{1,9}/fullTextXML)$`,
+);
+
+/** The authority as supplied, before URL parsing erases an explicit default port. */
+function suppliedAuthority(input: string): string | null {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/?#]*)/.exec(input.trim())?.[1] ?? null;
+}
 
 /**
  * The bounds, fixed, per kind of answer. A search answer is a page of JSON;
@@ -2742,12 +2752,25 @@ function europePmcHeaders(as: "json" | "xml"): () => Record<string, string> {
   });
 }
 
+/** Whether an HTTP charset label is one of the aliases the Encoding Standard maps to UTF-8. */
+function isUtf8Charset(label: string): boolean {
+  try {
+    return new TextDecoder(label).encoding === "utf-8";
+  } catch {
+    return false;
+  }
+}
+
 async function readEuropePmcXml(res: Response, finalUrl: string, _chain: string[], opts: Resolved): Promise<EuropePmcXml> {
   const bytes = await readBody(res, finalUrl, opts);
   const contentType = res.headers.get("content-type");
   const mediaType = mimeType(contentType);
   if (mediaType !== "application/xml" && mediaType !== "text/xml") {
     throw new FetchFailure("unsupported-type", finalUrl, "Europe PMC did not answer with XML.", { status: res.status });
+  }
+  const charset = charsetFromContentType(contentType);
+  if (charset !== null && !isUtf8Charset(charset)) {
+    throw new FetchFailure("unsupported-type", finalUrl, "Europe PMC's XML was not UTF-8.", { status: res.status });
   }
   let text: string;
   try {
@@ -2761,9 +2784,10 @@ async function readEuropePmcXml(res: Response, finalUrl: string, _chain: string[
 /**
  * **One GET to Europe PMC's REST API**: a search as JSON, or a paper's full
  * text as XML. Refused before DNS unless it is `https:`, no port, no
- * credentials, host exactly `EUROPE_PMC_HOST` and path under
- * `EUROPE_PMC_PATH_PREFIX` — the WHATWG parser has already resolved any dot
- * segment, so `…/rest/../../x` is checked as the `/x` it is. Then the same
+ * credentials, host exactly `EUROPE_PMC_HOST` and one of the two resource paths
+ * this caller uses. Matching the whole path, rather than only
+ * `EUROPE_PMC_PATH_PREFIX`, also refuses encoded slashes and double-encoded dot
+ * segments before a server or proxy gets a chance to decode them. Then the same
  * guarded `fetchBytes` as every other request: the address guard and its pin,
  * one deadline, the byte cap on what arrives.
  */
@@ -2775,13 +2799,15 @@ export async function fetchEuropePmc(
   options: BibliographicFetchOptions = {},
 ): Promise<unknown> {
   const target = parseTarget(input);
+  const authority = suppliedAuthority(input);
   if (
     target.protocol !== "https:" ||
+    authority?.toLowerCase() !== EUROPE_PMC_HOST ||
     target.port !== "" ||
     target.username !== "" ||
     target.password !== "" ||
     target.hostname.toLowerCase() !== EUROPE_PMC_HOST ||
-    !target.pathname.startsWith(EUROPE_PMC_PATH_PREFIX)
+    !EUROPE_PMC_PATH.test(target.pathname)
   ) {
     throw new FetchFailure("blocked-address", input.trim(), "Only Europe PMC's REST API is asked for a paper's free copy.");
   }

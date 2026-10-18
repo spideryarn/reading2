@@ -223,6 +223,13 @@ describe("what the converter builds", () => {
     expect(annotation?.getAttribute("encoding")).toBe("application/x-tex");
     expect(annotation?.textContent).toBe("x^2");
   });
+
+  it("refuses pathological nesting before the recursive converter sees it", () => {
+    const nested = `${"<unknown>".repeat(2_000)}words${"</unknown>".repeat(2_000)}`;
+    expect(() => jatsToHtml(article(`<p>${nested}</p>`), "PMC1")).toThrowError(
+      expect.objectContaining({ reason: "too-large" }),
+    );
+  });
 });
 
 /* ------------------------------------------------------------------ *
@@ -257,6 +264,8 @@ describe("what is refused before it is parsed (S5)", () => {
 
   it("refuses an internal entity, which jsdom would otherwise expand", () => {
     expect(refusal(`<!DOCTYPE article [<!ENTITY e "boom">]>${BODY}`)).toBe("declarations");
+    expect(refusal(`\uFEFF<!DoCtYpE article [\n<!EnTiTy % e "boom">\n]>${BODY}`)).toBe("declarations");
+    expect(refusal(`<!DOCTYPE article PUBLIC "a" "b" [<!ENTITY e "boom">]>${BODY}`)).toBe("declarations");
   });
 
   it("refuses an external entity and an external parameter entity, and asks for neither", async () => {

@@ -43,7 +43,11 @@ describe("fetchEuropePmc, the fixed door", () => {
       "https://www.ebi.ac.uk/europepmc/webservices/restful/x",
       "https://www.ebi.ac.uk/europepmc/webservices/rest/../../ebisearch/x",
       "https://www.ebi.ac.uk/europepmc/webservices/rest/%2e%2e/%2e%2e/x",
+      "https://www.ebi.ac.uk/europepmc/webservices/rest/%2e%2e%2febisearch/x",
+      "https://www.ebi.ac.uk/europepmc/webservices/rest/..%2febisearch/x",
+      "https://www.ebi.ac.uk/europepmc/webservices/rest/%252e%252e/ebisearch/x",
       "http://www.ebi.ac.uk/europepmc/webservices/rest/search?query=x",
+      "https://www.ebi.ac.uk:443/europepmc/webservices/rest/search?query=x",
       "https://www.ebi.ac.uk:8443/europepmc/webservices/rest/search?query=x",
       "https://user:pw@www.ebi.ac.uk/europepmc/webservices/rest/search?query=x",
       "https://www.ebi.ac.uk.evil.example/europepmc/webservices/rest/search?query=x",
@@ -99,6 +103,19 @@ describe("fetchEuropePmc, the fixed door", () => {
     await expect(fetchEuropePmc(XML, "xml", { fetchImpl: latin1, resolve })).rejects.toMatchObject({ code: "unsupported-type" });
     const html = vi.fn<FetchLike>(async () => new Response("<html></html>", { headers: { "content-type": "text/html" } }));
     await expect(fetchEuropePmc(XML, "xml", { fetchImpl: html, resolve })).rejects.toMatchObject({ code: "unsupported-type" });
+
+    const declaredUtf16 = vi.fn<FetchLike>(async () =>
+      new Response(body as unknown as BodyInit, { headers: { "content-type": "application/xml; charset=utf-16" } }),
+    );
+    await expect(fetchEuropePmc(XML, "xml", { fetchImpl: declaredUtf16, resolve })).rejects.toMatchObject({
+      code: "unsupported-type",
+    });
+    const utf16Bom = vi.fn<FetchLike>(async () =>
+      new Response(new Uint8Array([0xff, 0xfe, 0x3c, 0x00, 0x61, 0x00, 0x2f, 0x00, 0x3e, 0x00]) as unknown as BodyInit, {
+        headers: { "content-type": "application/xml" },
+      }),
+    );
+    await expect(fetchEuropePmc(XML, "xml", { fetchImpl: utf16Bom, resolve })).rejects.toMatchObject({ code: "unsupported-type" });
   });
 
   it("caps the XML at its own limit", async () => {

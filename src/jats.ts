@@ -44,7 +44,7 @@ const MATHML_NS = "http://www.w3.org/1998/Math/MathML";
 const XLINK_NS = "http://www.w3.org/1999/xlink";
 
 /** How much a document may be. The six measured papers are 2,300–3,800 elements and 130–480 KB. */
-export const JATS_LIMITS = { maxElements: 200_000, maxHtmlChars: 20 * 1024 * 1024 } as const;
+export const JATS_LIMITS = { maxElements: 200_000, maxDepth: 512, maxHtmlChars: 20 * 1024 * 1024 } as const;
 
 export type JatsRefusal = "declarations" | "parse" | "not-an-article" | "no-body" | "too-large";
 
@@ -70,6 +70,24 @@ function refuseDeclarations(xml: string): void {
   if (doctypes === 0) return;
   const allowed = xml.match(JATS_DOCTYPE)?.length ?? 0;
   if (doctypes !== 1 || allowed !== 1) throw new JatsRefused("declarations");
+}
+
+/** Bound both the amount of work and its nesting before the recursive converter sees it. */
+function refuseOversizedTree(document: Document): void {
+  const root = document.documentElement;
+  const stack: { element: Element; depth: number }[] = [{ element: root, depth: 1 }];
+  let elements = 0;
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) break;
+    elements += 1;
+    if (elements > JATS_LIMITS.maxElements || current.depth > JATS_LIMITS.maxDepth) {
+      throw new JatsRefused("too-large");
+    }
+    for (let child = current.element.lastElementChild; child !== null; child = child.previousElementSibling) {
+      stack.push({ element: child, depth: current.depth + 1 });
+    }
+  }
 }
 
 /** An id we will carry over: what a JATS id looks like, and nothing a selector or a URL could be bent by. */
@@ -983,7 +1001,7 @@ export function jatsToHtml(xml: string, pmcid: string): string {
   } catch {
     throw new JatsRefused("parse");
   }
-  if (source.getElementsByTagName("*").length > JATS_LIMITS.maxElements) throw new JatsRefused("too-large");
+  refuseOversizedTree(source);
   const article = source.documentElement;
   if (article.localName !== "article" || article.namespaceURI !== null) throw new JatsRefused("not-an-article");
   const body = child(article, "body");
