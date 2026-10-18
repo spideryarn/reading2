@@ -50,6 +50,14 @@ const CORPUS: Array<[string, string]> = [
      an HTML integration point inside MathML, where the namespace switches back. */
   ["forged block link", `<p><a href="#x" data-block-link="spya-k3m9qt" class="xref">a</a></p>`],
   ["svg marking", `<svg><g class="xref" data-xref="n-1"><text>x</text></g></svg>`],
+  /* An article's own `title`, moved onto `data-author-title` (plan 261018n) —
+     in each namespace, beside a forged copy, and on the one element exempt. */
+  ["author title", `<p><a href="https://e.com/" title="'A', B 2020">a</a> <abbr title="circa">c.</abbr></p>`],
+  ["author title, unnamed", `<p><a href="https://e.com/" title="Home"><img src="/i.png"></a></p>`],
+  ["author title, forged", `<p><span data-author-title="x" title="y">z</span></p>`],
+  ["author title, iframe", `<iframe src="https://www.youtube.com/embed/a" title="A talk"></iframe>`],
+  ["author title, svg", `<svg><circle r="5" title="c"></circle></svg>`],
+  ["author title, mathml", `<math><mi title="x">x</mi></math>`],
   [
     "mathml marking",
     `<math><mi class="mode-band tml-left" data-block-link="x">x</mi><mtext><span class="xref tml-left" data-xref="1">y</span></mtext></math>`,

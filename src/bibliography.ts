@@ -51,6 +51,7 @@ import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
 import { arxivIdOf } from "./paper-sources.js";
+import { AUTHOR_TITLE_ATTR } from "./sanitize-policy.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -1079,7 +1080,11 @@ export function entryIdentifiers(entry: string): { dois: string[]; arxivs: strin
 export interface Anchor {
   href: string;
   text: string;
-  /** The anchor's `title` attribute — gwern writes the work's title there. */
+  /**
+   * The anchor's own hover text — gwern writes the work's title there. The
+   * policy moves `title` onto `AUTHOR_TITLE_ATTR` (src/sanitize-policy.ts), and
+   * blocks stored before 2026-10-18 still carry `title`, so both are read.
+   */
   label: string;
   /** Every URL the anchor carries: href, and gwern's `data-url-original`/`data-href-mobile`. */
   urls: string[];
@@ -1121,7 +1126,7 @@ export function anchorsOf(html: string): Anchor[] {
     out.push({
       href,
       text: text(a.textContent),
-      label: text(a.getAttribute("title")),
+      label: text(a.getAttribute(AUTHOR_TITLE_ATTR) ?? a.getAttribute("title")),
       urls,
     });
   }

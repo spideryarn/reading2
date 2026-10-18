@@ -30,7 +30,7 @@ import { RESERVED_ATTRS } from "./reserved.js";
  * reading view adds afterwards unforgeable, including the ones nobody has
  * written yet.
  *
- * Two families, and a third would need an argument:
+ * Three families, and a fourth would need an argument:
  *
  * - **the pipeline's own `data-spya-*` namespace** (src/reserved.ts). Stage 2
  *   writes note and callout stamps for stage 3; stage 3 stamps `wasId`/`wasName`
@@ -43,15 +43,33 @@ import { RESERVED_ATTRS } from "./reserved.js";
  *   `data-href-mobile`, the real link behind an archive copy, which
  *   src/bibliography.ts reads off the sanitised block. Nothing in the browser reads
  *   either.
+ * - **the author's own hover text**, `AUTHOR_TITLE_ATTR`, which this policy
+ *   writes from the article's `title` — below.
  *
  * Adding a name here is the one way to let an article carry it, so
  * tests/sanitize-allowlist.test.ts pins this list exactly and fails if any
  * `data-…` spelled in `src/` survives without being on it.
  */
+/**
+ * **Where an article's own `title` goes**, so the browser draws no grey box over
+ * the prose and our card can show the words instead, labelled as the author's
+ * (ProseHoverCard.tsx; src/web/author-title.ts decides which are worth it).
+ * Greg, 2026-10-18, spya-y0xzwm: *"We should indicate that it's author provided
+ * if we do keep this."* Plan 261018n.
+ *
+ * **A kept name, not a reserved one, and forging it is not a hole.** An article
+ * that ships `data-author-title="…"` itself gets exactly what `title="…"` would
+ * have got it: its own words, shown as its own. Nothing of ours is claimed —
+ * which is the test every other kept name had to pass, and the reason
+ * tests/sanitize-allowlist.test.ts lets browser code read this one.
+ */
+export const AUTHOR_TITLE_ATTR = "data-author-title";
+
 export const ARTICLE_DATA_ATTRS: readonly string[] = [
   ...Object.values(RESERVED_ATTRS),
   "data-url-original",
   "data-href-mobile",
+  AUTHOR_TITLE_ATTR,
 ];
 
 /**
@@ -198,7 +216,13 @@ export const SANITIZER_VERSION = 8;
    seventh name, the rule now fails closed. A new marking needs no edit here,
    and tests/sanitize-allowlist.test.ts scans `src/` to prove it. Stricter,
    so bumped. Greg approved the defence edit, 2026-10-01;
-   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md. */
+   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md.
+
+   **Not bumped on 2026-10-18**, when `title` started moving onto
+   `AUTHOR_TITLE_ATTR` (`moveAuthorTitle`). An artefact cleaned under 8 still
+   carries `title`, which is kept text rather than a hazard, and the browser
+   pass moves it at ingress; re-cleaning every article would find nothing to
+   remove. Plan 261018n. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -638,6 +662,52 @@ function stripOwnApiUrls(el: Element): void {
   }
 }
 
+/**
+ * An article's `title` attribute, moved onto `AUTHOR_TITLE_ATTR` — the words
+ * kept, the browser's grey box gone. Greg's option C on q-z2c269, 2026-10-18.
+ *
+ * - **Not on an `<iframe>`**, whose `title` is the frame's accessible name
+ *   rather than a tooltip.
+ * - **What a screen reader had from it, it keeps** (GPT Sol, plan review): a
+ *   link with no words, no `alt` and no label, and an image with no `alt` at
+ *   all, get it as `aria-label`, as 261017g did for our own controls; an
+ *   `<abbr>` gets its expansion as `aria-description`. An image whose `alt=""`
+ *   says it is decorative stays decorative. Other elements' titles were only
+ *   ever a description, and repeating 170k of them, mostly Wikipedia's page
+ *   names, onto every link is not worth what it would say.
+ * - **An article's own `AUTHOR_TITLE_ATTR` wins over its `title`**, so a pass
+ *   over our own output, which has no `title` left, changes nothing, and an
+ *   element carrying both keeps one.
+ *
+ * Not a reason to bump `SANITIZER_VERSION`: an artefact cleaned before this
+ * still has `title`, which is kept text, not a hazard — and the browser pass
+ * moves it at ingress anyway.
+ */
+function moveAuthorTitle(el: Element): void {
+  const title = el.getAttribute("title");
+  if (title === null || el.tagName === "IFRAME") return;
+  el.removeAttribute("title");
+  if (!el.hasAttribute(AUTHOR_TITLE_ATTR)) el.setAttribute(AUTHOR_TITLE_ATTR, title);
+  if (!title.trim()) return;
+  const unnamed =
+    (el.tagName === "A" && !hasAName(el)) ||
+    (el.tagName === "IMG" && !el.hasAttribute("alt") && !hasALabel(el));
+  if (unnamed) el.setAttribute("aria-label", title);
+  if (el.tagName === "ABBR" && !el.hasAttribute("aria-description")) {
+    el.setAttribute("aria-description", title);
+  }
+}
+
+function hasALabel(el: Element): boolean {
+  return el.hasAttribute("aria-label") || el.hasAttribute("aria-labelledby");
+}
+
+/** Words, a non-empty `alt` inside, or a label of its own. */
+function hasAName(el: Element): boolean {
+  if ((el.textContent ?? "").trim() || hasALabel(el)) return true;
+  return Array.from(el.querySelectorAll("[alt]")).some((i) => (i.getAttribute("alt") ?? "").trim());
+}
+
 export function installArticlePolicy(purify: DOMPurify): void {
   /**
    * MathML's machine-readable copy of a formula, removed along with its text.
@@ -764,6 +834,8 @@ export function installArticlePolicy(purify: DOMPurify): void {
      * Every URL-bearing attribute, not just `href` and `src` — a rule that
      * covers four of six looks exactly like a rule that covers six. */
     stripOwnApiUrls(el);
+
+    moveAuthorTitle(el);
 
     if (el.tagName !== "IFRAME") return;
     if (!isAllowedEmbed(el.getAttribute("src"))) {

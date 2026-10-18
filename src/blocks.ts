@@ -27,7 +27,7 @@ import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from 
    src/reserved.ts, which is the only file allowed to name one of these. */
 import { CONTEXT_ATTRS, CONTEXT_ID_PATTERN, RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
-import { SANITIZER_VERSION } from "./sanitize-policy.js";
+import { AUTHOR_TITLE_ATTR, SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
    This file *writes* blocks.json — the spine every later stage addresses text
    through (docs/project/block-ids.md) — so a second declaration of its shape is
@@ -863,9 +863,14 @@ function emptyKey(tag: string, html: string): string | null {
      sides of a match disagree about markup: no id of ours, no href
      `retargetAnchors` repointed. That is the whole reason the general
      structural digest is deferred and this narrow one is not. */
+  /* **`title` is spelt `AUTHOR_TITLE_ATTR`**, because a block stored before
+     2026-10-18 says `title` and the sanitiser now writes the new name for the
+     same words (src/sanitize-policy.ts § `moveAuthorTitle`). Two spellings of
+     one attribute, or every titled `<hr>` re-mints on its first re-extraction —
+     GPT Sol, plan review of 261018n. */
   const attrs = Array.from(root.attributes)
     .filter((a) => a.name !== "id")
-    .map((a) => [a.name, a.value] as const)
+    .map((a) => [a.name === "title" ? AUTHOR_TITLE_ATTR : a.name, a.value] as const)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return `${EMPTY_KEY}${tag}:${JSON.stringify([attrs, root.innerHTML])}`;
 }

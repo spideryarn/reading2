@@ -322,6 +322,26 @@ describe("a text-less block with markup in it mints rather than guessing", () =>
   });
 
   /**
+   * **A rule stored before 2026-10-18 still says `title`**, and the sanitiser
+   * now writes `data-author-title` (plan 261018n). The two spellings are one
+   * attribute to the key, or every titled empty block re-mints on its first
+   * re-extraction — GPT Sol's P1 on the plan.
+   */
+  it("matches a stored rule's old title to the sanitiser's new name for it", () => {
+    const rules = (body: string) => `<article><h1>Rules</h1>${body}</article>`;
+    const doc = rules(`<p>One.</p><hr title="thin"><p>Two.</p>`);
+    const first = splitIntoBlocks(doc);
+    const legacy = first.blocks.map((b) => ({
+      ...b,
+      html: b.html.replace("data-author-title=", "title="),
+    }));
+    expect(legacy.some((b) => b.html.includes(`title="thin"`))).toBe(true);
+    const second = resplit(doc, legacy);
+    expect(idsOf(second.blocks)).toEqual(idsOf(first.blocks));
+    expect(second.stats.minted).toBe(0);
+  });
+
+  /**
    * **`<p></p>` and `<p>&#160;</p>` are two different paragraphs**, and the
    * second draws a blank line. `extractText` collapses a non-breaking space to
    * nothing — U+00A0 is `\s` — so the text side of the key cannot tell them

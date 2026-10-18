@@ -220,9 +220,14 @@ describe("what the article must keep", () => {
     expect(sanitizeHtml(`<p id="spya-k3m9qt">g</p>`)).toBe(`<p id="spya-k3m9qt">g</p>`);
   });
 
-  it("declares only the pipeline namespace and the two publisher addresses", () => {
+  it("declares only the pipeline namespace, the two publisher addresses and the author's hover text", () => {
     expect([...ARTICLE_DATA_ATTRS].sort()).toEqual(
-      [...Object.values(RESERVED_ATTRS), "data-href-mobile", "data-url-original"].sort(),
+      [
+        ...Object.values(RESERVED_ATTRS),
+        "data-href-mobile",
+        "data-url-original",
+        "data-author-title",
+      ].sort(),
     );
     expect([...ARTICLE_CLASSES]).toEqual(["pdf-uncertain"]);
   });
@@ -258,10 +263,14 @@ describe("completeness: no marking the app uses survives unless it is declared",
        `data-url-original` in src/web would be exactly that — a publisher's
        attribute with our meaning on it — and goes red here. The four below are
        ours, and scrubbed from a stranger's markup on the way in
-       (src/reserved.ts). */
+       (src/reserved.ts). `data-author-title` is the one kept name browser
+       code may read, because its meaning *is* "the article's own words": a
+       publisher who ships it gets what `title` would have got them, labelled
+       as theirs (src/sanitize-policy.ts § `AUTHOR_TITLE_ATTR`, plan 261018n). */
     const web = dataNamesInSource("src/web/**/*.{ts,tsx,css}");
     const trusted = [...web.keys()].filter((n) => ARTICLE_DATA_ATTRS.includes(n)).sort();
     expect(trusted).toEqual([
+      "data-author-title",
       "data-spya-note",
       "data-spya-note-back",
       "data-spya-note-ref",
