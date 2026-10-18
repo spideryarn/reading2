@@ -52,6 +52,10 @@ measured with scripted readers and a blind judge:
   work, three ways, against gates set before the run: registry abstracts plus one batched Haiku
   call at about a cent an article and 4.6% unsupported, against a web search per work at ~$0.32
   and 17%; an Opus judge, a hand check, and the identity failures a judge cannot see.
+- [261018b](../investigations/261018b-front-and-back-matter-eval.md) — front and back matter
+  (authors, abstract, contents, thanks, references) found on 52 articles in three sets, two held
+  out: a free label rule and one Haiku call, merged and held by code, fold no prose and find 71–96%
+  of it; what each held-out set broke, and what is still missed.
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.
