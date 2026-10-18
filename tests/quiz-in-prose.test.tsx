@@ -414,6 +414,7 @@ function expectPlacedLines(): void {
      tooltips are explicitly forbidden by docs/project/tooltips.md: they add a
      second, hover-only sentence that a finger can never reach. */
   expect(lineFor(Q1).getAttribute("title"), "the question grew a native tooltip").toBeNull();
+  expect(lineFor(Q1).getAttribute("data-tip"), "the question grew a second, hover-only sentence").toBeNull();
 }
 
 describe("the quiz's questions in the prose", () => {

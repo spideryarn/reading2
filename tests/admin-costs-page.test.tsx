@@ -692,7 +692,7 @@ describe("what a narrow window needs", () => {
     const th = [...host.querySelectorAll("table[data-pivot] thead th[data-col]")].find(
       (c) => c.textContent === long,
     );
-    expect(th?.getAttribute("title")).toBe(long);
+    expect(th?.getAttribute("data-tip")).toBe(long);
     const inner = th?.querySelector("[data-col-label]");
     expect(inner?.className).toContain("tw:truncate");
     expect(inner?.className).toMatch(/tw:max-w-/);
@@ -715,7 +715,7 @@ describe("what a narrow window needs", () => {
     const label = cells[0]?.querySelector("[data-label]");
     expect(label?.className).toMatch(/tw:max-w-/);
     expect(cells[0]?.className).not.toContain("tw:min-w-56");
-    expect(first?.querySelector("[data-drill]")?.getAttribute("title")).toContain(ADMIN_EMAIL_LOCAL);
+    expect(first?.querySelector("[data-drill]")?.getAttribute("data-tip")).toContain(ADMIN_EMAIL_LOCAL);
   });
 
   /* Every table here scrolls inside its own box, and at 390px most of each

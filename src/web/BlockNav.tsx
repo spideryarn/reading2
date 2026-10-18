@@ -126,7 +126,7 @@ export function BlockNav({ targets, currentId, onGo, noun }: Props) {
         type="button"
         onClick={go(prev)}
         disabled={!prev}
-        title={`Previous ${noun}, up the article`}
+        data-tip={`Previous ${noun}, up the article`}
         aria-label={`Previous ${noun}`}
       >
         <ChevronLeft size={15} />
@@ -138,7 +138,7 @@ export function BlockNav({ targets, currentId, onGo, noun }: Props) {
         type="button"
         onClick={go(next)}
         disabled={!next}
-        title={`Next ${noun}, down the article`}
+        data-tip={`Next ${noun}, down the article`}
         aria-label={`Next ${noun}`}
       >
         <ChevronRight size={15} />

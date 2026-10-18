@@ -1298,7 +1298,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               type="button"
               className="fb-tab fb-tab-shortcut"
               aria-pressed={view === "earlier" && choice.show === "waiting"}
-              title={shortcutTitle(liveQuestions)}
+              data-tip={shortcutTitle(liveQuestions)}
               onClick={() => {
                 setShow("waiting");
                 replies.close();

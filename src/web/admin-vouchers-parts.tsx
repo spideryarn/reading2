@@ -116,7 +116,7 @@ export function StarterSelect({
           ))}
         </select>
       </label>
-      <button type="button" disabled={disabled} onClick={reload} title="Read your articles again" className={BUTTON}>
+      <button type="button" disabled={disabled} onClick={reload} data-tip="Read your articles again" className={BUTTON}>
         <RefreshCw size={12} />
         Refresh
       </button>

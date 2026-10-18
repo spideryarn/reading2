@@ -51,7 +51,7 @@ export function ShelfPhoneHint() {
           rememberShelfPhoneHintDismissed();
           setPhone((p) => ({ ...p, dismissed: true }));
         }}
-        title="Don't show this again"
+        data-tip="Don't show this again"
         aria-label="Dismiss"
       >
         <X size={14} />

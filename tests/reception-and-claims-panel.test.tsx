@@ -2115,7 +2115,7 @@ describe("the work: title, authors and year", () => {
       "Authors and year as the AI read them off the page; each was found in the page's extract.",
     );
     /* Drawn as a reading, not a record: its own quiet class with the caveat on hover. */
-    expect(host.querySelector(".rcp-byline")?.getAttribute("title")).toContain("As the AI read it");
+    expect(host.querySelector(".rcp-byline")?.getAttribute("data-tip")).toContain("As the AI read it");
   });
 
   it("keeps the engine's title when it is whole, even beside a workTitle", () => {
@@ -2527,7 +2527,7 @@ describe("ReceptionAndClaimsPanel — threads", () => {
     const theme = host.querySelectorAll(".rcp-thread")[1] as HTMLButtonElement;
     expect(theme.disabled).toBe(true);
     expect(theme.querySelector(".rcp-thread-count")?.textContent).toBe("0");
-    expect(theme.title).toBe("The relevance bar is hiding every source on this");
+    expect(theme.getAttribute("data-tip")).toBe("The relevance bar is hiding every source on this");
   });
 
   /* **Scoped to the sub-mode** — plan 261003o, step 6. A thread is offered

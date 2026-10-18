@@ -35,7 +35,7 @@ async function draw(value: number, stops: number[], onChange = vi.fn()) {
         step: 0.01,
         value,
         stops,
-        title: "t",
+        tip: "t",
         valueText: "v",
         onChange,
       }),

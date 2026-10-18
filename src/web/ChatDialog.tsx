@@ -1146,7 +1146,7 @@ export function ChatDialog({
       type="button"
       className="chat-dialog-close close-x"
       onClick={onClose}
-      title="Close (Esc)"
+      data-tip="Close (Esc)"
       aria-label="Close"
     >
       <X size={15} />
@@ -1197,7 +1197,7 @@ export function ChatDialog({
           type="button"
           className="chat-card-shut"
           aria-expanded={false}
-          title="Open this conversation again"
+          data-tip="Open this conversation again"
           onClick={() => setShut(null)}
         >
           <span className="chat-card-head">
@@ -1241,7 +1241,7 @@ export function ChatDialog({
               className="chat-dialog-collapse"
               aria-expanded={true}
               aria-label="Collapse"
-              title="Collapse to one line. The conversation stays open."
+              data-tip="Collapse to one line. The conversation stays open."
               onClick={() => {
                 if (container) shutScroll.current = scrollOffsets(container);
                 setShut({ threadId: thread.id, reopen });
@@ -1421,7 +1421,7 @@ export function ChatDialog({
                 type="button"
                 className="linky"
                 onClick={() => onNewConversation(newAbout)}
-                title="Start another conversation about this paragraph"
+                data-tip="Start another conversation about this paragraph"
               >
                 New conversation
               </button>
@@ -1447,7 +1447,7 @@ export function ChatDialog({
                 type="button"
                 className="linky"
                 onClick={() => stop(thread.id, tail.id)}
-                title="Stop this answer. What has arrived is kept."
+                data-tip="Stop this answer. What has arrived is kept."
               >
                 <Square size={11} /> Stop
               </button>
@@ -1478,7 +1478,7 @@ export function ChatDialog({
                   onDropped(thread.id);
                   onClose();
                 }}
-                title="Stop this answer and throw the conversation away"
+                data-tip="Stop this answer and throw the conversation away"
               >
                 Cancel
               </button>

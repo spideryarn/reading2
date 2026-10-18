@@ -37,7 +37,7 @@ export function ThresholdSlider({
   visible,
   total,
   noun,
-  title,
+  tip,
   note,
   onChange,
 }: {
@@ -61,7 +61,7 @@ export function ThresholdSlider({
   /** The plural noun, for the spoken value: "questions". */
   noun: string;
   /** What the bar measures, in the reader's words. */
-  title: string;
+  tip: string;
   /** The foot line — threshold.ts § hiddenNote, with the caller's noun. */
   note: string;
   /** A number, or null to go back to the default. */
@@ -81,7 +81,7 @@ export function ThresholdSlider({
           <button
             type="button"
             className="gloss-gate-reset"
-            title={`Back to ${defaultValue.toFixed(2)}`}
+            data-tip={`Back to ${defaultValue.toFixed(2)}`}
             aria-label={`Reset the threshold to ${defaultValue.toFixed(2)}`}
             onClick={() => onChange(null)}
           >
@@ -96,7 +96,7 @@ export function ThresholdSlider({
         step={GATE_STEP}
         value={value}
         stops={stops}
-        title={title}
+        tip={tip}
         valueText={`${value.toFixed(2)}, showing ${count} ${noun}`}
         onChange={onChange}
       />

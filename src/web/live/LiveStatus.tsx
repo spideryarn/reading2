@@ -132,7 +132,7 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
   const stalled = live.stall && live.phase === "live";
   const reconnect = (
     <button type="button" onClick={live.reconnect}
-      title="End this call and start a fresh one in the same conversation. What was said is kept.">Reconnect</button>
+      data-tip="End this call and start a fresh one in the same conversation. What was said is kept.">Reconnect</button>
   );
   return (
     <section className={`chat-live-status is-${state}`} aria-label="Live conversation" onKeyDown={(e) => e.stopPropagation()}>
@@ -164,7 +164,7 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
             nowhere before it: plan 261003d. */}
         {live.stall === "open-turn" && live.talkMode === "hands-free" &&
           <button type="button" onClick={live.enterTapToTalk}
-            title="For the rest of this call: tap Talk, speak, then tap Done. Nothing is heard in between.">Tap to talk</button>}{" "}
+            data-tip="For the rest of this call: tap Talk, speak, then tap Done. Nothing is heard in between.">Tap to talk</button>}{" "}
         {reconnect}
       </div>}
       {/* Plain action buttons whose label changes, not an `aria-pressed`

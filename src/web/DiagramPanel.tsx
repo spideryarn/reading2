@@ -2823,7 +2823,7 @@ function DetailCard({
           type="button"
           className="diag-card-title"
           // The last resort for a title so long that even the card clamps it.
-          title={node.title}
+          data-tip={node.title}
           onClick={() => onJump(node.blockId)}
         >
           {node.number && <span className="diag-card-num">{node.number}</span>}
@@ -2835,7 +2835,7 @@ function DetailCard({
         </span>
       </div>
       {node.gist && related.length === 0 && (
-        <p className={withVoice("diag-card-gist", node.gistVoice)} title={node.gist}>
+        <p className={withVoice("diag-card-gist", node.gistVoice)} data-tip={node.gist}>
           {node.gist}
         </p>
       )}
@@ -2846,7 +2846,7 @@ function DetailCard({
         <ul className="diag-card-links">
           {related.map((r) => (
             <li key={`${r.kind}-${r.number}-${r.title}`} className={`diag-card-link-${r.kind}`}>
-              <span className="diag-card-linknum" title={r.title}>
+              <span className="diag-card-linknum" data-tip={r.title}>
                 {r.number}
               </span>
               <span className="diag-card-linkterms">{evidence(r)}</span>

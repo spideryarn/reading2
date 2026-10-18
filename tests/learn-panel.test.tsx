@@ -193,17 +193,17 @@ describe("Learn's panel is one conversation", () => {
     expect(host.querySelector(".chat-threads")).toBeNull();
     expect(host.querySelector(".chat-empty")).toBeNull();
     expect(host.querySelector("textarea")).toBeNull();
-    expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
+    expect(host.querySelector('button[data-tip="Start remembering"]')).toBeNull();
   });
 
   it("says Learn in the header, and offers Start over but no close, new or rename", () => {
     paint(learnThread());
     expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
-    expect(host.querySelector('button[title="All conversations"]')).toBeNull();
-    expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
-    expect(host.querySelector('button[title^="Rename"]')).toBeNull();
+    expect(host.querySelector('button[data-tip="All conversations"]')).toBeNull();
+    expect(host.querySelector('button[data-tip="Start remembering"]')).toBeNull();
+    expect(host.querySelector('button[data-tip^="Rename"]')).toBeNull();
     const startOver = host.querySelector<HTMLButtonElement>("button.chat-icon.danger");
-    expect(startOver?.title).toMatch(/^Start over/);
+    expect(startOver?.getAttribute("data-tip")).toMatch(/^Start over/);
   });
 
   /* The band decides it (`settled` in useChat.ts) and the panel only obeys:
@@ -221,7 +221,7 @@ describe("Learn's panel is one conversation", () => {
   it("leaves chat's header as it was", () => {
     paint({ ...learnThread(), kind: "chat" }, "chat");
     expect(host.querySelector(".band-head h2")?.textContent).toBe("What I took from it");
-    expect(host.querySelector('button[title="All conversations"]')).not.toBeNull();
+    expect(host.querySelector('button[data-tip="All conversations"]')).not.toBeNull();
   });
 });
 

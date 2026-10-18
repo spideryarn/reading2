@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SiteNav } from "../src/web/SiteBits.js";
 import { SiteFooter } from "../src/web/SiteFooter.js";
+import { HomeLogo } from "../src/web/HomeLogo.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,6 +52,15 @@ function hover(el: Element) {
   });
 }
 
+it("names the corner home link even when its letters are hidden on a narrow screen", () => {
+  act(() => root.render(<HomeLogo />));
+  const home = host.querySelector("a.logo-home");
+  expect(home).not.toBeNull();
+  // narrow-window.css hides .logo-text at 731px; the spider has alt="".
+  // The link therefore needs a name independent of those letters and its tip.
+  expect(home?.getAttribute("aria-label")).toBe("Spideryarn, back to the library");
+});
+
 describe("the top bar", () => {
   it("draws the spider inside the home link, and the link animates it", () => {
     act(() => root.render(<SiteNav here="home" signedIn={false} />));
@@ -76,14 +86,14 @@ describe("the top bar", () => {
     vi.stubGlobal("__SPIDERYARN_BUILD_TIME__", "2026-09-07T09:49:03Z");
     act(() => root.render(<SiteNav here="features" signedIn />));
     const home = host.querySelector('a[aria-label="Spideryarn Reading, home"]');
-    expect(home?.getAttribute("title")).toContain("back to the library");
-    expect(home?.getAttribute("title")).toContain("39282f8");
+    expect(home?.getAttribute("data-tip")).toContain("back to the library");
+    expect(home?.getAttribute("data-tip")).toContain("39282f8");
   });
 
   it("does not describe a signed-out home link as the reader's library", () => {
     act(() => root.render(<SiteNav here="features" signedIn={false} />));
     const home = host.querySelector('a[aria-label="Spideryarn Reading, home"]');
-    expect(home?.getAttribute("title")).toBeNull();
+    expect(home?.getAttribute("data-tip")).toBeNull();
   });
 });
 

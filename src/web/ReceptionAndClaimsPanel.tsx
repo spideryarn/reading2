@@ -740,12 +740,12 @@ export function headCount(rows: readonly { url: string }[]): string {
  * order sorted claim rows by the AI's judgment, and Reception's rows carry
  * none. **The sentence that said what the order was, on a line over the list,
  * went on 2026-10-03** (plan 261003o, step 8): the pressed button says it, and
- * these titles say whose reading an order rests on.
+ * these tips say whose reading an order rests on.
  */
-const ORDER_OPTION: Record<ReceptionOrder, { label: string; title: string }> = {
-  prioritised: { label: "as found", title: "In the order the search found them" },
-  date: { label: "date", title: "Oldest first, by the year the AI read off each page; pages with no year come last" },
-  stance: { label: "stance", title: "Most critical first — the AI's reading of each page" },
+const ORDER_OPTION: Record<ReceptionOrder, { label: string; tip: string }> = {
+  prioritised: { label: "as found", tip: "In the order the search found them" },
+  date: { label: "date", tip: "Oldest first, by the year the AI read off each page; pages with no year come last" },
+  stance: { label: "stance", tip: "Most critical first — the AI's reading of each page" },
 };
 
 /**
@@ -1669,7 +1669,7 @@ function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
             if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
           }}
         />
-        <button type="submit" className="gloss-btn rcp-lens-send" disabled={words === ""} title={RECEPTION_LENS_TIP}>
+        <button type="submit" className="gloss-btn rcp-lens-send" disabled={words === ""} data-tip={RECEPTION_LENS_TIP}>
           <MessagesSquare size={12} aria-hidden="true" />
           {RECEPTION_LENS_SEND}
         </button>
@@ -1685,7 +1685,7 @@ function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
                   className="rcp-angle"
                   aria-label={`${RECEPTION_OPEN_ANGLE_CHAT}: ${chat.origin.lens}`}
                   aria-describedby={chat.gist ? `rcp-angle-gist-${chat.id}` : undefined}
-                  title={originChatTip(RECEPTION_OPEN_ANGLE_CHAT, chat.turns, chat.gist ? "gist" : "none")}
+                  data-tip={originChatTip(RECEPTION_OPEN_ANGLE_CHAT, chat.turns, chat.gist ? "gist" : "none")}
                   onClick={() => chats.onOpen(chat.id)}
                 >
                   <MessagesSquare size={12} aria-hidden="true" />
@@ -1906,7 +1906,7 @@ function StopBar<L extends string>({
   words,
   defaultLevel,
   noun,
-  title,
+  tip,
   judgedOnly = false,
   moved,
   onLevel,
@@ -1935,7 +1935,7 @@ function StopBar<L extends string>({
   words: Record<L, string>;
   defaultLevel: L;
   noun: ThresholdNoun;
-  title: string;
+  tip: string;
   /** Leave rows with no judgment out of the bar's N of M. They remain visible. */
   judgedOnly?: boolean;
   moved: boolean;
@@ -1964,7 +1964,7 @@ function StopBar<L extends string>({
           <button
             type="button"
             className="gloss-gate-reset"
-            title={`Back to “${words[defaultLevel]}”`}
+            data-tip={`Back to “${words[defaultLevel]}”`}
             aria-label={`Reset the bar to “${words[defaultLevel]}”`}
             onClick={() => onLevel(null)}
           >
@@ -1980,7 +1980,7 @@ function StopBar<L extends string>({
         max={stops.length - 1}
         step={1}
         value={Math.max(0, stops.indexOf(level))}
-        title={title}
+        data-tip={tip}
         /* The thumb's position is a number nobody can hear, and here it is not
            even a number — so this is the word and the count, which between them
            are the whole of what the control does. */
@@ -2025,7 +2025,7 @@ function RelevanceBar({
       words={BEARS_LABEL}
       defaultLevel={RELEVANCE_DEFAULT}
       noun={ANSWER}
-      title="How directly the AI judged a page bears on the claim it answers: loosely, partly or directly. Left shows every answer, right only the ones it judged to bear directly. Rows the AI did not judge are never hidden."
+      tip="How directly the AI judged a page bears on the claim it answers: loosely, partly or directly. Left shows every answer, right only the ones it judged to bear directly. Rows the AI did not judge are never hidden."
       judgedOnly
       moved={moved}
       onLevel={onLevel}
@@ -2057,7 +2057,7 @@ function OrderBar({
             type="button"
             className={`gloss-sort-btn${order === key ? " on" : ""}`}
             aria-pressed={order === key}
-            title={ORDER_OPTION[key].title}
+            data-tip={ORDER_OPTION[key].tip}
             onClick={() => onOrder(key)}
           >
             {ORDER_OPTION[key].label}
@@ -2098,7 +2098,7 @@ function Threads({
   return (
     <section className="rcp-threads" aria-label="Threads across these sources">
       <h3 className="rcp-threads-head">
-        <span className="rcp-ai-tag" title="The AI's reading of the sources below — nothing in what the search returned checks it">
+        <span className="rcp-ai-tag" data-tip="The AI's reading of the sources below — nothing in what the search returned checks it">
           AI
         </span>
         Threads across these sources
@@ -2116,7 +2116,7 @@ function Threads({
               className={`rcp-thread${on ? " on" : ""}${t.kind === "key" ? " rcp-thread-key" : ""}`}
               aria-pressed={on}
               disabled={count === 0 && !on}
-              title={
+              data-tip={
                 count === 0
                   ? "The relevance bar is hiding every source on this"
                   : on
@@ -2334,7 +2334,7 @@ function ClaimsList({
               )}
               <span
                 className="rcp-group-count"
-                title={`${group.rows.length} ${group.rows.length === 1 ? "source" : "sources"} on this claim`}
+                data-tip={`${group.rows.length} ${group.rows.length === 1 ? "source" : "sources"} on this claim`}
               >
                 {group.rows.length}
               </span>
@@ -2553,7 +2553,7 @@ function OwnerListedClaims({
                     if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
                   }}
                 />
-                <button type="submit" className="gloss-btn rcp-check-send" disabled={!canCheck} title={SOURCES_CLAIM_CHECK_TIP}>
+                <button type="submit" className="gloss-btn rcp-check-send" disabled={!canCheck} data-tip={SOURCES_CLAIM_CHECK_TIP}>
                   {searching ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Globe size={12} aria-hidden="true" />}
                   {checkLabel(picked)}
                 </button>
@@ -2628,7 +2628,7 @@ function DigFurther({
       type="button"
       className="gloss-btn rcp-dig"
       disabled={onDig === null}
-      title={SOURCES_CLAIM_CHECK_DIG_FURTHER_TIP}
+      data-tip={SOURCES_CLAIM_CHECK_DIG_FURTHER_TIP}
       onClick={() => onDig?.(claimId)}
     >
       Dig further
@@ -3007,7 +3007,7 @@ function Row({
           Plan 260930j. */}
       {keySource && (
         <p className="rcp-key-line">
-          <span className="rcp-ai-tag" title="The AI's pick — nothing in what the search returned checks it">
+          <span className="rcp-ai-tag" data-tip="The AI's pick — nothing in what the search returned checks it">
             AI
           </span>
           <Star size={12} aria-hidden="true" className="rcp-key-star" />
@@ -3028,7 +3028,7 @@ function Row({
         href={row.url}
         target="_blank"
         rel="noreferrer noopener"
-        title={row.url}
+        data-tip={row.url}
       >
         {work.headline}
         <ExternalLink size={11} aria-hidden="true" />
@@ -3044,7 +3044,7 @@ function Row({
           {byline.length > 0 && (
             <span
               className="rcp-byline"
-              title={[
+              data-tip={[
                 work.registry !== null && registryBylineFields.length > 0
                   ? receptionRegistryNote(work.registry, registryBylineFields)
                   : null,
@@ -3073,7 +3073,7 @@ function Row({
           is an honest pair of answers rather than a contradiction. `bears`
           leads when the AI gave one — it is what a claim's rows are ordered by. */}
       <p className="rcp-ai-line">
-        <span className="rcp-ai-tag" title="The AI's reading of this page — nothing in what the search returned checks it">
+        <span className="rcp-ai-tag" data-tip="The AI's reading of this page — nothing in what the search returned checks it">
           AI
         </span>
         {(bears !== null || direct === null) && (

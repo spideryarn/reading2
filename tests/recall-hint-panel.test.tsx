@@ -108,7 +108,7 @@ const press = (el: Element | null) => {
   });
 };
 const copy = async () => {
-  const button = host.querySelector<HTMLButtonElement>('.chat-turn.model button[title="Copy this answer"]');
+  const button = host.querySelector<HTMLButtonElement>('.chat-turn.model button[data-tip="Copy this answer"]');
   if (!button) throw new Error("no copy button");
   await act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));

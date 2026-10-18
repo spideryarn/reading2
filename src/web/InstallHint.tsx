@@ -56,7 +56,7 @@ export function InstallHint({
           rememberDismissed();
           setShow(false);
         }}
-        title="Don't show this again"
+        data-tip="Don't show this again"
         aria-label="Dismiss"
       >
         <X size={14} />

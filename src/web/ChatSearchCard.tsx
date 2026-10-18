@@ -103,7 +103,7 @@ function QuickCard({ words, place, button, name, description, enabled, recheck }
     case "checking":
       return (
         <span className="cmd-chip-wrap chat-search">
-          <button type="button" className="cmd-chip" title={description} disabled aria-busy="true">
+          <button type="button" className="cmd-chip" data-tip={description} disabled aria-busy="true">
             {button}
           </button>
           <span className="cmd-chip-said" role="status">Checking saved searches…</span>
@@ -113,7 +113,7 @@ function QuickCard({ words, place, button, name, description, enabled, recheck }
     case "error":
       return (
         <span className="cmd-chip-wrap chat-search">
-          <button type="button" className="cmd-chip" title={description} disabled={!enabled} onClick={press}>
+          <button type="button" className="cmd-chip" data-tip={description} disabled={!enabled} onClick={press}>
             {button}
           </button>
           {(refused || shown.status === "error") && (
@@ -179,7 +179,7 @@ function FindCard({ words, place, button, name, description, enabled, recheck }:
       <button
         type="button"
         className="cmd-chip"
-        title={description}
+        data-tip={description}
         disabled={!enabled}
         onClick={() => {
           if (!recheck()) {

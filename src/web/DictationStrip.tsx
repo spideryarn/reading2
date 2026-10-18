@@ -273,7 +273,7 @@ export function DictationButton({
       </span>
     {/* **A card only while idle.** It describes starting; over Stop it would be
         the wrong words, and a card opening under the pointer mid-way through a
-        double press would be in the way of the second. Offline, the `title`
+        double press would be in the way of the second. Offline, the `data-tip`
         below says why the button is dead and the card stands aside; a button
         the box has switched off is natively disabled, which is no reliable
         trigger (tooltips.md), so it has none either. */}
@@ -322,14 +322,14 @@ export function DictationButton({
          `aria-label` present an unused `title` becomes the description anyway,
          so the slot was already spoken for. */
       aria-describedby={describedBy}
-      /* **The one case where a `title` is right on this button.** The comment
-         below says there is deliberately none, and that holds for the working
-         control: with an `aria-label` present an unused `title` becomes the
-         description, and that slot carries the promise. Offline, the label and
-         the description are already saying this same sentence, so the tooltip
-         adds no third voice — and it is the only way a mouse user finds out why
-         the button is dead. */
-      {...(offline ? { title: DICTATION_OFFLINE } : {})}
+      /* **The one case where a card (`data-tip`, TipCard.tsx) is right on this
+         button.** The working control has none, because the Tooltip above is
+         its card and the slot that describes it carries the promise. Offline,
+         the label and the description are already saying this same sentence, so
+         the card adds no third voice (`data-tip-describes="off"`) — and it is
+         the only way a mouse user finds out why the button is dead. */
+      data-tip={offline ? DICTATION_OFFLINE : undefined}
+      data-tip-describes="off"
       /* **Disabled while transcribing, and that is not merely cosmetic.** The
          microphone is already off; a press here can only mean "start again",
          and starting again two hundred milliseconds before the words arrive
@@ -565,7 +565,7 @@ export function DictationStrip({
       {mic && (
         <p className="dictation-line prof-mic-line">
           <span className="prof-mic-line-key">Microphone:</span>{" "}
-          <span className="prof-mic-device" title={mic.label}>
+          <span className="prof-mic-device" data-tip={mic.label}>
             {mic.label}
           </span>
           {mic.chosen && <span className="prof-mic-chosen"> (your choice)</span>}{" "}
@@ -746,14 +746,14 @@ function SaveRecording({
         /* **First, and it is the primary action.** Everything else in this row
            is salvage — a file to keep, a thing to throw away — and the reader's
            actual want is the words. Greg asked for it by name, 2026-09-05.
-           `title` rather than a disabled button with no reason on it, for the
+           `data-tip` rather than a disabled button with no reason on it, for the
            offline case. */
         <button
           type="button"
           className="prof-recording-retry"
           onClick={onRetry}
           disabled={!online}
-          {...(online ? {} : { title: DICTATION_OFFLINE })}
+          data-tip={online ? undefined : DICTATION_OFFLINE}
         >
           <RotateCcw size={12} /> Try again
         </button>
@@ -788,7 +788,8 @@ function SaveRecording({
         className="prof-recording-drop"
         onClick={onDiscard}
         aria-label="Discard the recording"
-        title="Discard the recording"
+        data-tip="Discard the recording"
+        data-tip-describes="off"
       >
         <X size={12} />
       </button>

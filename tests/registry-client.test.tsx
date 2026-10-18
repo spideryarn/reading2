@@ -377,7 +377,7 @@ describe("a Debate row on screen", () => {
     );
     const byline = host.querySelector<HTMLElement>(".rcp-byline");
     expect(byline?.textContent).toContain("Erin Wamsley, Stickgold · 2010");
-    expect(byline?.title).toContain("Authors and year from DataCite");
+    expect(byline?.getAttribute("data-tip")).toContain("Authors and year from DataCite");
     expect(host.querySelector(".rcp-detail")?.textContent).toContain("Authors and year from DataCite");
   });
 });

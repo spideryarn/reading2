@@ -386,8 +386,8 @@ describe("the Look up box", () => {
     const ask = host.querySelector(".gloss-ask");
     expect(ask?.textContent).not.toMatch(/Not added to the list/);
     const button = ask?.querySelector<HTMLButtonElement>("button[type=submit]");
-    expect(button?.title).toMatch(/adds the term to your glossary/);
-    expect(button?.title).toMatch(/Only you see terms you add/);
+    expect(button?.getAttribute("data-tip")).toMatch(/adds the term to your glossary/);
+    expect(button?.getAttribute("data-tip")).toMatch(/Only you see terms you add/);
   });
 });
 
@@ -397,7 +397,7 @@ describe("the kind of a term", () => {
     const kindOf = (id: string) =>
       host.querySelector(`[data-term-id="${id}"] .gloss-kind[role="img"]`);
     expect(kindOf("spya-term31")?.getAttribute("aria-label")).toMatch(/^A work — a book, paper/);
-    expect(kindOf("spya-term31")?.getAttribute("title")).toBe(kindOf("spya-term31")?.getAttribute("aria-label"));
+    expect(kindOf("spya-term31")?.getAttribute("data-tip")).toBe(kindOf("spya-term31")?.getAttribute("aria-label"));
     expect(kindOf("spya-term31")?.textContent).toBe("");
     expect(kindOf("spya-term33")?.getAttribute("aria-label")).toBe("A person");
     expect(kindOf("spya-term32")).toBeNull();

@@ -171,13 +171,13 @@ function type(box: HTMLTextAreaElement, text: string): void {
 const posted = () => calls.filter((c) => c.method === "POST").map((c) => c.body ?? {});
 
 async function rewrite(which: number, text: string): Promise<void> {
-  const pencils = [...host.querySelectorAll<HTMLButtonElement>('button[title="Rewrite this question"]')];
+  const pencils = [...host.querySelectorAll<HTMLButtonElement>('button[data-tip="Rewrite this question"]')];
   expect(pencils.length, "a pencil on each of the reader's questions").toBe(2);
   await act(async () => pencils[which]?.click());
   const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box");
   expect(box, "the editor opened").not.toBeNull();
   await act(async () => type(box as HTMLTextAreaElement, text));
-  const ask = host.querySelector<HTMLButtonElement>('button[title="Ask again (Enter)"]');
+  const ask = host.querySelector<HTMLButtonElement>('button[data-tip="Ask again (Enter)"]');
   expect(ask, "Ask again is offered").not.toBeNull();
   await act(async () => ask?.click());
   await settle();
@@ -241,12 +241,12 @@ describe("rewriting a question in Recall", () => {
     await settle();
     expect(host.textContent).toContain("A first answer");
 
-    const pencil = host.querySelector<HTMLButtonElement>('button[title="Rewrite this question"]');
+    const pencil = host.querySelector<HTMLButtonElement>('button[data-tip="Rewrite this question"]');
     expect(pencil, "a pencil on the question just asked").not.toBeNull();
     await act(async () => pencil?.click());
     const editor = host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box");
     await act(async () => type(editor as HTMLTextAreaElement, "What I meant to say"));
-    await act(async () => host.querySelector<HTMLButtonElement>('button[title="Ask again (Enter)"]')?.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('button[data-tip="Ask again (Enter)"]')?.click());
     await settle();
     expect(posted()).toHaveLength(2);
     expect(posted()[1]).toEqual({
@@ -266,7 +266,7 @@ describe("rewriting a question in Recall", () => {
 describe("an editor that cannot ask again yet says why", () => {
   async function editorOpenWhileAnswering(): Promise<HTMLTextAreaElement> {
     await mount();
-    const pencils = host.querySelectorAll<HTMLButtonElement>('button[title="Rewrite this question"]');
+    const pencils = host.querySelectorAll<HTMLButtonElement>('button[data-tip="Rewrite this question"]');
     await act(async () => pencils[0]?.click());
     const editor = host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box");
     expect(editor, "the editor opened").not.toBeNull();
@@ -327,7 +327,7 @@ describe("an editor that cannot ask again yet says why", () => {
     });
     await settle();
     expect(said()).toBe("");
-    await act(async () => host.querySelector<HTMLButtonElement>('button[title="Ask again (Enter)"]')?.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('button[data-tip="Ask again (Enter)"]')?.click());
     await settle();
     expect(posted()).toHaveLength(2);
     expect(posted()[1]).toMatchObject({ edit: "spya-q1q1q1", question: "What I meant to say" });

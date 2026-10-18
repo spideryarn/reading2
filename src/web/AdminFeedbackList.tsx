@@ -319,15 +319,16 @@ function IgnoreControl({
   return (
     <span className="tw:inline-flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
       {report.ignoredAt !== null && (
-        <span className="tw:text-ink-faint" title={exactly(report.ignoredAt)}>
+        <span className="tw:text-ink-faint" data-tip={exactly(report.ignoredAt)}>
           Ignored {timeAgo(report.ignoredAt, now) ?? ""}
+          <span className="tw:sr-only"> ({exactly(report.ignoredAt)})</span>
         </span>
       )}
       <button
         type="button"
         onClick={press}
         disabled={disabled}
-        title={
+        data-tip={
           ignored
             ? "Stop ignoring this report, so it is worked through like any other"
             : "Leave this report out of the ones we work through. It stays here and can be undone."
@@ -374,8 +375,9 @@ export function FeedbackCard({
         className={`tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1 ${dim}`}
       >
         <span className="tw:text-sm tw:text-foreground">{report.reporterEmail}</span>
-        <span className="tw:text-xs tw:text-muted-foreground" title={exactly(report.createdAt)}>
+        <span className="tw:text-xs tw:text-muted-foreground" data-tip={exactly(report.createdAt)}>
           {when}
+          <span className="tw:sr-only"> ({exactly(report.createdAt)})</span>
         </span>
       </div>
 
@@ -408,7 +410,7 @@ export function FeedbackCard({
           ) : (
             <Clock size={11} />
           )}
-          <span title={mirror.detail}>{mirror.label}</span>
+          <span data-tip={mirror.detail}>{mirror.label}</span>
         </span>
       </div>
 

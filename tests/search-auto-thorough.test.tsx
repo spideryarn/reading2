@@ -447,7 +447,7 @@ describe("a quick search starts the thorough one", () => {
     expect(s.asked("quick")).toEqual([WORDS]);
 
     const find = must<HTMLButtonElement>("button.srch-go");
-    expect(find.disabled).toBe(false);
+    expect(find.hasAttribute("aria-disabled")).toBe(false);
     click(find);
     await flush();
     expect(s.asked("quick"), "submitting the owned row asked a duplicate").toEqual([WORDS]);
@@ -730,7 +730,7 @@ describe("a quick search starts the thorough one", () => {
     await flush();
     const quick = s.posts("quick")[0]!;
     const meaning = s.posts("meaning")[0]!;
-    click(must('button[title="Delete this search"]', rowFor(WORDS)));
+    click(must('button[data-tip="Delete this search"]', rowFor(WORDS)));
     await flush();
     expect(s.deletes()).toEqual([quick.id]);
     expect(listed()).toEqual([]);
@@ -754,8 +754,8 @@ describe("a quick search starts the thorough one", () => {
     expect(s.asked("meaning")).toEqual([WORDS]);
 
     const find = must<HTMLButtonElement>("button.srch-go");
-    expect(find.disabled).toBe(true);
-    expect(find.title).toBe("Already searching for this — change the words to ask something else");
+    expect(find.getAttribute("aria-disabled")).toBe("true");
+    expect(find.getAttribute("data-tip")).toBe("Already searching for this — change the words to ask something else");
     click(find);
     await flush();
     expect(s.asked("quick")).toEqual([WORDS]);
@@ -763,7 +763,7 @@ describe("a quick search starts the thorough one", () => {
 
     // Positive control: other words still start their own pipeline.
     type(`${WORDS} dualism`);
-    expect(find.disabled).toBe(false);
+    expect(find.hasAttribute("aria-disabled")).toBe(false);
     click(find);
     await flush();
     expect(s.asked("quick")).toEqual([WORDS, `${WORDS} dualism`]);

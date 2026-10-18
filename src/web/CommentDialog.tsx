@@ -625,13 +625,13 @@ export function CommentDialog({
         {/* Only worth the room once there is somewhere to go. */}
         {total > 1 && (
           <span className="cmt-nav">
-            <button type="button" onClick={onPrev} disabled={!hasPrev} title="Previous comment, up the article" aria-label="Previous comment">
+            <button type="button" onClick={onPrev} disabled={!hasPrev} data-tip="Previous comment, up the article" aria-label="Previous comment">
               <ChevronLeft size={15} />
             </button>
             <span className="cmt-count" aria-live="polite">
               {position} / {total}
             </span>
-            <button type="button" onClick={onNext} disabled={!hasNext} title="Next comment, down the article" aria-label="Next comment">
+            <button type="button" onClick={onNext} disabled={!hasNext} data-tip="Next comment, down the article" aria-label="Next comment">
               <ChevronRight size={15} />
             </button>
           </span>
@@ -643,7 +643,7 @@ export function CommentDialog({
              and gives it back. */
           ref={closeRef}
           onClick={onClose}
-          title="Close (Esc)"
+          data-tip="Close (Esc)"
           aria-label="Close"
         >
           <X size={15} />

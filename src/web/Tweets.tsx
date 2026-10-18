@@ -386,13 +386,18 @@ export function ThreadPosts({
             )}
             <span
               className={`tw:font-mono ${tweet.chars > thread.limit ? "tw:text-danger" : ""}`}
-              title={
+              data-tip={
                 tweet.chars > thread.limit
                   ? `Over the ${thread.limit}-character limit by ${tweet.chars - thread.limit}`
                   : undefined
               }
             >
               {tweet.chars}/{thread.limit}
+              {tweet.chars > thread.limit && (
+                <span className="tw:sr-only">
+                  , over the {thread.limit}-character limit by {tweet.chars - thread.limit}
+                </span>
+              )}
             </span>
             <CopyButton
               text={() => tweet.text}

@@ -1460,7 +1460,7 @@ export function SkimDoor({
             <button
               type="button"
               className="skim-door-btn"
-              title={`Go on to ${door.deeper}: the next pass, in more detail`}
+              data-tip={`Go on to ${door.deeper}: the next pass, in more detail`}
               onClick={onDeeper}
             >
               More detail ›

@@ -528,7 +528,7 @@ describe("Search: nothing is asked until the opening read settles", () => {
     pressFindEveryWay();
     await flush();
     expect(posted, "a search was sent while the opening read was still out").toHaveLength(0);
-    expect(findButton().title).toBe("Waiting for your saved searches to load");
+    expect(findButton().getAttribute("data-tip")).toBe("Waiting for your saved searches to load");
     expect(searchBox().value, "the held press threw the draft away").toBe(NEW_QUESTION);
 
     get.release(json({ runs: [OLD_RUN] }));

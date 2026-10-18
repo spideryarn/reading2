@@ -121,7 +121,7 @@ export function ViewOnlyChip({
   return (
     <span
       className="mode on"
-      title={sessionUnconfirmed ? SESSION_UNCONFIRMED : sharedSentence(sharedBy)}
+      data-tip={sessionUnconfirmed ? SESSION_UNCONFIRMED : sharedSentence(sharedBy)}
     >
       <Lock size={11} className="tw:mr-1 tw:inline tw:align-[-1px]" />
       {VIEW_ONLY}
@@ -136,7 +136,7 @@ export function ViewOnlyChip({
           piece of chrome that survives the band — is the collision the split
           between these two components exists to avoid.
 
-          Visible text rather than only the `title`, for the reason this file's
+          Visible text rather than only the `data-tip`, for the reason this file's
           header gives at length: a tooltip is unreachable by touch and by
           keyboard, which is most of the readers who will see this width. */}
       {sessionUnconfirmed && (

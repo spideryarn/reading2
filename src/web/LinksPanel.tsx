@@ -121,7 +121,7 @@ function LinkRow({
           href={link.url}
           target="_blank"
           rel="noreferrer noopener"
-          title={link.url}
+          data-tip={link.url}
           aria-label={`${first} — opens ${host} in a new tab`}
         >
           <span className="link-phrase">{first}</span>
@@ -160,7 +160,7 @@ function LinkRow({
           <button
             type="button"
             className="gloss-btn link-in-bib"
-            title="Bibliography lists a cited work at this address: open its row"
+            data-tip="Bibliography lists a cited work at this address: open its row"
             onClick={() => onOpenWork(work.id)}
           >
             In Bibliography

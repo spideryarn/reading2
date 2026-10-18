@@ -65,7 +65,7 @@ function paint(t: ChatThread, offered = true) {
 }
 
 const bins = () =>
-  [...host.querySelectorAll<HTMLButtonElement>('.chat-turn.you button[title^="Delete this question"]')];
+  [...host.querySelectorAll<HTMLButtonElement>('.chat-turn.you button[data-tip^="Delete this question"]')];
 const press = (el: Element | undefined) => {
   if (!el) throw new Error("nothing to press");
   act(() => {
@@ -91,9 +91,9 @@ describe("the bin beside a question", () => {
     paint(thread([...turn(1), ...turn(2), ...turn(3)]));
     expect(host.querySelectorAll(".chat-turn.you")).toHaveLength(3);
     expect(bins()).toHaveLength(2);
-    expect(host.querySelector('.chat-turn.you button[title^="Delete"]')?.closest(".chat-turn")?.textContent)
+    expect(host.querySelector('.chat-turn.you button[data-tip^="Delete"]')?.closest(".chat-turn")?.textContent)
       .toContain("Where should I start?");
-    expect(host.querySelectorAll(".chat-turn.you")[0]?.querySelector('button[title^="Delete"]')).toBeNull();
+    expect(host.querySelectorAll(".chat-turn.you")[0]?.querySelector('button[data-tip^="Delete"]')).toBeNull();
   });
 
   it("arms on the first press, saying how much goes, and deletes on the second", () => {
@@ -101,24 +101,24 @@ describe("the bin beside a question", () => {
     const second = bins()[0];
     press(second);
     expect(deleted).toEqual([]);
-    expect(second?.title).toBe("Press again to delete this question, its answer and the 2 messages after it");
+    expect(second?.getAttribute("data-tip")).toBe("Press again to delete this question, its answer and the 2 messages after it");
     press(second);
     expect(deleted).toEqual(["spya-q2"]);
-    expect((document.activeElement as HTMLElement | null)?.title).toBe("Rewrite this question");
+    expect((document.activeElement as HTMLElement | null)?.getAttribute("data-tip")).toBe("Rewrite this question");
   });
 
   it("names the answer without counting it as a message after itself", () => {
     paint(thread([...turn(1), ...turn(2)]));
     const last = bins()[0];
     press(last);
-    expect(last?.title).toBe("Press again to delete this question and its answer");
+    expect(last?.getAttribute("data-tip")).toBe("Press again to delete this question and its answer");
   });
 
   it("does not claim there are '0 messages' after a question with no answer", () => {
     paint(thread([...turn(1), turn(2)[0] as ChatMessage]));
     const last = bins()[0];
     press(last);
-    expect(last?.title).toBe("Press again to delete this question");
+    expect(last?.getAttribute("data-tip")).toBe("Press again to delete this question");
   });
 
   it("keeps keyboard focus while it arms, then disarms after its timeout", () => {
@@ -130,10 +130,10 @@ describe("the bin beside a question", () => {
     expect(document.activeElement).toBe(last);
     expect(last?.classList.contains("armed")).toBe(true);
     // The title is the accessible name, so it is what a screen reader announces when it arms.
-    expect(last?.title).toBe("Press again to delete this question and its answer");
+    expect(last?.getAttribute("data-tip")).toBe("Press again to delete this question and its answer");
 
     act(() => vi.advanceTimersByTime(4_001));
-    expect(last?.title).toBe("Delete this question and everything after it");
+    expect(last?.getAttribute("data-tip")).toBe("Delete this question and everything after it");
     expect(last?.classList.contains("armed")).toBe(false);
   });
 

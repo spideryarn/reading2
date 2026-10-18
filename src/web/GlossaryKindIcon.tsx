@@ -20,7 +20,7 @@
  * the public DTO; only its drawing changed.
  *
  * `role="img"` with an `aria-label` so a screen reader hears the kind, and a
- * native `title` for the hover — the same mechanism as the sort buttons beside
+ * `data-tip` for the hover — the same mechanism as the sort buttons beside
  * it. docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
  */
 import { BookOpen, Building2, CalendarDays, MapPin, PersonStanding } from "lucide-react";
@@ -48,7 +48,7 @@ export function GlossaryKindIcon({ kind }: { kind: GlossaryKind }) {
   if (!isDrawn(kind)) return null;
   const { Icon, label } = KIND_ICON[kind];
   return (
-    <span className="gloss-kind" role="img" aria-label={label} title={label}>
+    <span className="gloss-kind" role="img" aria-label={label} data-tip={label} data-tip-describes="off">
       <Icon size={12} />
     </span>
   );

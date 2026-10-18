@@ -624,7 +624,7 @@ export function GlossaryPanel({
                   showScore={order}
                   /* An unscored entry got here without clearing anything, and
                      in an unheaded list a row with no numbers otherwise reads
-                     as though it had. A `title` and nothing visible: stage 1 of
+                     as though it had. A `data-tip` and nothing visible: stage 1 of
                      the plan found no unscored entry in any data we hold, and a
                      badge would be furniture for a state nobody has. */
                   unscored={order === "prioritised" && priorityOf(entry) === undefined}
@@ -1193,7 +1193,7 @@ function SortBar({
             type="button"
             className={`gloss-sort-btn${sort === option.key ? " on" : ""}`}
             aria-pressed={sort === option.key}
-            title={option.title}
+            data-tip={option.title}
             onClick={() => onSort(option.key)}
           >
             {option.label}
@@ -1264,7 +1264,7 @@ function GateSlider({
       /* **"showing … terms", not "promoting"** in the spoken value — an
          unscored term is shown without being promoted. */
       noun="terms"
-      title="How high a term has to score to stay on screen: the model's difficulty × its centrality. Left shows more terms, right fewer."
+      tip="How high a term has to score to stay on screen: the model's difficulty × its centrality. Left shows more terms, right fewer."
       note={gateNote(hiddenCount, entries.length)}
       onChange={onGate}
     />
@@ -1296,7 +1296,7 @@ function Term({
   /**
    * This row survived the bar without being scored, so say so — quietly.
    *
-   * A `title` and nothing visible. GPT Sol suggested a restrained label *or* a
+   * A `data-tip` and nothing visible. GPT Sol suggested a restrained label *or* a
    * tooltip; the tooltip alone is what stage 1's diagnosis supports, since no
    * unscored entry was found in any data we can inspect. It reveals no
    * composite score, so the rule that only the model's raw numbers reach the
@@ -1376,9 +1376,7 @@ function Term({
       /* Which entry this row is, for the one reader that has to find it from
          outside the panel: G from a paragraph puts the focus here (TermJump.tsx). */
       data-term-id={entry.id}
-      {...(unscored && {
-        title: "Not scored for prioritising — shown regardless of the threshold",
-      })}
+      data-tip={unscored ? "Not scored for prioritising — shown regardless of the threshold" : undefined}
     >
       <button
         type="button"
@@ -1395,7 +1393,7 @@ function Term({
           {/* A term the reader added from *Look up a term* (plan 261002f):
               provenance, so a word, not a warning — and it says who sees it. */}
           {entry.added && (
-            <span className="gloss-added" title="You looked this up and added it. Only you see it.">
+            <span className="gloss-added" data-tip="You looked this up and added it. Only you see it.">
               added by you
             </span>
           )}
@@ -1793,7 +1791,7 @@ function AskATerm({
              phone two lines of band (`[SPIDERYARN-READING2-4G]`). Since plan
              261002f the term is added, so the tooltip says so — and says who
              sees it, because a shared article's visitors do not. */
-          title="Finds these words in the article, explains the passage they are in, and adds the term to your glossary. Only you see terms you add. One model call."
+          data-tip="Finds these words in the article, explains the passage they are in, and adds the term to your glossary. Only you see terms you add. One model call."
         >
           {asking ? <LoaderCircle size={12} className="cmt-spinner" /> : <TextSearch size={12} />}
           {asking ? "Looking…" : "Look up"}
@@ -2318,7 +2316,7 @@ function MoreRow({
           variant="outline"
           size="sm"
           className="gloss-btn gloss-more-go"
-          title={title}
+          data-tip={title}
           /* Held with the retry elsewhere: `ReadError`, under a failed re-read. */
           disabled={waiting === "held"}
           onClick={() => void onMore()}

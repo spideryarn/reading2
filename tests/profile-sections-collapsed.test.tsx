@@ -147,8 +147,8 @@ describe("the profile page's sections", () => {
     const text = section("What's running").textContent ?? "";
     expect(text).toContain("OpenRouter (Messages)");
     expect(text).not.toContain("undefined");
-    for (const el of section("What's running").querySelectorAll("[title]")) {
-      expect(el.getAttribute("title")).not.toContain("undefined");
+    for (const el of section("What's running").querySelectorAll("[data-tip]")) {
+      expect(el.getAttribute("data-tip")).not.toContain("undefined");
     }
   });
 
@@ -166,7 +166,7 @@ describe("the profile page's sections", () => {
       act(() => toggle("What's running")?.click());
       const here = section("What's running");
       expect(here.textContent).toContain(`claude-sonnet-5 · ${value} (${value})`);
-      expect(here.querySelector("[title]")?.getAttribute("title")).toBe(
+      expect(here.querySelector("[data-tip]")?.getAttribute("data-tip")).toBe(
         `anthropic/claude-sonnet-5 · via ${value} · ${value} API`,
       );
     },

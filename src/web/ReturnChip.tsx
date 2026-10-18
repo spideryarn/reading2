@@ -100,7 +100,7 @@ export function ReturnChip({
         type="button"
         className="return-chip-close"
         onClick={() => dismissJumpOrigin()}
-        title="Hide this"
+        data-tip="Hide this"
         aria-label="Hide the way back"
       >
         <X size={14} />

@@ -298,7 +298,7 @@ describe("the already-searching guard", () => {
       active: [],
     });
     type(pendingQuick.criterion);
-    expect(findButton().disabled).toBe(true);
+    expect(findButton().getAttribute("aria-disabled")).toBe("true");
   });
 
   /* The other half — the same words as meaning go while the quick search is
@@ -332,7 +332,7 @@ describe("a quick row", () => {
     const buttons = container.querySelectorAll("button.srch-thorough");
     expect(buttons, "only on the quick row").toHaveLength(1);
     expect(thorough()?.textContent).toBe("thorough");
-    expect(thorough()?.title).toContain("replaces this quick search");
+    expect(thorough()?.getAttribute("data-tip")).toContain("replaces this quick search");
     expect(container.textContent?.toLowerCase()).not.toContain("flesh");
     act(() => thorough()?.click());
     expect(asked).toEqual([[QUICK.criterion, "meaning"]]);

@@ -1250,7 +1250,7 @@ function PlainRow({ report, show, now }: { report: EarlierReport; show: EarlierF
         {report.shipped ? (
           <>
             {" · "}
-            <span className="fb-earlier-shipped" title={SHIPPED_TITLE}>
+            <span className="fb-earlier-shipped" data-tip={SHIPPED_TITLE}>
               Shipped
             </span>
           </>
@@ -1260,7 +1260,7 @@ function PlainRow({ report, show, now }: { report: EarlierReport; show: EarlierF
              row would say it. */
           <>
             {" · "}
-            <span className="fb-earlier-unshipped" title={UNSHIPPED_TITLE}>
+            <span className="fb-earlier-unshipped" data-tip={UNSHIPPED_TITLE}>
               Not shipped
             </span>
           </>
@@ -1298,7 +1298,7 @@ function AdminRow({ report, now, adding }: { report: AdminRowReport; now: number
         {" · "}
         <RowMeta report={report} now={now} />
         {" · "}
-        <span className={statusClass(report.status)} data-status={report.status} title={STATUS_TITLE[report.status]}>
+        <span className={statusClass(report.status)} data-status={report.status} data-tip={STATUS_TITLE[report.status]}>
           {STATUS_WORD[report.status]}
         </span>
       </p>
@@ -1614,12 +1614,10 @@ function ThreadPager({
   }, [active, showing, showingDeciding, showingQuestion?.title]);
   return (
     <>
-      {/* **`aria-disabled`, not `disabled`, and a `title`** (261009m § 4): a
+      {/* **`aria-disabled`, not `disabled`, and a `data-tip`** (261009m § 4): a
           natively disabled button is no reliable trigger for a hint
-          (tooltips.md), and the house card portals to `document.body`,
-          underneath this modal dialog, which is why the shortcut beside the
-          tabs has a `title` too. A phone has no hover, so pressing an end
-          says the same sentence on the row. */}
+          (tooltips.md). A phone has no hover, so pressing an end says the same
+          sentence on the row. */}
       {(
         [
           ["previous", previous, "‹ Previous"],
@@ -1631,7 +1629,7 @@ function ThreadPager({
           type="button"
           className="fb-copy tap-target"
           aria-disabled={to === undefined || undefined}
-          title={to === undefined ? PAGER_HINT[which].end : PAGER_HINT[which].go}
+          data-tip={to === undefined ? PAGER_HINT[which].end : PAGER_HINT[which].go}
           onClick={() => {
             if (to === undefined) {
               setRefused((was) => ({ pagerKey, which, times: (was?.times ?? 0) + 1 }));

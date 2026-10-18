@@ -23,7 +23,9 @@ import { navigate } from "./router.js";
  * replacing the spread with a list of named props and silently leaving Floating
  * UI without a reference element. tests/tooltip-on-link.test.tsx.
  */
-type Props = AnchorHTMLAttributes<HTMLAnchorElement> & {
+/* No `title`: a native tooltip, which the app does not use (TipCard.tsx; plan
+   261017g). Say `data-tip`, which the spread below carries like any `data-*`. */
+type Props = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "title"> & {
   href: string;
   ref?: Ref<HTMLAnchorElement>;
   /* An `onNavigate` — called only when this tab really navigates, unlike

@@ -141,6 +141,7 @@ export function StackedDayChart({
   colourKeys,
   label,
   box,
+  tips,
 }: {
   data: DaySeries;
   /** The fixed order colours are assigned in — `colourOrder`. */
@@ -153,6 +154,15 @@ export function StackedDayChart({
    * static report passes nothing. A prop because this file has no hooks.
    */
   box?: ScrollBoxProps;
+  /**
+   * **How a bar says its series, day and amount on hover.** `"card"` in the
+   * app: a `data-tip`, which the page-wide card draws (TipCard.tsx). `"native"`
+   * in the static report, which has no React root and no card, so an SVG
+   * `<title>` is the only hover there is. Required, so each caller decides —
+   * the app has no native tooltips (tests/no-native-title-tooltips.test.ts,
+   * plan 261017g), and this is that test's one allowed file.
+   */
+  tips: "card" | "native";
 }) {
   const { days, series, values } = data;
   const dayTotal = (day: string) =>
@@ -215,13 +225,14 @@ export function StackedDayChart({
                   fill: seriesColour(part.key, colourKeys, part.isOther),
                 };
                 const hover = `${part.label} · ${day} · ${formatCostNanos(part.nanos)}`;
+                const tip = tips === "card" ? { "data-tip": hover } : {};
                 return at === parts.length - 1 ? (
-                  <path key={part.key} {...shared} d={roundedTop(x, y, barW, h)}>
-                    <title>{hover}</title>
+                  <path key={part.key} {...shared} {...tip} d={roundedTop(x, y, barW, h)}>
+                    {tips === "native" && <title>{hover}</title>}
                   </path>
                 ) : (
-                  <rect key={part.key} {...shared} x={x} y={y} width={barW} height={h}>
-                    <title>{hover}</title>
+                  <rect key={part.key} {...shared} {...tip} x={x} y={y} width={barW} height={h}>
+                    {tips === "native" && <title>{hover}</title>}
                   </rect>
                 );
               })}

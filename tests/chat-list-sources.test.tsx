@@ -238,14 +238,14 @@ describe("a Learn row", () => {
   it("has no rename and no delete; a chat's row keeps both", () => {
     paint(EVERY);
     for (const t of [LEARN, TUTORIAL, EXPLORE]) {
-      expect(row(t).querySelector('button[title="Rename this conversation"]'), `${t.id} rename`).toBeNull();
-      expect(row(t).querySelector('button[title="Delete this conversation"]'), `${t.id} delete`).toBeNull();
+      expect(row(t).querySelector('button[data-tip="Rename this conversation"]'), `${t.id} rename`).toBeNull();
+      expect(row(t).querySelector('button[data-tip="Delete this conversation"]'), `${t.id} delete`).toBeNull();
     }
     for (const t of [CHAT, CLAIM, PASSAGE]) {
-      expect(row(t).querySelector('button[title="Rename this conversation"]')).not.toBeNull();
-      expect(row(t).querySelector('button[title="Delete this conversation"]')).not.toBeNull();
+      expect(row(t).querySelector('button[data-tip="Rename this conversation"]')).not.toBeNull();
+      expect(row(t).querySelector('button[data-tip="Delete this conversation"]')).not.toBeNull();
     }
-    press(row(CHAT).querySelector('button[title="Delete this conversation"]'));
+    press(row(CHAT).querySelector('button[data-tip="Delete this conversation"]'));
     expect(deleted).toEqual([CHAT.id]);
   });
 });
@@ -315,6 +315,6 @@ describe("an article whose only conversations are Learn's", () => {
     paint([LEARN, TUTORIAL]);
     expect(rows()).toHaveLength(2);
     expect(host.querySelector("textarea.chat-input")).not.toBeNull();
-    expect(host.querySelector('button[title="Start a new conversation"]')).not.toBeNull();
+    expect(host.querySelector('button[data-tip="Start a new conversation"]')).not.toBeNull();
   });
 });

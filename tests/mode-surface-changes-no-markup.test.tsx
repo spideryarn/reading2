@@ -422,7 +422,7 @@ const CHAT: BandShape = {
      "the DOM did not change" is a claim rather than a restatement of the diff.
      The way back was an unlabelled × at the far end until plan 261008c § 1
      (spya-pd9fnc): on a phone nobody could tell it was the way back. */
-  headChildren: ["button.chat-back.tap-target[aria-label,title,type]", "h2", "button.chat-icon.danger[title,type]"],
+  headChildren: ["button.chat-back.tap-target[aria-label,data-tip,data-tip-describes,type]", "h2", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
@@ -442,7 +442,7 @@ const LEARN: BandShape = {
      since plan 261001m (2026-10-01), no "All conversations" close: Learn is
      one conversation and has no list to close back to. `subMode` renders
      nothing for this fixture. */
-  headChildren: ["h2", "button.chat-icon.danger[title,type]"],
+  headChildren: ["h2", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
@@ -487,7 +487,7 @@ const CHAT_LIST: BandShape = {
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "ol.chat-threads", "form.chat-composer"],
   /* No `ArmedDelete` with nothing open — the header's third slot is the
      new-conversation button instead, and the delete is simply absent. */
-  headChildren: ["h2", "button.chat-icon[title,type]"],
+  headChildren: ["h2", "button.chat-icon[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
