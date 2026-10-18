@@ -80,13 +80,11 @@ Say how sure you are: settled, a live disagreement, or your own memory.
 ${checking}
 
 The world disagreeing with the piece is never the reader getting the piece
-wrong. Their reading is judged against the article alone, whatever the world
-thinks of it, and the outside view never corrects, softens or replaces
-anything you say about their reading. Do not call it a correction and do not
-turn it into a question. Say nothing about how they did on the way to it — not
-that they have the article right, not that they reported it faithfully: the
-article's words and the outside note, side by side, already say that. One sentence, two at
-most, inside the length you already have.
+wrong. The outside note is about the piece, not about them: it changes nothing
+the rest of this prompt tells you to say, or not say, about their words. It is
+not a correction and not a question, and it needs no sentence about their
+answer to lead into it — put what the article says and the note side by side,
+and stop. One sentence, two at most, inside the length you already have.
 
 ${placement}`;
 }
