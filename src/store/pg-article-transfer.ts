@@ -426,6 +426,7 @@ async function resetRevisionReaderState(tx: TransferTx, articleId: string): Prom
       requestedUrl: articleRevisions.requestedUrl,
       finalUrl: articleRevisions.finalUrl,
       rawFilename: articleRevisions.rawFilename,
+      savedFromUrl: articleRevisions.savedFromUrl,
       rawSourceKind: articleRevisions.rawSourceKind,
       source: articleRevisions.source,
       illustrated: articleRevisions.illustrated,
@@ -441,6 +442,9 @@ async function resetRevisionReaderState(tx: TransferTx, articleId: string): Prom
         requestedUrl: revision.requestedUrl === null ? null : publicSourceUrl(revision.requestedUrl),
         finalUrl: revision.finalUrl === null ? null : publicSourceUrl(revision.finalUrl),
         rawFilename: neutralUploadFilename(revision.rawFilename, revision.rawSourceKind, revision.source),
+        /* The saved-from claim crosses as the provenance URLs do: only what a
+           stranger could be shown (plan 261018j § Stage 3). */
+        savedFromUrl: revision.savedFromUrl === null ? null : publicSourceUrl(revision.savedFromUrl),
         illustrated: hasIllustrationNote(revision.illustrated) ? null : revision.illustrated,
       })
       .where(eq(articleRevisions.id, revision.id));

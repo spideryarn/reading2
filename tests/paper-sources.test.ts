@@ -370,6 +370,8 @@ interface SourceCase {
     slug: string;
     candidates: string[];
   };
+  /** What every candidate promises: a PDF, unless said otherwise (Europe PMC's JATS). */
+  expect?: "jats";
   hosts: string[];
   nearMisses: string[];
 }
@@ -699,6 +701,46 @@ const SOURCE_CASES: Record<string, SourceCase> = {
       "https://www.nber.org/10.3386/w30000",
     ],
   },
+  /* Plan 261018j § Stage 1. The one source whose candidate is not a PDF and not
+     on the host it is known by: its JATS, from Europe PMC's REST API. */
+  "europepmc, a paper in the open-access subset": {
+    shapes: [
+      "https://europepmc.org/article/PMC/PMC4595480",
+      "https://europepmc.org/article/PMC/PMC4595480/",
+      "https://europepmc.org/article/pmc/pmc4595480",
+      "https://www.europepmc.org/article/PMC/PMC4595480",
+      "http://europepmc.org/abstract/PMC/PMC4595480",
+      "https://europepmc.org/article/PMC/PMC4595480?utm_source=x#figures",
+      "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC4595480/fullTextXML",
+    ],
+    resolved: {
+      source: "europepmc",
+      id: "PMC4595480",
+      canonicalUrl: "https://europepmc.org/article/PMC/PMC4595480",
+      key: "europepmc.org/article/PMC/PMC4595480",
+      slug: "europepmc-pmc4595480",
+      candidates: ["https://www.ebi.ac.uk/europepmc/webservices/rest/PMC4595480/fullTextXML"],
+    },
+    expect: "jats",
+    hosts: ["www.ebi.ac.uk"],
+    nearMisses: [
+      "https://europepmc.org/",
+      "https://europepmc.org/article/MED/26412097",
+      "https://europepmc.org/article/PMC/4595480",
+      "https://europepmc.org/article/PMC/PMC4595480/extra",
+      "https://europepmc.org/article/PMC/PMC4595480x",
+      "https://europepmc.org/article/PMC/PMC12345678901",
+      "https://europepmc.org/articles/PMC4595480",
+      "https://europepmc.org.evil.example/article/PMC/PMC4595480",
+      "https://europepmc.org:444/article/PMC/PMC4595480",
+      "https://user:pw@europepmc.org/article/PMC/PMC4595480",
+      "https://ebi.ac.uk/europepmc/webservices/rest/PMC4595480/fullTextXML",
+      "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC4595480/fullTextXML/x",
+      "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=PMC4595480",
+      "https://www.ebi.ac.uk/other/PMC4595480/fullTextXML",
+      "https://www.ebi.ac.uk/article/PMC/PMC4595480",
+    ],
+  },
 };
 
 const resolvedOrThrow = (url: string) => {
@@ -717,7 +759,7 @@ describe("resolvePaperSource — the sources after arXiv", () => {
         canonicalUrl: wanted.resolved.canonicalUrl,
         key: wanted.resolved.key,
         slug: wanted.resolved.slug,
-        candidates: wanted.resolved.candidates.map((url) => ({ url, expect: "pdf" })),
+        candidates: wanted.resolved.candidates.map((url) => ({ url, expect: wanted.expect ?? "pdf" })),
       };
 
       it.each(wanted.shapes)("resolves %s to the one paper", (url) => {
@@ -740,7 +782,7 @@ describe("resolvePaperSource — the sources after arXiv", () => {
         expect(got.key).toBe(`${landing.hostname.replace(/^www\./, "")}${landing.pathname.replace(/\/$/, "")}`);
         expect(got.candidates.length).toBeGreaterThan(0);
         for (const candidate of got.candidates) {
-          expect(candidate.expect).toBe("pdf");
+          expect(candidate.expect).toBe(wanted.expect ?? "pdf");
           expect(candidate.url).not.toBe(got.canonicalUrl);
           expect(new URL(candidate.url).protocol).toBe("https:");
           expect(wanted.hosts).toContain(new URL(candidate.url).host);

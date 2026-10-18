@@ -165,6 +165,15 @@ export interface PublicMeta {
    */
   url?: string;
   /**
+   * **Where an uploaded page says it was saved from**, for whoever can read it
+   * — `article_revisions.saved_from_url` run through `publicSourceUrl`
+   * (src/urls.ts), exactly as `url` is: no query, no credentials, a public host.
+   * A claim out of a file, worded on the page as *"Saved from <host>"*, and
+   * never fetched. Absent when there is none or the policy refuses it.
+   * docs/project/security-risks.md has the entry.
+   */
+  savedFrom?: string;
+  /**
    * **How hard the piece is to read**: the two levels and the model's one
    * sentence, so a visitor's minutes and card are the owner's
    * (`Meta.readingDifficulty`, and the same type, which is what keeps

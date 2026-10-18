@@ -187,7 +187,9 @@ for (const c of cases) {
   } else {
     const id = paper.candidates.map((candidate) => candidate.url).join(" ");
     const seen = fetched.get(id);
-    const outcome = seen ?? (await outcomeFor(paper.key, paper.candidates));
+    /* Documents only: Europe PMC's `"jats"` candidate is fetched through its own door, not this one. */
+    const documents = paper.candidates.flatMap((c) => (c.expect === "jats" ? [] : [{ url: c.url, expect: c.expect }]));
+    const outcome = seen ?? (await outcomeFor(paper.key, documents));
     fetched.set(id, outcome);
     if (!outcome.ok) bad += 1;
     line =

@@ -1909,6 +1909,17 @@ export interface Meta {
    */
   filename?: string;
 
+  /**
+   * **Where an uploaded page says it was saved from** — `saved_from_url`, put
+   * through `savedSource` (src/urls.ts) on every read rather than trusted from
+   * upload time. A claim out of the file, which the "Save for Spideryarn"
+   * bookmarklet writes; the masthead says *"Saved from <host>"* when there is no
+   * `url`, and it is **never fetched**. `PublicMeta.savedFrom` is the visitor's
+   * version, through `publicSourceUrl` instead.
+   * docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md § Stage 3.
+   */
+  savedFrom?: string;
+
   /* ---- PDFs only. Absent on everything Readability extracted. ---- */
 
   /** What this article was made from. Absent means a web page. */

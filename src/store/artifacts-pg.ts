@@ -76,6 +76,7 @@ import type { DocumentKind, RawManifest } from "../fetch.js";
 import { plainTitle } from "../html.js";
 import { log } from "../log.js";
 import { structureHash } from "../source-hash.js";
+import { savedSource } from "../urls.js";
 import { isDifficultyLevel } from "../reading-time.js";
 import type { Block, Meta, NavLabelStatus, StepName, StoredReadingDifficulty } from "../types.js";
 import {
@@ -239,6 +240,8 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
        `manifest.origin` bug this change already paid for once.
        ⟨Sol, 2026-09-07⟩ docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md. */
     filename: row.rawFilename,
+    /* Checked again on the way out, as `metaFrom` does: `savedSource`. */
+    savedFrom: savedSource(row.savedFromUrl),
     source: row.source as Meta["source"],
     method: row.extractMethod,
     pages: row.pages,
@@ -378,6 +381,7 @@ function readRaw(row: RevisionRow, source: { bytes: number } | null): RawManifes
     ...(row.requestedUrl === null ? {} : { requestedUrl: row.requestedUrl }),
     ...(row.finalUrl === null ? {} : { url: row.finalUrl }),
     ...(row.rawFilename === null ? {} : { filename: row.rawFilename }),
+    ...(row.savedFromUrl === null ? {} : { savedFrom: row.savedFromUrl }),
     contentType: row.rawContentType,
     encoding: row.rawEncoding,
     /* **`raw_byte_count`, and now nothing else.** This read `0` until
@@ -982,6 +986,7 @@ const RAW_COLUMNS = [
   "rawSha256",
   "rawByteCount",
   "rawFilename",
+  "savedFromUrl",
   "rawSourceSha256",
   "rawSourceKind",
 ] as const;
@@ -1196,6 +1201,11 @@ async function writeRawSource(
     rawSha256: manifest.sha256,
     rawByteCount: manifest.bytes,
     rawFilename: manifest.filename ?? null,
+    /* **Null unless this manifest carries one**, so a new upload without the
+       meta clears an old claim rather than inheriting it: the claim belongs to
+       these bytes. A force-extract does not come through here and keeps it
+       (`savedFromUrl: "carry"`, src/store/pg-revisions.ts). */
+    savedFromUrl: manifest.savedFrom ?? null,
     rawSourceSha256: storedSha256,
     rawSourceKind: kind,
   };

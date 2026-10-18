@@ -1109,7 +1109,7 @@ const JOB_STEPS: JobStep[] = [
  */
 type NotExtracts =
   /* Stage 1's facts, written by `fetch` (src/store/artifacts-pg.ts § `META_COLUMNS`). */
-  | "url" | "fetchedAt" | "rawSha256" | "filename"
+  | "url" | "fetchedAt" | "rawSha256" | "filename" | "savedFrom"
   /* Written by `blocks` from its own five columns. */
   | "readingDifficulty"
   /* Exclusive with `publishedYear` by CHECK; its own test below. */
@@ -1728,6 +1728,57 @@ describe("writing artefacts into a draft", () => {
         filename: "The Reader's Own Name.pdf",
         count: 4096,
       });
+    });
+  });
+
+  /**
+   * **A saved page's claim, through its column and back, and gone with the next
+   * file** — `saved_from_url`, plan 261018j § Stage 3 (GPT Sol's S4). Never
+   * `final_url`: the column the extract step's base comes from stays null.
+   */
+  it("keeps where an uploaded page says it was saved from, and a new file without one clears it", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const fresh = "d5".repeat(32);
+      const saved: RawManifest = {
+        kind: "html",
+        file: "raw.html",
+        origin: "upload",
+        uploadId: "up_saved",
+        filename: "A saved page.html",
+        savedFrom: "https://journals.plos.org/plosone/article/file-123?id=1",
+        contentType: "text/html; charset=utf-8",
+        encoding: "utf-8",
+        bytes: 2048,
+        sha256: NETWORK_SHA,
+        storedSha256: fresh,
+        storedBytes: 2048,
+        fetchedAt: "2026-10-18T01:02:03.000Z",
+      };
+      await writeArtefacts(claimed, tx, SLUG, "fetch", { raw: saved }, {});
+      const columns = async () =>
+        (
+          await tx
+            .select({
+              saved: articleRevisions.savedFromUrl,
+              final: articleRevisions.finalUrl,
+              requested: articleRevisions.requestedUrl,
+            })
+            .from(articleRevisions)
+            .where(eq(articleRevisions.id, claimed.revisionId))
+        )[0];
+      expect(await columns()).toEqual({
+        saved: "https://journals.plos.org/plosone/article/file-123?id=1",
+        final: null,
+        requested: null,
+      });
+      const back = (await readArtefact(claimed, tx, SLUG, "fetch", "raw")) as RawManifest;
+      expect(back.savedFrom).toBe("https://journals.plos.org/plosone/article/file-123?id=1");
+      expect(back.url).toBeUndefined();
+
+      const { savedFrom: _gone, ...plain } = saved;
+      await writeArtefacts(claimed, tx, SLUG, "fetch", { raw: { ...plain, uploadId: "up_plain" } }, {});
+      expect((await columns())?.saved).toBeNull();
     });
   });
 

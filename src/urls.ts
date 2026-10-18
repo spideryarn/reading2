@@ -198,6 +198,37 @@ export function safePublicCanonical(value: string): string | null {
 }
 
 /**
+ * **The address an uploaded page says it was saved from, as its owner may see
+ * it** — or `null` to show none.
+ *
+ * The value is a claim out of a file (`<meta name="spideryarn-saved-from">`,
+ * src/saved-from.ts), so it is checked where it is read in as well as here, on
+ * every read: a value in the database may not have come through the upload
+ * path at all. `http`/`https` only, no credentials, no fragment, at most 2,048
+ * characters. **The query is kept**, as it is for the owner's own `final_url`:
+ * this is the owner's address for their own page. What a *stranger* may see is
+ * `publicSourceUrl`'s question, not this one (src/public/dto.ts).
+ *
+ * It is shown and matched, and **never fetched**. docs/project/security-risks.md.
+ */
+export function savedSource(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed.length > 2048) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (url.username !== "" || url.password !== "") return null;
+  url.hash = "";
+  const out = url.toString();
+  return out.length > 2048 ? null : out;
+}
+
+/**
  * **The article's own address, published to whoever can read the article.**
  *
  * Greg, 2026-08-30:

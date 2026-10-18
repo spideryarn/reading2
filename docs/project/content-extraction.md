@@ -50,7 +50,9 @@ For background on why Readability was chosen over alternatives (trafilatura, def
 Stage 1 moved out of this script into [`src/fetch.ts`](../../src/fetch.ts) on 2026-08-25 —
 [fetching.md](fetching.md). What that buys this stage: HTML already decoded with the page's own
 character encoding rather than assumed to be UTF-8, a PDF refused by name instead of arriving as
-Readability-proof gibberish, and a typed failure rather than `Fetch failed: 403`.
+Readability-proof gibberish, and a typed failure rather than `Fetch failed: 403`. A paper read from
+Europe PMC arrives here as a page stage 1 built from its JATS ([`src/jats.ts`](../../src/jats.ts)),
+the way a Word upload does: an ordinary web page from here on.
 
 ## Two extractors, one artefact
 
@@ -379,6 +381,18 @@ address from `<link rel="canonical">` would cover more saved pages and is **deli
 done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
 fetching, which is a security question worth answering on its own rather than as a rider.
 
+**A page saved with the bookmarklet carries an address, and it is still not a base.** Since
+2026-10-18 "Save for Spideryarn" writes `<meta name="spideryarn-saved-from">` into the file's head,
+and `acquireUpload` reads it (`savedFromInHtml`, [`src/saved-from.ts`](../../src/saved-from.ts);
+checked by `savedSource`) into `RawManifest.savedFrom` and `article_revisions.saved_from_url`. It is
+a claim out of the file for the same reason the canonical link above is, so it is **never** `url`:
+this step still passes `null`, nothing resolves against it, and nothing fetches it. It is shown
+("Saved from &lt;host&gt;" in the masthead) and matched against a later paste on the uploader's own
+shelf (`slugForUrlKey`), and that is all;
+[security-risks.md](security-risks.md) has the entry and
+[261018j](../plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md)
+§ Stage 3 the design.
+
 For a fetched page, since 2026-10-05, the base is the URL stage 1 *ended up* at after redirects
 (`manifest.url`, which `fetchDocument` reports), not the one that was typed; the job's own address
 is used only where the manifest has none (the `extract` step in [`src/pipeline.ts`](../../src/pipeline.ts)).
@@ -480,7 +494,10 @@ place was checked against the code on 2026-10-07.
   `NOT_ARTICLES`.
 - Nothing to add for the reader's sentence or the pipeline: `documentIsABotCheck` in
   [`src/messages.ts`](../../src/messages.ts) and the `ChallengePage` branch in
-  [`src/pipeline.ts`](../../src/pipeline.ts) do not name the provider.
+  [`src/pipeline.ts`](../../src/pipeline.ts) do not name the provider. Nor for stage 1, which asks
+  the same registry (`isChallengePage`) whether a paper's address served a bot check, to look for
+  Europe PMC's free copy before stage 2 refuses it
+  ([fetching.md § A paper a site refuses](fetching.md#a-paper-a-site-refuses-europe-pmcs-free-copy)).
 - Current inventory counts in [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
   are prose and need updating by hand; keep dated measurement counts as recorded.
 

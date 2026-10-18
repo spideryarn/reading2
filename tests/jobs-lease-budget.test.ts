@@ -21,7 +21,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
 import { PDF_FIGURES_BUDGET_MS } from "../src/collect-pdf-figures.js";
-import { DEFAULTS as FETCH_DEFAULTS, retryDelayMs } from "../src/fetch.js";
+import {
+  BIBLIOGRAPHIC_LIMITS,
+  EUROPE_PMC_LIMITS,
+  DEFAULTS as FETCH_DEFAULTS,
+  retryDelayMs,
+} from "../src/fetch.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
 import { SOURCES } from "../src/paper-sources.js";
 import { ANSWER_TOKENS as RECEPTION_ANSWER_TOKENS } from "../src/reception.js";
@@ -395,6 +400,7 @@ describe("the job lease and the platform's kill", () => {
       cvf: "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
       jmlr: "https://jmlr.org/papers/v15/srivastava14a.html",
       nber: "https://www.nber.org/papers/w30000",
+      europepmc: "https://europepmc.org/article/PMC/PMC4595480",
     };
     expect(SOURCES, "the candidate-budget check needs the actual source registry").toBeDefined();
     expect(
@@ -415,6 +421,15 @@ describe("the job lease and the platform's kill", () => {
       STEP_BUDGET_MS.fetch,
       `\`fetch\` may make ${requestsAtMost} requests with ${oneFetchDocumentMs} ms of clocks each`,
     ).toBeGreaterThanOrEqual(requestsAtMost * oneFetchDocumentMs);
+    /* **And a refused paper's Europe PMC fallback** (plan 261018j § Stage 2):
+       the one refused fetch, then Crossref (for a PII), the search and the XML,
+       each one attempt of its own door's clock. Up to two identifiers are read
+       off the pasted and the final address, so the lookups are counted twice. */
+    const fallbackMs =
+      oneFetchDocumentMs +
+      2 * (BIBLIOGRAPHIC_LIMITS.timeoutMs + EUROPE_PMC_LIMITS.json.timeoutMs) +
+      EUROPE_PMC_LIMITS.xml.timeoutMs;
+    expect(STEP_BUDGET_MS.fetch, "the Europe PMC fallback's clocks").toBeGreaterThanOrEqual(fallbackMs);
     expect(STEP_BUDGET_MS.fetch).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
   });
 

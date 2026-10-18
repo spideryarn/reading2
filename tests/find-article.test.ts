@@ -143,11 +143,40 @@ const ASKED = {
   },
 } as const;
 
+/**
+ * **Uploads that say where they were saved from** (`article_revisions.saved_from_url`,
+ * plan 261018j § Stage 3): no fetched address at all, and a claim out of the file.
+ */
+const SAVED = {
+  /** A saved page: found by the address it says it was saved from. */
+  page: {
+    id: "3f0c1b8e-6a2d-4e9b-9c47-2d8e5a1f7b30",
+    revision: "a7d93e21-4b5c-4f80-b16e-90c2d4e8f153",
+    slug: "test-find-article-saved-page",
+    savedFrom: "https://www.example.test/find-article-saved-page",
+  },
+  /** Claims the address an article we fetched already has: the fetched one wins. */
+  claimsTheFetched: {
+    id: "5e2b9a40-1c7d-4f63-8a95-b3d0e6f2c418",
+    revision: "c1f48d27-9e3a-4b06-a5d8-7e2b0f9c6a34",
+    slug: "test-find-article-saved-claims-fetched",
+    savedFrom: URL,
+  },
+  /** A claim with a credential in it, which `savedSource` refuses on the way in. */
+  withCredentials: {
+    id: "8b6d2f13-7a4e-4c95-b0e1-5f9c3a7d2e86",
+    revision: "e4a07c95-2d6b-4f18-9c3e-a1b5d8f0e273",
+    slug: "test-find-article-saved-credentials",
+    savedFrom: "https://someone:secret@www.example.test/find-article-saved-credentials",
+  },
+} as const;
+
 await pgReady({
   suite: "tests/find-article.test.ts",
   columns: [
     { table: "spideryarn.articles", column: "short_id" },
     { table: "spideryarn.articles", column: "asked_url" },
+    { table: "spideryarn.article_revisions", column: "saved_from_url" },
   ],
 });
 
@@ -192,6 +221,22 @@ describe("finding an article that is not named after what you have", { timeout: 
           .set({ currentRevisionId: row.revision })
           .where(eq(articles.id, row.id));
       }
+    }
+
+    for (const row of Object.values(SAVED)) {
+      await db.insert(articles).values({ id: row.id, ownerId: currentOwnerId(), slug: row.slug });
+      await db.insert(articleRevisions).values({
+        id: row.revision,
+        articleId: row.id,
+        status: "published",
+        title: "A page somebody saved in their browser",
+        requestedUrl: null,
+        finalUrl: null,
+        rawFilename: `${row.slug}.html`,
+        savedFromUrl: row.savedFrom,
+        fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+      });
+      await db.update(articles).set({ currentRevisionId: row.revision }).where(eq(articles.id, row.id));
     }
   });
 
@@ -294,6 +339,35 @@ describe("finding an article that is not named after what you have", { timeout: 
     expect(await slugForUrlKey(urlKey(aliasOfAnother.final))).toBe(aliasOfAnother.slug);
   });
 
+  /**
+   * **A saved page is found by the address it says it came from**, so pasting
+   * that address after uploading the saved file opens the upload rather than
+   * failing at the site that refused us. Plan 261018j § Stage 3.
+   */
+  it("finds an uploaded page by the address it was saved from, however that is spelled", async () => {
+    const { slugForUrlKey } = await import("../src/store/find-article.js");
+    const { page } = SAVED;
+    for (const spelling of [
+      page.savedFrom,
+      "http://example.test/find-article-saved-page/",
+      "https://www.example.test/find-article-saved-page#section-2",
+    ]) {
+      expect(await slugForUrlKey(urlKey(spelling)), spelling).toBe(page.slug);
+    }
+  });
+
+  it("but a fetched copy of the same address wins over a saved one", async () => {
+    const { slugForUrlKey } = await import("../src/store/find-article.js");
+    expect(await slugForUrlKey(urlKey(URL))).toBe(SLUG);
+  });
+
+  it("and a saved-from claim with a credential in it matches nothing", async () => {
+    const { slugForUrlKey } = await import("../src/store/find-article.js");
+    expect(
+      await slugForUrlKey(urlKey("https://www.example.test/find-article-saved-credentials")),
+    ).toBeUndefined();
+  });
+
   /** The short id resolves the article on its own — the handle a rename needs. */
   it("resolves an article from its short id alone", async () => {
     const { slugForShortId } = await import("../src/store/find-article.js");
@@ -331,6 +405,16 @@ describe("finding an article that is not named after what you have", { timeout: 
     expect(theirs).toBeUndefined();
   });
 
+  /** A claim in one reader's file never decides what another reader's paste opens. */
+  it("nor by the address another reader's file says it was saved from", async () => {
+    const { slugForUrlKey } = await import("../src/store/find-article.js");
+    const theirs = await runInRequest(async () => {
+      setRequestOwner(OUTSIDER);
+      return slugForUrlKey(urlKey(SAVED.page.savedFrom));
+    });
+    expect(theirs).toBeUndefined();
+  });
+
   it("nor by short id", async () => {
     const { slugForShortId } = await import("../src/store/find-article.js");
     const theirs = await runInRequest(async () => {
@@ -343,7 +427,11 @@ describe("finding an article that is not named after what you have", { timeout: 
 
 async function clean() {
   const db = getDb();
-  for (const id of [ARTICLE_ID, ...Object.values(ASKED).map((row) => row.id)]) {
+  for (const id of [
+    ARTICLE_ID,
+    ...Object.values(ASKED).map((row) => row.id),
+    ...Object.values(SAVED).map((row) => row.id),
+  ]) {
     await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
     await db.delete(articleRevisions).where(eq(articleRevisions.articleId, id));
     await db.delete(articles).where(eq(articles.id, id));

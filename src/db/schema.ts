@@ -908,6 +908,25 @@ export const articleRevisions = spideryarn.table(
      * Null for a fetched document, which never had one.
      */
     rawFilename: text("raw_filename"),
+    /**
+     * **Where an uploaded page says it was saved from** — `RawManifest.savedFrom`,
+     * read out of the file's own `<meta name="spideryarn-saved-from">`, which
+     * the "Save for Spideryarn" bookmarklet writes (src/web/save-page-bookmarklet.ts).
+     *
+     * **A claim from a file, not an address we fetched**, and that is why it is
+     * a column of its own rather than `final_url`. It is never fetched, never
+     * the base stage 2 resolves against, never what Refresh fetches, and never
+     * scopes stage 4.5's images or link previews. It is shown ("Saved from
+     * <host>", through `savedSource`, and through `publicSourceUrl` for a
+     * visitor) and matched against a later paste on the uploader's own shelf
+     * only (src/store/find-article.ts). docs/project/security-risks.md has the
+     * entry; docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md § Stage 3.
+     *
+     * On the revision because the claim belongs to the bytes: a force-extract
+     * carries it (src/store/pg-revisions.ts § carry policy), a new upload
+     * replaces it. Null for everything fetched and every other upload.
+     */
+    savedFromUrl: text("saved_from_url"),
 
     /**
      * **Which object in the `sources` bucket this revision's document is.**

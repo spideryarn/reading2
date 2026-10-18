@@ -777,6 +777,19 @@ function sourceDom(
 }
 
 /**
+ * **Is this page, as it arrived, a bot check src/challenge-page.ts knows?**
+ *
+ * For stage 1, which asks only to decide whether a refused paper's free copy is
+ * worth looking for (src/pipeline.ts § `fetchByAddress`, plan 261018j S2).
+ * Parsed by `sourceDom`, so with the silent `VirtualConsole` its header
+ * explains. Stage 2's `readingArm` stays the refusal: this decides nothing
+ * about what is stored.
+ */
+export function isChallengePage(html: string, url: string | null): boolean {
+  return challengeIn(sourceDom(html, url).window.document) !== null;
+}
+
+/**
  * **Everything done to the DOM before Readability sees it**, in the order that
  * is the contract.
  *

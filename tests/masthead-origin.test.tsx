@@ -441,3 +441,76 @@ describe("a guessed address for an upload", () => {
     expect(host.innerHTML).not.toContain("javascript:");
   });
 });
+
+/**
+ * **A page saved with the bookmarklet says where it was saved from** — plan
+ * 261018j § Stage 3. A claim out of the file, so it is worded as one ("Saved
+ * from"), never as the original, and drawn only when there is no fetched
+ * address. Owner and visitor alike: what reaches a visitor has already been
+ * through `publicSourceUrl` on the server (tests/public-dto.test.ts).
+ */
+describe("the origin line for a saved page", () => {
+  const SAVED = "https://journals.plos.org/plosone/article/file-123";
+  const upload = { filename: "A paper.html", savedFrom: SAVED } satisfies Partial<Meta>;
+  const savedLink = () =>
+    [...host.querySelectorAll<HTMLAnchorElement>("a.origin-link")].find((a) => a.getAttribute("href") === SAVED);
+
+  it("tells the owner where the file was saved from, as a link that is not followed", async () => {
+    await mount(upload, true);
+
+    expect(host.textContent).toContain("Saved from");
+    expect(host.textContent).toContain("journals.plos.org");
+    expect(host.textContent).not.toContain(UPLOADED);
+    expect(host.textContent).not.toContain("View the original");
+    const a = savedLink();
+    expect(a?.getAttribute("target")).toBe("_blank");
+    expect(a?.getAttribute("rel")).toBe("noopener noreferrer nofollow");
+    expect(names()).toContain("Saved from journals.plos.org");
+    /* Not the title's link: that is the original's, and this is not one. */
+    expect(host.querySelector("h1 a")).toBeNull();
+  });
+
+  it("tells a visitor the same, from what the public payload carried", async () => {
+    await mount({ savedFrom: SAVED }, false);
+    expect(host.textContent).toContain("Saved from");
+    expect(savedLink()).toBeDefined();
+  });
+
+  it("gives way to a fetched address", async () => {
+    await mount({ url: "https://example.com/the-piece", savedFrom: SAVED }, true);
+    expect(host.textContent).not.toContain("Saved from");
+    expect(hrefs()).not.toContain(SAVED);
+  });
+
+  it("draws no guess beside it, because the address is known", async () => {
+    await act(async () => {
+      root.render(
+        createElement(Masthead, {
+          article: {
+            ...article(upload),
+            sourceGuess: {
+              status: "found",
+              url: "https://doi.org/10.1234/abc.5678",
+              host: "doi.org",
+              kind: "canonical",
+              matchedBy: "doi",
+            },
+          },
+          slug: SLUG,
+          onRenamed: () => {},
+        }),
+      );
+    });
+    expect(host.querySelector("a.origin-guess")).toBeNull();
+  });
+
+  it.each([
+    ["not http(s)", "javascript:alert(1)"],
+    ["carrying a credential", "https://someone:secret@journals.plos.org/x"],
+  ])("refuses a claim %s, and says the file was uploaded instead", async (_n, savedFrom) => {
+    await mount({ filename: "A paper.html", savedFrom }, true);
+    expect(host.textContent).not.toContain("Saved from");
+    expect(host.textContent).toContain(UPLOADED);
+    expect(host.innerHTML).not.toContain(savedFrom);
+  });
+});

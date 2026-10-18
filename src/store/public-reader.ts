@@ -348,6 +348,11 @@ const PUBLIC_PROJECTIONS = {
     readingIdeas: articleRevisions.readingIdeas,
     readingDifficultyReason: articleRevisions.readingDifficultyReason,
     finalUrl: articleRevisions.finalUrl,
+    /* Where an uploaded page says it was saved from — a claim, which
+       `publicMeta` runs through `publicSourceUrl` exactly as it does `finalUrl`
+       and publishes as `PublicMeta.savedFrom`. **Not on `head`**: it is never a
+       canonical. Plan 261018j, Sol's S3. */
+    savedFromUrl: articleRevisions.savedFromUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
     /* **The image manifest, and it is not yet doing anything.** This comment
@@ -1031,6 +1036,7 @@ export const pgPublicReader: PublicArticleReader = {
         readingDifficultyReason: found.revision.readingDifficultyReason,
         headingTitle: headingTitleOf(blocks),
         finalUrl: found.revision.finalUrl,
+        savedFromUrl: found.revision.savedFromUrl,
         blocks,
         tree,
         arc: found.revision.arc,

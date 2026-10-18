@@ -2963,6 +2963,62 @@ describe("the source URL a stranger receives", () => {
 });
 
 /**
+ * **Where a saved page says it came from, as a stranger receives it** — plan
+ * 261018j § Stage 3, GPT Sol's S3. A claim out of an uploaded file, so it goes
+ * through the same `publicSourceUrl` as `finalUrl`, into `meta.savedFrom` and
+ * never into `meta.url`. The canaries are the four the plan review named.
+ */
+describe("the saved-from address a stranger receives", () => {
+  const sent = (savedFromUrl: string | null) =>
+    publicArticle({
+      slug: "saved",
+      title: "A saved page",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
+      headingTitle: null,
+      finalUrl: null,
+      savedFromUrl,
+      blocks: [HEADING, BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    }).meta;
+
+  it("publishes an ordinary address as savedFrom, and never as url", () => {
+    const meta = sent("https://journals.plos.org/plosone/article/file-123#s2");
+    expect(meta.savedFrom).toBe("https://journals.plos.org/plosone/article/file-123");
+    expect(meta.url).toBeUndefined();
+  });
+
+  it.each([
+    ["a signed query", "https://www.cell.com/fulltext/S1?sig=SECRETSIGNATURE"],
+    ["a credential", "https://someone:secret@www.cell.com/fulltext/S1"],
+    ["localhost", "http://localhost/private"],
+    ["a private IP", "http://10.0.0.5/token"],
+    ["a scheme a browser would not follow", "javascript:alert(1)"],
+  ])("publishes nothing for %s", (_n, value) => {
+    const meta = sent(value);
+    expect(meta.savedFrom).toBeUndefined();
+    expect(JSON.stringify(meta)).not.toContain("SECRET");
+    expect(JSON.stringify(meta)).not.toContain("secret");
+    expect(JSON.stringify(meta)).not.toContain(value);
+  });
+
+  it("says nothing when there is none", () => {
+    expect(sent(null).savedFrom).toBeUndefined();
+  });
+});
+
+/**
  * **The Debate a shared link carries** — since 2026-09-29, plan 260929c stage
  * 4, by the contract 260905f § Security set. Its own block because two of its
  * cases need the article's own address set, and the artefact block above runs

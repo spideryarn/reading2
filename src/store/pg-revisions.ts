@@ -257,6 +257,11 @@ export const REVISION_CARRY_POLICY: Record<
      could no longer size. */
   rawByteCount: "carry",
   rawFilename: "carry",
+  /* Where an uploaded page says it was saved from: a fact about the stored
+     bytes, like the filename, so a force-extract keeps it. A new upload
+     re-fetches, and `writeRawSource` then writes it (or null) afresh. Plan
+     261018j § GPT Sol's plan review, S4. */
+  savedFromUrl: "carry",
   /**
    * The reference to the object in the `sources` bucket — carried, beside the
    * hash and the bytes it belongs with.

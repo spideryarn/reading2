@@ -77,7 +77,7 @@ import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
    not come off `meta` and so never passes through `webSource`. */
 import { hostOf, isWebUrl } from "../urls.js";
 import { Link } from "./Link.js";
-import { cameOffADisk, journalBesideSite, SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, journalBesideSite, savedFromSource, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, readHref } from "./router.js";
 import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
@@ -325,6 +325,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
             that an upload is a false sentence about their library. */}
         <OriginLine
           source={source}
+          savedFrom={savedFromSource(meta)}
           origin={onRenamed === undefined ? null : cameOffADisk(meta) ? "upload" : "unrecorded"}
           guess={article.sourceGuess}
         />
@@ -515,10 +516,19 @@ function CountsButton({ open, onToggle }: { open: boolean; onToggle: () => void 
  */
 function OriginLine({
   source,
+  savedFrom,
   origin,
   guess,
 }: {
   source: string | null;
+  /**
+   * **Where an uploaded page says it was saved from** — `savedFromSource`,
+   * so `null` whenever there is a `source`. Drawn for owner and visitor alike,
+   * because what reaches a visitor has already been through `publicSourceUrl`
+   * on the server. Worded as what it is, *"Saved from <host>"*: a claim the
+   * file made, which we have never fetched. Plan 261018j § Stage 3.
+   */
+  savedFrom: string | null;
   /**
    * What to say when there is no address — or `null` for *say nothing*.
    *
@@ -582,6 +592,41 @@ function OriginLine({
                 itself does not go on the page. */}
             <span className="origin-host">{parts ? parts.host : "View the original"}</span>
             {parts && <span className="origin-path">{parts.rest}</span>}
+          </a>
+        </Tooltip>
+      </p>
+    );
+  }
+
+  if (savedFrom) {
+    const parts = addressParts(savedFrom);
+    const label = parts ? `Saved from ${parts.host}` : "Saved from a web page";
+    return (
+      <p className="origin">
+        <Tooltip
+          placement="bottom"
+          keepSide
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={parts ? `Saved from ${parts.host}` : "Saved from a web page"}
+              what="This article was made from a file saved in a browser, and the file says it was saved from this page. What you are reading is our copy of that file."
+              how="Opens that page in a new tab. The address came with the file and we have never fetched it, so it is the file's word for where it came from."
+            />
+          }
+        >
+          <a
+            href={savedFrom}
+            target="_blank"
+            /* `nofollow` as well: the address is the file's claim, not a page
+               we read. */
+            rel="noopener noreferrer nofollow"
+            aria-label={label}
+            className="origin-link"
+          >
+            <Upload size={13} strokeWidth={1.75} className="origin-icon" />
+            <span>Saved from</span>
+            <span className="origin-host">{parts ? parts.host : "a web page"}</span>
           </a>
         </Tooltip>
       </p>

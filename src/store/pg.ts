@@ -318,6 +318,7 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
    that already knows whose row it is writing. */
 export { ownedSlug } from "./owned-slug.js";
 import { ownedSlug } from "./owned-slug.js";
+import { savedSource } from "../urls.js";
 
 
 /* **`slugIsTaken` moved to [slug-is-taken.ts](slug-is-taken.ts) on 2026-08-28**,
@@ -1127,6 +1128,12 @@ const REVISION_READ_POLICY: Record<
      Not `public`: a filename is a string the reader chose, and publishing a
      document is not publishing what they called it. */
   rawFilename: { rawSource: "value", article: "value", library: "value" },
+  /* **Where an uploaded page says it was saved from** — `Meta.savedFrom`, so on
+     the two reads that build a `Meta` (it is in `META_COLUMNS`). A claim out of
+     a file, shown and never fetched; the duplicate lookup reads it with its own
+     query (src/store/find-article.ts), and a visitor's projection is
+     src/store/public-reader.ts's. Plan 261018j § Stage 3. */
+  savedFromUrl: { article: "value", library: "value" },
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
@@ -1181,6 +1188,7 @@ const META_COLUMNS = {
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
   rawFilename: articleRevisions.rawFilename,
+  savedFromUrl: articleRevisions.savedFromUrl,
   source: articleRevisions.source,
   extractMethod: articleRevisions.extractMethod,
   pages: articleRevisions.pages,
@@ -1905,6 +1913,12 @@ export async function sourceHashFor(
  */
 export type MetaRow = { [C in keyof typeof META_COLUMNS]: Selected[C] };
 
+/** `Meta.savedFrom` from its column, checked again: absent unless `savedSource` passes it. */
+function savedFromOf(stored: string | null): Pick<Meta, "savedFrom"> {
+  const savedFrom = savedSource(stored);
+  return savedFrom === null ? {} : { savedFrom };
+}
+
 /**
  * `Meta.authors` from its column, for the one read that selects it — the
  * reading view's (`REVISION_READ_POLICY.authors`). Absent, never `[]`, when
@@ -2007,6 +2021,9 @@ export function metaFrom(
        `source === "pdf"` — which is the media kind and stopped being a proxy
        for *uploaded* on 2026-09-07. `Meta.filename` says the rest. */
     ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
+    /* A claim out of the uploaded file, so checked here on every read rather
+       than trusted from upload time: `savedSource` (src/urls.ts). */
+    ...savedFromOf(revision.savedFromUrl),
     /* PDF provenance, so the spread pattern above is load-bearing here too:
        `source: null` in `meta.json` is not the same artefact as no `source`
        key, and the round-trip test compares them. docs/plans/260826c-pdf-ingestion.md.

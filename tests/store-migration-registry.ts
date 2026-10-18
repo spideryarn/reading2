@@ -2310,6 +2310,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "which loads a corpus article into Postgres and reads no `data/` directory of its own; the " +
       "export it runs writes to a temporary directory it removes. Re-run witness 2 to confirm.",
   },
+  "tests/saved-from-url-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for `article_revisions.saved_from_url` " +
+      "(docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md " +
+      "§ Stage 3): the owner's read, the shelf's, the carry-forward and the visitor's read. It seeds " +
+      "through `scratchArticleInPg`, which loads a corpus article into Postgres and reads no `data/` " +
+      "directory of its own. Re-run witness 2 to confirm.",
+  },
   "tests/reading-difficulty-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -3323,6 +3334,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
      one column read back through four reads. */
   "tests/title-original-pg.test.ts": "private-postgres",
+  /* New on 2026-10-18 (plan 261018j § Stage 3). Its own throwaway article per
+     run, and one column read back through the owner's, the shelf's, a draft's
+     and a visitor's reads. */
+  "tests/saved-from-url-pg.test.ts": "private-postgres",
   /* New on 2026-10-05 (plan 261005j). Its own throwaway article per run, and
      five columns read back through six reads. */
   "tests/reading-difficulty-pg.test.ts": "private-postgres",

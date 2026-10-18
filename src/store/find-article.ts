@@ -50,6 +50,7 @@ import { getDb } from "../db/client.js";
 import { articleRevisions, articles } from "../db/schema.js";
 import { urlKey } from "../ingest.js";
 import { resolvePaperSource } from "../paper-sources.js";
+import { savedSource } from "../urls.js";
 import { guardDbStore } from "./db-errors.js";
 import { ownedByReader } from "./pg.js";
 
@@ -70,13 +71,22 @@ const db = guardDbStore("find-article", {
    * Every article row this reader owns, with its published revision's URL and
    * the address the reader asked for when the article was made.
    */
-  articleUrls(): Promise<{ slug: string; url: string | null; requestedUrl: string | null; askedUrl: string | null }[]> {
+  articleUrls(): Promise<
+    {
+      slug: string;
+      url: string | null;
+      requestedUrl: string | null;
+      askedUrl: string | null;
+      savedFrom: string | null;
+    }[]
+  > {
     return getDb()
       .select({
         slug: articles.slug,
         url: articleRevisions.finalUrl,
         requestedUrl: articleRevisions.requestedUrl,
         askedUrl: articles.askedUrl,
+        savedFrom: articleRevisions.savedFromUrl,
       })
       .from(articles)
       .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
@@ -131,20 +141,35 @@ const db = guardDbStore("find-article", {
  * An article that has never published still never matches. The asked-for
  * address is read only beside a `final_url`, and that is null without a
  * published revision.
+ *
+ * ## And a third, for a saved page
+ *
+ * Since 2026-10-18 an uploaded page that says where it was saved from
+ * (`article_revisions.saved_from_url`, the bookmarklet's meta) is found by
+ * that address too, **after both passes above**, so a fetched copy of the same
+ * page still wins. The address is a claim out of a file, which is why it is
+ * matched only here, on this reader's own shelf: a claim in one reader's file
+ * can never decide what another reader's paste opens. Checked again by
+ * `savedSource` before it is keyed. Plan 261018j § Stage 3.
  */
 export async function slugForUrlKey(key: string): Promise<string | undefined> {
   if (key === "") return undefined;
   const rows = await db.articleUrls();
   const byFinalUrl = rows.find((row) => row.url !== null && urlKey(row.url) === key);
   if (byFinalUrl) return byFinalUrl.slug;
-  return rows.find(
+  const byAskedUrl = rows.find(
     (row) =>
       row.url !== null &&
       row.askedUrl !== null &&
       (resolvePaperSource(row.url) !== null ||
         (row.requestedUrl !== null && resolvePaperSource(row.requestedUrl) !== null)) &&
       urlKey(row.askedUrl) === key,
-  )?.slug;
+  );
+  if (byAskedUrl) return byAskedUrl.slug;
+  return rows.find((row) => {
+    const saved = savedSource(row.savedFrom);
+    return saved !== null && urlKey(saved) === key;
+  })?.slug;
 }
 
 /**

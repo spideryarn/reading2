@@ -24,8 +24,13 @@
 export interface PaperCandidate {
   /** A fixed address built from the matched id — never text copied from the pasted address. */
   url: string;
-  /** What the bytes must turn out to be for this candidate to count. */
-  expect: "html" | "pdf";
+  /**
+   * What the bytes must turn out to be for this candidate to count — or, for
+   * `"jats"`, **how they are acquired**: Europe PMC's XML, through its own fixed
+   * door and converted to a web page (src/jats.ts). That one names a method,
+   * not a stored `DocumentKind`; what is stored is HTML. Plan 261018j, S1.
+   */
+  expect: "html" | "pdf" | "jats";
   /** For HTML: a string the page must contain to be the paper rather than an error page. */
   marker?: string;
 }
@@ -405,13 +410,70 @@ const nber: PaperSource = {
   },
 };
 
+const EUROPE_PMC_HOSTS: ReadonlySet<string> = new Set(["europepmc.org", "www.europepmc.org"]);
+const EBI_HOSTS: ReadonlySet<string> = new Set(["www.ebi.ac.uk"]);
+/** A PubMed Central id: `PMC` and one to nine digits. Matched case-insensitively, spelled upper-case. */
+const PMCID = "PMC\\d{1,9}";
+const PMCID_WHOLE = new RegExp(`^${PMCID}$`, "i");
+/** `/article/PMC/<id>` and `/abstract/PMC/<id>`, Europe PMC's page for a paper; nothing before or after. */
+const EUROPE_PMC_PATH = new RegExp(`^/(?:article|abstract)/PMC/(${PMCID})/?$`, "i");
+/** The full-text address itself, which is this source's one candidate. */
+const EUROPE_PMC_XML_PATH = new RegExp(`^/europepmc/webservices/rest/(${PMCID})/fullTextXML$`, "i");
+
+/** The address of a paper's full text at Europe PMC: a fixed string around an id `europePmcPaper` has checked. */
+function europePmcFullTextUrl(pmcid: string): string {
+  return `https://www.ebi.ac.uk/europepmc/webservices/rest/${pmcid}/fullTextXML`;
+}
+
+/**
+ * **Europe PMC's free full text**, as JATS XML, for a paper in its open-access
+ * subset — or `null` for anything that is not a PMCID. Plan 261018j § Stage 1.
+ *
+ * The one source whose candidate is not on the host it is known by: the paper
+ * is known by its page on `europepmc.org`, which is the source link and what
+ * Refresh resolves again, and its text is fetched from the REST API on
+ * `www.ebi.ac.uk` (src/fetch.ts § `fetchEuropePmc`, the only door that may ask
+ * it). The candidate is `"jats"`, which the fetch step converts rather than
+ * stores (src/pipeline.ts § `fetchEuropePmcPaper`). A paper its publisher
+ * refused arrives here too, by `fetchByAddress`'s fallback, which finds the id
+ * (src/europe-pmc.ts).
+ *
+ * The key keeps `PMC` upper-case, as `urlKey` spelled the page's address
+ * before this source existed (the rule above).
+ */
+export function europePmcPaper(pmcid: string): ResolvedPaper | null {
+  if (!PMCID_WHOLE.test(pmcid)) return null;
+  const id = pmcid.toUpperCase();
+  return {
+    source: "europepmc",
+    versionedId: id,
+    workId: id,
+    canonicalUrl: `https://europepmc.org/article/PMC/${id}`,
+    key: `europepmc.org/article/PMC/${id}`,
+    slug: slugOf("europepmc", id),
+    candidates: [{ url: europePmcFullTextUrl(id), expect: "jats" }],
+  };
+}
+
+const europepmc: PaperSource = {
+  name: "europepmc",
+  resolve(url) {
+    const matched = isAt(url, EUROPE_PMC_HOSTS)
+      ? EUROPE_PMC_PATH.exec(url.pathname)?.[1]
+      : isAt(url, EBI_HOSTS)
+        ? EUROPE_PMC_XML_PATH.exec(url.pathname)?.[1]
+        : undefined;
+    return matched === undefined ? null : europePmcPaper(matched);
+  },
+};
+
 /**
  * In order, though no address is recognised by two: each source names its own
  * hosts, and the one host three of them share (`doi.org`) is told apart by the
  * DOI's prefix.
  * Exported so the job-budget test can require a sample for every source.
  */
-export const SOURCES: readonly PaperSource[] = [arxiv, acl, pmlr, neurips, cvf, jmlr, nber];
+export const SOURCES: readonly PaperSource[] = [arxiv, acl, pmlr, neurips, cvf, jmlr, nber, europepmc];
 
 function parsed(url: string): URL | null {
   try {

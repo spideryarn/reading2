@@ -32,12 +32,13 @@ cannot express. `npm run ingest -- <url>` runs it, and everything after it.
 - [§ The evidence](#the-evidence) — size, encoding, document kind, certificates, redirects, timeouts, retries: why each rule exists
 - [§ What stage 1 leaves behind](#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk) — the stored object and manifest; `npm run fetch` is gone
 - [§ A paper source](#a-paper-source-one-paper-several-addresses) — a DOI or landing page leading to the paper
+- [§ A paper a site refuses](#a-paper-a-site-refuses-europe-pmcs-free-copy) — Europe PMC's free copy, and the original failure on any miss
 - [§ Not everything gets fetched](#not-everything-gets-fetched-rawmanifest-has-an-origin) — uploads and `RawManifest.origin`
 - [§ The user-agent question](#the-user-agent-question) — why we send what we send
 - [§ Addresses we won't dial](#addresses-we-wont-dial) — SSRF and private addresses
 - [§ Dependencies, and the ones we didn't take](#dependencies-and-the-ones-we-didnt-take) — library choices
 - [§ What's still loose](#whats-still-loose) — known gaps
-- A bot-check page is stage 2's refusal, not this stage's: [content-extraction.md § Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor)
+- A bot-check page is stage 2's refusal, not this stage's: [content-extraction.md § Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor). Stage 1 asks the same recognisers only to decide whether to look for a free copy ([§ A paper a site refuses](#a-paper-a-site-refuses-europe-pmcs-free-copy))
 
 ## What it does that a bare `fetch` doesn't
 
@@ -508,7 +509,9 @@ not proof of a hard elapsed-time ceiling. See
 
 ### The sources
 
-Since 2026-10-06 there are seven, and two sites that are shapes of the first. Every one was chosen
+Since 2026-10-06 there are seven, and two sites that are shapes of the first; Europe PMC made eight
+on 2026-10-18, and is the exception to two of the rules below (its one candidate is XML, and on
+another host). Every one of the seven was chosen
 because its landing page imported as a stub of a few hundred words under the paper's title
 ([261005e](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
 has the measurement and the ranking, and
@@ -545,6 +548,7 @@ repeated once, after ten seconds), and which of the two ways is wanted.
 | `cvf` | `openaccess.thecvf.com/<collection>/html/<name>.html` and `/<collection>/papers/<name>.pdf`, the collection written `content_cvpr_2016` or `content/ICCV2021` | `/<collection>/papers/<name>.pdf` |
 | `jmlr` | `jmlr.org/papers/v<N>/<name>.html` and `/papers/volume<N>/<name>/<name>.pdf`, with or without `www.` | `jmlr.org/papers/volume<N>/<name>/<name>.pdf` |
 | `nber` | `nber.org/papers/w<N>`, with a trailing slash or `.pdf`, and `/system/files/working_papers/w<N>/w<N>.pdf`, with or without `www.`; `doi.org/10.3386/w<N>` | `www.nber.org/system/files/working_papers/w<N>/w<N>.pdf` |
+| `europepmc` | `europepmc.org/article/PMC/PMC<n>` and `/abstract/PMC/PMC<n>`, with or without `www.`; the full-text address itself | `www.ebi.ac.uk/europepmc/webservices/rest/PMC<n>/fullTextXML`, as JATS, converted: [§ A paper a site refuses](#a-paper-a-site-refuses-europe-pmcs-free-copy) |
 
 **A Hugging Face or alphaXiv page is the arXiv paper**, not a source of its own: it resolves to
 exactly what the arXiv link resolves to, so it is the same article, and its source link afterwards
@@ -644,6 +648,62 @@ as well would need a second address column, which is a question for Greg in
 [the plan](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md). What makes that address and a freshly pasted `abs` link one article is `urlKey`,
 which answers with the source's key for every shape
 ([ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article)).
+
+### A paper a site refuses: Europe PMC's free copy
+
+> maybe the best thing for the user would be to try Europe PMC first and then fall back to the
+> bookmarklet. … Because I guess actually the XML format might be better than a PDF anyway.
+>
+> — Greg, 2026-10-18, reply `spya-qy8mgg` to [q-emrf2p](../user-feedback/questions/q-emrf2p.md)
+
+Publishers behind a bot check refuse us (cell.com's 403, Springer's "Client Challenge" page), and
+some of those papers are open access in Europe PMC, as JATS XML. When the one fetch of a pasted
+address **fails as `forbidden` or `unauthorized`**, or **succeeds with a page a stage-2 recogniser
+calls a bot check** (asked only when the address names a paper, so an ordinary page is never parsed
+here), `fetchByAddress` looks for that copy:
+
+```
+ the pasted and the final address ─ src/europe-pmc.ts § paperIdsInUrl ─▶ a DOI, or an Elsevier PII
+ a PII  ─ Crossref, alternative-id, exactly one work that carries it ──▶ its DOI
+ a DOI  ─ Europe PMC search: same DOI back, open access, in Europe PMC ▶ a PMCID
+ a PMCID ─ the europepmc source's candidate, fetched and converted ────▶ the article
+```
+
+**Any miss, at any step, leaves the original outcome exactly as it was**: the same failure, mapped
+the same way (so the same sentence, the Upload button and the bookmarklet), or the very document
+that arrived, for stage 2 to refuse. `tests/europe-pmc-fallback.test.ts` compares the failures
+sentence for sentence. A 404, a timeout and everything else never ask.
+
+- **The identifier comes off a route we have seen, host by host**, and is never cut: a DOI is the
+  whole rest of `/doi/…`, `/doi/full/…` or Springer's `/article/…`, so a real DOI ending `.pdf` is
+  kept and a wrong one simply misses, because the search must name the same DOI back. Of the 29
+  refusals measured in [261017a](../investigations/261017a-which-refused-paper-links-have-a-free-copy-the-server-can-read.md),
+  21 carry one and four of the six free copies are found this way; OUP's and BMJ's addresses carry
+  none.
+- **Its own door**, `fetchEuropePmc` in [`src/fetch.ts`](../../src/fetch.ts): `https:` to
+  `www.ebi.ac.uk` under `/europepmc/webservices/rest/` only, checked before DNS, one attempt, no
+  redirect, the honest bibliographic User-Agent; 8 s and 1 MiB for a search, 30 s and 20 MiB for
+  the XML, which must be XML and strict UTF-8. Crossref goes through `fetchBibliographicJson` as
+  every registry call does. [security-map.md](security-map.md#where-the-defences-physically-live).
+- **The XML is converted in stage 1** by [`src/jats.ts`](../../src/jats.ts), as an uploaded Word
+  file is: the page is built element by element (nothing of the XML's markup copied), stored as
+  `html`, and is an ordinary page from stage 2 on. Its head carries what stage 2 reads (`<title>`,
+  `citation_author` with institutions, `citation_doi`, `og:site_name` as the journal,
+  `article:published_time`). Figures point at PMC's open-data bucket:
+  [article-images.md](article-images.md#pmcs-open-data-bucket). A document with an entity
+  declaration or an internal DTD subset is refused before it is parsed, because jsdom's XML parser
+  expands internal entities; [security-risks.md R19](security-risks.md#from-securitymds-known-gaps).
+- **The manifest describes what arrived and names what was stored**: `bytes`, `sha256` and
+  `contentType` are the XML's, the stored object is the page (`writeConvertedRaw`). `requestedUrl`
+  is the XML's address and `url` is `europepmc.org/article/PMC/PMC<n>`, which is the source link,
+  what Refresh resolves, and what the pasted publisher link finds again through `asked_url`. The
+  job card says `… KB, Europe PMC's free full text`.
+- **Logged at `info`, without an address or an identifier**: the refusing host, `refused` or
+  `challenge`, the identifier's kind, and where it ended (`no-identifier`, `no-doi-for-pii`,
+  `no-open-copy`, `lookup-failed`, `full-text-failed`, `imported`).
+
+The plan, the spikes and the review that shaped it:
+[261018j](../plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md).
 
 ## Not everything gets fetched: `RawManifest` has an origin
 

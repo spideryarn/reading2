@@ -101,6 +101,12 @@ they are labelled apart because an unlabelled pair of URLs under a title is a pu
   reader-supplied part is the slug, which is percent-encoded there and escaped again at the markup
   boundary.
 
+**An uploaded page's saved-from address is not a third one here.** It is a claim the file made
+(`article_revisions.saved_from_url`, written by the bookmarklet's meta — plan
+[261018j](../plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md)
+§ Stage 3), so it is never `url`: the bundle carries it as `savedFromUrl` in `content/revision.json`
+like every other column, and `db:export`'s `raw.json` as `savedFrom`.
+
 **The origin is a constant, not a `Host` header**, and that argument now lives in `src/urls.ts`
 beside it — it moved out of [`src/public/page-head.ts`](../../src/public/page-head.ts) on
 2026-09-02, when this became its second caller. `page-head.ts` composes `og:url` from the same
