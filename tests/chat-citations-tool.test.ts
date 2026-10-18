@@ -425,6 +425,47 @@ describe("bibliographyOutcome — what goes back to the model", () => {
     expect(out.detail).toBe("3 works");
   });
 
+  /**
+   * **A row's note, labelled, inside the fence; what a note is, outside it**
+   * (plan 261017h stage 3c, design § 6). The note is a model's words from a
+   * stranger's abstract, so it is fenced with its row; our sentence saying
+   * what it is and is not is ours, so it is not. Said only when a row carries
+   * one.
+   */
+  it("carries a row's abstract note, labelled, in the fence, and says outside it what a note is", () => {
+    const noted = work({
+      blurb: {
+        sentences: [
+          { text: "It argues that running a program cannot by itself give a machine understanding.", quote: "q" },
+          { text: "x".repeat(400), quote: "q" },
+        ],
+        kind: "author-abstract",
+        source: "crossref",
+        via: "id",
+        workId: "doi:10.1017/s0140525x00005756",
+        url: "https://doi.org/10.1017/s0140525x00005756",
+        readAt: "2026-10-18T08:00:00.000Z",
+      },
+    });
+    const out = bibliographyOutcome(found(list([noted, THREE[2]!])), "");
+    const open = out.content.indexOf("<<<UNTRUSTED ARTICLE CITATIONS");
+    const close = out.content.indexOf("<<<END UNTRUSTED ARTICLE CITATIONS>>>");
+    const before = out.content.slice(0, open);
+    const inside = out.content.slice(open, close);
+    const line = inside.split("\n").find((l) => l.includes("abstract note")) ?? "";
+    expect(line).toMatch(/^ {2}abstract note \(AI, from the abstract at Crossref, read 2026-10-18\): It argues that running/);
+    /* About 300 characters of note, however long the stored one. */
+    expect(line.length).toBeLessThan(380);
+    expect(before).not.toContain("It argues that running");
+    expect(before).toMatch(/“abstract note” was written by an AI from that work's abstract alone/);
+    expect(before).toMatch(/not a web search and not a reading of the paper/);
+    /* One note, on its own row: the searched row has none. */
+    expect(inside.split("abstract note")).toHaveLength(2);
+
+    const plain = bibliographyOutcome(found(list(THREE)), "");
+    expect(plain.content).not.toContain("abstract note");
+  });
+
   it("when the list is capped, never calls N the article's total (Sol F5)", () => {
     const out = bibliographyOutcome(found(list(THREE, { capped: true })), "");
     const head = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));

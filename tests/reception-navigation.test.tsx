@@ -83,7 +83,7 @@ function publish(reception: Reception): PublicReception {
     headingTitle: null, finalUrl: "https://example.org/piece",
     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,
-    timeline: null, skim: null, faq: null, simpleSummary: null, bibliography: null, reception, sourcesClaims: null,
+    timeline: null, skim: null, faq: null, simpleSummary: null, bibliography: null, citationBlurbs: null, reception, sourcesClaims: null,
     crossrefs: null, crossrefsFresh: false, comments: [], searches: [], sketch: null,
     navLabelStatus: "ready", sourceGuess: null,
     sharedBy: "public",

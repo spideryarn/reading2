@@ -92,6 +92,10 @@ const SHARED = new Set([
      `article_citations` tool, so the two cannot disagree. Imports `types.js`
      (types only) and nothing else. Plan 261003m, stage 2. */
   "citation-effective-influence.js",
+  /* What a cited work's note is, in words — the band, the hover card and
+     chat's `article_citations` say where a note came from in one voice.
+     Imports `types.js` (types only) and nothing else. Plan 261017h stage 3c. */
+  "citation-blurb-words.js",
   "ids.js", // minting and validating block ids
   /* Which pasted addresses name a paper a source knows (arXiv), and that
      paper's one key and slug: `ingest.js` asks it in `urlKey` and

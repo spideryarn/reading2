@@ -36,10 +36,18 @@ for that.
 
 **Bibliography**
 
-- When a visible row has no more-specific reading line, one line above the list says we have read
-  none of those works, only the article that cites them. A row says more only when that changes: a
-  page found for it, a search extract read, or the paper itself read. The sentence on what the piece
-  uses a work for is written from the article, not from the cited work.
+- The **(i)** at the top of the band says we have read none of those works, only the article that
+  cites them. A row says more only when that changes: a page found for it, a search extract read, or
+  the paper itself read. The sentence on what the piece uses a work for is written from the article,
+  not from the cited work.
+- Many rows have a **short note** under the authors: a sentence or two an AI wrote from that work’s
+  abstract alone, looked up in a public catalogue of papers (Crossref, DataCite, or OpenAlex). It is
+  not a web search and not a reading of the paper, so it can be wrong. Under it, *From the abstract ·
+  Crossref* (or wherever it came from): point at those words, or tap them, to see the day it was read
+  and the words of the abstract each sentence rests on. A work with no note had no abstract we could
+  be sure was its own, or its note did not pass our checks; that says nothing about the work. Notes
+  are written by themselves a minute or so after the list, for every work at once, and visitors to a
+  shared article see them too.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the
   model’s memory of the work, not a citation count. New lists give a number only when the model is
   confident it knows the work; a low number then means a work it knows and thinks minor. If

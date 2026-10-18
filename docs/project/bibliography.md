@@ -36,6 +36,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 - [§ A row](#a-row) — what one row draws, and where its two scores come from
 - [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
+- [§ A note from the abstract](#a-note-from-the-abstract) — an AI's sentence or two about the work, from its abstract alone, and when it is shown
 - [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
 - [§ What we have read of the work](#what-we-have-read-of-the-work) — said once in the band's (i), and on a row only when it differs
 - [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
@@ -176,6 +177,75 @@ The plan is
 the panel, the public projection and chat: it keeps a count only beside a Crossref record, a whole
 number, with a moment that parses, and otherwise drops the count and keeps the record.
 
+### A note from the abstract
+
+**Since 2026-10-18 a row can carry a sentence or two about the work, written by an AI from that
+work's abstract alone** (plan
+[261017h](../plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md),
+stage 3; the design and its review are
+[261017h-stage-3-design-citation-blurbs.md](../plans/261017h-stage-3-design-citation-blurbs.md)).
+Greg, on the same report as the landing:
+
+> And finally, the Source mode isn't that helpful. I know we had switched to "Ask in chat" for a
+> deep dive on a source, but that's a bit heavy-weight/slow. I wonder if we should:
+> - Whenever I click on "Go to Sources" for a citation, automatically run a websearch and provide a
+>   brief (couple of sentences) blurb based on whatever's available for each source as part of
+>   generating the Sources mode (with clear indication in info-tooltip that it's just a quick web
+>   search, whether or not it's based on finding the Abstract, or the article itself, or what
+>   other people said about it, better to say nothing than hallucinate if you can't find any
+>   primary/authoritative sources, etc)
+> - How expensive would it be to do this for all the citations when generating Sources mode? Run
+>   some spikes/evals. If we can do a decent enough job of it for a few cents for all the
+>   citations for a standard article, it's worth doing. (And the "Ask in Chat" remains for a deep
+>   dive on any of them)
+>
+> I'm thinking we could get away with Haiku 5.5 for this brief-citation-blurb work.
+>
+> — Greg, 2026-10-17 (`spya-m53cdk`)
+
+The spike ([261017c](../investigations/261017c-citation-blurbs-cost-and-quality.md)) chose the
+abstract over a web search: a web search per work was about ten times "a few cents" and wrong more
+often. So **there is no web search**: the step `citation-blurbs` looks each work up in a public
+catalogue of papers — Crossref or DataCite by the row's DOI or arXiv id, OpenAlex's copy of the
+abstract for a DOI the first two lack, and, for an article imported from a public address, a
+Crossref search by title and first author — and Haiku 5.5 writes one sentence, a second only when
+the abstract separately supports it. Each sentence carries a quote that code must find in **that**
+work's abstract, and a separate call, shown only that abstract, must call every sentence supported,
+or nothing is kept (`src/citation-blurbs.ts`). The model is never asked what it remembers of the
+work.
+
+**On the row**, under the by-line: the note, in the model's face
+([fonts.md](fonts.md)), and under it a quiet label — *From the abstract · arXiv*, *· Crossref*,
+*· DataCite*, or *From OpenAlex's copy of the abstract*. The label opens a card on hover, focus or
+tap: *A short note an AI wrote from this work's abstract, as arXiv holds it, read on 18 October
+2026. It is a quick look-up in a public catalogue of papers, not a web search and not a reading of
+the paper itself, so it can be wrong.* Then the words of the abstract code checked each sentence
+against, a link to the work built by code from its identifier, and, for the owner, *To look closer,
+ask in chat.* A work found by its title adds *We found this work's record by its title and first
+author, so it is very likely, but not certainly, this work.* **Every other state draws nothing on
+the row** — the model declined, no abstract we could be sure was the work's, a note that failed its
+checks, a run still to come — because a row without a note says nothing about the work. The prose
+hover card draws the same component (`CiteBlurb` in
+[`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx)); there the card links nothing,
+because the hover card is itself a card the pointer is in. Marginalia does not show notes. The
+words, shared with chat, are [`src/citation-blurb-words.ts`](../../src/citation-blurb-words.ts).
+
+**It runs by itself**, after every published Bibliography, in a job of its own, so the list never
+waits for it; the band hears that job finish and reads again. It is queued when the list is
+published and runs when the owner next has the app open (the design review's G7). About a cent an
+article.
+
+**A note is shown only while it still belongs to its row.** The column
+`article_revisions.citation_blurbs` keeps one entry per work, and each read — the owner's
+`loadBibliography` (`attachBlurbs`) and a
+visitor's DTO — attaches it through one guard, `shownBlurb` in
+[`src/citation-blurbs-identity.ts`](../../src/citation-blurbs-identity.ts), and only when the
+entry's identity (id, title, authors, year, link and the registry's verdict) equals the one
+recomputed from the row **as the list stores it**, and it passed the checks as they are today
+(`CITATION_BLURBS_VALIDATION_VERSION`). A new prompt or model does not hide a kept note; a change to
+the checks does. A list made again that changes a row's title or link takes that row's note down
+until the next run.
+
 ## The one safety property
 
 **Every address a row presents as the work's own was in the article, and code found it.** The model
@@ -227,6 +297,14 @@ surfaces, total over `linkFrom` and the lookup's state, and `null` when there is
 the line in the band's (i) (`CITE_LIST_NOT_READ`); a hover card then says nothing about reading. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
 
+**Once a row on screen has a note from its abstract** (§ [A note from the
+abstract](#a-note-from-the-abstract)), the (i) says a longer sentence instead
+(`CITE_LIST_READ_ABSTRACTS`): *Unless a row says otherwise, we have read none of these works
+themselves. A note under a work was written by an AI from that work's abstract alone, as a public
+catalogue of papers holds it. A work with no note had no abstract we could be sure was its own, or
+its note did not pass our checks.* When it is drawn at all is unchanged. An abstract is not the
+work, so a note is not a reading line: `readNoteOf` does not count it.
+
 ## Nothing about the work beyond the article's bibliography
 
 Asked for through the Feedback button on 2026-10-03 (`spya-zmdb7y`):
@@ -267,6 +345,16 @@ made before 2026-10-03 keeps what it has until it is made again.
 are all aimed by it, and chat's `article_citations` tool returns it as *used for*. The plan, with
 what was passed over, is
 [261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md).
+
+**The newer exception, and it is labelled: a note from the work's abstract** (since 2026-10-18,
+§ [A note from the abstract](#a-note-from-the-abstract)). It is a sentence about the work that is
+not in the article's bibliography, and Greg asked for it a fortnight after the rule above, in his
+own words *"better to say nothing than hallucinate if you can't find any primary/authoritative
+sources"* (2026-10-17, quoted in full there). So it is held to that bar rather than to "nothing":
+written only from a source we fetched and code identified as the work — never the model's memory,
+never the citing paragraph restated — with a quote from that source for every sentence, a separate
+check that the source supports it, a label saying where it came from, and nothing at all when any
+of that fails. `why` stays off the row as before.
 
 ## Which citation, and whose entry
 
@@ -968,6 +1056,10 @@ owner's kept answers, so the tool needed no wider read. Crossref counts appear o
 fence as *Row 2: cited 357 times (Crossref’s count, read 2026-10-04)*, built by code from the number
 and the day `readCitationRegistry` let through. The displayed row number ties each count to its
 work inside the fence, after filtering and caps; our words also say what the count leaves out.
+A row with a note from its abstract (§ [A note from the abstract](#a-note-from-the-abstract)) carries
+it inside the fence as *abstract note (AI, from the abstract at Crossref, read 2026-10-18): …*, cut at
+about 300 characters, and when any row shown has one, our sentence outside the fence says what a
+note is and is not, and that a row without one says nothing about the work.
 
 ## Making it again
 
@@ -986,6 +1078,11 @@ succeeds, and a work found again keeps its id, so a link *Look it up* stored sta
 Metadata row is drawn independently of the experimental switch; Sources itself is outside it.
 Why it is safe to offer is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
+**The notes from abstracts have a Metadata row of their own**, *Notes on cited works*. A list made
+again queues them by itself; an unforced run keeps every note whose row is unchanged and asks only
+for the rest, and a forced one asks for every work again (about a cent). Without a list it fails
+rather than making one. `POST /api/jobs { slug, steps: ["citation-blurbs"] }` runs it alone.
+
 ## Who sees it
 
 Making the list, and *Look it up*, are owner-only. It was behind the
@@ -995,6 +1092,13 @@ sees a stored list** in the band, from the page's own payload: each work's addre
 `publicCitationUrl` (a refused one takes the link off the row, not the row), its dedupe `key` left
 behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-56,
 [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
+
+**A visitor sees the notes from abstracts too** (since 2026-10-18): they are written from public
+abstracts, never from anything the owner did. The public read selects the column itself rather
+than going through the owner's `loadBibliography`, and `publicCitedWork` in
+[`src/public/dto.ts`](../../src/public/dto.ts) attaches each note through the same `shownBlurb`
+guard, rebuilt field by field: no hash, model or versions cross, `workId` is parsed again, and the
+link is built from it by code. A visitor's card does not mention asking in chat.
 
 ## Deferred
 
@@ -1022,6 +1126,11 @@ mounts) ·
 [`citation-influence.ts`](../../src/citation-influence.ts) (Dig deeper's influence call and what
 code keeps of it) ·
 [`citation-effective-influence.ts`](../../src/citation-effective-influence.ts) (the one read path) ·
+the notes from abstracts: [`citation-evidence.ts`](../../src/citation-evidence.ts) (which abstract,
+and whether it is the work's), [`citation-blurbs.ts`](../../src/citation-blurbs.ts) (the step),
+[`citation-blurbs-identity.ts`](../../src/citation-blurbs-identity.ts) (the fingerprint and the
+read guard, `shownBlurb`), [`citation-blurb-words.ts`](../../src/citation-blurb-words.ts) (what the
+band, the card and chat say) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
 [`SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx) (the band, since 2026-10-09; it was `CitationsMode.tsx`) ·

@@ -147,6 +147,8 @@
     .tl-label,
     .cite-why,
     .cite-does,
+    /* a cited work's note, from its abstract; its label and quotes stay UI */
+    .cite-blurb-text,
     .cite-inv-lead,
     .cite-inv-text,
     .srch-hit-why,

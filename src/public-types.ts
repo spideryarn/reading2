@@ -62,6 +62,7 @@ import type {
   CitationLinkFrom,
   CitationPlace,
   CitationRegistry,
+  CitedWorkBlurb,
   RegistryWork,
   BlockContext,
   BlockId,
@@ -736,6 +737,15 @@ export interface PublicCitedWork {
    * drawn as the article gives it, without our verdict on its identifier.
    */
   registry?: PublicCitationRegistry;
+  /**
+   * **A short note on the work, from its public abstract** (plan 261017h
+   * stage 3c, G5) — the owner's `CitedWork.blurb`, by the same guard
+   * (`shownBlurb`, src/citation-blurbs-identity.ts): only a `blurb` entry that
+   * still belongs to this row and passed today's checks, every field rebuilt,
+   * `workId` re-parsed and the address built from it by code. Nothing about
+   * the run crosses: no hash, model, prompt or check version.
+   */
+  blurb?: CitedWorkBlurb;
 }
 
 /** The `found` arm of `CitationRegistry`, and only it. */

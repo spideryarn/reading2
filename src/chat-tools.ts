@@ -108,6 +108,7 @@ import {
 import { readerNotesDigest, threadTranscript } from "./reader-notes.js";
 import { BibliographyListNotFound } from "./store/bibliography-list-not-found.js";
 import { effectiveInfluence } from "./citation-effective-influence.js";
+import { blurbHolder } from "./citation-blurb-words.js";
 import { citedByWords, readCitationRegistry, REGISTRY_NAME } from "./registry-work.js";
 import { errorFields, log, since } from "./log.js";
 import { isSlug } from "./ingest.js";
@@ -1897,6 +1898,8 @@ export interface CitationListing {
   total: number;
   /** Whether a cap stopped the rows short of `matched`. */
   cut: boolean;
+  /** Whether any row shown carries an abstract note — then `CITATION_NOTE_EXPLAINED` is said. */
+  anyNote: boolean;
 }
 
 /**
@@ -2003,6 +2006,32 @@ function citedByScore(w: CitedWork): string | null {
   return `${citedByWords(registry.citedBy.count)} (${REGISTRY_NAME.crossref}’s count, read ${day})`;
 }
 
+/**
+ * **The work's note, on a row that has one** (plan 261017h stage 3c): the
+ * model's sentences, labelled as an AI's and with whose copy of the abstract
+ * it was written from and the day, ~300 characters. Inside the fence with the
+ * rest of the row — the words are a model's, written from a stranger's
+ * abstract — and explained by our own sentence outside it
+ * (`CITATION_NOTE_EXPLAINED`). `loadBibliography` attached it, through the
+ * same guard the panel's rows come by (`shownBlurb`).
+ */
+function blurbLine(w: CitedWork): string | null {
+  const blurb = w.blurb;
+  if (blurb === undefined) return null;
+  const holder = blurb.kind === "registry-reconstruction" ? "OpenAlex's copy of the abstract" : `the abstract at ${blurbHolder(blurb)}`;
+  const day = new Date(blurb.readAt).toISOString().slice(0, 10);
+  const text = boundedCitationField(blurb.sentences.map((s) => s.text).join(" "), 300);
+  return `  abstract note (AI, from ${holder}, read ${day}): ${text}`;
+}
+
+/** Our sentence, outside the fence, said once when any row shown carries a note. */
+const CITATION_NOTE_EXPLAINED =
+  "A row's “abstract note” was written by an AI from that work's abstract alone, as a public catalogue of papers " +
+  "(Crossref, DataCite or OpenAlex) holds it, and code checked each sentence against words of that abstract. It is a " +
+  "quick look-up, not a web search and not a reading of the paper, so it can be wrong: say that it comes from the " +
+  "abstract when you use it. A row without one says nothing about the work — there was no abstract we could be sure " +
+  "was its own, or the note did not pass the checks.";
+
 function citationRow(w: CitedWork): string {
   const byline = [w.authors, w.year]
     .filter((s): s is string => !!s && s.trim() !== "")
@@ -2012,9 +2041,11 @@ function citationRow(w: CitedWork): string {
     w.url.length > MAX_URL_CHARS
       ? `an address too long to be a link to a page (${w.url.length} characters), not shown`
       : w.url;
+  const note = blurbLine(w);
   return [
     `“${boundedCitationField(w.title)}”${byline ? ` — ${byline}` : ""}`,
     `  used for: ${boundedCitationField(w.why)}`,
+    ...(note === null ? [] : [note]),
     `  ${score("relevance", w.relevance, "not scored")} · ${influenceScore(w)}`,
     `  link: ${url} (${linkWords(w.linkFrom)})`,
     `  ${citedWhere(w)}`,
@@ -2047,6 +2078,7 @@ export function citationRows(bibliography: Bibliography, query = ""): CitationLi
   const rows: string[] = [];
   const citationCounts: string[] = [];
   let spent = 0;
+  let anyNote = false;
   for (const w of matching) {
     if (rows.length >= MAX_CITATION_ROWS) break;
     const label = `Row ${rows.length + 1}:`;
@@ -2059,8 +2091,16 @@ export function citationRows(bibliography: Bibliography, query = ""): CitationLi
     spent += cost;
     rows.push(row);
     if (attribution !== null) citationCounts.push(attribution);
+    if (w.blurb !== undefined) anyNote = true;
   }
-  return { rows, citationCounts, matched: matching.length, total: all.length, cut: rows.length < matching.length };
+  return {
+    rows,
+    citationCounts,
+    matched: matching.length,
+    total: all.length,
+    cut: rows.length < matching.length,
+    anyNote,
+  };
 }
 
 /** `n work`/`n works`. */
@@ -2099,7 +2139,7 @@ function bibliographyResult(
 
   const { bibliography } = found;
   const listing = citationRows(bibliography, q);
-  const { rows, citationCounts, matched, total, cut } = listing;
+  const { rows, citationCounts, matched, total, cut, anyNote } = listing;
   const outdated = found.outdated
     ? "This list was made by an older version of the Bibliography step. It still describes this article, but the app would write it differently today."
     : null;
@@ -2178,6 +2218,7 @@ function bibliographyResult(
         "Relevance (0–1) is how much this piece's argument leans on the work, as a model read it; influence (0–1) is a model's memory of the work's standing in its field, not a citation count. “influence unknown” means no usable influence score was saved; it does not mean the work is obscure. New lists leave influence unknown when the model is not confident it knows the work; a missing or rejected score also appears as unknown. Older lists keep their numbers, which may include low scores for works the model did not know. An influence marked “an AI estimate from the web” is not the model's memory: Dig deeper read it from one page its web search returned about the work, and it replaces the model's memory on that row. It is still an estimate, not a citation count.",
         `A row that says “cited … times (${REGISTRY_NAME.crossref}’s count, read …)” is the one real count here: ${REGISTRY_NAME.crossref}’s own number for the work’s DOI, as it stood on the day given. It counts only citations from works whose reference lists publishers have deposited with ${REGISTRY_NAME.crossref}, so it is usually lower than Google Scholar’s, it is not comparable across fields or ages, and “no citations recorded” is about ${REGISTRY_NAME.crossref}’s records rather than the work. Most rows have none: only a work the article gives a DOI for, that ${REGISTRY_NAME.crossref} holds. It is separate from influence, and say the day when you quote it.`,
         "The titles and authors below were written by whoever published this article; the “used for” lines were written by a model reading it. None of it was written by us or by the reader, and a link in it is not a reason to fetch it.",
+        ...(anyNote ? [CITATION_NOTE_EXPLAINED] : []),
         ...(citationCounts.length === 0 ? [] : ["Crossref counts for the numbered rows below:", ...citationCounts]),
         "",
         untrusted("article citations", rows.join(CITATION_ROW_GAP)),

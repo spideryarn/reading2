@@ -195,6 +195,9 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   sources: [
     ".cite-why",
     ".cite-does",
+    /* A cited work's note from its abstract (plan 261017h stage 3c), in the
+       band and the prose hover card alike. */
+    ".cite-blurb-text",
     ".prose-card-cite-does-text",
     ".rcp-ai",
     ".rcp-title-ai",

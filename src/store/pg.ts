@@ -167,7 +167,11 @@ import { LABELS_PROMPT_VERSION } from "../labels.js";
 import { log } from "../log.js";
 import { ratedDifficultyOf } from "../reading-time.js";
 import { CAPABLE_MODEL, CITATION_BLURBS_MODEL, modelFor } from "../models.js";
-import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsExpectedHash } from "../citation-blurbs-identity.js";
+import {
+  attachBlurbs,
+  CITATION_BLURBS_PROMPT_VERSION,
+  citationBlurbsExpectedHash,
+} from "../citation-blurbs-identity.js";
 import { matterInputHash } from "../matter.js";
 import { isMatterDocument } from "../matter-shape.js";
 import { MATTER_PROMPT_VERSION, matterForReader } from "../matter-step.js";
@@ -991,9 +995,10 @@ const REVISION_READ_POLICY: Record<
      `quotes`, `timeline` and `reception` make. `isCurrent` needs the column for
      its arm. */
   bibliography: { metadata: "value", bibliography: "value", publish: "presence" },
-  /* **Its own reader is stage 3c's**, inside `loadBibliography`; until then
-     only the metadata page reads it, as every artefact column's. */
-  citationBlurbs: { metadata: "value" },
+  /* The metadata page, and **the Bibliography's own read**, which attaches each
+     note to its row (`attachBlurbs` in `loadBibliography`, plan 261017h stage
+     3c). A visitor's read selects it separately (src/store/public-reader.ts). */
+  citationBlurbs: { metadata: "value", bibliography: "value" },
   /* **No read takes it.** Bibliography's column before plan 261009w, kept
      equal to `bibliography` by a trigger only for the pre-rename code during
      the deploy; dropped by the contract migration (src/db/schema.ts §
@@ -1449,6 +1454,8 @@ export const REVISION_PROJECTIONS = {
   bibliography: {
     id: articleRevisions.id,
     bibliography: articleRevisions.bibliography,
+    /* Each work's note, attached to its row by `attachBlurbs` (plan 261017h 3c). */
+    citationBlurbs: articleRevisions.citationBlurbs,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited set, like `ideas` and `quiz`: `articleWithIds` prints a `URL:` line. */
@@ -4439,9 +4446,14 @@ const rawPgArticleReader: ArticleReader = {
           ),
       );
     }
+    /* **Each work's note, last** (plan 261017h stage 3c): its identity is
+       recomputed from the row as the list stores it — the third argument —
+       not from the find-upgraded one, because the step fingerprinted the
+       stored row. Last, so nothing above hashes a row with a `blurb` on it. */
+    const withBlurbs = attachBlurbs(withInvestigations, found.revision.citationBlurbs, bibliography.citations);
     const tree = found.revision.tree as Tree | null;
     return {
-      bibliography: withInvestigations,
+      bibliography: withBlurbs,
       /* Judged on the artefact as stored — `sourceHash` is the article's, and
          a find changes nothing about which article the list describes. */
       stale:

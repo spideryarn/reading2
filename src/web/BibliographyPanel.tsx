@@ -51,9 +51,18 @@ import {
   type CitedInSpideryarn,
   type CitedMatchedBy,
   type CitedWork,
+  type CitedWorkBlurb,
   type RegistryCitedBy,
   type RegistrySource,
 } from "../types.js";
+import {
+  BLURB_ASK_IN_CHAT,
+  BLURB_FOUND_BY_TITLE,
+  blurbBasis,
+  blurbCardNote,
+  blurbQuotesLead,
+  CITE_LIST_READ_ABSTRACTS,
+} from "../citation-blurb-words.js";
 import { citedByWords, readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
 import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
 import { Link } from "./Link.js";
@@ -937,6 +946,10 @@ export function BibliographyPanel({
      either case would leave another true but vacuous warning (plan 261011c
      code review). */
   const showListReadNote = shown.some((work) => readNoteOf(work) === null);
+  /* **Which sentence, once it is drawn** (plan 261017h stage 3c): while no row
+     on screen has a note, that we have read none of the works; once one has,
+     the same, and what a note is and what its absence means. */
+  const listReadNote = shown.some((work) => work.blurb !== undefined) ? CITE_LIST_READ_ABSTRACTS : CITE_LIST_NOT_READ;
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = bibliography !== null && (owner === null || owner.status === "ready");
   /* A forced run has finished and its result is not here yet: the forced
@@ -995,7 +1008,7 @@ export function BibliographyPanel({
             since 2026-10-17, for the room (Greg, spya-m53cdk: *"we can hide
             this (...) behind an information-tooltip"*). Still only while a
             visible row relies on it (plan 261011c). */}
-        {showListReadNote && <p>{CITE_LIST_NOT_READ}</p>}
+        {showListReadNote && <p>{listReadNote}</p>}
         {bibliography.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
@@ -1308,7 +1321,8 @@ function WorkRow({
       <CiteTitle work={work} source={source} foundAs={foundAs} by={by} />
       {owned && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
-      {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
+      {work.blurb && <CiteBlurb blurb={work.blurb} owned={owned} linked />}
+      {line.conflict &&<p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       {/* The claim accompanies exactly the verdict or answer drawn below. */}
       {showsWhy(work, kept !== undefined) && (
         <p className="cite-why">
@@ -1425,6 +1439,84 @@ function WebInfluence({ influence }: { influence: Extract<EffectiveInfluence, { 
         {INFLUENCE_FROM_WEB}
       </button>
     </Tooltip>
+  );
+}
+
+/**
+ * **A short note on the work, from its abstract alone** (plan 261017h stage 3c)
+ * — under the row's by-line, and in the prose hover card, from this one
+ * component, so the two cannot say different things about one note.
+ *
+ * The sentences are the model's, so `.cite-blurb-text` is in its face
+ * (voices.css). Under them a quiet label says where the words came from —
+ * *From the abstract · arXiv* — and opens a card on hover, focus or tap
+ * (`useTapReveal`, as `WebInfluence` does): what the note is and is not, which
+ * catalogue and which day, and the words of the abstract code found each
+ * sentence rests on, in `<q>`, left in the app's face as third-party text is
+ * (docs/project/fonts.md § Whose voice is it). The link to the work is built by
+ * code from its identifier (`shownBlurb`), never a stored or model address.
+ *
+ * The caller draws it only when the row has a note: every other state — the
+ * model declined, no abstract, a failed check, a run still to come — draws
+ * nothing, because a row without a note says nothing about the work.
+ *
+ * **The link to the work is only on the band's card** (`linked`), which is
+ * then an interactive card the pointer can enter (Tooltip.tsx §
+ * `interactive`). The prose hover card is itself a card the pointer is inside,
+ * and a second enterable card nested in it would fight it for focus and for
+ * the outside click; there the card names the catalogue and links nothing, as
+ * the hover card's *Ask in chat* tip does.
+ */
+export function CiteBlurb({ blurb, owned, linked }: { blurb: CitedWorkBlurb; owned: boolean; linked: boolean }) {
+  const reveal = useTapReveal(false);
+  return (
+    <div className="cite-blurb">
+      <p className="cite-blurb-text">{blurb.sentences.map((s) => s.text).join(" ")}</p>
+      <Tooltip
+        content={
+          <>
+            <p className="tip-soon-how">{blurbCardNote(blurb)}</p>
+            {blurb.via === "title" && <p className="tip-soon-how">{BLURB_FOUND_BY_TITLE}</p>}
+            <p className="tip-soon-how">{blurbQuotesLead(blurb.sentences.length)}</p>
+            {blurb.sentences.map((s, i) => (
+              <p key={i} className="cite-blurb-quote">
+                <q>{s.quote}</q>
+              </p>
+            ))}
+            {(linked || owned) && (
+              <p className="tip-soon-how">
+                {linked && (
+                  <a href={blurb.url} target="_blank" rel="noopener noreferrer">
+                    {hostOf(blurb.url)} ↗
+                  </a>
+                )}
+                {linked && owned && " · "}
+                {owned && BLURB_ASK_IN_CHAT}
+              </p>
+            )}
+          </>
+        }
+        placement="bottom"
+        keepSide
+        className="score-bars-card cite-blurb-card"
+        open={reveal.open}
+        onOpenChange={reveal.onOpenChange}
+        interactive={linked ? { label: "About this note" } : undefined}
+      >
+        <button
+          type="button"
+          className="cite-blurb-basis"
+          aria-expanded={reveal.open}
+          onPointerDown={reveal.onPointerDown}
+          onPointerCancel={reveal.onPointerCancel}
+          onClick={(e) => {
+            if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+          }}
+        >
+          {blurbBasis(blurb)}
+        </button>
+      </Tooltip>
+    </div>
   );
 }
 

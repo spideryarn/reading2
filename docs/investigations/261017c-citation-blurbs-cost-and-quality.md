@@ -256,6 +256,69 @@ $0.0156 per run, and ran twice (the first had one batch cut off by thinking). Ar
 $0.29 and then $0.28 (the first run hit the 800-token ceiling). **Total $0.61.** The Opus
 judge was a Claude subagent: not OpenRouter, and not in these figures.
 
+## After the build: the shipped code on the same fixtures (2026-10-18)
+
+The design's § 7 *Eval after the build*
+([261017h-stage-3-design-citation-blurbs.md](../plans/261017h-stage-3-design-citation-blurbs.md)):
+a `production` phase in `evals/citation-blurbs-spike.ts` that calls the shipped `collectEvidence`
+(src/citation-evidence.ts) and `writeBlurbs` (src/citation-blurbs.ts) — the writer, code's quote
+and length rules, the separate check per work and its one retry — on every work of the three
+fixture articles, title search on. No Semantic Scholar, no arXiv API, OpenAlex only for a DOI the
+registries hold without an abstract. Then an Opus subagent judged every kept sentence, as in the
+spike, and I checked every title-search match against Crossref's own record by hand.
+
+**Clean runs** (no registry cooldown during the run):
+
+| | Butlin (70 works) | Coding benchmarks (33) | *Rhizome* essay (19) |
+|---|---|---|---|
+| Works with an abstract | 30 | 21 | 0 |
+| **Notes kept** (coverage) | **28 (40%)** | **21 (64%)** | **0 (0%)** |
+| No note, by reason | not found 25 · no abstract 14 · no identifier or title 1 · failed check (too long) 2 | not found 8 · no abstract 3 · conflict 1 | not found 14 · no identifier or title 5 |
+| Model calls (writer / check) | 3 / 31 | 3 / 24 | 0 |
+| Refused by code, then retried | 5 refused, 3 not supported, 6 retried | 2 refused, 3 not supported, 5 retried | – |
+| **Cost** (ledger, `withLedger`) | **$0.0161** | **$0.0092** | $0 |
+| Wall time: lookups / model | 16 s / 56 s | 3 s / 34 s | 4 s / – |
+
+**Faithfulness** (Opus judge, all 75 sentences of the 49 notes): **74 supported, 1 not in
+evidence (1.3%), 0 wrong work**, 1 that only restates its title. The one: Dulberg et al.'s note
+said the agents explored "rather than from an outside reward for trying new things", where the
+abstract says only "intrinsic and emergent rather than extrinsically imposed". The spike's arm A was
+4.6% with one inversion; the check call (G4) is the difference. 26 of the 49 notes have two
+sentences, although the prompt asks for one by default.
+
+**Identity of the title-search matches, by hand**: all 19 rows found by Crossref title search (17
+kept notes, 2 failed checks) were fetched again from Crossref by their DOI and compared with the
+citation: **19 of 19 are the cited work** (same title, or the title without its subtitle; same
+first author; same year, Dulberg's preprint a year earlier). Four are whole-book records
+(`edited-book`: Carruthers, Lau, Ginsburg & Jablonka, Clark), two are preprint servers'
+`posted-content`, two `book-chapter` — each the work the article cites.
+
+**Coverage against the 60% gate**: the coding paper passes (64%), **the reported paper fails
+(40%)**, under the design's own estimate of ~56% without Semantic Scholar. Its misses are mostly
+`not-found` (25 title searches Crossref could not match under the strict rule) and `no-abstract`
+(14 records Crossref holds without an abstract — books and older journals). That is the keys
+question, [q-ny49p3](../user-feedback/questions/q-ny49p3.md), again.
+
+**Three of the five runs hit a Crossref cooldown, and that is a finding about the design.** The
+first runs of all three articles, back to back, met a 429 or 503 from Crossref during the title
+searches (or the cooldown one had left); the shared limiter then cools Crossref for a minute
+(`bibliographic_services.cooldown_until`), and every row still to ask ends `transient:
+cooling-down`: **9 of 19, 11 of 33, and 36 of 70**, which left Butlin at **13 notes (19%)** instead of 28.
+A transient row is retried only by the next run, and by G2 only a publication or a press starts
+one, so on a real article those works would show nothing until the owner made the list again or
+pressed *Notes on cited works*. At the time, neither way out was built. The Stage 3 code review
+then took the first: wait out a short shared cooldown inside the run when the lookup budget and
+claim deadline allow, respecting Crossref's `Retry-After`; each retry still counts towards the
+60-query cap. Letting the band's open read queue another run for a `:partial` artefact remains
+unbuilt: it spends another model call, so it is a product decision rather than a review fix.
+
+**Spend for this section: $0.045** over five runs (`withLedger`'s lines: $0.0107, $0.0090,
+$0.0161, $0.0092, and $0 for the essay twice). The judge was a Claude subagent, not in it.
+
+```
+npx tsx evals/citation-blurbs-spike.ts production --fixture <bibliographies.json> --slug <slug> --work <dir>
+```
+
 ## Reproduce
 
 ```
