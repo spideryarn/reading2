@@ -9,8 +9,8 @@
  * slicing the string. docs/plans/261004j-encode-dois-in-link-addresses.md.
  *
  * **This file imports nothing**, so the browser can use it and so can
- * src/bibliography.ts, which src/bibliographic.ts already reaches by way of
- * src/cited-in-spideryarn.ts.
+ * src/work-id.ts, the pure identifier leaf shared by registry lookups and
+ * public reads.
  */
 
 /**

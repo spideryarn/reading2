@@ -509,6 +509,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
+  /* The notes on cited works, asked for on an article with no Bibliography.
+     See `CITATION_BLURBS_NO_BIBLIOGRAPHY`. */
+  "jb-no-bibliography": "blocked",
   /* A step that reads the structure, on an article still showing the stand-in
      outline it opened with. See `STRUCTURE_NOT_BUILT`. */
   "jb-no-structure": "blocked",

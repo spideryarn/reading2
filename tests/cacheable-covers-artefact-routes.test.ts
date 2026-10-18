@@ -181,6 +181,10 @@ const tableRowOf = (kind: string): boolean => {
 const ROUTELESS_KINDS = [
   "assets",
   "blocks",
+  /* The notes on cited works reach a reader on the Bibliography's rows
+     (`attachBlurbs`, and `publicCitedWork` for a visitor), never at a URL of
+     their own (plan 261017h stage 3c). */
+  "citation-blurbs",
   "extractedHtml",
   "labels",
   /* The front and back matter reaches a reader inside the article read

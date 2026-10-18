@@ -47,25 +47,19 @@
  * paper can use the same lookup while finding its canonical page.
  */
 
-import { ARXIV_ID_SHAPE, DOI_SHAPE, identityOf } from "./cited-in-spideryarn.js";
 import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { errorFields, log, type Log } from "./log.js";
 import { isCitedByCount } from "./registry-work.js";
 import { CONTACT_EMAIL } from "./site-text.js";
+import { DOI_SHAPE, doiFor, parseWorkId, type WorkId } from "./work-id.js";
 
 /* ------------------------------------------------------------ the types -- */
 
-/**
- * `doi:<lower-cased doi>` or `arxiv:<lower-cased id, no version>` — the same
- * spelling `keysOf` in src/bibliography.ts gives a work's `idKey`, so a Bibliography
- * row's key is already a `WorkId` once it has been through `parseWorkId`.
- *
- * Branded, so a string that has not been parsed cannot reach `lookupWork` — a
- * malformed identifier is refused by the compiler before it can be refused at
- * run time (which `lookupWork` also does).
- */
-export type WorkId = string & { readonly __workId: true };
+/* The identifier itself — `WorkId`, `parseWorkId`, `doiFor` — lives in
+   src/work-id.ts, a leaf a stranger's door may reach, and is re-exported here
+   so the lookup's callers keep one import. */
+export { doiFor, parseWorkId, type WorkId } from "./work-id.js";
 
 export type Registry = "crossref" | "datacite";
 
@@ -267,73 +261,6 @@ export interface LookupDeps {
   fetchJson?: (url: string) => Promise<unknown>;
   sleep?: (ms: number) => Promise<void>;
   log?: Log;
-}
-
-/* ------------------------------------------------------- the identifier -- */
-
-/** DOIs are case-insensitive and in practice ASCII; anything else is refused rather than guessed. */
-const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
-const MAX_ID_LENGTH = 300;
-
-/**
- * A publisher's page suffix glued onto a DOI by a copied address —
- * `10.1101/2020.06.26.174482v2.full.pdf` from bioRxiv, `….1.full` from a
- * journal. Neither registry knows those spellings (both 404'd in the 261001a
- * probe). Only the two observed publisher shapes are rewritten. DOI suffixes
- * are opaque, so a generic DOI ending `.pdf`, `.full` or `v2` is left alone.
- * A wrong strip is still caught downstream, where the registry's title must
- * agree with the citation's.
- */
-const BIORXIV_STEM = "10\\.1101\\/(?:\\d{4}\\.\\d{2}\\.\\d{2}\\.)?\\d+";
-const BIORXIV_PAGE = new RegExp(`^(${BIORXIV_STEM})(?:v\\d+)?\\.(?:full\\.pdf|full-text|full|abstract|short|pdf)$`, "i");
-const BIORXIV_VERSION = new RegExp(`^(${BIORXIV_STEM})v\\d+$`, "i");
-/* BioOne's observed article route. Keep this narrow: a DOI suffix is opaque,
-   so a generic `.full`/`.pdf` rule can silently rewrite a real DOI. */
-const BIOONE_PAGE = /^(10\.1636\/[a-z]+(?:-[a-z]+)*-\d{2}-\d{3}\.\d+)\.(?:full(?:\.pdf)?|abstract|short|pdf)$/i;
-
-function withoutPageSuffix(doi: string): string {
-  return doi.replace(BIORXIV_PAGE, "$1").replace(BIORXIV_VERSION, "$1").replace(BIOONE_PAGE, "$1");
-}
-
-function doiId(raw: string): WorkId | null {
-  const doi = withoutPageSuffix(raw);
-  const m = DOI_SHAPE.exec(doi);
-  if (!m?.[1] || !PRINTABLE_ASCII.test(m[1])) return null;
-  const id = `doi:${m[1].toLowerCase()}`;
-  return id.length <= MAX_ID_LENGTH ? (id as WorkId) : null;
-}
-
-function arxivId(arxiv: string): WorkId | null {
-  const m = ARXIV_ID_SHAPE.exec(arxiv);
-  return m?.[1] ? (`arxiv:${m[1].toLowerCase()}` as WorkId) : null;
-}
-
-/**
- * A DOI or arXiv id in any of the spellings a caller holds, as a `WorkId` — or
- * null. Accepts `doi:10.…`, a bare `10.…`, a `doi.org` address, `arxiv:…`, a
- * bare arXiv id (either shape, any version) and an `arxiv.org` abs/pdf address.
- * The address forms go through `identityOf` (src/cited-in-spideryarn.ts), the
- * one parser of an identifier out of an address.
- */
-export function parseWorkId(input: string): WorkId | null {
-  const s = input.trim();
-  if (/^https?:\/\//i.test(s)) {
-    const found = identityOf(s);
-    if (found.doi !== undefined) return doiId(found.doi);
-    if (found.arxiv !== undefined) return arxivId(found.arxiv);
-    return null;
-  }
-  const prefixed = /^(doi|arxiv):\s*(.+)$/i.exec(s);
-  if (prefixed?.[1] && prefixed[2]) {
-    return prefixed[1].toLowerCase() === "doi" ? doiId(prefixed[2]) : arxivId(prefixed[2]);
-  }
-  return doiId(s) ?? arxivId(s);
-}
-
-/** The DOI a lookup asks a registry about: the DOI itself, or arXiv's own at DataCite. */
-export function doiFor(id: WorkId): string {
-  if (id.startsWith("doi:")) return id.slice("doi:".length);
-  return `10.48550/arxiv.${id.slice("arxiv:".length)}`;
 }
 
 export function crossrefUrl(doi: string): string {

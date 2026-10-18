@@ -18,8 +18,6 @@
 
 import { createHash } from "node:crypto";
 
-import { parseWorkId } from "./bibliographic.js";
-import { evidenceUrl, REGISTRY_NEGATIVE_TTL_MS } from "./citation-evidence.js";
 import type {
   Bibliography,
   CitationBlurbEntry,
@@ -29,6 +27,7 @@ import type {
   CitedWork,
   CitedWorkBlurb,
 } from "./types.js";
+import { evidenceUrl, parseWorkId, REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
 
 /** One sentence by default; a second only when the abstract separately supports it (G4). */
 export const BLURB_MAX_SENTENCES = 2;
@@ -139,7 +138,7 @@ function record(value: unknown): Record<string, unknown> | null {
 
 /**
  * **The one read guard: a stored entry as a reader may be shown it, or null.**
- * The owner's `loadBibliography` (`attachBlurbs`, src/bibliography.ts) and a
+ * The owner's `loadBibliography` (src/store/pg.ts, through `attachBlurbs` below) and a
  * visitor's DTO (`publicCitedWork`, src/public/dto.ts) both call it, so the two
  * cannot show different notes for one row. Plan 261017h stage 3c; the design's
  * § 2 (*Attach by identity only*) as amended by G5 and G8.

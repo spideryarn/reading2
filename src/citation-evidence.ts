@@ -68,12 +68,15 @@ import {
   safeLookup,
   titlesDifferByObjectQualifier,
 } from "./citation-registry.js";
-import { doiPath, doiUrl } from "./doi-url.js";
+import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { log as rootLog, type Log } from "./log.js";
 import { authorYearLabel } from "./paper-evidence.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import type { CitedWork } from "./types.js";
+import { evidenceUrl } from "./work-id.js";
+
+export { evidenceUrl, REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
 
 /* ------------------------------------------------------------ the policy -- */
 
@@ -85,8 +88,6 @@ export const EVIDENCE_CONCURRENCY = 2;
 export const LOOKUP_BUDGET_MS = 120_000;
 /** The most of an abstract a prompt is given. */
 export const EVIDENCE_CAP = 2_500;
-/** A registry negative is worth asking again after this long: the registry cache's own miss lifetime (G9). */
-export const REGISTRY_NEGATIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Bump when what counts as evidence changes, so a stored hash says which rules made it. */
 const EVIDENCE_HASH_DOMAIN = "citation-evidence/1";
 
@@ -198,21 +199,6 @@ function capped(text: string): string {
   const cut = text.slice(0, EVIDENCE_CAP);
   const atWord = cut.replace(/\s+\S*$/, "");
   return (atWord.length > EVIDENCE_CAP / 2 ? atWord : cut).trimEnd();
-}
-
-function arxivUrl(id: WorkId): string {
-  return `https://arxiv.org/abs/${id.slice("arxiv:".length)}`;
-}
-
-/**
- * **The work's address, built by code from its identifier** — arxiv.org for an
- * arXiv id, doi.org for a DOI. The one builder: for the evidence a note is
- * written from, and for every read that shows the note
- * (src/citation-blurbs-identity.ts § `shownBlurb`), so a stored address is
- * never passed through to a reader.
- */
-export function evidenceUrl(workId: WorkId): string {
-  return workId.startsWith("arxiv:") ? arxivUrl(workId) : doiUrl(doiFor(workId));
 }
 
 function evidenceOf(
