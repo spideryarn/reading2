@@ -192,3 +192,10 @@ link, which repeats but is a control, and per-row.
   list made 12 notes from 16 abstracts for $0.0095. 3b's own notes for the code review: the 16k
   output ceiling for a batch of 20 is tight (13k across two calls); `too-long` refused 4 of 16
   twice, now split into `quote-too-long` to say why. 3c (the panel, visitors, chat) under way.
+- 2026-10-18: 3c (c288a99ff): the note on the row, in the hover card, for visitors and in chat.
+  Eval on the shipped code (261017c): 74 of 75 sentences supported, none about the wrong work;
+  coverage 40% on the reported paper, 64% on the coding paper. GPT Sol's Stage 3 code review
+  ([261017h-stage-3-code-review-sol.md](261017h-stage-3-code-review-sol.md)), *ship after fixes
+  (made)*: a Crossref cooldown is now waited out within the run's bounds (b1f486d33). Coverage and
+  a web search for the clicked work are question
+  [q-ny49p3](../user-feedback/questions/q-ny49p3.md). Done, on `dev`.
