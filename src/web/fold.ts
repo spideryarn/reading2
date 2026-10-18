@@ -57,17 +57,10 @@
  * front matter again. One article at a time, because there is one prose table.
  */
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { sectionRanges } from "../section-ranges.js";
 import type { Block, BlockId } from "../types.js";
 import { isModAltChord, isTyping } from "./key-chord.js";
 import { SAFE_ID } from "./reading-time.js";
-
-/** The level a heading with no recorded level is folded as: the narrowest. */
-const NO_LEVEL = 6;
-
-/** A heading's level for folding, or `null` when the block is not a heading. */
-function headingLevel(block: Block): number | null {
-  return block.kind === "heading" ? (block.level ?? NO_LEVEL) : null;
-}
 
 /**
  * **Where each heading's section ends** — the index one past its last block.
@@ -75,19 +68,11 @@ function headingLevel(block: Block): number | null {
  * A heading at level L owns every following block up to, not including, the
  * next heading whose level is L or coarser. So an H3 under an H2 is part of
  * the H2's section, and folding the H2 hides it along with everything else.
+ * The rule itself is `sectionRanges` (src/section-ranges.ts), shared with the
+ * front- and back-matter pass so the two cannot disagree.
  */
 function sectionEnds(blocks: readonly Block[]): Map<BlockId, number> {
-  const ends = new Map<BlockId, number>();
-  /** Headings whose section is still open, coarsest first. */
-  const open: { id: BlockId; level: number }[] = [];
-  blocks.forEach((block, i) => {
-    const level = headingLevel(block);
-    if (level === null) return;
-    while (open.length > 0 && open[open.length - 1]!.level >= level) ends.set(open.pop()!.id, i);
-    open.push({ id: block.id, level });
-  });
-  for (const h of open) ends.set(h.id, blocks.length);
-  return ends;
+  return new Map(sectionRanges(blocks).map((r) => [r.id, r.end]));
 }
 
 /**

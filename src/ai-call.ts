@@ -973,6 +973,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **An article's front and back matter** (src/matter.ts). The authors
+     pass's route, for its reason: the stored blocks' edges, to the upstream
+     the capable tier already sends the whole article to, with a strict
+     schema back. */
+  matter: {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
      route, copied for a sharper reason: what it sends is the reader's own
      conversation, so every endpoint is a zero-retention one. A refusal costs
@@ -1269,6 +1278,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
     providerDefault:
       "Not measured at a named effort: front-matter-authors' model and route, one record id and one line back (plan 261017a).",
   },
+  /* `low`, not the provider default: at the default Haiku spent the whole
+     2,000-token ceiling thinking on the reported article and never answered.
+     At `low`, with a 6,000 ceiling, 108 calls answered in a median 5.8 s,
+     ~$0.0014 each (scripts/matter-eval.ts, plan 261018a). */
+  matter: { effort: "low" },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */
   "chat-gist": { effort: "none" },

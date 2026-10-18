@@ -105,6 +105,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
   "src/front-matter-authors.ts":
     "copies a web page's authors and their affiliations verbatim, and the code stores the page's characters, not the model's",
+  "src/matter.ts": "writes block ids and kinds from a closed list, which code checks; no reader sees its words",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
   "src/chat-gist.ts":
     "writes one line about a conversation for another model to decide whether to open it; no reader sees it",
