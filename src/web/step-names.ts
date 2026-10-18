@@ -83,6 +83,12 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
   reception: { sub: { mode: "sources", view: "reception" } },
   "sources-claims": { sub: { mode: "sources", view: "claims" } },
   bibliography: { sub: { mode: "sources", view: "bibliography" } },
+  /* Drawn on Bibliography's rows (plan 261017h stage 3c), so it is named as
+     its own thing rather than sending the reader to that view twice. */
+  "citation-blurbs": {
+    name: "Notes on cited works",
+    what: "A short note on each cited work, written from its abstract",
+  },
   crossrefs: {
     name: "Cross-references",
     what: "Links in the prose from a claim to the passage it rests on",

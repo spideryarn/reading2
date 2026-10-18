@@ -48,6 +48,10 @@ measured with scripted readers and a blind judge:
   stops of their own, in four rounds: a figure with its own depth sat beside the wrong stops half the
   time, walking it in its quote's pass fixed that, and making room for it in the pass sizes stopped
   a third of them being trimmed; the quotes held, and a judge control for the intros.
+- [261017c](../investigations/261017c-citation-blurbs-cost-and-quality.md) — a blurb per cited
+  work, three ways, against gates set before the run: registry abstracts plus one batched Haiku
+  call at about a cent an article and 4.6% unsupported, against a web search per work at ~$0.32
+  and 17%; an Opus judge, a hand check, and the identity failures a judge cannot see.
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.

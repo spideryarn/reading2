@@ -714,6 +714,29 @@ query is never logged. The page says *"when you press Search OpenAlex for relate
 Not cited, OpenAlex is sent your article's title and the opening of its text"*;
 `LAST_UPDATED` already read 11 October 2026, and `tests/privacy-page.test.ts` holds the clause.
 
+**Since 2026-10-18, the notes on cited works send the works' own details, never the article's
+text.** When a Bibliography is published, each work it lists is looked up to write a short note on
+it from its abstract ([261017h § stage 3](../plans/261017h-stage-3-design-citation-blurbs.md),
+[`src/citation-evidence.ts`](../../src/citation-evidence.ts),
+[`src/citation-blurbs.ts`](../../src/citation-blurbs.ts)):
+
+- **Crossref and DataCite** are sent a cited work's DOI or arXiv id, as before; **OpenAlex** is sent
+  a cited work's DOI when neither holds its abstract.
+- **Crossref is sent a cited work's title and its first author's surname** when the work has no DOI
+  — **only for an article imported from a public web address**. An uploaded file (a PDF or an HTML
+  file, which may be a confidential manuscript) gets identifier lookups only: its reference list may
+  name its authors' own unpublished work, and a word list cannot prove a work is published (the
+  design review's G6). The signal is `meta.filename` (`raw_filename`, set for everything that came
+  off a disk) together with an http(s) address; anything without both counts as an upload. The
+  *in preparation / under review / submitted / forthcoming / unpublished* skip is a second guard,
+  not the claim.
+- **The model** (Claude Haiku, Anthropic through OpenRouter) is shown each cited work's title,
+  authors and year and its public abstract, to write the note and then to check it. No article text.
+
+The abstracts are cached in `bibliographic_records`, keyed by the work, not the article; the notes
+are stored on the article's revision and go with it. The page says each of these in words, and
+`tests/privacy-page.test.ts` holds the three clauses. `LAST_UPDATED` moved to 18 October 2026.
+
 **A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
 sent something of the reader's; these are sent the identifier of a published work. The page names
 all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.

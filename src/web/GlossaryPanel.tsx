@@ -977,7 +977,7 @@ export function effectiveSort(entries: readonly GlossaryEntry[], sort: TermSort)
  *
  * **Never null.** The old `gateNote` spoke only at the two ends, which made an
  * absent line ambiguous; this one is present wherever the slider is, saying
- * "Nothing is hidden" when that is the answer. A control that visibly does
+ * "Nothing hidden" when that is the answer. A control that visibly does
  * nothing is the failure this codebase keeps writing down
  * (docs/reusable/silent-success.md).
  *

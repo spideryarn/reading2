@@ -147,8 +147,13 @@ reopens it beside the mode.
 
 **A focus** is the one-shot that Citations had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
-state per band in `Reader`. The band scrolls the row (`data-term-id`, `data-citation-id`,
-`data-idea-id`, `data-claim-key`) into view once it is drawn and hands the request back. **An item
+state per band in `Reader`. Once the row (`data-term-id`, `data-citation-id`, `data-idea-id`,
+`data-claim-key`) is drawn, the band centres it in the list's own scroller — never the page — and
+flashes it, then hands the request back. Centred and flashed since 2026-10-17, for all four lists
+alike; it was `block: "nearest"` until then, which left a row already on screen where it was
+(Greg, `spya-m53cdk`: *"can we scroll to the right source (perhaps centred in the scrollable
+area), and flash it"*; plan
+[261017h](../plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md)). **An item
 the band no longer has** (an idea paraphrased into a new id, an entry the owner hid) is handed back
 at once, and the mode opens on its list. That is best effort and said so: the chat itself is still
 in Chat's list.

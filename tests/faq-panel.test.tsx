@@ -429,7 +429,7 @@ describe("the prioritised order", () => {
     expect(slider).not.toBeNull();
     expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("2 of 3");
     expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
-      "1 question is hidden by this threshold. Drag the slider left to show it.",
+      "1 question hidden. Drag left to show it.",
     );
   });
 
@@ -486,7 +486,7 @@ describe("the prioritised order", () => {
     expect(questionsShown()).toEqual([ISOLATED.question]);
     expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("1 of 4");
     expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
-      "3 questions are hidden by this threshold. Drag the slider left to show them.",
+      "3 questions hidden. Drag left to show them.",
     );
     expect(host.querySelector<HTMLInputElement>("#faq-bar")?.max).toBe("0.9");
     const pressed = host.querySelector<HTMLButtonElement>('.gloss-sort-btn[aria-pressed="true"]');

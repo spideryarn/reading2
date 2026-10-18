@@ -38,6 +38,7 @@ export type WholeColumn =
   | "illustrated"
   | "reception"
   | "bibliography"
+  | "citationBlurbs"
   | "crossrefs"
   | "matter"
   | "simpleSummary";
@@ -147,6 +148,7 @@ export const STORAGE: {
   reception: { reception: { at: "column", column: "reception" } },
   "sources-claims": { "sources-claims": { at: "column", column: "sourcesClaims" } },
   bibliography: { bibliography: { at: "column", column: "bibliography" } },
+  "citation-blurbs": { "citation-blurbs": { at: "column", column: "citationBlurbs" } },
   crossrefs: { crossrefs: { at: "column", column: "crossrefs" } },
   matter: { matter: { at: "column", column: "matter" } },
   /* The kind is the step's name, as every other kind here is — it is also the

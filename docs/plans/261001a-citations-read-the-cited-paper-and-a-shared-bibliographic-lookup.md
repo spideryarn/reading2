@@ -92,6 +92,14 @@ identifier (doi:10.1038/nn.4304 | arxiv:1706.03762)
 - **Identifiers only, never a title search.** Where an identifier came from, and whether the record
   agrees with what the caller already knows, is the caller's business — and every caller below
   checks the title (§ Review log P-2).
+  **One stated, bounded exception since 2026-10-18** (plan 261017h, [stage 3
+  design](261017h-stage-3-design-citation-blurbs.md) § Findings 3 and G6): the citation-blurb
+  evidence (`src/citation-evidence.ts`) may ask Crossref's `query.bibliographic` about a cited work
+  with no identifier — at most 60 title queries a run, the polite pool (`mailto`), the shared
+  spacing and cooldown, only for an article imported from a public web address, and the answer kept
+  per entry so an unchanged work is not asked again. That is our reading of Greg's *"If it's free,
+  great. … But don't abuse them."* (2026-10-01), not a reversal of it; a title search anywhere else
+  is a new decision.
 - **The cache is a table, `spideryarn.bibliographic_records`**, one row per identifier — global, not
   owner-scoped: public metadata about a public identifier, with no owner, no article and nothing about
   who asked. Columns, not JSON (sql.md): `id` text PK with a CHECK on its two shapes; `state`

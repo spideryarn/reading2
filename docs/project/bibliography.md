@@ -37,7 +37,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A row](#a-row) — what one row draws, and where its two scores come from
 - [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
 - [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
-- [§ What we have read of the work](#what-we-have-read-of-the-work) — said once above the list, and on a row only when it differs
+- [§ What we have read of the work](#what-we-have-read-of-the-work) — said once in the band's (i), and on a row only when it differs
 - [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
 - [§ Which citation, and whose entry](#which-citation-and-whose-entry) — matching a mention to a bibliography entry; numbered PDF lists
 - [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
@@ -195,8 +195,17 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 > be really careful to be clear about whether you could get the actual paper, so that we can be sure
 > you're not hallucinating
 
-Nothing that makes the list reads the cited work, so the band says so **once, above the list**, while a visible row has no line of its own:
+Nothing that makes the list reads the cited work, so the band says so **once, in its (i)** — the
+first thing the panel adds to the card — while a visible row has no line of its own:
 *Unless a row says otherwise, we have read none of these works, only the article that cites them.*
+It was a line above the list from 2026-10-11, and went into the (i) on 2026-10-17 to give the rows
+the room:
+
+> we can hide this (...) behind an information-tooltip, and anything else that's
+> repetitive/not adding much information.
+>
+> — Greg, 2026-10-17 (`spya-m53cdk`), plan [261017h](../plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md)
+
 Until 2026-10-11 every row and hover card said it (*We have not read this work, only the article that
 cites it.*), and Greg asked for it to go:
 
@@ -215,7 +224,7 @@ a search engine's extract of a matching page, and never the work itself. Once *D
 with the host, the length and the day. `readNoteOf` in
 [`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state, and `null` when there is nothing to add to
-the band's line (`CITE_LIST_NOT_READ`); a hover card then says nothing about reading. The design and its two plan reviews are
+the line in the band's (i) (`CITE_LIST_NOT_READ`); a hover card then says nothing about reading. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
 
 ## Nothing about the work beyond the article's bibliography
@@ -464,8 +473,9 @@ two surfaces disagreeing about whether an address is the work's own would teach 
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
 numbers), a kept *Dig deeper* answer (the row has the room), and a selected row in the mode (it
 needs `?cite=`). What it has instead, since 2026-10-10, is ***Open in Sources***, which opens
-Bibliography with the work's row brought into view (Reader's `openBibliographyWork`, a one-shot
-focus rather than a selection). Greg, report `spya-zux9w6`: *"Citation tooltips should include a
+Bibliography with the work's row centred in the list and flashed (Reader's `openBibliographyWork`,
+a one-shot focus rather than a selection; centred and flashed since 2026-10-17,
+[chat-from-a-mode.md](chat-from-a-mode.md) has the reason). Greg, report `spya-zux9w6`: *"Citation tooltips should include a
 link to take you to the citations mode, just like I think quotes do"* —
 [tooltips.md § Every card on a mode's mark has a way into its
 mode](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode), plan

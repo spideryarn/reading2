@@ -194,6 +194,13 @@ export const STEP_ORDER = [
      docs/plans/260911g-citations-mode.md. Bibliography's list; the step was
      `citations` until 2026-10-09 (plan 261009w). */
   "bibliography",
+  /* **Straight after `bibliography`, the list it reads.** A note on each cited
+     work from its abstract (plan 261017h stage 3). It sends no article, so its
+     place matters only for that one read: a job naming both makes the list
+     first. Queued by the publication of any job that ran `bibliography`
+     (`publishRevisionIn`), never by import itself. Off `DEFAULT_INGEST_STEPS`
+     and in `FORCE_ONLY_WHEN_NAMED`. */
+  "citation-blurbs",
   /* **Last**: it sends Ideas' bytes and thinks at `medium`, which no other
      `ids` stage does. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
      be as fast as possible — and in `FORCE_ONLY_WHEN_NAMED`: a model call over

@@ -408,6 +408,11 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      Reused rather than a new import — the Bibliography panel is stage 2 of
      docs/plans/260911g-citations-mode.md, and may choose its own glyph. */
   bibliography: Link2,
+  /* The bibliography's glyph again: the notes are written on its rows. Reused
+     rather than a new import; plan 261017h stage 3c draws the notes and may
+     choose its own. The only line of this file stage 3b touches, because this
+     record is total over `StepName`. */
+  "citation-blurbs": Link2,
   /* The arrow the block-link card already draws for a jump (ProseHoverCard.tsx):
      what a cross-reference does is take you to another block of the piece.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

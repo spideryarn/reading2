@@ -1,6 +1,6 @@
 {
-  "id": "1f880f20-74b0-4b40-a243-1283d03bd9e8",
-  "prevId": "ede779fb-7b4f-4d17-9d50-e89aa9536577",
+  "id": "cc6c46d2-c1e3-4898-b7ea-438f952ccfa5",
+  "prevId": "e6cdb82a-8c3a-4ddf-9355-a45b2f04275d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -823,12 +823,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "matter": {
-          "name": "matter",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "simple_summary": {
           "name": "simple_summary",
           "type": "jsonb",
@@ -879,6 +873,12 @@
         },
         "bibliography": {
           "name": "bibliography",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "citation_blurbs": {
+          "name": "citation_blurbs",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -2089,6 +2089,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "abstract": {
+          "name": "abstract",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "abstract_read_at": {
+          "name": "abstract_read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "claimed_until": {
           "name": "claimed_until",
           "type": "timestamp with time zone",
@@ -2129,6 +2141,14 @@
         "bibliographic_records_cited_by_count_read_at": {
           "name": "bibliographic_records_cited_by_count_read_at",
           "value": "\"spideryarn\".\"bibliographic_records\".\"cited_by_count_read_at\" is null\n            or (\"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"source\" is not distinct from 'crossref')"
+        },
+        "bibliographic_records_abstract": {
+          "name": "bibliographic_records_abstract",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"abstract\" is null or (length(\"spideryarn\".\"bibliographic_records\".\"abstract\") between 1 and 4000\n            and \"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"abstract_read_at\" is not null)"
+        },
+        "bibliographic_records_abstract_read_at": {
+          "name": "bibliographic_records_abstract_read_at",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"abstract_read_at\" is null or \"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found'"
         },
         "bibliographic_records_authors": {
           "name": "bibliographic_records_authors",
@@ -8161,7 +8181,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','crossrefs','simple')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','crossrefs','simple')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

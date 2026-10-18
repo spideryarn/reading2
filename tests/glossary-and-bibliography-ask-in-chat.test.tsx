@@ -44,6 +44,7 @@
  * rendered reader too. The *Ask in chat* the *Look up a term* box offers is
  * not touched (tests/glossary-ask-in-chat.test.tsx).
  */
+import { readFileSync } from "node:fs";
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
@@ -1159,27 +1160,77 @@ describe("Ask in chat on an idea", () => {
 /**
  * **The way back from a chat to the item it was started from** (plan 261009k,
  * stage 2): a line above the open chat's transcript, and a press on it that
- * opens the item's mode and brings the item's row into view. jsdom has no
- * `scrollIntoView`, so it is put on the prototype for each test and records
- * the elements it was called on.
+ * opens the item's mode and lands on the item's row — centred in the list's
+ * own scroller and flashed, since 2026-10-17 (item-focus.ts § useLandOnItem,
+ * spya-m53cdk).
+ *
+ * A landing is recorded twice over: `scrolled`, every row that took the flash
+ * (`element-flash`), and `scrollers`, every element whose `scrollTop` was
+ * written. The bands' real stylesheets are loaded, so the scroller a landing
+ * finds is the one the computed style says scrolls, as in a browser; jsdom has
+ * no layout, so a scroller is given a height (anything that does not scroll
+ * keeps jsdom's 0).
  */
+const BAND_CSS = ["timeline", "glossary", "ideas", "reception"]
+  .map((name) => readFileSync(`src/web/styles/${name}.css`, "utf8"))
+  .join("\n");
 describe("the way back from a chat to its item", () => {
   let scrolled: Element[] = [];
+  let scrollers: Element[] = [];
+  let watch: MutationObserver;
+  let style: HTMLStyleElement;
+  const restore: (() => void)[] = [];
   beforeEach(() => {
     scrolled = [];
-    (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = function into(this: Element) {
-      scrolled.push(this);
-    };
+    scrollers = [];
+    style = document.createElement("style");
+    style.textContent = BAND_CSS;
+    document.head.append(style);
+    watch = new MutationObserver((changes) => {
+      for (const c of changes) {
+        if (c.target instanceof Element && c.target.classList.contains("element-flash")) scrolled.push(c.target);
+      }
+    });
+    watch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
+    const height = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight");
+    const top = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+    const scrolls = (el: Element) => /^(auto|scroll)$/.test(getComputedStyle(el).overflowY);
+    Object.defineProperty(Element.prototype, "clientHeight", {
+      configurable: true,
+      get(this: Element) {
+        return scrolls(this) ? 200 : (height?.get?.call(this) ?? 0);
+      },
+    });
+    Object.defineProperty(Element.prototype, "scrollTop", {
+      configurable: true,
+      get(this: Element) {
+        return top?.get?.call(this) ?? 0;
+      },
+      set(this: Element, v: number) {
+        scrollers.push(this);
+        top?.set?.call(this, v);
+      },
+    });
+    restore.push(() => {
+      if (height) Object.defineProperty(Element.prototype, "clientHeight", height);
+      if (top) Object.defineProperty(Element.prototype, "scrollTop", top);
+    });
   });
   afterEach(() => {
-    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    watch.disconnect();
+    style.remove();
+    for (const r of restore.splice(0)) r();
   });
-  /** Only `row` was scrolled to: the same element, not a look-alike. Maybe
-      twice, since StrictMode runs a mount's effect twice in tests. */
-  function expectLandedOn(row: Element | null | undefined): void {
+  /** Only `row` was landed on — the same element, not a look-alike, maybe
+      twice since StrictMode runs a mount's effect twice — and the scroller
+      moved was `scroller`, its own list's. */
+  function expectLandedOn(row: Element | null | undefined, scroller: string): void {
     expect(row).toBeTruthy();
     expect(scrolled.length).toBeGreaterThan(0);
-    for (const el of scrolled) expect(el === row, "scrolled to another element").toBe(true);
+    for (const el of scrolled) expect(el === row, "flashed another element").toBe(true);
+    const moved = scrollers.filter((el) => el.contains(row ?? null));
+    expect(moved.length, `the row's own scroller, ${scroller}, was moved`).toBeGreaterThan(0);
+    for (const el of moved) expect(el.matches(scroller), `moved ${el.className}, not ${scroller}`).toBe(true);
   }
 
   const backLine = (): HTMLButtonElement | null =>
@@ -1211,7 +1262,7 @@ describe("the way back from a chat to its item", () => {
     await until(() => param("mode") === "glossary" && scrolled.length > 0, "Glossary, on the entry");
     expect(param("term")).toBe(QUOTED);
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
-    expectLandedOn(term(QUOTED));
+    expectLandedOn(term(QUOTED), ".gloss-list");
     expect(host.querySelector(".mode-band .gloss-look"), "the entry is open").not.toBeNull();
     /* One Back returns to the chat. */
     await act(async () => history.back());
@@ -1223,7 +1274,7 @@ describe("the way back from a chat to its item", () => {
     expect(line.textContent).toBe(`Back to “${WORK_TITLE}” in Bibliography`);
     await act(async () => line.click());
     await until(() => param("mode") === "sources" && scrolled.length > 0, "Citations, on the row");
-    expectLandedOn(workRow(WORK));
+    expectLandedOn(workRow(WORK), ".tl-scroll");
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
@@ -1262,7 +1313,7 @@ describe("the way back from a chat to its item", () => {
     await until(() => param("mode") === "ideas" && scrolled.length > 0, "Ideas, on the idea");
     expect(param("idea")).toBe(IDEA);
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
-    expectLandedOn(ideaRow(IDEA));
+    expectLandedOn(ideaRow(IDEA), ".ideas-scroll");
     expect(ideaRow(IDEA)?.classList.contains("open"), "the idea is open").toBe(true);
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
@@ -1281,7 +1332,7 @@ describe("the way back from a chat to its item", () => {
     expect(param("receptionthread")).toBeNull();
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     const claim = host.querySelector<HTMLDetailsElement>(".mode-band details.rcp-claim-group");
-    expectLandedOn(claim);
+    expectLandedOn(claim, ".rcp-scroll, .rcp-listed-wrap");
     expect(claim?.open).toBe(true);
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
@@ -1329,6 +1380,6 @@ describe("the way back from a chat to its item", () => {
     expect(backLine()?.textContent).toBe(`Back to “${IDEA_NAME}” in Ideas`);
     await act(async () => backLine()?.click());
     await until(() => param("mode") === "ideas" && scrolled.length > 0, "Ideas, on the idea");
-    expectLandedOn(ideaRow(IDEA));
+    expectLandedOn(ideaRow(IDEA), ".ideas-scroll");
   });
 });

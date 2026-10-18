@@ -463,6 +463,19 @@ async function drawVisitor(citations: PublicBibliography, order: CiteOrder = "pr
   );
 }
 
+/**
+ * What the band's (i) says, opened and closed again — `""` when the band has
+ * no (i), which is a list still loading or one with nothing in it.
+ */
+async function aboutText(): Promise<string> {
+  const about = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
+  if (!about) return "";
+  await act(async () => about.click());
+  const text = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
+  await act(async () => about.click());
+  return text;
+}
+
 function row(id: string): HTMLElement {
   const el = host.querySelector<HTMLElement>(`[data-citation-id="${id}"]`);
   if (!el) throw new Error(`no row ${id}`);
@@ -594,7 +607,7 @@ describe("BibliographyPanel", () => {
        = 0.20 is still under it, which is what the next line needs. */
     expect(CITATION_BAR_DEFAULT).toBe(0.25);
     expect(host.querySelector(`[data-citation-id="${PASSING.id}"]`)).toBeNull();
-    expect(host.textContent).toContain("1 citation is hidden by this threshold.");
+    expect(host.textContent).toContain("1 citation hidden.");
     /* A row with a relevance is scored by the bar even when its influence is
        unknown, so it no longer carries the "not scored" title; a row with no
        relevance still does. */
@@ -649,7 +662,7 @@ describe("BibliographyPanel", () => {
       expect(slider.value).toBe("0.25");
       expect(slider.max).toBe("0.6");
       expect(host.querySelector(".gloss-gate-value")?.textContent).toBe("0.25 · 2 of 3");
-      expect(host.querySelector(".gloss-gate-note")?.textContent).toContain("1 citation is hidden");
+      expect(host.querySelector(".gloss-gate-note")?.textContent).toContain("1 citation hidden");
       expect(host.querySelector(`[data-citation-id="${low.id}"]`)).toBeNull();
       expect(row(BARE.id).getAttribute("data-tip")).toContain("Not scored");
     }
@@ -1146,16 +1159,19 @@ const FOUND = work({
 });
 
 describe("what a row says we have read", () => {
-  it("says once, above the list, that we have not read the works, and nothing on a row nobody looked up", async () => {
+  it("says once, in the band's (i), that we have not read the works, and nothing on a row nobody looked up", async () => {
     await draw(owner());
     const r = row(CENTRAL.id);
     expect(r.querySelector(".cite-read")).toBeNull();
-    const once = host.querySelectorAll(".cite-list-read");
-    expect(once).toHaveLength(1);
-    expect(once[0]?.textContent).toBe(CITE_LIST_NOT_READ);
     expect(CITE_LIST_NOT_READ).toMatch(/read none/i);
-    /* Above the list, so it is read before the rows it qualifies. */
-    expect((once[0]?.compareDocumentPosition(r) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* Not in the band any more: above the list until 2026-10-17, and then
+       into the (i) for the room (Greg, spya-m53cdk, plan 261017h). */
+    expect(host.textContent).not.toContain(CITE_LIST_NOT_READ);
+    const about = await aboutText();
+    /* Once, and first of what the panel adds after the mode's own words:
+       before the notes about the scores. */
+    expect(about.split(CITE_LIST_NOT_READ)).toHaveLength(2);
+    expect(about.indexOf(CITE_LIST_NOT_READ)).toBeLessThan(about.indexOf(INFLUENCE_NOTE));
     /* And nothing the model wrote about the work: `why` is a paraphrase of
        the citing paragraph, and on a row nothing has checked it reads as what
        the paper says (Greg, spya-zmdb7y, plan 261003j). */
@@ -1169,24 +1185,30 @@ describe("what a row says we have read", () => {
        for the sentence to qualify. */
     await draw(owner(), 1);
     expect(host.querySelectorAll(".cite-item")).toHaveLength(0);
-    expect(host.querySelector(".cite-list-read")).toBeNull();
+    let about = await aboutText();
+    expect(about, "the (i) is there").toContain(INFLUENCE_NOTE);
+    expect(about).not.toContain(CITE_LIST_NOT_READ);
 
     /* Nor does it add a vacuous default to a list whose every row has its own,
        more specific line. */
     await draw(owner({ bibliography: artefact([FOUND]) }), null, undefined, "document");
     expect(row(FOUND.id).querySelector(".cite-read")?.textContent).toBe(CITE_PAGE_FOUND);
-    expect(host.querySelector(".cite-list-read")).toBeNull();
+    about = await aboutText();
+    expect(about, "the (i) is there").toContain(INFLUENCE_NOTE);
+    expect(about).not.toContain(CITE_LIST_NOT_READ);
   });
 
   it("draws the default for a stale ready list, but not while loading or for an empty answer", async () => {
     await draw(owner({ stale: true }));
-    expect(host.querySelector(".cite-list-read")?.textContent).toBe(CITE_LIST_NOT_READ);
+    expect(await aboutText()).toContain(CITE_LIST_NOT_READ);
 
     await draw(owner({ status: "loading" }));
-    expect(host.querySelector(".cite-list-read")).toBeNull();
+    expect(await aboutText()).not.toContain(CITE_LIST_NOT_READ);
+    expect(host.textContent).not.toContain(CITE_LIST_NOT_READ);
 
     await draw(owner({ bibliography: artefact([]) }));
-    expect(host.querySelector(".cite-list-read")).toBeNull();
+    expect(await aboutText()).not.toContain(CITE_LIST_NOT_READ);
+    expect(host.textContent).not.toContain(CITE_LIST_NOT_READ);
   });
 
   it("shows why, labelled as the article's, once something was checked against it", async () => {
@@ -1272,7 +1294,7 @@ describe("what a row says we have read", () => {
       ),
     );
     expect(row("spya-v2w3x4").querySelector(".cite-read")).toBeNull();
-    expect(host.querySelector(".cite-list-read")?.textContent).toBe(CITE_LIST_NOT_READ);
+    expect(await aboutText()).toContain(CITE_LIST_NOT_READ);
     expect(row("spya-v2w3x4").querySelector(".cite-find")).toBeNull();
   });
 
@@ -1713,9 +1735,9 @@ describe("a row whose work is already an article here", () => {
     /* A DOI match is identity, so the row does not repeat the title. */
     expect(row(owned.id).querySelector(".cite-here-how")).toBeNull();
     /* A matched article does not mean we read the cited work: the band's
-       line above the list still covers it, and the row claims nothing more. */
+       line in its (i) still covers it, and the row claims nothing more. */
     expect(row(owned.id).querySelector(".cite-read")).toBeNull();
-    expect(host.querySelector(".cite-list-read")?.textContent).toBe(CITE_LIST_NOT_READ);
+    expect(await aboutText()).toContain(CITE_LIST_NOT_READ);
     expect(row(FAMOUS.id).querySelector(".cite-here")).toBeNull();
   });
 
@@ -2039,11 +2061,32 @@ describe("opening the band on one work", () => {
     expect(barToReveal(WORKS, "spya-zzzzzz", "prioritised", CITATION_BAR_DEFAULT)).toBeNull();
   });
 
+  /**
+   * Draw the panel asked to land on `id`, with the band's geometry posed —
+   * jsdom has no layout. The list's scroller (`.tl-scroll`, made to scroll by
+   * a stylesheet, as the real one is) shows 0–200px; every row sits at
+   * 500–540px, below it. `landed` is the scroller's `scrollTop` after the
+   * render, and the row is left in the DOM for its flash to be read.
+   */
   async function drawFocused(id: string, bar: number | null) {
     const bars: (number | null)[] = [];
     let taken = 0;
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, left: 0, right: 300, width: 300, height: bottom - top, x: 0, y: top }) as DOMRect;
+    const style = document.createElement("style");
+    style.textContent = ".tl-scroll { overflow-y: auto; }";
+    document.head.append(style);
+    const rects = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.classList.contains("tl-scroll")) return rect(0, 200);
+      if (this.hasAttribute("data-citation-id")) return rect(500, 540);
+      return rect(0, 0);
+    });
+    const heights = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tl-scroll") ? 200 : 0;
+    });
+    const windowScroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     const scrolled: string[] = [];
-    const original = Element.prototype.scrollIntoView;
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
     Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
       scrolled.push(this.getAttribute("data-citation-id") ?? "?");
     };
@@ -2065,35 +2108,67 @@ describe("opening the band on one work", () => {
           }),
         ),
       );
+      return {
+        bars,
+        taken: () => taken,
+        landed: host.querySelector<HTMLElement>(".tl-scroll")?.scrollTop ?? 0,
+        windowScrolled: windowScroll.mock.calls.length,
+        scrolled,
+      };
     } finally {
-      Element.prototype.scrollIntoView = original;
+      rects.mockRestore();
+      heights.mockRestore();
+      windowScroll.mockRestore();
+      style.remove();
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
     }
-    return { bars, taken: () => taken, scrolled };
   }
 
-  it("scrolls to a drawn row and says the focus is taken", async () => {
+  /* Greg, spya-m53cdk: *"can we scroll to the right source (perhaps centred
+     in the scrollable area), and flash it"*. The list's own scroller, never
+     `scrollIntoView`, which scrolls every scrollable ancestor — the page
+     included (plan 261017h, GPT Sol's F1). */
+  it("centres a drawn row in the list's own scroller, flashes it, and says the focus is taken", async () => {
     const seen = await drawFocused(CENTRAL.id, null);
-    expect(seen.scrolled).toEqual([CENTRAL.id]);
+    /* The row's centre (500 + 20) at the scroller's centre (100). */
+    expect(seen.landed).toBe(420);
+    expect(seen.scrolled, "not scrollIntoView, which scrolls every ancestor").toEqual([]);
+    expect(seen.windowScrolled, "never the page").toBe(0);
+    expect(row(CENTRAL.id).classList.contains("element-flash")).toBe(true);
     expect(seen.taken()).toBe(1);
     expect(seen.bars).toEqual([]);
+  });
+
+  it("flashes it still for a reader who asked for reduced motion", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce") }) as MediaQueryList);
+    try {
+      await drawFocused(CENTRAL.id, null);
+      expect(row(CENTRAL.id).classList.contains("element-flash-still")).toBe(true);
+      expect(row(CENTRAL.id).classList.contains("element-flash")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("lowers the bar for a hidden row, and keeps the focus until the row is drawn", async () => {
     const seen = await drawFocused(PASSING.id, null);
     expect(seen.bars).toEqual([0.2]);
-    expect(seen.scrolled).toEqual([]);
+    expect(seen.landed).toBe(0);
     expect(seen.taken()).toBe(0);
     /* The URL has caught up on the same mounted panel: now the row is there
        to scroll to. Remounting here would miss a broken effect retry. */
     const after = await drawFocused(PASSING.id, 0.2);
     expect(after.bars).toEqual([]);
-    expect(after.scrolled).toEqual([PASSING.id]);
+    expect(after.landed).toBe(420);
+    expect(row(PASSING.id).classList.contains("element-flash")).toBe(true);
     expect(after.taken()).toBe(1);
   });
 
   it("drops a focus on a work the list does not have", async () => {
     const seen = await drawFocused("spya-zzzzzz", null);
-    expect(seen.scrolled).toEqual([]);
+    expect(seen.landed).toBe(0);
+    expect(host.querySelector(".element-flash")).toBeNull();
     expect(seen.taken()).toBe(1);
   });
 

@@ -152,6 +152,8 @@ import {
   structureHash,
 } from "../src/source-hash.js";
 import { parseJsonFrom } from "../src/parse-json.js";
+import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsInputHash } from "../src/citation-blurbs-identity.js";
+import { CITATION_BLURBS_MODEL } from "../src/models.js";
 import { articleText, articleWithIds } from "../src/article-prompt.js";
 import { metaRawSha256, sameStamp } from "../src/store/artifacts.js";
 import type { ArtifactKind, ArtifactMap, ArtifactReads } from "../src/store/artifacts.js";
@@ -686,6 +688,18 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: SOURCES_CLAIMS_VERSION,
     claims: [],
     dropped: emptySourcesClaimsDropped(),
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **No entries**, over the empty list above: a list that names no work has
+     no notes to write, and `SHAPE["citation-blurbs"]` accepts it. */
+  store.plant(SLUG, "citation-blurbs", "citation-blurbs", {
+    version: CITATION_BLURBS_PROMPT_VERSION,
+    generator: CITATION_BLURBS_MODEL,
+    slug: SLUG,
+    sourceHash: citationBlurbsInputHash([]),
+    entries: {},
+    counts: {},
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

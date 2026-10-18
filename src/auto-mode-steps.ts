@@ -60,6 +60,9 @@ export const AUTO_MODE_STEPS: readonly StepName[] = [
 export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
   illustrated: ["sketch"],
   skim: ["quotes", "ideas"],
+  /* Not a main mode, so no import job carries it: a Bibliography's
+     publication queues it (plan 261017h). Here because the copy must be whole. */
+  "citation-blurbs": ["bibliography"],
 };
 
 /**

@@ -471,7 +471,7 @@ export function effectiveRank(quotes: Quote[], rank: QuoteRank): QuoteRank {
  * Greg's call of 2026-09-03, applied here as well as next door: the bar hides
  * rather than groups, and it says how many. **Never null** — the old `barNote`
  * spoke only at the two ends, which made an absent line ambiguous; this one is
- * present wherever the slider is, saying "Nothing is hidden" when that is the
+ * present wherever the slider is, saying "Nothing hidden" when that is the
  * answer. A control that visibly does nothing is the failure this codebase
  * keeps writing down (docs/reusable/silent-success.md).
  *

@@ -334,7 +334,15 @@ describe("memoryBibliographicStore, under lookupWork", () => {
     ).toEqual(new Date("2026-10-04T12:00:00.000Z"));
     expect((await store.read(id("10.5281/zenodo.1"), { foundMs: 1, notFoundMs: 1 })).answer).toEqual({
       kind: "found",
-      record: { id: "doi:10.5281/zenodo.1", source: "datacite", title: "A dataset", authors: [], doi: "10.5281/zenodo.1" },
+      /* Not Crossref, so no count moment; but every found record was asked for its abstract (plan 261017h). */
+      record: {
+        id: "doi:10.5281/zenodo.1",
+        source: "datacite",
+        title: "A dataset",
+        authors: [],
+        doi: "10.5281/zenodo.1",
+        abstractReadAt: "2026-10-04T12:00:00.000Z",
+      },
     });
   });
 

@@ -166,7 +166,8 @@ import {
 import { LABELS_PROMPT_VERSION } from "../labels.js";
 import { log } from "../log.js";
 import { ratedDifficultyOf } from "../reading-time.js";
-import { CAPABLE_MODEL, modelFor } from "../models.js";
+import { CAPABLE_MODEL, CITATION_BLURBS_MODEL, modelFor } from "../models.js";
+import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsExpectedHash } from "../citation-blurbs-identity.js";
 import { matterInputHash } from "../matter.js";
 import { isMatterDocument } from "../matter-shape.js";
 import { MATTER_PROMPT_VERSION, matterForReader } from "../matter-step.js";
@@ -197,6 +198,7 @@ import type {
   StageState,
   Block,
   Bibliography,
+  CitationBlurbs,
   CitationFind,
   BibliographyFound,
   Reception,
@@ -532,6 +534,9 @@ const PRESENCE_OF = {
   hasArc: "arc",
   hasTweets: "tweets",
   hasGlossary: "glossary",
+  /* Whether a draft holds a Bibliography: what tells its publication to queue
+     the notes on its works (`publishRevisionIn`, plan 261017h). */
+  hasBibliography: "bibliography",
   /* Whether we hold the source document, one half of the shelf rebuild's skip
      condition (feedback 6B). The kind rather than the digest because the kind
      is what `readRaw` (src/store/artifacts-pg.ts) needs to rebuild the manifest;
@@ -985,7 +990,10 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `quotes`, `timeline` and `reception` make. `isCurrent` needs the column for
      its arm. */
-  bibliography: { metadata: "value", bibliography: "value" },
+  bibliography: { metadata: "value", bibliography: "value", publish: "presence" },
+  /* **Its own reader is stage 3c's**, inside `loadBibliography`; until then
+     only the metadata page reads it, as every artefact column's. */
+  citationBlurbs: { metadata: "value" },
   /* **No read takes it.** Bibliography's column before plan 261009w, kept
      equal to `bibliography` by a trigger only for the pre-rename code during
      the deploy; dropped by the contract migration (src/db/schema.ts §
@@ -1345,6 +1353,8 @@ export const REVISION_PROJECTIONS = {
     reception: articleRevisions.reception,
     /* For `isCurrent`'s arm, as `debate` above. */
     bibliography: articleRevisions.bibliography,
+    /* For `isCurrent`'s arm, which reads it beside `bibliography` above. */
+    citationBlurbs: articleRevisions.citationBlurbs,
     /* For `isCurrent`'s arm, as `debate` above. */
     faq: articleRevisions.faq,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1379,6 +1389,10 @@ export const REVISION_PROJECTIONS = {
     /* Not a gate either: what tells the publication whether to queue the
        `matter` successor — `matterSettled` against the blocks it publishes. */
     matter: articleRevisions.matter,
+    /* Whether the draft holds a Bibliography — what tells a publication whose
+       job ran `bibliography` to queue the notes on its works (plan 261017h).
+       A boolean, so the list itself is not pulled across to answer it. */
+    hasBibliography: sql<boolean>`${articleRevisions.bibliography} is not null`.as("has_bibliography"),
   },
   /* **All six of these carry `FINGERPRINT_COLUMNS`, and none of them did until
      2026-08-31 except `arc`** (which had all four) and `ideas`/`sketch` (which
@@ -2069,6 +2083,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   reception: ["article_revisions.reception"],
   "sources-claims": ["article_revisions.sources_claims"],
   bibliography: ["article_revisions.bibliography"],
+  "citation-blurbs": ["article_revisions.citation_blurbs"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
   skim: ["article_revisions.skim"],
@@ -3471,6 +3486,28 @@ const rawPgArticleReader: ArticleReader = {
               inputHash: bibliographyFingerprint(blocks, tree, citedFingerprint),
               promptVersion: BIBLIOGRAPHY_PROMPT_VERSION,
               model: CAPABLE_MODEL,
+            },
+          );
+        }
+        /* **Judged on the list it annotates, not the article** — the same
+           expected hash `STEPS["citation-blurbs"].stamp` computes, over the
+           `bibliography` column beside it and its own stored entries (a week-old
+           registry "nothing" makes it not current, G9). A `:partial` run is
+           not current either, which is the point of it (G2). */
+        case "citation-blurbs": {
+          const blurbs = revision.citationBlurbs as CitationBlurbs | null;
+          const bibliography = revision.bibliography as Bibliography | null;
+          if (!blurbs || !bibliography || !Array.isArray(bibliography.citations)) return false;
+          return sameStamp(
+            {
+              inputHash: blurbs.sourceHash,
+              promptVersion: blurbs.version,
+              model: blurbs.generator,
+            },
+            {
+              inputHash: citationBlurbsExpectedHash(bibliography.citations, blurbs, Date.now()),
+              promptVersion: CITATION_BLURBS_PROMPT_VERSION,
+              model: CITATION_BLURBS_MODEL,
             },
           );
         }

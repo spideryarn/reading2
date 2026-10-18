@@ -144,6 +144,14 @@ import { ownIdsOfPdf, withRegistryFacts, type OwnIds } from "./article-registry.
 import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
+import {
+  citationBlurbsModelDeps,
+  generateCitationBlurbs,
+  importedFromAPublicAddress,
+  type CitationBlurbsDeps,
+} from "./citation-blurbs.js";
+import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsExpectedHash } from "./citation-blurbs-identity.js";
+import { citationEvidenceDeps } from "./citation-evidence.js";
 import { attachReceptionRegistry, receptionRegistryDeps } from "./reception-registry.js";
 import { declaredFailure, stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
@@ -195,11 +203,13 @@ import {
   ARTICLE_RENDERER,
   type ArticleStage,
   CAPABLE_MODEL,
+  CITATION_BLURBS_MODEL,
   generatorFor,
   MATTER_MODEL,
   type ModelPower,
   modelFor,
   powerFor,
+  sameGenerator,
   STAGE_EFFORT,
 } from "./models.js";
 import type { AnthropicJsonSchema } from "./messages-structured-output.js";
@@ -212,6 +222,7 @@ import {
   documentHadTooLittleText,
   documentIsABotCheck,
   documentHasNoArticle,
+  CITATION_BLURBS_NO_BIBLIOGRAPHY,
   FETCH_PAPER_MISSING,
   fetchFailed,
   ILLUSTRATE_NO_SKETCH,
@@ -662,6 +673,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      positional cascade would buy it for nothing; and it replaces rather than
      appends. docs/plans/260911g-citations-mode.md. */
   "bibliography",
+  /* It reads the Bibliography and nothing reads what it writes; a forced run
+     asks every work again (~a cent), which a press one band along must not
+     buy. Its `stamp` hashes every row's identity, so a list that names other
+     works re-runs without being forced. Plan 261017h stage 3. */
+  "citation-blurbs",
   /* The same two reasons as `faq`: it reads the blocks, the tree and the
      metadata, nothing else in the pipeline reads what it writes, so the
      positional cascade would buy a model call for nothing. Its `stamp` compares
@@ -5799,6 +5815,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
+  /* Stage 5p — a note on each cited work, from its abstract alone (plan 261017h
+     stage 3). Queued by the publication of a Bibliography; see the factory. */
+  "citation-blurbs": citationBlurbsStep(),
   /* Stage 5q — cross-references: a phrase in one block linked to the block that
      shows it in detail. Off DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED;
      queued after import by the add page's box, or by a press on Metadata.
@@ -5860,6 +5879,89 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     },
   },
 };
+
+/**
+ * **The `citation-blurbs` step** — a short note on each work the Bibliography
+ * lists, from that work's abstract alone (src/citation-blurbs.ts, plan 261017h
+ * stage 3). A factory so a test can hand it fake registries and a fake model
+ * and still run the step the pipeline runs; `STEPS` builds it with the real
+ * ones.
+ *
+ * **It refuses rather than pulls** when there is no Bibliography, as
+ * `illustrated` does without a Sketch: it never makes the list itself.
+ *
+ * **The stamp (G1)** is the identity hash of every row in list order with the
+ * validation version, the prompt version and the model — read back off the
+ * artefact's root `sourceHash`, `version` and `generator`. A run that left any
+ * row transient stamps `:partial` (G2), and a registry "nothing" older than a
+ * week makes the expected hash `:recheck` (G9), so either way the next
+ * publication or press runs it again and a finished one skips.
+ *
+ * **A forced run asks everything again; an unforced one keeps what is still
+ * true.** The step is not told it was forced, so it infers it: it runs only
+ * when its stamp is not current or it was forced, so a stored artefact that IS
+ * current means somebody forced it.
+ */
+export function citationBlurbsStep(
+  deps?: () => Promise<CitationBlurbsDeps>,
+): PipelineStep<"citation-blurbs"> {
+  const depsFor =
+    deps ??
+    (async (): Promise<CitationBlurbsDeps> => ({
+      evidence: await citationEvidenceDeps(),
+      model: citationBlurbsModelDeps(plog.child({ step: "citation-blurbs" })),
+    }));
+  return {
+    name: "citation-blurbs",
+    label: "Writing a note on each cited work",
+    produces: ["citation-blurbs"],
+    stamp: async (ctx, store) => {
+      const bibliography = await store.read(ctx.slug, "bibliography", "bibliography");
+      if (!bibliography) return null;
+      const stored = await store.read(ctx.slug, "citation-blurbs", "citation-blurbs");
+      return {
+        inputHash: citationBlurbsExpectedHash(bibliography.citations, stored, Date.now()),
+        promptVersion: CITATION_BLURBS_PROMPT_VERSION,
+        model: CITATION_BLURBS_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const bibliography = await store.read(ctx.slug, "bibliography", "bibliography");
+      if (!bibliography) throw stageFailure(CITATION_BLURBS_NO_BIBLIOGRAPHY);
+      const previous = await store.read(ctx.slug, "citation-blurbs", "citation-blurbs");
+      const meta = await store.read(ctx.slug, "extract", "meta");
+      const d = await depsFor();
+      const forced =
+        previous !== null &&
+        previous.sourceHash === citationBlurbsExpectedHash(bibliography.citations, previous, d.model.now()) &&
+        previous.version === CITATION_BLURBS_PROMPT_VERSION &&
+        sameGenerator(previous.generator, CITATION_BLURBS_MODEL);
+      const run = await generateCitationBlurbs(
+        {
+          slug: ctx.slug,
+          bibliography,
+          previous,
+          titleSearch: importedFromAPublicAddress(meta),
+          force: forced,
+        },
+        { signal: ctx.signal, ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}) },
+        d,
+      );
+      const notes = run.counts.blurb ?? 0;
+      /* Counts only — never a title, an abstract or a note. `transient:*` near
+         `rows` is the registries or the model failing, which nothing on screen
+         would say; `failed-check:not-supported` is the check refusing notes. */
+      plog.info(
+        { slug: ctx.slug, step: "citation-blurbs", forced, partial: run.partial, ms: run.blurbs.elapsedMs, ...run.counts },
+        `citation-blurbs ${ctx.slug}: ${notes} ${notes === 1 ? "note" : "notes"} on ${bibliography.citations.length} works`,
+      );
+      return {
+        parts: { "citation-blurbs": run.blurbs },
+        detail: `${notes} ${notes === 1 ? "note" : "notes"} on ${bibliography.citations.length} works${run.partial ? ", some to try again" : ""}`,
+      };
+    },
+  };
+}
 
 /**
  * Is this a Sketch there is any point illustrating?

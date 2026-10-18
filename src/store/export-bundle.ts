@@ -425,6 +425,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "quotes",
   "timeline",
   "bibliography",
+  "citationBlurbs",
   "quiz",
   "faq",
   "relations",
@@ -506,6 +507,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("quotes.json", revision.quotes);
   at("timeline.json", revision.timeline);
   at("bibliography.json", revision.bibliography);
+  at("citation-blurbs.json", revision.citationBlurbs);
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
@@ -669,6 +671,8 @@ one thing that will make the rest of these files make sense.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
       bibliography.json    Every work the article cites, and the link the article gave for it.
+      citation-blurbs.json A short note an AI wrote on each cited work from its abstract, and what
+                           it rests on.
       sketch.json          The diagram.
       illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
@@ -870,6 +874,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
   "augmentations/bibliography.json": "Every work the article cites, and the link the article gave for it.",
+  "augmentations/citation-blurbs.json":
+    "A short note an AI wrote on each cited work from its abstract, and what it rests on.",
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",

@@ -982,6 +982,21 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **A note on each cited work, and its check** (src/citation-blurbs.ts).
+     `front-matter-authors`' route, for its reason: an Anthropic model and a
+     strict schema an upstream that dropped `response_format` would not honour.
+     What it sends is cited works' titles, authors, years and public abstracts,
+     never the article's own text. */
+  "citation-blurbs": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
+  "citation-blurbs-check": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
      route, copied for a sharper reason: what it sends is the reader's own
      conversation, so every endpoint is a zero-retention one. A refusal costs
@@ -1283,6 +1298,20 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      At `low`, with a 6,000 ceiling, 108 calls answered in a median 5.8 s,
      ~$0.0014 each (scripts/matter-eval.ts, plan 261018a). */
   matter: { effort: "low" },
+  /* Left at the default because the default is what the spike measured:
+     Haiku thinking over twenty abstracts at a time, about $0.002 a batch
+     (docs/investigations/261017c-citation-blurbs-cost-and-quality.md). The
+     16,000-token ceiling in src/citation-blurbs.ts is sized for that thinking. */
+  "citation-blurbs": {
+    providerDefault:
+      "Measured 2026-10-17 by the spike that chose the model: batches of 20, about $0.002 a batch (plan 261017h, investigation 261017c). Unmeasured at any named effort.",
+  },
+  /* The writer's setting, on its model and route: one work's abstract and a
+     sentence or two to judge against it. */
+  "citation-blurbs-check": {
+    providerDefault:
+      "Not measured at a named effort: citation-blurbs' model and route, one abstract and at most two sentences in, a verdict per sentence back (plan 261017h, G4).",
+  },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */
   "chat-gist": { effort: "none" },

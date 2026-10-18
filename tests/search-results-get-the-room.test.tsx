@@ -178,7 +178,7 @@ describe("the Search panel keeps its furniture out of the results' way", () => {
     await open(`runs=${RUN}`);
     expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("1 of 2");
     expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
-      "1 passage is hidden by this threshold. Drag the slider left to show it.",
+      "1 passage hidden. Drag left to show it.",
     );
   });
 
@@ -186,7 +186,7 @@ describe("the Search panel keeps its furniture out of the results' way", () => {
     await open(`runs=${RUN}&conf=80`);
     expect(host.querySelector(".srch-hits")).toBeNull();
     expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
-      "All 2 passages are hidden by this threshold. Drag the slider left to show them.",
+      "All 2 passages hidden. Drag left to show them.",
     );
   });
 

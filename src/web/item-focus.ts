@@ -17,6 +17,7 @@
  */
 import { type RefObject, useEffect, useRef } from "react";
 import type { BandMode } from "../modes.js";
+import { flashElement } from "./flash.js";
 import type { SourcesView } from "./params.js";
 
 export interface ItemFocus {
@@ -52,9 +53,20 @@ export function focusTaken(taken: ItemFocus): (now: ItemFocus | null) => ItemFoc
  * - an item it knows but has not `drawn` yet (a filter about to be lowered)
  *   waits for the render that draws it.
  *
- * The row is found inside `scope` by `attribute` and scrolled into view with
- * `block: "nearest"`, so a row already on screen does not move. `onLand` may
- * do one more thing to it first (Debate unfolds a claim).
+ * The row is found inside `scope` by `attribute`, **centred in its own
+ * scroller where its scroll range permits, and flashed** (`centreInScroller`,
+ * flash.ts § `flashElement`). The first and last rows naturally clamp at the
+ * list's ends; the flash still identifies them without adding blank half-list
+ * gutters to every band.
+ * Greg, 2026-10-17, spya-m53cdk: *"can we scroll to the right source (perhaps
+ * centred in the scrollable area), and flash it"*. It was `block: "nearest"`
+ * until then, so a row already on screen did not move — and a reader who had
+ * just pressed *Open in Sources* could not tell which of forty rows it was.
+ * All four lists land this way on purpose: one job, one look (controls.md §
+ * Controls that do the same job look the same). Plan
+ * docs/plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md.
+ * `onLand` may do one more thing to it first (Debate unfolds a claim), and it
+ * is measured after that.
  */
 export function useLandOnItem({
   focus,
@@ -90,15 +102,85 @@ export function useLandOnItem({
       return;
     }
     if (!drawn) return;
-    for (const row of scope.current?.querySelectorAll<HTMLElement>(`[${attribute}]`) ?? []) {
-      if (row.getAttribute(attribute) !== focus.id) continue;
-      land.current?.(row);
-      /* Optional call: jsdom has no `scrollIntoView`. */
-      row.scrollIntoView?.({ block: "nearest" });
-      taken.current?.(focus);
-      return;
-    }
+    let watch: ResizeObserver | null = null;
+    const attempt = () => {
+      for (const row of scope.current?.querySelectorAll<HTMLElement>(`[${attribute}]`) ?? []) {
+        if (row.getAttribute(attribute) !== focus.id) continue;
+        land.current?.(row);
+        const scroller = scrollerOf(row);
+        /* A band that is stepped aside measures zero. Keep the focus rather
+           than flashing it invisibly and reporting it served; its scroller's
+           first non-zero layout gets the same landing attempt. */
+        if (scroller && !centreInScroller(row, scroller)) {
+          if (typeof ResizeObserver === "function" && watch === null) {
+            watch = new ResizeObserver(() => {
+              if (scroller.clientHeight <= 0) return;
+              watch?.disconnect();
+              watch = null;
+              attempt();
+            });
+            watch.observe(scroller);
+          }
+          return;
+        }
+        flashElement(row);
+        taken.current?.(focus);
+        return;
+      }
+    };
+    attempt();
+    return () => {
+      watch?.disconnect();
+      watch = null;
+    };
   }, [focus, ready, known, drawn, scope, attribute]);
+}
+
+/**
+ * **The scroller a band row is in**: the nearest ancestor whose computed
+ * `overflow-y` scrolls — `.tl-scroll` (Bibliography), `.gloss-list`
+ * (Glossary), `.ideas-scroll` (Ideas), `.rcp-scroll` / `.rcp-listed-wrap`
+ * (Claims). Asked of the computed style, as ViewportProbe.tsx § `scrollerIn`
+ * does, rather than of a class list four panels would have to keep in step.
+ * **It stops at the band** (`.mode-band`) and never reaches the document: a
+ * row in no scroller of its own is left where it is.
+ */
+function scrollerOf(row: HTMLElement): HTMLElement | null {
+  for (let el = row.parentElement; el && el !== document.body; el = el.parentElement) {
+    if (el.classList.contains("mode-band")) return null;
+    const o = getComputedStyle(el).overflowY;
+    if (o === "auto" || o === "scroll") return el;
+  }
+  return null;
+}
+
+/**
+ * **Put `row`'s centre at the centre of its scroller's visible box**, at once,
+ * where the scroller's range permits it. The browser clamps a first or last
+ * row at the corresponding edge; centring those too would require persistent
+ * blank scroll room at both ends of all four lists.
+ * The scroller's own `scrollTop`, never `scrollIntoView`, which scrolls every
+ * scrollable ancestor too, the page included (GPT Sol's F1 on plan 261017h;
+ * list-step.ts § `useFollowRow` keeps the same rule). Instant because there is
+ * no travel worth watching — the band has just opened, or the reader pressed
+ * for this row — so the flash can start straight away rather than wait for a
+ * settle. A row taller than the scroller (an unfolded claim) starts at its top,
+ * so its head is not the part cut off. Clamped at 0; the browser clamps the
+ * other end. Nothing moves while the scroller measures nothing (a band
+ * stepped aside).
+ */
+function centreInScroller(row: HTMLElement, scroller: HTMLElement): boolean {
+  if (scroller.clientHeight <= 0) return false;
+  const box = row.getBoundingClientRect();
+  /* `getBoundingClientRect()` starts at the border box; scrolling starts at
+     the padding edge. Without `clientTop`, a bordered scroller lands high by
+     exactly its top border (chat-steps.ts § turnStarts uses the same origin). */
+  const top =
+    box.top - (scroller.getBoundingClientRect().top + scroller.clientTop) + scroller.scrollTop;
+  const height = scroller.clientHeight;
+  const to = box.height > height ? top : top + box.height / 2 - height / 2;
+  scroller.scrollTop = Math.max(0, Math.round(to));
+  return true;
 }
 
 /**

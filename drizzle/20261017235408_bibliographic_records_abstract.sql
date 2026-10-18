@@ -1,0 +1,5 @@
+ALTER TABLE "spideryarn"."bibliographic_records" ADD COLUMN "abstract" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."bibliographic_records" ADD COLUMN "abstract_read_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "spideryarn"."bibliographic_records" ADD CONSTRAINT "bibliographic_records_abstract" CHECK ("spideryarn"."bibliographic_records"."abstract" is null or (length("spideryarn"."bibliographic_records"."abstract") between 1 and 4000
+            and "spideryarn"."bibliographic_records"."state" is not distinct from 'found' and "spideryarn"."bibliographic_records"."abstract_read_at" is not null));--> statement-breakpoint
+ALTER TABLE "spideryarn"."bibliographic_records" ADD CONSTRAINT "bibliographic_records_abstract_read_at" CHECK ("spideryarn"."bibliographic_records"."abstract_read_at" is null or "spideryarn"."bibliographic_records"."state" is not distinct from 'found');

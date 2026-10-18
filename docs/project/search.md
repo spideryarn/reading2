@@ -1385,8 +1385,8 @@ A threshold can swallow the reader's results and look like an ordinary empty lis
   was opened there. Absent is not low — the same rule `orderFound` already followed when it sorted a
   literal match as certain. It is one line, `clears` in [`search-hits.ts`](../../src/web/search-hits.ts),
   and it has a test of its own.
-- **The count says `3 of 11`, never `3`**, and under the track a line says *"8 passages are hidden by
-  this threshold. Drag the slider left to show them."* A filter that hides eight things must not look
+- **The count says `3 of 11`, never `3`**, and under the track a line says *"8 passages
+  hidden. Drag left to show them."* A filter that hides eight things must not look
   like a search that found three. When nothing is hidden there is no line, since 2026-10-03: `11 of
   11` already says so (Greg, `spya-eqcbay`: *"We can get rid of that, I think, because the, you
   know, n of m above kind of answers that."*). The other thresholds still print theirs in every

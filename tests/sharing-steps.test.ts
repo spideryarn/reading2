@@ -135,6 +135,8 @@ describe("the policy", () => {
         /* 2026-10-18, a whole column that reads only the blocks: the front
            and back matter — plan 261018a. */
         "matter",
+        /* 2026-10-18, a whole column that reads the Bibliography — plan 261017h. */
+        "citation-blurbs",
       ].sort(),
     );
   });
@@ -144,11 +146,13 @@ describe("the policy", () => {
     expect(Object.keys(STEP_SHARING).sort()).toEqual([...STEP_ORDER].sort());
   });
 
-  it("declares the two known reads", () => {
+  it("declares the three known reads", () => {
     expect([...readsOf(job(["illustrated"]))]).toEqual(["sketch"]);
     expect([...readsOf(job(["skim"]))].sort()).toEqual(["ideas", "quotes"]);
+    /* Plan 261017h: each note is keyed to a row of the list. */
+    expect([...readsOf(job(["citation-blurbs"]))]).toEqual(["bibliography"]);
     for (const step of SHARING_STEPS) {
-      if (step === "illustrated" || step === "skim") continue;
+      if (step === "illustrated" || step === "skim" || step === "citation-blurbs") continue;
       expect([...readsOf(job([step]))], step).toEqual([]);
     }
   });

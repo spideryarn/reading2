@@ -10,10 +10,21 @@
  *                                              DOI: Crossref, and on a 404 DataCite
  * ```
  *
- * **Identifiers only, never a title search** (Greg's "don't abuse them"). Where
- * an identifier came from, and whether the record agrees with what the caller
- * already knows, is the caller's business — a DOI an article typed wrongly
- * resolves perfectly to the wrong paper, so every caller checks the title.
+ * **Identifiers only, never a title search — here.** Greg's words were "If it's
+ * free, great. … But don't abuse them." (2026-10-01), and this lookup reads them
+ * as one request per identifier, cached, for anybody. Where an identifier came
+ * from, and whether the record agrees with what the caller already knows, is
+ * the caller's business — a DOI an article typed wrongly resolves perfectly to
+ * the wrong paper, so every caller checks the title.
+ *
+ * **One stated, bounded exception** (plan 261017h, stage 3 design § Findings 3
+ * and G6): src/citation-evidence.ts may ask Crossref's `query.bibliographic`
+ * about a cited work that has no identifier — **at most 60 title queries a
+ * run**, in Crossref's polite pool (`mailto`), through this file's shared
+ * spacing, slots and cooldown (`inServiceTurn`), and only for an article
+ * imported from a public web address, never an uploaded file. The answer is
+ * kept per entry, so an unchanged work is not asked about again. It is not a
+ * licence for a title search anywhere else: another one is another decision.
  *
  * **The politeness lives in the database**, not in this process: the cache
  * (`bibliographic_records`), a per-identifier claim so two callers make one
@@ -101,10 +112,26 @@ export interface WorkRecord {
    * **When Crossref was asked for that count**, ISO, by the store's clock: on
    * every Crossref record `lookupWork` returns, count or no count, because
    * "asked, and there was none" is a different thing from "never asked". The
-   * parser never sets it; `withCountReadAt` does, from the moment the answer
+   * parser never sets it; `withReadMoments` does, from the moment the answer
    * was stored. Absent on a DataCite record.
    */
   citedByCountReadAt?: string;
+  /**
+   * **The work's abstract as the registry holds it**, plain text (JATS and
+   * markup stripped, a leading "Abstract" dropped, at most
+   * `MAX_ABSTRACT_LENGTH`): Crossref's `abstract`, or DataCite's description
+   * of type `Abstract` (which, for an arXiv id, is the author's arXiv
+   * abstract). Evidence for src/citation-evidence.ts, and **never copied into
+   * the Bibliography artefact** — `registryWorkOf` picks its fields by name.
+   */
+  abstract?: string;
+  /**
+   * **When the registry was asked for that abstract**, ISO, by the store's
+   * clock: on every found record `lookupWork` returns, abstract or none, so
+   * "asked, and there was none" differs from "cached before abstracts were
+   * kept" (the `citedByCountReadAt` precedent). The parser never sets it.
+   */
+  abstractReadAt?: string;
 }
 
 /**
@@ -128,15 +155,18 @@ export type LookupResult =
 export type CachedAnswer = { kind: "found"; record: WorkRecord } | { kind: "not-found" };
 
 /**
- * **An answer as the store keeps it, given the moment it was stored**: a
- * Crossref record says that is when its count was read; a DataCite record and
- * a miss say nothing. The one place that rule is written for a store kept in
- * memory and for what `lookupWork` returns from a write; the Postgres store
- * says the same thing in its `write` statement.
+ * **An answer as the store keeps it, given the moment it was stored**: every
+ * found record says that is when its abstract was asked for, and a Crossref
+ * record that it is when its count was read too; a miss says nothing. The one
+ * place that rule is written for a store kept in memory and for what
+ * `lookupWork` returns from a write; the Postgres store says the same thing in
+ * its `write` statement.
  */
-export function withCountReadAt<A extends CachedAnswer>(answer: A, storedAt: Date): A {
-  if (answer.kind !== "found" || answer.record.source !== "crossref") return answer;
-  return { ...answer, record: { ...answer.record, citedByCountReadAt: storedAt.toISOString() } };
+export function withReadMoments<A extends CachedAnswer>(answer: A, storedAt: Date): A {
+  if (answer.kind !== "found") return answer;
+  const at = storedAt.toISOString();
+  const count = answer.record.source === "crossref" ? { citedByCountReadAt: at } : {};
+  return { ...answer, record: { ...answer.record, ...count, abstractReadAt: at } };
 }
 
 /* ------------------------------------------------------------ the policy -- */
@@ -340,6 +370,29 @@ export function plainRegistryText(value: unknown, maxLength = 1000): string | nu
   return text.length > maxLength ? text.slice(0, maxLength).trimEnd() : text;
 }
 
+/** The most of an abstract that is kept — the `bibliographic_records_abstract` CHECK's bound. */
+export const MAX_ABSTRACT_LENGTH = 4_000;
+/** Shorter than this is a placeholder ("Abstract not available"), not an abstract. */
+const MIN_ABSTRACT_LENGTH = 40;
+
+/**
+ * **A registry's abstract as plain text, or null** — Crossref's JATS
+ * (`<jats:p>`, `<jats:title>Abstract</jats:title>`) or DataCite's description,
+ * through `plainRegistryText`, with a leading "Abstract" or "Summary" heading
+ * dropped and cut at a word under `MAX_ABSTRACT_LENGTH`. The one cleaning, for
+ * a record looked up by identifier and for a title search's item alike.
+ */
+export function registryAbstract(value: unknown): string | null {
+  const plain = plainRegistryText(value, Number.MAX_SAFE_INTEGER);
+  if (plain === null) return null;
+  const text = plain.replace(/^(?:abstract|summary)\b[\s:.—–-]*/i, "").trim();
+  if (text.length < MIN_ABSTRACT_LENGTH) return null;
+  if (text.length <= MAX_ABSTRACT_LENGTH) return text;
+  const cut = text.slice(0, MAX_ABSTRACT_LENGTH);
+  const atWord = cut.replace(/\s+\S*$/, "");
+  return (atWord.length > MAX_ABSTRACT_LENGTH / 2 ? atWord : cut).trimEnd();
+}
+
 export function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -423,6 +476,7 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
   /* Anything but a whole number the column can hold is no count, and the
      record is still an answer (plan 261005i, GPT Sol's F3). */
   const citedByCount = msg["is-referenced-by-count"];
+  const abstract = registryAbstract(msg.abstract);
   return {
     id,
     source: "crossref",
@@ -433,6 +487,7 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     ...(published !== undefined ? { published } : {}),
     doi: normaliseDoi(msg.DOI, doi),
     ...(isCitedByCount(citedByCount) ? { citedByCount } : {}),
+    ...(abstract !== null ? { abstract } : {}),
   };
 }
 
@@ -473,6 +528,11 @@ export function parseDatacite(id: WorkId, doi: string, json: unknown): WorkRecor
   const venue =
     plainRegistryText(record(attrs.container)?.title) ??
     plainRegistryText(typeof publisher === "string" ? publisher : record(publisher)?.name);
+  /* `Abstract` only: `Other` is where arXiv puts "15 pages, 5 figures". */
+  const described = list(attrs.descriptions)
+    .map(record)
+    .find((d) => d?.descriptionType === "Abstract");
+  const abstract = registryAbstract(described?.description);
   return {
     id,
     source: "datacite",
@@ -481,6 +541,7 @@ export function parseDatacite(id: WorkId, doi: string, json: unknown): WorkRecor
     ...(year !== undefined ? { year } : {}),
     ...(venue !== null ? { venue } : {}),
     doi: normaliseDoi(attrs.doi, doi),
+    ...(abstract !== null ? { abstract } : {}),
   };
 }
 
@@ -685,7 +746,7 @@ export async function lookupWork(id: WorkId, deps: LookupDeps = {}): Promise<Loo
     }
     /* What the next caller will read from the cache, so the two agree: a
        Crossref record carries the moment its count was read. */
-    return withCountReadAt(asked, storedAt);
+    return withReadMoments(asked, storedAt);
   } catch (err) {
     d.log.error({ id, outcome: "store", ms: Date.now() - started, ...errorFields(err) }, "bibliographic lookup failed");
     if (claim !== null) await d.store.release(claim).catch(() => {});

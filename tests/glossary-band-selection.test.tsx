@@ -248,23 +248,40 @@ describe("a term the threshold hides stops being the open one", () => {
    to bring the term's row into view, and a visitor's band was never handed the
    request — only the owner's was. */
 describe("a visitor's band lands on the term it was asked for", () => {
-  it("scrolls the row into view and hands the request back", async () => {
-    const landed: Element[] = [];
+  it("centres the row in the glossary's own scroller, flashes it, and hands the request back", async () => {
+    /* jsdom has no layout, so it is posed: `.gloss-list` (made to scroll by a
+       stylesheet, as the real one is) shows 0–200px, the rows sit at 500–540px.
+       Landing is shared with Bibliography, Ideas and Claims (item-focus.ts). */
     const taken: { id: string; n: number }[] = [];
-    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
-    Element.prototype.scrollIntoView = function (this: Element) {
-      landed.push(this);
-    };
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, left: 0, right: 300, width: 300, height: bottom - top, x: 0, y: top }) as DOMRect;
+    const style = document.createElement("style");
+    style.textContent = ".gloss-list { overflow-y: auto; }";
+    document.head.append(style);
+    const rects = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.classList.contains("gloss-list")) return rect(0, 200);
+      if (this.hasAttribute("data-term-id")) return rect(500, 540);
+      return rect(0, 0);
+    });
+    const heights = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("gloss-list") ? 200 : 0;
+    });
+    const windowScroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     try {
       await mount(`?mode=glossary&sort=document&term=${RARE.id}`, {
         focus: { id: RARE.id, n: 1 },
         onFocusTaken: (f: { id: string; n: number }) => taken.push(f),
       });
+      expect(document.querySelector<HTMLElement>(".gloss-list")?.scrollTop).toBe(420);
+      expect(windowScroll, "never the page").not.toHaveBeenCalled();
     } finally {
-      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
-      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      rects.mockRestore();
+      heights.mockRestore();
+      windowScroll.mockRestore();
+      style.remove();
     }
-    expect(landed.some((el) => el.getAttribute("data-term-id") === RARE.id)).toBe(true);
+    const landed = document.querySelector(`[data-term-id="${RARE.id}"]`);
+    expect(landed?.classList.contains("element-flash")).toBe(true);
     expect(taken).toEqual([{ id: RARE.id, n: 1 }]);
   });
 });

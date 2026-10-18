@@ -291,6 +291,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An article's front and back matter, found inside the `matter` step
      (plan 261018a). src/matter.ts. */
   matter: "step-driven",
+  /* A note on each cited work, and its check, written inside the
+     `citation-blurbs` step. src/citation-blurbs.ts. */
+  "citation-blurbs": "step-driven",
+  "citation-blurbs-check": "step-driven",
   /* A conversation's one-line gist, written after a chat answer is stored and
      its response sent — request scope, owner-attributed, triggered by the
      reader's question. src/chat-gist.ts. */

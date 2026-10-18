@@ -45,6 +45,7 @@ import type {
   Arc,
   Block,
   Bibliography,
+  CitationBlurbs,
   Crossrefs,
   Matter,
   SimpleSummary,
@@ -113,6 +114,7 @@ export type ArtifactKind =
   | "illustrated"
   | "reception"
   | "bibliography"
+  | "citation-blurbs"
   | "crossrefs"
   | "matter"
   | "simple";
@@ -244,6 +246,11 @@ export interface ArtifactMap {
    * `bibliography` step. docs/plans/260911g-citations-mode.md.
    */
   bibliography: Bibliography;
+  /**
+   * A note on each cited work, from its abstract — `CitationBlurbs`,
+   * src/types.ts, written by the `citation-blurbs` step. Plan 261017h stage 3.
+   */
+  "citation-blurbs": CitationBlurbs;
   /**
    * Links between the article's own blocks — `Crossrefs`, src/types.ts,
    * written by the `crossrefs` step.
@@ -500,6 +507,9 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      `buildBibliography` throws only when the model named works and every one of
      them was dropped. */
   bibliography: { field: "citations", ok: isArray },
+  /* An `entries` map, and **an EMPTY one is usable**: a list with no works,
+     or none decided yet, is still the step's answer. */
+  "citation-blurbs": { field: "entries", ok: isObject },
   /* A `links` array, and **an EMPTY one is usable**, as `faq`'s is: a piece
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
@@ -1061,6 +1071,12 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      nothing can half-inherit. */
   reception: "reception",
   bibliography: "bibliography",
+  /* **The root carries the shared stamp's three names** — `sourceHash`,
+     `version`, `generator` (G1 of the plan's design review) — and **no
+     `BASELINE` row**: the step reuses its own earlier entries by reading this
+     column itself (src/citation-blurbs.ts § `previousEntry`), keyed by the
+     Bibliography's ids, which that list already inherits across runs. */
+  "citation-blurbs": "citation-blurbs",
   /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
      re-run simply replaces the list. */
   crossrefs: "crossrefs",

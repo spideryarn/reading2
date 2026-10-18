@@ -1060,6 +1060,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      240 s was a timeout waiting for the first full-cap article. 360 s leaves
      the headroom. docs/plans/260911g-citations-mode.md § Progress. */
   bibliography: 360_000,
+  /* **NOT MEASURED** — the design's budget (plan 261017h stage 3, § 3): at most
+     120 s of registry lookups (`LOOKUP_BUDGET_MS`, src/citation-evidence.ts),
+     then batches of twenty works two at a time, each aborted at 120 s, and a
+     check per work; no batch is started that could not finish 20 s before the
+     claim's deadline, so a long list hands back with what it has rather than
+     being cut off mid-call. The spike's whole run was about a minute. Replace
+     with a measurement once it has run on real articles. */
+  "citation-blurbs": 360_000,
 };
 
 /**

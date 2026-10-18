@@ -65,6 +65,9 @@ describe("the steps the Metadata page will re-run", () => {
       "skim",
       "reception",
       "bibliography",
+      /* Plan 261017h, 2026-10-18: the notes on cited works, asked again from
+         Metadata. The three answers are in src/rerun-steps.ts. */
+      "citation-blurbs",
       /* Plan 260930f, 2026-09-30: the one way to make cross-references for an
          article already on the shelf. The three answers are in src/rerun-steps.ts. */
       "crossrefs",

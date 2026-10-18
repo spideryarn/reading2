@@ -58,10 +58,8 @@ until you know what they are for.
  │  ▇▇         ├─────────────────────┤   is like to be an      │
  │  ▇▇▇▇       │ threshold 0·10 · 21 of 24 organism …          │
  │             │ ──────●────────────  ← the bar, and the       │
- │             │ 3 terms are hidden     reader's hand on it    │
- │             │ by this threshold.  │                         │
- │             │ Drag the slider left│                         │
- │             │ to show them.       │                         │
+ │             │ 3 terms hidden. Drag   reader's hand on it    │
+ │             │ left to show them.  │                         │
  │             ├─────────────────────┤                         │
  │             │ nonreductive  d·72   │ … the nonreductive case│
  │             │ explanation   c·85   │   ┈┈┈┈┈┈┈┈┈┈┈┈          │
@@ -1402,7 +1400,9 @@ Four things about the slider are decisions rather than details:
   something: hard left shows everything, hard right shows exactly the costliest term (plus any the
   model did not score, which survive everywhere).
 - **It says how many it is holding back.** A line under the track, in every state including none and
-  all: *"18 terms are hidden by this threshold. Drag the slider left to show them."* Present
+  all: *"18 terms hidden. Drag left to show them."* (one line since 2026-10-17; it was *"…are
+  hidden by this threshold. Drag the slider left…"*, which wrapped to two — plan
+  [261017h](../plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md)). Present
   wherever the slider is and absent wherever it is not, because a line that goes missing for a
   *different* reason teaches the reader nothing, and an empty list under a bar is otherwise
   ambiguous between *there is nothing here* and *you have hidden it all* —

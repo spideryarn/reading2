@@ -1398,8 +1398,22 @@
     {
       "idx": 199,
       "version": "7",
-      "when": 1792287328443,
-      "tag": "20261018013528_matter",
+      "when": 1792281248048,
+      "tag": "20261017235408_bibliographic_records_abstract",
+      "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "7",
+      "when": 1792283269775,
+      "tag": "20261018002749_citation_blurbs",
+      "breakpoints": true
+    },
+    {
+      "idx": 201,
+      "version": "7",
+      "when": 1792290386767,
+      "tag": "20261018022626_matter",
       "breakpoints": true
     }
   ]

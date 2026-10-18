@@ -92,7 +92,15 @@ import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
 import { currentStepName, withRetiredSpellings } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
-import { awaitingStructure, type Block, type JobReset, type JobStep, type OwnerId, type StepName, type Tree } from "../types.js";
+import {
+  awaitingStructure,
+  type Block,
+  type JobReset,
+  type JobStep,
+  type OwnerId,
+  type StepName,
+  type Tree,
+} from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { extraColumns, extraSteps } from "../reset.js";
 import {
@@ -443,6 +451,12 @@ export const REVISION_CARRY_POLICY: Record<
      orphan every stage-3 lookup keyed on these ids until somebody paid for the
      call again. */
   bibliography: "carry",
+  /* **Carries with the list it annotates**, for its reason and one more: the
+     step reuses every entry still true of its row (src/citation-blurbs.ts), so
+     a draft that minted this would buy every note again on the next run. Each
+     entry carries its row's identity, so a carried note that no longer
+     describes its row is detached at read time. Plan 261017h stage 3. */
+  citationBlurbs: "carry",
 
   /* ---- MIRROR: never copied; a trigger fills it -------------------------- */
 
@@ -1050,6 +1064,8 @@ async function fenceJob(
     .update(jobs)
     .set({ draftRevisionId })
     .where(liveAttempt(jobId, attemptId))
+    /* `steps` for the same reason: a publication whose job made a Bibliography
+       queues the notes on its works (`queueCitationBlurbsIn`, plan 261017h). */
     .returning({ reset: jobs.reset, reservesName: jobs.reservesName, steps: jobs.steps });
   // Exactly one row, never `>= 1` and never ignored: zero rows here is the
   // fence doing its job, and it must reach the caller as a failure.
@@ -2221,6 +2237,15 @@ export interface PublishRevisionResult {
    */
   readonly autoModes: readonly SuccessorOutcome[];
   /**
+   * **The notes on cited works a new Bibliography needs** (plan 261017h stage
+   * 3, § 1 and G3): empty unless this publication's job ran `bibliography`
+   * (and not `citation-blurbs`) and the draft holds a list. One outcome
+   * normally; two when the first collapsed onto a job bound to an older base,
+   * which can never finish this revision, and a replacement scoped to this
+   * revision was queued beside it. `logPublication` says which.
+   */
+  readonly citationBlurbs: readonly SuccessorOutcome[];
+  /**
    * **A tree landed on a minimal paper** — `processing` flipped to `'full'` in
    * this transaction. The caller holding the job's reservation must charge it
    * and then `supersedeMinimal` the paper's minimal row, in the same
@@ -2718,6 +2743,29 @@ export async function publishRevisionIn(
       ? await queueMainModesIn(tx, article, successor)
       : [];
 
+  /**
+   * **A publication that made a Bibliography queues the notes on its works** —
+   * here, for the labels successor's reason: the list and the job that
+   * annotates it become true together, and every way a list is made (import's
+   * own Bibliography job, a Metadata re-make, *Find them again*, the command
+   * bar, MCP, the CLI) ends at this line. The list is published first, so
+   * nobody waits for the notes. Plan 261017h stage 3, § 1.
+   *
+   * **Which publication**: one under a job whose steps include `bibliography`
+   * and not `citation-blurbs` (a job naming both has made the notes already),
+   * whose draft holds a list. Never the notes job's own publication, so it
+   * cannot loop. Unforced and unscoped, so a reader's own press joins it, and
+   * the step itself skips when the list names the same works as before.
+   */
+  const jobSteps = (fenced?.steps ?? []).map((step) => currentStepName(step.name));
+  const citationBlurbs =
+    fenced !== null &&
+    jobSteps.includes("bibliography") &&
+    !jobSteps.includes("citation-blurbs") &&
+    draft.hasBibliography
+      ? await queueCitationBlurbsIn(tx, article, revisionId)
+      : [];
+
   return {
     revisionId,
     previousRevisionId: article.currentRevisionId,
@@ -2730,8 +2778,29 @@ export async function publishRevisionIn(
     matterSuccessor,
     regenerated,
     autoModes,
+    citationBlurbs,
     upgradedFromMinimal,
   };
+}
+
+/**
+ * Queue the `citation-blurbs` job for a revision that has just published a
+ * Bibliography — and **when the queue answers `boundToOlderBase`, a second one
+ * scoped to this revision** (GPT Sol's G3 on the plan): the job it collapsed
+ * onto holds a draft of an older base, so its publication will be refused and
+ * the new list would be left with no notes queued for it. The scope makes a
+ * fresh work key that nothing earlier can hold. `logPublication` says so
+ * after the commit.
+ */
+async function queueCitationBlurbsIn(
+  tx: Tx,
+  article: typeof articles.$inferSelect,
+  revisionId: string,
+): Promise<SuccessorOutcome[]> {
+  const ask = { ownerId: article.ownerId as OwnerId, slug: article.slug, steps: ["citation-blurbs"] as StepName[] };
+  const first = await enqueueSuccessorIn(tx, ask);
+  if (first.kind !== "boundToOlderBase") return [first];
+  return [first, await enqueueSuccessorIn(tx, { ...ask, scope: revisionId })];
 }
 
 /**
@@ -3251,9 +3320,35 @@ export function logPublication(
             })),
           }
         : {}),
+      /* Present only when this publication made a Bibliography: the notes job
+         on its works, by outcome and id (plan 261017h). */
+      ...(published.citationBlurbs.length
+        ? {
+            citationBlurbs: published.citationBlurbs.map((outcome) => ({
+              kind: outcome.kind,
+              jobId: outcome.jobId,
+            })),
+          }
+        : {}),
     },
     "revision published",
   );
+  /* **The notes job it would have joined can never finish this revision**, so
+     a replacement scoped to it was queued (G3). Said, because the first
+     outcome on its own would read as a job that is coming. Ids only. */
+  const [blurbsFirst, blurbsReplacement] = published.citationBlurbs;
+  if (blurbsFirst?.kind === "boundToOlderBase") {
+    logger.warn(
+      {
+        slug: opts.slug,
+        revisionId: published.revisionId,
+        heldBy: blurbsFirst.jobId,
+        replacement: blurbsReplacement?.jobId ?? null,
+        replacementKind: blurbsReplacement?.kind ?? null,
+      },
+      "the notes on cited works were held by a job bound to an older base; queued a replacement for this revision",
+    );
+  }
   /**
    * **The article reached the shelf promising labels that nothing is going to
    * buy**, and this line is the only thing that says so.

@@ -222,7 +222,94 @@ describe("the cache", () => {
         doi: "10.1038/nn.4304",
         /* Crossref was asked and gave no count: the moment is kept, the count is not. */
         citedByCountReadAt: expect.any(String) as string,
+        /* Asked for its abstract too, and there was none (plan 261017h). */
+        abstractReadAt: expect.any(String) as string,
       },
+    });
+  });
+
+  describe("the abstract (plan 261017h stage 3a)", () => {
+    const doi = "10.1000/abstracted";
+    const work = id(doi);
+    const ABSTRACT = "We show that sleep spindles couple the hippocampus to the cortex during consolidation.";
+    const answer = (abstract?: string) => ({
+      message: { DOI: doi, title: ["Dreams and memory consolidation"], ...(abstract === undefined ? {} : { abstract }) },
+    });
+    const columns = () =>
+      rows<{ abstract: string | null; read: boolean; same: boolean | null }>(sql`
+        select abstract, abstract_read_at is not null as read, abstract_read_at = fetched_at as same
+          from spideryarn.bibliographic_records where id = ${work}`);
+    /** A found row as the code before 3a left it: count asked, abstract never. */
+    const preAbstract = (source: "crossref" | "datacite") =>
+      getDb().execute(sql`
+        insert into spideryarn.bibliographic_records
+          (id, state, source, title, authors_family, authors_given, doi, fetched_at, cited_by_count_read_at)
+        values (${work}, 'found', ${source}, 'Dreams and memory consolidation', '{}', '{}', ${doi}, now(),
+                ${source === "crossref" ? sql`now()` : sql`null`})`);
+
+    it("does not call a found record fresh until somebody has asked for its abstract, then re-asks once and stores it", async () => {
+      for (const source of ["crossref", "datacite"] as const) {
+        await getDb().execute(sql`delete from spideryarn.bibliographic_records where id = ${work}`);
+        await preAbstract(source);
+        expect(await store.read(work, FRESHNESS), source).toEqual({ answer: null, claimed: false });
+      }
+      await getDb().execute(sql`delete from spideryarn.bibliographic_records where id = ${work}`);
+      await preAbstract("crossref");
+      const fetchJson = vi.fn(async () => answer(`<jats:p>${ABSTRACT}</jats:p>`));
+      const first = await lookupWork(work, { store, fetchJson });
+      expect(first).toMatchObject({ kind: "found", record: { abstract: ABSTRACT, abstractReadAt: expect.any(String) as string } });
+      expect(await lookupWork(work, { store, fetchJson })).toEqual(first);
+      expect(fetchJson).toHaveBeenCalledTimes(1);
+      expect(await columns()).toEqual([{ abstract: ABSTRACT, read: true, same: true }]);
+    });
+
+    it("is fresh once the registry was asked and gave no abstract: asked-and-none is not never-asked", async () => {
+      const fetchJson = vi.fn(async () => answer());
+      const first = await lookupWork(work, { store, fetchJson });
+      expect((first as { record: object }).record).not.toHaveProperty("abstract");
+      expect(await columns()).toEqual([{ abstract: null, read: true, same: true }]);
+      expect(await lookupWork(work, { store, fetchJson })).toEqual(first);
+      expect(fetchJson).toHaveBeenCalledTimes(1);
+    });
+
+    it("is refused, by the table itself, an abstract or a read moment on anything but a found record", async () => {
+      const refusedBy = async (query: ReturnType<typeof sql>): Promise<string | undefined> => {
+        try {
+          await getDb().execute(query);
+          return undefined;
+        } catch (err) {
+          const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+          expect(cause?.code).toBe("23514");
+          return cause?.constraint;
+        }
+      };
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, state, fetched_at, abstract_read_at)
+          values (${work}, 'not-found', now(), now())`),
+      ).toBe("bibliographic_records_abstract_read_at");
+      /* A claim's state is SQL NULL: `= 'found'` would let it through (postmortem 261004a). */
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, claimed_until, abstract_read_at)
+          values (${work}, now(), now())`),
+      ).toBe("bibliographic_records_abstract_read_at");
+      /* An abstract always comes with the moment it was read. */
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at, abstract)
+          values (${work}, 'found', 'datacite', 'T', '{}', '{}', ${doi}, now(), ${ABSTRACT})`),
+      ).toBe("bibliographic_records_abstract");
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at, abstract, abstract_read_at)
+          values (${work}, 'found', 'datacite', 'T', '{}', '{}', ${doi}, now(), ${"x".repeat(4_001)}, now())`),
+      ).toBe("bibliographic_records_abstract");
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at, abstract, abstract_read_at)
+          values (${work}, 'found', 'datacite', 'T', '{}', '{}', ${doi}, now(), ${ABSTRACT}, now())`),
+      ).toBeUndefined();
     });
   });
 
@@ -290,8 +377,8 @@ describe("the cache", () => {
 
     it("leaves a DataCite record fresh with no read moment: there is nothing to go back for", async () => {
       await getDb().execute(sql`
-        insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at)
-        values (${work}, 'found', 'datacite', 'A dataset', '{}', '{}', ${doi}, now())`);
+        insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at, abstract_read_at)
+        values (${work}, 'found', 'datacite', 'A dataset', '{}', '{}', ${doi}, now(), now())`);
       const seen = await store.read(work, FRESHNESS);
       expect(seen.answer).toMatchObject({ kind: "found", record: { source: "datacite" } });
       expect(await store.claim(work, FRESHNESS, CLAIM_LEASE_MS)).toBeNull();
