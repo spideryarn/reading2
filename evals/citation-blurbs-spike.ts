@@ -945,6 +945,14 @@ async function productionPhase(fixture: FixtureArticle[], slug: string, work: st
     evidenceOutcomes: evidence.counts.outcomes,
     titleQueries: evidence.counts.titleQueries,
     openAlexQueries: evidence.counts.openAlexQueries,
+    /* Plan 261018o's measurement: which sources were on, how often each was asked, and evidence by source. */
+    sources: evidenceDeps.sources ?? null,
+    openAlexTitleQueries: evidence.counts.openAlexTitleQueries,
+    semanticScholarQueries: evidence.counts.semanticScholarQueries,
+    evidenceBySource: works.reduce<Record<string, number>>((by, w) => {
+      by[`${w.evidence.source}:${w.evidence.via}`] = (by[`${w.evidence.source}:${w.evidence.via}`] ?? 0) + 1;
+      return by;
+    }, {}),
     outcomes,
     calls: written.counts,
     lookupMs: lookedUp - started,

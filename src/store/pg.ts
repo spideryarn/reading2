@@ -171,7 +171,9 @@ import {
   attachBlurbs,
   CITATION_BLURBS_PROMPT_VERSION,
   citationBlurbsExpectedHash,
+  sourcePolicy,
 } from "../citation-blurbs-identity.js";
+import { optionalSources } from "../registry-keys.js";
 import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
 import { isMatterDocument } from "../matter-shape.js";
 import { currentOwnerId } from "../owner.js";
@@ -3516,8 +3518,9 @@ const rawPgArticleReader: ArticleReader = {
         /* **Judged on the list it annotates, not the article** — the same
            expected hash `STEPS["citation-blurbs"].stamp` computes, over the
            `bibliography` column beside it and its own stored entries (a week-old
-           registry "nothing" makes it not current, G9). A `:partial` run is
-           not current either, which is the point of it (G2). */
+           registry "nothing" makes it not current, G9; so does one made
+           before a key switched a source on, plan 261018o R3). A `:partial`
+           run is not current either, which is the point of it (G2). */
         case "citation-blurbs": {
           const blurbs = revision.citationBlurbs as CitationBlurbs | null;
           const bibliography = revision.bibliography as Bibliography | null;
@@ -3529,7 +3532,12 @@ const rawPgArticleReader: ArticleReader = {
               model: blurbs.generator,
             },
             {
-              inputHash: citationBlurbsExpectedHash(bibliography.citations, blurbs, Date.now()),
+              inputHash: citationBlurbsExpectedHash(
+                bibliography.citations,
+                blurbs,
+                Date.now(),
+                sourcePolicy(optionalSources()),
+              ),
               promptVersion: CITATION_BLURBS_PROMPT_VERSION,
               model: CITATION_BLURBS_MODEL,
             },

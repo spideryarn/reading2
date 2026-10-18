@@ -183,6 +183,16 @@ OpenRouter account does not cover it, and `npm run cost` cannot see a penny of i
 from the reader's browser straight to OpenAI and no row is written
 ([ai-gateway.md](ai-gateway.md)). A cap for it has to be set in the OpenAI dashboard.
 
+**`OPENALEX_API_KEY` and `SEMANTIC_SCHOLAR_API_KEY` are free, optional, and switch sources on**
+([261018o](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md),
+[bibliography.md](bibliography.md)). Blank, everything works as before. OpenAlex's raises its daily
+budget tenfold for every OpenAlex call and lets the notes on cited works search OpenAlex by title;
+Semantic Scholar's lets them take abstracts from there — **but only with
+`SEMANTIC_SCHOLAR_COMMERCIAL_USE=approved` as well**, which Greg sets once AI2 has agreed to
+Spideryarn's paid use, because its standard licence is non-commercial. All three are on
+`gjd-remote push-env`'s allowlist; production reads them from Vercel's env. They are read per call by
+[`src/registry-keys.ts`](../../src/registry-keys.ts) and sent only as request headers, never in a URL.
+
 [`.env.example`](../../.env.example) is the only env file in git — `.gitignore` has `.env*` and then
 `!.env.example` — so it must never gain a real value. `.env.prod` records what the remote project
 needs and is **loaded by nothing**: `src/env.ts` reads `.env.local` and only `.env.local`.

@@ -221,13 +221,18 @@ export function providerHostOf(input: unknown): string | null {
    **OpenAlex** (261004h), for the same reason and one more: anonymous access is
    1,000 credits a day for the whole box, and a suite that spent them would
    leave Reception's *Cited by* answering `unavailable` to real readers. A test
-   hands `citersOf` a `fetchJson`. */
+   hands `citersOf` a `fetchJson`.
+
+   **Semantic Scholar** (261018o), for the same reasons, and because the box's
+   key would be spent from inside the suite. A test hands the cascade a
+   `fetchJson`. */
 const ALSO_REFUSED: readonly string[] = [
   "api.stripe.com",
   "api.resend.com",
   "api.crossref.org",
   "api.datacite.org",
   "api.openalex.org",
+  "api.semanticscholar.org",
 ];
 
 function methodOf(input: unknown, init: unknown): string {

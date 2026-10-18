@@ -174,6 +174,16 @@ export const ALLOWLIST: readonly string[] = [
      and the management API from the box, which had no way to reach either.
      The box's Supabase MCP stays pointed at the LOCAL stack regardless. */
   "SUPABASE_ACCESS_TOKEN",
+  /* The two free registry keys, for the notes on cited works and every
+     OpenAlex call (src/registry-keys.ts). Greg chose to get them, 2026-10-18
+     (q-ny49p3, 2B). Neither spends money; each only raises a rate limit and
+     switches a source on. Semantic Scholar's runs only with its approval flag
+     as well, because its standard licence is non-commercial, and the flag
+     travels with it so the box behaves as the laptop does.
+     docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md. */
+  "OPENALEX_API_KEY",
+  "SEMANTIC_SCHOLAR_API_KEY",
+  "SEMANTIC_SCHOLAR_COMMERCIAL_USE",
 ];
 
 /**

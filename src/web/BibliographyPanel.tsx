@@ -62,6 +62,7 @@ import {
   blurbCardNote,
   blurbQuotesLead,
   CITE_LIST_READ_ABSTRACTS,
+  semanticScholarPaperUrl,
 } from "../citation-blurb-words.js";
 import { citedByWords, readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
 import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
@@ -1489,6 +1490,15 @@ export function CiteBlurb({ blurb, owned, linked }: { blurb: CitedWorkBlurb; own
                   <a href={blurb.url} target="_blank" rel="noopener noreferrer">
                     {hostOf(blurb.url)} ↗
                   </a>
+                )}
+                {/* The link back Semantic Scholar's licence asks of what is shown from it (plan 261018o). */}
+                {linked && blurb.paperId !== undefined && (
+                  <>
+                    {" · "}
+                    <a href={semanticScholarPaperUrl(blurb.paperId)} target="_blank" rel="noopener noreferrer">
+                      Semantic Scholar ↗
+                    </a>
+                  </>
                 )}
                 {linked && owned && " · "}
                 {owned && BLURB_ASK_IN_CHAT}

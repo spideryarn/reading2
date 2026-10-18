@@ -5795,8 +5795,9 @@ export type BibliographyFound = BibliographyResponse;
 export interface CitationBlurbEvidence {
   /** The author's abstract, or OpenAlex's reconstruction of one — said as such on screen. */
   kind: "author-abstract" | "registry-reconstruction";
-  source: "crossref" | "datacite" | "openalex";
-  /** By the row's own identifier, or by a Crossref title search (G6: public-address articles only). */
+  /** `semantic-scholar` since 2026-10-18, with its key and approval only (plan 261018o). */
+  source: "crossref" | "datacite" | "openalex" | "semantic-scholar";
+  /** By the row's own identifier, or by a Crossref or OpenAlex title search (G6: public-address articles only). */
   via: "id" | "title";
   /** `doi:…` or `arxiv:…` — `WorkId` (src/bibliographic.ts). */
   workId: string;
@@ -5805,6 +5806,8 @@ export interface CitationBlurbEvidence {
   /** When the abstract was read, ISO. */
   readAt: string;
   evidenceHash: string;
+  /** Semantic Scholar's 40-hex id for the paper, on its evidence only: the card links to its page there. */
+  paperId?: string;
 }
 
 /** One sentence of a note and the words of the abstract it rests on (G4: one quote per sentence). */
@@ -5866,8 +5869,14 @@ export type CitationBlurbEntry = CitationBlurbEntryBase &
     | { state: "declined"; evidence: CitationBlurbEvidence }
     | { state: "failed-check"; why: CitationBlurbCheckWhy; evidence: CitationBlurbEvidence }
     | { state: "no-evidence"; why: CitationBlurbStructuralWhy }
-    /** `checkedAt` is when the registry said so; the step asks again once it is a week old. */
-    | { state: "no-evidence"; why: CitationBlurbRegistryWhy; checkedAt: string }
+    /**
+     * `checkedAt` is when the registry said so; the step asks again once it is
+     * a week old. `sourcePolicy` is which optional sources were on when it
+     * said so (src/citation-blurbs-identity.ts § `sourcePolicy`; plan 261018o,
+     * R3): one made under another policy is asked again. Absent on an entry
+     * written before 2026-10-18, which the base policy made.
+     */
+    | { state: "no-evidence"; why: CitationBlurbRegistryWhy; checkedAt: string; sourcePolicy?: string }
   );
 
 /**
@@ -5889,6 +5898,12 @@ export interface CitedWorkBlurb {
   url: string;
   /** When the abstract was read, ISO. */
   readAt: string;
+  /**
+   * Semantic Scholar's 40-hex id for the paper — present exactly when `source`
+   * is `semantic-scholar`, re-checked at the read. The card links to the
+   * paper's page there, as its licence asks.
+   */
+  paperId?: string;
 }
 
 /**
@@ -5904,7 +5919,8 @@ export interface CitationBlurbs {
   generator: string;
   slug: string;
   /**
-   * A hash of every row's identity in list order and the validation version;
+   * A hash of every row's identity in list order and the validation version —
+   * and the source policy, when it is not the keyless one (plan 261018o, R3);
    * with `:partial` on the end when any row ended transient (G2).
    */
   sourceHash: string;

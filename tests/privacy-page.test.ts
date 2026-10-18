@@ -229,6 +229,20 @@ describe("the privacy page", () => {
     );
   });
 
+  it("says what the two keyed sources would be sent, when enabled", () => {
+    /* Plan 261018o stage 1: Semantic Scholar by a cited work's DOI or arXiv id
+       (its key and approval only), and OpenAlex's title search when Crossref
+       found nothing (its key only; public-address articles only, as
+       Crossref's). The query is the title's words: the surname is compared on
+       our side (src/citation-evidence.ts § `openAlexSearchUrl`). */
+    const prose = PAGE.replace(/\s+/g, " ");
+    /* The name sits in a link, between these two halves of the sentence. */
+    expect(prose).toContain("cites are looked up by their identifiers only. When enabled,");
+    expect(prose).toContain(
+      "is also sent a cited work’s DOI or arXiv identifier, for its abstract; and, for an article you added from a public web address, OpenAlex the words of a cited work’s title when Crossref could not find it",
+    );
+  });
+
   it("says the public shelf's topics are named from shared titles and summaries only", () => {
     /* Plan 261008j, approved as "q-p5h2a7 A": the one privacy line it asked for. */
     const prose = PAGE.replace(/\s+/g, " ");
@@ -266,6 +280,8 @@ describe("the privacy page", () => {
       "api.crossref.org": "Crossref",
       "api.datacite.org": "DataCite",
       "api.openalex.org": "OpenAlex",
+      /* Plan 261018o: cited works' abstracts, when its key and approval are set. */
+      "api.semanticscholar.org": "Semantic Scholar",
     };
     expect(BIBLIOGRAPHIC_HOSTS.length).toBeGreaterThanOrEqual(3);
     for (const host of BIBLIOGRAPHIC_HOSTS) {

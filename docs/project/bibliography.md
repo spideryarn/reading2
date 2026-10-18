@@ -214,9 +214,29 @@ work's abstract, and a separate call, shown only that abstract, must call every 
 or nothing is kept (`src/citation-blurbs.ts`). The model is never asked what it remembers of the
 work.
 
+**Two more sources since 2026-10-18, each off until its key is set**
+([261018o § Stage 1](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md);
+Greg's *2B* on [q-ny49p3](../user-feedback/questions/q-ny49p3.md)). The cascade
+([`src/citation-evidence.ts`](../../src/citation-evidence.ts)) runs in three phases: every row is
+first resolved to a DOI or arXiv id — its own, or one a strict title match found — keeping any
+abstract the registry gave; then **Semantic Scholar** is asked, by that id, for each work still
+without one; then OpenAlex's reconstruction, as before. **OpenAlex's title search** runs only when
+Crossref's found no match, under the same strict rule (one rule over both registries' records: the
+title, the **first** author's surname, the year ±1, and each registry's kinds that are never the
+work refused) and inside the same cap of 60 title queries a run. A Semantic Scholar answer counts
+only when its own external id re-parses to the id we asked by **and** its title agrees — the same
+DOI can sit on the wrong paper there — and only its `abstract`, never its model-written `tldr`.
+Semantic Scholar needs `SEMANTIC_SCHOLAR_API_KEY` **and** `SEMANTIC_SCHOLAR_COMMERCIAL_USE=approved`
+(its standard licence is non-commercial); OpenAlex's search needs `OPENALEX_API_KEY`, which every
+OpenAlex call also sends for its larger budget ([setup-dev.md § Secrets](setup-dev.md#secrets)).
+Which sources were on is stamped on the step and on each registry "nothing", so switching a key on
+asks those rows again and keeps every note.
+
 **On the row**, under the by-line: the note, in the model's face
 ([fonts.md](fonts.md)), and under it a quiet label — *From the abstract · arXiv*, *· Crossref*,
-*· DataCite*, or *From OpenAlex's copy of the abstract*. The label opens a card on hover, focus or
+*· DataCite*, *· Semantic Scholar*, or *From OpenAlex's copy of the abstract*. A Semantic Scholar
+note's card links to the paper's page there too, with `utm_source=api`, the link back its licence
+asks for; its 40-hex paper id is re-checked at every read. The label opens a card on hover, focus or
 tap: *A short note an AI wrote from this work's abstract, as arXiv holds it, read on 18 October
 2026. It is a quick look-up in a public catalogue of papers, not a web search and not a reading of
 the paper itself, so it can be wrong.* Then the words of the abstract code checked each sentence

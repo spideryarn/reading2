@@ -156,7 +156,8 @@ import {
   importedFromAPublicAddress,
   type CitationBlurbsDeps,
 } from "./citation-blurbs.js";
-import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsExpectedHash } from "./citation-blurbs-identity.js";
+import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsExpectedHash, sourcePolicy } from "./citation-blurbs-identity.js";
+import { optionalSources } from "./registry-keys.js";
 import { citationEvidenceDeps } from "./citation-evidence.js";
 import { attachReceptionRegistry, receptionRegistryDeps } from "./reception-registry.js";
 import { declaredFailure, stageFailure } from "./job-failure.js";
@@ -6075,7 +6076,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
  * artefact's root `sourceHash`, `version` and `generator`. A run that left any
  * row transient stamps `:partial` (G2), and a registry "nothing" older than a
  * week makes the expected hash `:recheck` (G9), so either way the next
- * publication or press runs it again and a finished one skips.
+ * publication or press runs it again and a finished one skips. **Which
+ * optional sources the keys switch on is in the stamp too** (plan 261018o,
+ * R3): a key added makes the step not current, and a stored registry
+ * "nothing" made without it is asked again.
  *
  * **A forced run asks everything again; an unforced one keeps what is still
  * true.** The step is not told it was forced, so it infers it: it runs only
@@ -6091,6 +6095,9 @@ export function citationBlurbsStep(
       evidence: await citationEvidenceDeps(),
       model: citationBlurbsModelDeps(plog.child({ step: "citation-blurbs" })),
     }));
+  /* The policy the run would use: a test's injected sources, else the environment's now. */
+  const policyNow = async (): Promise<string> =>
+    sourcePolicy(deps ? (await deps()).evidence.sources : optionalSources());
   return {
     name: "citation-blurbs",
     label: "Writing a note on each cited work",
@@ -6100,7 +6107,7 @@ export function citationBlurbsStep(
       if (!bibliography) return null;
       const stored = await store.read(ctx.slug, "citation-blurbs", "citation-blurbs");
       return {
-        inputHash: citationBlurbsExpectedHash(bibliography.citations, stored, Date.now()),
+        inputHash: citationBlurbsExpectedHash(bibliography.citations, stored, Date.now(), await policyNow()),
         promptVersion: CITATION_BLURBS_PROMPT_VERSION,
         model: CITATION_BLURBS_MODEL,
       };
@@ -6113,7 +6120,8 @@ export function citationBlurbsStep(
       const d = await depsFor();
       const forced =
         previous !== null &&
-        previous.sourceHash === citationBlurbsExpectedHash(bibliography.citations, previous, d.model.now()) &&
+        previous.sourceHash ===
+          citationBlurbsExpectedHash(bibliography.citations, previous, d.model.now(), sourcePolicy(d.evidence.sources)) &&
         previous.version === CITATION_BLURBS_PROMPT_VERSION &&
         sameGenerator(previous.generator, CITATION_BLURBS_MODEL);
       const run = await generateCitationBlurbs(

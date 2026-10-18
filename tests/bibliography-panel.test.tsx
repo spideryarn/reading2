@@ -2259,6 +2259,31 @@ describe("a cited work's note from its abstract", () => {
     expect(text).not.toContain(BLURB_FOUND_BY_TITLE);
   });
 
+  /* Plan 261018o stage 1: the label names Semantic Scholar, and its card links
+     back to the paper's page there with `utm_source=api`, as its licence asks. */
+  it("names Semantic Scholar, and its card links to the paper's page there as well as to the DOI", async () => {
+    const PAPER_ID = "649def34f8be52c8b66281af98ae884c09aef38b";
+    const s2: NonNullable<CitedWork["blurb"]> = {
+      ...NOTE,
+      source: "semantic-scholar",
+      workId: "doi:10.1000/x",
+      url: "https://doi.org/10.1000/x",
+      paperId: PAPER_ID,
+    };
+    expect(blurbBasis(s2)).toBe("From the abstract · Semantic Scholar");
+    await draw(owner({ bibliography: artefact([{ ...NOTED, blurb: s2 }]) }));
+    await press(row(NOTED.id).querySelector(".cite-blurb-basis")!, "touch", "mouse");
+    const card = document.querySelector('[role="dialog"]');
+    expect(card?.textContent).toContain("A short note an AI wrote from this work's abstract, as Semantic Scholar holds it");
+    const links = [...(card?.querySelectorAll("a") ?? [])];
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      "https://doi.org/10.1000/x",
+      `https://www.semanticscholar.org/paper/${PAPER_ID}?utm_source=api`,
+    ]);
+    expect(links[1]?.textContent).toContain("Semantic Scholar");
+    expect(links[1]?.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
   it("adds the title-match caveat when the work was found by its title", async () => {
     await draw(owner({ bibliography: artefact([{ ...NOTED, blurb: { ...NOTE, via: "title" } }]) }));
     await press(row(NOTED.id).querySelector(".cite-blurb-basis")!, "touch", "mouse");

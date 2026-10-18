@@ -154,6 +154,16 @@ export function doiFor(id: WorkId): string {
   return `10.48550/arxiv.${id.slice("arxiv:".length)}`;
 }
 
+/**
+ * **Semantic Scholar's own id for a paper: forty lower-case hex characters**
+ * (its `paperId`, a SHA-1). Checked where the cascade reads it and again
+ * where a note is shown (src/citation-blurbs-identity.ts § `shownBlurb`),
+ * because it becomes part of a link on the reader's screen. Plan 261018o.
+ */
+export function isSemanticScholarPaperId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{40}$/.test(value);
+}
+
 /** A registry negative is worth asking again after this long: the registry cache's own miss lifetime (G9). */
 export const REGISTRY_NEGATIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

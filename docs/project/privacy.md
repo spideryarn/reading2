@@ -738,13 +738,30 @@ The abstracts are cached in `bibliographic_records`, keyed by the work, not the 
 are stored on the article's revision and go with it. The page says each of these in words, and
 `tests/privacy-page.test.ts` holds the three clauses. `LAST_UPDATED` moved to 18 October 2026.
 
+**Also since 2026-10-18, two more sources, each off until its key is set**
+([261018o § Stage 1](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md),
+[`src/registry-keys.ts`](../../src/registry-keys.ts)). The page says what the product may do, so it
+names both now, under *"When enabled"*:
+
+- **Semantic Scholar** is sent a cited work's DOI or arXiv id, when neither registry holds its
+  abstract — only with `SEMANTIC_SCHOLAR_API_KEY` **and** `SEMANTIC_SCHOLAR_COMMERCIAL_USE=approved`,
+  because its standard licence is non-commercial. Its host joins `BIBLIOGRAPHIC_HOSTS`, so the
+  privacy test's host-to-name map names it.
+- **OpenAlex** is sent the words of a cited work's title when Crossref's title search found nothing
+  — only with `OPENALEX_API_KEY`, and, as Crossref's, only for an article imported from a public
+  web address. The first author's surname is **not** sent: it is compared on our side against the
+  results' first authors.
+
+The keys travel as request headers, never in a URL, so they reach no log line, error or stored row.
+
 **A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
 sent something of the reader's; these are sent the identifier of a published work. The page names
 all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.
 
 **Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
 `BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
-dial, and requires the page to name each. A fourth index turns it red until the page names it.
+dial, and requires the page to name each. A fourth index turns it red until the page names it — as
+Semantic Scholar did on 2026-10-18.
 
 ## A claim typed into Sources › Claims
 

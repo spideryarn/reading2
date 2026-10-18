@@ -8,7 +8,7 @@
  *
  * ```
  * a row ─► rowIdentity (id, title, authors, year, url + linkFrom, registry kind + source)
- * every row, in list order, + CITATION_BLURBS_VALIDATION_VERSION ─► citationBlurbsInputHash
+ * every row, in list order, + CITATION_BLURBS_VALIDATION_VERSION (+ the source policy) ─► citationBlurbsInputHash
  * ```
  *
  * **Not the Bibliography's `sourceHash`**, so a list made again with the same
@@ -18,6 +18,7 @@
 
 import { createHash } from "node:crypto";
 
+import type { OptionalSources } from "./registry-keys.js";
 import type {
   Bibliography,
   CitationBlurbEntry,
@@ -27,7 +28,7 @@ import type {
   CitedWork,
   CitedWorkBlurb,
 } from "./types.js";
-import { evidenceUrl, parseWorkId, REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
+import { evidenceUrl, isSemanticScholarPaperId, parseWorkId, REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
 
 /** One sentence by default; a second only when the abstract separately supports it (G4). */
 export const BLURB_MAX_SENTENCES = 2;
@@ -75,9 +76,36 @@ export function rowIdentity(row: IdentityRow): string {
   return createHash("sha256").update(JSON.stringify(fields), "utf8").digest("hex").slice(0, 16);
 }
 
-/** Every row's identity in list order, under the validation version: the stamp's `inputHash`. */
-export function citationBlurbsInputHash(rows: readonly IdentityRow[]): string {
-  const canonical = JSON.stringify([CITATION_BLURBS_VALIDATION_VERSION, rows.map(rowIdentity)]);
+/**
+ * **Which optional sources a run may ask, as a stamp** (plan 261018o, R3) —
+ * the always-on three, then `+s2` for Semantic Scholar and `+openalex-title`
+ * for OpenAlex's keyed title search. `undefined` is the keyless run.
+ */
+export const BASE_SOURCE_POLICY = "crossref,datacite,openalex-doi";
+
+export function sourcePolicy(sources: OptionalSources | undefined): string {
+  return (
+    BASE_SOURCE_POLICY +
+    (sources?.semanticScholar ? "+s2" : "") +
+    (sources?.openAlexKeyed ? "+openalex-title" : "")
+  );
+}
+
+/**
+ * **Every row's identity in list order, under the validation version and the
+ * source policy: the stamp's `inputHash`.** A key switched on or off moves
+ * it, so the next publication or press runs the step and asks again what the
+ * new sources might answer (R3). **The keyless policy hashes exactly as
+ * before the policy existed**, so the deploy that brought it moved no stored
+ * stamp.
+ */
+export function citationBlurbsInputHash(rows: readonly IdentityRow[], policy: string): string {
+  const identities = rows.map(rowIdentity);
+  const canonical = JSON.stringify(
+    policy === BASE_SOURCE_POLICY
+      ? [CITATION_BLURBS_VALIDATION_VERSION, identities]
+      : [CITATION_BLURBS_VALIDATION_VERSION, policy, identities],
+  );
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
 
@@ -89,35 +117,43 @@ export const RECHECK_SUFFIX = ":recheck";
 const REGISTRY_WHYS: readonly CitationBlurbRegistryWhy[] = ["not-found", "no-abstract", "not-identified", "conflict"];
 
 /**
- * **A registry's "nothing", old enough to ask again** (G9) — `not-found`,
- * `no-abstract`, `not-identified`, `conflict` once a week has passed. A
- * structural answer (a label, an unpublished work, no identity) never is.
- * An unreadable `checkedAt` is old: asking again is the safe way to be wrong.
+ * **A registry's "nothing", worth asking again** — `not-found`,
+ * `no-abstract`, `not-identified`, `conflict` once a week has passed (G9),
+ * **or made under another source policy than `policy`** (R3: a key switched
+ * on may find what the old sources could not). An entry with no policy was
+ * written before policies existed, by the base one. A structural answer (a
+ * label, an unpublished work, no identity) never is. An unreadable
+ * `checkedAt` is old: asking again is the safe way to be wrong.
  */
-export function registryNegativeExpired(entry: CitationBlurbEntry, now: number): boolean {
+export function registryNegativeExpired(entry: CitationBlurbEntry, now: number, policy: string): boolean {
   if (entry.state !== "no-evidence" || !(REGISTRY_WHYS as readonly string[]).includes(entry.why)) return false;
+  const madeUnder = "sourcePolicy" in entry && typeof entry.sourcePolicy === "string" ? entry.sourcePolicy : BASE_SOURCE_POLICY;
+  if (madeUnder !== policy) return true;
   const checkedAt = "checkedAt" in entry ? Date.parse(entry.checkedAt) : Number.NaN;
   return !Number.isFinite(checkedAt) || now - checkedAt >= REGISTRY_NEGATIVE_TTL_MS;
 }
 
 /**
- * **The `inputHash` a run today would aim at**: the identity hash, with
- * `RECHECK_SUFFIX` when a stored entry that still belongs to its row is a
- * registry negative past its week. That suffix is never written — the run
- * that asks again stamps the bare hash (or `:partial`) — so it can only ever
- * make a finished artefact read as not current, which is exactly what G9
- * needs: only a publication or a press starts a run, so nothing spins.
+ * **The `inputHash` a run today would aim at**: the identity hash under
+ * `policy` — the policy the environment gives now — with `RECHECK_SUFFIX`
+ * when a stored entry that still belongs to its row is a registry negative
+ * past its week or made under another policy. That suffix is never written —
+ * the run that asks again stamps the bare hash (or `:partial`) — so it can
+ * only ever make a finished artefact read as not current, which is exactly
+ * what G9 needs: only a publication or a press starts a run, so nothing
+ * spins.
  */
 export function citationBlurbsExpectedHash(
   rows: readonly IdentityRow[],
   stored: CitationBlurbs | null,
   now: number,
+  policy: string,
 ): string {
-  const hash = citationBlurbsInputHash(rows);
+  const hash = citationBlurbsInputHash(rows, policy);
   if (stored === null || typeof stored.entries !== "object" || stored.entries === null) return hash;
   const due = rows.some((row) => {
     const entry = Object.hasOwn(stored.entries, row.id) ? stored.entries[row.id] : undefined;
-    return entry !== undefined && entry.identity === rowIdentity(row) && registryNegativeExpired(entry, now);
+    return entry !== undefined && entry.identity === rowIdentity(row) && registryNegativeExpired(entry, now, policy);
   });
   return due ? `${hash}${RECHECK_SUFFIX}` : hash;
 }
@@ -125,7 +161,7 @@ export function citationBlurbsExpectedHash(
 /* ------------------------------------------------------------- the read -- */
 
 const KINDS: readonly CitedWorkBlurb["kind"][] = ["author-abstract", "registry-reconstruction"];
-const SOURCES: readonly CitedWorkBlurb["source"][] = ["crossref", "datacite", "openalex"];
+const SOURCES: readonly CitedWorkBlurb["source"][] = ["crossref", "datacite", "openalex", "semantic-scholar"];
 const VIAS: readonly CitedWorkBlurb["via"][] = ["id", "title"];
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | null {
@@ -161,6 +197,11 @@ function record(value: unknown): Record<string, unknown> | null {
  * `parseWorkId`; **`url` built from it by `evidenceUrl`**, never the stored
  * one; `readAt` a moment that parses, written back as ISO. No hash, no model,
  * no versions leave here.
+ *
+ * **A Semantic Scholar note needs its `paperId`, forty hex characters, or it
+ * is not shown** (plan 261018o): the card links to the paper's page there,
+ * which its licence asks of anything showing its data, and the id becomes
+ * part of that link. Any other source's note never carries one out.
  */
 export function shownBlurb(entry: unknown, row: IdentityRow): CitedWorkBlurb | null {
   const e = record(entry);
@@ -186,7 +227,9 @@ export function shownBlurb(entry: unknown, row: IdentityRow): CitedWorkBlurb | n
   const workId = typeof ev?.workId === "string" ? parseWorkId(ev.workId) : null;
   const readAt = typeof ev?.readAt === "string" ? Date.parse(ev.readAt) : Number.NaN;
   if (kind === null || source === null || via === null || workId === null || !Number.isFinite(readAt)) return null;
-  return { sentences, kind, source, via, workId, url: evidenceUrl(workId), readAt: new Date(readAt).toISOString() };
+  const shown = { sentences, kind, source, via, workId, url: evidenceUrl(workId), readAt: new Date(readAt).toISOString() };
+  if (source !== "semantic-scholar") return shown;
+  return isSemanticScholarPaperId(ev?.paperId) ? { ...shown, paperId: ev.paperId } : null;
 }
 
 /** The stored artefact's `entries`, or null when the column holds nothing that reads as one. */

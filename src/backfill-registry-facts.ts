@@ -430,8 +430,8 @@ export async function dryRun(
  */
 export function memoryBibliographicStore(now: () => number = Date.now): BibliographicStore {
   const answers = new Map<WorkId, CachedAnswer>();
-  const coolUntil: Record<LimiterService, number> = { crossref: 0, datacite: 0, openalex: 0 };
-  const nextStart: Record<LimiterService, number> = { crossref: 0, datacite: 0, openalex: 0 };
+  const coolUntil: Record<LimiterService, number> = { crossref: 0, datacite: 0, openalex: 0, "semantic-scholar": 0 };
+  const nextStart: Record<LimiterService, number> = { crossref: 0, datacite: 0, openalex: 0, "semantic-scholar": 0 };
   return {
     read: async (id) => ({ answer: answers.get(id) ?? null, claimed: false }),
     claim: async (id, _fresh, leaseMs) => ({ id, until: new Date(now() + leaseMs) }),

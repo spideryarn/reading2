@@ -28,7 +28,7 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 import type { LookupResult } from "../src/bibliographic.js";
-import { citationBlurbsInputHash } from "../src/citation-blurbs-identity.js";
+import { BASE_SOURCE_POLICY, citationBlurbsInputHash } from "../src/citation-blurbs-identity.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs as jobsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -289,7 +289,7 @@ describe("two real jobs, the first partial (G1, G2)", () => {
   it("leaves the first partial, completes on the second, and skips the third with no call", async () => {
     const slug = `${SLUG_PREFIX}jobs-${randomUUID().slice(0, 6)}`;
     await articleWithAList(slug);
-    const whole = citationBlurbsInputHash(LIST.citations);
+    const whole = citationBlurbsInputHash(LIST.citations, BASE_SOURCE_POLICY);
 
     const busy = { "doi:10.1234/b": { kind: "unavailable", why: "cooling-down" } as LookupResult };
     const first = await runNotesJob(slug, busy);

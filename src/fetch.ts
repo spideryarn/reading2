@@ -41,6 +41,7 @@ import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import type { DocumentOrigin } from "./document-origin.js";
+import { registryKeyHeaders, type RegistryKeyName } from "./registry-keys.js";
 import { parseRetryAfter } from "./retry-after.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import type { FetchFailureCode } from "./types.js";
@@ -2622,8 +2623,19 @@ export async function fetchAsset(url: string, options: AssetFetchOptions): Promi
  * DOI. The same door for the same reason — one fixed, public, bibliographic
  * API, asked about an identifier and nothing else.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+ *
+ * **Semantic Scholar's API since 2026-10-18**, for src/citation-evidence.ts: a
+ * cited work's abstract by its DOI or arXiv id, one GET under these same
+ * bounds — and asked only once its key and Greg's approval are both set
+ * (src/registry-keys.ts).
+ * docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md, R2.
  */
-export const BIBLIOGRAPHIC_HOSTS: readonly string[] = ["api.crossref.org", "api.datacite.org", "api.openalex.org"];
+export const BIBLIOGRAPHIC_HOSTS: readonly string[] = [
+  "api.crossref.org",
+  "api.datacite.org",
+  "api.openalex.org",
+  "api.semanticscholar.org",
+];
 
 /**
  * **An honest User-Agent, unlike `USER_AGENT` above**, and on purpose.
@@ -2651,13 +2663,22 @@ export const BIBLIOGRAPHIC_LIMITS = {
 } as const;
 
 /**
- * What a caller of `fetchBibliographicJson` may pass: the cancellation and the
- * test seams. **Not the bounds or the User-Agent**, which are fixed above.
+ * What a caller of `fetchBibliographicJson` may pass: the cancellation, the
+ * test seams, and **which registry's key to attach** — by name, never by
+ * value. **Not the bounds or the User-Agent**, which are fixed above.
  */
 export type BibliographicFetchOptions = Pick<
   FetchOptions,
   "signal" | "fetchImpl" | "resolve" | "now"
->;
+> & {
+  /**
+   * Attach this registry's key, if one is set, as its header
+   * (src/registry-keys.ts § `registryKeyHeaders`) — **only when the URL's host
+   * is exactly that registry's**, so naming the wrong one sends nothing. Never
+   * in the URL: a `FetchFailure` carries its URL into logs and Sentry.
+   */
+  registryKey?: RegistryKeyName;
+};
 
 function bibliographicHeaders(): Record<string, string> {
   return {
@@ -2687,17 +2708,20 @@ async function readJson(res: Response, finalUrl: string, _chain: string[], opts:
 }
 
 /**
- * **One GET to Crossref, DataCite or OpenAlex, parsed as JSON.**
+ * **One GET to Crossref, DataCite, OpenAlex or Semantic Scholar, parsed as JSON.**
  *
  * The same guarded path as `fetchDocument` — the address guard and its pin, one
  * deadline, the byte cap on the bytes that arrive — with the host checked
  * against `BIBLIOGRAPHIC_HOSTS` first, so any other address is refused before a
  * DNS lookup or a socket. Fails with a `FetchFailure` whose `status` is the HTTP
  * status (404 / 429 / 503 …) and whose `retryAfterMs` is `Retry-After`.
+ *
+ * A key named by `registryKey` is attached here and nowhere else, for the host
+ * just checked; with `maxRedirects: 0` there is no second hop to carry it to.
  */
 export async function fetchBibliographicJson(
   input: string,
-  options: BibliographicFetchOptions = {},
+  { registryKey, ...options }: BibliographicFetchOptions = {},
 ): Promise<unknown> {
   const target = parseTarget(input);
   const host = target.hostname.toLowerCase();
@@ -2711,13 +2735,14 @@ export async function fetchBibliographicJson(
     throw new FetchFailure(
       "blocked-address",
       input.trim(),
-      "Only the Crossref, DataCite and OpenAlex APIs are asked for bibliographic records.",
+      "Only the Crossref, DataCite, OpenAlex and Semantic Scholar APIs are asked for bibliographic records.",
     );
   }
+  const keyed = registryKey === undefined ? {} : registryKeyHeaders(registryKey, host);
   return await fetchBytes(
     target.toString(),
     { ...options, ...BIBLIOGRAPHIC_LIMITS },
-    { headers: bibliographicHeaders, read: readJson },
+    { headers: () => ({ ...bibliographicHeaders(), ...keyed }), read: readJson },
   );
 }
 

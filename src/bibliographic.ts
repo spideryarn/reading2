@@ -69,8 +69,12 @@ export type Registry = "crossref" | "datacite";
  * from `Registry` on purpose: `Registry` is also a record's provenance
  * (`WorkRecord.source`, and the `source` CHECK on `bibliographic_records`), and
  * OpenAlex is never that (GPT Sol's F7 on plan 261004h).
+ *
+ * **Semantic Scholar since 2026-10-18**, for a cited work's abstract
+ * (src/citation-evidence.ts; plan 261018o, R2) — a pace like the others, and
+ * never a record's provenance either.
  */
-export type LimiterService = Registry | "openalex";
+export type LimiterService = Registry | "openalex" | "semantic-scholar";
 
 export interface WorkAuthor {
   family: string;
@@ -196,10 +200,16 @@ const POLL_MS = 100;
 /**
  * Starts spaced globally: **Crossref 250 ms (4/s, under its 10), DataCite
  * 500 ms (2/s, under its 1,000 per 5 minutes), OpenAlex 500 ms (2/s, under its
- * 10)**. Slots: 2, 1 and 1, seeded by the migrations — they are rows, not
- * numbers here.
+ * 10), Semantic Scholar 1,100 ms (under the one a second a key is given)**.
+ * Slots: 2, 1, 1 and 1, seeded by the migrations — they are rows, not numbers
+ * here.
  */
-export const SPACING_MS: Record<LimiterService, number> = { crossref: 250, datacite: 500, openalex: 500 };
+export const SPACING_MS: Record<LimiterService, number> = {
+  crossref: 250,
+  datacite: 500,
+  openalex: 500,
+  "semantic-scholar": 1_100,
+};
 
 /** A 429 or 503 without `Retry-After` cools the service this long; one with it, at most an hour. */
 export const DEFAULT_COOLDOWN_MS = 60_000;

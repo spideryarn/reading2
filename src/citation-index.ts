@@ -449,7 +449,8 @@ async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
   return {
     store: deps.store ?? (await import("./store/pg-citation-index.js")).pgCitationIndexStore,
     limiter: deps.limiter ?? (await import("./store/pg-bibliographic.js")).pgBibliographicStore,
-    fetchJson: deps.fetchJson ?? ((url) => fetchBibliographicJson(url)),
+    /* OpenAlex's key, when one is set, as its header (plan 261018o): ten times the free daily budget. */
+    fetchJson: deps.fetchJson ?? ((url) => fetchBibliographicJson(url, { registryKey: "openalex" })),
     sleep: deps.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms))),
     log: deps.log ?? log("store").child({ lookup: "citation-index" }),
   };

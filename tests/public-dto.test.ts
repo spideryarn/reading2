@@ -2575,6 +2575,32 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
+   * **A Semantic Scholar note crosses with its paper id, re-checked** (plan
+   * 261018o): the id becomes part of the card's link to Semantic Scholar, so
+   * it must be the forty hex characters the service mints, or no note
+   * crosses. Any other source's note never carries one, whatever is stored.
+   */
+  it("carries a Semantic Scholar note's paper id only when it reads as one, and no other note's", () => {
+    const entry = CITATION_BLURBS.entries["w-clean"] as Extract<CitationBlurbEntry, { state: "blurb" }>;
+    const PAPER_ID = "649def34f8be52c8b66281af98ae884c09aef38b";
+    const shared = (evidence: object) =>
+      publicArticle({
+        ...ARTICLE_BASE,
+        ...NO_ARTEFACTS,
+        bibliography: BIBLIOGRAPHY,
+        citationBlurbs: { ...CITATION_BLURBS, entries: { "w-clean": { ...entry, evidence: { ...entry.evidence, ...evidence } } as CitationBlurbEntry } },
+      }).bibliography?.citations[0]?.blurb;
+
+    const s2 = shared({ source: "semantic-scholar", paperId: PAPER_ID });
+    expect(s2).toMatchObject({ source: "semantic-scholar", paperId: PAPER_ID, url: "https://doi.org/10.1000/abc" });
+    expect(Object.keys(s2 ?? {}).sort()).toEqual(["kind", "paperId", "readAt", "sentences", "source", "url", "via", "workId"]);
+    for (const paperId of [undefined, "../../evil", PAPER_ID.toUpperCase(), `${PAPER_ID}0`, 42]) {
+      expect(shared({ source: "semantic-scholar", paperId }), String(paperId)).toBeUndefined();
+    }
+    expect(shared({ source: "crossref", paperId: PAPER_ID })).not.toHaveProperty("paperId");
+  });
+
+  /**
    * **The owner's lookup never crosses** (plan 260929g R-6): the reading, its
    * quotes, its state, the page whose extract was read and the fingerprints
    * are all the owner's paid activity. Checked on the whole payload, not only

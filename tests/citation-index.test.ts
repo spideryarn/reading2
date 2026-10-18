@@ -811,7 +811,8 @@ describe("fetchBibliographicJson and OpenAlex", () => {
       "https://openalex.org/works/W1",
       "https://api.openalex.org.evil.example/works/W1",
       "http://api.openalex.org/works/W1",
-      "https://api.semanticscholar.org/graph/v1/paper/1",
+      /* Semantic Scholar's API joined the list on 2026-10-18 (plan 261018o); its website did not. */
+      "https://www.semanticscholar.org/paper/1",
     ]) {
       await expect(fetchBibliographicJson(url, { fetchImpl: ok, resolve }), url).rejects.toMatchObject({
         code: "blocked-address",

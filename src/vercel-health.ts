@@ -346,6 +346,17 @@ const EXPECTED = [
     name: "RESEND_API_KEY",
     breaks: null,
   },
+  /**
+   * **The two optional registry keys and Semantic Scholar's approval switch**
+   * (src/registry-keys.ts; plan 261018o). `breaks: null`: without them every
+   * OpenAlex call runs keyless, as before, and the notes on cited works ask
+   * neither new source. But an operator wondering why notes did not gain the
+   * new sources after the keys were made would look here first, because
+   * production reads them from Vercel's env, not from the box's.
+   */
+  { name: "OPENALEX_API_KEY", breaks: null },
+  { name: "SEMANTIC_SCHOLAR_API_KEY", breaks: null },
+  { name: "SEMANTIC_SCHOLAR_COMMERCIAL_USE", breaks: null },
   /* **No `STRIPE_PRICE_*` here, and its absence is deliberate.** It was
      reported until 2026-09-02, when tiers and their Stripe price ids moved into
      the `billing_tiers` table so they could be changed without a deploy

@@ -32,6 +32,7 @@ import {
   lookupWork,
   parseWorkId,
   SLOT_LEASE_MS,
+  SPACING_MS,
   type WorkId,
 } from "../src/bibliographic.js";
 import { closeDb, getDb } from "../src/db/client.js";
@@ -83,7 +84,7 @@ const CROSSREF_ANSWER = {
 };
 
 describe("the seeded politeness rows", () => {
-  it("has one service row each, and 2 + 1 + 1 slots", async () => {
+  it("has one service row each, and 2 + 1 + 1 + 1 slots", async () => {
     expect(
       await rows<{ service: string; slots: number }>(sql`
         select s.service, count(l.slot)::int as slots
@@ -95,7 +96,17 @@ describe("the seeded politeness rows", () => {
       { service: "datacite", slots: 1 },
       /* The citation index, since 2026-10-04 (plan 261004h): a third service on the same limiter. */
       { service: "openalex", slots: 1 },
+      /* Cited works' abstracts, since 2026-10-18 (plan 261018o, R2): asked only with its key and approval. */
+      { service: "semantic-scholar", slots: 1 },
     ]);
+  });
+
+  it("takes and frees Semantic Scholar's one slot, and spaces its starts by 1.1 s", async () => {
+    const lease = await store.takeSlot("semantic-scholar", 20_000);
+    expect(lease).toMatchObject({ service: "semantic-scholar", slot: 1 });
+    expect(await store.takeSlot("semantic-scholar", 20_000)).toBeNull();
+    await store.freeSlot(lease!);
+    expect(SPACING_MS["semantic-scholar"]).toBe(1_100);
   });
 });
 

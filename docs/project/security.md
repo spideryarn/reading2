@@ -1134,9 +1134,16 @@ cite the article ([`src/citation-index.ts`](../../src/citation-index.ts)). They 
 what they hold was typed by publishers and depositors, so it is treated like any other outside
 content:
 
-- **The registry fetcher dials only `api.crossref.org`, `api.datacite.org` and
-  `api.openalex.org`**, on the guarded fetch path with no redirects —
-  `fetchBibliographicJson` in [`src/fetch.ts`](../../src/fetch.ts).
+- **The registry fetcher dials only `api.crossref.org`, `api.datacite.org`,
+  `api.openalex.org` and, since 2026-10-18, `api.semanticscholar.org`**, on the guarded fetch path
+  with no redirects — `fetchBibliographicJson` in [`src/fetch.ts`](../../src/fetch.ts). The two
+  optional keys go only as headers, and only to their own host
+  ([`src/registry-keys.ts`](../../src/registry-keys.ts); plan
+  [261018o](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md)).
+- **Semantic Scholar's paper id is the one registry value inside a link**, on a cited work's note
+  card: it must be forty lower-case hex characters, checked where it is read and again at every
+  read of the note (`isSemanticScholarPaperId` in [`src/work-id.ts`](../../src/work-id.ts)), and the
+  address around it is fixed.
 - **Their text is rendered as text.** `plainRegistryText` strips the markup Crossref titles carry,
   and nothing a registry sends goes through `dangerouslySetInnerHTML`.
 - **No address a registry sends is used as a link.** A record keeps an identifier, never a URL, and

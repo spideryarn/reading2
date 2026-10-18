@@ -18,9 +18,12 @@
  * - **the step's reuse** (item 7, G1, G2, G8, G9): what is reused with no
  *   call, what is asked again, what a forced run does, and when the stamp moves.
  */
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import type { LookupResult } from "../src/bibliographic.js";
+import type { OptionalSources } from "../src/registry-keys.js";
 import {
   BLURB_MAX_CHARS,
   type BlurbWork,
@@ -33,6 +36,7 @@ import {
   writeBlurbs,
 } from "../src/citation-blurbs.js";
 import {
+  BASE_SOURCE_POLICY,
   CITATION_BLURBS_PROMPT_VERSION,
   CITATION_BLURBS_VALIDATION_VERSION,
   citationBlurbsExpectedHash,
@@ -40,6 +44,7 @@ import {
   PARTIAL_SUFFIX,
   RECHECK_SUFFIX,
   rowIdentity,
+  sourcePolicy,
 } from "../src/citation-blurbs-identity.js";
 import { REGISTRY_NEGATIVE_TTL_MS } from "../src/work-id.js";
 import { CITATION_BLURBS_MODEL } from "../src/models.js";
@@ -229,9 +234,10 @@ describe("writing and checking (G4, the injected abstract)", () => {
 async function run(
   rows: CitedWork[],
   previous: CitationBlurbs | null,
-  options: { force?: boolean; lookups?: Partial<Record<string, LookupResult>>; now?: number } = {},
+  options: { force?: boolean; lookups?: Partial<Record<string, LookupResult>>; now?: number; sources?: OptionalSources } = {},
 ) {
   const reg = registries(options.lookups);
+  if (options.sources !== undefined) reg.d.sources = options.sources;
   const model = fakeModel(WORKS);
   if (options.now !== undefined) {
     const at = options.now;
@@ -252,7 +258,7 @@ describe("the step's work (item 7, G1, G2, G8, G9)", () => {
 
   it("stamps the root with the shared stamp's three names (G1)", async () => {
     const first = await run(ROWS, null);
-    expect(first.blurbs.sourceHash).toBe(citationBlurbsInputHash(ROWS));
+    expect(first.blurbs.sourceHash).toBe(citationBlurbsInputHash(ROWS, BASE_SOURCE_POLICY));
     expect(first.blurbs.version).toBe(CITATION_BLURBS_PROMPT_VERSION);
     expect(first.blurbs.generator).toBe(CITATION_BLURBS_MODEL);
     expect(first.blurbs.entries.a).toMatchObject({
@@ -281,19 +287,19 @@ describe("the step's work (item 7, G1, G2, G8, G9)", () => {
     const moved = [cited("a"), cited("b", { url: "https://doi.org/10.1234/b-other" })];
     const second = await run(moved, first.blurbs);
     expect(second.asked).toEqual(["doi:10.1234/b-other"]);
-    expect(citationBlurbsInputHash(moved)).not.toBe(citationBlurbsInputHash(ROWS));
+    expect(citationBlurbsInputHash(moved, BASE_SOURCE_POLICY)).not.toBe(citationBlurbsInputHash(ROWS, BASE_SOURCE_POLICY));
   });
 
   it("does not move the stamp for how the article uses a work: its why, relevance or mentions", () => {
     const reworded = [cited("a", { why: "Something else.", relevance: 0.9, citedAt: ["spya-bbbbbb"] }), cited("b")];
-    expect(citationBlurbsInputHash(reworded)).toBe(citationBlurbsInputHash(ROWS));
+    expect(citationBlurbsInputHash(reworded, BASE_SOURCE_POLICY)).toBe(citationBlurbsInputHash(ROWS, BASE_SOURCE_POLICY));
   });
 
   it("stores nothing for a transient row, stamps the run partial, and asks again next time (G2)", async () => {
     const busy = { "doi:10.1234/b": { kind: "unavailable", why: "cooling-down" } as LookupResult };
     const first = await run(ROWS, null, { lookups: busy });
     expect(first.partial).toBe(true);
-    expect(first.blurbs.sourceHash).toBe(`${citationBlurbsInputHash(ROWS)}${PARTIAL_SUFFIX}`);
+    expect(first.blurbs.sourceHash).toBe(`${citationBlurbsInputHash(ROWS, BASE_SOURCE_POLICY)}${PARTIAL_SUFFIX}`);
     expect(first.blurbs.entries.b).toBeUndefined();
     expect(first.counts["transient:cooling-down"]).toBe(1);
     const second = await run(ROWS, first.blurbs);
@@ -326,10 +332,10 @@ describe("the step's work (item 7, G1, G2, G8, G9)", () => {
     const inSixDays = NOW + REGISTRY_NEGATIVE_TTL_MS - 60_000;
     const soon = await run(rows, first.blurbs, { now: inSixDays });
     expect(soon.asked).toEqual([]);
-    expect(citationBlurbsExpectedHash(rows, first.blurbs, inSixDays)).toBe(citationBlurbsInputHash(rows));
+    expect(citationBlurbsExpectedHash(rows, first.blurbs, inSixDays, BASE_SOURCE_POLICY)).toBe(citationBlurbsInputHash(rows, BASE_SOURCE_POLICY));
     const inEightDays = NOW + REGISTRY_NEGATIVE_TTL_MS + 60_000;
-    expect(citationBlurbsExpectedHash(rows, first.blurbs, inEightDays)).toBe(
-      `${citationBlurbsInputHash(rows)}${RECHECK_SUFFIX}`,
+    expect(citationBlurbsExpectedHash(rows, first.blurbs, inEightDays, BASE_SOURCE_POLICY)).toBe(
+      `${citationBlurbsInputHash(rows, BASE_SOURCE_POLICY)}${RECHECK_SUFFIX}`,
     );
     const later = await run(rows, first.blurbs, { now: inEightDays });
     expect(later.asked).toEqual(["doi:10.1234/z"]);
@@ -337,9 +343,59 @@ describe("the step's work (item 7, G1, G2, G8, G9)", () => {
     const label = [cited("l", { title: "Zacks et al. (2007)", url: "https://scholar.google.com/x", linkFrom: "search", key: "work:l" })];
     const once = await run(label, null);
     expect(once.blurbs.entries.l).toMatchObject({ state: "no-evidence", why: "label-only" });
-    expect(citationBlurbsExpectedHash(label, once.blurbs, NOW + 10 * REGISTRY_NEGATIVE_TTL_MS)).toBe(
-      citationBlurbsInputHash(label),
+    expect(citationBlurbsExpectedHash(label, once.blurbs, NOW + 10 * REGISTRY_NEGATIVE_TTL_MS, BASE_SOURCE_POLICY)).toBe(
+      citationBlurbsInputHash(label, BASE_SOURCE_POLICY),
     );
+  });
+});
+
+/**
+ * **The source-policy stamp** — plan 261018o, R3 of its review. A key that
+ * switches a source on must make the stored registry "nothing"s worth asking
+ * again, or an article made before the key never gets the new sources; and a
+ * keyless deploy must not move any stored stamp at all.
+ */
+describe("which optional sources a run had (R3)", () => {
+  const ROWS = [cited("a"), cited("z", { title: "Some work nobody has", url: "https://doi.org/10.1234/z", key: "doi:10.1234/z" })];
+  const S2: OptionalSources = { semanticScholar: true, openAlexKeyed: false };
+  const WITH_S2 = sourcePolicy(S2);
+
+  it("names the policy in a plain closed form, and the keyless one is the base", () => {
+    expect(sourcePolicy(undefined)).toBe(BASE_SOURCE_POLICY);
+    expect(sourcePolicy({ semanticScholar: false, openAlexKeyed: false })).toBe("crossref,datacite,openalex-doi");
+    expect(WITH_S2).toBe("crossref,datacite,openalex-doi+s2");
+    expect(sourcePolicy({ semanticScholar: true, openAlexKeyed: true })).toBe("crossref,datacite,openalex-doi+s2+openalex-title");
+  });
+
+  it("leaves the keyless input hash exactly as it was before the stamp existed, and moves it for any other policy", () => {
+    const before = createHash("sha256")
+      .update(JSON.stringify([CITATION_BLURBS_VALIDATION_VERSION, ROWS.map(rowIdentity)]), "utf8")
+      .digest("hex")
+      .slice(0, 16);
+    expect(citationBlurbsInputHash(ROWS, BASE_SOURCE_POLICY)).toBe(before);
+    expect(citationBlurbsInputHash(ROWS, WITH_S2)).not.toBe(before);
+  });
+
+  it("stamps each registry negative with the policy that made it, and the root with the run's", async () => {
+    const first = await run(ROWS, null, { sources: S2 });
+    expect(first.blurbs.entries.z).toMatchObject({ state: "no-evidence", why: "not-found", sourcePolicy: WITH_S2 });
+    expect(first.blurbs.sourceHash).toBe(citationBlurbsInputHash(ROWS, WITH_S2));
+  });
+
+  it("asks a negative made under another policy again — a stamp-less one counts as the base — and keeps every note", async () => {
+    const keyless = await run(ROWS, null);
+    const old = structuredClone(keyless.blurbs);
+    delete (old.entries.z as { sourcePolicy?: string }).sourcePolicy;
+    for (const previous of [keyless.blurbs, old]) {
+      expect(citationBlurbsExpectedHash(ROWS, previous, NOW, WITH_S2)).toBe(`${citationBlurbsInputHash(ROWS, WITH_S2)}${RECHECK_SUFFIX}`);
+      expect(citationBlurbsExpectedHash(ROWS, previous, NOW, BASE_SOURCE_POLICY)).toBe(citationBlurbsInputHash(ROWS, BASE_SOURCE_POLICY));
+      const keyed = await run(ROWS, previous, { sources: S2 });
+      expect(keyed.asked).toEqual(["doi:10.1234/z"]);
+      expect(keyed.blurbs.entries.a).toEqual(previous.entries.a);
+      expect(keyed.counts.reused).toBe(1);
+      /* And a keyless run over the same artefact asks nothing. */
+      expect((await run(ROWS, previous)).asked).toEqual([]);
+    }
   });
 });
 

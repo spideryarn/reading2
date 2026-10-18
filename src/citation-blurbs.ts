@@ -53,6 +53,7 @@ import {
   citationBlurbsInputHash,
   registryNegativeExpired,
   rowIdentity,
+  sourcePolicy,
 } from "./citation-blurbs-identity.js";
 import {
   collectEvidence,
@@ -651,6 +652,7 @@ function storedEvidence(e: Evidence): CitationBlurbEvidence {
     host: e.host,
     readAt: e.readAt,
     evidenceHash: e.evidenceHash,
+    ...(e.paperId !== undefined ? { paperId: e.paperId } : {}),
   };
 }
 
@@ -665,7 +667,8 @@ function bump(counts: Record<string, number>, key: string, by = 1): void {
  *
  * An unforced run keeps an entry whose row's identity, the prompt version, the
  * model and the validation version all still match — unless it is a registry
- * "nothing" more than a week old (G9). A forced run keeps nothing.
+ * "nothing" more than a week old (G9), or one made under another source
+ * policy than this run's (plan 261018o, R3). A forced run keeps nothing.
  */
 export async function generateCitationBlurbs(
   input: CitationBlurbsInput,
@@ -673,6 +676,8 @@ export async function generateCitationBlurbs(
   deps: CitationBlurbsDeps,
 ): Promise<CitationBlurbsRun> {
   const started = deps.model.now();
+  /* The optional sources this run's cascade may ask, as the stamp names them. */
+  const policy = sourcePolicy(deps.evidence.sources);
   const nowIso = () => new Date(deps.model.now()).toISOString();
   const rows = input.bibliography.citations;
   const previous = input.previous?.entries ?? {};
@@ -711,7 +716,7 @@ export async function generateCitationBlurbs(
       had !== undefined &&
       had.promptVersion === CITATION_BLURBS_PROMPT_VERSION &&
       had.model === CITATION_BLURBS_MODEL &&
-      !registryNegativeExpired(had, started)
+      !registryNegativeExpired(had, started, policy)
     ) {
       entries[row.id] = had;
       bump(counts, "reused");
@@ -744,7 +749,7 @@ export async function generateCitationBlurbs(
       bump(counts, `no-evidence:${answer.why}`);
       entries[row.id] =
         "checkedAt" in answer
-          ? { ...base(row), state: "no-evidence", why: answer.why, checkedAt: answer.checkedAt }
+          ? { ...base(row), state: "no-evidence", why: answer.why, checkedAt: answer.checkedAt, sourcePolicy: policy }
           : { ...base(row), state: "no-evidence", why: answer.why };
     } else {
       evidenceOf.set(row.id, answer.evidence);
@@ -792,7 +797,7 @@ export async function generateCitationBlurbs(
     version: CITATION_BLURBS_PROMPT_VERSION,
     generator: CITATION_BLURBS_MODEL,
     slug: input.slug,
-    sourceHash: `${citationBlurbsInputHash(rows)}${partial ? PARTIAL_SUFFIX : ""}`,
+    sourceHash: `${citationBlurbsInputHash(rows, policy)}${partial ? PARTIAL_SUFFIX : ""}`,
     entries,
     counts: { ...counts },
     generatedAt: nowIso(),
@@ -801,7 +806,9 @@ export async function generateCitationBlurbs(
   const all: Record<string, number> = { ...counts, rows: rows.length, asked: todo.length };
   if (found.counts) {
     all.titleQueries = found.counts.titleQueries;
+    all.openAlexTitleQueries = found.counts.openAlexTitleQueries;
     all.openAlexQueries = found.counts.openAlexQueries;
+    all.semanticScholarQueries = found.counts.semanticScholarQueries;
   }
   if (written) {
     all.writerCalls = written.counts.writerCalls;

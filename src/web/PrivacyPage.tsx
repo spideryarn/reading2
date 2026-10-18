@@ -427,7 +427,18 @@ export function PrivacyPage() {
           and DataCite are sent its DOI or arXiv identifier, and OpenAlex its DOI. For an article
           you added from a public web address, a cited work with no DOI may be looked up at Crossref
           by its title and its first author’s surname instead; for a file you uploaded, the works it
-          cites are looked up by their identifiers only. Never the rest of the article’s text, and nothing about
+          cites are looked up by their identifiers only. When enabled,{" "}
+          <a
+            href="https://www.semanticscholar.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            Semantic Scholar
+          </a>{" "}
+          is also sent a cited work’s DOI or arXiv identifier, for its abstract; and, for an article
+          you added from a public web address, OpenAlex the words of a cited work’s title when
+          Crossref could not find it. Never the rest of the article’s text, and nothing about
           who you are. They learn that somebody using Spideryarn asked about that work, not who.
         </p>
         <p>

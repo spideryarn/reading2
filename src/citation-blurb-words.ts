@@ -15,17 +15,33 @@
  */
 import type { CitedWorkBlurb } from "./types.js";
 
-/** Who holds the abstract a note was written from: arXiv (through DataCite), Crossref, DataCite or OpenAlex. */
+/**
+ * Who holds the abstract a note was written from: arXiv (through DataCite),
+ * Crossref, DataCite, OpenAlex or Semantic Scholar. Semantic Scholar is named
+ * even for an arXiv paper: its licence asks that what is shown from it say so.
+ */
 export function blurbHolder(blurb: Pick<CitedWorkBlurb, "source" | "workId">): string {
   if (blurb.source === "openalex") return "OpenAlex";
+  if (blurb.source === "semantic-scholar") return "Semantic Scholar";
   if (blurb.workId.startsWith("arxiv:")) return "arXiv";
   return blurb.source === "crossref" ? "Crossref" : "DataCite";
 }
 
 /**
+ * **The paper's page at Semantic Scholar**, for a note written from its copy
+ * of the abstract — the link back its licence asks for, with the
+ * `utm_source=api` it names. `paperId` was re-checked as forty hex characters
+ * where the note was read (src/citation-blurbs-identity.ts § `shownBlurb`).
+ */
+export function semanticScholarPaperUrl(paperId: string): string {
+  return `https://www.semanticscholar.org/paper/${paperId}?utm_source=api`;
+}
+
+/**
  * **The row's quiet label** — *From the abstract · arXiv*, *· Crossref*,
- * *· DataCite*, or *From OpenAlex's copy of the abstract*, which is OpenAlex's
- * reconstruction from its word index rather than the author's own text.
+ * *· DataCite*, *· Semantic Scholar*, or *From OpenAlex's copy of the
+ * abstract*, which is OpenAlex's reconstruction from its word index rather
+ * than the author's own text.
  */
 export function blurbBasis(blurb: Pick<CitedWorkBlurb, "kind" | "source" | "workId">): string {
   if (blurb.kind === "registry-reconstruction") return "From OpenAlex's copy of the abstract";
@@ -63,7 +79,7 @@ export function blurbQuotesLead(sentences: number): string {
     : "Code checked that each sentence rests on words of the abstract:";
 }
 
-/** Added to the card when Crossref found the work by its title, not by an identifier the article gave. */
+/** Added to the card when Crossref or OpenAlex found the work by its title, not by an identifier the article gave. */
 export const BLURB_FOUND_BY_TITLE =
   "We found this work's record by its title and first author, so it is very likely, but not certainly, this work.";
 

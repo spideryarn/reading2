@@ -22,10 +22,12 @@ import {
   type EvidenceRow,
   LOOKUP_BUDGET_MS,
   MAX_TITLE_SEARCHES,
+  openAlexItemIdentifies,
   type RowEvidence,
 } from "../src/citation-evidence.js";
 import { FetchFailure } from "../src/fetch.js";
 import type { Log } from "../src/log.js";
+import type { OptionalSources } from "../src/registry-keys.js";
 
 /* ------------------------------------------------------------ fixtures -- */
 
@@ -94,11 +96,15 @@ interface Fakes {
   json?: (url: string) => unknown;
   now?: () => number;
   budgetMs?: number;
+  /** Absent: today's keyless run, which every test above the stage-1 blocks pins. */
+  sources?: OptionalSources;
 }
 
 function deps(f: Fakes = {}) {
   const asked: string[] = [];
   const fetched: string[] = [];
+  /** The registry each request named for its key, in request order ("-" for none). */
+  const keyed: string[] = [];
   const log = silentLog();
   const lim = limiter();
   const d: EvidenceDeps = {
@@ -106,8 +112,9 @@ function deps(f: Fakes = {}) {
       asked.push(id);
       return f.lookups?.[id] ?? { kind: "not-found" };
     },
-    fetchJson: async (url) => {
+    fetchJson: async (url, registryKey) => {
       fetched.push(url);
+      keyed.push(registryKey ?? "-");
       if (!f.json) throw new Error(`unexpected fetch ${url}`);
       return f.json(url);
     },
@@ -116,8 +123,9 @@ function deps(f: Fakes = {}) {
     now: f.now ?? (() => Date.parse("2026-10-18T10:00:00.000Z")),
     log,
     ...(f.budgetMs !== undefined ? { lookupBudgetMs: f.budgetMs } : {}),
+    ...(f.sources !== undefined ? { sources: f.sources } : {}),
   };
-  return { d, asked, fetched, log, lim };
+  return { d, asked, fetched, keyed, log, lim };
 }
 
 async function one(r: EvidenceRow, f: Fakes = {}, titleSearch = true) {
@@ -596,6 +604,337 @@ describe("the run's budget", () => {
   });
 });
 
+/* ===================================================================== *
+ * Plan 261018o stage 1: Semantic Scholar by id, OpenAlex by title, each
+ * switched on only by its key (docs/plans/261018o-…-registry-keys.md, R2,
+ * R5, R6 of its review). Tests 2–5 of the plan's list.
+ * ===================================================================== */
+
+const BOTH: OptionalSources = { semanticScholar: true, openAlexKeyed: true };
+const S2_ONLY: OptionalSources = { semanticScholar: true, openAlexKeyed: false };
+const PAPER_ID = "649def34f8be52c8b66281af98ae884c09aef38b";
+const S2_ABSTRACT = "Semantic Scholar's copy: spindles couple hippocampus and cortex during sleep, and memory improves.";
+const S2_PAPER = {
+  paperId: PAPER_ID,
+  title: COUPLING_TITLE,
+  abstract: S2_ABSTRACT,
+  externalIds: { DOI: "10.1038/NN.4304", MAG: "2403111963", CorpusId: 1234 },
+  year: 2016,
+};
+const OA_WORK = { display_name: COUPLING_TITLE, type: "article", abstract_inverted_index: inverted(ABSTRACT) };
+const NO_ABSTRACT = { "doi:10.1038/nn.4304": { kind: "found", record: record("doi:10.1038/nn.4304", COUPLING_TITLE) } } as const;
+
+const isS2 = (url: string) => url.startsWith("https://api.semanticscholar.org/");
+const isOpenAlexSearch = (url: string) => url.startsWith("https://api.openalex.org/works?");
+const isOpenAlexDoi = (url: string) => url.startsWith("https://api.openalex.org/works/doi:");
+
+/** A fake for every service by its address; anything it is not told about is a 404. */
+function services(answers: { s2?: () => unknown; oaSearch?: () => unknown; oaDoi?: () => unknown; crossref?: () => unknown }) {
+  return (url: string): unknown => {
+    const answer = isS2(url)
+      ? answers.s2
+      : isOpenAlexSearch(url)
+        ? answers.oaSearch
+        : isOpenAlexDoi(url)
+          ? answers.oaDoi
+          : answers.crossref;
+    if (answer === undefined) throw new FetchFailure("http-error", url, "HTTP 404", { status: 404, retryAfterMs: null });
+    return answer();
+  };
+}
+
+describe("with no key, neither new source is asked (test 2)", () => {
+  it("asks no Semantic Scholar and no OpenAlex search, for an id row or a title-only row Crossref cannot find", async () => {
+    const x = deps({
+      lookups: NO_ABSTRACT,
+      json: services({ oaDoi: () => OA_WORK, crossref: () => searchAnswer([]), s2: () => S2_PAPER, oaSearch: () => ({ results: [] }) }),
+    });
+    const out = await collectEvidence([COUPLING, TITLE_ROW], { titleSearch: true }, x.d);
+    expect(x.fetched.filter(isS2)).toEqual([]);
+    expect(x.fetched.filter(isOpenAlexSearch)).toEqual([]);
+    expect(out.byEntry.get("c1")).toMatchObject({ state: "evidence", evidence: { source: "openalex" } });
+    expect(out.byEntry.get("t1")).toEqual({ state: "no-evidence", why: "not-found", checkedAt: "2026-10-18T10:00:00.000Z" });
+    expect(x.log.errors).toEqual([]);
+  });
+
+  it("asks no Semantic Scholar while its approval is missing, whatever else is on (R5)", async () => {
+    const x = deps({ lookups: NO_ABSTRACT, sources: { semanticScholar: false, openAlexKeyed: true }, json: services({ oaDoi: () => OA_WORK }) });
+    await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(x.fetched.filter(isS2)).toEqual([]);
+  });
+
+  it("names OpenAlex's key on every OpenAlex request, so a key that is set is sent", async () => {
+    const x = deps({ lookups: NO_ABSTRACT, json: services({ oaDoi: () => OA_WORK }) });
+    await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(x.fetched.filter(isOpenAlexDoi)).toHaveLength(1);
+    expect(x.keyed).toEqual(["openalex"]);
+  });
+});
+
+describe("Semantic Scholar by DOI or arXiv id (test 3)", () => {
+  it("is the work's author abstract when its own id and its title agree, linked to doi.org, its paper id kept", async () => {
+    const x = deps({ lookups: NO_ABSTRACT, sources: S2_ONLY, json: services({ s2: () => S2_PAPER, oaDoi: () => OA_WORK }) });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(x.fetched).toEqual([
+      "https://api.semanticscholar.org/graph/v1/paper/DOI:10.1038/nn.4304?fields=paperId,title,abstract,externalIds,year",
+    ]);
+    expect(x.keyed).toEqual(["semantic-scholar"]);
+    expect(out.byEntry.get("c1")).toEqual({
+      state: "evidence",
+      evidence: {
+        kind: "author-abstract",
+        source: "semantic-scholar",
+        via: "id",
+        workId: "doi:10.1038/nn.4304",
+        url: "https://doi.org/10.1038/nn.4304",
+        host: "doi.org",
+        readAt: "2026-10-18T10:00:00.000Z",
+        text: S2_ABSTRACT,
+        evidenceHash: expect.stringMatching(/^[0-9a-f]{16}$/) as string,
+        paperId: PAPER_ID,
+      },
+    });
+    expect(out.counts.semanticScholarQueries).toBe(1);
+  });
+
+  it("asks by ARXIV: for an arXiv id DataCite had no abstract for, and accepts its ArXiv external id", async () => {
+    const attention = row({ id: "a1", title: "Attention Is All You Need", authors: "Vaswani", url: "https://arxiv.org/abs/1706.03762", linkFrom: "arxiv" });
+    const x = deps({
+      lookups: {
+        "arxiv:1706.03762": {
+          kind: "found",
+          record: record("arxiv:1706.03762", "Attention Is All You Need", { source: "datacite", doi: "10.48550/arxiv.1706.03762", authors: [{ family: "Vaswani" }], year: 2017 }),
+        },
+      },
+      sources: S2_ONLY,
+      json: services({ s2: () => ({ ...S2_PAPER, title: "Attention is All you Need", externalIds: { ArXiv: "1706.03762", DBLP: "x" } }) }),
+    });
+    const out = await collectEvidence([attention], { titleSearch: true }, x.d);
+    expect(x.fetched).toEqual([
+      "https://api.semanticscholar.org/graph/v1/paper/ARXIV:1706.03762?fields=paperId,title,abstract,externalIds,year",
+    ]);
+    expect(out.byEntry.get("a1")).toMatchObject({ state: "evidence", evidence: { source: "semantic-scholar", url: "https://arxiv.org/abs/1706.03762" } });
+  });
+
+  it("is not the work's when its title does not agree, or its ids are another work's — and OpenAlex is asked as before", async () => {
+    for (const paper of [
+      { ...S2_PAPER, title: "Soil microbiomes of the Atacama desert" },
+      { ...S2_PAPER, externalIds: { DOI: "10.1038/nn.9999" } },
+      { ...S2_PAPER, externalIds: {} },
+    ]) {
+      const x = deps({ lookups: NO_ABSTRACT, sources: S2_ONLY, json: services({ s2: () => paper, oaDoi: () => OA_WORK }) });
+      const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+      expect(out.byEntry.get("c1"), JSON.stringify(paper)).toMatchObject({ state: "evidence", evidence: { source: "openalex" } });
+    }
+  });
+
+  it("never takes a TLDR: a model's summary is not the author's abstract", async () => {
+    const tldrOnly = { ...S2_PAPER, abstract: null, tldr: { model: "tldr@v2.0.0", text: "Spindles help memory." } };
+    const x = deps({ lookups: NO_ABSTRACT, sources: S2_ONLY, json: services({ s2: () => tldrOnly }) });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("c1")).toEqual({ state: "no-evidence", why: "no-abstract", checkedAt: "2026-10-18T10:00:00.000Z" });
+    expect(JSON.stringify(out)).not.toContain("Spindles help memory");
+  });
+
+  it("refuses a paper id that is not Semantic Scholar's 40 hex characters", async () => {
+    const x = deps({ lookups: NO_ABSTRACT, sources: S2_ONLY, json: services({ s2: () => ({ ...S2_PAPER, paperId: "../../evil" }) }) });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("c1")).toMatchObject({ state: "no-evidence", why: "no-abstract" });
+  });
+
+  it("is off for the run on a 401 with its key set: one request, every row transient, logged as configuration, never as the key", async () => {
+    for (const status of [401, 403]) {
+      const second = { ...COUPLING, id: "c2", url: "https://doi.org/10.1038/nn.9999" };
+      const x = deps({
+        lookups: { ...NO_ABSTRACT, "doi:10.1038/nn.9999": { kind: "found", record: record("doi:10.1038/nn.9999", COUPLING_TITLE) } },
+        sources: S2_ONLY,
+        json: (url) => {
+          if (isS2(url)) throw new FetchFailure("http-error", url, `HTTP ${status}`, { status, retryAfterMs: null });
+          return { display_name: COUPLING_TITLE, type: "article" };
+        },
+      });
+      const out = await collectEvidence([COUPLING, second], { titleSearch: true }, x.d);
+      expect(x.fetched.filter(isS2), String(status)).toHaveLength(1);
+      expect(out.byEntry.get("c1")).toEqual({ state: "transient", why: "semantic-scholar-off" });
+      expect(out.byEntry.get("c2")).toEqual({ state: "transient", why: "semantic-scholar-off" });
+      expect(x.log.errors).toEqual([expect.objectContaining({ service: "semantic-scholar", status, outcome: "configuration" })]);
+    }
+  });
+
+  it("falls through to OpenAlex when it is busy or broken, and an OpenAlex note stands (R6)", async () => {
+    const x = deps({
+      lookups: NO_ABSTRACT,
+      sources: S2_ONLY,
+      json: (url) => {
+        if (isS2(url)) throw new FetchFailure("http-error", url, "HTTP 500", { status: 500, retryAfterMs: null });
+        return OA_WORK;
+      },
+    });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("c1")).toMatchObject({ state: "evidence", evidence: { source: "openalex" } });
+  });
+});
+
+describe("the cascade's order (test 5)", () => {
+  it("takes Crossref's abstract and asks neither Semantic Scholar nor OpenAlex", async () => {
+    const x = deps({
+      lookups: { "doi:10.1038/nn.4304": { kind: "found", record: record("doi:10.1038/nn.4304", COUPLING_TITLE, { abstract: ABSTRACT }) } },
+      sources: BOTH,
+      json: services({ s2: () => S2_PAPER, oaDoi: () => OA_WORK }),
+    });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(x.fetched).toEqual([]);
+    expect(out.byEntry.get("c1")).toMatchObject({ state: "evidence", evidence: { source: "crossref", text: ABSTRACT } });
+  });
+
+  it("takes Semantic Scholar's abstract over OpenAlex's reconstruction, which is then not asked", async () => {
+    const x = deps({ lookups: NO_ABSTRACT, sources: BOTH, json: services({ s2: () => S2_PAPER, oaDoi: () => OA_WORK }) });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(x.fetched.filter(isOpenAlexDoi)).toEqual([]);
+    expect(out.byEntry.get("c1")).toMatchObject({ state: "evidence", evidence: { source: "semantic-scholar" } });
+  });
+
+  it("asks Semantic Scholar for a Crossref title match that had no abstract, and keeps how it was found", async () => {
+    const { abstract: _a, ...bare } = CROSSREF_ITEM;
+    const x = deps({ sources: S2_ONLY, json: services({ crossref: () => searchAnswer([bare]), s2: () => S2_PAPER }) });
+    const out = await collectEvidence([TITLE_ROW], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("t1")).toMatchObject({
+      state: "evidence",
+      evidence: { source: "semantic-scholar", via: "title", workId: "doi:10.1038/nn.4304" },
+    });
+    /* A Crossref title match is not reconstructed by OpenAlex, as before. */
+    expect(x.fetched.filter(isOpenAlexDoi)).toEqual([]);
+  });
+});
+
+/** An OpenAlex `/works?search.title=` result, the Crossref fixture's work. */
+const OA_ITEM = {
+  id: "https://openalex.org/W2403111963",
+  doi: "https://doi.org/10.1038/nn.4304",
+  display_name: COUPLING_TITLE,
+  type: "article",
+  publication_year: 2016,
+  authorships: [
+    { author_position: "first", raw_author_name: "Nicolas Maingret", author: { display_name: "Nicolas Maingret" } },
+    { author_position: "last", raw_author_name: "Michaël Zugaro", author: { display_name: "Michaël Zugaro" } },
+  ],
+};
+
+describe("OpenAlex's title search, with its key (test 4)", () => {
+  const KEYED: OptionalSources = { semanticScholar: false, openAlexKeyed: true };
+
+  it("is asked only when Crossref found no match, by title, with its key, and its DOI then gets OpenAlex's reconstruction", async () => {
+    const x = deps({
+      sources: KEYED,
+      json: services({ crossref: () => searchAnswer([]), oaSearch: () => ({ results: [OA_ITEM] }), oaDoi: () => OA_WORK }),
+    });
+    const out = await collectEvidence([TITLE_ROW], { titleSearch: true }, x.d);
+    const search = x.fetched.find(isOpenAlexSearch);
+    expect(search).toBeDefined();
+    const url = new URL(search!);
+    expect(url.searchParams.get("search.title")).toBe("hippocampo cortical coupling mediates memory consolidation during sleep");
+    expect(url.searchParams.get("filter")).toBe("has_doi:true");
+    expect(url.searchParams.get("per_page")).toBe("5");
+    expect(url.searchParams.get("select")).toBe("id,doi,display_name,type,publication_year,authorships");
+    expect(url.searchParams.get("mailto")).toMatch(/@/);
+    expect(x.keyed).toEqual(["-", "openalex", "openalex"]);
+    expect(out.byEntry.get("t1")).toMatchObject({
+      state: "evidence",
+      evidence: { kind: "registry-reconstruction", source: "openalex", via: "title", workId: "doi:10.1038/nn.4304" },
+    });
+    expect(out.counts.titleQueries).toBe(2);
+    expect(out.counts.openAlexTitleQueries).toBe(1);
+  });
+
+  it("is not asked when Crossref matched, for an upload, or with no key", async () => {
+    const crossrefFinds = deps({ sources: KEYED, json: services({ crossref: () => searchAnswer([CROSSREF_ITEM]) }) });
+    await collectEvidence([TITLE_ROW], { titleSearch: true }, crossrefFinds.d);
+    expect(crossrefFinds.fetched.filter(isOpenAlexSearch)).toEqual([]);
+    const upload = deps({ sources: KEYED, json: services({ crossref: () => searchAnswer([]) }) });
+    await collectEvidence([TITLE_ROW], { titleSearch: false }, upload.d);
+    expect(upload.fetched).toEqual([]);
+  });
+
+  it("refuses a match with no DOI, a book-looking row's non-book, and a book chapter", async () => {
+    const { doi: _d, ...noDoi } = OA_ITEM;
+    const x = deps({ sources: KEYED, json: services({ crossref: () => searchAnswer([]), oaSearch: () => ({ results: [noDoi] }) }) });
+    const out = await collectEvidence([TITLE_ROW], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("t1")).toEqual({ state: "no-evidence", why: "not-found", checkedAt: "2026-10-18T10:00:00.000Z" });
+
+    const book = { ...TITLE_ROW, entry: "Maingret, N. (2016). Hippocampo-cortical coupling. MIT Press." };
+    for (const type of ["article", "book-chapter"]) {
+      expect(openAlexItemIdentifies({ ...OA_ITEM, type }, book), type).toBe(false);
+    }
+    expect(openAlexItemIdentifies({ ...OA_ITEM, type: "book" }, book)).toBe(true);
+  });
+
+  it("counts against the same cap as Crossref's title queries", async () => {
+    const rows = Array.from({ length: MAX_TITLE_SEARCHES }, (_, i) => ({ ...TITLE_ROW, id: `t${i}` }));
+    const x = deps({ sources: KEYED, json: services({ crossref: () => searchAnswer([]), oaSearch: () => ({ results: [] }) }) });
+    const out = await collectEvidence(rows, { titleSearch: true }, x.d);
+    expect(x.fetched).toHaveLength(MAX_TITLE_SEARCHES);
+    expect(out.counts.titleQueries).toBe(MAX_TITLE_SEARCHES);
+    expect([...out.byEntry.values()].some((a) => a.state === "transient" && a.why === "over-cap")).toBe(true);
+  });
+
+  it("treats a 403 with the key set as configuration: logged at error, OpenAlex off for the run, the row transient", async () => {
+    const x = deps({
+      sources: KEYED,
+      json: (url) => {
+        if (isOpenAlexSearch(url)) throw new FetchFailure("http-error", url, "HTTP 403", { status: 403, retryAfterMs: null });
+        return searchAnswer([]);
+      },
+    });
+    const out = await collectEvidence([TITLE_ROW], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("t1")).toEqual({ state: "transient", why: "openalex-off" });
+    expect(x.log.errors).toEqual([expect.objectContaining({ service: "openalex", status: 403, outcome: "configuration" })]);
+    expect(x.lim.cooled).toEqual([]);
+  });
+});
+
+describe("one strict rule over both registries' records (test 4, R6)", () => {
+  /** The Crossref rule's cases, each as an OpenAlex item. */
+  const ok = (over: object, r: EvidenceRow = TITLE_ROW) => openAlexItemIdentifies({ ...OA_ITEM, ...over }, r);
+  const first = (name: string) => ({ author_position: "first", raw_author_name: name, author: { display_name: name } });
+
+  it("keeps the same work, and a title equal up to a subtitle", () => {
+    expect(ok({})).toBe(true);
+    expect(ok({}, { ...TITLE_ROW, title: `${COUPLING_TITLE}: evidence from rodents` })).toBe(true);
+    expect(ok({ display_name: `${COUPLING_TITLE}: Evidence from rodents` })).toBe(true);
+  });
+
+  it("refuses another first author, agreement on the second author alone, or no first author", () => {
+    expect(ok({ authorships: [first("A. Reviewer")] })).toBe(false);
+    expect(ok({ authorships: [first("Michaël Zugaro"), { ...first("Nicolas Maingret"), author_position: "middle" }] })).toBe(false);
+    expect(ok({ authorships: [{ ...first("Nicolas Maingret"), author_position: "middle" }] })).toBe(false);
+    expect(ok({ authorships: [] })).toBe(false);
+  });
+
+  it("falls back to the author's display name when the byline's raw name is absent", () => {
+    expect(ok({ authorships: [{ author_position: "first", author: { display_name: "Nicolas Maingret" } }] })).toBe(true);
+  });
+
+  it("refuses a year more than one off, a correction's tail", () => {
+    expect(ok({ publication_year: 2019 })).toBe(false);
+    expect(ok({ publication_year: 2017 })).toBe(true);
+    expect(ok({ display_name: `${COUPLING_TITLE}: Correction` })).toBe(false);
+    expect(ok({ display_name: `Correction to: ${COUPLING_TITLE}` })).toBe(false);
+  });
+
+  it("refuses OpenAlex's own kinds that are not the work: a review of it, an erratum, a retraction, paratext, a peer review, a dataset", () => {
+    for (const type of ["book-review", "erratum", "retraction", "paratext", "peer-review", "dataset", "supplementary-materials"]) {
+      expect(ok({ type }), type).toBe(false);
+    }
+    for (const type of ["article", "preprint", "review", "letter"]) expect(ok({ type }), type).toBe(true);
+  });
+
+  it("is the rule Crossref's items go through too", () => {
+    expect(crossrefItemIdentifies(CROSSREF_ITEM, TITLE_ROW)).toBe(true);
+    expect(crossrefItemIdentifies({ ...CROSSREF_ITEM, type: "peer-review" }, TITLE_ROW)).toBe(false);
+    expect(openAlexItemIdentifies(null, TITLE_ROW)).toBe(false);
+  });
+});
+
 it("the real deps are the shared lookup and the guarded JSON fetch", async () => {
   const { citationEvidenceDeps } = await import("../src/citation-evidence.js");
   const { lookupWork } = await import("../src/bibliographic.js");
@@ -603,4 +942,61 @@ it("the real deps are the shared lookup and the guarded JSON fetch", async () =>
   expect(d.lookup).toBe(lookupWork);
   await expect(d.fetchJson("https://example.com/works")).rejects.toMatchObject({ code: "blocked-address" });
   vi.restoreAllMocks();
+});
+
+it("the real deps read which optional sources are on from the environment, per run", async () => {
+  const { citationEvidenceDeps } = await import("../src/citation-evidence.js");
+  const before = { oa: process.env.OPENALEX_API_KEY, s2: process.env.SEMANTIC_SCHOLAR_API_KEY, ok: process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE };
+  try {
+    delete process.env.OPENALEX_API_KEY;
+    delete process.env.SEMANTIC_SCHOLAR_API_KEY;
+    delete process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE;
+    expect((await citationEvidenceDeps()).sources).toEqual({ semanticScholar: false, openAlexKeyed: false });
+    process.env.OPENALEX_API_KEY = "k";
+    process.env.SEMANTIC_SCHOLAR_API_KEY = "k";
+    process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE = "approved";
+    expect((await citationEvidenceDeps()).sources).toEqual({ semanticScholar: true, openAlexKeyed: true });
+  } finally {
+    for (const [name, value] of [
+      ["OPENALEX_API_KEY", before.oa],
+      ["SEMANTIC_SCHOLAR_API_KEY", before.s2],
+      ["SEMANTIC_SCHOLAR_COMMERCIAL_USE", before.ok],
+    ] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+/* The key-redaction case through the cascade's real log lines: a forced 401 with a key set. */
+it("never logs Semantic Scholar's key on a refused request (test 1, through the cascade)", async () => {
+  const { fetchBibliographicJson } = await import("../src/fetch.js");
+  const KEY = "s2-cascade-secret-0042";
+  const before = process.env.SEMANTIC_SCHOLAR_API_KEY;
+  process.env.SEMANTIC_SCHOLAR_API_KEY = KEY;
+  try {
+    const lines: unknown[] = [];
+    const capture = {
+      debug: (o: unknown) => lines.push(o),
+      info: (o: unknown) => lines.push(o),
+      warn: (o: unknown) => lines.push(o),
+      error: (o: unknown) => lines.push(o),
+      child: () => capture,
+    } as unknown as Log;
+    const x = deps({ lookups: NO_ABSTRACT, sources: S2_ONLY });
+    x.d.log = capture;
+    x.d.fetchJson = (url, registryKey) =>
+      fetchBibliographicJson(url, {
+        ...(registryKey !== undefined ? { registryKey } : {}),
+        resolve: async () => ["104.18.0.1"],
+        fetchImpl: async () => new Response("{}", { status: 401 }),
+      });
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(out.byEntry.get("c1")).toEqual({ state: "transient", why: "semantic-scholar-off" });
+    expect(lines.length).toBeGreaterThan(0);
+    expect(JSON.stringify(lines)).not.toContain(KEY);
+  } finally {
+    if (before === undefined) delete process.env.SEMANTIC_SCHOLAR_API_KEY;
+    else process.env.SEMANTIC_SCHOLAR_API_KEY = before;
+  }
 });

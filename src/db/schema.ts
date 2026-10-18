@@ -8475,21 +8475,30 @@ export const bibliographicRecords = spideryarn.table(
  * limiter and nothing else. `bibliographic_records.source` still allows only
  * the two registries: OpenAlex is never a record's provenance
  * (`LimiterService` against `Registry` in src/bibliographic.ts).
+ *
+ * **Four since 2026-10-18**: `semantic-scholar`, asked for a cited work's
+ * abstract by src/citation-evidence.ts once its key and approval are set
+ * (plan 261018o, R2). Not a record's provenance either.
  */
 export const bibliographicServices = spideryarn.table(
   "bibliographic_services",
   {
-    service: text("service").$type<"crossref" | "datacite" | "openalex">().primaryKey(),
+    service: text("service").$type<"crossref" | "datacite" | "openalex" | "semantic-scholar">().primaryKey(),
     nextStartAt: timestamp("next_start_at", { withTimezone: true }).notNull().defaultNow(),
     cooldownUntil: timestamp("cooldown_until", { withTimezone: true }),
   },
-  (t) => [check("bibliographic_services_service", sql`${t.service} in ('crossref', 'datacite', 'openalex')`)],
+  (t) => [
+    check(
+      "bibliographic_services_service",
+      sql`${t.service} in ('crossref', 'datacite', 'openalex', 'semantic-scholar')`,
+    ),
+  ],
 );
 
 /**
  * **Leased slots, bounding how many requests are in flight to each registry
  * across every instance** — 2 for Crossref (under its 3 concurrent), 1 for
- * DataCite, 1 for OpenAlex. Seeded by the migrations. Taken with `for update skip locked`,
+ * DataCite, 1 for OpenAlex, 1 for Semantic Scholar. Seeded by the migrations. Taken with `for update skip locked`,
  * leased for 20 s so a dead process cannot hold one for ever, freed in a
  * `finally`.
  */
@@ -8497,7 +8506,7 @@ export const bibliographicServiceSlots = spideryarn.table(
   "bibliographic_service_slots",
   {
     service: text("service")
-      .$type<"crossref" | "datacite" | "openalex">()
+      .$type<"crossref" | "datacite" | "openalex" | "semantic-scholar">()
       .notNull()
       .references(() => bibliographicServices.service, { onDelete: "cascade" }),
     slot: smallint("slot").notNull(),

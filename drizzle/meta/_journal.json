@@ -1422,6 +1422,13 @@
       "when": 1792325098215,
       "tag": "20261018120458_revision_saved_from_url",
       "breakpoints": true
+    },
+    {
+      "idx": 203,
+      "version": "7",
+      "when": 1792360879974,
+      "tag": "20261018220119_bibliographic_semantic_scholar_service",
+      "breakpoints": true
     }
   ]
 }
