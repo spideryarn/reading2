@@ -79,6 +79,7 @@
     "eval:tutorial": "tsx evals/learn-tutorial.ts",
     "eval:explore": "tsx evals/learn-explore.ts",
     "eval:quiz": "tsx evals/quiz.ts",
+    "eval:wider-world": "tsx evals/wider-world.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
     "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",
     "eval:dictation-gate": "tsx evals/dictation/gate-models.ts",
