@@ -30,7 +30,7 @@ import { RESERVED_ATTRS } from "./reserved.js";
  * reading view adds afterwards unforgeable, including the ones nobody has
  * written yet.
  *
- * Two families, and a third would need an argument:
+ * Three families, and a fourth would need an argument:
  *
  * - **the pipeline's own `data-spya-*` namespace** (src/reserved.ts). Stage 2
  *   writes note and callout stamps for stage 3; stage 3 stamps `wasId`/`wasName`
@@ -43,15 +43,33 @@ import { RESERVED_ATTRS } from "./reserved.js";
  *   `data-href-mobile`, the real link behind an archive copy, which
  *   src/bibliography.ts reads off the sanitised block. Nothing in the browser reads
  *   either.
+ * - **the author's own hover text**, `AUTHOR_TITLE_ATTR`, which this policy
+ *   writes from the article's `title` — below.
  *
  * Adding a name here is the one way to let an article carry it, so
  * tests/sanitize-allowlist.test.ts pins this list exactly and fails if any
  * `data-…` spelled in `src/` survives without being on it.
  */
+/**
+ * **Where an article's own `title` goes**, so the browser draws no grey box over
+ * the prose and our card can show the words instead, labelled as the author's
+ * (ProseHoverCard.tsx; src/web/author-title.ts decides which are worth it).
+ * Greg, 2026-10-18, spya-y0xzwm: *"We should indicate that it's author provided
+ * if we do keep this."* Plan 261018n.
+ *
+ * **A kept name, not a reserved one, and forging it is not a hole.** An article
+ * that ships `data-author-title="…"` itself gets exactly what `title="…"` would
+ * have got it: its own words, shown as its own. Nothing of ours is claimed —
+ * which is the test every other kept name had to pass, and the reason
+ * tests/sanitize-allowlist.test.ts lets browser code read this one.
+ */
+export const AUTHOR_TITLE_ATTR = "data-author-title";
+
 export const ARTICLE_DATA_ATTRS: readonly string[] = [
   ...Object.values(RESERVED_ATTRS),
   "data-url-original",
   "data-href-mobile",
+  AUTHOR_TITLE_ATTR,
 ];
 
 /**
@@ -198,7 +216,13 @@ export const SANITIZER_VERSION = 8;
    seventh name, the rule now fails closed. A new marking needs no edit here,
    and tests/sanitize-allowlist.test.ts scans `src/` to prove it. Stricter,
    so bumped. Greg approved the defence edit, 2026-10-01;
-   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md. */
+   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md.
+
+   **Not bumped on 2026-10-18**, when `title` started moving onto
+   `AUTHOR_TITLE_ATTR` (`moveAuthorTitle`). An artefact cleaned under 8 still
+   carries `title`, which is kept text rather than a hazard, and the browser
+   pass moves it at ingress; re-cleaning every article would find nothing to
+   remove. Plan 261018n. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -638,6 +662,102 @@ function stripOwnApiUrls(el: Element): void {
   }
 }
 
+/**
+ * An article's `title` attribute, moved onto `AUTHOR_TITLE_ATTR` — the words
+ * kept, the browser's grey box gone. Greg's option C on q-z2c269, 2026-10-18.
+ *
+ * - **Not on an `<iframe>`**, whose `title` is the frame's accessible name
+ *   rather than a tooltip.
+ * - **An article's own `AUTHOR_TITLE_ATTR` wins over its `title`**, so a pass
+ *   over our own output, which has no `title` left, changes nothing, and an
+ *   element carrying both keeps one.
+ *
+ * Not a reason to bump `SANITIZER_VERSION`: an artefact cleaned before this
+ * still has `title`, which is kept text, not a hazard — and the browser pass
+ * moves it at ingress anyway.
+ */
+function moveAuthorTitle(el: Element): void {
+  const title = el.getAttribute("title");
+  if (title === null || el.localName === "iframe") return;
+  el.removeAttribute("title");
+  if (!el.hasAttribute(AUTHOR_TITLE_ATTR)) el.setAttribute(AUTHOR_TITLE_ATTR, title);
+}
+
+function hasAriaLabel(el: Element): boolean {
+  return (el.getAttribute("aria-label") ?? "").trim() !== "";
+}
+
+/** Words, a non-empty `alt` inside, or a label of its own. */
+function hasAName(el: Element): boolean {
+  if ((el.textContent ?? "").trim() || hasAriaLabel(el)) return true;
+  return Array.from(el.querySelectorAll("img[alt]")).some((i) =>
+    (i.getAttribute("alt") ?? "").trim(),
+  );
+}
+
+/**
+ * Preserve the accessible meaning of the `title` attributes moved above.
+ *
+ * **This runs after DOMPurify has finished the whole tree, not from its
+ * `afterSanitizeAttributes` hook.** That hook is pre-order: while it is on an
+ * anchor, descendants such as `<script>` and forbidden form controls have not
+ * been removed yet. Reading `textContent` or `[alt]` there can therefore call
+ * an eventually empty link "named" and discard the only name a screen reader
+ * had. It also made namespace-sensitive `tagName === "A"` miss SVG's lowercase
+ * `<a>`. The clean tree and `localName` make both claims true rather than
+ * parser-dependent. Caught in review of plan 261018n before it shipped.
+ *
+ * `aria-labelledby` is deliberately not accepted as proof of a name here: a
+ * reference can point at an element DOMPurify removed, or at a different block
+ * this fragment cannot inspect. Adding the fallback `aria-label` is harmless
+ * when the reference resolves, because `aria-labelledby` takes precedence.
+ *
+ * An unnamed link and an image with no `alt` at all get the author's words as
+ * `aria-label`; an image whose `alt=""` says it is decorative stays decorative.
+ * An `<abbr>` keeps its expansion as `aria-description`. Other elements' titles
+ * were only ever a description, and repeating 170k of them, mostly Wikipedia's
+ * page names, onto every link is not worth what it would say.
+ */
+function preserveAuthorTitleAccessibility(root: ParentNode): void {
+  for (const el of Array.from(root.querySelectorAll(`[${AUTHOR_TITLE_ATTR}]`))) {
+    const words = el.getAttribute(AUTHOR_TITLE_ATTR) ?? "";
+    if (!words.trim()) continue;
+    const unnamedLink = el.localName === "a" && !hasAName(el);
+    const unnamedImage =
+      el.localName === "img" && !el.hasAttribute("alt") && !hasAriaLabel(el);
+    if (unnamedLink || unnamedImage) el.setAttribute("aria-label", words);
+    if (el.localName === "abbr" && !el.hasAttribute("aria-description")) {
+      el.setAttribute("aria-description", words);
+    }
+  }
+}
+
+/**
+ * Sanitise one article fragment and finish the policy decisions that require
+ * seeing the fully sanitised tree. Both bindings call this exact function, so
+ * the server/client byte-equality contract still has one implementation.
+ */
+export function sanitizeArticleHtml(purify: DOMPurify, html: string): string {
+  /* Nearly every policy call has no author title. Asking DOMPurify for a DOM
+     fragment just to serialize it again roughly doubles those calls, which is
+     visible on the allowlist's thousands of one-element probes. The hook still
+     runs on the fast string path; only the post-walk accessibility decision
+     needs a tree, and an attribute that can create it must be spelt in the
+     input. False positives cost one slower call, while HTML cannot entity- or
+     whitespace-encode an attribute name into a false negative. */
+  if (!/\b(?:title|data-author-title)\s*=/i.test(html)) {
+    return purify.sanitize(html, { ...ARTICLE_CONFIG });
+  }
+  const clean = purify.sanitize(html, {
+    ...ARTICLE_CONFIG,
+    RETURN_DOM_FRAGMENT: true,
+  }) as DocumentFragment;
+  preserveAuthorTitleAccessibility(clean);
+  const holder = clean.ownerDocument.createElement("div");
+  holder.append(clean);
+  return holder.innerHTML;
+}
+
 export function installArticlePolicy(purify: DOMPurify): void {
   /**
    * MathML's machine-readable copy of a formula, removed along with its text.
@@ -764,6 +884,8 @@ export function installArticlePolicy(purify: DOMPurify): void {
      * Every URL-bearing attribute, not just `href` and `src` — a rule that
      * covers four of six looks exactly like a rule that covers six. */
     stripOwnApiUrls(el);
+
+    moveAuthorTitle(el);
 
     if (el.tagName !== "IFRAME") return;
     if (!isAllowedEmbed(el.getAttribute("src"))) {

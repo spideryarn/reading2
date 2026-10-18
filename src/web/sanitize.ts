@@ -41,7 +41,7 @@
 
 import DOMPurify from "dompurify";
 import type { Article } from "../types.js";
-import { ARTICLE_CONFIG, installArticlePolicy } from "../sanitize-policy.js";
+import { installArticlePolicy, sanitizeArticleHtml } from "../sanitize-policy.js";
 import { openExternalLinksInNewTab } from "./external-links.js";
 
 /*
@@ -77,7 +77,7 @@ installArticlePolicy(purify);
  * day. It lives in external-links.ts, applied by `sanitizeArticle` below.
  */
 export function sanitizeBlockHtml(html: string): string {
-  return purify.sanitize(html, { ...ARTICLE_CONFIG });
+  return sanitizeArticleHtml(purify, html);
 }
 
 /**

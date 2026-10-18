@@ -1,0 +1,1021 @@
+diff --git a/docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md b/docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md
+new file mode 100644
+index 000000000..4edda546e
+--- /dev/null
++++ b/docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md
+@@ -0,0 +1,116 @@
++# An article's own `title` attributes, shown in our card and marked as the author's
++
++Queue item `qi-ra2qwnfk`, from Greg's reply `spya-y0xzwm` to
++[q-z2c269](../user-feedback/questions/q-z2c269.md) (report `spya-q04h98`, plan
++[261017g](261017g-native-title-tooltips-become-rich-cards-everywhere-and-a-test-keeps-it-that-way.md)).
++
++> I'm inclined towards C. It sounds like we think this could be valuable content. Or I suppose we
++> could just trust that our glossary will catch it...? We should indicate that it's author provided
++> if we do keep this. It's not worth huge amounts of complexity for, though. So I guess I'm leaning
++> towards keeping it, but use your judgment.
++>
++> — Greg, 2026-10-18 (spya-y0xzwm)
++
++## What is there now
++
++Since 261017g every tooltip *our* code draws is our card. What is left is an article's own `title`
++attribute: DOMPurify keeps it, so the prose shows the browser's grey box over it.
++
++**Measured on the local store, 2026-10-18** (281,843 blocks; `data/titles-survey.ts`, not
++committed): 169,972 elements carry a `title` — 131k links, 38k spans, 576 images, 382 `<abbr>`,
++25 iframes. Most say nothing the reader cannot already see:
++
++- the title is the link's or the span's own text (`<abbr title="circa">` is not, `<a title="Leo">Leo</a>` is);
++- the title restates the address — every Wikipedia link (`/wiki/Ancient_Corinth`, *Ancient Corinth*);
++- COinS metadata (`<span class="Z3988" title="ctx_ver=Z39.88-2004&…">`), never meant for a person;
++- empty.
++
++With those four set aside, **24,725 remain** (14.5k links, 9.6k spans, 377 abbr, 142 img), and they
++are worth having: gwern's link titles are the citation the link stands for (*'Scaling Laws for
++Neural Language Models', Kaplan et al 2020* on the words *science*); his date and inflation spans
++(*1981 was 45 years ago.*); Wikipedia's *Freely accessible* on a DOI; an arXiv paper's section
++names on its cross-references; `<abbr>` expansions. Greg's glossary question: the glossary is the
++model's account of the piece's terms and covers none of these — a citation, a date note, an
++expansion the author chose — so it does not replace them.
++
++## The change (option C)
++
++1. **The policy renames `title` to `data-author-title`**, in `installArticlePolicy`'s
++   `afterSanitizeAttributes` hook (src/sanitize-policy.ts), on every element except `<iframe>`, whose
++   `title` is its accessible name, not a tooltip. `data-author-title` joins `ARTICLE_DATA_ATTRS` as a
++   third family, *the author's own words, moved off `title`*. One policy, so both bindings do it,
++   `tests/sanitize-client.test.ts`'s byte-for-byte equality holds, and a second pass is a no-op.
++   - **Forging it is not a hole, and that is why it may be a kept name rather than a reserved one.**
++     An article that ships `data-author-title="…"` gets exactly what `title="…"` would have given it:
++     its own words, labelled as its own. Nothing of ours is claimed. The allowlist test's "no browser
++     code trusts a kept name" list gains it, with that reason.
++   - **An element whose only name was its `title`** (an icon link with no text and no `aria-label`)
++     gets `aria-label` from it, so a screen reader still hears it — 261017g's rule for our own.
++   - **`SANITIZER_VERSION` is not bumped.** An artefact cleaned under 8 is not unsafe: a `title` is
++     kept text, and the browser pass renames it at ingress anyway. Bumping would re-sanitise every
++     stored article on its next server read for nothing. Said in the version history.
++2. **Existing articles get it at render** — the browser binding runs on every load — without being
++   re-imported (Greg, spya-r8arjm: no re-import). New imports store the renamed attribute.
++3. **The one server reader of `title` on block html**, `anchorsOf` in src/bibliography.ts (a link's
++   label, used to match a citation), reads `data-author-title` and falls back to `title`, since stored
++   blocks from before this change still carry the old name.
++4. **The prose card shows it.** `ProseHoverCard` reads `closest("[data-author-title]")`, keeps it only
++   if `authorTitleWorthShowing` (a small pure function, src/web/author-title.ts) says it adds
++   something — the four exclusions above — and draws one section: a `prose-card-label` *from the
++   article* in our voice, then the words in the author's (`voice-author`, fonts.md), clipped at 300
++   characters. It sits above the link half, since it is usually the author's description of the
++   link. The selector gains `.prose [data-author-title]` so a titled `<abbr>` or `<span>` opens a card
++   by itself; nothing changes for touch (a native `title` never showed under a finger either).
++5. **Docs**: security-map.md's sanitiser row says the policy renames `title`; tooltips.md says where
++   the author's hover text went; the q-z2c269 bookkeeping.
++
++## What it costs and what it does not do
++
++- **Exports and the MCP payload carry `data-author-title` instead of `title`** on newly imported
++  articles. Nothing reads it there; the words are not lost.
++- **A screen reader loses a link's or a span's `title` as a description** (an `<abbr>`, an unnamed
++  link and an unnamed image keep theirs — see Sol's finding 2 below).
++- The filter is a heuristic. It errs to *show* (a redundant title costs one line in a card that is
++  already opening); the one wholesale case it guards against is Wikipedia's.
++
++## The simpler options passed over
++
++- **A — leave it.** No code, but the grey box stays on 24k elements that are worth reading, and on a
++  link it sits next to our card.
++- **B — strip `title`.** One line, and every one of those 24k goes, including gwern's citations.
++- **Rename at ingress, outside the policy**, as src/web/external-links.ts does for `target`. Avoids
++  touching the defence, but maths.ts puts changed blocks back through the policy, which would strip
++  our attribute again, and the stored html would still carry `title`. The policy is the one place
++  that sees every path.
++
++## GPT Sol's plan review, and what changed
++
++[Review](261018n-author-title-plan-review-sol.md): *proceed with fixes*, five findings, all taken.
++
++1. **P1, block ids.** A text-less block's identity is its attributes (`emptyKey`, src/blocks.ts), so a
++   stored `<hr title="thin">` and a new `<hr data-author-title="thin">` stopped matching and the rule
++   would re-mint. Fixed in the key, which spells `title` as the new name;
++   `tests/empty-blocks-keep-their-ids.test.ts` went red first. Sol also suggested bumping
++   `SANITIZER_VERSION`; not done, because with the key fixed nothing stored is wrong, and the bump's
++   rule is "an artefact could now be wrong".
++2. **P2, accessibility.** Beyond the empty link: an `<img>` with no `alt` gets `aria-label`
++   (not one with `alt=""`, which is decorative), and an `<abbr>` gets `aria-description`. Other
++   elements' titles, which were only ever a description, are not copied into ARIA — that would be
++   170k repeats, mostly Wikipedia page names.
++3. **P2, cross-references.** A titled `<span>` round a `mark.xref` would have opened our card beside
++   BlockLinkCard. Such an element gives up its hover text.
++4. **P2, the filter.** Visible-text comparison now ignores only case, spacing and outer quotes, so
++   `C++` over `C` is kept; the address comparison stays aggressive.
++5. **P3, parity.** Six title cases joined `tests/sanitize-client.test.ts`'s corpus (each namespace, a
++   forged copy, the iframe). A real Chrome check was done by a browser subagent: no `[title]` left in
++   two articles' prose, the card drawn in Source Serif 4.
++
++## Verification
++
++- `tests/sanitize.test.ts`: `title` becomes `data-author-title`; iframe keeps `title`; an empty-text
++  link gains `aria-label`; idempotent. Red before the hook.
++- `tests/sanitize-allowlist.test.ts`: the pinned lists.
++- `tests/author-title.test.ts`: each exclusion, and a gwern citation kept.
++- `tests/bibliography*.test.ts`: a link label from either name.
++- Browser: a Sonnet subagent hovers a gwern link and an `<abbr>` on the local dev server — card shows
++  *from the article* in the author's face, no grey box.
+diff --git a/docs/plans/261018n-author-title-plan-review-prompt.md b/docs/plans/261018n-author-title-plan-review-prompt.md
+new file mode 100644
+index 000000000..4d553d46f
+--- /dev/null
++++ b/docs/plans/261018n-author-title-plan-review-prompt.md
+@@ -0,0 +1,22 @@
++You are reviewing a plan before it is built, in the Spideryarn repo (this working tree). Read-only: do not edit files.
++
++The plan: docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md
++
++Context to read:
++- src/sanitize-policy.ts (the one sanitiser policy, a security defence; both bindings share it: src/sanitize.ts server, src/web/sanitize.ts browser)
++- tests/sanitize-allowlist.test.ts, tests/sanitize-client.test.ts, tests/sanitize.test.ts
++- src/web/external-links.ts (the precedent for a presentation pass outside the policy) and src/web/maths.ts around line 284 (re-sanitises changed blocks)
++- src/web/ProseHoverCard.tsx (`read`, the `useHoverCard` selector, the card body, `LinkCard`)
++- src/bibliography.ts `anchorsOf` (reads `title` off a stored block's links)
++- docs/project/security-map.md, docs/project/fonts.md, docs/project/tooltips.md
++- docs/user-feedback/questions/q-z2c269.md (the question Greg answered, and options A/B/C)
++
++Greg's permission covers this one sanitiser change. Please check:
++1. Is renaming `title` -> `data-author-title` inside the policy hook safe? Any mXSS, DOM-clobbering, or forgery consequence, given ARTICLE_DATA_ATTRS's "kept names" rule and the test that pins which kept names browser code may read? Is the "forging it gains nothing over title" argument right?
++2. Idempotence and server/client byte-equality: does afterSanitizeAttributes' order (attribute removal/adding, aria-label) keep a second pass a no-op and both bindings identical? Any element types (SVG, MathML, iframe, img) where moving `title` is wrong?
++3. Is not bumping SANITIZER_VERSION right, by the rule in its comment?
++4. Any other reader of `title` on stored or rendered block html that the plan missed (server or browser)? Grep for it.
++5. Is the card design (selector widening to `.prose [data-author-title]`, filter heuristics, placement above the link half) sound with useHoverCard's delegation, focus, and touch rules? Any interaction that breaks an existing card (terms, cites, quotes, notes, xrefs, BlockLinkCard)?
++6. Is there a simpler version that keeps the words and marks them as the author's?
++
++Answer with numbered findings, each with severity (P0/P1/P2/P3), file:line evidence, and a concrete fix. End with a one-line verdict: "VERDICT: proceed", "VERDICT: proceed with fixes", or "VERDICT: rethink".
+diff --git a/docs/plans/261018n-author-title-plan-review-sol.md b/docs/plans/261018n-author-title-plan-review-sol.md
+new file mode 100644
+index 000000000..991a23981
+--- /dev/null
++++ b/docs/plans/261018n-author-title-plan-review-sol.md
+@@ -0,0 +1,15 @@
++1. **P1 — Not bumping `SANITIZER_VERSION` can silently remint stable block IDs.** The plan says old blocks may retain `title` ([plan:49](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md:49)), while newly extracted HTML is sanitized before ID carry-over ([blocks.ts:1392](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/src/blocks.ts:1392)). For textless blocks, identity includes every attribute name and value ([blocks.ts:818](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/src/blocks.ts:818)); there is already an explicit `<hr title="…">` identity test ([empty-blocks-keep-their-ids.test.ts:296](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/tests/empty-blocks-keep-their-ids.test.ts:296)). Thus legacy `<hr title="thin">` and new `<hr data-author-title="thin">` no longer match, and that block silently gets a new ID. PostgreSQL’s stage baseline is read as stored, without sanitizer normalization ([artifacts-pg.ts:435](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/src/store/artifacts-pg.ts:435)), so bumping alone is insufficient there. **Fix:** bump to version 9, and canonicalize legacy `title` to `data-author-title` when preparing the previous baseline—or make `emptyKey` treat those spellings identically. Add a regression using a legacy titled `<hr>` baseline and assert `minted === 0`.
++
++2. **P2 — The change knowingly removes meaningful accessibility semantics.** The plan explicitly accepts losing `abbr[title]` to screen readers ([plan:71](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md:71)), contrary to the tooltip contract that replacements need a separate assistive path ([tooltips.md:96](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/docs/project/tooltips.md:96)). Images without `alt` can likewise lose a fallback accessible name. Restoring only empty anchors does not cover either case. **Fix:** preserve the title as an accessible description where one is absent; give `<abbr>` an explicit accessible expansion, and give `<img>` an `aria-label` when `alt` is absent—not when `alt=""` deliberately marks it decorative. Test these cases alongside the empty-link case.
++
++3. **P2 — A titled ancestor can race `BlockLinkCard` on a cross-reference.** The widened selector ([plan:57](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md:57)) can match a titled `<span>` containing `mark.xref`. Cross-references deliberately exclude only author hyperlinks, not titled spans ([annotate.ts:1131](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/src/web/annotate.ts:1131)), while `BlockLinkCard` independently listens for that mark ([BlockLinkCard.tsx:388](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/src/web/BlockLinkCard.tsx:388)). Hover or keyboard focus can therefore open two delegated cards. **Fix:** make the prose selector treat `XREF_SELECTOR` as a shadowing target and have `read` decline it before walking to a titled ancestor. Add hover and focus tests proving only the block-preview card opens.
++
++4. **P2 — The proposed filter can hide meaningful punctuation despite claiming to err toward showing.** The draft comparator removes all punctuation and symbols ([author-title.ts:38](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/src/web/author-title.ts:38)); consequently `title="C++"` over text `C`, or `C#` over `C`, is classified as redundant and discarded. **Fix:** use conservative normalization for visible-text equality—case, whitespace, Unicode normalization, and surrounding quotation marks—while retaining semantic internal punctuation. Keep the more aggressive path normalization separate. Add `C++` and `C#` cases.
++
++5. **P3 — The new transformation is not included in the binding-parity corpus.** `tests/author-title.test.ts` exercises the server binding, while the server/client equality corpus contains no title-renaming cases ([sanitize-client.test.ts:29](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/tests/sanitize-client.test.ts:29)). That suite also acknowledges its “browser” is still jsdom ([sanitize-client.test.ts:15](/var/tmp/spideryarn-worktrees/qi-ra2qwnfk-author-title-in-card/tests/sanitize-client.test.ts:15)). **Fix:** add ordinary, pre-forged, iframe, SVG, and MathML title cases to the shared parity/idempotence corpus; include at least one real-Chromium smoke case for the namespace paths.
++
++No XSS or clobbering issue otherwise: `setAttribute` introduces no parser re-entry, `data-author-title` cannot clobber DOM properties, and forging it only produces explicitly author-labelled text. The iframe exception and second-pass attribute ordering are sound; SVG/MathML attributes are safe, with `<svg><title>` elements unaffected. Grep found no other direct stored-HTML reader beyond `anchorsOf`; the important missed indirect reader is `emptyKey` in finding 1.
++
++There is no materially simpler design that still supports links, spans, abbreviations, and the maths re-sanitization path. The policy-backed attribute remains the smallest coherent approach once these fixes are included.
++
++VERDICT: proceed with fixes
+\ No newline at end of file
+diff --git a/docs/project/security-map.md b/docs/project/security-map.md
+index 65c538706..733525b9a 100644
+--- a/docs/project/security-map.md
++++ b/docs/project/security-map.md
+@@ -99,7 +99,7 @@ An agent about to edit one of these is editing a defence, not a helper.
+ 
+ | | |
+ |---|---|
+-| [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it |
++| [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it. Since 2026-10-18 it also renames an article's `title` to `data-author-title`, which the prose card shows as the author's words — a kept name that grants nothing `title` did not, so forging it is harmless (Greg's option C, plan [261018n](../plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md)) |
+ | [`src/sanitize.ts`](../../src/sanitize.ts) | the server binding, called from stage 3 in [`src/blocks.ts`](../../src/blocks.ts) — cleans the stored artefact |
+ | [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`article/access.ts`](../../src/web/article/access.ts) § `resolveAccess` — guards the render. **Policy only**: it must stay byte-for-byte what the server binding produces, and `tests/sanitize-client.test.ts` says so |
+ | [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
+diff --git a/docs/project/tooltips.md b/docs/project/tooltips.md
+index 44ab8da55..b3b7e5b7c 100644
+--- a/docs/project/tooltips.md
++++ b/docs/project/tooltips.md
+@@ -102,6 +102,15 @@ text where the words matter); and show on a **disabled shadcn `Button`**, which
+ `pointer-events: none`. Where a card wants a head and paragraphs rather than a sentence, it is a
+ `ControlTip` in a `Tooltip`, as before.
+ 
++**An article's own `title` is not ours, and since 2026-10-18 it is not grey either.** The test above
++cannot see it, because it arrives as data. The sanitiser moves it onto `data-author-title`
++(`src/sanitize-policy.ts` § `AUTHOR_TITLE_ATTR`, an `<iframe>`'s excepted), and the prose card shows
++it as a *from the article* section in the author's face — on a link above the link half, and on a
++titled `<abbr>` or `<span>` by itself. `src/web/author-title.ts` leaves out what says nothing new:
++the element's own words, the address again (every Wikipedia link), COinS metadata. Greg's option C
++on [q-z2c269](../user-feedback/questions/q-z2c269.md); plan
++[261018n](../plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md).
++
+ ## Short paragraphs or bullets, not one block
+ 
+ > for the rich tooltip for the remember mode information, it's like one big paragraph. Prefer smaller
+@@ -801,6 +810,7 @@ This is the single home for which marks have a card. As of 2026-10-10:
+ | Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |
+ | Hits, `mark.hit` — Search, Ideas, Timeline, Referee, Skim | only while their mode is open | **none** | none needed — the mode is open and its band lists the item |
+ | The author's links, footnote markers | every mode | `LinkCard`, `NoteCard` | none — the author's, not a mode's |
++| The author's own hover text, `[data-author-title]` (since 2026-10-18) | every mode | `AuthorTitlePart` | none — the author's, not a mode's |
+ 
+ Nothing else draws in the prose: Sources' Reception and Claims, FAQ, Structure, Summary, Diagram,
+ Learn and Marginalia do not (`passages.ts` § `selectPassages`). A new mark that a mode draws gets a
+diff --git a/src/bibliography.ts b/src/bibliography.ts
+index 44820e861..3a97b7da2 100644
+--- a/src/bibliography.ts
++++ b/src/bibliography.ts
+@@ -51,6 +51,7 @@ import { finishedText, streamMessage } from "./messages-stream.js";
+ import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
+ import { REF_ATTR } from "./notes.js";
+ import { arxivIdOf } from "./paper-sources.js";
++import { AUTHOR_TITLE_ATTR } from "./sanitize-policy.js";
+ import { parseJsonAnswer } from "./parse-json.js";
+ import {
+   assertNoBlockIdEnums,
+@@ -1079,7 +1080,11 @@ export function entryIdentifiers(entry: string): { dois: string[]; arxivs: strin
+ export interface Anchor {
+   href: string;
+   text: string;
+-  /** The anchor's `title` attribute — gwern writes the work's title there. */
++  /**
++   * The anchor's own hover text — gwern writes the work's title there. The
++   * policy moves `title` onto `AUTHOR_TITLE_ATTR` (src/sanitize-policy.ts), and
++   * blocks stored before 2026-10-18 still carry `title`, so both are read.
++   */
+   label: string;
+   /** Every URL the anchor carries: href, and gwern's `data-url-original`/`data-href-mobile`. */
+   urls: string[];
+@@ -1121,7 +1126,7 @@ export function anchorsOf(html: string): Anchor[] {
+     out.push({
+       href,
+       text: text(a.textContent),
+-      label: text(a.getAttribute("title")),
++      label: text(a.getAttribute(AUTHOR_TITLE_ATTR) ?? a.getAttribute("title")),
+       urls,
+     });
+   }
+diff --git a/src/blocks.ts b/src/blocks.ts
+index fd2a4265e..474f70f50 100644
+--- a/src/blocks.ts
++++ b/src/blocks.ts
+@@ -27,7 +27,7 @@ import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from
+    src/reserved.ts, which is the only file allowed to name one of these. */
+ import { CONTEXT_ATTRS, CONTEXT_ID_PATTERN, RESERVED_ATTRS, scrubReserved } from "./reserved.js";
+ import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
+-import { SANITIZER_VERSION } from "./sanitize-policy.js";
++import { AUTHOR_TITLE_ATTR, SANITIZER_VERSION } from "./sanitize-policy.js";
+ /* `Block` and `BlockKind` come from types.ts rather than being declared here.
+    This file *writes* blocks.json — the spine every later stage addresses text
+    through (docs/project/block-ids.md) — so a second declaration of its shape is
+@@ -863,9 +863,14 @@ function emptyKey(tag: string, html: string): string | null {
+      sides of a match disagree about markup: no id of ours, no href
+      `retargetAnchors` repointed. That is the whole reason the general
+      structural digest is deferred and this narrow one is not. */
++  /* **`title` is spelt `AUTHOR_TITLE_ATTR`**, because a block stored before
++     2026-10-18 says `title` and the sanitiser now writes the new name for the
++     same words (src/sanitize-policy.ts § `moveAuthorTitle`). Two spellings of
++     one attribute, or every titled `<hr>` re-mints on its first re-extraction —
++     GPT Sol, plan review of 261018n. */
+   const attrs = Array.from(root.attributes)
+     .filter((a) => a.name !== "id")
+-    .map((a) => [a.name, a.value] as const)
++    .map((a) => [a.name === "title" ? AUTHOR_TITLE_ATTR : a.name, a.value] as const)
+     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+   return `${EMPTY_KEY}${tag}:${JSON.stringify([attrs, root.innerHTML])}`;
+ }
+diff --git a/src/sanitize-policy.ts b/src/sanitize-policy.ts
+index 61b41f48b..d5840a453 100644
+--- a/src/sanitize-policy.ts
++++ b/src/sanitize-policy.ts
+@@ -30,7 +30,7 @@ import { RESERVED_ATTRS } from "./reserved.js";
+  * reading view adds afterwards unforgeable, including the ones nobody has
+  * written yet.
+  *
+- * Two families, and a third would need an argument:
++ * Three families, and a fourth would need an argument:
+  *
+  * - **the pipeline's own `data-spya-*` namespace** (src/reserved.ts). Stage 2
+  *   writes note and callout stamps for stage 3; stage 3 stamps `wasId`/`wasName`
+@@ -43,15 +43,33 @@ import { RESERVED_ATTRS } from "./reserved.js";
+  *   `data-href-mobile`, the real link behind an archive copy, which
+  *   src/bibliography.ts reads off the sanitised block. Nothing in the browser reads
+  *   either.
++ * - **the author's own hover text**, `AUTHOR_TITLE_ATTR`, which this policy
++ *   writes from the article's `title` — below.
+  *
+  * Adding a name here is the one way to let an article carry it, so
+  * tests/sanitize-allowlist.test.ts pins this list exactly and fails if any
+  * `data-…` spelled in `src/` survives without being on it.
+  */
++/**
++ * **Where an article's own `title` goes**, so the browser draws no grey box over
++ * the prose and our card can show the words instead, labelled as the author's
++ * (ProseHoverCard.tsx; src/web/author-title.ts decides which are worth it).
++ * Greg, 2026-10-18, spya-y0xzwm: *"We should indicate that it's author provided
++ * if we do keep this."* Plan 261018n.
++ *
++ * **A kept name, not a reserved one, and forging it is not a hole.** An article
++ * that ships `data-author-title="…"` itself gets exactly what `title="…"` would
++ * have got it: its own words, shown as its own. Nothing of ours is claimed —
++ * which is the test every other kept name had to pass, and the reason
++ * tests/sanitize-allowlist.test.ts lets browser code read this one.
++ */
++export const AUTHOR_TITLE_ATTR = "data-author-title";
++
+ export const ARTICLE_DATA_ATTRS: readonly string[] = [
+   ...Object.values(RESERVED_ATTRS),
+   "data-url-original",
+   "data-href-mobile",
++  AUTHOR_TITLE_ATTR,
+ ];
+ 
+ /**
+@@ -198,7 +216,13 @@ export const SANITIZER_VERSION = 8;
+    seventh name, the rule now fails closed. A new marking needs no edit here,
+    and tests/sanitize-allowlist.test.ts scans `src/` to prove it. Stricter,
+    so bumped. Greg approved the defence edit, 2026-10-01;
+-   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md. */
++   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md.
++
++   **Not bumped on 2026-10-18**, when `title` started moving onto
++   `AUTHOR_TITLE_ATTR` (`moveAuthorTitle`). An artefact cleaned under 8 still
++   carries `title`, which is kept text rather than a hazard, and the browser
++   pass moves it at ingress; re-cleaning every article would find nothing to
++   remove. Plan 261018n. */
+ 
+ /**
+  * Video embeds, by exact origin and path prefix.
+@@ -638,6 +662,52 @@ function stripOwnApiUrls(el: Element): void {
+   }
+ }
+ 
++/**
++ * An article's `title` attribute, moved onto `AUTHOR_TITLE_ATTR` — the words
++ * kept, the browser's grey box gone. Greg's option C on q-z2c269, 2026-10-18.
++ *
++ * - **Not on an `<iframe>`**, whose `title` is the frame's accessible name
++ *   rather than a tooltip.
++ * - **What a screen reader had from it, it keeps** (GPT Sol, plan review): a
++ *   link with no words, no `alt` and no label, and an image with no `alt` at
++ *   all, get it as `aria-label`, as 261017g did for our own controls; an
++ *   `<abbr>` gets its expansion as `aria-description`. An image whose `alt=""`
++ *   says it is decorative stays decorative. Other elements' titles were only
++ *   ever a description, and repeating 170k of them, mostly Wikipedia's page
++ *   names, onto every link is not worth what it would say.
++ * - **An article's own `AUTHOR_TITLE_ATTR` wins over its `title`**, so a pass
++ *   over our own output, which has no `title` left, changes nothing, and an
++ *   element carrying both keeps one.
++ *
++ * Not a reason to bump `SANITIZER_VERSION`: an artefact cleaned before this
++ * still has `title`, which is kept text, not a hazard — and the browser pass
++ * moves it at ingress anyway.
++ */
++function moveAuthorTitle(el: Element): void {
++  const title = el.getAttribute("title");
++  if (title === null || el.tagName === "IFRAME") return;
++  el.removeAttribute("title");
++  if (!el.hasAttribute(AUTHOR_TITLE_ATTR)) el.setAttribute(AUTHOR_TITLE_ATTR, title);
++  if (!title.trim()) return;
++  const unnamed =
++    (el.tagName === "A" && !hasAName(el)) ||
++    (el.tagName === "IMG" && !el.hasAttribute("alt") && !hasALabel(el));
++  if (unnamed) el.setAttribute("aria-label", title);
++  if (el.tagName === "ABBR" && !el.hasAttribute("aria-description")) {
++    el.setAttribute("aria-description", title);
++  }
++}
++
++function hasALabel(el: Element): boolean {
++  return el.hasAttribute("aria-label") || el.hasAttribute("aria-labelledby");
++}
++
++/** Words, a non-empty `alt` inside, or a label of its own. */
++function hasAName(el: Element): boolean {
++  if ((el.textContent ?? "").trim() || hasALabel(el)) return true;
++  return Array.from(el.querySelectorAll("[alt]")).some((i) => (i.getAttribute("alt") ?? "").trim());
++}
++
+ export function installArticlePolicy(purify: DOMPurify): void {
+   /**
+    * MathML's machine-readable copy of a formula, removed along with its text.
+@@ -765,6 +835,8 @@ export function installArticlePolicy(purify: DOMPurify): void {
+      * covers four of six looks exactly like a rule that covers six. */
+     stripOwnApiUrls(el);
+ 
++    moveAuthorTitle(el);
++
+     if (el.tagName !== "IFRAME") return;
+     if (!isAllowedEmbed(el.getAttribute("src"))) {
+       el.remove();
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index d3f1944ba..f50043626 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -126,6 +126,9 @@ import {
+ } from "../messages.js";
+ import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
+ import { leavesTheApp } from "./external-links.js";
++import { authorTitleWorthShowing } from "./author-title.js";
++import { XREF_SELECTOR } from "./xref.js";
++import { AUTHOR_TITLE_ATTR } from "../sanitize-policy.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+ import { useJobs } from "./useJobs.js";
+ import { forgetOnReaderChange } from "./lib/reader-change.js";
+@@ -225,6 +228,13 @@ interface Hit {
+   note: NoteMarker | null;
+   /** A note's back-link: the same machinery pointing the other way. */
+   back: boolean;
++  /**
++   * **The article's own hover text** on the words, or round them — what was its
++   * `title` before the policy moved it (src/sanitize-policy.ts §
++   * `AUTHOR_TITLE_ATTR`), already through `authorTitleWorthShowing`. `null`
++   * where there is none, or none worth a line. Plan 261018n.
++   */
++  authorTitle: string | null;
+ }
+ 
+ /**
+@@ -525,10 +535,32 @@ function HoverCard({
+          is not the answer. */
+       const inBlock = blockOfLink(anchorEl);
+ 
+-      if (note) return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false };
++      /* **The author's hover text, read upwards only**, and only in the prose:
++         the attribute is written by the article policy, so nothing outside an
++         article's html can carry it. The innermost wins — an `<abbr>` inside a
++         titled link is about the abbreviation.
++
++         **Not round a cross-reference.** A `mark.xref` is BlockLinkCard's, and
++         the selector skips it, so a pointer on one inside a titled `<span>`
++         resolves to the span — and two cards would open over one phrase. Such a
++         span gives up its hover text instead (GPT Sol, plan review of 261018n). */
++      const titledAt = el.closest(`.prose [${AUTHOR_TITLE_ATTR}]`);
++      const titled = titledAt?.querySelector(XREF_SELECTOR) ? null : titledAt;
++      const authorTitle = titled
++        ? authorTitleWorthShowing(
++            titled.getAttribute(AUTHOR_TITLE_ATTR) ?? "",
++            titled.textContent ?? "",
++            titled.closest("a[href]")?.getAttribute("href") ?? null,
++          )
++        : null;
++
++      if (note) {
++        return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false, authorTitle };
++      }
+ 
+       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
+-      const marked = termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0;
++      const marked =
++        termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0 || authorTitle !== null;
+       if (!marked && !link) return null;
+       if (!marked && link?.kind === "anchor" && !anchor) return null;
+       return {
+@@ -541,6 +573,7 @@ function HoverCard({
+         href,
+         note: null,
+         back: !!anchorEl && isBackLink(anchorEl),
++        authorTitle,
+       };
+     },
+     [byId, byWork, sourceUrl, blockText, notes, quotes],
+@@ -572,8 +605,11 @@ function HoverCard({
+        (TableView.tsx § `NOT_A_BLOCK_SELECTION`), which is how a finger
+        annotates. `:not(.xref)` for the reason the other two marks have it.
+        docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2. */
+-    selector:
+-      "mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href]",
++    /* **And the words an article gave its own hover text**, since 2026-10-18 —
++       a titled `<abbr>` or `<span>` opens the card by itself, where the browser
++       used to draw its grey box. Pointer only, as the quote is: a `<span>` takes
++       no focus, and a finger never got the grey box either. Plan 261018n. */
++    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}]`,
+     /* Both containers survive their own re-render, which is the whole
+        requirement — see `host`. A chat answer's `<p>` does not, so the
+        fallback would leave a card pinned to a detached node as an answer
+@@ -589,7 +625,8 @@ function HoverCard({
+       hit.termIds.length === 0 &&
+       hit.citeIds.length === 0 &&
+       !hit.link &&
+-      !hit.note
++      !hit.note &&
++      !hit.authorTitle
+         ? QUOTE_OPEN_MS
+         : HOVER_DELAY.open,
+     /* True here and false for a bare term, and the difference is not a
+@@ -725,7 +762,8 @@ function HoverCard({
+   });
+ 
+   if (!shown) return null;
+-  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back } = shown.data;
++  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back, authorTitle } =
++    shown.data;
+   const found = termIds
+     .map((id) => byId.get(id))
+     .filter((e): e is GlossaryEntry => e !== undefined);
+@@ -737,12 +775,15 @@ function HoverCard({
+   const quoted = quoteKeys
+     .map((key) => quotes?.byKey.get(key))
+     .filter((q): q is Quote => q !== undefined);
+-  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link) return null;
++  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link && !authorTitle) {
++    return null;
++  }
+ 
+   const label = [
+     ...found.map((e) => e.name),
+     ...cited.map((w) => w.title),
+     ...quoted.map(() => "quote"),
++    authorTitle ? "from the article" : null,
+     note
+       ? `note ${note.label}`.trim()
+       : link?.kind === "external"
+@@ -826,6 +867,14 @@ function HoverCard({
+               why we kept them, then where a link would take you. */}
+           {quotes &&
+             quoted.map((q) => <QuoteCard key={q.id} quote={q} source={quotes} onClose={close} />)}
++          {/* The author's own hover text, above the note or link half: on a
++              link it is usually the author's description of where it goes. */}
++          {authorTitle && (
++            <AuthorTitlePart
++              words={authorTitle}
++              divided={found.length > 0 || cited.length > 0 || quoted.length > 0}
++            />
++          )}
+           {/* The note in full, in place of the link half rather than under it.
+               A marker IS a link into this article, so `LinkCard` would happily
+               draw it — as "elsewhere in this article" over 260 clipped
+@@ -834,7 +883,7 @@ function HoverCard({
+           {note && (
+             <NoteCard
+               note={note}
+-              divided={found.length > 0 || quoted.length > 0}
++              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
+               onGo={() => {
+                 close();
+                 onFollowNote(
+@@ -856,7 +905,7 @@ function HoverCard({
+               facts={facts}
+               add={add}
+               back={back}
+-              divided={found.length > 0 || quoted.length > 0}
++              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
+               onJump={(id) => { close(); onJump(id); }}
+             />
+           )}
+@@ -1431,6 +1480,25 @@ function LinkCard({
+   return <div className={`prose-card-body${divided ? " divided" : ""}`}>{content}</div>;
+ }
+ 
++/**
++ * **The article's own hover text** — what it put in a `title`, which the browser
++ * would have drawn as a grey box. Labelled as the article's and set in its face
++ * with the quote rule down the side, because these are the author's words and
++ * not ours (docs/project/fonts.md). Greg, 2026-10-18, spya-y0xzwm: *"We should
++ * indicate that it's author provided if we do keep this."* Plan 261018n.
++ */
++function AuthorTitlePart({ words, divided }: { words: string; divided: boolean }) {
++  return (
++    <div className={`prose-card-body${divided ? " divided" : ""}`}>
++      <p className="prose-card-label">
++        <FileText size={9} />
++        from the article
++      </p>
++      <p className="prose-card-text prose-card-quote">{words}</p>
++    </div>
++  );
++}
++
+ /**
+  * **What the page says about itself**, fetched by our server once and cached for
+  * everybody — the third source, and the only one that can answer for an
+diff --git a/src/web/author-title.ts b/src/web/author-title.ts
+new file mode 100644
+index 000000000..68663d7ec
+--- /dev/null
++++ b/src/web/author-title.ts
+@@ -0,0 +1,69 @@
++/**
++ * **Whether an article's own hover text is worth a line in our card.**
++ *
++ * The policy moves every `title` an article ships onto `data-author-title`
++ * (src/sanitize-policy.ts § `AUTHOR_TITLE_ATTR`), so the browser draws no grey
++ * box; the prose card (ProseHoverCard.tsx) shows what is left, labelled as the
++ * author's. Most of it says nothing the reader cannot already see, and this
++ * sets aside the four kinds that dominate a measured store — 145k of 170k on
++ * 2026-10-18 (plan 261018n):
++ *
++ *  - the element's own words again (`<a title="Leo">Leo</a>`);
++ *  - the address again — every Wikipedia link, `/wiki/Ancient_Corinth` titled
++ *    *Ancient Corinth*, which the link half of the card names already;
++ *  - COinS metadata (`span.Z3988`), a query string for citation managers;
++ *  - blank.
++ *
++ * It errs towards showing: a redundant line costs little in a card that is
++ * opening anyway, and a citation hidden by an over-clever rule costs the words.
++ *
++ * Returns the words to draw, whitespace collapsed and clipped, or `null`.
++ */
++export function authorTitleWorthShowing(
++  title: string,
++  text: string,
++  href: string | null,
++): string | null {
++  const words = title.replace(/\s+/g, " ").trim();
++  if (!words || words.startsWith("ctx_ver=")) return null;
++  if (sameWords(words) === sameWords(text)) return null;
++  const key = addressWords(words);
++  const path = href ? addressWords(pathOf(href)) : "";
++  if (key && (path === key || path.endsWith(` ${key}`))) return null;
++  return words.length > MAX ? `${words.slice(0, MAX).trimEnd()}…` : words;
++}
++
++const MAX = 300;
++
++/**
++ * **For "is it the element's own words?", only what cannot change the meaning
++ * goes**: case, spacing, and quotation marks round the outside — so
++ * `“Scaling Laws”` is `scaling laws`, and `C++` is still not `C` (GPT Sol, plan
++ * review of 261018n).
++ */
++function sameWords(s: string): string {
++  return s
++    .normalize("NFKC")
++    .toLowerCase()
++    .replace(/\s+/g, " ")
++    .trim()
++    .replace(/^["'“”‘’«»]+|["'“”‘’«»]+$/gu, "")
++    .trim();
++}
++
++/**
++ * **For "is it the address again?", everything but the letters and digits**: a
++ * path spells *Bibcode (identifier)* as `Bibcode_(identifier)`.
++ */
++function addressWords(s: string): string {
++  return s.normalize("NFKC").toLowerCase().replace(/[\s_\p{P}\p{S}]+/gu, " ").trim();
++}
++
++/** The href's path, decoded; `""` when it will not parse. */
++function pathOf(href: string): string {
++  try {
++    return decodeURIComponent(new URL(href, "https://x.invalid/").pathname);
++  } catch {
++    return "";
++  }
++}
+diff --git a/tests/author-title-card.test.tsx b/tests/author-title-card.test.tsx
+new file mode 100644
+index 000000000..e901459dc
+--- /dev/null
++++ b/tests/author-title-card.test.tsx
+@@ -0,0 +1,133 @@
++// @vitest-environment jsdom
++/**
++ * **Point at words the article gave hover text to, and our card shows it as the
++ * article's** — plan 261018n, Greg's option C on q-z2c269. The html goes
++ * through the real browser binding first, so this is the attribute the policy
++ * writes rather than one typed in by hand. Harness after
++ * tests/citation-hover-card.test.tsx.
++ */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { ProseHoverCard } from "../src/web/ProseHoverCard.js";
++import { sanitizeBlockHtml } from "../src/web/sanitize.js";
++import { buildNoteIndex } from "../src/web/notes-view.js";
++import { HOVER_DELAY } from "../src/web/useHoverCard.js";
++
++class FakeResizeObserver {
++  observe() {}
++  unobserve() {}
++  disconnect() {}
++}
++
++const HTML = sanitizeBlockHtml(
++  `<p>Models scale (<a href="https://gwern.net/doc/x" title="'Scaling Laws for Neural Language Models', Kaplan et al 2020">science</a>),
++   <abbr title="circa">c.</abbr> 2020, as <a href="https://en.wikipedia.org/wiki/Leo_(constellation)" title="Leo (constellation)">Leo</a> does.
++   <span title="ctx_ver=Z39.88-2004&amp;rft.genre=book">x</span></p>`,
++);
++
++let host: HTMLDivElement;
++let root: Root;
++
++function paint(): void {
++  act(() =>
++    root.render(
++      <>
++        <div
++          className="prose"
++          // biome-ignore lint/security/noDangerouslySetInnerHtml: standing in for TableView
++          dangerouslySetInnerHTML={{ __html: HTML }}
++        />
++        <ProseHoverCard
++          entries={[]}
++          works={[]}
++          slug={null}
++          sourceUrl={null}
++          blockText={new Map()}
++          notes={buildNoteIndex([])}
++          lookUpLinks={false}
++          canAddToShelf={false}
++          showInSpideryarn={false}
++          termActions={null}
++          onOpenTerm={() => {}}
++          onJump={() => {}}
++          onFollowNote={() => {}}
++        />
++      </>,
++    ),
++  );
++}
++
++function hover(target: Element): void {
++  act(() => {
++    const event = new MouseEvent("pointerover", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 });
++    Object.defineProperty(event, "pointerType", { value: "mouse" });
++    Object.defineProperty(event, "pointerId", { value: 1 });
++    Object.defineProperty(event, "isPrimary", { value: true });
++    target.dispatchEvent(event);
++  });
++  act(() => {
++    vi.advanceTimersByTime(HOVER_DELAY.open + 100);
++  });
++}
++
++const card = () => document.querySelector(".prose-card");
++const el = (selector: string) => {
++  const found = host.querySelector(selector);
++  if (!found) throw new Error(`no ${selector}`);
++  return found;
++};
++
++beforeEach(() => {
++  vi.useFakeTimers();
++  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  paint();
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++  vi.useRealTimers();
++  vi.unstubAllGlobals();
++});
++
++describe("the article's own hover text, in our card", () => {
++  it("leaves no title for the browser to draw", () => {
++    expect(host.querySelector("[title]")).toBeNull();
++  });
++
++  it("shows a link's citation as the article's, above the link half", () => {
++    hover(el('a[href^="https://gwern.net"]'));
++    const shown = card();
++    expect(shown?.textContent).toContain("from the article");
++    const quote = shown?.querySelector(".prose-card-quote");
++    expect(quote?.textContent).toBe("'Scaling Laws for Neural Language Models', Kaplan et al 2020");
++    expect(shown?.textContent).toContain("gwern.net");
++  });
++
++  it("opens a card on an abbreviation by itself", () => {
++    hover(el("abbr"));
++    expect(card()?.querySelector(".prose-card-quote")?.textContent).toBe("circa");
++  });
++
++  it("says nothing extra where the title only restates the address", () => {
++    hover(el('a[href*="wikipedia"]'));
++    expect(card()?.textContent ?? "").not.toContain("from the article");
++  });
++
++  it("leaves a cross-reference inside a titled span to its own card", () => {
++    const span = el("span");
++    span.setAttribute("data-author-title", "Section 2, above");
++    span.innerHTML = `<mark class="xref" data-xref="x1">see above</mark>`;
++    hover(el("mark.xref"));
++    expect(card()).toBeNull();
++  });
++
++  it("opens no card on COinS metadata", () => {
++    hover(el("span"));
++    expect(card()).toBeNull();
++  });
++});
+diff --git a/tests/author-title.test.ts b/tests/author-title.test.ts
+new file mode 100644
+index 000000000..de1ac9083
+--- /dev/null
++++ b/tests/author-title.test.ts
+@@ -0,0 +1,133 @@
++/**
++ * An article's own `title` attribute: moved by the policy onto
++ * `data-author-title`, so the browser draws no grey box, and shown in the prose
++ * card when it says something the reader cannot already see.
++ * docs/plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md.
++ */
++import { describe, expect, it } from "vitest";
++import { sanitizeHtml } from "../src/sanitize.js";
++import { AUTHOR_TITLE_ATTR } from "../src/sanitize-policy.js";
++import { anchorsOf } from "../src/bibliography.js";
++import { authorTitleWorthShowing } from "../src/web/author-title.js";
++
++describe("the policy moves an article's title off the element", () => {
++  it("renames title on a link, an abbreviation and a span", () => {
++    for (const html of [
++      `<p><a href="https://example.com/a" title="'A paper', Smith 2020">a paper</a></p>`,
++      `<p><abbr title="circa">c.</abbr> 1900</p>`,
++      `<p><span title="1981 was 45 years ago.">45ya</span></p>`,
++    ]) {
++      const out = sanitizeHtml(html);
++      expect(out, html).not.toMatch(/\stitle=/);
++      expect(out, html).toContain(`${AUTHOR_TITLE_ATTR}="`);
++    }
++  });
++
++  it("keeps the words exactly", () => {
++    const out = sanitizeHtml(`<p><span title="Ancient &amp; &quot;Greek&quot;">AG</span></p>`);
++    expect(out).toBe(`<p><span ${AUTHOR_TITLE_ATTR}="Ancient &amp; &quot;Greek&quot;">AG</span></p>`);
++  });
++
++  it("leaves an embed's title alone, because it is the frame's name and not a tooltip", () => {
++    const out = sanitizeHtml(`<iframe src="https://www.youtube.com/embed/abc" title="A talk"></iframe>`);
++    expect(out).toContain(`title="A talk"`);
++    expect(out).not.toContain(AUTHOR_TITLE_ATTR);
++  });
++
++  it("gives a link whose only name was its title that name as aria-label", () => {
++    const out = sanitizeHtml(`<p><a href="https://example.com/" title="Home page"><img src="/i.png" alt=""></a></p>`);
++    expect(out).toContain(`aria-label="Home page"`);
++    expect(out).toContain(`${AUTHOR_TITLE_ATTR}="Home page"`);
++  });
++
++  it("keeps an abbreviation's expansion for a screen reader", () => {
++    const out = sanitizeHtml(`<p><abbr title="circa">c.</abbr></p>`);
++    expect(out).toContain(`aria-description="circa"`);
++  });
++
++  it("names an image that had no alt, and leaves a decorative one decorative", () => {
++    expect(sanitizeHtml(`<p><img src="/i.png" title="A chart"></p>`)).toContain(`aria-label="A chart"`);
++    expect(sanitizeHtml(`<p><img src="/i.png" alt="" title="A chart"></p>`)).not.toContain("aria-label");
++  });
++
++  it("does not add aria-label where the element already has words", () => {
++    const out = sanitizeHtml(`<p><a href="https://example.com/" title="Home page">home</a></p>`);
++    expect(out).not.toContain("aria-label");
++  });
++
++  it("is idempotent", () => {
++    for (const html of [
++      `<p><a href="https://example.com/a" title="t">x</a></p>`,
++      `<p><a href="https://example.com/" title="Home"><img src="/i.png" alt=""></a></p>`,
++      `<svg><circle r="5" title="a circle"></circle></svg>`,
++    ]) {
++      const once = sanitizeHtml(html);
++      expect(sanitizeHtml(once), html).toBe(once);
++    }
++  });
++
++  it("keeps an article's own data-author-title, which gives it nothing title did not", () => {
++    const out = sanitizeHtml(`<p><span ${AUTHOR_TITLE_ATTR}="hi">x</span></p>`);
++    expect(out).toContain(`${AUTHOR_TITLE_ATTR}="hi"`);
++  });
++});
++
++describe("the bibliography still reads a link's label", () => {
++  it("from the new name and from the old one, which stored blocks still carry", () => {
++    const fresh = anchorsOf(sanitizeHtml(`<p><a href="https://example.com/a" title="A paper">x</a></p>`));
++    const stored = anchorsOf(`<p><a href="https://example.com/a" title="A paper">x</a></p>`);
++    expect(fresh[0]?.label).toBe("A paper");
++    expect(stored[0]?.label).toBe("A paper");
++  });
++});
++
++describe("authorTitleWorthShowing", () => {
++  it("keeps a citation the link stands for", () => {
++    expect(
++      authorTitleWorthShowing(
++        "'Scaling Laws for Neural Language Models', Kaplan et al 2020",
++        "science",
++        "https://gwern.net/doc/www/arxiv.org/abc",
++      ),
++    ).toBe("'Scaling Laws for Neural Language Models', Kaplan et al 2020");
++  });
++
++  it("keeps an abbreviation's expansion", () => {
++    expect(authorTitleWorthShowing("circa", "c.", null)).toBe("circa");
++  });
++
++  it("drops a title that is the element's own words", () => {
++    expect(authorTitleWorthShowing("Leo", " leo ", null)).toBeNull();
++    expect(authorTitleWorthShowing("“Scaling Laws”", "Scaling laws", null)).toBeNull();
++  });
++
++  it("drops a title that restates the address — every Wikipedia link", () => {
++    expect(authorTitleWorthShowing("Ancient Corinth", "Corinth", "https://en.wikipedia.org/wiki/Ancient_Corinth")).toBeNull();
++    expect(authorTitleWorthShowing("Bibcode (identifier)", "Bibcode", "/wiki/Bibcode_(identifier)")).toBeNull();
++    expect(
++      authorTitleWorthShowing(
++        "Special:BookSources/978-0-19-509594-4",
++        "978-0-19-509594-4",
++        "https://en.wikipedia.org/wiki/Special:BookSources/978-0-19-509594-4",
++      ),
++    ).toBeNull();
++  });
++
++  it("keeps punctuation that is part of the meaning", () => {
++    expect(authorTitleWorthShowing("C++", "C", null)).toBe("C++");
++    expect(authorTitleWorthShowing("C#", "C", null)).toBe("C#");
++  });
++
++  it("drops COinS metadata and blank titles", () => {
++    expect(authorTitleWorthShowing("ctx_ver=Z39.88-2004&rft_val_fmt=info", "", null)).toBeNull();
++    expect(authorTitleWorthShowing("   ", "x", null)).toBeNull();
++  });
++
++  it("collapses whitespace and clips a long one", () => {
++    const long = "word ".repeat(200);
++    const shown = authorTitleWorthShowing(`a\n  b ${long}`, "x", null);
++    expect(shown?.startsWith("a b word")).toBe(true);
++    expect(shown?.length).toBeLessThanOrEqual(301);
++    expect(shown?.endsWith("…")).toBe(true);
++  });
++});
+diff --git a/tests/empty-blocks-keep-their-ids.test.ts b/tests/empty-blocks-keep-their-ids.test.ts
+index 1fe3d15ae..701753b4b 100644
+--- a/tests/empty-blocks-keep-their-ids.test.ts
++++ b/tests/empty-blocks-keep-their-ids.test.ts
+@@ -321,6 +321,26 @@ describe("a text-less block with markup in it mints rather than guessing", () =>
+     expect(second.stats.minted).toBe(0);
+   });
+ 
++  /**
++   * **A rule stored before 2026-10-18 still says `title`**, and the sanitiser
++   * now writes `data-author-title` (plan 261018n). The two spellings are one
++   * attribute to the key, or every titled empty block re-mints on its first
++   * re-extraction — GPT Sol's P1 on the plan.
++   */
++  it("matches a stored rule's old title to the sanitiser's new name for it", () => {
++    const rules = (body: string) => `<article><h1>Rules</h1>${body}</article>`;
++    const doc = rules(`<p>One.</p><hr title="thin"><p>Two.</p>`);
++    const first = splitIntoBlocks(doc);
++    const legacy = first.blocks.map((b) => ({
++      ...b,
++      html: b.html.replace("data-author-title=", "title="),
++    }));
++    expect(legacy.some((b) => b.html.includes(`title="thin"`))).toBe(true);
++    const second = resplit(doc, legacy);
++    expect(idsOf(second.blocks)).toEqual(idsOf(first.blocks));
++    expect(second.stats.minted).toBe(0);
++  });
++
+   /**
+    * **`<p></p>` and `<p>&#160;</p>` are two different paragraphs**, and the
+    * second draws a blank line. `extractText` collapses a non-breaking space to
+diff --git a/tests/sanitize-allowlist.test.ts b/tests/sanitize-allowlist.test.ts
+index 591455fa7..dd6a0983a 100644
+--- a/tests/sanitize-allowlist.test.ts
++++ b/tests/sanitize-allowlist.test.ts
+@@ -220,9 +220,14 @@ describe("what the article must keep", () => {
+     expect(sanitizeHtml(`<p id="spya-k3m9qt">g</p>`)).toBe(`<p id="spya-k3m9qt">g</p>`);
+   });
+ 
+-  it("declares only the pipeline namespace and the two publisher addresses", () => {
++  it("declares only the pipeline namespace, the two publisher addresses and the author's hover text", () => {
+     expect([...ARTICLE_DATA_ATTRS].sort()).toEqual(
+-      [...Object.values(RESERVED_ATTRS), "data-href-mobile", "data-url-original"].sort(),
++      [
++        ...Object.values(RESERVED_ATTRS),
++        "data-href-mobile",
++        "data-url-original",
++        "data-author-title",
++      ].sort(),
+     );
+     expect([...ARTICLE_CLASSES]).toEqual(["pdf-uncertain"]);
+   });
+@@ -258,10 +263,14 @@ describe("completeness: no marking the app uses survives unless it is declared",
+        `data-url-original` in src/web would be exactly that — a publisher's
+        attribute with our meaning on it — and goes red here. The four below are
+        ours, and scrubbed from a stranger's markup on the way in
+-       (src/reserved.ts). */
++       (src/reserved.ts). `data-author-title` is the one kept name browser
++       code may read, because its meaning *is* "the article's own words": a
++       publisher who ships it gets what `title` would have got them, labelled
++       as theirs (src/sanitize-policy.ts § `AUTHOR_TITLE_ATTR`, plan 261018n). */
+     const web = dataNamesInSource("src/web/**/*.{ts,tsx,css}");
+     const trusted = [...web.keys()].filter((n) => ARTICLE_DATA_ATTRS.includes(n)).sort();
+     expect(trusted).toEqual([
++      "data-author-title",
+       "data-spya-note",
+       "data-spya-note-back",
+       "data-spya-note-ref",
+diff --git a/tests/sanitize-client.test.ts b/tests/sanitize-client.test.ts
+index 5f4a4224a..7a205877c 100644
+--- a/tests/sanitize-client.test.ts
++++ b/tests/sanitize-client.test.ts
+@@ -50,6 +50,14 @@ const CORPUS: Array<[string, string]> = [
+      an HTML integration point inside MathML, where the namespace switches back. */
+   ["forged block link", `<p><a href="#x" data-block-link="spya-k3m9qt" class="xref">a</a></p>`],
+   ["svg marking", `<svg><g class="xref" data-xref="n-1"><text>x</text></g></svg>`],
++  /* An article's own `title`, moved onto `data-author-title` (plan 261018n) —
++     in each namespace, beside a forged copy, and on the one element exempt. */
++  ["author title", `<p><a href="https://e.com/" title="'A', B 2020">a</a> <abbr title="circa">c.</abbr></p>`],
++  ["author title, unnamed", `<p><a href="https://e.com/" title="Home"><img src="/i.png"></a></p>`],
++  ["author title, forged", `<p><span data-author-title="x" title="y">z</span></p>`],
++  ["author title, iframe", `<iframe src="https://www.youtube.com/embed/a" title="A talk"></iframe>`],
++  ["author title, svg", `<svg><circle r="5" title="c"></circle></svg>`],
++  ["author title, mathml", `<math><mi title="x">x</mi></math>`],
+   [
+     "mathml marking",
+     `<math><mi class="mode-band tml-left" data-block-link="x">x</mi><mtext><span class="xref tml-left" data-xref="1">y</span></mtext></math>`,

@@ -102,6 +102,15 @@ text where the words matter); and show on a **disabled shadcn `Button`**, which 
 `pointer-events: none`. Where a card wants a head and paragraphs rather than a sentence, it is a
 `ControlTip` in a `Tooltip`, as before.
 
+**An article's own `title` is not ours, and since 2026-10-18 it is not grey either.** The test above
+cannot see it, because it arrives as data. The sanitiser moves it onto `data-author-title`
+(`src/sanitize-policy.ts` § `AUTHOR_TITLE_ATTR`, an `<iframe>`'s excepted), and the prose card shows
+it as a *from the article* section in the author's face — on a link above the link half, and on a
+titled `<abbr>` or `<span>` by itself. `src/web/author-title.ts` leaves out what says nothing new:
+the element's own words, the address again (every Wikipedia link), COinS metadata. Greg's option C
+on [q-z2c269](../user-feedback/questions/q-z2c269.md); plan
+[261018n](../plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md).
+
 ## Short paragraphs or bullets, not one block
 
 > for the rich tooltip for the remember mode information, it's like one big paragraph. Prefer smaller
@@ -801,6 +810,7 @@ This is the single home for which marks have a card. As of 2026-10-10:
 | Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |
 | Hits, `mark.hit` — Search, Ideas, Timeline, Referee, Skim | only while their mode is open | **none** | none needed — the mode is open and its band lists the item |
 | The author's links, footnote markers | every mode | `LinkCard`, `NoteCard` | none — the author's, not a mode's |
+| The author's own hover text, `[data-author-title]` (since 2026-10-18) | every mode | `AuthorTitlePart` | none — the author's, not a mode's |
 
 Nothing else draws in the prose: Sources' Reception and Claims, FAQ, Structure, Summary, Diagram,
 Learn and Marginalia do not (`passages.ts` § `selectPassages`). A new mark that a mode draws gets a

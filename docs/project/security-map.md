@@ -99,7 +99,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 
 | | |
 |---|---|
-| [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it |
+| [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it. Since 2026-10-18 it also renames an article's `title` to `data-author-title`, which the prose card shows as the author's words — a kept name that grants nothing `title` did not, so forging it is harmless (Greg's option C, plan [261018n](../plans/261018n-an-article-s-own-title-attributes-shown-in-our-card-marked-as-the-author-s.md)) |
 | [`src/sanitize.ts`](../../src/sanitize.ts) | the server binding, called from stage 3 in [`src/blocks.ts`](../../src/blocks.ts) — cleans the stored artefact |
 | [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`article/access.ts`](../../src/web/article/access.ts) § `resolveAccess` — guards the render. **Policy only**: it must stay byte-for-byte what the server binding produces, and `tests/sanitize-client.test.ts` says so |
 | [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |

@@ -126,6 +126,9 @@ import {
 } from "../messages.js";
 import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
 import { leavesTheApp } from "./external-links.js";
+import { authorTitleWorthShowing } from "./author-title.js";
+import { XREF_SELECTOR } from "./xref.js";
+import { AUTHOR_TITLE_ATTR } from "../sanitize-policy.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { useJobs } from "./useJobs.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
@@ -225,6 +228,13 @@ interface Hit {
   note: NoteMarker | null;
   /** A note's back-link: the same machinery pointing the other way. */
   back: boolean;
+  /**
+   * **The article's own hover text** on the words, or round them — what was its
+   * `title` before the policy moved it (src/sanitize-policy.ts §
+   * `AUTHOR_TITLE_ATTR`), already through `authorTitleWorthShowing`. `null`
+   * where there is none, or none worth a line. Plan 261018n.
+   */
+  authorTitle: string | null;
 }
 
 /**
@@ -456,6 +466,12 @@ function HoverCard({
      card for no reason a reader could see. */
   const read = useCallback(
     (el: HTMLElement): Hit | null => {
+      /* A cross-reference owns the exact words it marks. It is included in the
+         delegated selector as a shadowing target so `el` is the xref itself,
+         rather than a titled ancestor found by `closest`; decline it before
+         walking upwards. Other words in that titled ancestor still keep the
+         author's hover text. */
+      if (el.matches(XREF_SELECTOR)) return null;
       const mark = el.closest("mark.term");
       const anchorEl = el.closest("a[href]");
 
@@ -525,10 +541,31 @@ function HoverCard({
          is not the answer. */
       const inBlock = blockOfLink(anchorEl);
 
-      if (note) return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false };
+      /* **The author's hover text, read upwards only**, and only in the prose:
+         the attribute is written by the article policy, so nothing outside an
+         article's html can carry it. The innermost wins — an `<abbr>` inside a
+         titled link is about the abbreviation.
+
+         **Not on a cross-reference.** A `mark.xref` is BlockLinkCard's; it is a
+         shadowing selector target and was declined at the top of `read`, so a
+         titled ancestor is reached from its other words but never through the
+         xref itself (GPT Sol, plan review of 261018n). */
+      const titled = el.closest(`.prose [${AUTHOR_TITLE_ATTR}]`);
+      const authorTitle = titled
+        ? authorTitleWorthShowing(
+            titled.getAttribute(AUTHOR_TITLE_ATTR) ?? "",
+            titled.textContent ?? "",
+            titled.closest("a[href]")?.getAttribute("href") ?? null,
+          )
+        : null;
+
+      if (note) {
+        return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false, authorTitle };
+      }
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
-      const marked = termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0;
+      const marked =
+        termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0 || authorTitle !== null;
       if (!marked && !link) return null;
       if (!marked && link?.kind === "anchor" && !anchor) return null;
       return {
@@ -541,6 +578,7 @@ function HoverCard({
         href,
         note: null,
         back: !!anchorEl && isBackLink(anchorEl),
+        authorTitle,
       };
     },
     [byId, byWork, sourceUrl, blockText, notes, quotes],
@@ -572,8 +610,11 @@ function HoverCard({
        (TableView.tsx § `NOT_A_BLOCK_SELECTION`), which is how a finger
        annotates. `:not(.xref)` for the reason the other two marks have it.
        docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2. */
-    selector:
-      "mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href]",
+    /* **And the words an article gave its own hover text**, since 2026-10-18 —
+       a titled `<abbr>` or `<span>` opens the card by itself, where the browser
+       used to draw its grey box. Pointer only, as the quote is: a `<span>` takes
+       no focus, and a finger never got the grey box either. Plan 261018n. */
+    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}], ${XREF_SELECTOR}`,
     /* Both containers survive their own re-render, which is the whole
        requirement — see `host`. A chat answer's `<p>` does not, so the
        fallback would leave a card pinned to a detached node as an answer
@@ -589,7 +630,8 @@ function HoverCard({
       hit.termIds.length === 0 &&
       hit.citeIds.length === 0 &&
       !hit.link &&
-      !hit.note
+      !hit.note &&
+      !hit.authorTitle
         ? QUOTE_OPEN_MS
         : HOVER_DELAY.open,
     /* True here and false for a bare term, and the difference is not a
@@ -725,7 +767,8 @@ function HoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back } = shown.data;
+  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back, authorTitle } =
+    shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
@@ -737,12 +780,15 @@ function HoverCard({
   const quoted = quoteKeys
     .map((key) => quotes?.byKey.get(key))
     .filter((q): q is Quote => q !== undefined);
-  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link) return null;
+  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link && !authorTitle) {
+    return null;
+  }
 
   const label = [
     ...found.map((e) => e.name),
     ...cited.map((w) => w.title),
     ...quoted.map(() => "quote"),
+    authorTitle ? "from the article" : null,
     note
       ? `note ${note.label}`.trim()
       : link?.kind === "external"
@@ -826,6 +872,14 @@ function HoverCard({
               why we kept them, then where a link would take you. */}
           {quotes &&
             quoted.map((q) => <QuoteCard key={q.id} quote={q} source={quotes} onClose={close} />)}
+          {/* The author's own hover text, above the note or link half: on a
+              link it is usually the author's description of where it goes. */}
+          {authorTitle && (
+            <AuthorTitlePart
+              words={authorTitle}
+              divided={found.length > 0 || cited.length > 0 || quoted.length > 0}
+            />
+          )}
           {/* The note in full, in place of the link half rather than under it.
               A marker IS a link into this article, so `LinkCard` would happily
               draw it — as "elsewhere in this article" over 260 clipped
@@ -834,7 +888,7 @@ function HoverCard({
           {note && (
             <NoteCard
               note={note}
-              divided={found.length > 0 || quoted.length > 0}
+              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
               onGo={() => {
                 close();
                 onFollowNote(
@@ -856,7 +910,7 @@ function HoverCard({
               facts={facts}
               add={add}
               back={back}
-              divided={found.length > 0 || quoted.length > 0}
+              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
               onJump={(id) => { close(); onJump(id); }}
             />
           )}
@@ -1429,6 +1483,25 @@ function LinkCard({
   const content = body();
   if (!content) return null;
   return <div className={`prose-card-body${divided ? " divided" : ""}`}>{content}</div>;
+}
+
+/**
+ * **The article's own hover text** — what it put in a `title`, which the browser
+ * would have drawn as a grey box. Labelled as the article's and set in its face
+ * with the quote rule down the side, because these are the author's words and
+ * not ours (docs/project/fonts.md). Greg, 2026-10-18, spya-y0xzwm: *"We should
+ * indicate that it's author provided if we do keep this."* Plan 261018n.
+ */
+function AuthorTitlePart({ words, divided }: { words: string; divided: boolean }) {
+  return (
+    <div className={`prose-card-body${divided ? " divided" : ""}`}>
+      <p className="prose-card-label">
+        <FileText size={9} />
+        from the article
+      </p>
+      <p className="prose-card-text prose-card-quote">{words}</p>
+    </div>
+  );
 }
 
 /**
