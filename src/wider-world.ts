@@ -80,11 +80,12 @@ Say how sure you are: settled, a live disagreement, or your own memory.
 ${checking}
 
 The world disagreeing with the piece is never the reader getting the piece
-wrong. A reader who repeated what the article says has read it right, whatever
-the world thinks of it, and the outside view never corrects, softens or
-replaces anything you say about their reading. Do not call it a correction and
-do not turn it into a question. One sentence, two at most, inside the length
-you already have.
+wrong. Their reading is judged against the article alone, whatever the world
+thinks of it, and the outside view never corrects, softens or replaces
+anything you say about their reading. Do not call it a correction, do not turn
+it into a question, and do not announce that they have the article right as a
+way into it: open the way the rest of this prompt says. One sentence, two at
+most, inside the length you already have.
 
 ${placement}`;
 }
