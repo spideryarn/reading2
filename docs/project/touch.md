@@ -517,6 +517,15 @@ has the numbers.
 [261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
 depends on the side.)
 
+**On a narrow touch screen there is no column, since 2026-10-18.** Under
+`(max-width: 731px) and (hover: none)` the right pad shrinks to a narrow strip. At rest it holds only
+state: the marks, without their counts, and the reading-time hairline at the outer edge. The tap that
+selects a row turns the gutter into a horizontal bar above the paragraph. Everything below about
+which row is selected still holds; only where the icons are drawn changes. Greg, on a phone: *"we
+only need it when there's an explicit action"* (spya-k49y3q,
+[261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). A full-width iPad
+keeps the column; a narrow iPad split view meets the query and uses the bar.
+
 **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
 The bookmark and the blue chat mark are facts about the article and are always there; the permalink,
 the chat door, the "?" and the "…" wait to be asked for. A finger has no hover, so on 2026-09-04 the
