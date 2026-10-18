@@ -332,7 +332,7 @@ describe("admitMatter", () => {
     const a = paper();
     const note = (n: number) => block(`Notes: These figures plot the coefficients and 95% confidence intervals from event study regressions using the Sun and Abraham (2021) estimator, panel ${n}.`);
     const tail = [block("Figure 1: Sample output", "media"), note(1), block("Figure 2: Raw distributions", "media"), note(2), block("Figure 3: Event studies", "media"), note(3)];
-    const blocks = [...a.blocks.slice(0, a.at.refsHeading! + 1), ...tail];
+    const blocks = [...(a.blocks as readonly (MatterBlock & Block)[]).slice(0, a.at.refsHeading! + 1), ...tail];
     const b = { ...a, blocks };
     const folded = admitMatter(b, [section(b, a.at.refsHeading!, ["references"])]).stretches.flatMap((s) => [
       blocks.findIndex((x) => x.id === s.from),

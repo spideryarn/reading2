@@ -41,7 +41,7 @@ import {
   RECHECK_SUFFIX,
   rowIdentity,
 } from "../src/citation-blurbs-identity.js";
-import { REGISTRY_NEGATIVE_TTL_MS } from "../src/citation-evidence.js";
+import { REGISTRY_NEGATIVE_TTL_MS } from "../src/work-id.js";
 import { CITATION_BLURBS_MODEL } from "../src/models.js";
 import { citationBlurbsStep } from "../src/pipeline.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";

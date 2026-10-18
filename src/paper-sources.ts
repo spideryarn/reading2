@@ -74,7 +74,7 @@ export const PAPER_SLUG_MAX = 60;
 /**
  * The same id, **bounded**, for the addresses this file resolves: an old-style
  * archive name is at most 16 characters. `ARXIV_ID_PATTERN` leaves it unbounded,
- * and that copy is left alone because src/cited-in-spideryarn.ts and
+ * and that copy is left alone because src/work-id.ts and
  * src/paper-text.ts share it and neither builds a slug from what it matches.
  *
  * Sixteen is twice the longest archive name known to whoever wrote this

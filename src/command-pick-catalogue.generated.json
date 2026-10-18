@@ -1962,6 +1962,29 @@
   ]
  },
  {
+  "id": "action:rerun-citation-blurbs",
+  "label": "Notes on cited works › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun notes on cited works",
+   "re-run notes on cited works",
+   "regenerate notes on cited works",
+   "redo notes on cited works",
+   "refresh notes on cited works",
+   "notes on cited works again",
+   "run notes on cited works again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "action:rerun-crossrefs",
   "label": "Cross-references › Run again",
   "description": "Written again from scratch; free, and what is here stays until it succeeds",
