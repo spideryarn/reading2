@@ -15,7 +15,7 @@ import {
   rowWorkId,
 } from "../src/citation-registry.js";
 import { receptionRegistryDeps } from "../src/reception-registry.js";
-import { REGISTRY_AUTHORS_KEPT } from "../src/registry-work.js";
+import { REGISTRY_AUTHORS_KEPT, registryWorkOf } from "../src/registry-work.js";
 import type { BlockId, Bibliography, CitedWork } from "../src/types.js";
 
 const AT = "spya-k3m9qt" as BlockId;
@@ -116,6 +116,24 @@ describe("what an answer puts on the row", () => {
       venue: "NeurIPS",
     });
     expect(out.counts).toMatchObject({ identified: 1, asked: 1, found: 1, conflict: 0 });
+  });
+
+  it("never carries the registry's abstract, or when it was read, into the Bibliography (plan 261017h stage 3a)", async () => {
+    /* The abstract is cached for the blurb step's evidence; the artefact is
+       copied to visitors, exports and chat, and is not where a 4,000-character
+       publisher text belongs. `registryWorkOf` picks its fields by name. */
+    const withAbstract = record("doi:10.5555/attention", "Attention is all you need", {
+      abstract: "The dominant sequence transduction models are based on complex recurrent networks.",
+      abstractReadAt: "2026-10-18T09:00:00.000Z",
+    });
+    const reg = fake({ "doi:10.5555/attention": { kind: "found", record: withAbstract } });
+    const out = await attachCitationRegistry(list([ATTENTION]), reg);
+    const row = out.bibliography.citations[0]?.registry;
+    expect(row).toMatchObject({ kind: "found", title: "Attention is all you need" });
+    expect(row).not.toHaveProperty("abstract");
+    expect(row).not.toHaveProperty("abstractReadAt");
+    expect(JSON.stringify(out.bibliography)).not.toContain("dominant sequence");
+    expect(registryWorkOf(withAbstract)).not.toHaveProperty("abstract");
   });
 
   describe("Crossref's citation count (plan 261005i)", () => {

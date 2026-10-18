@@ -67,6 +67,8 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
   `supabase db reset --linked`, and the other expensive one
 - [§ Checkpoints](#checkpoints-work-a-failed-attempt-already-paid-for) — the cache of model work a
   failed attempt already paid for
+- [§ The bibliographic cache keeps abstracts](#the-bibliographic-cache-keeps-abstracts) —
+  `bibliographic_records.abstract` and `abstract_read_at`, and why a row without the moment is stale
 - [§ What is not done yet](#what-is-not-done-yet) — known gaps (uplink, Vercel env, `restrict`)
 
 ## AI output we paid for is kept <a id="ai-output-we-paid-for-is-kept"></a>
@@ -1552,6 +1554,30 @@ What to know before touching any of it:
 A checkpoint write deliberately does **not** join the artefact transaction — preserving the work of a
 *failed* attempt is the whole point, and one rolled back with the attempt is worthless. The Postgres
 adapter uses `getDb()` and takes no `tx`.
+
+## The bibliographic cache keeps abstracts
+
+`spideryarn.bibliographic_records` — the global, ownerless cache of what Crossref and DataCite say a
+DOI or arXiv id is ([`src/bibliographic.ts`](../../src/bibliographic.ts),
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)) —
+gained two columns on 2026-10-18 for the citation blurbs
+([261017h stage 3](../plans/261017h-stage-3-design-citation-blurbs.md)):
+
+- **`abstract text`** — the work's abstract as the registry holds it, plain text, at most 4,000
+  characters: Crossref's `abstract` with the JATS stripped, or DataCite's description of type
+  `Abstract` (for an arXiv id, the author's arXiv abstract). Public text about a public work. It is
+  evidence for `src/citation-evidence.ts` and is **never copied into the Bibliography artefact** —
+  `registryWorkOf` picks its fields by name, and `tests/citation-registry.test.ts` pins it.
+- **`abstract_read_at timestamptz`** — set on every `found` answer, abstract or none, so *asked, and
+  there was none* differs from *cached before abstracts were kept*. **A found row with it null is
+  not fresh** (`freshSql` in [`src/store/pg-bibliographic.ts`](../../src/store/pg-bibliographic.ts)),
+  so every row cached before the migration is asked about once more — `cited_by_count_read_at`'s
+  precedent, for both registries.
+
+Two CHECKs: `bibliographic_records_abstract` (only on a found row, 1–4,000 characters, never without
+its moment) and `bibliographic_records_abstract_read_at` (only on a found row), both written with
+`is not distinct from` because a claim's `state` is SQL NULL
+([261004a](../postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md)).
 
 ## What is not done yet
 

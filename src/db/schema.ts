@@ -8311,6 +8311,22 @@ export const bibliographicRecords = spideryarn.table(
      * docs/plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md.
      */
     citedByCountReadAt: timestamp("cited_by_count_read_at", { withTimezone: true }),
+    /**
+     * `WorkRecord.abstract`: the work's abstract as the registry holds it —
+     * Crossref's `abstract`, or DataCite's `Abstract` description — as plain
+     * text, at most 4,000 characters. Public text about a public work; the
+     * evidence a citation blurb is written from (plan 261017h stage 3). Null
+     * when the registry gave none, and on every row from before 2026-10-18.
+     */
+    abstract: text("abstract"),
+    /**
+     * **When the registry was asked for that abstract**: `fetched_at`'s moment
+     * on every `found` answer, abstract or none; null otherwise. Null on a
+     * found row means *never asked* (cached before abstracts were kept), and
+     * such a row is not fresh (src/store/pg-bibliographic.ts § `freshSql`) —
+     * `cited_by_count_read_at`'s argument, for every registry.
+     */
+    abstractReadAt: timestamp("abstract_read_at", { withTimezone: true }),
     /** The single-flight claim: somebody is asking until then. Null when nobody is. */
     claimedUntil: timestamp("claimed_until", { withTimezone: true }),
   },
@@ -8347,6 +8363,17 @@ export const bibliographicRecords = spideryarn.table(
       "bibliographic_records_cited_by_count_read_at",
       sql`${t.citedByCountReadAt} is null
             or (${t.state} is not distinct from 'found' and ${t.source} is not distinct from 'crossref')`,
+    ),
+    /** An abstract is a found record's, bounded, never empty, and always with the moment it was read. */
+    check(
+      "bibliographic_records_abstract",
+      sql`${t.abstract} is null or (length(${t.abstract}) between 1 and 4000
+            and ${t.state} is not distinct from 'found' and ${t.abstractReadAt} is not null)`,
+    ),
+    /** The moment says "the registry was asked", so only a found record has one. */
+    check(
+      "bibliographic_records_abstract_read_at",
+      sql`${t.abstractReadAt} is null or ${t.state} is not distinct from 'found'`,
     ),
     /** Same length, at most 100, and a family name for every author. */
     check(

@@ -70,13 +70,19 @@ const EXPECTED_SLOTS: Record<LimiterService, number> = { crossref: 2, datacite: 
  * Crossref answer, count or no count, so this refuses a row once — one refresh
  * that *works*: a failed one leaves the moment null and the row eligible
  * (GPT Sol's F4). A DataCite row has no count to go back for.
+ *
+ * **Nor is any found row nobody has asked for its abstract** (plan 261017h
+ * stage 3a), by the same argument for every registry: `write` sets
+ * `abstract_read_at` on every found answer, abstract or none, so a row cached
+ * before abstracts were kept is asked about once more, and only once.
  */
 function freshSql(fresh: Freshness): SQL {
   return sql`(
     (spideryarn.bibliographic_records.state = 'found'
       and spideryarn.bibliographic_records.fetched_at > now() - make_interval(secs => ${secs(fresh.foundMs)})
       and not (spideryarn.bibliographic_records.source = 'crossref'
-               and spideryarn.bibliographic_records.cited_by_count_read_at is null))
+               and spideryarn.bibliographic_records.cited_by_count_read_at is null)
+      and spideryarn.bibliographic_records.abstract_read_at is not null)
     or (spideryarn.bibliographic_records.state = 'not-found'
       and spideryarn.bibliographic_records.fetched_at > now() - make_interval(secs => ${secs(fresh.notFoundMs)}))
   )`;
@@ -94,6 +100,8 @@ interface RecordRow {
   doi: string | null;
   cited_by_count: number | null;
   cited_by_count_read_at: Date | string | null;
+  abstract: string | null;
+  abstract_read_at: Date | string | null;
   fresh: boolean;
   claimed: boolean;
 }
@@ -124,6 +132,8 @@ function answerOf(id: WorkId, row: RecordRow): CachedAnswer | null {
       ...(row.source === "crossref" && row.cited_by_count_read_at !== null
         ? { citedByCountReadAt: new Date(row.cited_by_count_read_at).toISOString() }
         : {}),
+      ...(row.abstract !== null ? { abstract: row.abstract } : {}),
+      ...(row.abstract_read_at !== null ? { abstractReadAt: new Date(row.abstract_read_at).toISOString() } : {}),
     },
   };
 }
@@ -132,7 +142,7 @@ const rawPgBibliographicStore: BibliographicStore = {
   async read(id, fresh) {
     const result = await getDb().execute(sql`
       select state, source, title, authors_family, authors_given, year, venue, published_day, doi,
-             cited_by_count, cited_by_count_read_at,
+             cited_by_count, cited_by_count_read_at, abstract, abstract_read_at,
              coalesce(${freshSql(fresh)}, false) as fresh,
              coalesce(claimed_until > now(), false) as claimed
         from spideryarn.bibliographic_records
@@ -183,7 +193,10 @@ const rawPgBibliographicStore: BibliographicStore = {
        finds DataCite's record, or nothing, must not leave Crossref's old count
        under it (plan 261005i, GPT Sol's F4). The moment is set whether or not
        Crossref gave a count — see `freshSql`. The millisecond, as the claim's
-       is, so the moment returned here is exactly the one a later read gives. */
+       is, so the moment returned here is exactly the one a later read gives.
+       The abstract and the moment it was asked for follow the same rule for
+       every found record, Crossref's or DataCite's (plan 261017h): any other
+       answer clears both. */
     const fromCrossref = found?.source === "crossref";
     const storedAt = sql`date_trunc('milliseconds', now())`;
     return await getDb().transaction(async (tx): Promise<Date | null> => {
@@ -198,6 +211,8 @@ const rawPgBibliographicStore: BibliographicStore = {
                published_day = ${found?.published ?? null},
                cited_by_count = ${fromCrossref ? (found.citedByCount ?? null) : null}::integer,
                cited_by_count_read_at = ${fromCrossref ? storedAt : sql`null`},
+               abstract = ${found?.abstract ?? null},
+               abstract_read_at = ${found !== null ? storedAt : sql`null`},
                fetched_at = ${storedAt}, claimed_until = null
          where id = ${claim.id}
            and claimed_until = ${claim.until.toISOString()}::timestamptz

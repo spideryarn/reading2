@@ -26,11 +26,13 @@ import {
   type Freshness,
   type IdentifierClaim,
   lookupWork,
+  MAX_ABSTRACT_LENGTH,
   parseCrossref,
   parseDatacite,
   parseWorkId,
   plainRegistryText,
   type Registry,
+  registryAbstract,
   type SlotLease,
   type StartTaken,
   type WorkId,
@@ -284,6 +286,60 @@ describe("parseDatacite", () => {
   });
 });
 
+describe("the abstract a registry holds (plan 261017h stage 3a)", () => {
+  const JATS =
+    '<jats:title>Abstract</jats:title><jats:p>We show that sleep spindles &amp; ripples couple the ' +
+    "hippocampus to the cortex, and that <jats:italic>boosting</jats:italic> the coupling improves memory &#x2014; " +
+    "a causal role for the dialogue.</jats:p>";
+
+  it("keeps Crossref's abstract with the JATS stripped, entities decoded and the leading 'Abstract' dropped", () => {
+    const record = parseCrossref(id("10.1000/x"), "10.1000/x", { message: { title: ["Coupling"], abstract: JATS } });
+    expect(record?.abstract).toBe(
+      "We show that sleep spindles & ripples couple the hippocampus to the cortex, and that boosting the coupling " +
+        "improves memory — a causal role for the dialogue.",
+    );
+  });
+
+  it("caps it, and keeps none that is empty or too short to say anything", () => {
+    const long = parseCrossref(id("10.1000/x"), "10.1000/x", {
+      message: { title: ["T"], abstract: `<jats:p>${"word ".repeat(2000)}</jats:p>` },
+    });
+    expect(long?.abstract?.length).toBeLessThanOrEqual(MAX_ABSTRACT_LENGTH);
+    expect(long?.abstract?.length).toBeGreaterThan(3_500);
+    for (const abstract of [undefined, null, 42, "", "<jats:p> </jats:p>", "Abstract", "<p>Abstract not available</p>"]) {
+      expect(parseCrossref(id("10.1000/x"), "10.1000/x", { message: { title: ["T"], abstract } }), String(abstract)).not.toHaveProperty(
+        "abstract",
+      );
+    }
+  });
+
+  it("keeps DataCite's description of type Abstract, and not one of type Other", () => {
+    const withDescriptions = (descriptions: unknown) =>
+      parseDatacite(id("arxiv:1706.03762"), "10.48550/arxiv.1706.03762", {
+        data: { attributes: { titles: [{ title: "Attention Is All You Need" }], creators: [], descriptions } },
+      });
+    const ABSTRACT = "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks.";
+    expect(
+      withDescriptions([
+        { description: "15 pages, 5 figures", descriptionType: "Other" },
+        { description: ABSTRACT, descriptionType: "Abstract" },
+      ])?.abstract,
+    ).toBe(ABSTRACT);
+    expect(withDescriptions([{ description: `${ABSTRACT} (but typed Other)`, descriptionType: "Other" }])).not.toHaveProperty("abstract");
+    expect(withDescriptions(undefined)).not.toHaveProperty("abstract");
+  });
+
+  it("never says when the abstract was read: that is the store's clock, not the parser's", () => {
+    expect(parseCrossref(id("10.1000/x"), "10.1000/x", { message: { title: ["T"], abstract: JATS } })).not.toHaveProperty(
+      "abstractReadAt",
+    );
+  });
+
+  it("is the same cleaning for an abstract from a title search", () => {
+    expect(registryAbstract(JATS)).toBe(parseCrossref(id("10.1000/x"), "10.1000/x", { message: { title: ["T"], abstract: JATS } })?.abstract);
+  });
+});
+
 describe("plainRegistryText", () => {
   it("caps what it keeps", () => {
     expect(plainRegistryText("x".repeat(1500))).toHaveLength(1000);
@@ -312,6 +368,8 @@ class MemoryStore implements BibliographicStore {
     ) {
       return false;
     }
+    /* Nor is any found record nobody has asked for its abstract (plan 261017h). */
+    if (row.answer.kind === "found" && row.answer.record.abstractReadAt === undefined) return false;
     return Date.now() - row.at < (row.answer.kind === "found" ? f.foundMs : f.notFoundMs);
   }
 
@@ -342,10 +400,13 @@ class MemoryStore implements BibliographicStore {
     this.writes.push(`${claim.id}:${answer.kind}`);
     const at = Date.now();
     /* Written out rather than through the production helper, so the two can disagree. */
+    const readAt = new Date(at).toISOString();
     const kept: CachedAnswer =
-      answer.kind === "found" && answer.record.source === "crossref"
-        ? { kind: "found", record: { ...answer.record, citedByCountReadAt: new Date(at).toISOString() } }
-        : answer;
+      answer.kind !== "found"
+        ? answer
+        : answer.record.source === "crossref"
+          ? { kind: "found", record: { ...answer.record, citedByCountReadAt: readAt, abstractReadAt: readAt } }
+          : { kind: "found", record: { ...answer.record, abstractReadAt: readAt } };
     this.rows.set(claim.id, { answer: kept, at, claimedUntil: null });
     return new Date(at);
   }
