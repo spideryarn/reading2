@@ -7,7 +7,9 @@
  */
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { splitIntoBlocks } from "../src/blocks.js";
+import { blocksAreWhatTheirHtmlProduces, splitIntoBlocks } from "../src/blocks.js";
+import { emptyDropped, toLinks } from "../src/crossrefs.js";
+import { placeQuoteInBlock } from "../src/quote-in-block.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { PdfRecord } from "../src/pdf.js";
 import { renderHtml } from "../src/pdf-read.js";
@@ -55,7 +57,12 @@ const WRAPPED = [
   "which is instead the source of so much outrage.",
 ].join("\n");
 
-const blockquote = (html: string): string => /<blockquote>([\s\S]*?)<\/blockquote>/.exec(html)?.[1] ?? "";
+const blockquote = (html: string): string => /<blockquote(?:\s[^>]*)?>([\s\S]*?)<\/blockquote>/.exec(html)?.[1] ?? "";
+
+const browserText = (inner: string): string => {
+  const doc = new JSDOM(`<blockquote>${inner}</blockquote>`).window.document;
+  return doc.querySelector("blockquote")?.textContent ?? "";
+};
 
 describe("a quote's line breaks, from a PDF", () => {
   it("writes a poem's line breaks as <br>", () => {
@@ -102,6 +109,25 @@ describe("a quote's line breaks, from a PDF", () => {
     expect(blockquote(renderHtml([quote(text)], "T", RAW_SHA))).not.toContain("<br>");
   });
 
+  it("does not call a short opening followed by two full prose lines verse", () => {
+    const text = [
+      "As he explained:",
+      "the whole of the universe is a single body and every one of us belongs to that body,",
+      "which is why an injury to any one member should concern all the other members as well.",
+    ].join("\n");
+    expect(blockquote(renderHtml([quote(text)], "T", RAW_SHA))).not.toContain("<br>");
+  });
+
+  it("does not call a short opening followed by three full prose lines verse", () => {
+    const text = [
+      "As he explained:",
+      "the whole of the universe is a single body and every one of us belongs to that body,",
+      "which is why an injury to any one member should concern all the other members as well,",
+      "and why nobody who fails to feel the pain of others deserves the name of a human being.",
+    ].join("\n");
+    expect(blockquote(renderHtml([quote(text)], "T", RAW_SHA))).not.toContain("<br>");
+  });
+
   it("joins a quote continued onto the next page with a space, as before", () => {
     const lines = SAADI.split("\n");
     const html = renderHtml(
@@ -115,17 +141,73 @@ describe("a quote's line breaks, from a PDF", () => {
   it("keeps the newline in the text the browser anchors to", () => {
     /* src/web/annotate.ts reads the block's text nodes; a bare <br> has none. */
     const inner = blockquote(renderHtml([quote(SAADI)], "T", RAW_SHA));
-    const doc = new JSDOM(`<blockquote>${inner}</blockquote>`).window.document;
-    expect(doc.querySelector("blockquote")?.textContent).toBe(SAADI);
+    expect(browserText(inner)).toBe(SAADI);
+  });
+
+  it.each([
+    ["CRLF", "\r\n"],
+    ["CR", "\r"],
+    ["Unicode line separator", "\u2028"],
+    ["Unicode paragraph separator", "\u2029"],
+  ])("draws %s line endings without changing the browser's text", (_name, separator) => {
+    const text = ["First short line", ". . .", "  Third indented line", "Fourth short line"].join(separator);
+    const before = browserText(text);
+    const inner = blockquote(renderHtml([quote(text)], "T", RAW_SHA));
+    expect(inner.match(/<br>/gu)).toHaveLength(3);
+    expect(browserText(inner)).toBe(before);
+  });
+
+  it("does not mistake marker or entity markup for line endings", () => {
+    const text = [
+      "First & shortest line",
+      "Second line carries a note¹",
+      "Third ⟦illegible⟧ <quoted> line",
+      "Final line",
+    ].join("\n");
+    const inner = blockquote(
+      renderHtml([quote(text, { page: 2, uncertain: true }), quote("¹ The note.", { page: 2, type: "footnote" })], "T", RAW_SHA),
+    );
+    expect(inner.match(/<br>/gu)).toHaveLength(3);
+    expect(inner).toContain("&amp;");
+    expect(inner).toContain("&lt;quoted&gt;");
+    expect(inner).toContain("<sup><a ");
+    expect(browserText(inner)).toBe(text);
+    expect(renderHtml([quote(text, { uncertain: true })], "T", RAW_SHA)).toContain('<blockquote class="pdf-uncertain">');
+  });
+
+  it("keeps a passage across a line anchorable and linkable", async () => {
+    const blocks = splitIntoBlocks(
+      renderHtml(
+        [
+          quote(SAADI),
+          quote("An intervening paragraph.", { type: "paragraph" }),
+          quote("The detail behind the poem.", { type: "paragraph" }),
+        ],
+        "T",
+        RAW_SHA,
+      ),
+    ).blocks;
+    const from = blocks[0]!;
+    const to = blocks[2]!;
+    const phrase = "body,\nThey are of the same essence.";
+    const start = browserText(blockquote(from.html)).indexOf(phrase);
+    expect(start).toBeGreaterThan(-1);
+    expect(await placeQuoteInBlock(from, { quote: phrase, start })).toBe("ok");
+    expect(toLinks([{ from: from.id, phrase, to: to.id }], blocks, emptyDropped())).toEqual([
+      { from: from.id, phrase, to: to.id },
+    ]);
   });
 
   it("changes no block's text, id or fingerprint", () => {
     /* The same quote as it was stored before: newlines left raw. */
     const before = splitIntoBlocks(`<article><blockquote>${SAADI}</blockquote></article>`).blocks;
-    const after = splitIntoBlocks(renderHtml([quote(SAADI)], "T", RAW_SHA), before).blocks;
+    const extracted = renderHtml([quote(SAADI)], "T", RAW_SHA);
+    const run = splitIntoBlocks(extracted, before);
+    const after = run.blocks;
     expect(after.map((b) => b.text)).toEqual(before.map((b) => b.text));
     expect(after.map((b) => b.id)).toEqual(before.map((b) => b.id));
     expect(hashBlocks(after)).toBe(hashBlocks(before));
     expect(after[0]?.html).toContain("<br>");
+    expect(blocksAreWhatTheirHtmlProduces(extracted, run.html, after)).toBe(true);
   });
 });

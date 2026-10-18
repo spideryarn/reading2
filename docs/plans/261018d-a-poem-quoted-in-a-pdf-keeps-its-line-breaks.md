@@ -41,7 +41,8 @@ indentation.)
 ## The fix
 
 In `renderHtml`, for a **`quote`** record only: decide whether its line breaks are the author's,
-and if so write each one as `<br>\n`. Otherwise leave the text exactly as it is now.
+and if so write a `<br>` before each separator, keeping the separator itself in the text (the usual
+case is `<br>\n`). Otherwise leave the text exactly as it is now.
 
 **The test is the typesetter's own: could the next word have fitted on this line?** A line broken
 by the column ends because the next word would not fit; a line of verse ends with room to spare.
@@ -51,24 +52,26 @@ by the column ends because the next word would not fit; a line of verse ends wit
   printed text column is wider than that, and without the floor a poem of uniformly short lines
   (Horace, in this book) looks exactly like a narrow column;
 - a break is *free* when `line + space + next word ≤ 0.85 × width`; blank lines are not breaks;
-- the quote is verse when it has **at least three lines** and at least half its breaks are free;
+- the quote is verse when it has **at least four lines** (three breaks) and at least half its
+  breaks are free;
 - a quote containing TeX delimiters (`\(`, `\[`) is never verse: a `<br>` inside a formula would
   break it, and a formula is not a poem.
 
-**`<br>\n`, not `<br>`.** A `<br>` has no text node, and the browser anchors comments, selections
-and cross-references to `block.html`'s concatenated text nodes (src/web/annotate.ts). A bare `<br>`
-would turn `body,\nThey` into `body,They` there, so a passage selected across a line would stop
-matching its block, and an existing anchor across one would stop drawing (Sol, plan review F1).
-Keeping the newline after the `<br>` leaves that text byte-for-byte as it was.
+**The original separator after `<br>`, not a bare `<br>`.** A `<br>` has no text node, and the
+browser anchors comments, selections and cross-references to `block.html`'s concatenated text nodes
+(src/web/annotate.ts). A bare `<br>` would turn `body,\nThey` into `body,They` there, so a passage
+selected across a line would stop matching its block, and an existing anchor across one would stop
+drawing (Sol, plan review F1). Keeping `\n`, CRLF, CR or a Unicode line separator after the `<br>`
+leaves the browser's text as it was; matching CRLF as one unit avoids doubling that newline.
 
 **A miss is today's behaviour; a false positive is a new break mid-sentence**, so the rule is tuned
 to miss. Dialogue set a turn to a line would be drawn as lines, which is how it was printed.
 
 **Measured on Greg's own PDFs in production** (read-only, 2026-10-18; 23 articles, every
-`blockquote` carrying a newline — 39): 24 called verse, all of them verse, including the Saadi poem
-and the book's Horace odes; the 15 called prose include all the wrapped prose, and the misses are
-two-line quotes (a Dylan lyric, two lines of *Henry IV*), the three-line Anaximander fragment, and a
-speech set one sentence per line. Those misses render as they do today.
+`blockquote` carrying a newline — 39): 22 called verse, all of them verse, including the Saadi poem,
+the book's Horace odes and the Rosenkavalier monologue; the misses are quotes of two or three lines
+(a Dylan lyric, two lines of *Henry IV*, the Anaximander fragment) and a speech set one sentence per
+line. Those misses render as they do today.
 
 **Ids and caches do not move.** `extractText` treats `<br>` as a word boundary and collapses
 whitespace, so a block's `text` is identical either way, and `text` is what ids are matched on and
@@ -111,5 +114,25 @@ page loses that one line.
 
 Plan: GPT Sol, APPROVE WITH CHANGES —
 [261018d-…-plan-review-sol.md](261018d-a-poem-quoted-in-a-pdf-keeps-its-line-breaks-plan-review-sol.md).
-F1 (`<br>\n`), F2 (second-longest width, three lines, honest wording about false positives), F3
-(keep the space at a page turn) and F4 (a real id/hash test) all taken. F5 needed nothing.
+F1 (`<br>` plus the original separator), F2 (second-longest width, at least three breaks, honest
+wording about false positives), F3 (keep the space at a page turn) and F4 (a real id/hash test) all
+taken. F5 needed nothing.
+
+Code: GPT Sol, APPROVE WITH CHANGES (made) —
+[261018d-…-code-review-sol.md](261018d-a-poem-quoted-in-a-pdf-keeps-its-line-breaks-code-review-sol.md).
+Its CRLF/Unicode-separator fix (F1) and its extra downstream tests are kept. Its F2 raised the
+threshold to two thirds as well as the minimum to four lines; re-measured on the same 39 quotes,
+two thirds called 19 verse and lost two real ones — the 22-line Rosenkavalier monologue in this very
+book, and a Dhammapada dialogue — while the four-line minimum alone already refuses its three-line
+prose fixture (and a four-line version, now a test). So the minimum stays and the threshold is half.
+
+
+## Browser check (local dev, Playwright, 2026-10-18)
+
+A PDF built for the purpose — prose, the Saadi poem indented, prose, a six-line wrapped prose quote
+indented — uploaded through the shelf. The reader typed both passages as block quotes. The poem
+shows seven lines with even spacing and its stored HTML is `line<br>\nline`; the prose quote flows as
+one paragraph and wraps at the reading column, not at the PDF's line ends. A comment made by
+dragging from "same essence." into "When time afflicts" was accepted (201, quote
+`same essence.\nWhen time afflicts`) and drawn over exactly those words, in two marks either side of
+the `<br>`. Dark appearance only.

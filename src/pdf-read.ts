@@ -2004,20 +2004,25 @@ ${parts.join("\n")}
  * Drawing every one would break a prose quote mid-sentence at the page width,
  * so only a quote whose breaks `linesAreTheAuthors` are drawn.
  *
- * **`<br>\n`, not `<br>`: the newline stays in the text.** A `<br>` has no text
- * node, and the browser anchors comments, selections and cross-references to
- * the concatenated text nodes of `block.html` (src/web/annotate.ts) — so a bare
- * `<br>` would turn `body,\nThey` into `body,They` there, and a passage selected
- * across the line would no longer match its block (GPT Sol, plan review F1).
- * The block's `text` does not change either way: `extractText` (src/blocks.ts)
+ * **`<br>` followed by the original separator, not a bare `<br>`: the separator
+ * stays in the text.** A `<br>` has no text node, and the browser anchors
+ * comments, selections and cross-references to the concatenated text nodes of
+ * `block.html` (src/web/annotate.ts) — so a bare `<br>` would turn
+ * `body,\nThey` into `body,They` there, and a passage selected across the line
+ * would no longer match its block (GPT Sol, plan review F1). Keeping CRLF as
+ * one match also stops it becoming text nodes on both sides of the `<br>`. The
+ * block's `text` does not change either way: `extractText` (src/blocks.ts)
  * collapses both to one space, so ids and `hashBlocks` hold.
  * docs/plans/261018d-a-poem-quoted-in-a-pdf-keeps-its-line-breaks.md.
  */
 function withLines(type: RecordType, text: string, html: string): string {
   if (type !== "quote" || !linesAreTheAuthors(text)) return html;
-  return html.replace(/\n/gu, "<br>\n");
+  return html.replace(LINE_BREAKS, (lineBreak) => `<br>${lineBreak}`);
 }
 
+/** Every line separator JSON text can carry; CRLF must stay one separator. */
+const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/u;
+const LINE_BREAKS = /\r\n|[\n\r\u2028\u2029]/gu;
 /** A printed text column is wider than this, so lines shorter are the author's however uniform. */
 const COLUMN_FLOOR = 45;
 /** How much of the line must be left over for a break to have been chosen rather than forced. */
@@ -2032,25 +2037,28 @@ const ROOM_TO_SPARE = 0.85;
  *
  * The width is the **second**-longest line, never under `COLUMN_FLOOR`, so one
  * outlier — a URL, two lines the model joined — cannot widen the column and make
- * every ordinary wrap look free. Blank lines are not breaks. Fewer than three
- * lines is never verse: one break is too little evidence either way.
+ * every ordinary wrap look free. Blank lines are not breaks. Fewer than four
+ * lines is never verse: two breaks are too little evidence either way.
  *
  * **A miss renders exactly as before this existed; a false positive is a new
  * break mid-sentence**, so it is tuned to miss. Measured on 39 newline-bearing
- * block quotes from production PDFs: every quote it calls verse (24) is verse;
- * the misses are two-line quotes, a three-line fragment and a speech set a
- * sentence to a line. Dialogue set a turn to a line would be drawn as lines,
- * which is how it was printed.
+ * block quotes from production PDFs (2026-10-18): 22 called verse, all of them
+ * verse; the misses are quotes of two or three lines and a speech set a sentence
+ * to a line. A two-thirds threshold (GPT Sol, code review F2) was tried and lost
+ * a 22-line monologue from the book behind the report, so the guard against a
+ * short opening line before full prose lines is the four-line minimum instead.
+ * Dialogue set a turn to a line would be drawn as lines, which is how it was
+ * printed.
  *
  * A quote with TeX in it is never verse: a `<br>` inside a formula breaks it.
  */
 export function linesAreTheAuthors(text: string): boolean {
   if (/\\[([]/u.test(text)) return false;
   const lines = text
-    .split("\n")
+    .split(LINE_BREAK)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
-  if (lines.length < 3) return false;
+  if (lines.length < 4) return false;
   const chars = (s: string) => [...s].length;
   const width = Math.max(COLUMN_FLOOR, lines.map(chars).sort((a, b) => b - a)[1]!);
   let free = 0;
