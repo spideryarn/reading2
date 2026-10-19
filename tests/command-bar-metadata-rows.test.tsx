@@ -438,20 +438,23 @@ describe("Open the original", () => {
   /* A double press on Stop presses Enter from an effect, once the words
      arrive — possibly after the browser's activation has run out (GPT Sol's
      F2 on the plan). Then nothing is opened, and the bar asks for a press. */
-  it("opens nothing outside a gesture, and asks for an Enter", () => {
+  it.each([
+    ["web page", { kind: "web", url: WEB }],
+    ["uploaded PDF", { kind: "pdf" }],
+  ] as const)("opens no %s outside a gesture, and asks for an Enter", (_name, original) => {
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     /* jsdom has no `userActivation`; the one property, not a copied
        `navigator`, whose getters a spread would lose. */
     Object.defineProperty(navigator, "userActivation", { value: { isActive: false }, configurable: true });
     try {
-      readingWith({ kind: "pdf" });
+      readingWith(original);
       openBar();
       type("original");
       press("Enter");
       expect(open).not.toHaveBeenCalled();
       expect(requests.filter((r) => r.includes("/api/source/"))).toEqual([]);
       expect(dialog().open).toBe(true);
-      expect(status()).toContain("Press Enter to open the original");
+      expect(status()).toContain("Choose it again to open the original");
     } finally {
       delete (navigator as { userActivation?: unknown }).userActivation;
     }

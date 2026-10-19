@@ -48,14 +48,18 @@ vi.mock("nuqs", async (importOriginal) => ({
   useQueryState: () => [null, () => {}],
 }));
 /* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
-   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest.
+   Keep the props, because this page now decides what *Open the original* may
+   open and a test of the origin line alone would not see that handoff break. */
+const dock = vi.hoisted(() => vi.fn((_props: unknown) => null));
 vi.mock("../src/web/Dock.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
-  Dock: () => null,
+  Dock: dock,
 }));
 
 const { Metadata } = await import("../src/web/Metadata.js");
 const { PublicMetadataPage } = await import("../src/web/PublicPages.js");
+const { originalOf } = await import("../src/web/SourceLink.js");
 
 const SLUG = "a-piece";
 const URL_ = "https://www.noemamag.com/a-piece/";
@@ -105,6 +109,7 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  dock.mockClear();
   /* The owner's page fetches `/api/metadata/:slug` on mount, and this answers it.
      It has to succeed for the *file* link, and that is the page working rather
      than the test being awkward: `Origin`'s owner gate is `hasShelfRow`, which
@@ -139,6 +144,8 @@ afterEach(async () => {
 });
 
 const hrefs = () => [...host.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
+const dockOriginal = (): unknown =>
+  (dock.mock.calls.at(-1)?.[0] as { original?: unknown } | undefined)?.original;
 
 /** The owner's page, which owns a rename callback because only an owner has one. */
 async function owner(meta: Partial<Meta>) {
@@ -191,6 +198,7 @@ describe("the owner's metadata page", () => {
 
     expect(hrefs()).toContain(URL_);
     expect(host.textContent).not.toContain(UPLOADED);
+    expect(dockOriginal()).toEqual({ kind: "web", url: URL_ });
   });
 
   it("says an uploaded PDF was uploaded, and offers the file", async () => {
@@ -201,6 +209,7 @@ describe("the owner's metadata page", () => {
        there is — and a button rather than an anchor, because the route behind
        it needs an Authorization header (src/web/SourceLink.tsx). */
     expect(host.textContent).toContain("View the original");
+    expect(dockOriginal()).toEqual({ kind: "pdf" });
   });
 
   it("does not call the converted page the original Word file", async () => {
@@ -218,6 +227,7 @@ describe("the owner's metadata page", () => {
 
     expect(host.textContent).toContain(UPLOADED);
     expect(host.textContent).not.toContain("View the original");
+    expect(dockOriginal()).toBeUndefined();
   });
 
   it("still offers the original when PDF evidence overruled a Word filename", async () => {
@@ -263,12 +273,38 @@ describe("the owner's metadata page", () => {
     vi.stubGlobal("fetch", () => Promise.reject(new Error("no metadata in this test")));
     await owner({ url: URL_ });
     expect(hrefs()).toContain(URL_);
+    /* The page itself is an owner-only route, so the command bar need not wait
+       for this second request before it can open a public web address. */
+    expect(dockOriginal()).toEqual({ kind: "web", url: URL_ });
 
     await act(async () => root.unmount());
     root = createRoot(host);
     await owner({ source: "pdf" });
     expect(host.textContent).toContain(UPLOADED);
     expect(host.textContent).not.toContain("View the original");
+    /* Unlike the inline button, the Dock already knows this is the owner's
+       page. This is the deliberate `true` versus `hasShelfRow` split in plan
+       261019f, and the private route still performs its own owner check. */
+    expect(dockOriginal()).toEqual({ kind: "pdf" });
+  });
+});
+
+describe("what counts as the original", () => {
+  it("gives a web address to either reader, but an uploaded PDF only to its owner", () => {
+    expect(originalOf({ slug: SLUG, title: "A piece", url: URL_ }, false)).toEqual({
+      kind: "web",
+      url: URL_,
+    });
+    expect(originalOf({ slug: SLUG, title: "A piece", source: "pdf" }, true)).toEqual({ kind: "pdf" });
+    expect(originalOf({ slug: SLUG, title: "A piece", source: "pdf" }, false)).toBeNull();
+  });
+
+  it("prefers a followable web address and never calls an uploaded HTML file an openable original", () => {
+    expect(originalOf({ slug: SLUG, title: "A piece", source: "pdf", url: URL_ }, true)).toEqual({
+      kind: "web",
+      url: URL_,
+    });
+    expect(originalOf({ slug: SLUG, title: "A piece", filename: "saved.html" }, true)).toBeNull();
   });
 });
 

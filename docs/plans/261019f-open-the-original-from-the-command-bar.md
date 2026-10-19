@@ -73,7 +73,7 @@ GPT Sol, read-only ([review](261019f-open-the-original-plan-review-sol.md)):
   got a row that shuts the band. The nickname is removed from Plain; it is this row's word now.
 - **F2**: a double press on Stop presses Enter from an effect when the words arrive, possibly after
   the browser's activation has expired. The row asks `navigator.userActivation.isActive` first, and
-  without a gesture opens nothing and says *"Press Enter to open the original in a new tab."*
+  without a gesture opens nothing and says *"Choose it again to open the original in a new tab."* — no key named, since a finger has none
 - **F3**: one fixed description for both kinds and no host — *"The web page or the PDF this article
   was made from, in a new tab."* — because the command-pick catalogue holds one entry per
   (id, label), and words that moved with the article would be frozen there as one article's.

@@ -746,13 +746,15 @@ function metadataRows(article: CommandBarArticle): readonly Command[] {
  * the browser's few seconds of activation have run out — and then `window.open`
  * is refused without a word, or the PDF arm's fallback replaces this very tab.
  * So the row asks the browser first (`hasGesture`), and with no gesture it
- * stays drawn and says to press Enter, which is one (GPT Sol's F2 on the plan).
+ * stays drawn and asks to be chosen again, which is one (GPT Sol's F2 on the plan).
  *
  * The web arm closes at once: a popup the browser refused anyway has no
  * answer to wait for, and `noopener` makes `window.open` return `null` either
  * way. The PDF arm waits, so a refusal stays under the box as a sentence.
  */
-const PRESS_TO_OPEN = "Press Enter to open the original in a new tab.";
+/* No key named: a finger has no Enter, and a tap on the row is a gesture too
+   (tests/words-that-name-a-key-have-something-to-press.test.ts). */
+const PRESS_TO_OPEN = "Choose it again to open the original in a new tab.";
 
 /**
  * **May this call open a tab?** — the browser's own answer where it has one

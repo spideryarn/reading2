@@ -188,11 +188,14 @@ export async function openUploadedOriginal(
   slug: string,
   fragment?: string,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> {
-  /* Synchronously, before any await. See the header. */
-  const tab = window.open("", "_blank");
-  if (tab) tab.opener = null;
-
+  let tab: Window | null = null;
   try {
+    /* Synchronously, before any await. Inside the failure boundary too:
+       `window.open` may throw when this document is no longer fully active,
+       and this helper promises a result rather than a rejected promise. */
+    tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
+
     const res = await apiFetch(`/api/source/${encodeURIComponent(slug)}`);
     /* Written here for a reader, and said so by its class: the body of a
        refusal on this route is not read, since a success is a PDF. */
