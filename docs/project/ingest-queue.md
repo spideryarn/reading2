@@ -665,8 +665,10 @@ Three things, all in the browser, in
 - **The owner's early visit.** `/read/<slug>` before the import has published used to tell its own
   owner *Not shared*. `OwnerNotShared`
   ([`src/web/article/StillBeingAdded.tsx`](../../src/web/article/StillBeingAdded.tsx)) asks the job
-  engine for a fresh list, and if a live import job has that slug it draws the job's card and
-  re-reads the article when the job is done. It does not send the reader to the add page, because
+  engine for a fresh list and reads the newest import job with that slug: queued, running, failed
+  or stopped, it draws the job's card; done, it re-reads the article. A failed one counts since
+  2026-10-19, when an import that had failed before the page opened still said *Not shared*
+  ([261019n](../plans/261019n-admin-sees-other-users-articles-and-views-as-them.md)). It does not send the reader to the add page, because
   arriving there posts an import.
 - **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
   *Create a private link*. Since 2026-10-09 the link comes first, both are buttons, and the row
