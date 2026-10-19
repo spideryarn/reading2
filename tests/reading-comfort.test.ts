@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BRIGHTNESS,
+  readComfort,
   TEXT_SIZE,
   type ComfortSetting,
   startReadingComfort,
@@ -55,20 +56,38 @@ describe("the two settings", () => {
 });
 
 describe("index.html's before-paint script", () => {
+  it("is the exact head script, before the app", () => {
+    expect(inline).toBeTruthy();
+    const at = html.indexOf('id="appearance-boot"');
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThan(html.indexOf("/src/web/boot.tsx"));
+  });
+
   for (const s of SETTINGS) {
-    for (const value of [...s.values, "wibble", ""]) {
+    for (const value of [...s.values, "wibble", "", null]) {
       it(`agrees with ${s.key} for ${JSON.stringify(value)}`, () => {
-        const doc = runInline({ [s.key]: value });
+        const stored = value === null ? {} : { [s.key]: value };
+        const doc = runInline(stored);
+        Object.defineProperty(window, "localStorage", {
+          configurable: true,
+          value: { getItem: (key: string) => stored[key] ?? null },
+        });
         const expected = s.parse(value);
         const attr = doc.documentElement.getAttribute(s.attribute);
         expect(attr).toBe(expected === s.fallback ? null : expected);
+        expect(readComfort(s)).toBe(expected);
       });
     }
   }
 
   it("sets nothing when storage throws", () => {
     const doc = runInline("throws");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: { getItem: () => { throw new DOMException("blocked", "SecurityError"); } },
+    });
     for (const s of SETTINGS) expect(doc.documentElement.getAttribute(s.attribute)).toBeNull();
+    for (const s of SETTINGS) expect(readComfort(s)).toBe(s.fallback);
     expect(doc.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 });
@@ -106,7 +125,11 @@ describe("the /profile control", () => {
     });
     const resized = vi.fn();
     window.addEventListener("resize", resized);
+    /* The boot script's DOM can be stale if storage changes before the module
+       starts. Startup has to reconcile it before React mounts. */
+    document.documentElement.setAttribute("data-text-size", "largest");
     startReadingComfort();
+    expect(document.documentElement.hasAttribute("data-text-size")).toBe(false);
     const host = document.createElement("div");
     const root = createRoot(host);
     act(() => root.render(createElement(ReadingComfortSettings)));
@@ -132,6 +155,15 @@ describe("the /profile control", () => {
     expect(document.documentElement.getAttribute("data-brightness")).toBe("dim");
     expect(host.textContent).toContain("Couldn't save it on this device");
 
+    /* A bfcache restore keeps the page-only value and repaints it, rather than
+       replacing it with the older stored value. */
+    document.documentElement.removeAttribute("data-brightness");
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    expect(document.documentElement.getAttribute("data-brightness")).toBe("dim");
+    expect(host.textContent).toContain("Couldn't save it on this device");
+
     /* Another tab's write wins over this page's unsaved one. */
     store["spya.brightness"] = "full";
     act(() => {
@@ -150,8 +182,11 @@ describe("the /profile control", () => {
  * one has to be added here with its reason, or written in rem.
  */
 describe("no font size in px outside the allowlist", () => {
-  const ALLOWED: Record<string, string> = {
-    "src/web/styles/diagram.css": "Force's node labels: diagram.ts budgets each label's width in px",
+  const ALLOWED: Record<string, { declarations: readonly string[]; reason: string }> = {
+    "src/web/styles/diagram.css": {
+      declarations: ["font-size: 10px", "font-size: 10px", "font-size: 10px"],
+      reason: "Force's node labels: diagram.ts budgets each label's width in px",
+    },
   };
   const dirs = ["styles", "src/web/styles"];
   const files = dirs.flatMap((d) =>
@@ -160,16 +195,34 @@ describe("no font size in px outside the allowlist", () => {
       .map((f) => `${d}/${f}`),
   );
   it("finds the stylesheets", () => expect(files.length).toBeGreaterThan(20));
-  for (const f of files) {
-    it(f, () => {
-      const css = readFileSync(join(repo, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  function pxFontDeclarations(source: string): string[] {
+    const css = source.replace(/\/\*[\s\S]*?\*\//g, "");
+    return [...css.matchAll(/(?:^|[;{}])\s*(font(?:-size)?)\s*:\s*([^;{}]*)/gi)]
+      .filter((m) => /(?:\d+(?:\.\d*)?|\.\d+)px\b/i.test(m[2] ?? ""))
       /* A px floor beside a rem — narrow-window.css's `max(1rem, 16px)`, the
          iOS focus-zoom threshold — still grows with the root, so it passes. */
-      const px = [...css.matchAll(/font-size:\s*([^;]*\d+(?:\.\d+)?px[^;]*)/g)]
-        .map((m) => m[0])
-        .filter((decl) => !/max\([^)]*rem/.test(decl));
-      if (f in ALLOWED) return;
-      expect(px).toEqual([]);
+      .filter((m) => !/^max\([^)]*rem\b[^)]*\)$/i.test((m[2] ?? "").trim()))
+      .map((m) => `${m[1]!.toLowerCase()}: ${m[2]!.trim()}`);
+  }
+
+  it("recognises shorthand, case and line breaks", () => {
+    expect(
+      pxFontDeclarations(`
+        .a { font: 13px/1.4 serif; }
+        .b { FONT-SIZE: 12PX; }
+        .c { font-size\n: 11px; }
+        .d { font-size:\n10px; }
+        .floor { font-size: max(1rem, 16px); }
+      `),
+    ).toEqual(["font: 13px/1.4 serif", "font-size: 12PX", "font-size: 11px", "font-size: 10px"]);
+  });
+
+  for (const f of files) {
+    it(f, () => {
+      const px = pxFontDeclarations(readFileSync(join(repo, f), "utf8"));
+      const allowed = ALLOWED[f];
+      expect(px, allowed?.reason).toEqual(allowed?.declarations ?? []);
     });
   }
 });
@@ -186,6 +239,6 @@ describe("the reader's layout key", () => {
     const src = readFileSync(join(repo, "src/web/reader/Reader.tsx"), "utf8");
     const key = /const layoutKey = `([^`]*)`/.exec(src)?.[1];
     expect(key).toBeTruthy();
-    expect(key).toContain("${rootFontPx}");
+    expect(key).toContain("${" + "rootFontPx}");
   });
 });

@@ -53,8 +53,9 @@ Default sets nothing. Percentages, not px, so a reader's own browser default sti
 
 Why this is small rather than a project, measured in the tree today:
 
-- **The app is already written in `rem`.** 497 `font-size` declarations in `rem`, 5 in `px`
-  (`ideas.css:360`, three Diagram force-graph labels at `diagram.css:280-282`, and none elsewhere).
+- **The app is already written in `rem`.** In the finished tree, 503 `font-size` declarations use
+  `rem`; the only fixed px sizes are the three Diagram force-graph labels at
+  `diagram.css:280-282` (plus the deliberate `max(1rem, 16px)` iOS focus-zoom floor).
   Headings, captions, footnotes, mode-band text roles (`--type-item` and friends), controls
   (`--control-h: 2.25rem`) and `--reading-size` itself are all `rem`, so all of them move together
   and the hierarchy is kept exactly — the 261003a problem does not arise.
@@ -91,7 +92,7 @@ What does *not* scale, by design or by accident:
 - **CSS media queries.** `rem`/`em` in a media query mean the *initial* font size, never the
   root's, and ours are in px anyway. So breakpoints stay put; at a larger size the JS layout gives
   up columns sooner (its ideals are in rem), which is the right direction.
-- **The five px font sizes**, Lucide icons (sized in px at the call site), and the deliberate px
+- **The three fixed px font sizes**, Lucide icons (sized in px at the call site), and the deliberate px
   rows in controls.md. Icons beside bigger text look a little small; tolerable, and the same as a
   reader with a 20px browser default sees today.
 - **A live change while an article is open.** The control lives on `/profile`, where none is
@@ -100,8 +101,9 @@ What does *not* scale, by design or by accident:
   hook's own comment calls `resize` the cheapest thing that notices.
 
 A guard so it stays true: a test that no stylesheet under `src/web/styles/` or `styles/` declares a
-`font-size` in px outside a short allowlist with reasons. That is the "future modes naturally do the
-right thing" Greg asked for, and it fails on the day someone writes `font-size: 13px`.
+`font-size` or `font` shorthand in px outside an exact allowlist with reasons. That is the "future
+modes naturally do the right thing" Greg asked for, and it fails on the day someone writes
+`font-size: 13px` — including in the one stylesheet that has allowed declarations already.
 
 ## Brightness: one dimming layer over everything
 
@@ -113,9 +115,9 @@ paint, and
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 2147483647;
   background: rgb(0 0 0 / var(--dim));
 }
-:root[data-brightness="dim"]     { --dim: 0.3; }   /* 70% of the light */
-:root[data-brightness="dimmer"]  { --dim: 0.5; }   /* 50% */
-:root[data-brightness="dimmest"] { --dim: 0.65; }  /* 35% */
+:root[data-brightness="dim"]     { --dim: 0.2; }  /* 80% of the encoded value */
+:root[data-brightness="dimmer"]  { --dim: 0.35; } /* 65% */
+:root[data-brightness="dimmest"] { --dim: 0.5; }  /* 50% */
 ```
 
 Black at alpha *a* over a pixel scales its encoded value by 1 − *a*: the page, the ink,
@@ -137,10 +139,13 @@ engine), and it re-filters the whole page on every scroll frame. An overlay is o
 
 Two places the layer cannot reach, and what covers them:
 
-- **Top-layer dialogs** (`showModal()`: the Lightbox, Feedback, the purpose prompt, Illustrated's
-  dialog) draw above any `z-index`. `:root[data-brightness] dialog[open]` gets
-  `filter: brightness(calc(1 - var(--dim)))`, and `::backdrop` the same. A filter on a dialog is
-  harmless: it is already the containing block of its own contents.
+- **Top-layer dialogs** (`showModal()`: the Lightbox, Feedback, Command Bar, purpose prompt, Sketch
+  and Illustrated) draw above any `z-index`. `:root[data-brightness] dialog[open]` gets
+  `filter: brightness(calc(1 - var(--dim)))`; the already-dark `::backdrop` is left alone. A filter
+  makes the dialog a containing block for fixed descendants, so the current inventory was checked:
+  every dialog is itself the viewport overlay. Feedback's fixed Toast is its one fixed descendant;
+  it stays in the same corner relative to that same box (and follows the measured visual viewport
+  on iOS). A future fixed descendant needs this rule rechecked.
 - **The browser's own furniture** (the status bar, the scrollbar) is outside the page. Nothing to do.
 
 It works in Light as well as Dark — same rule, no theme check — which is simpler and not wrong.
@@ -164,9 +169,9 @@ Stored **per device, in `localStorage`**, like Appearance, and not as a `reader_
 ## The pieces
 
 1. **`src/web/reading-comfort.ts`** — the two settings: values, keys (`spya.brightness`,
-   `spya.text-size`), `parse…`, guarded reads and writes, `applyComfort()` (sets or removes the two
-   attributes), a `storage` listener started from `main.tsx` beside `startAppearance()`, and
-   `useBrightness()` / `useTextSize()` hooks with the same "couldn't save" state Appearance has.
+   `spya.text-size`), guarded reads and writes, `setComfort()` (sets or removes the two attributes),
+   a `storage` listener started from `main.tsx` beside `startAppearance()`, and the generic
+   `useComfort()` hook with the same "couldn't save" state Appearance has.
    *Not* folded into `appearance.ts`: that file is about the theme, and these are not.
 2. **`index.html`** — the inline `appearance-boot` script also sets the two attributes. One script,
    because one head script is enough and each `<script>` is a parse; the test lifts it as today.
@@ -191,8 +196,8 @@ At 820×1180 (Greg's portrait iPad) and 390×844, Dark: Plain and Glossary at ea
 before/after screenshots kept under `docs/plans/261019g-shot-*.png`. Ask for: no horizontal scroll,
 hierarchy intact (h2 > h3 > body), gutter icons on their lines, the band giving up columns cleanly,
 the masthead and controls bar not overlapping. Brightness: a pixel read of the page and of body ink
-at each level (expect ≈ 70/50/35%), taps still reach links and buttons through the layer, and the
-Lightbox open under Dimmest is dimmed too.
+at each level (expect encoded pixels ≈ 80/65/50%, or emitted light ≈ 60/38/22%), taps still reach
+links and buttons through the layer, and the Lightbox open under Dimmest is dimmed too.
 
 ## Done looks like
 

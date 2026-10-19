@@ -154,9 +154,9 @@ export function layoutViewportWidth(): number {
  * **Not read once at module scope.** Text-only zoom and a settings change both
  * move it while the page is open, and the same `resize` that already re-measures
  * the window is the cheapest thing that notices — browsers fire one for text
- * zoom. Nothing notices a change made in another tab's settings until the next
- * resize or reload, which is a smaller failure than pinning it at import time,
- * when a stylesheet may not even have loaded.
+ * zoom. The reading-comfort storage listener dispatches that same event after
+ * a change made in another tab; using the existing measurement path avoids a
+ * second source of truth for the root size.
  */
 export function useRootFontPx(): number {
   const [px, setPx] = useState(rootFontPx);

@@ -5,8 +5,9 @@
  * bedroom (spya-q645m0, spya-ast8cu): a way to show less light than the iPad's
  * lowest brightness, and bigger text in a home-screen app that has no zoom.
  *
- * - **Brightness** draws one black layer over the whole page, so every pixel
- *   gives off a fixed share of its light — ink, page and pictures alike.
+ * - **Brightness** draws one black layer over the whole page, so every pixel's
+ *   encoded RGB value is scaled by the same share — ink, page and pictures
+ *   alike. The share of emitted light is smaller because sRGB is nonlinear.
  * - **Text size** sets the root font-size, so every `rem` grows, which is
  *   nearly all of the app's type, and the JS layout follows by reading the root
  *   (reader/measure.ts § `useRootFontPx`). typography.md § The reader's text
@@ -120,6 +121,13 @@ function refreshFromStorage(s: ComfortSetting<string>): void {
   for (const l of listeners) l();
 }
 
+/** Repaint a page-only choice after bfcache without replacing it from storage. */
+function reapplyCurrent(s: ComfortSetting<string>): void {
+  const value = current.get(s.key) ?? s.fallback;
+  apply(s, value);
+  for (const l of listeners) l();
+}
+
 let started = false;
 
 /**
@@ -135,8 +143,15 @@ export function startReadingComfort(): void {
   });
   window.addEventListener("pageshow", (e) => {
     if (!e.persisted) return;
-    for (const s of SETTINGS) if (!volatile.has(s.key)) refreshFromStorage(s);
+    for (const s of SETTINGS) {
+      if (volatile.has(s.key)) reapplyCurrent(s);
+      else refreshFromStorage(s);
+    }
   });
+  /* Reconcile the head script with storage before React mounts. Besides closing
+     the tiny head-to-module race, this repairs the page if that script was
+     removed or aborted while the module still loaded. */
+  for (const s of SETTINGS) refreshFromStorage(s);
 }
 
 function subscribe(l: () => void): () => void {

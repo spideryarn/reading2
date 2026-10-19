@@ -47,11 +47,15 @@
 /* **A dialog opened with showModal() sits in the top layer**, above any
    z-index, so the layer cannot reach it: the Lightbox, Feedback, the command
    bar, Sketch and Illustrated's enlargements, the purpose prompt. It dims
-   itself instead; a filter on a dialog costs nothing, since it is already the
-   containing block of everything inside it. Its ::backdrop is left alone: it is
-   already a dark wash, and a custom property does not reliably reach it
-   (lightbox.css says why). Anything else that reaches the top layer — a
-   `popover` — would need adding here. */
+   itself instead. A filter establishes a containing block for fixed descendants,
+   so this was checked against the current dialogs: each dialog is itself the
+   viewport-sized box. Feedback's fixed Toast is the one fixed descendant; its
+   containing block becoming that same box keeps its corner unchanged (and on
+   iOS follows the dialog's measured visual viewport). Recheck this rule if
+   another one appears. Its ::backdrop is left alone: it is already a dark wash,
+   and a custom property does not reliably reach it (lightbox.css says why).
+   Anything else that reaches the top layer — a `popover` — would need adding
+   here. */
 :root[data-brightness] dialog[open] {
   filter: brightness(calc(1 - var(--comfort-dim, 0)));
 }

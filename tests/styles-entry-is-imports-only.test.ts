@@ -221,9 +221,9 @@ const MANIFEST = [
      Shares no element with the sheet below. The per-voice faces, for everyone
      since 2026-10-02 — docs/project/fonts.md. */
   "voices.css",
-  /* **Last, and the position is the point.** The wordmark's hover animations
+  /* **Late, and the position is the point.** The wordmark's hover animations
      have to beat `.logo`, `.logo-home` and `.dock-home`, which are set in
-     dock.css and dock-fit.css far above — so loading last is what lets a
+     dock.css and dock-fit.css far above — so loading this late is what lets a
      one-class animation rule win against them without an `!important` or a
      specificity war.
 
@@ -234,6 +234,10 @@ const MANIFEST = [
      left the corner for as long as a reader pointed at it. The rule is now
      `.spya-anim:not(.logo-home)`. docs/project/design-logo.md § The traps. */
   "logo-animations.css",
+  /* Last so these document-wide attributes win over component sheets: the
+     root size is the baseline for all rem type, and a top-layer dialog needs
+     its dimming rule after the dialog's own appearance. Plan 261019g. */
+  "reading-comfort.css",
 ];
 
 /**

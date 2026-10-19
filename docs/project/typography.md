@@ -223,8 +223,9 @@ app, where there is no browser zoom:
 **The root is the baseline, so the rule for new code is one line: size type in `rem`.** Then it
 follows the setting with nothing else to remember — the prose, its headings, a mode's rows, the
 controls, all in proportion, so the hierarchy is kept. A `font-size` in px does not follow, and
-[`tests/reading-comfort.test.ts`](../../tests/reading-comfort.test.ts) fails on one in a stylesheet
-outside a short allowlist with a reason (a px floor beside a rem, like `max(1rem, 16px)`, passes).
+[`tests/reading-comfort.test.ts`](../../tests/reading-comfort.test.ts) fails on one — including in a
+`font` shorthand — outside an exact allowlist with a reason (a px floor beside a rem, like
+`max(1rem, 16px)`, passes).
 It reads stylesheets only: a px size inline in TSX (a Tailwind `text-[11px]`, an SVG `fontSize`)
 is not checked, so do not write one for text a reader reads. The JS layout
 follows because it reads the root (`reader/measure.ts` § `useRootFontPx`), the same path a reader

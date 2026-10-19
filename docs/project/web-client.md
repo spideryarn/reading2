@@ -652,7 +652,9 @@ paint by the same head script as the theme —
 [`styles/reading-comfort.css`](../../src/web/styles/reading-comfort.css) says why it is not a
 filter, and how the top-layer dialogs it cannot reach dim themselves. **So a new colour needs no
 dim value**, and a new `showModal()` dialog is covered by the `dialog[open]` rule; anything else that
-reaches the top layer (a `popover`) would need adding there. Why not a darker palette:
+reaches the top layer (a `popover`) would need adding there. The dialog filter establishes a
+containing block for fixed descendants; Feedback's Toast is the one current case and stays anchored
+to the dialog's viewport-sized box, so recheck the rule if another appears. Why not a darker palette:
 [261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md#brightness-one-dimming-layer-over-everything).
 
 ## Reading an API response

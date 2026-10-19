@@ -612,7 +612,10 @@ function job(value: unknown): FeedbackJobState | null {
  * bounds is separately capped by shape, so the headroom cannot be spent.
  */
 const WORST_BYTES_PER_CHAR = 6;
-const DEVICE_BYTES = (300 + 35 + 64 + 16 + 200) * WORST_BYTES_PER_CHAR;
+const DEVICE_VOCAB_CHARS = [COLOUR_SCHEMES, APPEARANCES, THEMES, BRIGHTNESSES, TEXT_SIZES]
+  .map((values) => Math.max(...values.map((value) => value.length)))
+  .reduce((sum, length) => sum + length, 0);
+const DEVICE_BYTES = (300 + 35 + 64 + DEVICE_VOCAB_CHARS + 200) * WORST_BYTES_PER_CHAR;
 const API_CALL_BYTES = (10 + 200 + 8 + 12 + 80 + 24 + 120) * WORST_BYTES_PER_CHAR;
 const ERROR_BYTES = (64 + 24 + 40) * WORST_BYTES_PER_CHAR;
 const ARTICLE_BYTES =
