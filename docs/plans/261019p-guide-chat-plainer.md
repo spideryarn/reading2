@@ -245,8 +245,12 @@ No P0. Every P1 taken:
   shorten only past the limit, keeping their words and every unusual term.
 - **F4** — `invitesProfile` drew a sentence inviting them to talk about themselves: the no-reason
   greeting draws none; the reason-stored arm keeps its line as before.
-- **F5** — the pairs carry the cited passages; prompt hash recorded; every content and whole-piece
-  reply read by hand ([261019b](../investigations/261019b-guide-plainer-blind-judged.md)).
+- **F5** — the judged pairs carried 400-character excerpts of cited passages; review found one
+  supporting line beyond that boundary, and new pairs carry the complete fixture blocks. The after arm recorded its `converse.ts` hash, but the
+  two baseline files were written before that field was added and do not prove their prompt source;
+  every content and whole-piece reply was read by hand
+  ([261019b](../investigations/261019b-guide-plainer-blind-judged.md)). The reviewed eval now records
+  both prompt-bearing source files and refuses incomplete pairs.
 - **F6, F7** — folded into Stage 2 above.
 - **F8** (P2) — the starters are asserted literally; the help page says the guide answers briefly,
   and the help corpus is regenerated.
@@ -258,6 +262,28 @@ no reply on the new prompt asked about the reader or declined a question about t
 and 6 of 22 before. Numbers, method and what reading the replies found:
 [261019b](../investigations/261019b-guide-plainer-blind-judged.md).
 
+## GPT Sol on the code (2026-10-19, write-capable, `gpt-5.6-sol`, high)
+
+No P0. It fixed, and I read and kept: **C1** *do not assume they have read it* had become an
+absolute, now a default *unless they tell you otherwise*; **C2** Live's suggestion-first fought its
+answer-first rule, now scoped to how-to-read turns; **C3–C7** the eval's screens, pairing,
+unblinding, clipped passages, hashes and medians, which now fail closed (clean replies 7/9/14 of
+22, not 12/12/22; the blind 19–2 unchanged); **C8** stale comments and docs. It wrote two
+postmortems: [261019d](../postmortems/261019d-scoped-prompt-rules-became-absolutes.md) and
+[261019e](../postmortems/261019e-a-paid-eval-must-fail-closed-at-every-evidence-boundary.md).
+
+**C9**, wider and older than this plan: `SAVING WHAT THEY TELL YOU` asks for the reader's words in
+`offer_to_save`, while the profile rule and the guide's own restatement forbade anything they said
+in any tool argument. Fixed in the guide only: `offer_to_save` may carry their words, since it only
+shows them back to the reader; no other tool may. The offers eval after it: every offer right
+([261019b](../investigations/261019b-guide-plainer-blind-judged.md)).
+
+A reminder of the three-sentence limit beside the question was tried and taken out: it changed
+nothing measurable (261019b § A second after arm).
+
 ## Bookkeeping
 
-To fill in at the end: the commits and the question file's id.
+- Stage 1: `385f08e55` and the review commit after it, on `dev`.
+- Stage 2: question `q-y4p2ct`, queue item `qi-3q9z7mr6`.
+- Note: [261019_1944](../user-feedback/261019_1944-guide-chat-plainer-less-nagging.md).
+- `qi-bt4z2zaw`'s point 2 (stop quoting About you back) marked done there.

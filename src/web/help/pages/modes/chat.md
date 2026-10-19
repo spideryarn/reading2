@@ -79,7 +79,7 @@ until you send something. When the guide suggests a mode or a passage, it gives 
 says what pressing it will do; it never opens anything or moves you by itself. To help you decide
 how to read the piece, it can search the web for what others have said about it, and read one web
 page in an answer, such as one you paste in. Ask it what a passage or a term means and it answers in
-a sentence or two, with links to the passages, and offers **Ask in Chat** to take your question
+up to three short sentences, with links to the passages, and offers **Ask in Chat** to take your question
 further; a question about the subject beyond the piece, it hands to a new Chat. Its
 greeting asks why you are reading the piece, in a few words, or you can just ask it something:
 answer in the box below as you would any message. When

@@ -3,18 +3,21 @@
   "at": "2026-10-19T22:31:02.386Z",
   "summary": {
     "n": 22,
-    "clean": 12,
-    "medianWords": 49,
+    "clean": 9,
+    "medianWords": 48.5,
     "questions": 15,
     "asksWhy": 4,
     "asksAbout": 3,
     "refuses": 7,
     "cited": 17,
     "chatSteps": 8,
-    "medianChatCloseness": 0.93,
+    "medianChatCloseness": 0.84,
     "problems": {
       "asked about them": 3,
-      "declined to answer": 7
+      "long": 4,
+      "declined to answer": 7,
+      "uncited answer sentence": 6,
+      "does not end on a passage": 4
     },
     "dollars": 0.259
   },
@@ -205,6 +208,7 @@
       "chatCloseness": null,
       "summaryMode": false,
       "problems": [
+        "long (61)",
         "asked about them"
       ],
       "refuses": false
@@ -237,7 +241,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": true,
-      "problems": [],
+      "problems": [
+        "long (68)"
+      ],
       "refuses": false
     },
     {
@@ -261,7 +267,8 @@
       "chatCloseness": 0.75,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence"
       ],
       "refuses": true
     },
@@ -286,7 +293,9 @@
       "chatCloseness": 0.75,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },
@@ -311,7 +320,9 @@
       "chatCloseness": 0.93,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },
@@ -465,7 +476,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": true,
-      "problems": [],
+      "problems": [
+        "long (61)"
+      ],
       "refuses": false
     },
     {
@@ -560,7 +573,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": true,
-      "problems": [],
+      "problems": [
+        "long (61)"
+      ],
       "refuses": false
     },
     {
@@ -588,7 +603,8 @@
       "chatCloseness": 0.75,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence"
       ],
       "refuses": true
     },
@@ -613,7 +629,9 @@
       "chatCloseness": 0.64,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },
@@ -638,7 +656,9 @@
       "chatCloseness": 0.93,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },

@@ -3,19 +3,22 @@
   "at": "2026-10-19T22:30:54.457Z",
   "summary": {
     "n": 22,
-    "clean": 12,
-    "medianWords": 52,
+    "clean": 7,
+    "medianWords": 51.5,
     "questions": 13,
     "asksWhy": 4,
     "asksAbout": 4,
     "refuses": 6,
     "cited": 19,
     "chatSteps": 8,
-    "medianChatCloseness": 0.93,
+    "medianChatCloseness": 0.84,
     "problems": {
       "asked about them": 4,
       "declined to answer": 6,
-      "no Summary": 1
+      "uncited answer sentence": 6,
+      "does not end on a passage": 4,
+      "no Summary": 1,
+      "long": 4
     },
     "dollars": 0.336
   },
@@ -260,7 +263,8 @@
       "chatCloseness": 0.75,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence"
       ],
       "refuses": true
     },
@@ -285,7 +289,9 @@
       "chatCloseness": 0.57,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },
@@ -310,7 +316,9 @@
       "chatCloseness": 0.93,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },
@@ -481,7 +489,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": false,
-      "problems": [],
+      "problems": [
+        "long (66)"
+      ],
       "refuses": false
     },
     {
@@ -513,6 +523,7 @@
       "chatCloseness": null,
       "summaryMode": false,
       "problems": [
+        "long (63)",
         "asked about them"
       ],
       "refuses": false
@@ -545,7 +556,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": true,
-      "problems": [],
+      "problems": [
+        "long (73)"
+      ],
       "refuses": false
     },
     {
@@ -568,7 +581,9 @@
       "chatStep": "What does Anil Seth mean by 'simulation is not instantiation'?",
       "chatCloseness": 0.75,
       "summaryMode": false,
-      "problems": [],
+      "problems": [
+        "1 uncited answer sentence"
+      ],
       "refuses": false
     },
     {
@@ -592,7 +607,9 @@
       "chatCloseness": 0.57,
       "summaryMode": false,
       "problems": [
-        "declined to answer"
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
       ],
       "refuses": true
     },
@@ -620,7 +637,10 @@
       "chatStep": "If the brain is just doing prediction, why couldn't a big enough transformer do the same prediction and be conscious too?",
       "chatCloseness": 0.93,
       "summaryMode": false,
-      "problems": [],
+      "problems": [
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ],
       "refuses": false
     },
     {
@@ -651,7 +671,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": false,
-      "problems": [],
+      "problems": [
+        "long (68)"
+      ],
       "refuses": false
     }
   ]

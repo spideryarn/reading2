@@ -8,9 +8,9 @@
  *   under every `?chatfrom=` and with no conversation at all, and a press on
  *   it opens the guide (GPT Sol's F2);
  * - **the greeting**, ours and free, asking in the conversation since plan
- *   261009i (no box): why you are reading when no reason is stored, About you
- *   quoted back when it is there, three ways in while it is empty (plan
- *   261009u), nothing asked when the reason could not be read;
+ *   261009i (no box): why you are reading when no reason is stored, stored
+ *   About you used silently, three ways in while it is empty (plan 261009u),
+ *   nothing asked when the reason could not be read;
  * - **the guide's Ask in Chat step** (plan 261012f), pressed through
  *   `onSendNew` and never the guide's own `onSend`;
  * - **the guide's offer to save** (plans 261009q and 261011s), a card under

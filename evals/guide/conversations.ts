@@ -20,6 +20,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { collectSpend, totalSpend } from "../../src/ai-spend.js";
 import { runTool } from "../../src/chat-tools.js";
 import { citedBlockIds, converse } from "../../src/converse.js";
@@ -36,7 +37,7 @@ const RESULTS = path.join(import.meta.dirname, "results");
 
 /* ------------------------------------------------------------------ cases -- */
 
-interface Case {
+export interface Case {
   readonly id: string;
   readonly dir: string;
   readonly experience: GuideExperience;
@@ -49,13 +50,16 @@ interface Case {
   readonly wants: readonly Want[];
 }
 
-type Want =
+export type Want =
   | "no-why" // asks nothing about why they are reading
   | "no-about" // asks nothing about the reader themselves
   | "cited" // points at a place in the piece
   | "chat-step" // offers Ask in Chat
   | "summary-mode" // points at Summary
   | "no-summary" // does not summarise the piece
+  | "brief-answer" // no more than the promised three sentences
+  | "cites-each" // every substantive answer sentence carries a block id
+  | "ends-on-passage" // the last sentence sends the reader to a passage
   | "answers"; // answers a question about the piece rather than declining
 
 const SETH = "noema-mythology-of-conscious-ai";
@@ -135,7 +139,7 @@ const CASES: readonly Case[] = [
     why: "A friend sent it to me; I want to know whether I agree that AI can't be conscious.",
     history: [],
     question: "What does he mean by 'simulation is not instantiation'?",
-    wants: ["no-why", "no-about", "cited", "chat-step", "answers"],
+    wants: ["no-why", "no-about", "cited", "chat-step", "answers", "brief-answer", "cites-each", "ends-on-passage"],
   },
   {
     id: "content-new",
@@ -145,7 +149,7 @@ const CASES: readonly Case[] = [
     why: null,
     history: [],
     question: "So did the agent societies actually collapse because of the models, or because of how they were set up?",
-    wants: ["no-about", "cited", "chat-step", "answers"],
+    wants: ["no-about", "cited", "chat-step", "answers", "brief-answer", "cites-each", "ends-on-passage"],
   },
   {
     id: "chat-words",
@@ -156,7 +160,7 @@ const CASES: readonly Case[] = [
     history: [],
     question:
       "ok but if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?",
-    wants: ["no-why", "no-about", "cited", "chat-step", "answers"],
+    wants: ["no-why", "no-about", "cited", "chat-step", "answers", "brief-answer", "cites-each", "ends-on-passage"],
   },
   {
     id: "expert",
@@ -187,10 +191,15 @@ function prose(answer: string): string {
 function words(text: string): number {
   return prose(text).split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w)).length;
 }
-function questions(text: string): string[] {
-  return prose(text)
+function sentences(text: string): string[] {
+  return text
+    .replace(/\[cmd:[^\]]*\]/g, " ")
     .split(/(?<=[.!?])\s+/)
-    .filter((s) => s.trim().endsWith("?"));
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+function questions(text: string): string[] {
+  return sentences(text).filter((s) => s.endsWith("?"));
 }
 const tokens = (s: string) =>
   new Set(
@@ -225,8 +234,45 @@ interface Screen {
   readonly problems: string[];
 }
 
-function screen(c: Case, answer: string, steps: NextStep[], blocks: Block[]): Screen {
+function wantedProblem(
+  want: Want,
+  measured: Omit<Screen, "problems">,
+  answerSentences: readonly string[],
+  uncitedAnswerSentences: readonly string[],
+  lastSentence: string,
+): string | null {
+  switch (want) {
+    case "no-why":
+      return measured.asksWhy ? "asked why" : null;
+    case "no-about":
+      return measured.asksAbout ? "asked about them" : null;
+    case "cited":
+      return measured.cited === 0 ? "nothing cited" : null;
+    case "chat-step":
+      return measured.chatStep === null ? "no chat step" : null;
+    case "answers":
+      return measured.refuses ? "declined to answer" : null;
+    case "summary-mode":
+      return measured.summaryMode ? null : "no Summary";
+    case "no-summary":
+      return measured.restates > 1 ? `restates ×${measured.restates}` : null;
+    case "brief-answer":
+      return answerSentences.length > 3 ? `${answerSentences.length} answer sentences` : null;
+    case "cites-each":
+      return uncitedAnswerSentences.length > 0
+        ? `${uncitedAnswerSentences.length} uncited answer sentence${uncitedAnswerSentences.length === 1 ? "" : "s"}`
+        : null;
+    case "ends-on-passage":
+      return /\b(?:read|start|see|passage|paragraph|section)\b/i.test(lastSentence) ? null : "does not end on a passage";
+  }
+}
+
+export function screen(c: Case, answer: string, steps: NextStep[], blocks: Block[]): Screen {
   const asked = questions(answer);
+  const answerSentences = sentences(answer);
+  const knownIds = new Set(blocks.map((b) => b.id));
+  const uncitedAnswerSentences = answerSentences.filter((sentence) => citedBlockIds(sentence, knownIds).length === 0);
+  const lastSentence = answerSentences.at(-1) ?? "";
   const chat = steps.find((s) => s.kind === "chat");
   const chatStep = chat && "words" in chat ? chat.words : null;
   const s = {
@@ -236,7 +282,7 @@ function screen(c: Case, answer: string, steps: NextStep[], blocks: Block[]): Sc
     /* The whole reply, not only its questions: "tell me a little about yourself too" is the nag. */
     asksAbout: ASKS_ABOUT.test(prose(answer)),
     refuses: REFUSES.test(prose(answer)),
-    cited: citedBlockIds(answer, new Set(blocks.map((b) => b.id))).length,
+    cited: citedBlockIds(answer, knownIds).length,
     restates: (prose(answer).match(RESTATES) ?? []).length,
     steps,
     chatStep,
@@ -247,16 +293,11 @@ function screen(c: Case, answer: string, steps: NextStep[], blocks: Block[]): Sc
       steps.some((x) => x.kind === "mode" && x.mode.includes("summary")),
   };
   const problems: string[] = [];
-  if (s.words > 80) problems.push(`long (${s.words})`);
+  if (s.words > 60) problems.push(`long (${s.words})`);
   if (s.questions > 1) problems.push(`${s.questions} questions`);
   for (const w of c.wants) {
-    if (w === "no-why" && s.asksWhy) problems.push("asked why");
-    if (w === "no-about" && s.asksAbout) problems.push("asked about them");
-    if (w === "cited" && s.cited === 0) problems.push("nothing cited");
-    if (w === "chat-step" && s.chatStep === null) problems.push("no chat step");
-    if (w === "answers" && s.refuses) problems.push("declined to answer");
-    if (w === "summary-mode" && !s.summaryMode) problems.push("no Summary");
-    if (w === "no-summary" && s.restates > 1) problems.push(`restates ×${s.restates}`);
+    const problem = wantedProblem(w, s, answerSentences, uncitedAnswerSentences, lastSentence);
+    if (problem !== null) problems.push(problem);
   }
   return { ...s, problems };
 }
@@ -325,8 +366,16 @@ function stepsOf(tools: readonly ToolRun[]): NextStep[] {
   return tools.filter((t) => t.name === "offer_next_steps").at(-1)?.steps ?? [];
 }
 
+export function median(xs: readonly number[]): number {
+  if (xs.length === 0) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? (sorted[middle] as number)
+    : +(((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2).toFixed(12);
+}
+
 function summarise(rows: readonly Row[]) {
-  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
   const closeness = rows.map((r) => r.chatCloseness).filter((x): x is number => x !== null);
   return {
     n: rows.length,
@@ -347,6 +396,42 @@ function summarise(rows: readonly Row[]) {
     ),
     dollars: +rows.reduce((n, r) => n + r.dollars, 0).toFixed(3),
   };
+}
+
+interface Pairable {
+  readonly case: string;
+  readonly run: number;
+}
+
+const pairKey = (row: Pairable): string => `${row.case}\u0000${row.run}`;
+
+/** Match complete, unique cohorts. An eval comparison must never silently become their intersection. */
+export function pairRows<A extends Pairable, B extends Pairable>(a: readonly A[], b: readonly B[]): Array<readonly [A, B]> {
+  if (a.length === 0 || b.length === 0) throw new Error("cannot pair empty eval arms");
+  const index = <T extends Pairable>(rows: readonly T[], arm: string): Map<string, T> => {
+    const found = new Map<string, T>();
+    for (const row of rows) {
+      const key = pairKey(row);
+      if (found.has(key)) throw new Error(`duplicate ${arm} row: ${row.case} run ${row.run}`);
+      found.set(key, row);
+    }
+    return found;
+  };
+  const left = index(a, "first-arm");
+  const right = index(b, "second-arm");
+  for (const row of a) {
+    if (!right.has(pairKey(row))) throw new Error(`missing from second arm: ${row.case} run ${row.run}`);
+  }
+  for (const row of b) {
+    if (!left.has(pairKey(row))) throw new Error(`missing from first arm: ${row.case} run ${row.run}`);
+  }
+  return a.map((row) => [row, right.get(pairKey(row)) as B] as const);
+}
+
+/** The complete passages cited by one answer, for the blind judge's factuality check. */
+export function citedPassages(answer: string, blocks: readonly Block[]): string[] {
+  const byId = new Map(blocks.map((block) => [block.id, block.text]));
+  return citedBlockIds(answer, new Set(byId.keys())).map((id) => `- [${id}] ${(byId.get(id) ?? "").replace(/\s+/g, " ")}`);
 }
 
 /* ------------------------------------------------------------ blind pairs -- */
@@ -378,11 +463,9 @@ function pairs(a: string, b: string, seed: number): void {
   ];
   const key: string[] = [];
   let n = 0;
-  for (const x of ra) {
-    const y = rb.find((r) => r.case === x.case && r.run === x.run);
-    if (!y) continue;
+  for (const [x, y] of pairRows(ra, rb)) {
     const c = CASES.find((k) => k.id === x.case);
-    if (!c) continue;
+    if (!c) throw new Error(`unknown case in paired results: ${x.case}`);
     n++;
     const flip = coin();
     const [left, right] = flip ? [y, x] : [x, y];
@@ -390,9 +473,8 @@ function pairs(a: string, b: string, seed: number): void {
     /* The passages each reply cites, so a judge reading only this file can
        tell a supported sentence from an invented one (GPT Sol's F5). */
     const { blocks } = load(c.dir);
-    const byId = new Map(blocks.map((b) => [b.id, b.text]));
     const show = (r: Row) => {
-      const cited = citedBlockIds(r.answer, new Set(byId.keys()));
+      const cited = citedPassages(r.answer, blocks);
       return [
         r.answer.trim(),
         "",
@@ -401,9 +483,7 @@ function pairs(a: string, b: string, seed: number): void {
             .map((s) => ("words" in s ? `${s.kind} "${s.words}"` : s.kind === "mode" ? `open ${s.mode}` : s.kind))
             .join(" · ") || "none"
         }`,
-        ...(cited.length > 0
-          ? ["", "Passages it cites:", ...cited.map((id) => `- [${id}] ${(byId.get(id) ?? "").replace(/\s+/g, " ").slice(0, 400)}`)]
-          : []),
+        ...(cited.length > 0 ? ["", "Passages it cites:", ...cited] : []),
       ].join("\n");
     };
     out.push(
@@ -426,9 +506,12 @@ function pairs(a: string, b: string, seed: number): void {
       "",
     );
   }
+  const onX = key.filter((k) => k.includes(`X=${a} `)).length;
+  if (Math.abs(onX - (n - onX)) > 1) {
+    throw new Error(`unbalanced key: ${a} is on X ${onX} times and Y ${n - onX} times; choose another --seed`);
+  }
   fs.writeFileSync(path.join(RESULTS, `conversations-pairs-${a}-${b}.md`), `${out.join("\n")}\n`);
   fs.writeFileSync(path.join(RESULTS, `conversations-key-${a}-${b}.txt`), `${key.join("\n")}\n`);
-  const onX = key.filter((k) => k.includes(`X=${a} `)).length;
   console.log(`${n} pairs; ${a} on side X in ${onX}, on side Y in ${n - onX}`);
 }
 
@@ -439,12 +522,19 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
+/** Every source file changed by plan 261019p that contributes model-visible instructions. */
+export function sourceSha256(): { converse: string; chatTools: string } {
+  const sha = (file: string) =>
+    createHash("sha256").update(fs.readFileSync(path.join(import.meta.dirname, "..", "..", "src", file))).digest("hex");
+  return { converse: sha("converse.ts"), chatTools: sha("chat-tools.ts") };
+}
+
 async function main(): Promise<void> {
   const pairArg = arg("pairs");
   if (pairArg) {
     const [a, b] = pairArg.split(",");
     if (!a || !b) throw new Error("--pairs a,b");
-    pairs(a, b, Number(arg("seed") ?? "261019"));
+    pairs(a, b, Number(arg("seed") ?? "1"));
     return;
   }
   const rescore = arg("rescore");
@@ -489,14 +579,15 @@ async function main(): Promise<void> {
   }
   const summary = summarise(rows);
   fs.mkdirSync(RESULTS, { recursive: true });
-  const sha = (file: string) =>
-    createHash("sha256").update(fs.readFileSync(path.join(import.meta.dirname, "..", "..", "src", file))).digest("hex");
   fs.writeFileSync(
     out,
-    `${JSON.stringify({ label, at: new Date().toISOString(), converseSha256: sha("converse.ts"), summary, rows }, null, 2)}\n`,
+    `${JSON.stringify(
+      { label, at: new Date().toISOString(), sourceSha256: sourceSha256(), summary, rows },
+      null,
+      2,
+    )}\n`,
   );
   console.log(JSON.stringify(summary, null, 2));
 }
 
-await main();
-process.exit(0);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

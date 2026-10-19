@@ -40,9 +40,9 @@ import { PROFILE_HREF } from "./router.js";
  *
  * Each sends its words as the reader's first message, so what they pressed is
  * what the transcript shows. Drawn whatever is stored: with no reason, *Where
- * should I start?* gets the guide's question why, which is the conversation
- * the greeting opens anyway. Later answers carry the guide's own next steps
- * instead (GuideNextSteps.tsx).
+ * should I start?* still gets a concrete place first; the guide may then make
+ * one guess about why they are reading. Later answers carry the guide's own
+ * next steps instead (GuideNextSteps.tsx).
  *
  * *What is this piece about?* replaced *How could I read this well?* in plan
  * docs/plans/261019p-guide-chat-plainer.md: it is what a newcomer asks first

@@ -1741,9 +1741,9 @@ technique is described"), so they know where to go. If they ask you to
 summarise it, you may point them to Summary, as a map to read alongside the
 piece, never as a way of not reading it.
 
-Do not assume they have read it. Most have just opened it. Talk about it as
-something they are about to read ("start at…", "as you read…"), never as
-something they already know.
+Do not assume they have read it. Most have just opened it. Unless they tell you
+otherwise, talk about it as something they are about to read ("start at…",
+"as you read…"). Never imply they know a passage they have not said they read.
 
 QUESTIONS ABOUT WHAT THE PIECE SAYS
 
@@ -1975,11 +1975,14 @@ ${plainWords("explain", "ask")}
 
 ${PROFILE_RULES}
 
-Two of those rules are different in this conversation, because here the reader
+Three of those rules are different in this conversation, because here the reader
 and their reading are the subject. A sentence may be about them, their reason
-or the app, and not about the article. And you may speak to them directly and
-use the reason they gave. The rest hold: no flattery, no announcing what you
-are skipping, and nothing they told you in a tool argument.`;
+or the app, and not about the article. You may speak to them directly and use
+the reason they gave. And offer_to_save may carry their own words, as SAVING
+WHAT THEY TELL YOU says, since it only puts them back in front of the reader.
+The rest hold: no flattery, no announcing what you are skipping, and nothing
+they told you in any other tool argument: not in a search, and not in a web
+address.`;
 
 /**
  * Which system prompt a turn gets, and it is chosen by the **thread's** kind,

@@ -4,8 +4,8 @@
   "converseSha256": "409984285b5dd7a99588848ba49a7414178f502feedad7b7c1f1dd0a51965b85",
   "summary": {
     "n": 22,
-    "clean": 22,
-    "medianWords": 52,
+    "clean": 14,
+    "medianWords": 51.5,
     "questions": 7,
     "asksWhy": 0,
     "asksAbout": 0,
@@ -13,7 +13,12 @@
     "cited": 22,
     "chatSteps": 6,
     "medianChatCloseness": 1,
-    "problems": {},
+    "problems": {
+      "long": 2,
+      "uncited answer sentence": 6,
+      "answer sentences": 5,
+      "does not end on a passage": 3
+    },
     "dollars": 0.356
   },
   "rows": [
@@ -77,7 +82,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": true,
-      "problems": []
+      "problems": [
+        "long (70)"
+      ]
     },
     {
       "case": "new-about",
@@ -255,7 +262,9 @@
       "chatStep": "What does he mean by 'simulation is not instantiation'?",
       "chatCloseness": 1,
       "summaryMode": true,
-      "problems": []
+      "problems": [
+        "1 uncited answer sentence"
+      ]
     },
     {
       "case": "content-new",
@@ -282,7 +291,11 @@
       "chatStep": "Did the agent societies actually collapse because of the models, or because of how they were set up?",
       "chatCloseness": 1,
       "summaryMode": true,
-      "problems": []
+      "problems": [
+        "4 answer sentences",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ]
     },
     {
       "case": "chat-words",
@@ -313,7 +326,10 @@
       "chatStep": "if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?",
       "chatCloseness": 1,
       "summaryMode": false,
-      "problems": []
+      "problems": [
+        "4 answer sentences",
+        "1 uncited answer sentence"
+      ]
     },
     {
       "case": "expert",
@@ -557,7 +573,9 @@
       "chatStep": null,
       "chatCloseness": null,
       "summaryMode": true,
-      "problems": []
+      "problems": [
+        "long (64)"
+      ]
     },
     {
       "case": "content",
@@ -588,7 +606,10 @@
       "chatStep": "What does he mean by 'simulation is not instantiation'?",
       "chatCloseness": 1,
       "summaryMode": true,
-      "problems": []
+      "problems": [
+        "4 answer sentences",
+        "1 uncited answer sentence"
+      ]
     },
     {
       "case": "content-new",
@@ -615,7 +636,11 @@
       "chatStep": "So did the agent societies actually collapse because of the models, or because of how they were set up?",
       "chatCloseness": 1,
       "summaryMode": true,
-      "problems": []
+      "problems": [
+        "4 answer sentences",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ]
     },
     {
       "case": "chat-words",
@@ -642,7 +667,11 @@
       "chatStep": "ok but if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?",
       "chatCloseness": 1,
       "summaryMode": false,
-      "problems": []
+      "problems": [
+        "5 answer sentences",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ]
     },
     {
       "case": "expert",

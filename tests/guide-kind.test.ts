@@ -104,6 +104,8 @@ describe("the guide's prompt", () => {
     expect(guide).toMatch(/Never summarise the\s+piece/);
     expect(guide).toMatch(/When they ask what the whole piece is about, or for its gist, do not give its\s+argument or findings/);
     expect(guide).toMatch(/Do not assume they have read it/);
+    expect(guide).toMatch(/Unless they tell you\s+otherwise/);
+    expect(guide).not.toMatch(/never as\s+something they already know/);
     expect(lastOf(build("guide"))).toContain("Never a summary of the piece");
   });
 
@@ -128,6 +130,15 @@ describe("the guide's prompt", () => {
     expect(guide).toMatch(/opens with a fixed greeting of ours/);
     expect(guide).not.toMatch(/a box for it/);
     expect(lastOf(build("guide"))).toContain("never a question about who they are");
+  });
+
+  /* GPT Sol's C9 on 261019p: SAVING WHAT THEY TELL YOU asks for the reader's
+     words in offer_to_save, and the profile rule forbade any tool argument. */
+  it("lets offer_to_save carry the reader's words, and no other tool", () => {
+    const guide = systemOf("guide");
+    expect(guide).toMatch(/offer_to_save may carry their own words/);
+    expect(guide).toMatch(/nothing\s+they told you in any other tool argument/);
+    expect(guide).not.toMatch(/and nothing they told you in a tool argument\./);
   });
 
   it("answers a question about a passage briefly, cited, then offers Chat (plan 261019p)", () => {

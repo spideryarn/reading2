@@ -1337,7 +1337,8 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   words is plenty*) and says they can just ask something about it instead, and stays above the
   turns while the conversation is mounted. Since 2026-10-19 it no longer asks about the reader
   themselves, nor quotes *About you* back to ask if it is still right: the guide uses it without
-  asking ([261019p](../plans/261019p-guide-chat-plainer.md)). What the reader answers is saved only
+  asking. The older optional profile link remains only when a reason is already stored and *About
+  you* is empty ([261019p](../plans/261019p-guide-chat-plainer.md)). What the reader answers is saved only
   through the guide's offer and their press (above). While the conversation is empty it offers
   three ways in, each sent as the reader's first message (*Where should I start?*, *What is this
   piece about?*, *Help me work out what I want from this*; plan 261009u, and 261019p's second
@@ -1385,7 +1386,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 Its cost is reported as `chat` (`jobFor`), on purpose for now. The evals are
 [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and
 [`evals/guide/run.ts`](../../evals/guide/run.ts), and for how it reads over a short conversation,
-[261019a](../investigations/261019b-guide-plainer-blind-judged.md) and
+[261019b](../investigations/261019b-guide-plainer-blind-judged.md) and
 [`evals/guide/conversations.ts`](../../evals/guide/conversations.ts).
 
 ## Not built, and worth building
