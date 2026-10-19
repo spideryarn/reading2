@@ -775,6 +775,32 @@ and be written over. `tests/last-view.test.ts` scans the client for `useQuerySta
 one that neither list has heard of, so the next parameter is a decision rather than an
 omission.
 
+### The paragraph you were on, and an arrival that holds
+
+> When I reopen an article that I've already been reading, it should ideally reopen at roughly the
+> position where I was on last, where I was, yeah, the paragraph that I was reading most recently.
+>
+> — Greg, 2026-10-18 (spya-qspg5a)
+
+Two changes since then, both in
+[261019a](../plans/261019a-reopen-lands-on-the-paragraph-you-were-reading.md):
+
+- **The stored copy keeps the paragraph, not just the section.** `?at=` stays a section while the
+  reader scrolls (`position.ts`), and on Greg's book a section is about 1,650 words. So the spy also
+  notes the paragraph at the reading line (`readingRow`), and `useLastView` stores that paragraph as
+  `at`. It saves as soon as the note is made, ahead of the address's 300ms debounce, and on an
+  address change only while the address still names the `at` the note was made against. A note
+  belongs to the `useLastView` that registered it, so it is never saved under another reader,
+  article or view (`noteReadingPlace`, [`last-view.ts`](../../src/web/last-view.ts)). A restore
+  therefore puts a paragraph in `?at=`, which the app already honoured from jumps: the spy leaves a
+  finer value standing while the reader stays in its section. A reload or a copied link then keeps
+  that paragraph.
+- **An arrival at `?at=` holds until the reader moves** (`arriveAt`,
+  [`scroll.ts`](../../src/web/scroll.ts)). The prose face arrives seconds after a cold load and
+  rewraps every row above, and the spy used to write down where that left the page. Each reopen
+  started a section further back:
+  [postmortem 261019a](../postmortems/261019a-a-reopen-drifted-back-a-section-each-time.md).
+
 ### An article never opened here arrives at a default
 
 > When I open an article for the first time, default to Summary/Briefer in left-hand (if there's

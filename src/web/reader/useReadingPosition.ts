@@ -13,23 +13,25 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Block, BlockId } from "../../types.js";
-import { atParam } from "../params.js";
+import { atParam, currentAt } from "../params.js";
 import {
   abandonScroll,
+  arriveAt,
   arrivalAnchor,
   clearArrivalAnchor,
   glideTarget,
-  recentreArrival,
+  realignArrival,
   scrollToBlock,
   scrollToTop,
   stickyOffset,
   watchBarVisibility,
 } from "../scroll.js";
-import { positionToWrite, type Section } from "../position.js";
+import { positionToWrite, readingRow, type Section } from "../position.js";
+import { noteReadingPlace } from "../last-view.js";
 import { beginJump, beginReturn, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
-import { isFoldedAway, subscribeFold, visibleNear } from "../fold.js";
+import { isFoldedAway, isRowHidden, subscribeFold, visibleNear } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -49,6 +51,13 @@ import { isFoldedAway, subscribeFold, visibleNear } from "../fold.js";
 export function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: string) {
   const [at, setAt] = useQueryState("at", atParam);
   const synced = useRef<BlockId | null>(null);
+  /* StrictMode tears down and replays a mounted effect. If that teardown ended
+     this effect's own kept arrival, the replay must take it again even though
+     `synced` already equals `at`. A real reader movement ends the hold first and
+     therefore leaves no replay marker. */
+  const replayArrival = useRef<BlockId | null | undefined>(undefined);
+  /** The last value the spy itself wrote, which the address may not show for another 300ms — § `notePlace`. */
+  const wrote = useRef<BlockId | null | undefined>(undefined);
   /* The article's block → row index. The spy needs it to ask which section the
      address's current value lies in, which is no longer the same question as
      what the value *is*: a jump may have put a paragraph there. One pass over
@@ -57,13 +66,27 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
 
   // URL → page: first load, back/forward, pasted link.
   useEffect(() => {
-    if (at === synced.current) return;
+    const replay = replayArrival.current === at;
+    replayArrival.current = undefined;
+    if (at === synced.current && !replay) return;
     synced.current = at;
     /* `scrollToTop`, not a bare `window.scrollTo` — Back with a glide still in
        flight would otherwise arrive at the top and be dragged forward again by
-       the jump it had just undone. scroll.ts § scrollToTop. */
-    if (at === null) scrollToTop();
-    else scrollToBlock(at, "auto");
+       the jump it had just undone. scroll.ts § scrollToTop.
+
+       **`arriveAt`, which holds the block at the top until the reader moves**
+       (plan 261019a, report spya-qspg5a). On a cold load the prose face lands
+       seconds after this scroll and rewraps every row above the block; with no
+       hold, the spy wrote the section above into `?at=` and into the reader's
+       memory of the article, and each reopen started a section further back. */
+    if (at === null) {
+      scrollToTop();
+      return;
+    }
+    const release = arriveAt(at);
+    return () => {
+      if (release()) replayArrival.current = at;
+    };
   }, [at]);
 
   /**
@@ -152,8 +175,8 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
        ended the hold and re-anchored to `?at=`, because a reflow moves the
        block off the centre without a scroll event; re-centring it keeps that
        true — without the hold lapsing while the spy below measures
-       (`recentreArrival`). */
-    if (recentreArrival()) return;
+       (`realignArrival`). */
+    if (realignArrival()) return;
     if (at === null) return; // nothing to hold at the top
     abandonScroll();
     scrollToBlock(at, "auto");
@@ -167,6 +190,42 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
        article, and the largest single reason a mode switch there cost 4.7
        seconds (Sentry SPIDERYARN-READING2-1M). */
     const rows = rowsForBlockIds(sections.map((s) => s.blockId));
+    /* Every block's row too, for the paragraph at the reading line — looked up
+       once here in the same single pass, and read a dozen at a time by binary
+       search (position.ts § `readingRow`). */
+    const blockRows = rowsForBlockIds(blocks.map((b) => b.id));
+    /**
+     * **Tell the reader's memory of the article which paragraph they are on**
+     * (last-view.ts § The paragraph, not only the section; plan 261019a,
+     * report spya-qspg5a). Only once the page is the reader's own: a jump in
+     * flight or a held arrival is a place we put them, already in `?at=`, and
+     * while an arrival is still settling the line may be over the wrong
+     * paragraph altogether.
+     *
+     * **And only while this spy's value is the address's, or is its own
+     * write still in nuqs's queue.** On a reopen, `useLastView` puts the
+     * remembered `?at=` on the address in a layout effect, after this hook's
+     * first render read the bare one: the first measurement still holds
+     * `null`, and noting "the top" from it erased the paragraph it was about
+     * to restore. A value the address has never had is not the reader's yet.
+     */
+    const notePlace = () => {
+      const at = synced.current;
+      if (at !== currentAt() && at !== wrote.current) return;
+      if (at === null) return noteReadingPlace({ at: null, block: null });
+      const row = readingRow(
+        blockRows.length,
+        (i) => blockRows[i]?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+        stickyOffset() + 1,
+        (i) => {
+          const b = blocks[i];
+          return b === undefined || isRowHidden(b.id);
+        },
+      );
+      const id = row === null ? undefined : blocks[row]?.id;
+      const block = id === undefined ? null : (visibleNear(id) as BlockId | null);
+      noteReadingPlace({ at, block: block ?? at });
+    };
     let frame = 0;
     const measure = () => {
       frame = 0;
@@ -180,6 +239,8 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          function throw the answer away. The rects are the expensive half of
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
+      const anchored = (arrivalAnchor()?.id as BlockId | undefined) ?? null;
+      const settled = !jumpInFlight && anchored === null;
       /* Shutting a stretch can leave the address holding a block inside it,
          and so can folding a heading over a paragraph a jump put there.
          Canonicalise that held value before asking whether the measured
@@ -201,7 +262,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         jumpInFlight,
         atTop: window.scrollY <= stickyOffset(),
         held,
-        anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
+        anchored,
         /* A folded section start is never written: restoring it would unfold
            it (scroll.ts § `scrollToBlock`). fold.ts. `isFoldedAway`, not
            `isRowHidden`: the first section starts on the masthead's echo, which
@@ -215,8 +276,10 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
       if (next === null) {
         if (held !== synced.current) {
           synced.current = held;
+          wrote.current = held;
           void setAt(held);
         }
+        if (settled) notePlace();
         return;
       }
       /* **A section that starts in a shut stretch is written as its first
@@ -230,7 +293,9 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          `positionToWrite`). */
       const at = next.at === null ? null : (visibleNear(next.at) as BlockId | null);
       synced.current = at;
+      wrote.current = at;
       void setAt(at);
+      if (settled) notePlace();
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -246,7 +311,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
       window.removeEventListener("scroll", onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [sections, rowOf, setAt, layoutKey]);
+  }, [sections, blocks, rowOf, setAt, layoutKey]);
 
   /* The controls bar gets out of the way while you read forwards — scroll.ts
      § watchBarVisibility, and shell.css § the bar that leaves while you read

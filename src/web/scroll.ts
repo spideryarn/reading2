@@ -12,6 +12,7 @@
  * path. See docs/project/block-ids.md.
  */
 import { isContentHidden, isRowHidden, revealBlock } from "./fold.js";
+import { onFontsChanged } from "./fonts.js";
 import { blockRow, passageMarks } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
 
@@ -890,6 +891,13 @@ export interface ScrollHow {
    * even when the paragraph is too tall to be. Only with `centre`.
    */
   passage?: string | undefined;
+  /**
+   * Hold the arrival and keep it aligned as the page settles — § `arriveAt`.
+   * Set by the moves that take such a hold; a bare `scrollToBlock` never does.
+   */
+  keep?: boolean;
+  /** The `arriveAt` call that owns a kept hold; internal, so its cleanup cannot end a newer arrival. */
+  keepOwner?: symbol | undefined;
 }
 
 /**
@@ -935,10 +943,24 @@ export function alignedOffset(o: {
  * however late the event is (§ `ourScrollY`). A re-flow that makes the browser
  * scroll ends it too, and then the reading line answers again, which is the
  * old behaviour rather than a wrong one.
+ *
+ * **A kept arrival** (`anchorKeep`, since plan 261019a) is the other kind: an
+ * arrival at `?at=` with its top under the bar, which also *keeps itself
+ * there* while the page settles — § `arriveAt`. It ends in the same ways, plus
+ * the reader's own input, and a scroll the browser made to keep its block in
+ * place does not end it.
  */
 let anchor: { id: string; passage: string | undefined } | null = null;
+let anchorAlign: ScrollAlign = "centre";
+let anchorKeep = false;
+/** Which `arriveAt` may tear this hold down on unmount. Centred holds have no owner. */
+let anchorOwner: symbol | null = null;
 let anchorY = 0;
+/** The page's height when a kept arrival was last aligned — § `onScrollWhileAnchored`. */
+let anchorHeight = 0;
 let anchorListening = false;
+/** Tears down a kept arrival's watchers — § `keepWatching`. */
+let stopKeeping: (() => void) | null = null;
 const anchorListeners = new Set<() => void>();
 
 /** Anchor changes can settle or end without scrolling; live position samplers must hear them. */
@@ -954,13 +976,62 @@ function onScrollWhileAnchored(): void {
      arrive a second later behind a render. The page has not moved, so the
      reader has not left — no clock is asked (§ `ourScrollY`). */
   if (window.scrollY === anchorY) return; // exactly: `anchorY` is a readback too
+  if (anchor !== null && anchorKeep) {
+    /* **A kept arrival whose block is still where it was put has not been
+       left**: the browser scrolled to keep it there — Chrome's scroll
+       anchoring of a block inserted above the prose table, such as the
+       controls bar appearing. */
+    if (restsOn(anchor.id, anchorAlign, anchor.passage)) {
+      anchorY = window.scrollY;
+      return;
+    }
+    /* **Nor has one whose page changed height under it.** A reflow can move
+       `scrollY` by a pixel and fire this event in the very frame it moves the
+       block, before the resize that would put it back has been reported —
+       measured at 390px wide when the prose face landed, and that one event
+       ended the hold. A reader's scroll, a scrollbar drag included, leaves
+       the page's height alone; a reflow is what changes it. */
+    if (document.documentElement.scrollHeight !== anchorHeight) {
+      realignArrival();
+      return;
+    }
+  }
   clearArrivalAnchor();
 }
 
-/** End a centred arrival without implying that a glide is in flight. */
+/**
+ * Whether the page is already where `scrollToBlock` would put `id` — within
+ * two pixels, because at a phone's pixel density the browser's own settling
+ * moves `scrollY` by a fraction that rounds to a whole pixel (measured: 58072
+ * then 58071 at 390px wide, with the block not moved), and an exact test ended
+ * the hold on it before the prose face had even arrived.
+ */
+function restsOn(id: string, align: ScrollAlign, passage: string | undefined): boolean {
+  const row = blockRow(id);
+  return row !== null && Math.abs(aimAt(id, row, align, passage).read() - window.scrollY) < 2;
+}
+
+/**
+ * **End a centred arrival; leave a kept one** — for a layout change that can
+ * take a centred arrival's passage marks away without scrolling (Reader.tsx,
+ * on a change of mode). A kept arrival is a block of the prose, not a mark,
+ * and a mode that reflows the prose is exactly what it keeps itself aligned
+ * through. Measured on a phone-width cold load: the mode settling after the
+ * restore ended the hold, and the prose face then carried the block 7,000px
+ * down with nothing holding it (plan 261019a).
+ */
+export function endCentredArrival(): void {
+  if (!anchorKeep) clearArrivalAnchor();
+}
+
+/** End an arrival's hold without implying that a glide is in flight. */
 export function clearArrivalAnchor(): void {
   const held = anchor !== null;
   anchor = null;
+  anchorKeep = false;
+  anchorOwner = null;
+  stopKeeping?.();
+  stopKeeping = null;
   if (anchorListening) {
     window.removeEventListener("scroll", onScrollWhileAnchored);
     anchorListening = false;
@@ -968,32 +1039,126 @@ export function clearArrivalAnchor(): void {
   if (held) for (const listener of anchorListeners) listener();
 }
 
-function holdAnchor(id: string, passage: string | undefined): void {
+function holdAnchor(
+  id: string,
+  passage: string | undefined,
+  align: ScrollAlign = "centre",
+  keep = false,
+  owner: symbol | null = null,
+): void {
   anchor = { id, passage };
+  anchorAlign = align;
+  anchorKeep = keep;
+  anchorOwner = owner;
   anchorY = window.scrollY;
+  anchorHeight = document.documentElement.scrollHeight;
   if (!anchorListening) {
     window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
     anchorListening = true;
   }
+  if (keep && stopKeeping === null) stopKeeping = keepWatching();
   for (const listener of anchorListeners) listener();
 }
 
+/** The reader's own hand on the page — the same four `flash.ts § keepAligned` stops for. */
+const READER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+
 /**
- * **Put a held centred arrival back in the centre, instantly, without the
- * hold lapsing** — the reflow re-anchor's move (reader/useReadingPosition.ts;
- * postmortem 261017a). `scrollToBlock`'s glide ends the hold at once and takes
- * it again only on its corrective frame, and the position spy measures in
- * between: centred on a section's first block, it would read the section
- * before and write that into `?at=` (GPT Sol's review of the fix, F1). So the
- * hold is taken again here, straight after the instant move. `false` when
- * nothing is held, and nothing moves.
+ * **What re-aligns a kept arrival, and what ends it** — postmortem 261002b's
+ * fix, applied to the reader's own arrival (plan 261019a).
+ *
+ * Re-aligns on a web font finishing (`onFontsChanged`, not `fonts.ready` —
+ * fonts.ts says why) and on the body changing size, which is what a rewrap
+ * of the prose does. Chrome's scroll anchoring cannot do this for us: the
+ * prose is a `<table>`, and a row growing above the window moves everything
+ * below it with `scrollY` unchanged — measured at +3,181px when the prose face
+ * landed 4.7s after a cold `?at=` arrival.
+ *
+ * Ends on the reader's own input, cancelling a corrective frame still to come
+ * as well (GPT Sol's plan review, F2) — otherwise a key pressed straight after
+ * arriving would be undone one frame later. No timer: the watchers go with the
+ * hold, and every other movement ends the hold (`cancel`).
  */
-export function recentreArrival(): boolean {
+function keepWatching(): () => void {
+  const sizes = new Map<Element, string>();
+  /* A ResizeObserver reports every target once on `observe`, which is not a
+     change; so compare with the size it last reported. */
+  const ro =
+    typeof ResizeObserver === "function"
+      ? new ResizeObserver((entries) => {
+          let changed = false;
+          for (const e of entries) {
+            const size = `${e.contentRect.width}x${e.contentRect.height}`;
+            const before = sizes.get(e.target);
+            sizes.set(e.target, size);
+            if (before !== undefined && before !== size) changed = true;
+          }
+          if (changed) realignArrival();
+        })
+      : null;
+  ro?.observe(document.body);
+  const unfont = onFontsChanged(() => realignArrival());
+  const letGo = () => {
+    abandonScroll();
+    clearArrivalAnchor();
+  };
+  for (const type of READER_INPUT) window.addEventListener(type, letGo, { capture: true, passive: true });
+  return () => {
+    ro?.disconnect();
+    unfont();
+    for (const type of READER_INPUT) window.removeEventListener(type, letGo, { capture: true });
+  };
+}
+
+/**
+ * **Arrive at `id`, top under the bar, and keep it there until the reader
+ * moves** — the `?at=` restore's move (reader/useReadingPosition.ts; plan
+ * 261019a, report spya-qspg5a). While it holds, the position spy names this
+ * block's section and nothing else (position.ts § `positionToWrite`,
+ * `anchored`), so a measurement taken before the page has settled is never
+ * written into `?at=` — or into the reader's memory of the article
+ * (last-view.ts), which is how a reopen used to land one section further back
+ * each time. Taken at once rather than on the corrective frame, so that the
+ * reader's input in between cancels that frame too.
+ */
+export function arriveAt(id: string): () => boolean {
+  const owner = Symbol("kept arrival");
+  abandonScroll();
+  scrollToBlock(id, "auto", undefined, { keep: true, keepOwner: owner });
+  /* Only on a row there is to hold: the masthead's echo goes to the top of the
+     page, and an id the article no longer has goes nowhere. */
+  if (blockRow(id) !== null && !isRowHidden(id)) holdAnchor(id, undefined, "top", true, owner);
+  /* The hook that asked for this arrival owns its lifetime too. The token is
+     the distinction between its own hold and a newer jump/restore that happens
+     to name the same block. `cancel`, not only `clearArrivalAnchor`, also stops
+     the instant glide's corrective frame from taking the hold back afterwards. */
+  return () => {
+    if (anchorOwner !== owner) return false;
+    cancel();
+    return true;
+  };
+}
+
+/**
+ * **Put a held arrival back where it was put, instantly, without the hold
+ * lapsing** — the reflow re-anchor's move (reader/useReadingPosition.ts;
+ * postmortem 261017a), and a kept arrival's on a font or a resize.
+ * `scrollToBlock`'s glide ends the hold at once and takes it again only on its
+ * corrective frame, and the position spy measures in between: centred on a
+ * section's first block, it would read the section before and write that into
+ * `?at=` (GPT Sol's review of the fix, F1). So the hold is taken again here,
+ * straight after the instant move. `false` when nothing is held, and nothing
+ * moves. It was `recentreArrival` until arrivals at the top could be held too.
+ */
+export function realignArrival(): boolean {
   const held = arrivalAnchor();
   if (held === null) return false;
+  const align = anchorAlign;
+  const keep = anchorKeep;
+  const owner = anchorOwner;
   abandonScroll();
-  scrollToBlock(held.id, "auto", undefined, { align: "centre", passage: held.passage });
-  holdAnchor(held.id, held.passage);
+  scrollToBlock(held.id, "auto", undefined, { align, passage: held.passage, keep, keepOwner: owner ?? undefined });
+  holdAnchor(held.id, held.passage, align, keep, owner);
   return true;
 }
 
@@ -1054,7 +1219,9 @@ export function scrollToBlock(
        clears it), and before the caller hears — so a caller that asks where
        the reader is from inside `done` gets the arrival. */
     (outcome) => {
-      if (outcome === "settled" && align === "centre") holdAnchor(id, how.passage);
+      if (outcome === "settled" && (align === "centre" || how.keep)) {
+        holdAnchor(id, how.passage, align, how.keep, how.keepOwner ?? null);
+      }
       done?.(outcome);
     },
     instant ? 0 : SCROLL_MS,

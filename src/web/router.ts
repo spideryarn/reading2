@@ -1613,7 +1613,7 @@ export function navigate(
   if (options.scroll !== false) window.scrollTo({ top: 0 });
 }
 
-function subscribe(onChange: () => void): () => void {
+function subscribe(onChange: (event: Event) => void): () => void {
   window.addEventListener("popstate", onChange);
   window.addEventListener(NAVIGATED, onChange);
   return () => {
@@ -1634,9 +1634,12 @@ function subscribe(onChange: () => void): () => void {
  * (§ `watchHistoryWrites` above) exists precisely to keep that subscription
  * narrow. A listener that writes to storage and touches no state costs nothing.
  *
+ * The event is passed through so that caller can distinguish Back/Forward's
+ * `popstate` from an in-page history write without adding a second listener.
+ *
  * Returns its own unsubscriber, so it drops straight out of a `useEffect`.
  */
-export function onAddressChange(listener: () => void): () => void {
+export function onAddressChange(listener: (event: Event) => void): () => void {
   return subscribe(listener);
 }
 

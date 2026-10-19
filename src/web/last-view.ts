@@ -77,6 +77,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { type ArticleView, liftedLegacySearch, onAddressChange, parseRoute } from "./router.js";
+import type { BlockId } from "../types.js";
 import { type BandMode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { bandCoversProse } from "./layout.js";
 import { storageReader } from "./lib/storage-reader.js";
@@ -430,6 +431,51 @@ export function rememberableSearch(search: string): string {
     return !(key === "mode" && (thread || needsAnExplicitPress(pairValue(p))));
   });
   return kept.length > 0 ? `?${kept.join("&")}` : "";
+}
+
+/**
+ * ## The paragraph, not only the section
+ *
+ * > When I reopen an article that I've already been reading, it should ideally reopen at roughly
+ * > the position where I was on last, where I was, yeah, the paragraph that I was reading most
+ * > recently.
+ * >
+ * > — Greg, 2026-10-18 (spya-qspg5a)
+ *
+ * The address's `?at=` is a section while the reader scrolls (position.ts),
+ * and a section of a book can be seven minutes of reading. So the position spy
+ * also notes **the paragraph at the reading line** with the `?at=` it holds,
+ * and the copy kept here stores that paragraph in place of the section's first
+ * block. A restore then puts a paragraph in `?at=`, which the app already
+ * honours: the spy leaves a finer value standing while the reader stays in its
+ * section. Plan docs/plans/261019a-reopen-lands-on-the-paragraph-you-were-reading.md.
+ */
+export interface ReadingPlace {
+  /** The `?at=` the spy holds — which may be ahead of the address by its 300ms debounce. */
+  at: BlockId | null;
+  /** The paragraph at the reading line, or `null` at the top of the article. */
+  block: BlockId | null;
+}
+
+/** `remembered` with its `at` set to `block`, or taken out for `null`. Textual, like the rest. */
+export function withReadingPlace(remembered: string, block: BlockId | null): string {
+  const rest = pairs(remembered).filter((p) => pairKey(p) !== "at");
+  const kept = block === null ? rest : [`at=${block}`, ...rest];
+  return kept.length > 0 ? `?${kept.join("&")}` : "";
+}
+
+/** The address's own `at`, as the spy would hold it. */
+function addressAt(search: string): string | null {
+  const pair = pairs(search).find((p) => pairKey(p) === "at");
+  return pair === undefined ? null : pairValue(pair);
+}
+
+/** The live `useLastView`'s saver — one at a time, so a note is saved only under the reader, article and view it was made in. */
+let placeSaver: ((place: ReadingPlace) => void) | null = null;
+
+/** The position spy's note (useReadingPosition.ts). Nothing happens when no reading view is remembering. */
+export function noteReadingPlace(place: ReadingPlace): void {
+  placeSaver?.(place);
 }
 
 /**
@@ -843,7 +889,15 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
 
   useEffect(() => {
     if (slug === null) return;
-    const save = () => {
+    /* The spy's latest note, for this reader, article and view only: a new
+       run of this effect starts with none (§ The paragraph, not only the
+       section). */
+    let place: ReadingPlace | null = null;
+    /* When the spy crosses a section before nuqs's position debounce lands,
+       this is the older address value the fresh note superseded. An unrelated
+       query write may still carry it; Back/Forward may not. */
+    let laggingAt: string | null | undefined;
+    const save = (fresh = false, event?: Event) => {
       /* **Which article the address currently names, not which one this
          component was rendered for.** `navigate()` writes the new address
          synchronously and fires its event before React re-renders, so on the
@@ -857,7 +911,26 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
       /* **And the reader this listener was made for is still the one who
          arrived.** The pathname cannot say that. § A change of reader. */
       if (arrivedFor.current?.readerId !== readerId) return;
-      const search = rememberableSearch(location.search);
+      const remembered = rememberableSearch(location.search);
+      /* **The paragraph in place of the section.** A fresh note is saved as it
+         stands, ahead of the address, so leaving inside the spy's 300ms
+         debounce keeps it (GPT Sol's plan review, F3). An address change
+         keeps it while the address names the `at` it was noted against, or the
+         older one that its queued write is replacing. A different position —
+         and Back/Forward even to that older value — is newer than the note. */
+      const nowAt = addressAt(location.search);
+      const matchesPlace = place !== null && nowAt === place.at;
+      /* A fresh note is authoritative even while `?at=` is queued. Keep it
+         through another query-string write that still carries the address we
+         observed behind it. A history traversal is different: its position is
+         the reader's newer choice even when it happens to equal that old value. */
+      const stillLagging =
+        place !== null && event?.type !== "popstate" && laggingAt !== undefined && nowAt === laggingAt;
+      const search =
+        place !== null && (fresh || matchesPlace || stillLagging)
+          ? withReadingPlace(remembered, place.block)
+          : remembered;
+      if (!fresh && (matchesPlace || !stillLagging)) laggingAt = undefined;
       /* A bare metadata visit is not an open of the prose. Keep its missing
          key missing; existing views and explicit article state still save. */
       if (route.view === "metadata" && search === "" && readLastView(slug, readerId).kind !== "stored") return;
@@ -866,6 +939,20 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
     // The state we arrived with counts: a shared link's `?at=` is where this
     // reader was, from the moment they opened it.
     save();
-    return onAddressChange(save);
+    const unlisten = onAddressChange((event) => save(false, event));
+    /* Only the reading view has a spy to take notes from. */
+    if (view !== "article") return unlisten;
+    const saver = (next: ReadingPlace) => {
+      if (place !== null && place.at === next.at && place.block === next.block) return;
+      const nowAt = addressAt(location.search);
+      laggingAt = nowAt === next.at ? undefined : nowAt;
+      place = next;
+      save(true);
+    };
+    placeSaver = saver;
+    return () => {
+      unlisten();
+      if (placeSaver === saver) placeSaver = null;
+    };
   }, [slug, view, readerId]);
 }
