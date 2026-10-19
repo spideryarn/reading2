@@ -1,17 +1,29 @@
 ---
 reports: spya-kwcn4x
+addenda: spya-ve9bbw
 ending: shipped
 comment: On a tall screen our button was docked at the far edge, up to 600px from your words. It now sits just past the iPad's own menu. Please try it on your iPad once deployed.
 ---
 # On an iPad, selecting text showed the iPad's menu and no "Highlight or comment" button
 
 Report `spya-kwcn4x` (#607, SPIDERYARN-READING2-JY, queue item `qi-6ybwkegr`), a problem, from Greg
-(admin, `feedback-reporter.ts` exit 0, no addenda), 2026-10-18 23:37 UTC, on an iPad, build
+(admin, `feedback-reporter.ts` exit 0; one addendum, below), 2026-10-18 23:37 UTC, on an iPad, build
 `956a2380`, on
 `https://www.spideryarn.com/read/rovelli-order-of-time-7098a4fca8e95ec987b96f1c97-spya-r26sug?at=spya-g83jsr&margin=1`:
 
 > I tried to select some text on an iPad, and it showed me the iPad text selection menu with cut and
 > copy and whatever, but didn't seem to show me any kind of Spideryarn context menu.
+
+His addendum `spya-ve9bbw`, 2026-10-19 07:56 UTC, written before the fix landed but not read by
+the session that made it:
+
+> Oh wait, actually, maybe it is showing the highlight or comment. It's just in a corner of the
+> screen and I never noticed it. Maybe that's okay. I don't know if there's a way to subtly make it
+> a bit more noticeable for the user.
+
+It confirms the likeliest cause below: the button did appear, docked at the far edge. The fix
+below is the "more noticeable" he asks for, since the button now sits just past his words rather
+than in a corner. Recorded by the feedback sweep, 2026-10-19; nothing further was built for it.
 
 **Ending: Shipped**, on `dev`. Plan, evidence and reviews:
 [261019b](../plans/261019b-ipad-selection-chip-sits-near-the-words-and-a-finger-is-known-from-touchstart.md).

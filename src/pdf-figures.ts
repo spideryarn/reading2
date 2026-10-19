@@ -641,7 +641,15 @@ export type PdfFigureFailure =
    * picture on *that* page is the previous figure's.
    * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
    */
-  | "caption-not-in-page-text";
+  | "caption-not-in-page-text"
+  /**
+   * **The figure has no caption, so there is nothing to check its page
+   * against.** Not `caption-not-in-page-text`, which claims a caption the
+   * figure does not have. Pairing one safely needs where the picture sits
+   * between the prose around it, which this gate does not read yet:
+   * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md § Stage B.
+   */
+  | "uncaptioned";
 
 /** What became of one marker. Exactly one of these exists per marker. */
 export type FigureOutcome =
@@ -702,6 +710,12 @@ export function pairPageFigures(input: {
   for (const marker of input.markers) {
     const markersHere = markersByPage.get(marker.page) ?? [];
     const usableHere = usableByPage.get(marker.page) ?? [];
+    /* First, and still counted on its page above: a captioned figure beside it
+       must not take a picture that may be this one's. */
+    if ((input.captions.get(marker.ref) ?? "").trim() === "") {
+      outcomes.push({ status: "refused", marker, reason: "uncaptioned" });
+      continue;
+    }
     if (markersHere.length !== 1 || usableHere.length > 1) {
       outcomes.push({ status: "refused", marker, reason: "ambiguous" });
       continue;
@@ -872,12 +886,24 @@ export const PDF_FIGURE_REF_VERSION = "pdffig1";
  * Throws on anything that is not a lowercase sha256 and two positive whole
  * numbers, because a malformed ref does not fail here — it fails much later, as
  * a lookup that never matches and a figure that never appears.
+ *
+ * **`context` is for a figure with no caption**, and only for one: the page's
+ * emitted-figure count and the prose either side of it. The ordinal makes refs
+ * distinct within one render; the context prevents a re-extraction that found
+ * one more figure earlier on the page handing an old ref — and through
+ * `emptyKey` in src/blocks.ts, its block id — to the new one. The page count is
+ * what makes that safe for a run of adjacent empty figures, whose immediate
+ * neighbours are empty too (GPT Sol, plan review of 261019e, finding 4).
+ * Absent, the hash is byte-for-byte what it was before `context` existed, so
+ * no captioned ref stored today moves and the version tag does not change: no
+ * captionless ref existed before it.
  */
 export function pdfFigureRef(input: {
   rawSha256: string;
   page: number;
   ordinal: number;
   caption: string;
+  context?: string;
 }): string {
   if (!/^[0-9a-f]{64}$/.test(input.rawSha256)) {
     throw new Error("pdf-figures: a figure ref needs the raw PDF's lowercase sha256");
@@ -886,15 +912,20 @@ export function pdfFigureRef(input: {
     throw new Error(`pdf-figures: bad page/ordinal ${input.page}/${input.ordinal} for a figure ref`);
   }
   const caption = input.caption.replace(/\s+/g, " ").trim();
-  const captionDigest = createHash("sha256").update(caption, "utf8").digest("hex");
-  const digest = createHash("sha256")
-    .update(
-      [PDF_FIGURE_REF_VERSION, input.rawSha256, String(input.page), String(input.ordinal), captionDigest].join(
-        "\n",
-      ),
-      "utf8",
-    )
-    .digest("hex");
+  if (input.context !== undefined && caption !== "") {
+    throw new Error("pdf-figures: neighbour context is only valid for an uncaptioned figure");
+  }
+  const digestOf = (text: string) =>
+    createHash("sha256").update(text.replace(/\s+/g, " ").trim(), "utf8").digest("hex");
+  const fields = [
+    PDF_FIGURE_REF_VERSION,
+    input.rawSha256,
+    String(input.page),
+    String(input.ordinal),
+    digestOf(caption),
+  ];
+  if (input.context !== undefined) fields.push(digestOf(input.context));
+  const digest = createHash("sha256").update(fields.join("\n"), "utf8").digest("hex");
   /* Half a sha256. The ref only has to be unguessable-by-accident and unique
      within one article; the whole thing would double the length of an attribute
      that sits in every figure's stored HTML. */

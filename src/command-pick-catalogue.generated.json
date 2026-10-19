@@ -9,7 +9,6 @@
    "reading",
    "just the article",
    "prose",
-   "original",
    "no mode",
    "no panel"
   ],
@@ -1027,6 +1026,28 @@
    "make private",
    "who can read",
    "visibility"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:original",
+  "label": "Open the original",
+  "description": "The web page or the PDF this article was made from, in a new tab.",
+  "aliases": [
+   "view the original",
+   "view original",
+   "open original",
+   "original page",
+   "original pdf",
+   "source page"
   ],
   "kind": "action",
   "generates": false,

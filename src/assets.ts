@@ -197,7 +197,7 @@ export interface Assets {
 /**
  * Why a figure marker ended up with no picture.
  *
- * The first eight are `PdfFigureFailure` in src/pdf-figures.ts, which decides
+ * The first nine are `PdfFigureFailure` in src/pdf-figures.ts, which decides
  * them on bytes and the page's text; the rest are this step's, and cannot be decided there because
  * that module never encodes, stores, reads a bucket or watches a clock. Three
  * of those — `not-located`, `too-complex`, `render-failed` — belong to the
@@ -238,6 +238,13 @@ export type PdfFigureFailure =
    * src/pdf-figures.ts; docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
    */
   | "caption-not-in-page-text"
+  /**
+   * The figure prints no caption, so nothing ties a picture on its page to it.
+   * Its block is kept and marked all the same, so the reader is told it is
+   * missing rather than never knowing it was there.
+   * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md.
+   */
+  | "uncaptioned"
   /**
    * **The page was the narrow case the drawn-figure route exists for, and no
    * drawing on it could be proved to be this caption's.** One figure marker,

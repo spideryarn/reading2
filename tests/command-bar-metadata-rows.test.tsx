@@ -46,6 +46,8 @@ const SLUG = "a-piece";
 let requests: string[];
 /** The export route's answer — a zip, or a refusal a test swaps in. */
 let exportAnswer: () => Response;
+/** The uploaded PDF's route — the file, or a refusal a test swaps in. */
+let sourceAnswer: () => Response;
 let host: HTMLDivElement;
 let root: Root;
 let clicked: HTMLAnchorElement[];
@@ -74,12 +76,15 @@ beforeEach(() => {
   clicked = [];
   exportAnswer = () =>
     new Response(new Blob(["zip"]), { status: 200, headers: { "content-type": "application/zip" } });
+  sourceAnswer = () =>
+    new Response(new Blob(["%PDF"]), { status: 200, headers: { "content-type": "application/pdf" } });
   jobEngine.reset();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     requests.push(`${method} ${url}`);
     if (url.startsWith("/api/export/")) return Promise.resolve(exportAnswer());
+    if (url.startsWith("/api/source/")) return Promise.resolve(sourceAnswer());
     if (url === "/api/jobs") return Promise.resolve(json({ jobs: [] }));
     return Promise.resolve(json({}));
   });
@@ -343,5 +348,129 @@ describe("Export", () => {
     expect(dialog().open).toBe(true);
     expect(status()).toContain("Couldn't build the download.");
     expect(status()).toContain("No such article.");
+  });
+});
+
+/**
+ * **Open the original** — Greg, 2026-10-18 (spya-r6a5s5): *"I tried typing
+ * original into the command bar and didn't find anything."* Plan 261019f.
+ *
+ * What a happy path would not see: the tab is opened **inside** the Enter,
+ * before anything is awaited (a later one is a blocked popup, and nothing
+ * happens on screen); a refused PDF closes that blank tab and keeps the bar
+ * open with the reason; and an article with no original has no row, rather
+ * than one that can only fail.
+ */
+describe("Open the original", () => {
+  const WEB = "https://www.noemamag.com/a-piece/";
+
+  function readingWith(original: unknown): void {
+    act(() => {
+      root.render(
+        // biome-ignore lint/suspicious/noExplicitAny: as `reading` above
+        createElement(Dock as any, {
+          slug: SLUG,
+          view: "article",
+          mode: "plain",
+          onMode: () => {},
+          experimental: EXPERIMENTAL_OFF,
+          original,
+        }),
+      );
+    });
+  }
+
+  /** A stand-in tab, for the PDF arm's `window.open("", "_blank")`. */
+  function fakeTab(): { opener: unknown; location: { href: string }; close: ReturnType<typeof vi.fn> } {
+    return { opener: "parent", location: { href: "" }, close: vi.fn() };
+  }
+
+  it("is not on the list the bar opens on", () => {
+    readingWith({ kind: "web", url: WEB });
+    openBar();
+    expect(listed()).not.toContain("Open the original");
+  });
+
+  it("is the first row for `original`, and opens the address in a new tab without an opener", () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    readingWith({ kind: "web", url: WEB });
+    openBar();
+    type("original");
+    expect(listed()[0]).toBe("Open the original");
+    press("Enter");
+    expect(open).toHaveBeenCalledWith(WEB, "_blank", "noopener,noreferrer");
+    expect(dialog().open).toBe(false);
+  });
+
+  it("opens an uploaded PDF in a tab opened inside the Enter, then fills it", async () => {
+    const tab = fakeTab();
+    const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    URL.createObjectURL = vi.fn(() => "blob:pdf");
+    readingWith({ kind: "pdf" });
+    openBar();
+    type("original pdf");
+    expect(listed()[0]).toBe("Open the original");
+    press("Enter");
+    /* Before anything settles: the popup belongs to the keypress. */
+    expect(open).toHaveBeenCalledWith("", "_blank");
+    expect(tab.opener).toBeNull();
+    await settle();
+    expect(requests).toContain(`GET /api/source/${SLUG}`);
+    expect(tab.location.href).toBe("blob:pdf");
+    expect(tab.close).not.toHaveBeenCalled();
+    expect(dialog().open).toBe(false);
+  });
+
+  it("closes the blank tab and stays open with the reason when the PDF is refused", async () => {
+    sourceAnswer = () => json({ error: "That article did not come from a PDF." }, 404);
+    const tab = fakeTab();
+    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    readingWith({ kind: "pdf" });
+    openBar();
+    type("original");
+    press("Enter");
+    await settle();
+    expect(tab.close).toHaveBeenCalled();
+    expect(dialog().open).toBe(true);
+    expect(status()).toContain("Couldn't open the original.");
+  });
+
+  /* A double press on Stop presses Enter from an effect, once the words
+     arrive — possibly after the browser's activation has run out (GPT Sol's
+     F2 on the plan). Then nothing is opened, and the bar asks for a press. */
+  it.each([
+    ["web page", { kind: "web", url: WEB }],
+    ["uploaded PDF", { kind: "pdf" }],
+  ] as const)("opens no %s outside a gesture, and asks for an Enter", (_name, original) => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    /* jsdom has no `userActivation`; the one property, not a copied
+       `navigator`, whose getters a spread would lose. */
+    Object.defineProperty(navigator, "userActivation", { value: { isActive: false }, configurable: true });
+    try {
+      readingWith(original);
+      openBar();
+      type("original");
+      press("Enter");
+      expect(open).not.toHaveBeenCalled();
+      expect(requests.filter((r) => r.includes("/api/source/"))).toEqual([]);
+      expect(dialog().open).toBe(true);
+      expect(status()).toContain("Choose it again to open the original");
+    } finally {
+      delete (navigator as { userActivation?: unknown }).userActivation;
+    }
+  });
+
+  it("is absent when there is no original to open", () => {
+    readingWith(undefined);
+    openBar();
+    type("original");
+    expect(listed()).not.toContain("Open the original");
+  });
+
+  it("leaves `source` to the Sources mode", () => {
+    readingWith({ kind: "web", url: WEB });
+    openBar();
+    type("source");
+    expect(listed()[0]).toBe("Sources");
   });
 });

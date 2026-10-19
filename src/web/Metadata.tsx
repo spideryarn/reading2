@@ -259,7 +259,6 @@ import type {
   Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
-import { convertedFormatFromName } from "../uploads.js";
 /* The steps this page will re-run, from a leaf rather than from
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
@@ -272,7 +271,7 @@ import { Dock, withPanel } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
-import { cameOffADisk, journalBesideSite, SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, journalBesideSite, originalOf, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { TagEditor } from "./TagEditor.js";
@@ -1505,6 +1504,9 @@ export function Metadata({
            `tags` is the editor's own save (`saveTags`), so a tag added from
            the bar is on the page at once (GPT Sol's F4 on plan 261003f). */
         shelfRow={showingFixture ? undefined : { archive, tags: { edit: saveTags } }}
+        /* The bar's *Open the original*, from the rule the origin line on this
+           page draws from (SourceLink.tsx § `originalOf`). */
+        original={showingFixture ? undefined : (originalOf(meta, true) ?? undefined)}
       />
     </>
   );
@@ -2497,16 +2499,16 @@ function Origin({
               ? "The address recorded for this article is not one a browser can follow."
               : "No web address was recorded for this article."}
         </span>
-        {/* `GET /api/source/:slug` serves stage 1's canonical document. For a
-            text, Markdown or Word upload that is the HTML page we made, not the
-            original file kept beside it, so calling this control *View the
-            original* would be false. Withhold it until that original has its own
-            route. `slug` is the route's, never `meta.slug` — an address with no
-            article of its own is answered with the fixture's meta, and this link
-            must be about the address the reader is standing on. */}
+        {/* **Only what `GET /api/source/:slug` will serve, which is a PDF** —
+            `originalOf` says why, and the command bar's *Open the original*
+            asks it too, so the two cannot disagree. Until 2026-10-19 this
+            offered an uploaded web page as well, and that button could only
+            answer 404 (plan 261019f). `slug` is the route's, never `meta.slug` —
+            an address with no article of its own is answered with the
+            fixture's meta, and this link must be about the address the reader
+            is standing on. */}
         {uploaded &&
-          owner &&
-          (meta.source === "pdf" || convertedFormatFromName(meta.filename ?? "") === null) && (
+          originalOf(meta, owner)?.kind === "pdf" && (
             <span className="tw:text-highlight-text">
               <SourceLink slug={slug}>View the original</SourceLink>
             </span>
