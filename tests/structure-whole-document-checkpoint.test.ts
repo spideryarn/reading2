@@ -369,7 +369,13 @@ describe("generateStructure and the structure checkpoint", () => {
         title: "Bad",
         gist: "Names a block that is not there.",
         question: "Bad — where did it begin?",
-        children: [{ title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" }],
+        /* On the second child: a first child's start is not asked, and with only two children a
+           drop would leave one covering the article, which is refused on any answer
+           (src/start-ranges.ts § `UnresolvedStarts`). */
+        children: [
+          { title: "Found", gist: "The start is real.", question: "Found — where is it?", start: "spya-chk001" },
+          { title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" },
+        ],
       },
     });
     await expect(
@@ -406,7 +412,13 @@ describe("generateStructure and the structure checkpoint", () => {
         title: "Bad",
         gist: "Names a block that is not there.",
         question: "Bad — where did it begin?",
-        children: [{ title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" }],
+        /* On the second child: a first child's start is not asked, and with only two children a
+           drop would leave one covering the article, which is refused on any answer
+           (src/start-ranges.ts § `UnresolvedStarts`). */
+        children: [
+          { title: "Found", gist: "The start is real.", question: "Found — where is it?", start: "spya-chk001" },
+          { title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" },
+        ],
       },
     })],
   ];

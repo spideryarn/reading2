@@ -477,6 +477,7 @@ export function readExpansion(opts: {
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: [],
     droppedQuestions: [],
   };
   const read = targets.map((target, i) => {
@@ -2283,7 +2284,7 @@ interface WaveReading {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
 }
 
 /**
@@ -2316,6 +2317,7 @@ function readWaveAnswers(opts: {
   for (const call of wave.calls) {
     report.repairs.push(...call.reading.report.repairs);
     report.droppedChildren.push(...call.reading.report.droppedChildren);
+    report.unresolvedStarts.push(...call.reading.report.unresolvedStarts);
     report.rangelessChildren.push(...call.reading.report.rangelessChildren);
     report.droppedHeadings.push(...call.reading.report.droppedHeadings);
     report.collapsedRungs.push(...call.reading.report.collapsedRungs);
