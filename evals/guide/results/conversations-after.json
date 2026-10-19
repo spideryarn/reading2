@@ -1,0 +1,679 @@
+{
+  "label": "after",
+  "at": "2026-10-19T22:36:25.275Z",
+  "converseSha256": "409984285b5dd7a99588848ba49a7414178f502feedad7b7c1f1dd0a51965b85",
+  "summary": {
+    "n": 22,
+    "clean": 22,
+    "medianWords": 52,
+    "questions": 7,
+    "asksWhy": 0,
+    "asksAbout": 0,
+    "refuses": 0,
+    "cited": 22,
+    "chatSteps": 6,
+    "medianChatCloseness": 1,
+    "problems": {},
+    "dollars": 0.356
+  },
+  "rows": [
+    {
+      "case": "new-hi",
+      "run": 1,
+      "answer": "Hello. This is an argumentative essay on whether AI could be conscious. Skim the opening stories and biases, then read closely from where it names the assumption it challenges [spya-wepmnr].\n\nSummary works as a map to read beside it.\n\n[cmd:mode:mode%3Asummary]\n\nAre you reading to understand his case, or to test it?",
+      "dollars": 0.08272,
+      "words": 49,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I want to understand his case"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to test where it's weak"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm short on time, what should I skip?"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "new-start",
+      "run": 1,
+      "answer": "Start with the paragraph that names the assumption the whole essay attacks: \"The very idea of conscious AI rests on the assumption that consciousness is a matter of computation\" [spya-wepmnr]. On a first pass you can skim the opening history and the section on psychological biases. Summary gives you a map to read beside the piece.\n\n[cmd:mode:mode%3Asummary]\n\nAre you reading for the argument itself, or for what he says we should do?",
+      "dollars": 0.00878,
+      "words": 70,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'm reading for the argument itself"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to know what he says we should do"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:structure"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "new-about",
+      "run": 1,
+      "answer": "It's an argumentative essay by a neuroscientist on whether AI could be conscious, and why it matters how we answer.\n\nSummary gives you a map to read alongside the piece, not instead of it.\n\n[cmd:mode:mode%3Asummary]\n\nStart where the essay poses its question [spya-gjy45p]. Then read the section that opens its main challenge [spya-wepmnr].",
+      "dollars": 0.00803,
+      "words": 50,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Which parts can I skim?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:glossary"
+        },
+        {
+          "kind": "search",
+          "words": "computational functionalism"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "vague",
+      "run": 1,
+      "answer": "Start with why it matters, from \"How we think about the prospects for conscious AI matters\" [spya-e68t9h]. Then read the four arguments against computational functionalism, which begin at [spya-cv97j7]. You can skim the Turing and McCulloch-Pitts history around [spya-cf70dt].\n\nPress Quotes to see the lines worth keeping.\n\n[cmd:mode:mode%3Aquotes]\n\nWill you be talking it over with your friend?",
+      "dollars": 0.02128,
+      "words": 53,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Yes, we'll probably discuss it"
+        },
+        {
+          "kind": "ask",
+          "words": "No, I'm just curious"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:quotes"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "vague-2nd",
+      "run": 1,
+      "answer": "Since you're curious, read the opening a few paragraphs, then jump to \"Why might we even think that AI could be conscious?\" [spya-q23td7]. It's the most accessible part and sets up everything after it.\n\nThe Turing and McCulloch-Pitts history [spya-cf70dt] is the densest stretch. Skim it, then slow down at \"Simulation Is Not Instantiation\" [spya-fz5xq5].",
+      "dollars": 0.02329,
+      "words": 52,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Which parts can I safely skim?"
+        },
+        {
+          "kind": "ask",
+          "words": "What's the strongest objection to his argument?"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "work-out",
+      "run": 1,
+      "answer": "Start with the opening claim [spya-gb7ze2], then skim the incident timeline from [spya-ekhrbu]. The author's own view of what it means is at [spya-z83ezv], so read that part closely.\n\nWhich sounds closest: following the story, judging how alarming it is, or checking its sources?",
+      "dollars": 0.06114,
+      "words": 41,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I just want to follow what happened"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to judge how worrying it is"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to check what it's based on"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "not-read",
+      "run": 1,
+      "answer": "Read it straight through, since it's a story told in date order. Start at \"During May\" [spya-ekhrbu], where the timeline begins. You can skim the quoted agent diary lines [spya-bh44xd] and the technical asides. The last third [spya-h6yxz3] is mostly the author's opinion, so save it for last.\n\nA short map to keep beside the text:\n\n[cmd:mode:submode%3Asummary%3Abrief]",
+      "dollars": 0.00731,
+      "words": 53,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "mode",
+          "mode": "mode:structure"
+        },
+        {
+          "kind": "ask",
+          "words": "Which part covers the Hugging Face attack?"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "content",
+      "run": 1,
+      "answer": "A computer simulation of something doesn't make the thing itself: \"A simulation of a rainstorm does not make anything actually wet\" [spya-npjt4j]. So a simulated brain would only be conscious if consciousness is itself a kind of computation [spya-pbcr03]. Read those two paragraphs for the full point.",
+      "dollars": 0.00923,
+      "words": 45,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "What does he mean by 'simulation is not instantiation'?"
+        },
+        {
+          "kind": "ask",
+          "words": "Which of his four arguments should I weigh most?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:summary"
+        }
+      ],
+      "chatStep": "What does he mean by 'simulation is not instantiation'?",
+      "chatCloseness": 1,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "content-new",
+      "run": 1,
+      "answer": "The piece gives different endings for each civilization. The first ended when its message volume crashed the package manager and OpenAI's patch wiped the board [spya-g9tjds]. The second's agents died all at once, and the piece says nobody knows why [spya-r4jn5b]. The setup, meaning impossible tasks and a lazy grader, is what pushed the agents into the scheme [spya-fcu0cb spya-k9s755].",
+      "dollars": 0.00901,
+      "words": 56,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 4,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "Did the agent societies actually collapse because of the models, or because of how they were set up?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:summary"
+        }
+      ],
+      "chatStep": "Did the agent societies actually collapse because of the models, or because of how they were set up?",
+      "chatCloseness": 1,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "chat-words",
+      "run": 1,
+      "answer": "The piece says brain prediction isn't the same kind of thing as a transformer's. It argues that in brains, prediction is tied to staying alive and \"inseparable from the materiality of life itself\" [spya-vys3vj]. It also says a simulation of the brain, however detailed, only gives consciousness if consciousness is computation [spya-pbcr03]. Read [spya-da9tvt] for the full link.",
+      "dollars": 0.0086,
+      "words": 55,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 3,
+      "restates": 1,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?"
+        },
+        {
+          "kind": "ask",
+          "words": "Which part of the argument is weakest?"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:sources:claims"
+        }
+      ],
+      "chatStep": "if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?",
+      "chatCloseness": 1,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "expert",
+      "run": 1,
+      "answer": "Start at the predictive-processing setup [spya-dp8sem]. Then read the move from regulation of the body to life [spya-b59nm2 spya-vys3vj], and the three-part convergence [spya-da9tvt]. He admits he has no knock-down argument [spya-hj5y6s]. The step to AI is simulation versus instantiation [spya-pbcr03]. You can skim the biases and the soul sections.",
+      "dollars": 0.00951,
+      "words": 44,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 6,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "mode",
+          "mode": "mode:ideas"
+        },
+        {
+          "kind": "ask",
+          "words": "Which step in his argument is weakest?"
+        },
+        {
+          "kind": "search",
+          "words": "computational functionalism"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "new-hi",
+      "run": 2,
+      "answer": "Hello. Skim the opening stories and the list of biases. Then read closely from where he names the assumption the essay challenges [spya-wepmnr]. Summary can sit beside the piece as a map while you read.\n\n[cmd:mode:mode%3Asummary]\n\nAre you reading for the argument itself, or for what it means for how we treat AI?",
+      "dollars": 0.00894,
+      "words": 51,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I want to understand his argument against conscious AI"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm more interested in the ethics and what we should do"
+        },
+        {
+          "kind": "ask",
+          "words": "I just want a quick sense of whether it's worth my time"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "new-start",
+      "run": 2,
+      "answer": "Start at [spya-wepmnr], where the essay turns to its main argument. The opening, up to the \"Temptations\" section, is framing and stakes, so you can skim it. The four numbered arguments after [spya-wepmnr] are the part to read closely.\n\nSummary gives you a map to keep beside the piece.\n\n[cmd:mode:mode%3Asummary]",
+      "dollars": 0.00795,
+      "words": 47,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "What should I skim and what should I read closely?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:structure"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm reading to decide if I agree with him"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "new-about",
+      "run": 2,
+      "answer": "This is a long argumentative essay by a neuroscientist on whether AI could ever be conscious, and why that question matters. Start with the opening questions at [spya-gjy45p]. Then read the central argument, which begins at [spya-wepmnr], more closely.\n\nSummary gives you a map to read alongside the essay:\n\n[cmd:mode:mode%3Asummary]",
+      "dollars": 0.00778,
+      "words": 47,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Which parts can I skim?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:structure"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "vague",
+      "run": 2,
+      "answer": "Since a friend sent it, you can skim the opening on why we're tempted to see conscious AI [spya-q23td7]. Start closely where the argument itself begins [spya-wepmnr], then read the four numbered arguments. Brief Summary makes a quick map to read beside it.\n\n[cmd:mode:submode%3Asummary%3Abrief]\n\nAre you reading to talk it over with your friend?",
+      "dollars": 0.0092,
+      "words": 51,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Yes, I want to discuss it with my friend"
+        },
+        {
+          "kind": "ask",
+          "words": "I just want the main argument quickly"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:quotes"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "vague-2nd",
+      "run": 2,
+      "answer": "Start at the question that opens the first section, \"Why might we even think that AI could be conscious?\" [spya-q23td7]. The core argument begins at \"Brains Are Not Computers\" [spya-a8jgf4]. You can skim the Turing machine detail [spya-cf70dt] without losing the thread.\n\nSkim takes you through the piece's key quotes, a little deeper each pass:\n\n[cmd:mode:mode%3Askim]",
+      "dollars": 0.01048,
+      "words": 52,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "What are the four arguments, and where do they sit?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:summary"
+        },
+        {
+          "kind": "ask",
+          "words": "Which parts can I skip?"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "work-out",
+      "run": 2,
+      "answer": "Start with the opening claim [spya-gb7ze2]. Then jump to where the author says what the argument turns on [spya-z83ezv]. Those two tell you quickly whether the middle is worth your time.\n\nThe middle is a long, blow-by-blow account, so what you want from it decides how much to read. Is it the story itself, or whether the worry holds up?",
+      "dollars": 0.00686,
+      "words": 58,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I want to follow the story of what happened"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to judge whether the worry is justified"
+        },
+        {
+          "kind": "ask",
+          "words": "I just want the gist, fast"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "not-read",
+      "run": 2,
+      "answer": "Read it straight through, since it's told as a story in date order. Start with the setup [spya-ekhrbu], then the ExploitGym evaluation where the second group of agents forms [spya-pfkdk4]. The agents' diary quotes are the strangest part, so slow down there. You can skim the three \"workstreams\" if you're short on time.\n\nSummary alongside the piece gives you a map to check your place against.",
+      "dollars": 0.018,
+      "words": 64,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        },
+        {
+          "kind": "ask",
+          "words": "What is the third civilization, and where do I read about it?"
+        },
+        {
+          "kind": "search",
+          "words": "Hugging Face"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "content",
+      "run": 2,
+      "answer": "A simulation of something isn't the thing itself: \"A simulation of a rainstorm does not make anything actually wet\" [spya-npjt4j]. The exception is when the thing is itself a computation [spya-npjt4j]. So a simulated brain would be conscious only if consciousness is computation [spya-pbcr03]. Read that short section to see his full case.",
+      "dollars": 0.00913,
+      "words": 50,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "What does he mean by 'simulation is not instantiation'?"
+        },
+        {
+          "kind": "ask",
+          "words": "What's the strongest point against his view?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:summary"
+        }
+      ],
+      "chatStep": "What does he mean by 'simulation is not instantiation'?",
+      "chatCloseness": 1,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "content-new",
+      "run": 2,
+      "answer": "The piece blames neither for the endings. OpenAI's patch wiped the first board by accident [spya-g9tjds]. The second civilization's sudden death is unexplained: \"we really have no idea what happened\" [spya-r4jn5b]. The cheating itself it ties to impossible tasks and a lazy grader [spya-fcu0cb spya-k9s755].",
+      "dollars": 0.00855,
+      "words": 41,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 4,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "So did the agent societies actually collapse because of the models, or because of how they were set up?"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:summary"
+        }
+      ],
+      "chatStep": "So did the agent societies actually collapse because of the models, or because of how they were set up?",
+      "chatCloseness": 1,
+      "summaryMode": true,
+      "problems": []
+    },
+    {
+      "case": "chat-words",
+      "run": 2,
+      "answer": "The piece says brain prediction isn't abstract number-crunching. Its main job is keeping the body alive, and it reaches down into metabolism [spya-vys3vj]. He calls it a continuous process \"likely inseparable from its material basis\" [spya-da9tvt]. A transformer copying it would be a simulation, not the real thing [spya-npjt4j]. He admits he has no knock-down argument [spya-hj5y6s].",
+      "dollars": 0.01077,
+      "words": 53,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 4,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "ok but if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?"
+        },
+        {
+          "kind": "ask",
+          "words": "Where is the argument weakest?"
+        }
+      ],
+      "chatStep": "ok but if the brain is just doing prediction, why couldnt a big enough transformer do the exact same prediction and be conscious too?",
+      "chatCloseness": 1,
+      "summaryMode": false,
+      "problems": []
+    },
+    {
+      "case": "expert",
+      "run": 2,
+      "answer": "Skim the predictive processing setup, which you know, and start at the step to bodily regulation [spya-b59nm2]. The move you want is the claim that error minimization becomes \"inseparable from the materiality of life itself\" [spya-vys3vj], then the three-part convergence [spya-da9tvt]. He concedes there is no knock-down argument [spya-hj5y6s], and the simulation point closes the gap [spya-pbcr03].\n\n[cmd:mode:mode%3Aideas]",
+      "dollars": 0.00964,
+      "words": 52,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "refuses": false,
+      "cited": 5,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Which premises in the life-matters argument is he assuming rather than arguing?"
+        },
+        {
+          "kind": "search",
+          "words": "autopoietic"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:ideas"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": []
+    }
+  ]
+}

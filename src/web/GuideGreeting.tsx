@@ -43,11 +43,16 @@ import { PROFILE_HREF } from "./router.js";
  * should I start?* gets the guide's question why, which is the conversation
  * the greeting opens anyway. Later answers carry the guide's own next steps
  * instead (GuideNextSteps.tsx).
+ *
+ * *What is this piece about?* replaced *How could I read this well?* in plan
+ * docs/plans/261019p-guide-chat-plainer.md: it is what a newcomer asks first
+ * (Greg, `spya-yt2v73`), and the guide answers it with one sentence of
+ * orientation and Summary as a map, never the argument.
  */
 export const GUIDE_STARTS = [
   "Where should I start?",
+  "What is this piece about?",
   "Help me work out what I want from this",
-  "How could I read this well?",
 ] as const;
 
 function Run({ run }: { run: GreetingRun }) {

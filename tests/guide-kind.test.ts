@@ -102,8 +102,9 @@ describe("the guide's prompt", () => {
   it("holds the anti-goal: about the reading, never a summary in place of it", () => {
     const guide = systemOf("guide");
     expect(guide).toMatch(/Never summarise the\s+piece/);
-    expect(guide).toMatch(/not a conversation about what the piece says/);
-    expect(lastOf(build("guide"))).toContain("not a summary of the piece");
+    expect(guide).toMatch(/When they ask what the whole piece is about, or for its gist, do not give its\s+argument or findings/);
+    expect(guide).toMatch(/Do not assume they have read it/);
+    expect(lastOf(build("guide"))).toContain("Never a summary of the piece");
   });
 
   it("repeats the current 60-word limit beside the question, not the old one", () => {
@@ -112,15 +113,29 @@ describe("the guide's prompt", () => {
     expect(last).not.toContain("under 100 words");
   });
 
-  it("asks why they are reading when they have not said, and invites About you once", () => {
+  /* Plan 261019p (Greg, spya-p4uqye and spya-ptjk63): a suggestion first, a
+     question only as a guess and at most once more, and never about the reader
+     themselves. The old "ask that first" and "invite About you once" are gone. */
+  it("suggests before it asks, and does not nag about why they read or who they are", () => {
     const guide = systemOf("guide");
-    expect(guide).toMatch(/If they still have not said why they are reading it, ask that first/);
+    expect(guide).toMatch(/never hold it back until they answer/);
+    expect(guide).toMatch(/Ask about their reading at most once more/);
+    expect(guide).toMatch(/Never ask about the reader themselves/);
+    expect(guide).not.toMatch(/ask that first/);
+    expect(guide).not.toMatch(/invite it once/);
     /* Plan 261009i: the greeting asks in the conversation, so the model is told
        it did, and that the box is gone. */
     expect(guide).toMatch(/opens with a fixed greeting of ours/);
     expect(guide).not.toMatch(/a box for it/);
-    expect(guide).toMatch(/invite it once, lightly/);
-    expect(guide).toMatch(/Ask one question at a time/);
+    expect(lastOf(build("guide"))).toContain("never a question about who they are");
+  });
+
+  it("answers a question about a passage briefly, cited, then offers Chat (plan 261019p)", () => {
+    const guide = systemOf("guide");
+    expect(guide).toMatch(/answer\s+it, briefly: at most three short sentences/);
+    expect(guide).toMatch(/Every sentence about the piece carries the block id/);
+    expect(guide).not.toMatch(/do not answer it here/);
+    expect(guide).toMatch(/copied exactly, their spelling and wording included/);
   });
 
   it("applies the shared plain-words rule to the questions it writes", () => {
