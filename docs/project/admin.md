@@ -847,7 +847,10 @@ restores it.
 **The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
 [`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
 from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
-loader is a compile error). A create form — address, articles (20 by default), private note, and a
+loader is a compile error). It opens with three short paragraphs saying what a voucher, a starter
+article and an author gift each are: one kind of gift and a shortcut to it, not two separate gifts
+([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). A create
+form — address, articles (20 by default), private note, and a
 note to them that goes in their email, with a sketch of that email beside it showing where the note
 lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
 the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body), and

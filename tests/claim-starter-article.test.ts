@@ -69,7 +69,10 @@ import type { Verifier } from "../src/auth.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { handleApi } from "../src/routes.js";
+import { PRIVATE_INGEST_COST } from "../src/billing/points.js";
+import { FREE } from "../src/billing/tiers.js";
 import { listAuthorGifts } from "../src/store/pg-author-gifts.js";
+import { usageFor, wallUsed } from "../src/store/pg-billing.js";
 import { claimVouchersFor, listVouchers } from "../src/store/pg-vouchers.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -78,7 +81,7 @@ loadEnvLocal();
 
 const { pool } = await pgReady({
   suite: "tests/claim-starter-article.test.ts",
-  tables: ["spideryarn.billing_vouchers", "spideryarn.author_gifts", "spideryarn.articles"],
+  tables: ["spideryarn.billing_vouchers", "spideryarn.author_gifts", "spideryarn.articles", "spideryarn.ingest_events"],
   keepPool: true,
   max: 4,
 });
@@ -168,6 +171,7 @@ async function sweep(): Promise<void> {
   const owners = [ALICE, BOB, CAROL];
   await pool.query("delete from spideryarn.author_gifts where created_by = any($1::uuid[])", [owners]);
   await pool.query("delete from spideryarn.billing_vouchers where created_by = any($1::uuid[])", [owners]);
+  await pool.query("delete from spideryarn.ingest_events where owner_id = any($1::uuid[])", [owners]);
   await pool.query("delete from spideryarn.article_visibility_changes where slug like $1", [`${SLUG_STEM}%`]);
   await pool.query("delete from spideryarn.article_share_link_events where slug like $1", [`${SLUG_STEM}%`]);
   const { rows } = await pool.query("select id from spideryarn.articles where slug like $1", [`${SLUG_STEM}%`]);
@@ -229,6 +233,23 @@ describe("claimVouchersFor — the starter moves", () => {
     expect(await claimAsBob()).toMatchObject({ claimed: 1, articles: [] });
     expect(await claimedBy(v)).toBe(BOB);
   });
+
+  /* Greg, 2026-10-19 (spya-np36qf): "if it's a gift, it shouldn't cost them".
+     The two tests beside this one say the article moves and the creator's rows
+     are frozen; neither asks what the recipient has used afterwards, so a move
+     that re-pointed the creator's ingest at the new owner would pass both. */
+  it("costs the recipient none of their free articles, and leaves the creator's charge with the creator", async () => {
+    const a = await seed("costs-nothing");
+    await pool.query(
+      "insert into spideryarn.ingest_events (owner_id, article_id, succeeded_at) values ($1, $2, now())",
+      [ALICE, a.id],
+    );
+    await voucher(a);
+    expect((await claimAsBob()).articles).toEqual([a.slug]);
+    expect(await ownerOf(a.id)).toBe(BOB);
+    expect(wallUsed(await usageFor(BOB, FREE))).toBe(0);
+    expect(wallUsed(await usageFor(ALICE, FREE))).toBe(PRIVATE_INGEST_COST);
+  });
 });
 
 /* ----------------------------------------------------------------- stays -- */
@@ -248,6 +269,8 @@ describe("claimVouchersFor — the starter stays, and the voucher is claimed any
     /* Nothing of theirs was deleted. */
     expect(await count("comments", a.id)).toBe(1);
     expect(await count("reading_time", a.id)).toBe(1);
+    /* And the recipient, reading the creator's copy by its link, has used nothing (spya-np36qf). */
+    expect(wallUsed(await usageFor(BOB, FREE))).toBe(0);
   });
 
   it("leaves it when an illustration contains the creator's own direction", async () => {

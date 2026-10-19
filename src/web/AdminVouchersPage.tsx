@@ -1182,10 +1182,30 @@ export function AdminVouchersPage() {
 
   return (
     <Shell title="Gift vouchers" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
-      <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
-        A voucher adds articles to the free allowance of whoever signs in with that address, and
-        counts only while they are on the Free plan. Several to one address add up.
-      </p>
+      {/* Greg, 2026-10-19 (spya-vuw2hy): the two sections read as two kinds of
+          gift. They are one kind and a shortcut to it — plan 261019i. */}
+      <div className="tw:mb-6 tw:flex tw:flex-col tw:gap-2 tw:text-sm tw:text-muted-foreground">
+        <p className="tw:m-0">
+          A <span className="tw:font-medium tw:text-foreground">voucher</span> adds articles to the free
+          allowance of whoever signs in with that address, and counts only while they are on the Free plan.
+          Several to one address add up.
+        </p>
+        <p className="tw:m-0">
+          A voucher can include one of your articles as a{" "}
+          <span className="tw:font-medium tw:text-foreground">starter article</span>. The first gift email links
+          to it, so they have something to read straight away. Receiving or reading it uses none of their
+          allowance. When they sign in, the starter moves to their account, unless something makes that unsafe (it is
+          public, another gift names it, or it has your notes on it); then they go on reading your copy by its
+          link. Later, High-powered AI on one they own, or
+          importing their own copy of one that stayed, uses their allowance as usual.
+        </p>
+        <p className="tw:m-0">
+          An <span className="tw:font-medium tw:text-foreground">author gift</span> is a shortcut for drafting a
+          voucher for the author of one of your articles. That article is its starter. A lookup suggests their
+          address, and the gift waits as a draft until you press Send. Once Send succeeds, it creates an ordinary
+          voucher in the list at the bottom.
+        </p>
+      </div>
 
       {readerId === null ? (
         <>
