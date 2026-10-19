@@ -38,5 +38,4 @@ on build `cb956387`, batched as Overseer queue item `qi-wg9a9np8`:
   voucher in the list. The Author gifts section says the same in one line. So they are not two
   kinds of gift but one, and a shortcut to it.
 
-This session had no Sentry sign-in step of its own and did not write the Sentry status; the next
-feedback sweep does.
+Sentry: SPIDERYARN-READING2-K9 and -KA marked resolved by this session, 2026-10-19.
