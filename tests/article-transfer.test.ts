@@ -620,15 +620,19 @@ describe("/api/admin/articles", () => {
     const theirs = await seed("private-theirs", { owner: ALICE });
     const open = await seed("public-theirs", { owner: BOB, visibility: "public" });
     const mine = await seed("mine", { owner: ADMIN });
+    /* An import of the administrator's that never published (spya-zt7u0h). */
+    const failed = await seed("mine-failed", { owner: ADMIN });
+    await pool.query("update spideryarn.articles set current_revision_id = null where id = $1", [failed.id]);
     const reply = await drive("GET", "/api/admin/articles", null);
     expect(reply.status).toBe(200);
     expect(reply.headers["cache-control"]).toBe("private, no-store");
     expect(reply.body.emailsAvailable).toBe(true);
     const rows = reply.body.articles as AdminArticle[];
     const byId = new Map(rows.map((r) => [r.id, r]));
-    expect(byId.get(theirs.id)).toMatchObject({ ownerId: ALICE, ownerEmail: "alice@example.invalid", title: null, slug: null, mine: false });
-    expect(byId.get(open.id)).toMatchObject({ ownerId: BOB, title: open.title, slug: open.slug, visibility: "public" });
-    expect(byId.get(mine.id)).toMatchObject({ mine: true, title: mine.title, slug: mine.slug });
+    expect(byId.get(theirs.id)).toMatchObject({ ownerId: ALICE, ownerEmail: "alice@example.invalid", title: null, slug: null, mine: false, published: null });
+    expect(byId.get(open.id)).toMatchObject({ ownerId: BOB, title: open.title, slug: open.slug, visibility: "public", published: true });
+    expect(byId.get(mine.id)).toMatchObject({ mine: true, title: mine.title, slug: mine.slug, published: true });
+    expect(byId.get(failed.id)).toMatchObject({ mine: true, title: null, slug: failed.slug, published: false });
     /* Nowhere on the wire, not merely not in its field. */
     const text = JSON.stringify(reply.body);
     expect(text).not.toContain(theirs.title);

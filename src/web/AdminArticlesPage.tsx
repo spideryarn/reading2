@@ -85,6 +85,13 @@ function samePreview(a: TransferPreview, b: TransferPreview): boolean {
   );
 }
 
+/**
+ * **An article of yours, or a public one, that no import ever published**
+ * (spya-zt7u0h): a failed or unfinished import. It was *Untitled*; its link
+ * opens the job's card for its owner, which says why.
+ */
+export const NOT_PUBLISHED_YET = "Not published: its import failed or has not finished";
+
 function ArticleCell({ article }: { article: AdminArticle }) {
   if (article.title === null && article.slug === null) {
     return (
@@ -93,15 +100,18 @@ function ArticleCell({ article }: { article: AdminArticle }) {
       </span>
     );
   }
-  const title = article.title ?? "Untitled";
+  /* Our words, not the author's, so not in the author's face (fonts.md). */
+  const unpublished = article.title === null && article.published === false;
+  const title = unpublished ? NOT_PUBLISHED_YET : (article.title ?? "Untitled");
+  const voice = unpublished ? "tw:text-muted-foreground" : voiceClass("author");
   return (
     <span>
       {article.slug ? (
-        <Link href={readHref(article.slug)} className={voiceClass("author")}>
+        <Link href={readHref(article.slug)} className={voice}>
           {title}
         </Link>
       ) : (
-        <span className={voiceClass("author")}>{title}</span>
+        <span className={voice}>{title}</span>
       )}{" "}
       <code className="tw:text-xs tw:text-muted-foreground">{handleOf(article)}</code>
     </span>

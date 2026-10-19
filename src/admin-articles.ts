@@ -33,6 +33,13 @@ export interface AdminArticle {
   readonly title: string | null;
   /** Null for another reader's private article. */
   readonly slug: string | null;
+  /**
+   * Whether an import ever finished and published it (it has a current
+   * revision). False is a failed or unfinished import, whose address says
+   * *Not shared* to anyone without its job. Null for another reader's private
+   * article, with the title (spya-zt7u0h, plan 261019n).
+   */
+  readonly published: boolean | null;
 }
 
 export interface AdminArticles {

@@ -29,7 +29,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { AdminArticlesPage, matchesFilter } = await import("../src/web/AdminArticlesPage.js");
+const { AdminArticlesPage, matchesFilter, NOT_PUBLISHED_YET } = await import("../src/web/AdminArticlesPage.js");
 const { READER_STATE } = await import("../src/admin-articles.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,6 +52,7 @@ const ARTICLES = [
     processing: "full",
     title: null,
     slug: null,
+    published: null,
   },
   {
     id: MINE,
@@ -64,6 +65,7 @@ const ARTICLES = [
     processing: "full",
     title: "The Bitter Lesson",
     slug: "the-bitter-lesson",
+    published: true,
   },
 ];
 
@@ -83,6 +85,8 @@ let calls: Call[];
 /** Each GET of the preview takes the next of these; the last repeats. */
 let previews: Record<string, unknown>[];
 let postAnswer: { status: number; body: unknown };
+/** What `GET /api/admin/articles` answers. */
+let listed: readonly unknown[] = ARTICLES;
 
 beforeEach(() => {
   calls = [];
@@ -112,7 +116,7 @@ beforeEach(() => {
       return json(200, next);
     }
     if (url.endsWith("/transfer") && method === "POST") return json(postAnswer.status, postAnswer.body);
-    return json(200, { articles: ARTICLES, emailsAvailable: true });
+    return json(200, { articles: listed, emailsAvailable: true });
   }) as typeof fetch;
 });
 
@@ -127,7 +131,8 @@ async function settle() {
   }
 }
 
-async function mount() {
+async function mount(articles: readonly unknown[] = ARTICLES) {
+  listed = articles;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -176,6 +181,24 @@ describe("/admin/articles", () => {
     /* No short id: the article id stands in (Sol F9). */
     expect(rowFor("The Bitter Lesson")?.textContent).toContain(MINE);
     expect(rowFor("The Bitter Lesson")?.textContent).toContain("(you)");
+  });
+
+  /* spya-zt7u0h: an import that never published was a row called *Untitled*,
+     a link to a page that said *Not shared*. */
+  it("names an article of yours whose import never published as that, not Untitled", async () => {
+    const unpublished = {
+      ...ARTICLES[1]!,
+      id: "a1a1a1a1-0b11-4c5e-8a01-261011000006",
+      shortId: "spya-drhjjm",
+      visibility: "private",
+      title: null,
+      slug: "a-failed-import-spya-drhjjm",
+      published: false,
+    };
+    await mount([...ARTICLES, unpublished]);
+    const row = rowFor("spya-drhjjm");
+    expect(row?.textContent).not.toContain("Untitled");
+    expect(row?.textContent).toContain(NOT_PUBLISHED_YET);
   });
 
   it("filters by owner address or id", () => {
