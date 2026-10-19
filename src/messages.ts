@@ -346,6 +346,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "cite-no-extract": "retry",
   "cite-unfinished": "retry",
   "cite-investigate-resting": "blocked",
+  /* A web note for one cited work — src/citation-web-note.ts (plan 261018o). */
+  "cite-web-note-resting": "blocked",
+  "cite-web-note-registry": "retry",
   /* *Dig deeper* — src/dig-deeper.ts. */
   "dig-resting": "blocked",
   "dig-no-search": "retry",
@@ -7023,6 +7026,39 @@ export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
     "Dig deeper on cited works has done as many as it can for today, so asking again today will get the same " +
     "answer. Try again tomorrow — the row's link is still there. [cite-investigate-resting]",
 };
+
+/* ---------------------------------------------- a web note (plan 261018o) --
+   *Open in Sources* on a cited work with no note, by the article's owner:
+   one web search for that work's own page (src/citation-web-note.ts). The
+   refusals before anything is spent; the row draws the note or a quiet line. */
+
+export const WEB_NOTE_BUSY =
+  "Another web search for a cited work is still running. Wait for it to finish, then open this one again.";
+export const WEB_NOTE_LIMITED =
+  "You have searched the web for a lot of cited works recently. Try again in a while; nothing was searched.";
+/** The 503 of the three, so it carries a code. */
+export const WEB_NOTE_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Web searches for cited works have done as many as they can for today, so asking again today will get the same " +
+    "answer. Try again tomorrow; nothing was searched. [cite-web-note-resting]",
+};
+/**
+ * **The catalogue we ask for a title-only work's identifier was busy** — the
+ * press could not tell which work this is, so it searched nothing. A 503.
+ */
+export const WEB_NOTE_REGISTRY_BUSY: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The public catalogue of papers we check this work against was busy, so nothing was searched. " +
+    "Opening it again in a minute usually works. [cite-web-note-registry]",
+};
+/** The 409s: answered from what is already stored, for nothing. Read by the client by `reason`, not by these words. */
+export const WEB_NOTE_HAS_ABSTRACT_NOTE = "This work already has a note from its abstract.";
+export const WEB_NOTE_HAS_WEB_NOTE = "This work already has a note from a web search.";
+export const WEB_NOTE_SEARCHED = "We searched the web for this work's own page recently and found none we could be sure of.";
+export const WEB_NOTE_NO_IDENTIFIER =
+  "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched.";
 
 /**
  * **The first step's call failed** (plan 260930d P-5): the quick check that

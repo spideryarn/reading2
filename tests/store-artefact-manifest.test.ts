@@ -277,6 +277,7 @@ const HOMES: Record<string, string> = {
   "glossary-lookups.json": "glossary_lookups",
   "citation-finds.json": "citation_finds",
   "citation-investigations.json": "citation_investigations",
+  "citation-web-notes.json": "citation_web_notes",
   "reading-time.json": "reading_time",
   "glossary-hidden.json": "glossary_hidden_entries",
   /* Reader state, and the one exception to "never on a revision" being stated
@@ -540,6 +541,14 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "citation_investigations",
+    },
+  },
+  /* And again: a sentinel `citation_web_notes` row (plan 261018o stage 2). */
+  "citation-web-notes.json": {
+    why: "no committed article carries a web note; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "citation_web_notes",
     },
   },
   /* And again: a sentinel `reading_time` row, required back out of both. */

@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "18 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "19 October 2026"');
   });
 
   it("says what the notes on cited works send, and that an upload's are looked up by identifier only", () => {
@@ -240,6 +240,20 @@ describe("the privacy page", () => {
     expect(prose).toContain("cites are looked up by their identifiers only. When enabled,");
     expect(prose).toContain(
       "is also sent a cited work’s DOI or arXiv identifier, for its abstract; and, for an article you added from a public web address, OpenAlex the words of a cited work’s title when Crossref could not find it",
+    );
+  });
+
+  it("says what one web search for a cited work sends, and when it runs", () => {
+    /* Plan 261018o stage 2: the owner's Open in Sources on a cited work with no
+       note searches the web once for its own page (src/citation-web-note.ts):
+       the search, and Haiku, see that work's details and identifier, never
+       the article's text. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When you open a cited work that has no note in Sources, from its card in the article, the web is searched once for that work’s own page: the search is sent its title, authors, year and DOI or arXiv identifier, and never the article’s text",
+    );
+    expect(prose).toContain(
+      "and to write a note on one cited work from a web search for its own page, for which it is shown that work’s title, authors, year and identifier and what the search returned",
     );
   });
 

@@ -160,6 +160,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
     ["../src/store/pg-citation-finds.js", "pgCitationFindStore", "citation-finds"],
     ["../src/store/pg-citation-investigations.js", "pgCitationInvestigationStore", "citation-investigations"],
+    ["../src/store/pg-citation-web-notes.js", "pgCitationWebNoteStore", "citation-web-notes"],
     ["../src/store/pg-cited-in-spideryarn.js", "pgCitedInSpideryarnStore", "cited-in-spideryarn"],
     ["../src/store/pg-source-guesses.js", "pgSourceGuessStore", "source-guesses"],
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
@@ -375,6 +376,9 @@ describe("no Postgres store is selected without a guard", () => {
       /* Citations' *Investigate*, 2026-09-30: its parameters are an answer
          about what somebody's article cites. */
       "pgCitationInvestigationStore",
+      /* A web note on one cited work, 2026-10-19 (261018o stage 2): its
+         parameters are a page and sentences about what somebody's article cites. */
+      "pgCitationWebNoteStore",
       /* The candidate read binds the owner and can return titles and source
          addresses from articles they may open. */
       "pgCitedInSpideryarnStore",

@@ -48,6 +48,15 @@ for that.
   be sure was its own, or its note did not pass our checks; that says nothing about the work. Notes
   are written by themselves a minute or so after the list, for every work at once, and visitors to a
   shared article see them too.
+- **A work with no note can get one from the web.** Point at a citation in the article and press
+  *Open in Sources* on its card: if the work has a DOI or an arXiv id, we search the web once for
+  its own page — its DOI page, its arXiv page, or a publisher’s page that carries its DOI under its
+  title — and an AI writes a sentence from the search engine’s extract of that page, which code
+  and a second check hold to the page’s own words. While it looks, the row says so; it labels the
+  note *From a web search ·* and the page’s site. A web page can say more or less than the paper,
+  so it can be wrong. If no page could be shown to be the work’s own, the row says that, and it is
+  not searched again for a week. A work with no identifier is not searched. Only you see these
+  notes, not visitors.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the
   model’s memory of the work, not a citation count. New lists give a number only when the model is
   confident it knows the work; a low number then means a work it knows and thinks minor. If

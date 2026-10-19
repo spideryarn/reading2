@@ -77,6 +77,7 @@ import {
   relatedWorkStore,
   citedCandidates,
   investigateCitation,
+  citationWebNote,
   guessSource,
   loadTimeline,
   loadTweets,
@@ -107,6 +108,7 @@ import {
   withRetry,
 } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
+import { WebNoteRefused, type WebNoteRun } from "./citation-web-note.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Quick search (plan 261002e): the same events from Jev, so `search` below
@@ -1478,7 +1480,7 @@ function sse(res: ServerResponse): {
    *                           `streamHelpAnswer`,
    *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
-   *                           `streamCitationInvestigation`,
+   *                           `streamCitationInvestigation`, `streamCitationWebNote`,
    *                           `runRefereeCriterion`, `runRefereePromises`, `runHiddenCheck`
    *                           (since 2026-10-09, plan 261009a), and
    *                           `search` for a meaning run
@@ -2375,6 +2377,72 @@ async function streamCitationInvestigation(slug: string, entryId: string, res: S
   } finally {
     /* Usually the generator has already released it. This is the path for a
        client gone before iteration, and is idempotent on every other path. */
+    try {
+      await release();
+    } finally {
+      res.end();
+    }
+  }
+}
+
+/**
+ * **A short note on one cited work from one web search, kept** —
+ * `POST /api/bibliography/:slug/:id/web-note`, SSE out. The owner's *Open in
+ * Sources* on a citation's card in the prose, for a row with no note (plan
+ * 261018o stage 2; src/citation-web-note.ts).
+ *
+ * Everything that costs nothing is decided by `citationWebNote` before a
+ * header is written: the 404 (no such entry, or not the owner's), the 409s —
+ * `{ error, reason }`, the `reason` a `WebNoteRefusal` the client reads — and
+ * the allowance's 429/503. Then `stage` frames (`searching`, `checking`) and
+ * exactly one `done` (`WebNoteDone`, **written only after it is stored**) or
+ * `error`. **Stages, not words**: the stated exception to streaming what a
+ * person waits on (docs/project/bibliography.md § A web note).
+ *
+ * **A press that has started runs to the end and stores its answer** whoever
+ * is listening (`streamCitationInvestigation`'s choice, for its reason: the
+ * answer is kept, so leaving must not throw a paid one away). Before it
+ * starts, a gone connection frees the slot and spends nothing.
+ */
+async function streamCitationWebNote(slug: string, entryId: string, res: ServerResponse): Promise<void> {
+  let run: WebNoteRun;
+  try {
+    run = await citationWebNote(slug, entryId);
+  } catch (err) {
+    /* One declared class, one declared field (the catch-all's rule): the
+       refusal's `reason` is a closed list, never anything of the error's own. */
+    if (err instanceof WebNoteRefused) {
+      send(res, 409, { error: err.message, reason: err.reason });
+      return;
+    }
+    throw err;
+  }
+  const { stream, release } = run;
+  let frame: ReturnType<typeof sse>["frame"] | null = null;
+  try {
+    const connection = sse(res);
+    frame = connection.frame;
+    if (!connection.alive()) return;
+    for await (const event of stream()) {
+      switch (event.type) {
+        case "stage":
+          frame("stage", { stage: event.stage });
+          break;
+        case "done":
+          frame("done", event.done);
+          break;
+        default: {
+          const never: never = event;
+          throw new Error(`unhandled web note event: ${JSON.stringify(never)}`);
+        }
+      }
+    }
+  } catch (err) {
+    captureFailure(err, { route: "citation-web-note", slug });
+    frame?.("error", { error: sayToReader(err, { route: "citation-web-note", slug }) });
+  } finally {
+    /* Frees the slot only for a press that never started; a started one
+       frees its own when it ends. Idempotent. */
     try {
       await release();
     } finally {
@@ -12225,6 +12293,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       await streamCitationInvestigation(at, slugPart(captures, 2), res);
+    },
+  },
+
+  /* **A note on one cited work from one web search** — the owner's *Open in
+     Sources* on a noteless row (plan 261018o stage 2). SSE,
+     `streamCitationWebNote` above. Owner-only (the reader seam is
+     owner-scoped, so a visitor's slug is a 404), on its own
+     `citation-web-note` allowance after every free refusal
+     (src/citation-web-note.ts § `WEB_NOTE_RATE_POLICY`). Nothing is read off
+     the body. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/bibliography\/([\w.%-]+)\/([\w.%-]+)\/web-note$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      await streamCitationWebNote(slugPart(captures, 1), slugPart(captures, 2), res);
     },
   },
 

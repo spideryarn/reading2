@@ -174,6 +174,7 @@ describe("every table says when its rows happened", () => {
           "glossary_lookups",
           "citation_finds",
           "citation_investigations",
+          "citation_web_notes",
           "upload_source_guesses",
         ].includes(config.name)
       ) {

@@ -997,6 +997,23 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **A web note for one cited work, and its check** (src/citation-web-note.ts,
+     plan 261018o stage 2). `citation-find`'s policy for its reason: the
+     writer sends `openrouter:web_search` on Exa, and a fallback that silently
+     dropped the tool would answer from memory — caught (no annotation, no
+     note), but the row would say *found none* for a search that never ran.
+     What it sends is one cited work's title, authors, year and identifier,
+     never the article's text. The check is the blurbs' check's route. */
+  "citation-web-note": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
+  "citation-web-note-check": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
      route, copied for a sharper reason: what it sends is the reader's own
      conversation, so every endpoint is a zero-retention one. A refusal costs
@@ -1312,6 +1329,17 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "citation-blurbs-check": {
     providerDefault:
       "Not measured at a named effort: citation-blurbs' model and route, one abstract and at most two sentences in, a verdict per sentence back (plan 261017h, G4).",
+  },
+  /* The spike's web arm ran Haiku at its default thinking, which a
+     2,500-token ceiling answered under and an 800-token one did not
+     (investigation 261017c). src/citation-web-note.ts § WEB_NOTE_MAX_TOKENS. */
+  "citation-web-note": {
+    providerDefault:
+      "Measured 2026-10-17 by the spike's web arm (investigation 261017c): one search, about 0.8 cents and 6 s a press, at the default; its ceiling is src/citation-web-note.ts § WEB_NOTE_MAX_TOKENS.",
+  },
+  "citation-web-note-check": {
+    providerDefault:
+      "Not measured at a named effort: citation-blurbs-check's model and route, one page extract and at most two sentences in (plan 261018o, R8).",
   },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */

@@ -5306,6 +5306,15 @@ export interface CitedWork {
    */
   blurb?: CitedWorkBlurb;
   /**
+   * **A short note from one web search for this work** — the owner's press
+   * of *Open in Sources* on a row with no note (plan 261018o stage 2).
+   * Attached at read time from `citation_web_notes` by `shownWebNote`
+   * (src/citation-web-note-shown.ts), only while the row is the one it was
+   * made for and only when the row has no `blurb` (an abstract note wins).
+   * Owner-only: never crosses the public boundary, and not in chat in v1.
+   */
+  webNote?: CitedWorkWebNote;
+  /**
    * **What Crossref or DataCite holds under the row's DOI or arXiv id** —
    * written by the `bibliography` step after the model's list is built
    * (src/citation-registry.ts, plan 261001a stage 5), so it is stored, unlike
@@ -5905,6 +5914,100 @@ export interface CitedWorkBlurb {
    */
   paperId?: string;
 }
+
+/* --------------------------------------------------- the web note (1B) --
+   Plan 261018o stage 2: docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md
+   § Stage 2, as amended by its review (R1, R4, R7, R8, R9). src/citation-web-note.ts
+   writes one; src/citation-web-note-shown.ts is the read guard. Here, beside
+   the abstract note, because the client draws both with one component. */
+
+/**
+ * **Why a web search for one work kept no note** — every one a completed
+ * answer, so each is stored as a negative for seven days (R4). A call that
+ * failed, timed out, was cut off or could not be read is none of these: it is
+ * stored nowhere, and the next press asks again.
+ */
+export type CitationWebNoteWhy =
+  /** The search handed back no results at all. */
+  | "no-results"
+  /** The model said no result was the work's own page. */
+  | "none-picked"
+  /** The model named a URL that was not one of the results. */
+  | "not-a-result"
+  /** The result is not the work's own page by its identifier (R1). */
+  | "not-the-work"
+  /** The result is the article being read, or a copy of it. */
+  | "the-article"
+  /** The result came with no extract to write from. */
+  | "no-extract"
+  /** The model said the extract does not say what the work argues or finds. */
+  | "declined"
+  /** Code refused the note's shape or a quote (`judgeNote`). */
+  | Exclude<CitationBlurbCheckWhy, "repeated-index" | "not-supported">
+  /** The separate check did not call every sentence supported. */
+  | "not-supported";
+
+/**
+ * **A web note as `citation_web_notes` keeps it** — one row per `(article,
+ * entry)`, overwritten by a later press. `identity` is `rowIdentity` of the
+ * row as the list stores it when the press ran; the read attaches a note only
+ * while that still holds and `validationVersion` is today's.
+ */
+export type CitationWebNote = {
+  identity: string;
+  validationVersion: string;
+  promptVersion: string;
+  model: string;
+  /** Billed searches the provider reported; null is "it did not say", not zero. */
+  searches: number | null;
+  /** When the press decided, ISO. A `none` is asked again a week after this. */
+  checkedAt: string;
+} & (
+  | {
+      state: "note";
+      sentences: CitationBlurbSentence[];
+      /** The search result's own address — the annotation's, never the model's. */
+      url: string;
+      host: string;
+      /** The result's own title, capped; null when it gave none. */
+      title: string | null;
+      /** When the search read the page, ISO: the press's moment. */
+      readAt: string;
+    }
+  | { state: "none"; why: CitationWebNoteWhy }
+);
+
+/**
+ * **A web note as the owner is shown it** — `CitedWork.webNote`, rebuilt by
+ * `shownWebNote` (src/citation-web-note-shown.ts) field by field. Owner-only:
+ * never on a visitor's row, and not in chat in v1.
+ */
+export interface CitedWorkWebNote {
+  sentences: CitationBlurbSentence[];
+  /** http(s), no credentials, re-checked at the read. */
+  url: string;
+  /** Recomputed from `url` at the read. */
+  host: string;
+  title?: string;
+  readAt: string;
+}
+
+/** The SSE stages of a web-note press: one search, then the separate check. */
+export type WebNoteStage = "searching" | "checking";
+
+/**
+ * **What a web-note press ended with**, the `done` frame's body: a note,
+ * stored, or none and why. `POST /api/bibliography/:slug/:id/web-note`.
+ */
+export type WebNoteDone = { outcome: "note"; webNote: CitedWorkWebNote } | { outcome: "none"; why: CitationWebNoteWhy };
+
+/**
+ * **Why a press was answered without spending** — a 409's `reason`: the row
+ * has an abstract note or a web note already, it was searched under a week
+ * ago and nothing was found, or it has no identifier a page could be checked
+ * against (R1), so no search would be honest.
+ */
+export type WebNoteRefusal = "abstract-note" | "web-note" | "searched" | "no-identifier";
 
 /**
  * The artefact. **Transient outcomes are counted, never stored** (a registry

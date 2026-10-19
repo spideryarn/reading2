@@ -65,6 +65,8 @@
 
 import { log } from "../log.js";
 import { type InvestigateCitationDeps, makeInvestigateCitation, readCitedPaper } from "../citation-investigate.js";
+import { makeCitationWebNote } from "../citation-web-note.js";
+import { citationEvidenceDeps } from "../citation-evidence.js";
 import { makeGuessSource } from "../source-guess-run.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
@@ -73,6 +75,7 @@ import type {
   ChatStore,
   CitationFindStore,
   CitationInvestigationStore,
+  CitationWebNoteStore,
   CommentStore,
   ReadingTimeStore,
   GlossaryHiddenStore,
@@ -117,6 +120,7 @@ import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgCitationFindStore } from "./pg-citation-finds.js";
 import { pgCitationInvestigationStore } from "./pg-citation-investigations.js";
+import { pgCitationWebNoteStore } from "./pg-citation-web-notes.js";
 import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
@@ -620,6 +624,12 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
 );
 
 /**
+ * Where a web note for one cited work is kept — one row per `(article,
+ * entry)`, a note or a completed *none* (plan 261018o stage 2, R4).
+ */
+export const citationWebNoteStore: CitationWebNoteStore = guarded("citation-web-notes", pgCitationWebNoteStore);
+
+/**
  * Bibliography's *Investigate*: one streamed, web-searching answer about one cited
  * work, kept. Built here out of the parts, as `lookUpTerm` is: the reader seam
  * decides ownership (a stranger's slug is a 404), the allowance bounds the
@@ -644,6 +654,21 @@ export const investigateCitationDeps = {
   readPaper: readCitedPaper,
 } satisfies InvestigateCitationDeps;
 export const investigateCitation = makeInvestigateCitation(investigateCitationDeps);
+
+/**
+ * **A note on one cited work from one web search** — the owner's *Open in
+ * Sources* on a row with no note (plan 261018o stage 2). `investigateCitation`'s
+ * parts: the reader decides ownership, its own allowance bounds the presses,
+ * and its own store keeps a note or a completed *none*. The registries are the
+ * notes' own (`citationEvidenceDeps`), for a title-only row's identifier.
+ * src/citation-web-note.ts. Below `fetchAllowanceStore` for the same reason.
+ */
+export const citationWebNote = makeCitationWebNote({
+  reader,
+  notes: citationWebNoteStore,
+  allowance: fetchAllowanceStore,
+  evidence: citationEvidenceDeps,
+});
 
 /** An uploaded paper's guessed web address — one row per article, a claim then an answer. */
 export const sourceGuessStore: SourceGuessStore = guarded("source-guesses", pgSourceGuessStore);

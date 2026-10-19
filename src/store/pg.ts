@@ -54,6 +54,7 @@ import {
   articles,
   citationFinds,
   citationInvestigations,
+  citationWebNotes,
   comments as commentsTable,
   glossaryHiddenEntries,
   glossaryLookups,
@@ -134,6 +135,7 @@ import {
 } from "../citation-investigate-context.js";
 import { DIG_DEEPER_MODEL } from "../dig-deeper.js";
 import { investigationFromRow } from "./citation-investigation-row.js";
+import { webNoteFromRow } from "./citation-web-note-row.js";
 import { renderProfile } from "../profile.js";
 import {
   attachFinds,
@@ -173,6 +175,7 @@ import {
   citationBlurbsExpectedHash,
   sourcePolicy,
 } from "../citation-blurbs-identity.js";
+import { attachWebNotes } from "../citation-web-note-shown.js";
 import { optionalSources } from "../registry-keys.js";
 import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
 import { isMatterDocument } from "../matter-shape.js";
@@ -4393,13 +4396,14 @@ const rawPgArticleReader: ArticleReader = {
        `attachFinds` upgrades only `search` rows: a link the article gave always
        wins over one we went looking for. docs/plans/260911g-citations-mode.md
        § Stage 3. */
-    const [blocks, stored, investigated] = await Promise.all([
+    const [blocks, stored, investigated, webNoted] = await Promise.all([
       blockHashInputs(found.revision.id),
       getDb().select().from(citationFinds).where(eq(citationFinds.articleId, found.article.id)),
       getDb()
         .select()
         .from(citationInvestigations)
         .where(eq(citationInvestigations.articleId, found.article.id)),
+      getDb().select().from(citationWebNotes).where(eq(citationWebNotes.articleId, found.article.id)),
     ]);
     const finds = new Map<string, CitationFind>(stored.map((row) => [row.entryId, findFromRow(row)]));
     /* **A lookup attaches only to the list it was made against** (plan
@@ -4476,9 +4480,18 @@ const rawPgArticleReader: ArticleReader = {
        not from the find-upgraded one, because the step fingerprinted the
        stored row. Last, so nothing above hashes a row with a `blurb` on it. */
     const withBlurbs = attachBlurbs(withInvestigations, found.revision.citationBlurbs, bibliography.citations);
+    /* **Each web note, after the abstract notes** (plan 261018o stage 2), so
+       `attachWebNotes` sees which rows have one: an abstract note always
+       wins. Its identity is recomputed from the row as stored, for
+       `attachBlurbs`' reason; the guard re-reads every field the table holds. */
+    const withWebNotes = attachWebNotes(
+      withBlurbs,
+      new Map(webNoted.map((row) => [row.entryId, webNoteFromRow(row)])),
+      bibliography.citations,
+    );
     const tree = found.revision.tree as Tree | null;
     return {
-      bibliography: withBlurbs,
+      bibliography: withWebNotes,
       /* Judged on the artefact as stored — `sourceHash` is the article's, and
          a find changes nothing about which article the list describes. */
       stale:

@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "18 October 2026";
+const LAST_UPDATED = "19 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -441,6 +441,9 @@ export function PrivacyPage() {
           you added from a public web address, OpenAlex the words of a cited work’s title when
           Crossref could not find it. Never the rest of the article’s text, and nothing about
           who you are. They learn that somebody using Spideryarn asked about that work, not who.
+          When you open a cited work that has no note in Sources, from its card in the article, the
+          web is searched once for that work’s own page: the search is sent its title, authors, year
+          and DOI or arXiv identifier, and never the article’s text.
         </p>
         <p>
           {/* **The honest version of the training question.** Everything here
@@ -557,7 +560,9 @@ export function PrivacyPage() {
           names and the opening of the page, about 6,000 characters at most, and to write a short
           note on each work an article cites and check it, for which it is shown each cited work’s
           title, authors and year and its abstract from a public catalogue, and none of the
-          article’s own text;{" "}
+          article’s own text, and to write a note on one cited work from a web search for its own
+          page, for which it is shown that work’s title, authors, year and identifier and what the
+          search returned;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it

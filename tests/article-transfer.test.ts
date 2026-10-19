@@ -223,6 +223,12 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
      values ($1, $2, $3, 'an answer', 1, 10, 'title', 'm', 'h', 'v1', now())`,
     [a.id, mintId(), owner],
   );
+  await q(
+    `insert into spideryarn.citation_web_notes
+       (article_id, entry_id, owner_id, identity, state, why, checked_at, model, prompt_version, validation_version)
+     values ($1, $2, $3, 'i', 'none', 'none-picked', now(), 'm', 'p', 'v')`,
+    [a.id, mintId(), owner],
+  );
   await q("insert into spideryarn.reading_time (article_id, block_id, seconds) values ($1, $2, 42)", [a.id, a.block]);
   await q(
     "insert into spideryarn.stale_notice_dismissals (article_id, mode, dismissed_for) values ($1, 'glossary', array['x1'])",
@@ -242,7 +248,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
   return new Set<ReaderStateTable>([
     "referee_criteria", "comments", "chat_threads", "chat_mentions", "chat_messages", "quiz_attempts", "referee_promises",
     "referee_hidden_checks", "sources_claim_checks", "search_runs", "article_tags", "glossary_hidden_entries",
-    "glossary_lookups", "citation_finds", "citation_investigations", "reading_time", "stale_notice_dismissals",
+    "glossary_lookups", "citation_finds", "citation_investigations", "citation_web_notes", "reading_time", "stale_notice_dismissals",
     "command_suggestion_dismissals", "link_summaries",
   ]);
 }

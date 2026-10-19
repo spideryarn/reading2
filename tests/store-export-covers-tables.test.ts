@@ -635,6 +635,29 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         influenceVersion: "citation-influence/1",
       });
     },
+    /* A web note on one cited work (plan 261018o stage 2): a `note`, so every
+       column is filled and seen to leave in the zip. The sentinel is a
+       sentence. */
+    citation_web_notes: async () => {
+      await db.insert(schema.citationWebNotes).values({
+        articleId: ARTICLE_ID,
+        entryId: "spya-wbn234",
+        ownerId: owner(),
+        identity: "test-identity",
+        state: "note",
+        why: null,
+        sentences: [{ text: sentinel("citation_web_notes"), quote: "a quote from the page's own extract" }],
+        url: "https://example.org/a-cited-paper-page",
+        host: "example.org",
+        title: "A cited paper's own page",
+        readAt: new Date(),
+        checkedAt: new Date(),
+        model: "test",
+        promptVersion: "citation-web-note/1",
+        validationVersion: "citation-web-note-checks/1",
+        searches: 1,
+      });
+    },
     /* On the block `beforeAll` gave an identity row: the composite foreign key
        refuses an id the article never had. The sentinel is the number. */
     reading_time: async () => {
@@ -821,6 +844,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   glossary_lookups: {},
   citation_finds: {},
   citation_investigations: {},
+  citation_web_notes: {},
   reading_time: {},
   glossary_hidden_entries: {},
   article_tags: {},
@@ -870,6 +894,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
   citation_finds: (parsed) => listAt(parsed, "finds"),
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
+  citation_web_notes: (parsed) => listAt(parsed, "notes"),
   reading_time: (parsed) => listAt(parsed, "blocks"),
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
   article_tags: (parsed) => listAt(parsed, "tags"),
@@ -917,6 +942,7 @@ await pgReady({
     "spideryarn.glossary_lookups",
     "spideryarn.citation_finds",
     "spideryarn.citation_investigations",
+    "spideryarn.citation_web_notes",
     "spideryarn.reading_time",
     "spideryarn.glossary_hidden_entries",
     "spideryarn.article_tags",
@@ -1129,6 +1155,24 @@ describe("what the record calls exported, both exports were watched writing", ()
       expect(text).toContain("https://example.org/about-a-cited-paper");
       expect(text).toContain("A cited paper - Example");
       expect(text).toContain("citation-influence/1");
+    }
+  });
+
+  /* And for `citation_web_notes` (plan 261018o stage 2): the rollback names
+     its columns by hand too, so the sentence sentinel alone would pass with
+     the page or the versions missing. */
+  it("carries a web note's page, identity and versions into both outputs", async () => {
+    const rollback = await readFile(path.join(out, SLUG, "citation-web-notes.json"), "utf8");
+    const bundle = bundled.get(ARTICLE_TABLE_COVERAGE.citation_web_notes.bundle.exported
+      ? ARTICLE_TABLE_COVERAGE.citation_web_notes.bundle.into
+      : "");
+    for (const text of [rollback, bundle]) {
+      expect(text).toContain("https://example.org/a-cited-paper-page");
+      expect(text).toContain("A cited paper's own page");
+      expect(text).toContain("a quote from the page's own extract");
+      expect(text).toContain("test-identity");
+      expect(text).toContain("citation-web-note-checks/1");
+      expect(text).toContain("citation-web-note/1");
     }
   });
 

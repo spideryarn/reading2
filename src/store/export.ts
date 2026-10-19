@@ -997,6 +997,33 @@ export async function exportArticle(
     await put("citation_investigations", "citation-investigations.json", { investigations });
   }
 
+  /* A web note on one cited work, or a completed *none* (plan 261018o stage
+     2), keyed by entry id for the finds' reason. Column for column, identity
+     and versions included, so the rollback keeps a note the read path would
+     no longer attach. */
+  if (rows.citationWebNotes.length) {
+    const notes: Record<string, unknown> = {};
+    for (const row of rows.citationWebNotes) {
+      notes[row.entryId] = {
+        identity: row.identity,
+        state: row.state,
+        why: row.why,
+        sentences: row.sentences,
+        url: row.url,
+        host: row.host,
+        title: row.title,
+        readAt: row.readAt?.toISOString() ?? null,
+        checkedAt: row.checkedAt.toISOString(),
+        model: row.model,
+        promptVersion: row.promptVersion,
+        validationVersion: row.validationVersion,
+        searches: row.searches,
+        createdAt: row.createdAt?.toISOString() ?? null,
+      };
+    }
+    await put("citation_web_notes", "citation-web-notes.json", { notes });
+  }
+
   /* Keyed by block id, the address everything else here uses. */
   if (rows.readingTime.length) {
     const seconds: Record<string, number> = {};

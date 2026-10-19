@@ -1571,6 +1571,16 @@ describe("the artefacts a shared link carries", () => {
             version: INFLUENCE_VERSION,
           },
         },
+        /* The owner's web note (plan 261018o stage 2): a search the owner
+           paid for over a stranger's page — owner-only, every string a
+           sentinel that must not reach the wire. */
+        webNote: {
+          sentences: [{ text: "web note sentence sentinel", quote: "web note quote sentinel from a page extract" }],
+          url: "https://web-note-page-sentinel.example/paper",
+          host: "web-note-page-sentinel.example",
+          title: "web note page title sentinel",
+          readAt: "2026-10-19T09:00:00.000Z",
+        },
         /* The work's reference entry (plan 260930i) — owner-only until the
            public DTO names it, which is Greg's call on a defence. */
         entry: "entry sentinel from the reference list",
@@ -2622,6 +2632,21 @@ describe("the artefacts a shared link carries", () => {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.bibliography?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("lookup");
+  });
+
+  /** **Nor does the owner's web note** (plan 261018o stage 2, R8): not in the public DTO, anywhere. */
+  it("carries no part of a cited work's web note, anywhere", () => {
+    const json = JSON.stringify(built);
+    for (const sentinel of [
+      '"webNote"',
+      "web note sentence sentinel",
+      "web note quote sentinel from a page extract",
+      "web-note-page-sentinel.example",
+      "web note page title sentinel",
+    ]) {
+      expect(json, sentinel).not.toContain(sentinel);
+    }
+    expect(built.bibliography?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("webNote");
   });
 
   /** **Nor does the owner's *Investigate*** (plan 260930a § The route, the store, the limits). */

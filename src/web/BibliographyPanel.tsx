@@ -52,6 +52,7 @@ import {
   type CitedMatchedBy,
   type CitedWork,
   type CitedWorkBlurb,
+  type CitedWorkWebNote,
   type RegistryCitedBy,
   type RegistrySource,
 } from "../types.js";
@@ -62,7 +63,14 @@ import {
   blurbCardNote,
   blurbQuotesLead,
   CITE_LIST_READ_ABSTRACTS,
+  CITE_LIST_WEB_NOTES,
   semanticScholarPaperUrl,
+  WEB_NOTE_CHECKING,
+  WEB_NOTE_NONE,
+  WEB_NOTE_SEARCHING,
+  webNoteBasis,
+  webNoteCardNote,
+  webNoteQuotesLead,
 } from "../citation-blurb-words.js";
 import { citedByWords, readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
 import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
@@ -70,7 +78,7 @@ import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import type { PublicBibliography, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
-import type { UseBibliography } from "./useBibliography.js";
+import type { CitationWebNoteSearch, UseBibliography } from "./useBibliography.js";
 import { AboutMade } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
@@ -125,6 +133,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
   investigation?: CitedWork["investigation"];
   /** Already an article here, the reader's or a public one (plan 260930b). A public row cannot carry one. */
   inSpideryarn?: CitedWork["inSpideryarn"];
+  /** The owner's note from one web search (plan 261018o stage 2). A public row cannot carry one. */
+  webNote?: CitedWork["webNote"];
   /** The work's entry as the article gives it (plan 260930i); public only when it is its reference block's text. */
   entry?: CitedWork["entry"];
   /**
@@ -950,7 +960,11 @@ export function BibliographyPanel({
   /* **Which sentence, once it is drawn** (plan 261017h stage 3c): while no row
      on screen has a note, that we have read none of the works; once one has,
      the same, and what a note is and what its absence means. */
-  const listReadNote = shown.some((work) => work.blurb !== undefined) ? CITE_LIST_READ_ABSTRACTS : CITE_LIST_NOT_READ;
+  const listReadNote = shown.some((work) => work.blurb !== undefined || (owner !== null && work.webNote !== undefined))
+    ? CITE_LIST_READ_ABSTRACTS
+    : CITE_LIST_NOT_READ;
+  /* And what a web note is, once one is on screen (plan 261018o stage 2). */
+  const listWebNote = owner !== null && shown.some((work) => work.webNote !== undefined);
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = bibliography !== null && (owner === null || owner.status === "ready");
   /* A forced run has finished and its result is not here yet: the forced
@@ -1010,6 +1024,7 @@ export function BibliographyPanel({
             this (...) behind an information-tooltip"*). Still only while a
             visible row relies on it (plan 261011c). */}
         {showListReadNote && <p>{listReadNote}</p>}
+        {showListReadNote && listWebNote && <p>{CITE_LIST_WEB_NOTES}</p>}
         {bibliography.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
@@ -1137,6 +1152,7 @@ export function BibliographyPanel({
                     /* The owner's alone: a visitor's row draws neither the
                        button nor the mark. */
                     chats={access.kind === "owner" ? (access.chats ?? null) : null}
+                    webNote={owner}
                   />
                 ))}
               </ol>
@@ -1274,6 +1290,7 @@ function WorkRow({
   owned,
   onJump,
   chats,
+  webNote,
 }: {
   work: ShownWork;
   unscored: boolean;
@@ -1286,6 +1303,8 @@ function WorkRow({
   onJump(id: BlockId, passage?: string): void;
   /** `null` for a visitor: no *Ask in chat*, and no mark. */
   chats: CitedWorkChats | null;
+  /** The owner's web-note press, for the row's one line while it runs or after it found nothing; `null` for a visitor. */
+  webNote: WebNoteProgressState | null;
 }) {
   const cited = citingPlaceOf(work);
   /* The chat started from this row, if there is one: matched by the work's
@@ -1323,6 +1342,10 @@ function WorkRow({
       {owned && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {work.blurb && <CiteBlurb blurb={work.blurb} owned={owned} linked />}
+      {/* A web note only where there is no abstract note (the server attaches
+          it so, `attachWebNotes`), and only the owner's (plan 261018o). */}
+      {owned && !work.blurb && work.webNote && <CiteBlurb webNote={work.webNote} owned linked />}
+      {owned && !work.blurb && !work.webNote && <WebNoteProgress work={work} webNote={webNote ?? null} />}
       {line.conflict &&<p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       {/* The claim accompanies exactly the verdict or answer drawn below. */}
       {showsWhy(work, kept !== undefined) && (
@@ -1467,32 +1490,53 @@ function WebInfluence({ influence }: { influence: Extract<EffectiveInfluence, { 
  * and a second enterable card nested in it would fight it for focus and for
  * the outside click; there the card names the catalogue and links nothing, as
  * the hover card's *Ask in chat* tip does.
+ *
+ * **And a note from one web search** (`webNote`, plan 261018o stage 2), the
+ * owner's only, in the same face with its own words: *From a web search ·
+ * host*, and a card that says it is a search engine's extract of the work's
+ * page, not the paper. Its link is the search result's own address, which is
+ * a stranger's page, so it is `nofollow` as well.
  */
-export function CiteBlurb({ blurb, owned, linked }: { blurb: CitedWorkBlurb; owned: boolean; linked: boolean }) {
+export function CiteBlurb(
+  props: { owned: boolean; linked: boolean } & (
+    | { blurb: CitedWorkBlurb; webNote?: never }
+    | { webNote: CitedWorkWebNote; blurb?: never }
+  ),
+) {
+  const { owned, linked } = props;
   const reveal = useTapReveal(false);
+  const sentences = props.blurb?.sentences ?? props.webNote?.sentences ?? [];
+  const blurb = props.blurb;
+  const webNote = props.webNote;
   return (
-    <div className="cite-blurb">
-      <p className="cite-blurb-text">{blurb.sentences.map((s) => s.text).join(" ")}</p>
+    <div className={webNote ? "cite-blurb cite-web-note" : "cite-blurb"}>
+      <p className="cite-blurb-text">{sentences.map((s) => s.text).join(" ")}</p>
       <Tooltip
         content={
           <>
-            <p className="tip-soon-how">{blurbCardNote(blurb)}</p>
-            {blurb.via === "title" && <p className="tip-soon-how">{BLURB_FOUND_BY_TITLE}</p>}
-            <p className="tip-soon-how">{blurbQuotesLead(blurb.sentences.length)}</p>
-            {blurb.sentences.map((s, i) => (
+            <p className="tip-soon-how">{blurb ? blurbCardNote(blurb) : webNote ? webNoteCardNote(webNote) : null}</p>
+            {blurb?.via === "title" && <p className="tip-soon-how">{BLURB_FOUND_BY_TITLE}</p>}
+            <p className="tip-soon-how">{blurb ? blurbQuotesLead(sentences.length) : webNoteQuotesLead(sentences.length)}</p>
+            {sentences.map((s, i) => (
               <p key={i} className="cite-blurb-quote">
                 <q>{s.quote}</q>
               </p>
             ))}
             {(linked || owned) && (
               <p className="tip-soon-how">
-                {linked && (
+                {linked && blurb && (
                   <a href={blurb.url} target="_blank" rel="noopener noreferrer">
                     {hostOf(blurb.url)} ↗
                   </a>
                 )}
+                {/* A stranger's page, re-checked at the read (`shownWebNote`): http(s), no credentials. */}
+                {linked && webNote && (
+                  <a href={webNote.url} target="_blank" rel="noopener noreferrer nofollow">
+                    {webNote.host} ↗
+                  </a>
+                )}
                 {/* The link back Semantic Scholar's licence asks of what is shown from it (plan 261018o). */}
-                {linked && blurb.paperId !== undefined && (
+                {linked && blurb?.paperId !== undefined && (
                   <>
                     {" · "}
                     <a href={semanticScholarPaperUrl(blurb.paperId)} target="_blank" rel="noopener noreferrer">
@@ -1523,11 +1567,35 @@ export function CiteBlurb({ blurb, owned, linked }: { blurb: CitedWorkBlurb; own
             if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
           }}
         >
-          {blurbBasis(blurb)}
+          {blurb ? blurbBasis(blurb) : webNote ? webNoteBasis(webNote) : null}
         </button>
       </Tooltip>
     </div>
   );
+}
+
+/** What `WebNoteProgress` reads of the owner's press (useBibliography.ts § `CitationWebNoteSearch`). */
+export type WebNoteProgressState = Pick<CitationWebNoteSearch, "webNoting" | "webNoteStage" | "webNoteNone">;
+
+/**
+ * **The row's one line about a web-note press** (plan 261018o stage 2) — what
+ * the search is doing while the ~6 s go by, by stage, or that it found no page
+ * we could be sure was the work's own. Nothing otherwise: a press that failed,
+ * or a row with no identifier to search by, says nothing new (the row already
+ * says what we have and have not read). In the app's face: these are our
+ * words about the search, not the model's.
+ */
+export function WebNoteProgress({ work, webNote }: { work: Pick<ShownWork, "id">; webNote: WebNoteProgressState | null }) {
+  if (webNote === null) return null;
+  if (webNote.webNoting === work.id) {
+    return (
+      <p className="cite-read cite-web-note-progress" role="status">
+        {webNote.webNoteStage === "checking" ? WEB_NOTE_CHECKING : WEB_NOTE_SEARCHING}
+      </p>
+    );
+  }
+  if (webNote.webNoteNone === work.id) return <p className="cite-read cite-web-note-none">{WEB_NOTE_NONE}</p>;
+  return null;
 }
 
 /** The explanation opens on hover, focus or tap; a finger's card closes on scroll. */

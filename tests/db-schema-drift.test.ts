@@ -280,6 +280,7 @@ describe("declaredTables", () => {
       "citation_index_citers",
       "citation_index_lookups",
       "citation_investigations",
+      "citation_web_notes",
       "command_suggestion_dismissals",
       "comments",
       "feedback",
@@ -412,8 +413,9 @@ describe("against a real database", () => {
          `command_suggestion_dismissals` the same day (plan 261010u); fifty-nine
          since `feedback_addenda` the same day (plan 261010o); sixty since
          `related_work_searches`, 2026-10-11 (plan 261011ac); sixty-one since
-         `chat_mentions`, 2026-10-12 (plan 261012d). */
-      expect(report.declaredTables).toBe(61);
+         `chat_mentions`, 2026-10-12 (plan 261012d); sixty-two since
+         `citation_web_notes`, 2026-10-19 (plan 261018o stage 2). */
+      expect(report.declaredTables).toBe(62);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

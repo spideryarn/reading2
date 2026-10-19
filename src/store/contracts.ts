@@ -81,6 +81,8 @@ import type {
   GlossaryLookup,
   CitationFind,
   CitationInvestigation,
+  CitationWebNote,
+  CitedWork,
   SourceGuess,
   GlossaryFound,
   QuotesFound,
@@ -1799,6 +1801,27 @@ export interface CitationInvestigationStore {
 }
 
 /**
+ * **Where a web note for one cited work is kept** — `citation_web_notes`, one
+ * row per `(article, entry)`, overwritten by a later press (plan 261018o
+ * stage 2, R4). `citation_finds`' shape. Owner-scoped: a slug the caller does
+ * not own is a 404 before anything is read or written.
+ * src/store/pg-citation-web-notes.ts; src/citation-web-note.ts writes.
+ */
+export interface CitationWebNoteStore {
+  /**
+   * **The row as the list stores it, and its stored web note** — `null` when
+   * the current list has no entry with that id. The stored row, not the
+   * owner's read of it: `attachFinds` turns a searched row into a `web` one on
+   * that read, and the note's identity is the stored row's (`rowIdentity`),
+   * as the abstract notes' is. The note comes back unread (`unknown` fields
+   * are the read guard's to judge, src/citation-web-note-shown.ts).
+   */
+  read(slug: string, entryId: string): Promise<{ row: CitedWork; note: CitationWebNote | null } | null>;
+  /** Write a decided press — a note or a completed *none* — replacing any earlier one. */
+  save(slug: string, entryId: string, note: CitationWebNote): Promise<void>;
+}
+
+/**
  * **An uploaded paper's guessed web address: a claim, then an answer** — one
  * row per article, src/store/pg-source-guesses.ts.
  * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Decisions 2.
@@ -3321,7 +3344,13 @@ export type RateBucket =
      allowance, which Cited by shares: one semantic search costs ten credits,
      so a script pressing it could spend everybody's day
      (src/related-work.ts § `RELATED_WORK_RATE_POLICY`, plan 261011ac). */
-  | "related-work-search";
+  | "related-work-search"
+  /* A web note for one cited work — one Haiku call with one web search and
+     one check call, pressed by the owner's *Open in Sources* on a row with no
+     note (src/citation-web-note.ts § `WEB_NOTE_RATE_POLICY`, plan 261018o R7).
+     Not Dig deeper's bucket: that one is shared by much dearer presses, and
+     a cheap one here must not starve them, or they it. */
+  | "citation-web-note";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan

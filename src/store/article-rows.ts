@@ -34,6 +34,7 @@ import {
   chatThreads,
   citationFinds,
   citationInvestigations,
+  citationWebNotes,
   comments as commentsTable,
   glossaryLookups,
   readingTime,
@@ -228,6 +229,14 @@ export const ARTICLE_TABLE_COVERAGE = {
   citation_investigations: {
     rollback: { exported: true, into: "citation-investigations.json" },
     bundle: { exported: true, into: "augmentations/citation-investigations.json" },
+  },
+  /* A web note on one cited work, or a completed *none* — reader state beside
+     the `bibliography` artefact exactly as `citation_finds` is.
+     docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md
+     § Stage 2. */
+  citation_web_notes: {
+    rollback: { exported: true, into: "citation-web-notes.json" },
+    bundle: { exported: true, into: "augmentations/citation-web-notes.json" },
   },
   /* Seconds spent per block — reader state keyed on block ids, so it travels
      with them. docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
@@ -763,6 +772,8 @@ export interface ArticleRows {
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
   readonly citationInvestigations: readonly (typeof citationInvestigations.$inferSelect)[];
+  /** One per cited work pressed: a web note or a completed *none*. Plan 261018o stage 2. */
+  readonly citationWebNotes: readonly (typeof citationWebNotes.$inferSelect)[];
   readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
   /** The glossary entries the owner hid, by entry id. Plan 261002c § 2. */
   readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
@@ -995,6 +1006,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(citationInvestigations)
     .where(eq(citationInvestigations.articleId, article.id))
     .orderBy(asc(citationInvestigations.entryId));
+  const webNotes = await tx
+    .select()
+    .from(citationWebNotes)
+    .where(eq(citationWebNotes.articleId, article.id))
+    .orderBy(asc(citationWebNotes.entryId));
   const hiddenTerms = await tx
     .select()
     .from(glossaryHiddenEntries)
@@ -1043,6 +1059,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     glossaryLookups: lookups,
     citationFinds: finds,
     citationInvestigations: investigations,
+    citationWebNotes: webNotes,
     readingTime: secondsRead,
     glossaryHiddenEntries: hiddenTerms,
     articleTags: tags,

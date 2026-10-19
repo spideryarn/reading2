@@ -295,6 +295,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      `citation-blurbs` step. src/citation-blurbs.ts. */
   "citation-blurbs": "step-driven",
   "citation-blurbs-check": "step-driven",
+  /* A web note for one cited work, and its check — the owner's press of *Open
+     in Sources*, in request scope, owner-attributed. src/citation-web-note.ts. */
+  "citation-web-note": "interactive request work",
+  "citation-web-note-check": "interactive request work",
   /* A conversation's one-line gist, written after a chat answer is stored and
      its response sent — request scope, owner-attributed, triggered by the
      reader's question. src/chat-gist.ts. */

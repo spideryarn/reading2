@@ -771,6 +771,19 @@ all four, links each, and says what is and is not sent. `LAST_UPDATED` moved to 
 dial, and requires the page to name each and its opening sentence to count them. A new index turns
 it red until the page names and counts it — as Semantic Scholar, the fourth, did on 2026-10-18.
 
+**Since 2026-10-19, one web search for one cited work, on the owner's press**
+([261018o § Stage 2](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md),
+[`src/citation-web-note.ts`](../../src/citation-web-note.ts)). When the owner presses *Open in
+Sources* on a citation's card in the prose and the work has no note, Claude Haiku (through
+OpenRouter) runs one web search on Exa for that work: the search, and the model, are sent the
+work's title, authors, year and DOI or arXiv identifier — never the article's text, and nothing for
+a work with no identifier, which is not searched. For a title-only row the identifier comes from
+the title lookups above, so an uploaded file's title-only works are never searched. The note, the
+page's address and title, and when, are kept in `citation_web_notes`, one row per work, and go with
+the article (deletion, export). Never shown to a visitor. The page says it in the Crossref
+paragraph and in Haiku's clause; `tests/privacy-page.test.ts` holds both, and `LAST_UPDATED` moved to
+19 October 2026.
+
 ## A claim typed into Sources › Claims
 
 **Added 2026-10-09**, with [reception.md § Checking the claims you pick](reception.md#checking-the-claims-you-pick)

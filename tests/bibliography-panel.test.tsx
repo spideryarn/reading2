@@ -428,6 +428,10 @@ function owner(over: Partial<UseBibliography> = {}): UseBibliography {
     investigateDraft: null,
     investigateFailed: null,
     investigate: async () => {},
+    webNoting: null,
+    webNoteStage: null,
+    webNoteNone: null,
+    findWebNote: async () => {},
     ...over,
   };
 }
@@ -2335,5 +2339,69 @@ describe("a cited work's note from its abstract", () => {
     const text = document.querySelector('[role="dialog"]')?.textContent ?? "";
     expect(text).toContain("A short note an AI wrote");
     expect(text).not.toContain(BLURB_ASK_IN_CHAT);
+  });
+});
+
+/* Plan 261018o stage 2: a note from one web search, the owner's press of the
+   prose card's *Open in Sources* on a row with no note. The same component as
+   the abstract note, its own label and card; the row says what the search is
+   doing while it runs, and that it found nothing when it did. */
+const WEB_NOTE: NonNullable<CitedWork["webNote"]> = {
+  sentences: [
+    { text: "It finds that loss falls as a power law in size, data and compute.", quote: "The loss scales as a power-law with model size" },
+  ],
+  url: "https://arxiv.org/abs/2001.08361",
+  host: "arxiv.org",
+  title: "Scaling Laws for Neural Language Models",
+  readAt: "2026-10-19T08:00:00.000Z",
+};
+
+describe("a cited work's note from one web search", () => {
+  it("draws the note with its own label, and a card saying it is a page's extract, not the paper", async () => {
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, webNote: WEB_NOTE }]) }));
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-blurb-text")?.textContent).toBe(WEB_NOTE.sentences[0]!.text);
+    expect(r.querySelector(".cite-blurb-basis")?.textContent).toBe("From a web search · arxiv.org");
+    await press(r.querySelector(".cite-blurb-basis")!, "touch", "mouse");
+    const card = document.querySelector('[role="dialog"]');
+    const text = card?.textContent ?? "";
+    expect(text).toContain(
+      "A short note an AI wrote from one web search for this work: the search engine's extract of its own page at arxiv.org, read on 19 October 2026.",
+    );
+    expect(text).toContain("It is not a reading of the paper, and a web page can say more or less than the paper, so it can be wrong.");
+    expect(text).toContain("Code checked that it rests on these words of the page:");
+    expect(card?.querySelector(".cite-blurb-quote q")?.textContent).toBe(WEB_NOTE.sentences[0]!.quote);
+    const link = card?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe(WEB_NOTE.url);
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer nofollow");
+    expect(text).toContain(BLURB_ASK_IN_CHAT);
+  });
+
+  it("draws the abstract note and not the web note when a row somehow has both", async () => {
+    await draw(owner({ bibliography: artefact([{ ...NOTED, webNote: WEB_NOTE }]) }));
+    expect(row(NOTED.id).querySelectorAll(".cite-blurb")).toHaveLength(1);
+    expect(row(NOTED.id).querySelector(".cite-blurb-basis")?.textContent).toBe("From the abstract · arXiv");
+  });
+
+  it("says what the search is doing while it runs, by stage, on that row only", async () => {
+    await draw(owner({ bibliography: artefact([CENTRAL, FAMOUS]), webNoting: CENTRAL.id, webNoteStage: "searching" }));
+    expect(row(CENTRAL.id).querySelector(".cite-web-note-progress")?.textContent).toBe(
+      "Looking for this work's own page on the web…",
+    );
+    expect(row(FAMOUS.id).querySelector(".cite-web-note-progress")).toBeNull();
+    await draw(owner({ bibliography: artefact([CENTRAL, FAMOUS]), webNoting: CENTRAL.id, webNoteStage: "checking" }));
+    expect(row(CENTRAL.id).querySelector(".cite-web-note-progress")?.textContent).toBe("Checking the note against the page…");
+  });
+
+  it("says that the search found no page it could be sure of", async () => {
+    await draw(owner({ bibliography: artefact([CENTRAL]), webNoteNone: CENTRAL.id }));
+    expect(row(CENTRAL.id).querySelector(".cite-web-note-none")?.textContent).toBe(
+      "We searched the web for this work's own page and found none we could be sure of.",
+    );
+  });
+
+  it("is never drawn on a visitor's row, even if one carried it", async () => {
+    await drawVisitor(artefact([{ ...CENTRAL, webNote: WEB_NOTE }]) as unknown as PublicBibliography);
+    expect(row(CENTRAL.id).querySelector(".cite-blurb")).toBeNull();
   });
 });

@@ -48,6 +48,7 @@ import {
 } from "../marginalia/MarginaliaColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
+import { openFromCiteCard } from "../useBibliography.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
 import { blocksOnScreenNow } from "../on-screen.js";
@@ -1763,6 +1764,20 @@ export function Reader({
       }
     },
     [mode, sourcesView, thread, setSourcesWay],
+  );
+  /**
+   * ***Open in Sources* on a citation's card in the prose — and, for a work
+   * with no note, one web search for its own page** (plan 261018o stage 2,
+   * Greg's *1B*). Only this press: not a row click, not opening Sources, not
+   * a chat's way back, which all call `openBibliographyWork` alone. The verb
+   * itself refuses a row that already has a note of either kind, and the
+   * server refuses for nothing what it has already answered. Owner-only, as
+   * the card's button is (the visitor's card gets `null`).
+   */
+  const findWebNote = owner?.bibliography.findWebNote;
+  const openCitedWorkFromCard = useMemo(
+    () => openFromCiteCard(openBibliographyWork, findWebNote),
+    [openBibliographyWork, findWebNote],
   );
   const [, setIdeaWay] = useQueryStates({
     mode: modeParam,
@@ -4936,8 +4951,9 @@ export function Reader({
         onAskCitedWork={owner ? askWork : null}
         onCheckCitedWork={owner ? checkCitedWorkInChat : null}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
-           view (plan 261010e). Owner only, as the marks are. */
-        onOpenCitedWork={owner ? openBibliographyWork : null}
+           view (plan 261010e). Owner only, as the marks are. On a row with
+           no note it also starts the one web search (plan 261018o). */
+        onOpenCitedWork={owner ? openCitedWorkFromCard : null}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}

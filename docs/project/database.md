@@ -69,6 +69,8 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
   failed attempt already paid for
 - [§ The bibliographic cache keeps abstracts](#the-bibliographic-cache-keeps-abstracts) —
   `bibliographic_records.abstract` and `abstract_read_at`, and why a row without the moment is stale
+- [§ A web note on one cited work is reader state](#a-web-note-on-one-cited-work-is-reader-state) —
+  `citation_web_notes`, a note or a week-long *none* per cited work, attached at the owner's read
 - [§ What is not done yet](#what-is-not-done-yet) — known gaps (uplink, Vercel env, `restrict`)
 
 ## AI output we paid for is kept <a id="ai-output-we-paid-for-is-kept"></a>
@@ -1578,6 +1580,21 @@ Two CHECKs: `bibliographic_records_abstract` (only on a found row, 1–4,000 cha
 its moment) and `bibliographic_records_abstract_read_at` (only on a found row), both written with
 `is not distinct from` because a claim's `state` is SQL NULL
 ([261004a](../postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md)).
+
+## A web note on one cited work is reader state
+
+`spideryarn.citation_web_notes` (2026-10-19,
+[261018o § Stage 2](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md))
+keeps the note one web search wrote for a cited work the owner opened — or, as `state = 'none'`
+with its `why`, the completed answer that there was no page worth writing from, which stands for a
+week. It is `citation_finds`' shape: one row per `(article_id, entry_id)`, `owner_id` with its
+`auth.users` key by hand, overwritten by a later press with `created_at` kept, and attached to the
+row only at the owner's read (`attachWebNotes` in `loadBibliography`) while `identity` is still the
+row's `rowIdentity` and no abstract note is there. It is never written into the `citation_blurbs`
+artefact, which has one writer. The CHECKs tie every field to its state with `coalesce`, for
+261004a's reason. Like its siblings it is in deletion, transfer, `ArticleRows` and both exports
+(`citation-web-notes.json`); [`src/store/pg-citation-web-notes.ts`](../../src/store/pg-citation-web-notes.ts)
+is the store.
 
 ## What is not done yet
 

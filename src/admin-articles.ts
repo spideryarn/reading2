@@ -76,6 +76,7 @@ export const READER_STATE = [
   { table: "glossary_lookups", label: "glossary lookups", ownWords: true },
   { table: "citation_finds", label: "citation finds", ownWords: true },
   { table: "citation_investigations", label: "citation investigations", ownWords: true },
+  { table: "citation_web_notes", label: "citation web notes", ownWords: true },
   { table: "reading_time", label: "passages with reading time", ownWords: false },
   { table: "stale_notice_dismissals", label: "notices sent away", ownWords: false },
   { table: "command_suggestion_dismissals", label: "suggestions sent away", ownWords: false },

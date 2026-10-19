@@ -60,6 +60,7 @@ import {
   checkpoints,
   citationFinds,
   citationInvestigations,
+  citationWebNotes,
   comments,
   sourcesClaimChecks,
   glossaryHiddenEntries,
@@ -1166,6 +1167,19 @@ describe("destroying an article", () => {
           contextHash: "0123456789abcdef",
           promptVersion: "citation-investigate/1",
           at: now,
+        }),
+      citation_web_notes: () =>
+        db.insert(citationWebNotes).values({
+          articleId: GONE_ARTICLE,
+          entryId: mintId(),
+          ownerId: owner,
+          identity: "test-identity",
+          state: "none",
+          why: "none-picked",
+          checkedAt: now,
+          model: "test/model",
+          promptVersion: "citation-web-note/1",
+          validationVersion: "citation-web-note-checks/1",
         }),
       ingest_events: () =>
         db.insert(ingestEvents).values({ ownerId: owner, articleId: GONE_ARTICLE, slug: GONE_SLUG }),

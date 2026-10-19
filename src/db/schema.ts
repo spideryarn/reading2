@@ -93,6 +93,7 @@ import type {
   Faq,
   Relations,
   SourcesClaimList,
+  CitationBlurbSentence,
   Crossrefs,
   Matter,
   SimpleSummary,
@@ -5556,6 +5557,118 @@ export const citationInvestigations = spideryarn.table(
 );
 
 /**
+ * **A short note on one cited work, from one web search** — the owner's press
+ * of *Open in Sources* on a row with no abstract note,
+ * docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md
+ * § Stage 2 as amended by its review's R4; src/citation-web-note.ts writes it
+ * through src/store/pg-citation-web-notes.ts. `citation_finds`' shape: reader
+ * state, one row per `(article, entry)`, overwritten by a later press, apart
+ * from the artefact and attached to the entry at read time (src/store/pg.ts §
+ * `loadBibliography`, by `attachWebNotes` in src/citation-web-note-shown.ts)
+ * only while `identity` is the row's `rowIdentity` and `validation_version` is
+ * today's — and only when the row has no abstract note, which always wins.
+ *
+ * **Two states, and only completed answers are rows** (R4): `note`, with the
+ * sentences and the page they rest on, or `none` with its `why`, which stands
+ * as a negative for a week from `checked_at`. A call that failed, was cut off
+ * or could not be read stores nothing, so the next press asks again. The
+ * CHECKs below tie every field to its state, so no writer can store a note
+ * without its page or a negative without its reason.
+ *
+ * **`url`, `host` and `title` are the search result's, never the model's**:
+ * one of the call's own `url_citation` annotations and what that result
+ * called itself. The read guard recomputes `host` from `url` anyway.
+ *
+ * **No claim columns.** The press's own allowance runs one press at a time
+ * per reader (R7) and the store is re-read after it is taken, so a second
+ * press waits and then finds the first one's answer.
+ */
+export const citationWebNotes = spideryarn.table(
+  "citation_web_notes",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** A `CitedWork.id`, minted by `mintUniqueId` and inherited across re-runs. */
+    entryId: text("entry_id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration, as `citation_finds`. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * `rowIdentity` of the row **as the list stores it** when the press ran
+     * (src/citation-blurbs-identity.ts). A list made again that changed the
+     * work changes it, and the note is no longer shown.
+     */
+    identity: text("identity").notNull(),
+    /** `CitationWebNote.state`: `note` or `none`. */
+    state: text("state").notNull(),
+    /** `CitationWebNoteWhy`, exactly when `none`. */
+    why: text("why"),
+    /**
+     * One or two `{ text, quote }`, each quote the page extract's own words as
+     * code found them. One display value, read and written whole (sql.md's
+     * allowance for an opaque value). Exactly when `note`.
+     */
+    sentences: jsonb("sentences").$type<CitationBlurbSentence[]>(),
+    /** The annotation's URL, exactly as the search returned it. http(s) only. Exactly when `note`. */
+    url: text("url"),
+    /** `url`'s host — stored for the record; the read recomputes it. Exactly when `note`. */
+    host: text("host"),
+    /** The result's own title, capped; only beside a `url`, and may be null there. */
+    title: text("title"),
+    /** When the search read the page — the press's moment. Exactly when `note`. */
+    readAt: timestamp("read_at", { withTimezone: true }),
+    /** When the press decided. A `none` is asked again a week after this. */
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull(),
+    model: text("model").notNull(),
+    /** `CITATION_WEB_NOTE_PROMPT_VERSION`. Says which prompt wrote it; hides nothing. */
+    promptVersion: text("prompt_version").notNull(),
+    /** `CITATION_WEB_NOTE_VALIDATION_VERSION`. A stale one is not shown, and its negative is asked again. */
+    validationVersion: text("validation_version").notNull(),
+    /** Billed web searches the call reported — nullable, and null is not zero (as `citation_finds`). */
+    searches: integer("searches"),
+    /**
+     * **When this row was first written** — the first press on this work.
+     * `checked_at` is re-stamped by a later press, which overwrites the row;
+     * this keeps the first, because the upsert in the store never names it.
+     * Filled by the database default, so every writer is covered. Nullable as
+     * its siblings are, though every row of this table has one.
+     * AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.entryId] }),
+    check(
+      "citation_web_notes_entry_id_format",
+      sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    check("citation_web_notes_state", sql`${t.state} in ('note', 'none')`),
+    /* The reason exactly when `none`, and only one the reader has a sentence
+       for (`CitationWebNoteWhy` in src/types.ts). `coalesce`, because a CHECK
+       that evaluates to NULL passes
+       (docs/postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md). */
+    check(
+      "citation_web_notes_why",
+      sql`coalesce(${t.state} = 'none', false) = (${t.why} is not null) and (${t.why} is null or ${t.why} in ('no-results', 'none-picked', 'not-a-result', 'not-the-work', 'the-article', 'no-extract', 'declined', 'quote-not-in-evidence', 'quote-too-short', 'quote-too-long', 'too-long', 'not-supported'))`,
+    ),
+    /* A note has its sentences, its page and its moment; a `none` has none of
+       them. The title follows the address and may be null beside it. */
+    check(
+      "citation_web_notes_note",
+      sql`coalesce(${t.state} = 'note', false) = (${t.sentences} is not null) and coalesce(${t.state} = 'note', false) = (${t.url} is not null) and coalesce(${t.state} = 'note', false) = (${t.host} is not null) and coalesce(${t.state} = 'note', false) = (${t.readAt} is not null) and (${t.title} is null or ${t.url} is not null)`,
+    ),
+    /* One or two sentences. `case` first, so `jsonb_array_length` never meets
+       a non-array. */
+    check(
+      "citation_web_notes_sentences",
+      sql`${t.sentences} is null or (case when jsonb_typeof(${t.sentences}) = 'array' then jsonb_array_length(${t.sentences}) between 1 and 2 else false end)`,
+    ),
+    check("citation_web_notes_url_scheme", sql`${t.url} is null or ${t.url} ~ '^https?://'`),
+    check("citation_web_notes_searches", sql`${t.searches} is null or ${t.searches} >= 0`),
+  ],
+);
+
+/**
  * **Our guess at where an uploaded paper lives on the web** — one row per
  * article, docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Stored
  * where. Written by src/source-guess.ts through
@@ -8132,7 +8245,7 @@ export const rateLimitEvents = spideryarn.table(
        rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

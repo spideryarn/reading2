@@ -53,6 +53,10 @@ import type {
   InvestigateStage,
   Job,
   PaperPassage,
+  CitedWorkWebNote,
+  WebNoteDone,
+  WebNoteRefusal,
+  WebNoteStage,
 } from "../types.js";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -135,7 +139,47 @@ export interface CitationDig {
   investigate(id: string): Promise<void>;
 }
 
-export interface UseBibliography extends CitationDig {
+/**
+ * **A web note for one cited work** (plan 261018o stage 2) — the owner's
+ * *Open in Sources* from a citation's card in the prose, on a row with no
+ * note, looks for the work's own page with one web search. On the read, as
+ * `investigate` is, because the press starts from the prose in any mode and
+ * the row it lands on is in the band. One at a time, as the server's
+ * allowance is.
+ */
+export interface CitationWebNoteSearch {
+  /** The work whose web note is being looked for, or null. */
+  webNoting: string | null;
+  /** Which step: `searching`, then `checking`. Null before the first frame. */
+  webNoteStage: WebNoteStage | null;
+  /** The work whose press, this session, found no page we could be sure of. */
+  webNoteNone: string | null;
+  /**
+   * **Look for one work's own page on the web**, unless the row already has a
+   * note of either kind. The server refuses for nothing what it has already
+   * answered (409 with a `reason`), so a second press costs nothing.
+   */
+  findWebNote(id: string): Promise<void>;
+}
+
+/**
+ * **The prose card's *Open in Sources*** (plan 261018o stage 2): open the
+ * work's row, and look for a web note for it — which `findWebNote` does only
+ * for a row with no note. Reader.tsx wires the card to this and nothing else
+ * to it: not a row click, not opening Sources, not a chat's way back. Apart so
+ * a test can hold the wiring without mounting the reader.
+ */
+export function openFromCiteCard(
+  open: (workId: string) => void,
+  findWebNote: ((workId: string) => Promise<void>) | undefined,
+): (workId: string) => void {
+  return (workId) => {
+    open(workId);
+    void findWebNote?.(workId);
+  };
+}
+
+export interface UseBibliography extends CitationDig, CitationWebNoteSearch {
   status: BibliographyStatus;
   bibliography: Bibliography | null;
   /** The article moved under this list — blocks, sections or the cited head. */
@@ -240,7 +284,7 @@ export interface UseBibliography extends CitationDig {
  * read the same `BibliographyRead`, so they are stale together and can never show
  * different lists.
  */
-export interface BibliographyRead extends CitationDig {
+export interface BibliographyRead extends CitationDig, CitationWebNoteSearch {
   status: BibliographyStatus;
   bibliography: Bibliography | null;
   stale: boolean;
@@ -605,6 +649,84 @@ export function useBibliographyRead(slug: string): BibliographyRead {
     [slug, applyFound, detachDerived, applyInvestigation, refresh],
   );
 
+  /**
+   * ***Open in Sources* on a row with no note** — plan 261018o stage 2. The
+   * server's promises, which this keeps:
+   *
+   * - **`done` means stored**: a note in the frame is the one the next read
+   *   attaches, so it is patched onto the row at once (`webNote` only) and the
+   *   list read again behind it.
+   * - **A press answered for nothing** — the 409s — is quiet: a `searched`
+   *   says the row's *found none* line again; the rest say nothing new.
+   * - **A failure says nothing on the row**: nothing was stored, the row says
+   *   what it said before, and the next press asks again.
+   * - **Leaving the article stops the reading, not the search**: the server
+   *   finishes and stores a press it has started.
+   */
+  const webNoteLive = useRef<AbortController | null>(null);
+  const [webNoting, setWebNoting] = useState<string | null>(null);
+  const [webNoteStage, setWebNoteStage] = useState<WebNoteStage | null>(null);
+  const [webNoteNone, setWebNoteNone] = useState<string | null>(null);
+  const findWebNote = useCallback(
+    async (id: string) => {
+      if (webNoteLive.current) return;
+      const row = bibliographyNow.current?.citations.find((w) => w.id === id);
+      if (!row || row.blurb !== undefined || row.webNote !== undefined) return;
+      const controller = new AbortController();
+      webNoteLive.current = controller;
+      const mine = () => webNoteLive.current === controller;
+      setWebNoting(id);
+      setWebNoteStage(null);
+      setWebNoteNone((was) => (was === id ? null : was));
+      try {
+        const res = await apiFetch(
+          `/api/bibliography/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/web-note`,
+          { method: "POST", signal: controller.signal },
+        );
+        if (res.status === 409) {
+          const body = (await res.json().catch(() => null)) as { reason?: WebNoteRefusal } | null;
+          if (mine() && body?.reason === "searched") setWebNoteNone(id);
+          return;
+        }
+        if (!res.ok || !res.body) {
+          await readJson(res);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
+        }
+        const done = await readAnswerStream(res.body, {
+          delta: () => {},
+          done: (data) => (isWebNoteDone(data) ? data : undefined),
+          other: (name, data) => {
+            if (!mine() || name !== "stage") return;
+            const stage = (data as { stage?: unknown } | null)?.stage;
+            if (stage === "searching" || stage === "checking") setWebNoteStage(stage);
+          },
+        });
+        if (!mine()) return;
+        if (done.outcome === "none") {
+          setWebNoteNone(id);
+          return;
+        }
+        const webNote = done.webNote;
+        setBibliography((current) =>
+          current
+            ? { ...current, citations: current.citations.map((w) => (w.id === id && w.blurb === undefined ? { ...w, webNote } : w)) }
+            : current,
+        );
+        void refresh();
+      } catch {
+        /* Nothing stored, so nothing new to say on the row; a press is not a
+           read, and the reader is not left with an error to dismiss. */
+      } finally {
+        if (mine()) {
+          webNoteLive.current = null;
+          setWebNoting(null);
+          setWebNoteStage(null);
+        }
+      }
+    },
+    [slug, refresh],
+  );
+
   /* Another article stops reading — useGlossary.ts's
      cleanup for `look`, for the same reason: the old stream's `done` must not
      land on the next article's list, whose ids are the same shape. */
@@ -613,6 +735,11 @@ export function useBibliographyRead(slug: string): BibliographyRead {
     () => () => {
       investigateLive.current?.abort();
       investigateLive.current = null;
+      webNoteLive.current?.abort();
+      webNoteLive.current = null;
+      setWebNoting(null);
+      setWebNoteStage(null);
+      setWebNoteNone(null);
       setInvestigating(null);
       setInvestigateStage(null);
       setInvestigateDraft(null);
@@ -641,6 +768,10 @@ export function useBibliographyRead(slug: string): BibliographyRead {
     investigateDraft,
     investigateFailed,
     investigate,
+    webNoting,
+    webNoteStage,
+    webNoteNone,
+    findWebNote,
   };
 }
 
@@ -678,6 +809,10 @@ export function useBibliography(slug: string, read: BibliographyRead, enabled = 
     investigateDraft,
     investigateFailed,
     investigate,
+    webNoting,
+    webNoteStage,
+    webNoteNone,
+    findWebNote,
   } = read;
   /**
    * Revalidate on mount, behind whatever is on screen.
@@ -752,7 +887,34 @@ export function useBibliography(slug: string, read: BibliographyRead, enabled = 
     investigateDraft,
     investigateFailed,
     investigate,
+    webNoting,
+    webNoteStage,
+    webNoteNone,
+    findWebNote,
   };
+}
+
+/**
+ * **A web-note `done` frame, whole or not at all** — a `none` with a reason,
+ * or a note with one or two sentences, each a text and a quote, and an
+ * http(s) address. It goes onto the row, so a malformed one is a failure.
+ */
+function isWebNoteDone(data: unknown): data is WebNoteDone {
+  const d = data as { outcome?: unknown; why?: unknown; webNote?: Partial<CitedWorkWebNote> } | null;
+  if (!d || typeof d !== "object") return false;
+  if (d.outcome === "none") return typeof d.why === "string";
+  const n = d.webNote;
+  return (
+    d.outcome === "note" &&
+    !!n &&
+    Array.isArray(n.sentences) &&
+    n.sentences.length > 0 &&
+    n.sentences.every((s) => !!s && isText(s.text) && isText(s.quote)) &&
+    isText(n.url) &&
+    /^https?:\/\//i.test(n.url) &&
+    isText(n.host) &&
+    isText(n.readAt)
+  );
 }
 
 /**

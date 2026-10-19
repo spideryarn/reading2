@@ -28,11 +28,12 @@ import { mintId } from "../src/ids.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { pgCitationFindStore } from "../src/store/pg-citation-finds.js";
 import { pgCitationInvestigationStore } from "../src/store/pg-citation-investigations.js";
+import { pgCitationWebNoteStore } from "../src/store/pg-citation-web-notes.js";
 import { pgGlossaryHiddenStore } from "../src/store/pg-glossary-hidden.js";
 import { pgGlossaryLookupStore } from "../src/store/pg-lookups.js";
 import { pgReaderStore } from "../src/store/pg-reader.js";
 import { pgSourceGuessStore } from "../src/store/pg-source-guesses.js";
-import type { CitationFind, CitationInvestigation, GlossaryLookup } from "../src/types.js";
+import type { CitationFind, CitationInvestigation, CitationWebNote, GlossaryLookup } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -46,6 +47,7 @@ await pgReady({
     { table: "spideryarn.glossary_lookups", column: "created_at" },
     { table: "spideryarn.citation_finds", column: "created_at" },
     { table: "spideryarn.citation_investigations", column: "created_at" },
+    { table: "spideryarn.citation_web_notes", column: "created_at" },
     { table: "spideryarn.upload_source_guesses", column: "created_at" },
   ],
 });
@@ -296,6 +298,36 @@ describe("citation_investigations.created_at", () => {
     const after = await timesOf("citation_investigations", "at", byEntry(entry));
     expect(after.moving).toBe(LATER);
     expect(after.createdAt).toBeNull();
+  });
+});
+
+/** A completed *none* — the shortest row the CHECKs allow. Plan 261018o stage 2. */
+function webNoteNone(checkedAt: string): CitationWebNote {
+  return {
+    identity: "an-identity",
+    validationVersion: "citation-web-note-checks/1",
+    promptVersion: "citation-web-note/1",
+    model: "a-model",
+    searches: 1,
+    checkedAt,
+    state: "none",
+    why: "none-picked",
+  };
+}
+
+describe("citation_web_notes.created_at", () => {
+  it("is stamped on the first press and kept by a later one, while `checked_at` moves", async () => {
+    const entry = mintId();
+    await asOwner(() => pgCitationWebNoteStore.save(SLUG, entry, webNoteNone(EARLIER)));
+    const first = await timesOf("citation_web_notes", "checked_at", byEntry(entry));
+    expectRecent(first.createdAt, startedAt);
+    expect(first.moving).toBe(EARLIER);
+
+    await pause(20);
+    await asOwner(() => pgCitationWebNoteStore.save(SLUG, entry, webNoteNone(LATER)));
+    const second = await timesOf("citation_web_notes", "checked_at", byEntry(entry));
+    expect(second.moving).toBe(LATER);
+    expect(second.createdAt).toBe(first.createdAt);
   });
 });
 

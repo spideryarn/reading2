@@ -1071,6 +1071,16 @@ export type NonTaskAiJob =
      small call per work, which sees nothing else (GPT Sol's G4 on the plan).
      Its own job so the ledger can say what checking adds. */
   | "citation-blurbs-check"
+  /* **A note on one cited work from one web search** — the owner's press of
+     *Open in Sources* on a row with no note (src/citation-web-note.ts, plan
+     261018o stage 2), on `CITATION_BLURBS_MODEL`. Not a `Task`, for
+     `citation-blurbs`' reason: its model is the notes' model, chosen by the
+     spike, and a `MODEL_ENV_VAR` row could move one without the other. */
+  | "citation-web-note"
+  /* **And its separate check against the page's extract**, the abstract
+     notes' check made provenance-neutral (R8). Its own job so the ledger can
+     say what checking a web note adds. */
+  | "citation-web-note-check"
   /* **A conversation's one-line gist**, written after each answer —
      src/chat-gist.ts, on `CHAT_GIST_MODEL` below. */
   | "chat-gist"
@@ -1644,6 +1654,11 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   /* A strict JSON schema back, on chat/completions. src/citation-blurbs.ts. */
   "citation-blurbs": "chat",
   "citation-blurbs-check": "chat",
+  /* Chat, for `citation-find`'s reason — the web-search server tool — and a
+     strict JSON answer. src/citation-web-note.ts. */
+  "citation-web-note": "chat",
+  /* A strict JSON schema back, on chat/completions: the blurbs' check. */
+  "citation-web-note-check": "chat",
   /* A strict JSON schema back, on chat/completions. src/chat-gist.ts. */
   "chat-gist": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
@@ -1916,6 +1931,8 @@ export const NON_TASK_MODELS: readonly {
   { job: "matter", id: MATTER_MODEL, provider: "openrouter" },
   { job: "citation-blurbs", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "citation-blurbs-check", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
+  { job: "citation-web-note", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
+  { job: "citation-web-note-check", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },

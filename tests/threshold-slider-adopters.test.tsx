@@ -163,6 +163,10 @@ function bibliographyOwner(): UseBibliography {
     investigateDraft: null,
     investigateFailed: null,
     investigate: async () => {},
+    webNoting: null,
+    webNoteStage: null,
+    webNoteNone: null,
+    findWebNote: async () => {},
   };
 }
 

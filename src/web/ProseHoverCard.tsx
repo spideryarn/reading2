@@ -2336,6 +2336,9 @@ function CiteCard({
           card is already one the pointer is in (`CiteBlurb` § linked). The
           owner's line about asking in chat goes with `onAsk`. */}
       {work.blurb && <CiteBlurb blurb={work.blurb} owned={onAsk !== null} linked={false} />}
+      {/* Or the owner's note from one web search, where there is no abstract
+          note (plan 261018o stage 2). A visitor's row never carries one. */}
+      {!work.blurb && work.webNote && <CiteBlurb webNote={work.webNote} owned={onAsk !== null} linked={false} />}
       {line.conflict && <p className="prose-card-cite-read">{registryConflictNote(line.conflict)}</p>}
       {/* Already an article here — the band's line, from the band's component
           (plan 261001i). Owner-only, and gated by name as well as by the

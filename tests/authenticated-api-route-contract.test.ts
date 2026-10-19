@@ -759,6 +759,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/bibliography/w1/w2/investigate"],
   },
   {
+    /* A web note for one cited work (plan 261018o stage 2). */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/bibliography\\/([\\w.%-]+)\\/([\\w.%-]+)\\/web-note$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/bibliography/w1/w2/web-note"],
+  },
+  {
     /* Its old path, for one deploy, as above. */
     match: {
       kind: "regex",
@@ -1126,8 +1136,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    an admin's addenda to their own reports (plan 261010o); 118 with a
    reviewer's major/minor comment sort (plan 261011f); 120 with every article
    and one article's transfer (plan 261011n); 121 with Sources › Not cited
-   (plan 261011ac). */
-const EXPECTED_MATCHER_COUNT = 121;
+   (plan 261011ac); 122 with a cited work's web note (plan 261018o). */
+const EXPECTED_MATCHER_COUNT = 122;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1144,8 +1154,9 @@ const EXPECTED_MATCHER_COUNT = 121;
    the bar's suggestions (plan 261010u); 144 with the addenda's POST (plan
    261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
    with every article, and a transfer's preview and POST (plan 261011n); 150
-   with Not cited's GET and POST (plan 261011ac). */
-const EXPECTED_GUARD_COUNT = 150;
+   with Not cited's GET and POST (plan 261011ac); 151 with a cited work's web
+   note (plan 261018o). */
+const EXPECTED_GUARD_COUNT = 151;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2411,6 +2422,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
         // Bibliography's Investigate, 260930a (Find it, its sibling POST, went 2026-10-04)
         "POST regex /^\\/api\\/bibliography\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",
+        // a cited work's web note, 261018o
+        "POST regex /^\\/api\\/bibliography\\/([\\w.%-]+)\\/([\\w.%-]+)\\/web-note$/",
         // and its old path, for one deploy (plan 261009w)
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",
         "POST regex /^\\/api\\/source-guess\\/([\\w.%-]+)$/",

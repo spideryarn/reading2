@@ -580,6 +580,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
       investigations: rows.citationInvestigations.map((row) => rowJson(row)),
     });
   }
+  if (rows.citationWebNotes.length) {
+    at("citation-web-notes.json", { notes: rows.citationWebNotes.map((row) => rowJson(row)) });
+  }
   if (rows.readingTime.length) {
     at("reading-time.json", { blocks: rows.readingTime.map((row) => rowJson(row)) });
   }
@@ -660,6 +663,9 @@ one thing that will make the rest of these files make sense.
       citation-investigations.json
                            What the Dig deeper action wrote about cited works you asked it to look into,
                            which search results it read, and what it read of each paper.
+      citation-web-notes.json
+                           Short notes on cited works you opened, each from one web search
+                           for the work's own page, or why none was kept.
       reading-time.json    How many seconds you have spent on each block.
       tags.json            Your own tags on the article.
       quiz-attempts.json   Your answers to the quiz questions, and the mark each was given.
@@ -866,6 +872,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/citation-finds.json": "Pages found on the web for cited works you asked about.",
   "augmentations/citation-investigations.json":
     "What the Dig deeper action wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
+  "augmentations/citation-web-notes.json":
+    "Short notes on cited works you opened, each written from one web search for the work's own page, or why none was kept.",
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
   "augmentations/tags.json": "Your own tags on the article.",
   "augmentations/quiz-attempts.json": "Your answers to the quiz questions, and the mark each was given.",
@@ -1033,6 +1041,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "glossary lookups", n: rows.glossaryLookups.length },
     { label: "cited works found on the web", n: rows.citationFinds.length },
     { label: "cited works investigated", n: rows.citationInvestigations.length },
+    { label: "cited works searched for a web note", n: rows.citationWebNotes.length },
     { label: "blocks with reading time", n: rows.readingTime.length },
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "your tags", n: rows.articleTags.length },

@@ -13,7 +13,7 @@
  * look-up, not a web search and not a reading of the paper — because Greg's
  * own bar for it was *"better to say nothing than hallucinate"* (spya-m53cdk).
  */
-import type { CitedWorkBlurb } from "./types.js";
+import type { CitedWorkBlurb, CitedWorkWebNote } from "./types.js";
 
 /**
  * Who holds the abstract a note was written from: arXiv (through DataCite),
@@ -96,3 +96,40 @@ export const CITE_LIST_READ_ABSTRACTS =
   "Unless a row says otherwise, we have read none of these works themselves. " +
   "A note under a work was written by an AI from that work's abstract alone, as a public catalogue of papers holds it. " +
   "A work with no note had no abstract we could be sure was its own, or its note did not pass our checks.";
+
+/* ------------------------------------------------- a web note (261018o) --
+   The owner's *Open in Sources* on a row with no note: one web search for the
+   work's own page (src/citation-web-note.ts). The same component draws it
+   (`CiteBlurb`), so the words for what it is are here beside the abstract
+   note's, and say what it is **not** just as plainly. */
+
+/** The row's quiet label: *From a web search · arxiv.org*. */
+export function webNoteBasis(note: Pick<CitedWorkWebNote, "host">): string {
+  return `From a web search · ${note.host}`;
+}
+
+/** The card's first paragraph: one search, whose page, which day, and that it can be wrong. */
+export function webNoteCardNote(note: Pick<CitedWorkWebNote, "host" | "readAt">): string {
+  return (
+    `A short note an AI wrote from one web search for this work: the search engine's extract of its own page at ${note.host}, ` +
+    `read on ${blurbDay(note.readAt)}. It is not a reading of the paper, and a web page can say more or less than the paper, ` +
+    "so it can be wrong."
+  );
+}
+
+/** Before the quotes on a web note's card. */
+export function webNoteQuotesLead(sentences: number): string {
+  return sentences === 1
+    ? "Code checked that it rests on these words of the page:"
+    : "Code checked that each sentence rests on words of the page:";
+}
+
+/** The row while the search runs. */
+export const WEB_NOTE_SEARCHING = "Looking for this work's own page on the web…";
+/** The row while the note is checked against the page, before it is shown. */
+export const WEB_NOTE_CHECKING = "Checking the note against the page…";
+/** The row once a search found no page code could be sure is the work's own. */
+export const WEB_NOTE_NONE = "We searched the web for this work's own page and found none we could be sure of.";
+/** Added to the band's (i) when a row on screen has a web note. */
+export const CITE_LIST_WEB_NOTES =
+  "A note labelled “From a web search” was written instead from a search engine's extract of the work's own web page.";

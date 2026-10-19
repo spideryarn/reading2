@@ -68,6 +68,8 @@ const EXCEPTIONS: Record<string, string> = {
     "Web search runs on the same call. Nobody has measured that with a schema, and the search annotations are a security witness.",
   "src/author-lookup.ts":
     "Web search runs on the same call, as in citation-find.ts, and the server checks every URL and address in the answer against the search annotations itself (plan 261010c D4).",
+  "src/citation-web-note.ts":
+    "Web search runs on the writer's call, as in citation-find.ts: nobody has measured a schema beside the search tool under require_parameters, and the annotations are the security witness. Its check call does carry a schema (checkRequest, src/citation-blurbs.ts). Plan 261018o stage 2.",
   "src/labels.ts":
     "Its answer is tuples, which the provider's supported schema subset cannot express. It needs a change of answer shape and a quality check first; it already re-asks on a malformed pair.",
   "src/structure-expand.ts":

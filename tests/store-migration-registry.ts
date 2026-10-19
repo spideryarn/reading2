@@ -2868,6 +2868,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      a visitor's public query. One scratch article, the column written
      directly. No GoTrue and no bucket. */
   "tests/citation-blurbs-read-pg.test.ts": "private-postgres",
+  /* 261018o stage 2: a web note on one cited work, kept and read back by
+     the store and the owner's `loadBibliography`. One scratch article, its
+     list written directly. No GoTrue and no bucket. */
+  "tests/citation-web-notes-pg.test.ts": "private-postgres",
+  "tests/citation-web-note-route.test.ts": "private-postgres",
   /* Plan 261009w Stage 2: the expand migration against the old code's and the new code's statements. */
   "tests/bibliography-expand-pg.test.ts": "private-postgres",
   /* Plan 261009w Stage 3: the same for Reception, Claims and the claim-check table's view. */
