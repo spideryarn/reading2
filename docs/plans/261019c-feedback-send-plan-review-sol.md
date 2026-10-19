@@ -1,0 +1,16 @@
+1. Don’t use `aria-busy` as the styling hook. It permits assistive technology to defer descendant changes—the changing label is precisely the feedback you want announced. It also does not disable the button. Use `data-working` instead; if “Sending” needs guaranteed announcement, use a separate `role="status"`. During `dictate.readOnly`, the button remains enabled because pressing it queues the send, so keep the pointer cursor there; use `cursor: progress` only on `[data-working]:disabled`. [WAI-ARIA’s definition](https://www.w3.org/TR/wai-aria-1.2/#aria-busy) supports this concern.
+
+2. The diagnosis is broadly honest, but four claims should be tightened in [the plan](/var/tmp/spideryarn-worktrees/fban90k0-feedback-send-no-spinner/docs/plans/261019c-feedback-send-shows-it-is-working-at-once.md:17):
+
+   - “The server handler was fast,” not “the server is not slow”; the log begins after arrival.
+   - The 17–19 seconds rule out queued sending, but “reread his words” is inference.
+   - The browser run proves prompt DOM updates in desktop Chromium/WebKit, not an iPad paint.
+   - “Removing opacity is the change after which the symptom stopped” is unsupported: the prior report was treated as fixed from Playwright screenshots, explicitly without a real-iPad confirmation.
+
+3. The reduced-motion evidence is misread. Although `.cmt-spinner` declares a 25% pulse, the global reduced-motion guard forces animations to `0.01ms` and one iteration ([tailwind.css](/var/tmp/spideryarn-worktrees/fban90k0-feedback-send-no-spinner/src/web/tailwind.css:145)). It therefore does not sit at roughly 11% during repeated cycles. The whole button is still genuinely at 45%, so the main diagnosis survives.
+
+4. The proposed cascade otherwise works. `.fb-send:disabled` and `.fb-send[data-working]` each have specificity `(0,2,0)`, so the later rule wins. `tap-target.css` changes only positioning/pseudo-elements; the global `button:disabled` rule is in the lower `base` layer and only sets the cursor; no generic `[aria-busy]` rule interferes. The spinner keeps its own orange because `.cmt-spinner` sets `color` directly. On the dialog’s `--surface-raised`, `--ink-faint` is approximately 4.62:1 dark and 6.54:1 light; `--positive` is already tested above 4.5:1. `--rule-strong` is only about 1.43:1 dark and 2.00:1 light, acceptable for an inactive control but deliberately faint.
+
+5. Include the same working-state correction for `FeedbackSendBox`: both **Send reply** and **Send addendum** are disabled and dimmed to 45% while their spinner is showing ([feedback.css](/var/tmp/spideryarn-worktrees/fban90k0-feedback-send-no-spinner/src/web/styles/feedback.css:392), [FeedbackSendBox.tsx](/var/tmp/spideryarn-worktrees/fban90k0-feedback-send-no-spinner/src/web/FeedbackSendBox.tsx:159)). `Defer for now` is not affected by that opacity rule. Tests should use `readerCssNoComments()`, require unique selectors, inventory every selector matching `.fb-send`, and cover all three states—Sending, Adding the picture, Writing that down—not merely rule order.
+
+Verdict: **proceed with changes**.

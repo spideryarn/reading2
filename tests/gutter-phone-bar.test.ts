@@ -1,8 +1,10 @@
 /**
- * **On a narrow touch screen the gutter's column gives its room to the prose,
- * and a tap brings the icons up in a bar above the paragraph** — gutter.css
- * § a narrow screen and a finger, narrow-window.css's matching pad tokens.
- * docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md.
+ * **On a no-hover touch screen the gutter's column gives its room to the prose,
+ * and a tap brings the icons up in a bar above the paragraph** — gutter.css §
+ * a no-hover screen, narrow-window.css's matching pad tokens. On a phone since
+ * docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md, and
+ * on every no-hover screen, the iPad included, since
+ * docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md.
  *
  * The browser check is the real evidence (a desktop Chrome harness never
  * matches `(hover: none)`); this pins the declarations it depends on, so a
@@ -10,11 +12,11 @@
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
 
 const css = readerCssNoComments();
 const component = readFileSync(new URL("../src/web/BlockGutter.tsx", import.meta.url), "utf8");
-const PHONE = "(max-width: 731px) and (hover: none)";
+const NO_HOVER = "(hover: none)";
 const ROOTS = [9, 12, 16, 20, 24];
 
 /** The declarations of one rule inside `block`, whitespace flattened. */
@@ -28,25 +30,32 @@ function rule(block: string, selector: string): string {
   throw new Error(`no rule for \`${selector}\``);
 }
 
-describe("a narrow touch screen: the gutter as a bar above the paragraph", () => {
-  const block = mediaBlock(css, PHONE, ".blk-permalink");
+describe("a no-hover screen: the gutter as a bar above the paragraph", () => {
   const BAR = "tr.row-active td.text .blk-gutter";
+  const block = mediaBlock(css, NO_HOVER, `${BAR} >`);
+  const pads = mediaBlock(css, NO_HOVER, "--text-pad-r");
+
+  it("applies at every width, not only a phone's", () => {
+    for (const marker of [`${BAR} >`, "--text-pad-r: max("]) {
+      const at = css.indexOf(marker, css.indexOf(`@media ${NO_HOVER}`));
+      const preludes = enclosing(css, at).slice(1);
+      expect(preludes.some((p) => p.includes("max-width")), `${marker} sits under a width query`).toBe(false);
+    }
+  });
 
   it("narrows both pads, and only under a finger", () => {
-    const narrow = mediaBlock(css, "(max-width: 731px)", "--text-pad-l: 0.9rem");
-    const touch = mediaBlock(narrow, "(hover: none)", "--text-pad-r");
+    const touch = pads;
     expect(touch).toMatch(/--text-pad-l:\s*0\.6rem/);
     expect(touch).toMatch(/--text-pad-r:\s*max\(1\.25rem,\s*19px\)/);
     expect(touch).toMatch(/--blk-gutter-x:\s*0px/);
   });
 
   it.each(ROOTS)("keeps the mark glyph inside the right pad at a %ipx root", (root) => {
-    const narrow = mediaBlock(css, "(max-width: 731px)", "--text-pad-l: 0.9rem");
-    const touch = mediaBlock(narrow, "(hover: none)", "--text-pad-r");
+    const touch = pads;
     const pad = /--text-pad-r:\s*max\(\s*([\d.]+)rem\s*,\s*([\d.]+)px\s*\)/.exec(touch);
     const glyph = /const GLYPH\s*=\s*([\d.]+);/.exec(component);
     const inset = /padding-inline-end:\s*([\d.]+)px/.exec(rule(block, ".blk-gutter > *"));
-    expect(pad, "the phone pad has no px floor for the fixed-pixel glyph").not.toBeNull();
+    expect(pad, "the touch pad has no px floor for the fixed-pixel glyph").not.toBeNull();
     expect(glyph, "BlockGutter's glyph size is no longer a numeric constant").not.toBeNull();
     expect(inset, "the at-rest glyph has no numeric end inset").not.toBeNull();
     const padPx = Math.max(Number(pad?.[1]) * root, Number(pad?.[2]));
