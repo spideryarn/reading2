@@ -645,6 +645,10 @@ hash answering 400 as the control; that has not been re-checked since.
 **Reading non-sensitive production data needs no asking.** Greg, 2026-10-07: *"you always have
 permission to read non-sensitive data on production"* — a row's status, counts, timestamps; not
 prose, notes, email bodies or anything a reader wrote. Always inside `begin read only`.
+Greg widened it on 2026-10-19: *"You always have read-only permission to access production going
+forwards."* — so a read of production, of any table or bucket, needs no asking; writes still do.
+The auto-mode classifier may refuse a read anyway ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)
+§ Holding the production credential); that refusal stands, and is not to be worked around.
 
 **Delete such a script when the read is done; never leave it where a subagent will look.** On
 2026-10-07 a browser-check subagent found a session's scratch production-read script in its
