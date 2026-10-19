@@ -757,8 +757,10 @@ supposed to appear.
 
 Three things fixed it, and the third is the interesting one:
 
-1. **Three phases rather than two** — `idle | opening | listening`. The orange is only worn once
-   `audiostart` has fired, and `opening` says *"Opening the microphone…"* in words.
+1. **Three phases rather than two** — `idle | opening | listening`. `opening` is only the time before
+   the track exists and says *"Wait — opening the microphone…"*; the orange and the tape start when
+   the track is ours. Waiting for Chromium's later `audiostart` lost the first second of speech
+   ([261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md)).
 2. **A strip that exists whenever the microphone is armed**, not only when it has something to say.
 3. **A live level meter** — Greg's ask, *"so that the user has a sense of whether it's working"*.
 
@@ -853,8 +855,9 @@ Two smaller things Greg asked for in the same breath. The armed button wore `Mic
 icon for *muted* — so the one moment the microphone was live it showed the glyph for dead. It is now
 a filled **square** in both armed phases, on the rule that the icon says what the *press* does; the
 phase is carried by colour, the pulse, and the strip's own words. And there is an `m:ss` timer,
-whose zero is the first `audiostart` rather than the press, because the 1.1 seconds before the
-device opens are not seconds of anything.
+whose zero is the moment the track is ours rather than the press, because the time before the
+device opens is not seconds of anything. It shares the tape's zero, so the time shown is the time
+recorded ([261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md)).
 
 ### What we heard, when nothing came back
 
