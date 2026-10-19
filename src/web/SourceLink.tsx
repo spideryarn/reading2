@@ -146,6 +146,89 @@ export function journalBesideSite(journal: string | undefined, siteName: string 
   return journal?.trim().toLowerCase() === siteName?.trim().toLowerCase() ? undefined : journal;
 }
 
+/**
+ * **What "the original" is for this article, or `null` when there is none to
+ * open** — the one answer the Metadata page's *View the original* and the
+ * command bar's *Open the original* both read, so the two cannot disagree.
+ * Plan 261019f.
+ *
+ * - **`web`**: the article's own address (`webSource`), opened in a new tab.
+ * - **`pdf`**: the PDF the owner uploaded, through `openUploadedOriginal`.
+ *   `meta.source === "pdf"` and nothing wider, because that is the only kind
+ *   `GET /api/source/:slug` serves (src/routes.ts § `sendSource`: HTML from our
+ *   origin is stored XSS). An uploaded web page or Word file has no route to
+ *   its file yet, and offering one was a button that could only answer 404.
+ *   **Never for a visitor**: the route is the owner's alone.
+ *
+ * *Saved from* is deliberately not an original: it is the file's own claim,
+ * never fetched (`savedFromSource`).
+ */
+export type Original = { readonly kind: "web"; readonly url: string } | { readonly kind: "pdf" };
+
+export function originalOf(meta: Meta, owner: boolean): Original | null {
+  const url = webSource(meta);
+  if (url !== null) return { kind: "web", url };
+  if (owner && meta.source === "pdf") return { kind: "pdf" };
+  return null;
+}
+
+/**
+ * **Open the owner's uploaded PDF in a new tab** — the whole of what
+ * `SourceLink` does on a click, as a function the command bar calls too. The
+ * header says why it is a fetch and a `blob:` rather than a link.
+ *
+ * **Call it inside the gesture.** The tab is opened before the first `await`,
+ * so a caller that awaits anything first gets a blocked popup and nothing on
+ * screen. A failure closes the blank tab and resolves with the reader-facing
+ * sentence.
+ *
+ * `fragment` is `SourceLink`'s — see the prop.
+ */
+export async function openUploadedOriginal(
+  slug: string,
+  fragment?: string,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> {
+  /* Synchronously, before any await. See the header. */
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+
+  try {
+    const res = await apiFetch(`/api/source/${encodeURIComponent(slug)}`);
+    /* Written here for a reader, and said so by its class: the body of a
+       refusal on this route is not read, since a success is a PDF. */
+    if (!res.ok) throw new ReaderFacingError(`The server said ${res.status}.`);
+    /* A body that dies part-way down rejects with a bare `TypeError`. It
+       is a lost connection, not a bug, and this is the place that knows it
+       came from the transport; `readJson` marks its own read the same way
+       (lib/api.ts), and a blob does not go through it. */
+    const bytes = await res.blob().catch((e: unknown) => {
+      throw e instanceof TypeError ? markUnreachable(e) : e;
+    });
+    const url = URL.createObjectURL(bytes);
+    /* The fragment goes on the address the tab is sent to, and **not** on
+       the object URL we revoke below: `revokeObjectURL` matches the URL it
+       was given, so a `#page=7` glued on before the revoke would leave the
+       blob alive for the life of the document. */
+    const at = fragment ? `${url}#${fragment}` : url;
+    if (tab) tab.location.href = at;
+    else window.location.href = at;
+    /* Revoked on a timer rather than immediately: the tab has to have
+       started loading it first, and there is no event here that says it
+       has. A minute is far longer than the load and still bounds the leak. */
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return { ok: true };
+  } catch (err) {
+    /* Close the blank tab rather than leaving the reader looking at
+       about:blank wondering whether it is still loading. */
+    tab?.close();
+    /* One code, last (docs/project/copy.md): the reason's own when it
+       has one (`[net-down]`, `[web-unexpected]`), this control's when it
+       does not. */
+    const why = describeFetchFailure(err as Error);
+    return { ok: false, message: `Couldn't open the original. ${codeOfMessage(why) ? why : `${why} [source-open]`}` };
+  }
+}
+
 export function SourceLink({
   slug,
   children,
@@ -187,47 +270,11 @@ export function SourceLink({
 
   const open = () => {
     setError(null);
-
-    /* Synchronously, before any await. See the header. */
-    const tab = window.open("", "_blank");
-    if (tab) tab.opener = null;
-
-    void (async () => {
-      try {
-        const res = await apiFetch(`/api/source/${encodeURIComponent(slug)}`);
-        /* Written here for a reader, and said so by its class: the body of a
-           refusal on this route is not read, since a success is a PDF. */
-        if (!res.ok) throw new ReaderFacingError(`The server said ${res.status}.`);
-        /* A body that dies part-way down rejects with a bare `TypeError`. It
-           is a lost connection, not a bug, and this is the place that knows it
-           came from the transport; `readJson` marks its own read the same way
-           (lib/api.ts), and a blob does not go through it. */
-        const bytes = await res.blob().catch((e: unknown) => {
-          throw e instanceof TypeError ? markUnreachable(e) : e;
-        });
-        const url = URL.createObjectURL(bytes);
-        /* The fragment goes on the address the tab is sent to, and **not** on
-           the object URL we revoke below: `revokeObjectURL` matches the URL it
-           was given, so a `#page=7` glued on before the revoke would leave the
-           blob alive for the life of the document. */
-        const at = fragment ? `${url}#${fragment}` : url;
-        if (tab) tab.location.href = at;
-        else window.location.href = at;
-        /* Revoked on a timer rather than immediately: the tab has to have
-           started loading it first, and there is no event here that says it
-           has. A minute is far longer than the load and still bounds the leak. */
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      } catch (err) {
-        /* Close the blank tab rather than leaving the reader looking at
-           about:blank wondering whether it is still loading. */
-        tab?.close();
-        /* One code, last (docs/project/copy.md): the reason's own when it
-           has one (`[net-down]`, `[web-unexpected]`), this control's when it
-           does not. */
-        const why = describeFetchFailure(err as Error);
-        setError(`Couldn't open the original. ${codeOfMessage(why) ? why : `${why} [source-open]`}`);
-      }
-    })();
+    /* Called inside the click: `openUploadedOriginal` opens the tab before
+       it awaits anything. */
+    void openUploadedOriginal(slug, fragment).then((result) => {
+      if (!result.ok) setError(result.message);
+    });
   };
 
   return (

@@ -210,6 +210,16 @@ describe("the owner's metadata page", () => {
     expect(host.textContent).not.toContain("View the original");
   });
 
+  /* `GET /api/source/:slug` serves only a PDF (src/routes.ts § `sendSource`,
+     because HTML from our origin is stored XSS), so for an uploaded web page
+     the button could only answer 404. Plan 261019f § A bug fixed on the way. */
+  it("does not offer an uploaded web page's file, which the route will not serve", async () => {
+    await owner({ filename: "saved.html" });
+
+    expect(host.textContent).toContain(UPLOADED);
+    expect(host.textContent).not.toContain("View the original");
+  });
+
   it("still offers the original when PDF evidence overruled a Word filename", async () => {
     await owner({ source: "pdf", filename: "draft.docx" });
 

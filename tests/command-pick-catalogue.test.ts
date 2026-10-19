@@ -119,6 +119,9 @@ function rowsIn(context: Context): readonly Command[] {
             view: context.article.view,
             help: "/help/mode-glossary",
             shelfRow: context.article.owner ? { archive, tags: { edit: async () => [] } } : undefined,
+            /* *Open the original* (plan 261019f): both pages hand one in for
+               an article with a web address, the common case. */
+            original: { kind: "web", url: "https://example.com/a-piece" },
             /* What the reading view hands the owner when both lists can be
                added to — the widest bar, so both *Find more* rows (and, since
                plan 261009i, the *Guide* row) are in the catalogue. Without it a sentence could never be answered with

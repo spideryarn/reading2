@@ -227,7 +227,7 @@ import {
 } from "../reader-capability.js";
 import { markedModes, visitorGap } from "../visitor.js";
 import { SharedNotice, ViewOnlyChip, VisitorBand } from "../PublicChrome.js";
-import { webSource } from "../SourceLink.js";
+import { originalOf, webSource } from "../SourceLink.js";
 import { SmallScreenHint } from "../SmallScreenHint.js";
 import { useRenderCount } from "../perf.js";
 import { makeBlockBookmarker } from "../block-bookmark.js";
@@ -5053,6 +5053,9 @@ export function Reader({
         shelfRow={archive === undefined ? undefined : { archive, tags: tagsControl }}
         /* The bar's argument rows — `executor` above. */
         executor={executor}
+        /* The bar's *Open the original* — the uploaded PDF only for the
+           owner, whose route it is (SourceLink.tsx § `originalOf`). */
+        original={originalOf(article.meta, owner !== null) ?? undefined}
         drawer={
           owner
             ? {
