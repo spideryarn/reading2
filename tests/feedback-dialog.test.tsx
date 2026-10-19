@@ -24,6 +24,7 @@ import { CONTACT_EMAIL } from "../src/site-text.js";
 import { MAX_FEEDBACK_QUESTION_BODY_CHARS } from "../src/feedback-question-values.js";
 import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 import { exactly } from "../src/web/relative-time.js";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 /** Handed the request's init, so an answer can watch its `signal` (plan 261010f). */
@@ -548,6 +549,7 @@ describe("the feedback dialog", () => {
     expect(first?.value).toBe("It broke.");
     expect(host.querySelector(".fb-failed")).not.toBeNull();
     expect(host.querySelector(".fb-copy")).not.toBeNull();
+    expect(host.querySelector("button.fb-send")?.hasAttribute("data-working")).toBe(false);
 
     answer = ok(200);
     send();
@@ -679,6 +681,7 @@ describe("the feedback dialog", () => {
 
     const button = host.querySelector<HTMLButtonElement>("button.fb-send");
     expect(button?.disabled, "Send stayed live while the picture was decoding").toBe(true);
+    expect(button?.hasAttribute("data-working"), "Adding the picture was drawn dimmed").toBe(true);
     /* And the keyboard path, which does not go through `disabled` at all. */
     send();
     await act(async () => {});
@@ -748,6 +751,8 @@ describe("the feedback dialog", () => {
     mount();
     type("Said out loud, being written down");
     expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
+    /* Writing that down is work on the reader's behalf too (plan 261019c). */
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.hasAttribute("data-working")).toBe(true);
     send();
     await act(async () => {});
     expect(posts).toHaveLength(0);
@@ -1140,6 +1145,7 @@ describe("the feedback dialog", () => {
   it("spins on Send while the report is in flight", async () => {
     mount();
     type("It broke.");
+    expect(host.querySelector("button.fb-send")?.hasAttribute("data-working")).toBe(false);
     const flight: { land: (() => void) | null } = { land: null };
     answer = () =>
       new Promise<Response>((resolve) => {
@@ -1155,11 +1161,38 @@ describe("the feedback dialog", () => {
     /* And it is not pressable meanwhile. The ref latch is what stops two clicks
        in one frame (above); this is the half a reader can see. */
     expect(button?.disabled).toBe(true);
+    /* **Working, so drawn at full strength**, not dimmed as a button that
+       cannot be pressed (spya-an90k0, plan 261019c): the rule below. */
+    expect(button?.hasAttribute("data-working")).toBe(true);
 
     await act(async () => {
       flight.land?.();
     });
     expect(host.querySelector("button.fb-send")?.textContent).not.toContain("Sending");
+  });
+
+  /**
+   * **A button that is working is never dimmed** (spya-an90k0, plan 261019c).
+   * Greg, on an iPad: *"no UI feedback at all, no spinner"* — while the code
+   * put the spinner and "Sending" under the `opacity: 0.45` every disabled Send
+   * gets, which is also our leading iPad suspect for a button that paints
+   * nothing (plan 260912c). The busy rule must outweigh the dimming one.
+   */
+  it("draws a working Send, and a working Send reply, at full opacity", () => {
+    /* This file's shared cleanup unmounts its normal fixture, so this CSS-only
+       assertion still mounts one and remains independently runnable with `-t`. */
+    mount();
+    const css = readerCssNoComments();
+    for (const [dimmed, working] of [
+      [".fb-send:disabled", ".fb-send[data-working]:disabled"],
+      [".fb-reply-send:disabled", ".fb-reply-send[data-working]:disabled"],
+    ] as const) {
+      expect(css).toMatch(new RegExp(`${dimmed.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*opacity:\\s*0\\.45`));
+      const escaped = working.replace(/[.[\]]/g, "\\$&");
+      const found = [...css.matchAll(new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`, "g"))];
+      expect(found, `one rule for ${working}`).toHaveLength(1);
+      expect(found[0]?.[1]).toMatch(/opacity:\s*1\s*;/);
+    }
   });
 });
 
@@ -2330,8 +2363,15 @@ describe("the Earlier tab", () => {
         expect(box(item(211))).not.toBeNull();
         expect(box(item(211))?.getAttribute("aria-label")).toBe("What to add to report #211");
         typeInto(item(211), "  One more thing.\nOn two lines.  ");
-        answer = stored(201);
+        const gate: { release?: () => void } = {};
+        const finish = stored(201);
+        answer = () =>
+          new Promise<Response>((resolve) => {
+            gate.release = () => void finish().then(resolve);
+          });
         click(button(item(211), "Send addendum"));
+        expect(button(item(211), "Send addendum").hasAttribute("data-working")).toBe(true);
+        await act(async () => gate.release?.());
         await settle();
 
         expect(posts).toHaveLength(1);
@@ -2348,6 +2388,7 @@ describe("the Earlier tab", () => {
         click(button(item(211), "Add to this report"));
         expect(box(item(211))?.value).toBe("");
         typeInto(item(211), "And another.");
+        answer = stored(201);
         click(button(item(211), "Send addendum"));
         await settle();
         expect(sent(1).id).not.toBe(sent(0).id);
@@ -3536,6 +3577,8 @@ describe("the Earlier tab", () => {
         click(sendButton);
         click(sendButton);
         expect(posts).toHaveLength(1);
+        /* In flight: drawn at full strength, not dimmed (plan 261019c). */
+        expect(thread().querySelector(".fb-reply-send")?.hasAttribute("data-working")).toBe(true);
         await act(async () => gate.release?.());
         await settle();
         expect(thread().querySelector(".fb-question-answer")).not.toBeNull();

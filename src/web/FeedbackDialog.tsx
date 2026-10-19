@@ -1579,6 +1579,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
                the microphone and sends once the words land (`send`). Plan
                261010f; it used to be disabled here while still reading Send. */
             disabled={(!somethingSaid && !dictationBusy) || over || stage.kind === "sending" || preparing}
+            /* **Working, so not dimmed** like a Send that cannot be pressed:
+               the three spinner labels below. Greg saw "no spinner" on an iPad;
+               the code drew Sending at `opacity: 0.45` (spya-an90k0, plan
+               261019c). A data attribute, not `aria-busy`, which may hold back
+               announcing the very label that changes. */
+            data-working={stage.kind === "sending" || preparing || dictate.readOnly ? "" : undefined}
           >
             {stage.kind === "sending" ? (
               <>
