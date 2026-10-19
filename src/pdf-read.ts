@@ -2619,8 +2619,9 @@ const NEIGHBOUR_CHARS = 80;
  * An identity, not evidence of where the picture is — it only has to stay the
  * same for the same transcript and differ between two captionless figures on
  * one page. Proving which picture is this figure's needs positions on the page,
- * which this does not carry (docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md
- * § Stage B). A neighbour that is itself a captionless figure contributes its
+ * which this does not carry
+ * (docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md).
+ * A neighbour that is itself a captionless figure contributes its
  * empty text. Several adjacent empty figures therefore have identical prose
  * contexts; the page count makes an insertion remint the whole ambiguous run
  * instead of moving its old ids down by one. The per-page ordinal in the ref

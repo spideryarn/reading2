@@ -646,8 +646,9 @@ export type PdfFigureFailure =
    * **The figure has no caption, so there is nothing to check its page
    * against.** Not `caption-not-in-page-text`, which claims a caption the
    * figure does not have. Pairing one safely needs where the picture sits
-   * between the prose around it, which this gate does not read yet:
-   * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md § Stage B.
+   * between the prose around it, which this byte-level gate does not read. The
+   * later located route now does:
+   * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md.
    */
   | "uncaptioned";
 

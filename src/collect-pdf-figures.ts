@@ -100,6 +100,7 @@ import { describeStorageFailure } from "./collect-assets.js";
 import { readPdfPageLayouts } from "./pdf-figure-layout.js";
 import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure-page.js";
 import {
+  anchorBox,
   type DrawnFigureVerdict,
   judgeLocatedRegion,
   locateDrawnFigure,
@@ -116,15 +117,20 @@ import {
   pairPageFigures,
   type PdfFigureFailure as PairingFailure,
 } from "./pdf-figures.js";
-import { readPdfRasters } from "./pdf-figure-read.js";
+import { type PdfRasterRead, readPdfRasters } from "./pdf-figure-read.js";
 import {
   answeredBox,
   COMPOSITE_REFUSALS,
   type FigureLocator,
+  type FigureNeighbours,
   judgeLocatedBox,
+  judgeNeighbourOrder,
+  type LocateSubject,
   type LocatePage,
   type PictureRef,
   type SentPage,
+  disorderedRuns,
+  runKey,
   type UsablePicture,
 } from "./pdf-figure-locate.js";
 import { type RawSourceStore, storeRawSource } from "./store/blobs.js";
@@ -252,18 +258,43 @@ export const MAX_LOCATE_CALLS = 8;
 export const MAX_LOCATE_LOOKS = 24;
 
 /**
+ * **The uncaptioned figures' own allowance**, calls and windows alike, on top
+ * of the captioned figures' — and asked only after every captioned one, so a
+ * book's run of diagrams can never spend what a paper's refused figure would
+ * have had (GPT Sol, plan review of 261019j, finding 3). A book prints dozens
+ * of uncaptioned diagrams: Rovelli's *The Order of Time* has 28. Measured cost
+ * and time per call are in
+ * docs/investigations/261019a-uncaptioned-pdf-figures-located-on-rovelli.md;
+ * the step's one clock, `PDF_FIGURES_BUDGET_MS`, still bounds the whole run.
+ */
+export const MAX_UNCAPTIONED_LOCATE_CALLS = 40;
+
+/**
  * The refusals a look at the page could settle — a caption not in the page's
  * text (the transcript's page may be one off, or the caption is drawn inside
  * the picture), two pictures on the page, no picture on the page, no drawing
- * that could be proved the caption's. The rest are about the bytes, the bucket
- * or the clock, which no model can help with.
+ * that could be proved the caption's, no caption at all. The rest are about the
+ * bytes, the bucket or the clock, which no model can help with.
  */
 const LOCATABLE: ReadonlySet<PdfFigureFailure> = new Set<PdfFigureFailure>([
   "caption-not-in-page-text",
   "ambiguous",
   "no-raster",
   "not-located",
+  "uncaptioned",
 ]);
+
+/**
+ * **What the model would be asked about this marker, or `null`**: its caption
+ * if the article gave it one, otherwise the prose either side if there is any.
+ * A marker with neither is not held for the located route.
+ */
+function subjectOf(ref: string, options: CollectPdfFiguresOptions): LocateSubject | null {
+  const caption = options.captions.get(ref) ?? "";
+  if (caption.trim()) return { kind: "caption", caption };
+  const neighbours = options.neighbours.get(ref);
+  return neighbours ? { kind: "neighbours", ...neighbours } : null;
+}
 
 export interface CollectPdfFiguresOptions {
   /** Every marker in the article's blocks — `pdfFigureMarkersIn`, src/collect-assets.ts. */
@@ -280,6 +311,15 @@ export interface CollectPdfFiguresOptions {
    */
   captions: ReadonlyMap<string, string>;
   /**
+   * The prose either side of each **uncaptioned** marker, by ref —
+   * `pdfFigureNeighboursIn`, src/collect-assets.ts. What the located route asks
+   * about such a figure instead of a caption; a marker absent here and from
+   * `captions` is never asked about. Required for the same reason as
+   * `captions`: left out, every uncaptioned figure would be refused without a
+   * word, which is the silence report spya-x9gn3d was about.
+   */
+  neighbours: ReadonlyMap<string, FigureNeighbours>;
+  /**
    * **The third route: a model shown the page.** Asked only about a marker
    * both other routes refused for a reason a look at the page could settle
    * (`LOCATABLE`), and only when a picture nobody has sits on its page or a
@@ -290,8 +330,10 @@ export interface CollectPdfFiguresOptions {
    * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2.
    */
   locate: FigureLocator | null;
-  /** At most this many locator calls for the article; may lower, never widen, `MAX_LOCATE_CALLS`. */
+  /** At most this many locator calls for the article's captioned figures; may lower, never widen, `MAX_LOCATE_CALLS`. */
   maxLocateCalls?: number;
+  /** The same for its uncaptioned figures and `MAX_UNCAPTIONED_LOCATE_CALLS`. */
+  maxUncaptionedLocateCalls?: number;
   blobs?: RawSourceStore;
   signal?: AbortSignal;
   now?: () => Date;
@@ -312,6 +354,8 @@ export interface CollectPdfFiguresOptions {
   budgetMs?: number;
   /** Page-layout reader injection for deterministic deadline tests. */
   readLayouts?: typeof readPdfPageLayouts;
+  /** Raster reader injection for deterministic cache and deadline tests. */
+  readPdfRasters?: typeof readPdfRasters;
 }
 
 export interface PdfFiguresRun {
@@ -406,8 +450,7 @@ export async function collectPdfFigures(
    * is still the one the page gave, not `out-of-time`.
    */
   const refuse = (marker: PdfFigureMarker, reason: PdfFigureFailure): void => {
-    const captioned = (options.captions.get(marker.ref) ?? "").trim() !== "";
-    if (options.locate && captioned && LOCATABLE.has(reason)) book.held.set(marker.ref, reason);
+    if (options.locate && subjectOf(marker.ref, options) && LOCATABLE.has(reason)) book.held.set(marker.ref, reason);
     else fail(marker, reason);
   };
 
@@ -455,9 +498,9 @@ export async function collectPdfFigures(
     }
 
     /* A marker the article gave no caption is refused `uncaptioned` here, since
-       there is nothing to check its page against — and the drawn route and the
-       locator below are only asked about captioned markers.
-       docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md. */
+       there is nothing to check its page against. The drawn route is not tried
+       for it; the locator is, by the prose either side.
+       docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md. */
     const { outcomes } = pairPageFigures({
       markers: looked,
       candidates: read.candidates,
@@ -737,7 +780,7 @@ async function readRasters(
 ): Promise<Awaited<ReturnType<typeof readPdfRasters>> | null> {
   if (markers.length === 0) return { candidates: [], skippedPages: [], unread: [], pageText: new Map(), paints: [], views: new Map(), rotations: new Map() };
   try {
-    const read = await readPdfRasters({
+    const read = await (options.readPdfRasters ?? readPdfRasters)({
       data: options.pdf,
       /* One page per marker; `readPdfRasters` sorts and de-duplicates, so two
          figures on page 7 do not decode page 7 twice. */
@@ -782,6 +825,13 @@ async function readRasters(
  *
  * **Two markers pointing at one picture get it neither**: one of the two
  * answers is wrong, and nothing here can say which.
+ *
+ * **An uncaptioned figure is asked about by the prose either side of it**,
+ * since 2026-10-19, after every captioned one and from its own allowance
+ * (`MAX_UNCAPTIONED_LOCATE_CALLS`). Its answer has two more things to pass: the
+ * picture must lie where the prose is printed (`inNeighbourOrder`), and a run
+ * of figures sharing one pair of neighbours must come down the page in order.
+ * It never reaches the composite route. docs/plans/261019j.
  */
 async function locatedRoute(
   held: readonly PdfFigureMarker[],
@@ -800,12 +850,23 @@ async function locatedRoute(
   /* The override exists to make a smaller ceiling testable; it may not widen
      the production policy. Normalise hostile/accidental numeric values too,
      so NaN cannot turn the comparison below off. */
-  const requestedCalls = options.maxLocateCalls ?? MAX_LOCATE_CALLS;
-  const maxCalls = Number.isFinite(requestedCalls)
-    ? Math.max(0, Math.min(MAX_LOCATE_CALLS, Math.floor(requestedCalls)))
-    : MAX_LOCATE_CALLS;
+  const ceiling = (requested: number | undefined, policy: number) => {
+    const value = requested ?? policy;
+    return Number.isFinite(value) ? Math.max(0, Math.min(policy, Math.floor(value))) : policy;
+  };
+  /* Two allowances, one per kind of question, so neither can spend the other's. */
+  const allowance: Record<LocateSubject["kind"], { calls: number; looks: number; maxCalls: number; maxLooks: number }> = {
+    caption: { calls: 0, looks: 0, maxCalls: ceiling(options.maxLocateCalls, MAX_LOCATE_CALLS), maxLooks: MAX_LOCATE_LOOKS },
+    neighbours: {
+      calls: 0,
+      looks: 0,
+      maxCalls: ceiling(options.maxUncaptionedLocateCalls, MAX_UNCAPTIONED_LOCATE_CALLS),
+      maxLooks: MAX_UNCAPTIONED_LOCATE_CALLS,
+    },
+  };
   const choices: {
     marker: PdfFigureMarker;
+    subject: LocateSubject;
     identity: string;
     raster: DecodedRaster;
     page: number;
@@ -819,23 +880,61 @@ async function locatedRoute(
     page: number;
     box: PageBox;
   }[] = [];
-  let looks = 0;
+  /* Captioned figures first, then uncaptioned, each in page order: the clock is
+     shared, so a book's run of diagrams must come after a paper's refused figure. */
+  const asked = held.flatMap((marker) => {
+    const subject = subjectOf(marker.ref, options);
+    return subject ? [{ marker, subject }] : [];
+  });
+  const rank = (s: LocateSubject) => (s.kind === "caption" ? 0 : 1);
+  asked.sort((a, b) => rank(a.subject) - rank(b.subject) || a.marker.page - b.marker.page);
 
-  for (const marker of [...held].sort((a, b) => a.page - b.page)) {
-    if (signal.aborted || book.locateCalls >= maxCalls || looks >= MAX_LOCATE_LOOKS) break;
-    looks += 1;
-    const window = [marker.page - 1, marker.page, marker.page + 1].filter((p) => p >= 1);
-    let read: Awaited<ReturnType<typeof readPdfRasters>>;
-    try {
-      read = await readPdfRasters({
-        data: options.pdf,
-        pages: window,
-        maxImagePixels: options.maxImagePixels ?? MAX_FIGURE_PIXELS,
-        signal,
-      });
-    } catch {
-      continue;
+  /**
+   * **Each page read and rendered once while the windows overlap it.** A
+   * book's diagrams sit a page or two apart, so consecutive windows share two
+   * of their three pages, and reading and rendering each window afresh spent
+   * 156 s of the 180 s budget on Rovelli's 28 (measured 2026-10-19,
+   * docs/investigations/261019a-uncaptioned-pdf-figures-located-on-rovelli.md).
+   * A page leaves both caches as soon as a window no longer holds it, so what
+   * is held at once is still about three pages (GPT Sol, stage 2 plan review,
+   * finding 7). A page whose read failed is remembered as failed.
+   */
+  const pageReads = new Map<number, PdfRasterRead | null>();
+  const shownPages = new Map<number, { png: Uint8Array; view: SentPage["view"] } | null>();
+  const windowRead = async (window: readonly number[]): Promise<PdfRasterRead | null> => {
+    for (const cache of [pageReads, shownPages]) {
+      for (const page of cache.keys()) if (!window.includes(page)) cache.delete(page);
     }
+    for (const page of window) {
+      if (pageReads.has(page)) continue;
+      try {
+        pageReads.set(
+          page,
+          await (options.readPdfRasters ?? readPdfRasters)({
+            data: options.pdf,
+            pages: [page],
+            maxImagePixels: options.maxImagePixels ?? MAX_FIGURE_PIXELS,
+            signal,
+          }),
+        );
+      } catch {
+        pageReads.set(page, null);
+      }
+    }
+    const reads = window.map((page) => pageReads.get(page));
+    /* All or nothing, as one read of the window was. */
+    if (reads.some((r) => !r)) return null;
+    return mergeReads(reads as PdfRasterRead[]);
+  };
+
+  for (const { marker, subject } of asked) {
+    if (signal.aborted) break;
+    const spend = allowance[subject.kind];
+    if (spend.calls >= spend.maxCalls || spend.looks >= spend.maxLooks) continue;
+    spend.looks += 1;
+    const window = [marker.page - 1, marker.page, marker.page + 1].filter((p) => p >= 1);
+    const read = await windowRead(window);
+    if (!read) continue;
 
     const usable: (UsablePicture & { raster: DecodedRaster })[] = [];
     const blank: PictureRef[] = [];
@@ -853,16 +952,18 @@ async function locatedRoute(
 
     const sent: (SentPage & LocatePage)[] = [];
     for (const page of window) {
-      const shown = await renderWholePage(page, read, cuts);
+      if (!shownPages.has(page)) shownPages.set(page, await renderWholePage(page, read, cuts));
+      const shown = shownPages.get(page);
       if (shown) sent.push({ page, view: shown.view, png: shown.png });
     }
     if (signal.aborted) break;
     if (sent.length === 0) continue;
 
     book.locateCalls += 1;
+    spend.calls += 1;
     let answer: Awaited<ReturnType<FigureLocator>>;
     try {
-      answer = await locate({ caption: options.captions.get(marker.ref) ?? "", pages: sent }, signal);
+      answer = await locate({ subject, pages: sent }, signal);
     } catch {
       /* A locator is an external call even when it is injected. The real
          adapter turns provider failures into `{ ok: false }`, but this seam's
@@ -887,17 +988,17 @@ async function locatedRoute(
       const paint = read.paints.find((p) => p.page === verdict.page && p.key === verdict.key);
       if (picture) {
         const view = read.views.get(verdict.page);
-        choices.push({
-          marker,
-          identity: picture.identity,
-          raster: picture.raster,
-          page: verdict.page,
-          box: paint && view ? visiblePaintBox(paint, view) : null,
-        });
+        const box = paint && view ? visiblePaintBox(paint, view) : null;
+        if (subject.kind === "neighbours" && !(await inNeighbourOrder(subject, verdict.page, box, options, signal))) {
+          continue;
+        }
+        choices.push({ marker, subject, identity: picture.identity, raster: picture.raster, page: verdict.page, box });
       }
       continue;
     }
-    if (!COMPOSITE_REFUSALS.has(verdict.reason)) continue;
+    /* The composite route binds a box to the caption it finds printed on the
+       page, and an uncaptioned figure has none to find. */
+    if (subject.kind !== "caption" || !COMPOSITE_REFUSALS.has(verdict.reason)) continue;
     const composite = await compositeRegion(marker, answer.answer, sent, read, usable, taken, cuts, options, signal);
     if (composite) regions.push({ marker, ...composite });
   }
@@ -913,7 +1014,12 @@ async function locatedRoute(
     overlaps(a, b) ||
     a.identity === b.identity ||
     a.pictureIdentities.some((identity) => b.pictureIdentities.includes(identity));
+  /* A run of uncaptioned figures that share their neighbours is told apart by
+     order alone, so the pictures chosen for it must come down the pages in the
+     run's order, or none of the run is kept. GPT Sol, plan review of 261019j. */
+  const disordered = disorderedRuns(choices);
   const keptPictures = choices.filter((c) =>
+    !disordered.has(runKey(c.subject) ?? "") &&
     choices.filter((o) => o.identity === c.identity).length === 1 &&
     !regions.some((r) => overlaps(r, c) || sharesPicture(r, c.identity)),
   );
@@ -923,6 +1029,50 @@ async function locatedRoute(
       !choices.some((c) => overlaps(r, c) || sharesPicture(r, c.identity)),
   );
   return [...keptPictures, ...keptRegions].map(({ marker, raster }) => ({ marker, raster }));
+}
+
+/** Single-page reads, in page order, as one read of those pages would have come back. */
+function mergeReads(reads: readonly PdfRasterRead[]): PdfRasterRead {
+  return {
+    candidates: reads.flatMap((r) => r.candidates),
+    skippedPages: reads.flatMap((r) => r.skippedPages),
+    unread: reads.flatMap((r) => r.unread),
+    pageText: new Map(reads.flatMap((r) => [...r.pageText])),
+    paints: reads.flatMap((r) => r.paints),
+    views: new Map(reads.flatMap((r) => [...r.views])),
+    rotations: new Map(reads.flatMap((r) => [...r.rotations])),
+  };
+}
+
+/**
+ * **Whether a picture chosen for an uncaptioned figure sits where the prose
+ * either side says it does** — `judgeNeighbourOrder`, src/pdf-figure-locate.ts,
+ * on the chosen page's text layer. Fails closed: a picture whose box or page
+ * could not be read is not kept, since the check is what stands between a
+ * clean neighbouring diagram and the reader.
+ */
+async function inNeighbourOrder(
+  subject: FigureNeighbours,
+  page: number,
+  picture: PageBox | null,
+  options: CollectPdfFiguresOptions,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (!picture) return false;
+  let layout: PageLayout | null | undefined;
+  try {
+    layout = (await (options.readLayouts ?? readPdfPageLayouts)({ data: options.pdf, pages: [page], signal })).get(page);
+  } catch {
+    return false;
+  }
+  if (!layout) return false;
+  return (
+    judgeNeighbourOrder({
+      picture,
+      before: anchorBox(subject.beforeStart, layout.text),
+      after: anchorBox(subject.after, layout.text),
+    }) === "consistent"
+  );
 }
 
 /**

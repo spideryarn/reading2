@@ -43,6 +43,7 @@ import {
   collectAssets,
   describeStorageFailure,
   pdfFigureCaptionsIn,
+  pdfFigureNeighboursIn,
   pdfFigureMarkersIn,
   STOPPED_PART_WAY,
 } from "./collect-assets.js";
@@ -2160,6 +2161,9 @@ export async function recoverPdfFigures(
     pdf,
     signal: ctx.signal,
     captions: pdfFigureCaptionsIn(blocks),
+    /* What the locator asks about a figure the article prints no caption for.
+       docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md. */
+    neighbours: pdfFigureNeighboursIn(blocks),
     /* The third route, asked only about figures the other two refused —
        Greg, 2026-09-28: "For now let's just do it for figures that fail."
        docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2. */

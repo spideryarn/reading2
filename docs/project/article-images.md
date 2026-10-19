@@ -98,10 +98,10 @@ done deliberately.
 **The figures do have a clock, and it is a different kind of thing.** `FIGURE_WAIT_MS` is not a
 budget on latency but a ceiling on a hang: the figures *are* awaited before the first draw, so until
 2026-09-07 one `/api/asset/…` that never answered meant the article never appeared at all — a blank
-page rather than a blank picture, on a document we hold in full. Past the ceiling a figure is
-caption-only, which is a state this feature already had, so the bound added no new reader-facing
-words. Nothing healthy comes near it: the bytes come from our own bucket at a ~348 ms median, and
-the largest figure in the corpus is 0.76 MB.
+page rather than a blank picture, on a document we hold in full. Past the ceiling a figure stays
+without its picture, which is a state this feature already had, so the bound added no new
+reader-facing words. Nothing healthy comes near it: the bytes come from our own bucket at a ~348 ms
+median, and the largest figure in the corpus is 0.76 MB.
 
 **And the guarantee is conditional on our own end working.** An image of ours that fails or times
 out falls back to the publisher's URL, because the second draw is rebuilt from the original html —
@@ -250,11 +250,12 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   pure); cuts the page out alone ([`src/pdf-figure-page.ts`](../../src/pdf-figure-page.ts)); and has
   PDFium, compiled to WebAssembly, draw only that rectangle
   ([`src/pdf-figure-render.ts`](../../src/pdf-figure-render.ts)). The PNG goes through the same
-  `storeOne` as a bitmap, so everything below the manifest is unchanged. **Everything outside that
-  case stays caption-only**, and the three new failure words — `not-located`, `too-complex`,
-  `render-failed` — say which rule refused it. Two figures on one page, a page mixing a bitmap
-  with a drawing, and a caption above its figure are all deferred, because ownership there would be
-  inferred rather than shown (GPT Sol F1, F14; Fable's ruling is in the plan).
+  `storeOne` as a bitmap, so everything below the manifest is unchanged. **This route leaves
+  everything outside that case caption-only for the later routes below**, and the three new failure
+  words — `not-located`, `too-complex`, `render-failed` — say which rule refused it. Two figures on
+  one page, a page mixing a bitmap with a drawing, and a caption above its figure are all deferred
+  here, because ownership there would be inferred rather than shown (GPT Sol F1, F14; Fable's
+  ruling is in the plan).
 - **Since 2026-09-24 a picture attaches to a caption only if its page prints that caption.** One
   marker and one picture on a page used to be enough, but the page is the *transcript's* claim.
   On a printed web essay, each tall figure was pushed onto the next page, and the model filed its
@@ -310,11 +311,23 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   step may drop what is not the article, but not what is the article merely because a later step
   cannot resolve it.** Its ref folds in the page's figure count and the prose either side, since
   page and ordinal alone would let a re-extraction move its block id onto another figure, and
-  adjacent empty figures otherwise have empty neighbours. Recovering its picture needs where it
-  sits between that prose on the page, and "the prose is on the page" is not enough: it would pass
-  260924e's wrong pairing. That positional route is
-  [261019e § Stage B](../plans/261019e-uncaptioned-pdf-figures-are-kept.md#stage-b-written-up-queued-for-greg-recover-the-picture-by-position),
-  waiting on Greg.
+  adjacent empty figures otherwise have empty neighbours.
+- **And since later that day its picture is recovered by the located route, asked by the prose
+  either side** instead of a caption — Greg, 2026-10-19: *"we do want to include all of the
+  figures and diagrams and tables if we can."* `pdfFigureNeighboursIn` reads the text before and
+  after each uncaptioned marker from the blocks; the model is shown the window and asked for the
+  figure that sits between them; `judgeLocatedBox` holds the answer to one clean picture as for a
+  caption, and two more checks hold it to the prose: the picture must lie below the start of the
+  text before it and above the text after it wherever that text is printed across from it
+  (`judgeNeighbourOrder`), and a run of figures sharing one pair of neighbours must come down the
+  page in order. Uncaptioned figures are asked after every captioned one, from their own
+  allowance (`MAX_UNCAPTIONED_LOCATE_CALLS`), and never reach the composite route, which needs a
+  printed caption — so an uncaptioned **vector** figure still shows the note. On Rovelli's
+  *The Order of Time* it recovered 25 of 28, every one checked by eye against its page, in 76 s:
+  [261019j](../plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md),
+  [the measurement](../investigations/261019a-uncaptioned-pdf-figures-located-on-rovelli.md).
+  An uncaptioned picture's `alt` is *"Figure without a caption"*, since there is no visible
+  caption beside it to make empty alt right.
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now

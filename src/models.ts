@@ -408,7 +408,8 @@ export const PDF_READER_MODEL = "openai/gpt-6-luna";
 /**
  * **What finds a figure the PDF itself could not place** — the model shown a
  * refused figure's page and its neighbours and asked for the page and box of
- * the figure with this caption (src/pdf-figure-locate.ts). Not on a tier,
+ * the figure — by its caption when it has one, or by the prose either side when
+ * it does not (src/pdf-figure-locate.ts). Not on a tier,
  * for the PDF reader's reason: a tier is a judgment about how much reasoning a
  * job needs, and this one needs eyes and a coordinate convention.
  *
@@ -420,8 +421,8 @@ export const PDF_READER_MODEL = "openai/gpt-6-luna";
  * refused, none wrong, ~1.8 s and ~$0.002 a call. The table is in
  * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2.
  * It is a *preview* model; if OpenRouter retires the id, every call fails and
- * every figure it would have found stays caption-only — the state it was
- * already in.
+ * every figure keeps the refusal it already had — a captioned figure stays
+ * caption-only, and an uncaptioned one keeps its visible recovery note.
  *
  * **Not moved to Gemini 3.8 Flash on 2026-10-09**, though "always the latest
  * of each family" is the rule (plan 261009a): 3.8 reasons on every call, so

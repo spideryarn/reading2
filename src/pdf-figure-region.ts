@@ -709,6 +709,39 @@ function findCaption(
   return { ok: true, lines: matched };
 }
 
+/** How much of an anchor is matched, normalised — enough to be one sentence's opening. */
+export const ANCHOR_MATCH_CHARS = 40;
+/** A shorter anchor is not matched at all: too likely to recur. */
+export const ANCHOR_MIN_CHARS = 24;
+
+/**
+ * **Where on the page a passage begins, or `null`** — the box of the runs its
+ * opening `ANCHOR_MATCH_CHARS` letters span, matched over the runs in content
+ * order the way `findCaption` matches. `null` when the opening is too short,
+ * absent, or printed twice: the order check (`judgeNeighbourOrder`,
+ * src/pdf-figure-locate.ts) then has nothing to go on, which is a missing veto
+ * and never a refusal. Unlike a caption, a passage may begin mid-line.
+ */
+export function anchorBox(passage: string, items: readonly PageTextItem[]): PageBox | null {
+  const needle = normalise(passage).slice(0, ANCHOR_MATCH_CHARS);
+  if (needle.length < ANCHOR_MIN_CHARS) return null;
+  let hay = "";
+  const spans: { start: number; end: number; item: PageTextItem }[] = [];
+  for (const item of items) {
+    if (!isUpright(item)) continue;
+    const text = normalise(item.str);
+    if (!text) continue;
+    spans.push({ start: hay.length, end: hay.length + text.length, item });
+    hay += text;
+  }
+  const at = hay.indexOf(needle);
+  if (at < 0 || hay.indexOf(needle, at + 1) >= 0) return null;
+  const boxes = spans
+    .filter((span) => span.end > at && span.start < at + needle.length)
+    .map((span) => itemBox(span.item));
+  return boxes.length === 0 ? null : boxes.reduce(union);
+}
+
 /* ------------------------------------------------------------------ *
  * Text lines
  * ------------------------------------------------------------------ */

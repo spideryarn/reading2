@@ -87,6 +87,7 @@ import {
   sniffImage,
 } from "./assets.js";
 import { type AssetFetch, fetchAsset, FetchFailure, type FetchFailureCode } from "./fetch.js";
+import type { FigureNeighbours } from "./pdf-figure-locate.js";
 import { RESERVED_ATTRS } from "./reserved.js";
 import { type RawSourceStore, storeRawSource } from "./store/blobs.js";
 import type { Block } from "./types.js";
@@ -434,6 +435,83 @@ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, strin
   return captions;
 }
 
+/** How much of each neighbour the locator is shown. */
+export const NEIGHBOUR_PROMPT_CHARS = 300;
+
+/**
+ * **The prose either side of each uncaptioned PDF figure, keyed by its
+ * marker's ref** — what the located route asks the model by instead of a
+ * caption (src/pdf-figure-locate.ts § `FigureNeighbours`).
+ *
+ * Only for markers `pdfFigureMarkersIn` hands back and `pdfFigureCaptionsIn`
+ * has no caption for. The nearest block either side with any text is the
+ * neighbour — a captioned figure's text is its caption, which is as good a
+ * landmark as prose — and an empty block between is skipped. Adjacent
+ * uncaptioned figures therefore share their neighbours, and `run` says which of
+ * the run each is. A marker with no text on either side gets nothing and stays
+ * refused `uncaptioned`.
+ *
+ * **From the blocks, not the transcript**, which costs one thing named on
+ * `FigureNeighbours`: a paragraph continued round a figure is whole in front of
+ * it. Carrying the transcript's own neighbours would mean writing article text
+ * into a reserved attribute, which src/reserved.ts rules out (values in that
+ * namespace are ids we minted). docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md.
+ */
+export function pdfFigureNeighboursIn(blocks: readonly Block[]): Map<string, FigureNeighbours> {
+  const neighbours = new Map<string, FigureNeighbours>();
+  const markers = pdfFigureMarkersIn(blocks);
+  const captions = pdfFigureCaptionsIn(blocks);
+  const wanted = new Set(markers.filter((m) => !captions.has(m.ref)).map((m) => m.ref));
+  if (wanted.size === 0) return neighbours;
+  const { JSDOM } = jsdom();
+  const dom = new JSDOM("<!doctype html><template></template>");
+  const template = dom.window.document.querySelector("template");
+  if (!template) return neighbours;
+
+  /* Each block's uncaptioned refs, in order. */
+  const refsOf = blocks.map((block) => {
+    if (!block.html || !MARKER_IN_HTML.test(block.html)) return [];
+    template.innerHTML = block.html;
+    return [...template.content.querySelectorAll(PDF_FIGURE_SELECTOR)].flatMap((element) => {
+      const marker = parsePdfFigureMarker(element.getAttribute(RESERVED_ATTRS.pdfFigure) ?? "");
+      return marker && wanted.has(marker.ref) ? [marker.ref] : [];
+    });
+  });
+  const textOf = (i: number) => blocks[i]?.text.replace(/\s+/g, " ").trim() ?? "";
+
+  let i = 0;
+  while (i < blocks.length) {
+    if ((refsOf[i] ?? []).length === 0) {
+      i += 1;
+      continue;
+    }
+    /* A run: blocks holding uncaptioned markers, and empty blocks between them. */
+    let end = i;
+    const run: string[] = [];
+    while (end < blocks.length && ((refsOf[end] ?? []).length > 0 || textOf(end) === "")) {
+      run.push(...(refsOf[end] ?? []));
+      end += 1;
+    }
+    let before = i - 1;
+    while (before >= 0 && textOf(before) === "") before -= 1;
+    const beforeText = before >= 0 ? textOf(before) : "";
+    const afterText = end < blocks.length ? textOf(end) : "";
+    const key = run[0];
+    if (key && (beforeText || afterText)) {
+      run.forEach((ref, k) => {
+        neighbours.set(ref, {
+          before: beforeText.slice(-NEIGHBOUR_PROMPT_CHARS),
+          beforeStart: beforeText.slice(0, NEIGHBOUR_PROMPT_CHARS),
+          after: afterText.slice(0, NEIGHBOUR_PROMPT_CHARS),
+          run: { index: k + 1, of: run.length, key },
+        });
+      });
+    }
+    i = end;
+  }
+  return neighbours;
+}
+
 /**
  * **The version of what the PDF half of this step decides**, folded into
  * `assetsInputHash` only for an article that has PDF figure markers — see the
@@ -456,10 +534,14 @@ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, strin
  * model's box once the page binds it to its caption (`judgeLocatedRegion`,
  * src/pdf-figure-region.ts; docs/plans/261001q-pdf-tables-and-composite-figures.md),
  * and the locator asked about every refused figure, not only one beside a
- * picture. Nothing re-runs on its own; tests/collect-assets.test.ts pins both
- * stamps.
+ * picture. **`7` is the located route asked about uncaptioned figures**, by the
+ * prose either side of them (`pdfFigureNeighboursIn`;
+ * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md):
+ * the same uncaptioned marker can now go from refused to stored. A change to
+ * the neighbour prompt is a bump too. Nothing re-runs on its own;
+ * tests/collect-assets.test.ts pins both stamps.
  */
-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/6";
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/7";
 
 /**
  * The cheap look before the parse — built once, from the registered name rather
@@ -548,6 +630,15 @@ const MARKER_IN_HTML = new RegExp(RESERVED_ATTRS.pdfFigure, "i");
  * in a digest of it (src/pdf-figures.ts § `pdfFigureRef`). A string can never
  * serialise like the preferred list's array, so the two optional elements
  * cannot be mistaken for each other in either order of absence.
+ *
+ * ## An uncaptioned figure's neighbours are a fifth — and only when there are any
+ *
+ * Since 2026-10-19 the locator is asked about an uncaptioned figure by the prose
+ * either side of it (`pdfFigureNeighboursIn`), so that prose is a decision
+ * input. Its ref folds in only 80 characters of each side, and the model is
+ * shown more, so the neighbours go in themselves: a tagged object, keyed by
+ * ref, which no array or string above can serialise like. An article with no
+ * uncaptioned marker hashes as before.
  */
 export function assetsInputHash(blocks: readonly Block[]): string {
   const images = imagesIn(blocks);
@@ -555,11 +646,20 @@ export function assetsInputHash(blocks: readonly Block[]): string {
     image.preferred === null ? [] : [[image.src, image.preferred]],
   );
   const markers = pdfFigureMarkersIn(blocks).map((m) => m.ref);
+  const neighbours = markers.length > 0 ? [...pdfFigureNeighboursIn(blocks)] : [];
   const canonical = `spya-assets/1\n${JSON.stringify([
     images.map((image) => image.src),
     markers,
     ...(preferred.length > 0 ? [preferred] : []),
     ...(markers.length > 0 ? [PDF_FIGURE_RECOVERY_POLICY] : []),
+    ...(neighbours.length > 0
+      ? [
+          {
+            kind: "pdf-figure-neighbours",
+            entries: neighbours.map(([ref, n]) => [ref, n.before, n.beforeStart, n.after, n.run.index, n.run.of, n.run.key]),
+          },
+        ]
+      : []),
   ])}`;
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }

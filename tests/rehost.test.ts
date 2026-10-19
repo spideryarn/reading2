@@ -198,6 +198,17 @@ describe("rehostBlockHtml", () => {
    * in a figure block simply lands a few characters to the left.
    * `zoomable.test.ts` pins the same fact for the enlarge button.
    */
+  it("says a figure has no caption, where it has none, rather than hiding it from a screen reader", () => {
+    /* docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md:
+       empty alt is right beside a visible caption and wrong without one. */
+    const html = `<figure data-spya-pdf-figure="${REF_ONE}"></figure>`;
+    const out = rehostBlockHtml(html, { figure: () => src, image: () => null });
+    const div = document.createElement("div");
+    div.innerHTML = out;
+    expect(div.querySelector("img")?.getAttribute("alt")).toBe("Figure without a caption");
+    expect(renderedText(out)).toBe(renderedText(html));
+  });
+
   it("does not change the rendered text by one character", () => {
     const html = figureBlock("spya-aaaaaa", REF_ONE, "Figure 1. A graph.").html;
     const out = rehostBlockHtml(html, { figure: () => src, image: () => null });

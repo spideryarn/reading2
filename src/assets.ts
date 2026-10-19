@@ -59,8 +59,8 @@
  *
  * ## 4. A PDF's own figures live here too, in their own collection
  *
- * An article made from a PDF has no `<img>` anywhere — stage 2 writes a
- * caption-only `<figure>` and a marker (src/pdf-figures.ts, src/pdf-read.ts).
+ * An article made from a PDF has no `<img>` anywhere — stage 2 writes a marked
+ * `<figure>`, with its caption when it has one (src/pdf-figures.ts, src/pdf-read.ts).
  * The bytes behind those markers are recovered by the same step, and recorded
  * **beside** `entries` rather than inside it: `AssetEntry.url` promises the
  * exact string `getAttribute("src")` returns, and a pseudo-URL there would make
@@ -751,8 +751,8 @@ export function parsePdfFigureMarker(value: string): PdfFigureMarker | null {
  * C-5.
  *
  * So a ref seen more than once yields **no** marker, and both `<figure>`s stay
- * caption-only — the same trade Fable's call made and for the same reason: a
- * missing figure is visible, a wrong one is not. It is not recorded as a
+ * without a picture — the same trade Fable's call made and for the same reason:
+ * a missing figure is visible, a wrong one is not. It is not recorded as a
  * failure either, because a marker that was never returned was never promised
  * to anybody; the invariant every later stage carries is that every marker
  * *this walk hands back* gets an entry.

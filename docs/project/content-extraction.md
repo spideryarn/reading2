@@ -233,10 +233,11 @@ The differences that matter to a reader:
   [260912a](../plans/260912a-figure-2-vector-figures-from-a-pdf.md).
 - **A figure with no caption is an empty marked `<figure>`**, since 2026-10-19. Until then
   `renderHtml` dropped it with every other empty record, and a book that prints no captions lost
-  27 of its 33 figures without a word (report spya-x9gn3d). Its picture is not recovered yet — every
-  route proves ownership by the caption — so the reader is told it is missing:
-  [article-images.md](article-images.md) and
-  [261019e](../plans/261019e-uncaptioned-pdf-figures-are-kept.md).
+  27 of its 33 figures without a word (report spya-x9gn3d). Its picture is recovered in `assets`
+  by asking the figure locator by the prose either side of it, and where that fails the reader is
+  told it is missing: [article-images.md](article-images.md),
+  [261019e](../plans/261019e-uncaptioned-pdf-figures-are-kept.md) and
+  [261019j](../plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md).
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
   as two records and used to render as "dis patcher". `mendSeamHyphens` in
