@@ -198,11 +198,11 @@ describe("when a microphone cannot be opened", () => {
 });
 
 describe("what it says while it is working", () => {
-  it("makes the ~1.1 second gap before the microphone opens visible", () => {
-    /* Measured in the product: pressing the button and the microphone actually
-       opening are ~1.1s apart, and with nothing on screen somebody says a word
-       into nothing and concludes it is broken. */
-    expect(draw(dictation({ armed: true, startedAt: null }))).toContain("Opening the microphone");
+  it("tells somebody to wait until the microphone track opens", () => {
+    /* Before `getUserMedia` returns there is no track and speech is lost. The
+       fleet uses the same shared hook and the same explicit instruction as the
+       product strip (plan 261019m). */
+    expect(draw(dictation({ armed: true, startedAt: null }))).toContain("Wait — opening the microphone");
   });
 
   it("tells a browser with no live words that the words come at the end", () => {
