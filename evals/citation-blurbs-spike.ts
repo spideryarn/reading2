@@ -26,11 +26,12 @@
  * 2. Crossref by DOI (a DOI row, or a DOI a title search confirmed), whose
  *    `abstract` field `parseCrossref` drops today; DataCite's `Abstract`
  *    description when Crossref does not know the DOI.
- * 3. OpenAlex by DOI, before any title search — only with `OPENALEX_API_KEY`
- *    set or while the keyless budget lasts; the first refusal turns it off.
- * 4. Semantic Scholar by DOI / arXiv id in one batch, else its title match;
- *    its `abstract`, and its `tldr` recorded as a **separate** evidence type,
- *    because a TLDR is model-written, not the author's.
+ * 3. OpenAlex by DOI, before any title search — through the guarded fetch,
+ *    its key as a header when set; the first refusal turns it off.
+ * 4. (Semantic Scholar by DOI / arXiv id, and its title match, until
+ *    2026-10-19: removed because they bypassed the approval switch. Its
+ *    `tldr`, recorded as a **separate** evidence type because a TLDR is
+ *    model-written, survives in the old `registry.json` files.)
  *
  * A title search (Crossref, Semantic Scholar) keeps a record only when the
  * normalised titles are equal (or one is the other plus a subtitle after a
@@ -75,7 +76,8 @@ import { plainWords } from "../src/plain-words.js";
 import { parseJsonAnswer } from "../src/parse-json.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import type { CitedWork } from "../src/types.js";
-import { citationEvidenceDeps, collectEvidence } from "../src/citation-evidence.js";
+import { citationEvidenceDeps, collectEvidence, openAlexAbstractUrl } from "../src/citation-evidence.js";
+import { FetchFailure, fetchBibliographicJson } from "../src/fetch.js";
 import { type BlurbWork, citationBlurbsModelDeps, writeBlurbs } from "../src/citation-blurbs.js";
 import type { Log } from "../src/log.js";
 
@@ -310,18 +312,24 @@ async function dataciteAbstract(doi: string): Promise<SourceHit | null> {
   return { source: "datacite", via: "id", title, type, abstract: cleanText(abs), tldr: null };
 }
 
+/**
+ * OpenAlex by DOI through the guarded door, its key (when set) as a header —
+ * never as an `api_key` parameter, which this phase used to add to the URL
+ * (stage 1's code review of plan 261018o, F2).
+ */
 async function openAlexByDoi(doi: string): Promise<SourceHit | null> {
   if (!openAlexOn) return null;
-  const params = new URLSearchParams({ select: "display_name,type,abstract_inverted_index", mailto: CONTACT_EMAIL });
-  const key = process.env.OPENALEX_API_KEY;
-  if (key) params.set("api_key", key);
-  const { status, json } = await getJson(`https://api.openalex.org/works/doi:${doi}?${params}`, undefined, 1);
-  if (status === 429 || status === 401 || status === 403) {
-    openAlexOn = false;
-    openAlexNote = `OpenAlex refused with ${status}: ${String((json as { message?: string })?.message ?? json).slice(0, 200)}`;
+  let json: unknown;
+  try {
+    json = await fetchBibliographicJson(openAlexAbstractUrl(doi), { registryKey: "openalex" });
+  } catch (err) {
+    const status = err instanceof FetchFailure ? err.status : null;
+    if (status === 429 || status === 401 || status === 403) {
+      openAlexOn = false;
+      openAlexNote = `OpenAlex refused with ${status}`;
+    }
     return null;
   }
-  if (status !== 200) return null;
   const j = json as { display_name?: string; type?: string; abstract_inverted_index?: unknown };
   return {
     source: "openalex",
@@ -333,56 +341,14 @@ async function openAlexByDoi(doi: string): Promise<SourceHit | null> {
   };
 }
 
-interface S2Paper {
-  title?: string;
-  year?: number;
-  abstract?: string | null;
-  tldr?: { text?: string } | null;
-  authors?: { name?: string }[];
-  publicationTypes?: string[] | null;
-}
-
-function s2Hit(p: S2Paper, via: "id" | "title"): SourceHit {
-  return {
-    source: "s2",
-    via,
-    title: p.title ?? null,
-    type: p.publicationTypes?.join(",") ?? null,
-    abstract: cleanText(p.abstract),
-    tldr: cleanText(p.tldr?.text),
-  };
-}
-
-const S2_FIELDS = "title,year,abstract,tldr,authors,publicationTypes";
-
-async function s2Batch(ids: string[]): Promise<(S2Paper | null)[]> {
-  if (ids.length === 0) return [];
-  const { status, json } = await getJson(`https://api.semanticscholar.org/graph/v1/paper/batch?fields=${S2_FIELDS}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ids }),
-  }, 6);
-  if (status !== 200 || !Array.isArray(json)) return ids.map(() => null);
-  return json as (S2Paper | null)[];
-}
-
-async function s2Match(work: WorkRow): Promise<S2Paper | null> {
-  await sleep(1100);
-  const { status, json } = await getJson(
-    `https://api.semanticscholar.org/graph/v1/paper/search/match?query=${encodeURIComponent(work.title)}&fields=${S2_FIELDS}`,
-    undefined,
-    6,
-  );
-  if (status !== 200) return null;
-  const p = ((json as { data?: S2Paper[] })?.data ?? [])[0];
-  if (!p?.title) return null;
-  const record = {
-    title: p.title,
-    year: p.year ?? null,
-    surnames: (p.authors ?? []).map((a) => (a.name ?? "").split(/\s+/).at(-1) ?? ""),
-  };
-  return titleSearchIdentifies(record, work) ? p : null;
-}
+/* **No Semantic Scholar here any more** (stage 1's code review of plan
+   261018o, F1). This phase used to POST a batch and run a title match
+   straight at Semantic Scholar's API, outside the approval switch its
+   non-commercial licence needs. Semantic Scholar is now asked only through
+   src/fetch.ts § `fetchBibliographicJson`, which refuses it without its key
+   and `SEMANTIC_SCHOLAR_COMMERCIAL_USE=approved`; the `production` phase below
+   measures it through the real cascade. The `registry.json` files written
+   before 2026-10-19 still carry `s2` hits, which the later phases read. */
 
 /** The cascade's pick: the author's abstract from the first source that has one, else a TLDR. */
 function chooseEvidence(hits: SourceHit[]): WorkRow["evidence"] {
@@ -448,20 +414,6 @@ async function registryPhase(fixture: FixtureArticle[], work: string): Promise<v
         if (o) w.hits.push(o);
       }
       w.registryMs = Date.now() - t0;
-    }
-    /* Semantic Scholar: one batch for every row with an identifier, then a
-       throttled title match for title-only rows nothing has identified. */
-    const withId = mine.filter((w) => w.doi || w.arxiv);
-    const papers = await s2Batch(withId.map((w) => (w.arxiv ? `ARXIV:${w.arxiv.replace(/v\d+$/, "")}` : `DOI:${w.doi}`)));
-    withId.forEach((w, i) => {
-      const p = papers[i];
-      if (p) w.hits.push(s2Hit(p, "id"));
-    });
-    for (const w of mine.filter((x) => !x.doi && !x.arxiv && x.idKind === "title-only")) {
-      const t0 = Date.now();
-      const p = await s2Match(w);
-      if (p) w.hits.push(s2Hit(p, "title"));
-      w.registryMs += Date.now() - t0;
     }
     for (const w of mine) w.evidence = chooseEvidence(w.hits);
     timing[article.slug] = Date.now() - began;

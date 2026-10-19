@@ -669,6 +669,30 @@ describe("with no key, neither new source is asked (test 2)", () => {
     expect(x.fetched.filter(isOpenAlexDoi)).toHaveLength(1);
     expect(x.keyed).toEqual(["openalex"]);
   });
+
+  /* Stage 1's code review, F4: a DOI lookup that STARTS inside the budget and
+     ends after it still goes straight on to OpenAlex under the keyless policy,
+     as it did before the phases existed. Only a keyed run waits for phase 3. */
+  it("goes straight on to OpenAlex from a lookup that ends past the budget, keyless — as before the phases", async () => {
+    for (const sources of [undefined, { semanticScholar: false, openAlexKeyed: true }] as const) {
+      let clock = 0;
+      const x = deps({ lookups: NO_ABSTRACT, now: () => clock, budgetMs: 1_000, json: services({ oaDoi: () => OA_WORK }), ...(sources ? { sources } : {}) });
+      const slow = x.d.lookup;
+      x.d.lookup = async (id) => {
+        const answer = await slow(id);
+        clock += 5_000;
+        return answer;
+      };
+      const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+      if (sources === undefined) {
+        expect(x.fetched.filter(isOpenAlexDoi), "keyless").toHaveLength(1);
+        expect(out.byEntry.get("c1")).toMatchObject({ state: "evidence", evidence: { source: "openalex" } });
+      } else {
+        expect(x.fetched, "keyed: phase 3 starts nothing past the budget").toEqual([]);
+        expect(out.byEntry.get("c1")).toEqual({ state: "transient", why: "over-budget" });
+      }
+    }
+  });
 });
 
 describe("Semantic Scholar by DOI or arXiv id (test 3)", () => {
@@ -759,6 +783,30 @@ describe("Semantic Scholar by DOI or arXiv id (test 3)", () => {
       expect(out.byEntry.get("c2")).toEqual({ state: "transient", why: "semantic-scholar-off" });
       expect(x.log.errors).toEqual([expect.objectContaining({ service: "semantic-scholar", status, outcome: "configuration" })]);
     }
+  });
+
+  /* Stage 1's code review, F5: the 429 breaker. */
+  it("is off for the run on a 429: one request, one shared cooldown, every row transient, a warning and no configuration error", async () => {
+    const second = { ...COUPLING, id: "c2", url: "https://doi.org/10.1038/nn.9999" };
+    const x = deps({
+      lookups: { ...NO_ABSTRACT, "doi:10.1038/nn.9999": { kind: "found", record: record("doi:10.1038/nn.9999", COUPLING_TITLE) } },
+      sources: S2_ONLY,
+      json: (url) => {
+        if (isS2(url)) throw new FetchFailure("rate-limited", url, "HTTP 429", { status: 429, retryAfterMs: 30_000 });
+        return { display_name: COUPLING_TITLE, type: "article" };
+      },
+    });
+    const warnings: unknown[] = [];
+    x.d.log = { ...x.log, warn: (o: unknown) => warnings.push(o), child: () => x.d.log } as unknown as Log;
+    const out = await collectEvidence([COUPLING, second], { titleSearch: true }, x.d);
+    expect(x.fetched.filter(isS2)).toHaveLength(1);
+    expect(x.lim.cooled).toEqual(["semantic-scholar"]);
+    expect(out.byEntry.get("c1")).toEqual({ state: "transient", why: "semantic-scholar-off" });
+    expect(out.byEntry.get("c2")).toEqual({ state: "transient", why: "semantic-scholar-off" });
+    expect(warnings.filter((w) => (w as { service?: string }).service === "semantic-scholar")).toEqual([
+      expect.objectContaining({ service: "semantic-scholar", status: 429, outcome: "off-for-run" }),
+    ]);
+    expect(x.log.errors).toEqual([]);
   });
 
   it("falls through to OpenAlex when it is busy or broken, and an OpenAlex note stands (R6)", async () => {
@@ -972,8 +1020,9 @@ it("the real deps read which optional sources are on from the environment, per r
 it("never logs Semantic Scholar's key on a refused request (test 1, through the cascade)", async () => {
   const { fetchBibliographicJson } = await import("../src/fetch.js");
   const KEY = "s2-cascade-secret-0042";
-  const before = process.env.SEMANTIC_SCHOLAR_API_KEY;
+  const before = { key: process.env.SEMANTIC_SCHOLAR_API_KEY, ok: process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE };
   process.env.SEMANTIC_SCHOLAR_API_KEY = KEY;
+  process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE = "approved";
   try {
     const lines: unknown[] = [];
     const capture = {
@@ -996,7 +1045,45 @@ it("never logs Semantic Scholar's key on a refused request (test 1, through the 
     expect(lines.length).toBeGreaterThan(0);
     expect(JSON.stringify(lines)).not.toContain(KEY);
   } finally {
-    if (before === undefined) delete process.env.SEMANTIC_SCHOLAR_API_KEY;
-    else process.env.SEMANTIC_SCHOLAR_API_KEY = before;
+    for (const [name, value] of [
+      ["SEMANTIC_SCHOLAR_API_KEY", before.key],
+      ["SEMANTIC_SCHOLAR_COMMERCIAL_USE", before.ok],
+    ] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+/* Stage 1's code review, F1: even a cascade handed `semanticScholar: true` by
+   mistake cannot reach Semantic Scholar with a key and no approval — the one
+   door refuses it before any request. */
+it("sends no Semantic Scholar request through the real door with a key but no approval, whatever the cascade was told", async () => {
+  const { fetchBibliographicJson } = await import("../src/fetch.js");
+  const before = { key: process.env.SEMANTIC_SCHOLAR_API_KEY, ok: process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE };
+  process.env.SEMANTIC_SCHOLAR_API_KEY = "s2-unapproved-key";
+  delete process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE;
+  try {
+    const x = deps({ lookups: NO_ABSTRACT, sources: S2_ONLY });
+    const transport = vi.fn(async () => Response.json(S2_PAPER));
+    x.d.fetchJson = (url, registryKey) =>
+      isS2(url)
+        ? fetchBibliographicJson(url, {
+            ...(registryKey !== undefined ? { registryKey } : {}),
+            resolve: async () => ["104.18.0.1"],
+            fetchImpl: transport,
+          })
+        : Promise.resolve(OA_WORK);
+    const out = await collectEvidence([COUPLING], { titleSearch: true }, x.d);
+    expect(transport).not.toHaveBeenCalled();
+    expect(out.byEntry.get("c1")).toMatchObject({ state: "evidence", evidence: { source: "openalex" } });
+  } finally {
+    for (const [name, value] of [
+      ["SEMANTIC_SCHOLAR_API_KEY", before.key],
+      ["SEMANTIC_SCHOLAR_COMMERCIAL_USE", before.ok],
+    ] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 });

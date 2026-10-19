@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorFields } from "../src/log.js";
+import { sanitise } from "../src/monitoring-scrub.js";
 import { BIBLIOGRAPHIC_HOSTS, FetchFailure, fetchBibliographicJson, type FetchLike } from "../src/fetch.js";
 import { openAlexKey, optionalSources, registryKeyHeaders, semanticScholarKey } from "../src/registry-keys.js";
 
@@ -74,9 +75,11 @@ describe("the readers", () => {
     expect(optionalSources().openAlexKeyed).toBe(true);
   });
 
-  it("give a header only for the named registry's own host", () => {
+  it("give a header only for the named registry's own host — and Semantic Scholar's only with its approval (R5)", () => {
     process.env.OPENALEX_API_KEY = OA_KEY;
     process.env.SEMANTIC_SCHOLAR_API_KEY = S2_KEY;
+    expect(registryKeyHeaders("semantic-scholar", "api.semanticscholar.org")).toEqual({});
+    process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE = "approved";
     expect(registryKeyHeaders("openalex", "api.openalex.org")).toEqual({ Authorization: `Bearer ${OA_KEY}` });
     expect(registryKeyHeaders("semantic-scholar", "api.semanticscholar.org")).toEqual({ "x-api-key": S2_KEY });
     expect(registryKeyHeaders("openalex", "api.crossref.org")).toEqual({});
@@ -85,17 +88,48 @@ describe("the readers", () => {
   });
 });
 
+/** Both of Semantic Scholar's switches on: its key and the recorded approval. */
+function approveS2(): void {
+  process.env.SEMANTIC_SCHOLAR_API_KEY = S2_KEY;
+  process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE = "approved";
+}
+
 describe("fetchBibliographicJson with a registry key", () => {
-  it("dials Semantic Scholar's API host, with the same fixed bounds", async () => {
+  it("dials Semantic Scholar's API host only with its key AND approval, named — refused before DNS otherwise (R5)", async () => {
     expect(BIBLIOGRAPHIC_HOSTS).toContain("api.semanticscholar.org");
+    const refusedWith = async (registryKey?: "openalex" | "semantic-scholar") => {
+      const fetchImpl = vi.fn<FetchLike>(async () => Response.json({ paperId: "x" }));
+      const dns = vi.fn(async () => ["104.18.0.1"]);
+      await expect(
+        fetchBibliographicJson(S2_URL, { fetchImpl, resolve: dns, ...(registryKey ? { registryKey } : {}) }),
+        String(registryKey),
+      ).rejects.toMatchObject({ code: "blocked-address" });
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(dns).not.toHaveBeenCalled();
+    };
+    /* No key: no anonymous request either. */
+    await refusedWith("semantic-scholar");
+    await refusedWith();
+    /* A key with no approval, or the wrong word. */
+    process.env.SEMANTIC_SCHOLAR_API_KEY = S2_KEY;
+    await refusedWith("semantic-scholar");
+    process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE = "yes";
+    await refusedWith("semantic-scholar");
+    /* Approved, but the caller did not name Semantic Scholar's key. */
+    process.env.SEMANTIC_SCHOLAR_COMMERCIAL_USE = "approved";
+    await refusedWith();
+    await refusedWith("openalex");
+
     const fetchImpl = vi.fn<FetchLike>(async () => Response.json({ paperId: "x" }));
-    await expect(fetchBibliographicJson(S2_URL, { fetchImpl, resolve })).resolves.toEqual({ paperId: "x" });
+    await expect(fetchBibliographicJson(S2_URL, { fetchImpl, resolve, registryKey: "semantic-scholar" })).resolves.toEqual({
+      paperId: "x",
+    });
     expect(fetchImpl.mock.calls[0]![1].redirect).toBe("manual");
   });
 
   it("sends each key in its header, never in the URL", async () => {
     process.env.OPENALEX_API_KEY = OA_KEY;
-    process.env.SEMANTIC_SCHOLAR_API_KEY = S2_KEY;
+    approveS2();
     const oa = vi.fn<FetchLike>(async () => Response.json({}));
     await fetchBibliographicJson(OA_URL, { fetchImpl: oa, resolve, registryKey: "openalex" });
     expect(headersOf(oa).Authorization).toBe(`Bearer ${OA_KEY}`);
@@ -109,11 +143,11 @@ describe("fetchBibliographicJson with a registry key", () => {
 
   it("sends no key to another host, whatever registry the caller names", async () => {
     process.env.OPENALEX_API_KEY = OA_KEY;
-    process.env.SEMANTIC_SCHOLAR_API_KEY = S2_KEY;
+    approveS2();
+    /* (Semantic Scholar's host with OpenAlex named is refused outright: the first test.) */
     for (const [url, name] of [
       [CROSSREF_URL, "openalex"],
       [CROSSREF_URL, "semantic-scholar"],
-      [S2_URL, "openalex"],
       [OA_URL, "semantic-scholar"],
     ] as const) {
       const fetchImpl = vi.fn<FetchLike>(async () => Response.json({}));
@@ -135,9 +169,9 @@ describe("fetchBibliographicJson with a registry key", () => {
     expect(headersOf(unset)).not.toHaveProperty("Authorization");
   });
 
-  it("keeps the key out of a 429's failure and a network error's, message, url, cause and log fields alike", async () => {
+  it("keeps the key out of a 429's failure: message, url, cause and log fields alike", async () => {
     process.env.OPENALEX_API_KEY = OA_KEY;
-    process.env.SEMANTIC_SCHOLAR_API_KEY = S2_KEY;
+    approveS2();
     for (const [url, name, key] of [
       [OA_URL, "openalex", OA_KEY],
       [S2_URL, "semantic-scholar", S2_KEY],
@@ -146,16 +180,47 @@ describe("fetchBibliographicJson with a registry key", () => {
       const tooMany = await fetchBibliographicJson(url, { fetchImpl: limited, resolve, registryKey: name }).catch((e: unknown) => e);
       expect(tooMany).toBeInstanceOf(FetchFailure);
       expect((tooMany as FetchFailure).status).toBe(429);
+      expect((tooMany as FetchFailure).retryAfterMs).toBe(5_000);
       expect(headersOf(limited)).not.toEqual({});
       expect(everythingAbout(tooMany), `${name} 429`).not.toContain(key);
-
-      const broken = vi.fn<FetchLike>(async (_url, init) => {
-        /* The worst a transport could do: name the request it failed, headers and all. */
-        throw new TypeError(`fetch failed`, { cause: new Error(`socket hang up ${typeof init}`) });
-      });
-      const down = await fetchBibliographicJson(url, { fetchImpl: broken, resolve, registryKey: name }).catch((e: unknown) => e);
-      expect(down).toBeInstanceOf(FetchFailure);
-      expect(everythingAbout(down), `${name} network`).not.toContain(key);
     }
+  });
+
+  /**
+   * **A transport that puts the key it was handed into its own error** — in
+   * its message and in its cause, the worst a dependency could do. The
+   * failure we throw is rebuilt from safe fields, so neither it, nor what the
+   * logger writes of it, nor the event Sentry is sent carries the key.
+   */
+  it("rebuilds a keyed request's network failure from safe fields, whatever the transport said", async () => {
+    process.env.OPENALEX_API_KEY = OA_KEY;
+    approveS2();
+    for (const [url, name, key] of [
+      [OA_URL, "openalex", OA_KEY],
+      [S2_URL, "semantic-scholar", S2_KEY],
+    ] as const) {
+      const leaky = vi.fn<FetchLike>(async (_url, init) => {
+        const sent = JSON.stringify(init.headers);
+        throw new TypeError(`fetch failed with ${sent}`, { cause: new Error(`socket hang up, headers ${sent}`) });
+      });
+      const down = await fetchBibliographicJson(url, { fetchImpl: leaky, resolve, registryKey: name }).catch((e: unknown) => e);
+      expect(leaky).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(leaky.mock.calls[0]![1].headers), "the fake really held the key").toContain(key);
+      expect(down).toBeInstanceOf(FetchFailure);
+      expect((down as FetchFailure).url).toBe(url);
+      expect(everythingAbout(down), `${name} failure`).not.toContain(key);
+      expect(JSON.stringify(errorFields(down)), `${name} log`).not.toContain(key);
+      const scrubbed = sanitise(down);
+      expect(JSON.stringify([scrubbed.error.message, scrubbed.error.stack, scrubbed.props]), `${name} sentry`).not.toContain(key);
+    }
+  });
+
+  it("leaves a keyless request's network failure as it always was, cause and all", async () => {
+    const broken = vi.fn<FetchLike>(async () => {
+      throw new TypeError("fetch failed", { cause: new Error("socket hang up") });
+    });
+    const down = await fetchBibliographicJson(OA_URL, { fetchImpl: broken, resolve }).catch((e: unknown) => e);
+    expect(down).toBeInstanceOf(FetchFailure);
+    expect((down as FetchFailure).cause).toBeDefined();
   });
 });

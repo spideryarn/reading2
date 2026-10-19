@@ -1128,9 +1128,11 @@ slug is a 404 — and the reasons, which may quote the hidden words, are never l
 
 ## The bibliographic registries are outside sources too <a id="registries"></a>
 
-**Crossref, DataCite and OpenAlex send us strings that end up on the page** — a cited work's title,
-authors, venue and year ([`src/bibliographic.ts`](../../src/bibliographic.ts)), and the papers that
-cite the article ([`src/citation-index.ts`](../../src/citation-index.ts)). They are reputable, but
+**Crossref, DataCite, OpenAlex and Semantic Scholar send us strings that end up on the page** — a
+cited work's title, authors, venue and year ([`src/bibliographic.ts`](../../src/bibliographic.ts)),
+the papers that cite the article ([`src/citation-index.ts`](../../src/citation-index.ts)), and the
+abstracts a cited work's note is written from and quotes
+([`src/citation-evidence.ts`](../../src/citation-evidence.ts)). They are reputable, but
 what they hold was typed by publishers and depositors, so it is treated like any other outside
 content:
 
@@ -1140,6 +1142,9 @@ content:
   optional keys go only as headers, and only to their own host
   ([`src/registry-keys.ts`](../../src/registry-keys.ts); plan
   [261018o](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md)).
+  A keyed request's failure is rebuilt from safe fields — code, status, `Retry-After`, our URL —
+  so a transport that quotes its headers in an error cannot carry a key into a log or Sentry.
+  Semantic Scholar is refused before DNS unless its key and its approval are both set.
 - **Semantic Scholar's paper id is the one registry value inside a link**, on a cited work's note
   card: it must be forty lower-case hex characters, checked where it is read and again at every
   read of the note (`isSemanticScholarPaperId` in [`src/work-id.ts`](../../src/work-id.ts)), and the

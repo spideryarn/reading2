@@ -59,7 +59,8 @@ export function semanticScholarApproved(): boolean {
  * key is set **and** `host` is exactly that registry's host, so naming the
  * wrong registry for a URL sends nothing. OpenAlex takes `Authorization:
  * Bearer`, which it treats as its `api_key` parameter
- * (help.openalex.org/api/authentication); Semantic Scholar takes `x-api-key`.
+ * (help.openalex.org/api/authentication); Semantic Scholar takes `x-api-key`,
+ * and only once its use is approved (`semanticScholarAllowed`).
  */
 export function registryKeyHeaders(name: RegistryKeyName, host: string): Record<string, string> {
   if (host !== REGISTRY_KEY_HOSTS[name]) return {};
@@ -68,7 +69,18 @@ export function registryKeyHeaders(name: RegistryKeyName, host: string): Record<
     return key === null ? {} : { Authorization: `Bearer ${key}` };
   }
   const key = semanticScholarKey();
-  return key === null ? {} : { "x-api-key": key };
+  return key === null || !semanticScholarApproved() ? {} : { "x-api-key": key };
+}
+
+/**
+ * **Whether any request may go to Semantic Scholar at all** — its key **and**
+ * the exact approval word (R5). src/fetch.ts § `fetchBibliographicJson` asks
+ * this at the one door every Semantic Scholar request goes through, before a
+ * DNS lookup, so neither an anonymous request nor a keyed but unapproved one
+ * can leave, whichever caller asks.
+ */
+export function semanticScholarAllowed(): boolean {
+  return semanticScholarKey() !== null && semanticScholarApproved();
 }
 
 /**
@@ -90,7 +102,7 @@ export interface OptionalSources {
 /** The sources the environment switches on right now. */
 export function optionalSources(): OptionalSources {
   return {
-    semanticScholar: semanticScholarKey() !== null && semanticScholarApproved(),
+    semanticScholar: semanticScholarAllowed(),
     openAlexKeyed: openAlexKey() !== null,
   };
 }

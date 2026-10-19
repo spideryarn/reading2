@@ -677,7 +677,9 @@ and `tests/privacy-page.test.ts` holds the clause. `LAST_UPDATED` already reads 
 **Added 2026-10-04**, with
 [reception.md § Cited by](reception.md#cited-by-the-papers-that-cite-the-piece)
 ([261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md)). Three
-public indexes of published work are asked about a paper by its identifier, from our server:
+public indexes of published work were asked about a paper by its identifier, from our server — and,
+since 2026-10-18, a fourth, Semantic Scholar, when enabled (below); the page says *"Four public
+indexes"*:
 
 - **Crossref and DataCite**, since 2026-10-01: what a DOI or arXiv id refers to, for an article
   being added and when its cited works are looked up ([`src/bibliographic.ts`](../../src/bibliographic.ts)).
@@ -752,16 +754,22 @@ names both now, under *"When enabled"*:
   web address. The first author's surname is **not** sent: it is compared on our side against the
   results' first authors.
 
-The keys travel as request headers, never in a URL, so they reach no log line, error or stored row.
+The keys travel as request headers, never in a URL, so they reach no log line, error or stored row;
+a keyed request's failure is rebuilt from safe fields, so not even a transport that quotes its
+headers can put one there. **Semantic Scholar is refused at the one door every request to it goes
+through** (`fetchBibliographicJson`), before DNS, unless both its key and its approval are set — so
+no caller, an eval included, can ask it anonymously or unapproved. `tests/registry-keys-sole-reader.test.ts`
+sweeps `src/`, `evals/` and `scripts/` for any other reader of the keys, any `api_key` parameter,
+and any other caller of Semantic Scholar's API.
 
-**A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
+**A paragraph under the list, not four more entries in it.** The list in *Where it goes* is who is
 sent something of the reader's; these are sent the identifier of a published work. The page names
-all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.
+all four, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.
 
 **Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
 `BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
-dial, and requires the page to name each. A fourth index turns it red until the page names it — as
-Semantic Scholar did on 2026-10-18.
+dial, and requires the page to name each and its opening sentence to count them. A new index turns
+it red until the page names and counts it — as Semantic Scholar, the fourth, did on 2026-10-18.
 
 ## A claim typed into Sources › Claims
 

@@ -30,7 +30,8 @@
  * list below is a second guard, not the claim.
  *
  * **With no key, neither new source is asked and nothing is logged as a
- * failure**: exactly the cascade of 261017h. A bad or absent optional source
+ * failure**: exactly the cascade of 261017h — down to a DOI row going on to
+ * OpenAlex in the same worker that looked it up, not waiting for phase 3. A bad or absent optional source
  * falls through to the next phase; it never suppresses one (R6).
  *
  * **Pure, with its dependencies handed in** (`EvidenceDeps`); the real ones
@@ -735,7 +736,14 @@ async function byIdentifier(row: EvidenceRow, id: WorkId, run: Run): Promise<Row
   }
   /* arXiv's own DOIs live at DataCite, which already gave what it has: OpenAlex is not asked (Semantic Scholar may be). */
   const arxiv = id.startsWith("arxiv:") || doiFor(id).startsWith("10.48550/");
-  return { state: "pending", id, via: "id", reconstruct: !arxiv };
+  const pending: Pending = { state: "pending", id, via: "id", reconstruct: !arxiv };
+  /* **Keyless, OpenAlex straight away, in this worker** — exactly the cascade
+     before the phases (stage 1's code review, F4). Waiting for phase 3 would
+     let a lookup that began inside the budget and ended past it lose its
+     OpenAlex request, which no keyless run used to. A keyed run takes the
+     phased path, so Semantic Scholar is asked first. */
+  const keyless = !run.sources.semanticScholar && !run.sources.openAlexKeyed;
+  return keyless && pending.reconstruct ? await fromOpenAlex(row.id, pending, run) : pending;
 }
 
 type TitleAttempt =
@@ -928,22 +936,10 @@ function outcomeKey(answer: RowEvidence): string {
       : `transient:${answer.why}`;
 }
 
-/**
- * **The evidence for every row, by entry id** — each row answered once.
- * Phase 1's identifier lookups and title searches run as two queues of
- * `EVIDENCE_CONCURRENCY` side by side; then phase 2 asks Semantic Scholar one
- * at a time, and phase 3 OpenAlex, about what is still pending. No phase
- * starts anything after the budget, and title searches stop at
- * `MAX_TITLE_SEARCHES`, in list order.
- */
-export async function collectEvidence(
-  rows: readonly EvidenceRow[],
-  options: EvidenceOptions,
-  d: EvidenceDeps,
-): Promise<{ byEntry: Map<string, RowEvidence>; counts: EvidenceCounts }> {
-  const started = d.now();
+/** A run's shared state, its budget starting at `started`. */
+function newRun(d: EvidenceDeps, options: EvidenceOptions, started: number): Run {
   const budget = d.lookupBudgetMs ?? LOOKUP_BUDGET_MS;
-  const run: Run = {
+  return {
     d,
     sources: d.sources ?? { semanticScholar: false, openAlexKeyed: false },
     checkedAt: () => new Date(d.now()).toISOString(),
@@ -960,6 +956,53 @@ export async function collectEvidence(
         : options.deadlineAt - (options.deadlineMarginMs ?? 0),
     ),
   };
+}
+
+/** What `resolveWorkId` found: the work's identifier and how, or why there is none, or not this time. */
+export type ResolvedWork =
+  | { kind: "id"; id: WorkId; via: Evidence["via"] }
+  | { kind: "none"; why: StructuralWhy | RegistryWhy }
+  | { kind: "transient"; why: TransientWhy };
+
+/**
+ * **Phase 1 alone, for one row: which work this is, by identifier** — the
+ * row's own DOI or arXiv id, or the DOI the strict title rule found (Crossref,
+ * then OpenAlex with its key), under every refusal phase 1 has: a registry
+ * conflict, an unpublished work, a label, an upload's title row (G6), a title
+ * too weak to search. **No abstract is asked for**, and nothing is stored.
+ *
+ * For a web note (src/citation-web-note.ts, plan 261018o R1): a page is the
+ * work's own only by this identifier, so a row this answers `none` for gets no
+ * web search at all. A row's own id is taken as the row gives it — the
+ * `bibliography` step already compared it with the registry's record and a
+ * disagreement is `registry.kind === "conflict"`, refused here.
+ */
+export async function resolveWorkId(row: EvidenceRow, options: EvidenceOptions, d: EvidenceDeps): Promise<ResolvedWork> {
+  const run = newRun(d, options, d.now());
+  const route = routeOf(row, options, run.checkedAt());
+  if (route.kind === "id") return { kind: "id", id: route.id, via: "id" };
+  const answer = route.kind === "done" ? route.answer : await guarded(row.id, run, () => byTitle(row, route.surname, run));
+  if (answer.state === "pending") return { kind: "id", id: answer.id, via: answer.via };
+  if (answer.state === "evidence") return { kind: "id", id: answer.evidence.workId, via: answer.evidence.via };
+  if (answer.state === "transient") return { kind: "transient", why: answer.why };
+  return { kind: "none", why: answer.why };
+}
+
+/**
+ * **The evidence for every row, by entry id** — each row answered once.
+ * Phase 1's identifier lookups and title searches run as two queues of
+ * `EVIDENCE_CONCURRENCY` side by side; then phase 2 asks Semantic Scholar one
+ * at a time, and phase 3 OpenAlex, about what is still pending. No phase
+ * starts anything after the budget, and title searches stop at
+ * `MAX_TITLE_SEARCHES`, in list order.
+ */
+export async function collectEvidence(
+  rows: readonly EvidenceRow[],
+  options: EvidenceOptions,
+  d: EvidenceDeps,
+): Promise<{ byEntry: Map<string, RowEvidence>; counts: EvidenceCounts }> {
+  const started = d.now();
+  const run = newRun(d, options, started);
   const byEntry = new Map<string, RowEvidence>();
   const ids: { row: EvidenceRow; id: WorkId }[] = [];
   const titles: { row: EvidenceRow; surname: string }[] = [];

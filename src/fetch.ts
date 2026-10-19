@@ -41,7 +41,7 @@ import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import type { DocumentOrigin } from "./document-origin.js";
-import { registryKeyHeaders, type RegistryKeyName } from "./registry-keys.js";
+import { REGISTRY_KEY_HOSTS, registryKeyHeaders, semanticScholarAllowed, type RegistryKeyName } from "./registry-keys.js";
 import { parseRetryAfter } from "./retry-after.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import type { FetchFailureCode } from "./types.js";
@@ -2718,6 +2718,18 @@ async function readJson(res: Response, finalUrl: string, _chain: string[], opts:
  *
  * A key named by `registryKey` is attached here and nowhere else, for the host
  * just checked; with `maxRedirects: 0` there is no second hop to carry it to.
+ *
+ * **Semantic Scholar is refused here, before DNS, unless its key and its
+ * approval are both set and the caller names its key** (plan 261018o, R5 and
+ * its code review's F1): this is the one door every Semantic Scholar request
+ * goes through, so no caller can make an anonymous request or an unapproved
+ * one.
+ *
+ * **A keyed request's failure is rebuilt from safe fields** (the code review's
+ * F3): its code, status, `Retry-After` and our own URL, with a fixed message
+ * and no cause. A transport is handed the key in a header, and what it puts in
+ * its own error's message or cause is not ours to vouch for — so none of it
+ * reaches the logger, which follows causes, or Sentry.
  */
 export async function fetchBibliographicJson(
   input: string,
@@ -2738,12 +2750,32 @@ export async function fetchBibliographicJson(
       "Only the Crossref, DataCite, OpenAlex and Semantic Scholar APIs are asked for bibliographic records.",
     );
   }
+  if (host === REGISTRY_KEY_HOSTS["semantic-scholar"] && (registryKey !== "semantic-scholar" || !semanticScholarAllowed())) {
+    throw new FetchFailure(
+      "blocked-address",
+      target.toString(),
+      "Semantic Scholar is asked only with its key and its approved use both set.",
+    );
+  }
   const keyed = registryKey === undefined ? {} : registryKeyHeaders(registryKey, host);
-  return await fetchBytes(
-    target.toString(),
+  const url = target.toString();
+  const request = fetchBytes(
+    url,
     { ...options, ...BIBLIOGRAPHIC_LIMITS },
     { headers: () => ({ ...bibliographicHeaders(), ...keyed }), read: readJson },
   );
+  if (Object.keys(keyed).length === 0) return await request;
+  try {
+    return await request;
+  } catch (err) {
+    const f = err instanceof FetchFailure ? err : null;
+    const code = f?.code ?? "connection";
+    throw new FetchFailure(code, url, `The registry request failed (${code}${f?.status != null ? `, HTTP ${f.status}` : ""}).`, {
+      status: f?.status ?? null,
+      retryable: f?.retryable ?? false,
+      retryAfterMs: f?.retryAfterMs ?? null,
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ *

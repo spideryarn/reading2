@@ -269,7 +269,7 @@ describe("the privacy page", () => {
     expect(prose).toContain("It goes to our database, to Sentry and, as an email, to our own inbox");
   });
 
-  it("names the three indexes a DOI is sent to, and says what is not sent", () => {
+  it("names every index a DOI is sent to, counts them right, and says what is not sent", () => {
     /* Plan 261004h. src/fetch.ts § `BIBLIOGRAPHIC_HOSTS` is the list of hosts
        the server asks about a DOI: Crossref and DataCite since 2026-10-01
        (src/bibliographic.ts), which the page did not name until now, and
@@ -283,7 +283,12 @@ describe("the privacy page", () => {
       /* Plan 261018o: cited works' abstracts, when its key and approval are set. */
       "api.semanticscholar.org": "Semantic Scholar",
     };
-    expect(BIBLIOGRAPHIC_HOSTS.length).toBeGreaterThanOrEqual(3);
+    /* And the sentence that introduces them counts them (stage 1's code review
+       of 261018o, F6: it said "Three" over four names). A fifth host turns
+       both of these red. */
+    const COUNT = ["Zero", "One", "Two", "Three", "Four", "Five", "Six"];
+    expect(BIBLIOGRAPHIC_HOSTS).toHaveLength(4);
+    expect(prose).toContain(`${COUNT[BIBLIOGRAPHIC_HOSTS.length]} public indexes of published work are asked about papers`);
     for (const host of BIBLIOGRAPHIC_HOSTS) {
       const name = NAME[host];
       expect(name, `${host} has no name on the privacy page yet`).toBeDefined();

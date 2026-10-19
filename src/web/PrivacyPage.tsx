@@ -374,8 +374,9 @@ export function PrivacyPage() {
             and Stripe’s customer and subscription references.
           </Third>
         </ul>
-        {/* **Three indexes of published work, and why they are a paragraph and
-            not three more entries in the list above.** That list is who is sent
+        {/* **Four indexes of published work (Semantic Scholar the fourth,
+            since 2026-10-18, when enabled), and why they are a paragraph and
+            not four more entries in the list above.** That list is who is sent
             something of the reader's. These are sent the identifier of a
             published work, or since 2026-10-11, for an article with no DOI,
             the words of its title to OpenAlex (Cited by's title search,
@@ -387,10 +388,10 @@ export function PrivacyPage() {
             have been asked since 2026-10-01 and were missing from this page
             until OpenAlex arrived on 2026-10-04
             (docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md).
-            tests/privacy-page.test.ts reads the host list, so a fourth index
-            turns it red until it is named here. */}
+            tests/privacy-page.test.ts reads the host list, so a fifth index
+            turns it red until it is named and counted here. */}
         <p>
-          Three public indexes of published work are asked about papers:{" "}
+          Four public indexes of published work are asked about papers:{" "}
           <a
             href="https://www.crossref.org/"
             target="_blank"
