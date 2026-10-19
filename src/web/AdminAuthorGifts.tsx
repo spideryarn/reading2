@@ -903,7 +903,7 @@ export function AuthorGifts({ shelf, onVoucherMade }: { shelf: StarterShelf | nu
       </div>
       <p className="tw:m-0 tw:mb-3 tw:text-xs tw:text-muted-foreground">
         Drafts of a gift voucher for the author of one of your articles. A lookup fills in what it can find; nothing is
-        emailed until you press Send.
+        emailed until you press Send. Once Send succeeds, it creates a voucher in the list below, with its article as the starter.
         {watching && " A lookup is running, so this list is checked every few seconds."}
       </p>
       {shelf !== null && (

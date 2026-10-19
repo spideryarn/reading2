@@ -605,6 +605,7 @@ export function DataTable<T>({
   rows,
   caption,
   sidewaysCue = false,
+  markedRowId = null,
 }: {
   table: Table<T>;
   rows: Row<T>[];
@@ -617,6 +618,12 @@ export function DataTable<T>({
    * and the shelf and `/admin/users` draw as they did (plan 261006g § Stage 2).
    */
   sidewaysCue?: boolean;
+  /**
+   * The row a link pointed at — `/admin/users?user=<id>` (plan 261019k). Drawn
+   * highlighted with `aria-current`, and `data-row-id` on every row is how the
+   * page finds it to scroll to. `row.id` is the table's own `rowId`.
+   */
+  markedRowId?: string | null;
 }) {
   const drawn = (
       <table className="tw:w-full tw:border-collapse tw:text-sm">
@@ -634,7 +641,11 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={row.id}
-              className="tw:group tw:border-b tw:border-border/60 tw:last:border-0 tw:hover:bg-card"
+              data-row-id={row.id}
+              aria-current={row.id === markedRowId ? "true" : undefined}
+              className={`tw:group tw:border-b tw:border-border/60 tw:last:border-0 ${
+                row.id === markedRowId ? "tw:bg-highlight/10" : "tw:hover:bg-card"
+              }`}
             >
               {row.getVisibleCells().map((cell) => {
                 const meta = cell.column.columnDef.meta;

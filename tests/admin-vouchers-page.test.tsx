@@ -15,6 +15,8 @@ import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AdminUser } from "../src/admin.js";
+
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
@@ -30,6 +32,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 const { AdminVouchersPage } = await import("../src/web/AdminVouchersPage.js");
 const { useAdminVouchers } = await import("../src/web/useAdminVouchers.js");
 const { SignedInReader } = await import("../src/web/lib/made-for.js");
+const { accountUsageFacts } = await import("../src/web/AdminUserCard.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -101,6 +104,40 @@ let retryAnswer: { status: number; body: unknown } | Promise<{ status: number; b
 let listAnswer: unknown[];
 /** What `GET /api/library` answers: the administrator's own shelf, for the starter picker. */
 let shelfAnswer: unknown[];
+/** What `GET /api/admin/users` answers: the accounts each row links to (plan 261019k). Status 0 throws. */
+let usersAnswer: { status: number; body: unknown };
+
+/** An account as /admin/users draws it. */
+const account = (over: Partial<AdminUser> & { readonly id: string; readonly email: string }): AdminUser => ({
+  createdAt: "2026-09-01T10:00:00Z",
+  lastSignInAt: "2026-10-18T10:00:00Z",
+  providers: ["email"],
+  articles: 7,
+  archived: 2,
+  uploads: 1,
+  questions: 31,
+  chats: 4,
+  searches: 9,
+  opens: 55,
+  lastReadAt: "2026-10-18T11:00:00Z",
+  spendNanos: 3_141_600_000,
+  spendCalls: 41,
+  spendUnpricedCalls: 3,
+  spendMonth: "2026-10",
+  plan: "free",
+  ingests: 4,
+  ingestsShared: 0,
+  highPower: 0,
+  highPowerShared: 0,
+  minimal: 0,
+  ingestLimit: 3,
+  ingestWindow: "lifetime",
+  ...over,
+});
+/* The claimant of CLAIMED, under the address it holds now. */
+const CLAIMANT = account({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", email: "claimed-now@example.test" });
+/* An existing reader the waiting voucher was sent to, who has not been back since. */
+const WAITING_ACCOUNT = account({ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", email: "waiting@example.test" });
 
 /** A shelf row with what the picker reads, and what the shelf's cache insists on. */
 const shelfRow = (over: { readonly slug: string; readonly [field: string]: unknown }) => ({
@@ -134,6 +171,7 @@ beforeEach(() => {
   retryAnswer = { status: 202, body: { id: "x", email: "sending" } };
   listAnswer = VOUCHERS;
   shelfAnswer = SHELF;
+  usersAnswer = { status: 200, body: { users: [CLAIMANT] } };
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -155,6 +193,10 @@ beforeEach(() => {
       return json(answer.status, answer.body);
     }
     if (url.startsWith("/api/library")) return json(200, { articles: shelfAnswer });
+    if (url === "/api/admin/users") {
+      if (usersAnswer.status === 0) throw new TypeError("Failed to fetch");
+      return json(usersAnswer.status, usersAnswer.body);
+    }
     /* The *Author gifts* section's own read (plan 261010c); its suite is tests/admin-author-gifts.test.tsx. */
     if (url === "/api/admin/author-gifts") return json(200, { gifts: [] });
     return json(200, { vouchers: listAnswer });
@@ -1355,5 +1397,196 @@ describe("/admin/vouchers", () => {
       const row = await readdress({ ok: true, email: "queued", starter: "kept" });
       expect(row?.textContent).not.toContain("without the starter article");
     });
+  });
+});
+
+/**
+ * Each account on the page links to /admin/users, with a card on the link
+ * summarising its usage — Greg, 2026-10-19 (spya-qdd2vc), plan 261019k.
+ */
+describe("the link from each account to /admin/users", () => {
+  const linkIn = (email: string) => rowFor(email)?.querySelector<HTMLAnchorElement>("a[data-account-link]") ?? null;
+
+  it("links a claimed voucher's claimant, by id, under the address they hold now", async () => {
+    await mount();
+    await settle();
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    /* In Status, as its claimant: the Email column is where the gift was sent. */
+    expect(link?.textContent).toBe("claimed-now@example.test");
+    expect(link?.closest("td")?.textContent).toContain("Claimed by claimed-now@example.test");
+    expect(rowFor("claimed@example.test")?.querySelectorAll("a[data-account-link]")).toHaveLength(1);
+  });
+
+  it("lets a claimed id win when the voucher's old address belongs to another account", async () => {
+    const oldAddressHolder = account({
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      email: "claimed@example.test",
+    });
+    usersAnswer = { status: 200, body: { users: [oldAddressHolder, CLAIMANT] } };
+    await mount();
+    await settle();
+
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    expect(link?.textContent).toBe("claimed-now@example.test");
+  });
+
+  it("uses the id-matched account address when the voucher read could not resolve it", async () => {
+    listAnswer = VOUCHERS.map((voucher) =>
+      voucher.id === CLAIMED ? { ...voucher, claimantEmail: null } : voucher,
+    );
+    await mount();
+    await settle();
+
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    expect(link?.textContent).toBe("claimed-now@example.test");
+    expect(link?.closest("td")?.textContent).not.toContain("address could not be read");
+  });
+
+  it("puts the account's usage on the link's card, as its description", async () => {
+    await mount();
+    await settle();
+    const link = linkIn("claimed@example.test");
+    await act(async () => link?.focus());
+    await settle();
+    const tooltip = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(tooltip?.textContent).toContain("claimed-now@example.test");
+    expect(tooltip?.textContent).toContain("31 comments");
+    expect(tooltip?.textContent).toContain("Open in Users");
+    expect(link?.getAttribute("aria-describedby")?.split(/\s+/)).toContain(tooltip?.id);
+    expect(document.activeElement).toBe(link);
+    expect(tooltip?.querySelector("a, button")).toBeNull();
+  });
+
+  it("links a waiting voucher whose address already has an account, whatever its case", async () => {
+    const shouted = { ...WAITING_ACCOUNT, email: " Waiting@Example.TEST" };
+    usersAnswer = { status: 200, body: { users: [CLAIMANT, shouted] } };
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")?.getAttribute("href")).toBe(`/admin/users?user=${WAITING_ACCOUNT.id}`);
+  });
+
+  it("does not link a revoked voucher nobody claimed, even if its address has an account", async () => {
+    usersAnswer = {
+      status: 200,
+      body: { users: [CLAIMANT, account({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", email: "revoked@example.test" })] },
+    };
+    await mount();
+    await settle();
+    expect(linkIn("revoked@example.test")).toBeNull();
+  });
+
+  it("leaves an address nobody has signed up with as plain text", async () => {
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")).toBeNull();
+    expect(linkIn("revoked@example.test")).toBeNull();
+  });
+
+  it("links nobody when two accounts share the waiting address, rather than guessing", async () => {
+    const twin = account({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", email: "waiting@example.test" });
+    usersAnswer = { status: 200, body: { users: [CLAIMANT, WAITING_ACCOUNT, twin] } };
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")).toBeNull();
+  });
+
+  it("still links a claimed row when the user list could not be read, and says what is missing", async () => {
+    usersAnswer = { status: 500, body: { error: "nope" } };
+    await mount();
+    await settle();
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent ?? "");
+    expect(alerts.some((a) => a.includes("Could not read the accounts"))).toBe(true);
+    await act(async () => link?.focus());
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain(
+      "Could not read their usage",
+    );
+  });
+
+  it("keeps a claimed link usable while its usage is still loading", async () => {
+    const ordinaryFetch = globalThis.fetch;
+    let answerUsers: (response: Response) => void = () => {};
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+      if ((init?.method ?? "GET") === "GET" && url === "/api/admin/users") {
+        return new Promise<Response>((resolve) => {
+          answerUsers = resolve;
+        });
+      }
+      return ordinaryFetch(input, init);
+    }) as typeof fetch;
+
+    await mount();
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    await act(async () => link?.focus());
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain(
+      "usage is still loading",
+    );
+
+    await act(async () => answerUsers(new Response(JSON.stringify({ users: [CLAIMANT] }), { status: 200 })));
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain("31 comments");
+  });
+
+  it("reads the accounts again on Refresh", async () => {
+    await mount();
+    await settle();
+    const before = calls.filter((c) => c.url === "/api/admin/users").length;
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Refresh the vouchers"]')?.click());
+    await settle();
+    expect(calls.filter((c) => c.url === "/api/admin/users").length).toBe(before + 1);
+  });
+
+  it("does not link a waiting address from stale accounts after Refresh fails", async () => {
+    usersAnswer = { status: 200, body: { users: [CLAIMANT, WAITING_ACCOUNT] } };
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")?.getAttribute("href")).toBe(
+      `/admin/users?user=${WAITING_ACCOUNT.id}`,
+    );
+
+    usersAnswer = { status: 500, body: { error: "accounts unavailable" } };
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Refresh the vouchers"]')?.click());
+    await settle();
+
+    expect(linkIn("waiting@example.test")).toBeNull();
+    expect(linkIn("claimed@example.test")?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent ?? "");
+    expect(alerts.some((a) => a.includes("waiting vouchers are not linked"))).toBe(true);
+
+    const claimed = linkIn("claimed@example.test");
+    await act(async () => claimed?.focus());
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain(
+      "Usage is from the last successful read",
+    );
+  });
+
+  it("summarises the account's usage, one short line a fact", () => {
+    const now = Date.parse("2026-10-19T10:00:00Z");
+    const facts = Object.fromEntries(accountUsageFacts(CLAIMANT, now).map((f) => [f.label, f.value]));
+    expect(facts.Shelf).toBe("7 articles, 2 archived; 1 PDF uploaded");
+    expect(facts.Used).toBe("31 comments · 4 chats · 9 searches");
+    expect(facts.Opened).toMatch(/^55 times, last /);
+    expect(facts.Plan).toBe("free");
+    expect(facts["Model calls"]).toBe("$3 in 2026-10 (UTC), 41 calls, 3 unpriced");
+    const idle = Object.fromEntries(
+      accountUsageFacts(
+        (({ lastSignInAt: _never, ...rest }) => ({ ...rest, spendCalls: 0, spendNanos: 0, opens: 0 }))(CLAIMANT),
+        now,
+      ).map(
+        (f) => [f.label, f.value],
+      ),
+    );
+    expect(idle["Model calls"]).toBe("none recorded in 2026-10 (UTC)");
+    expect(idle.Opened).toBe("never");
+    expect(idle["Last sign-in"]).toBe("never");
   });
 });

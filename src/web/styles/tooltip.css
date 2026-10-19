@@ -260,6 +260,21 @@
   border-top: 1px solid var(--rule);
 }
 
+/* **The account card** — AdminUserCard.tsx, plan 261019k: the paper card's
+   title and facts, then where the link goes, ruled off and arrowed like
+   `ControlTip`'s press line (dock.css § .tip-soon-press). */
+.tip-paper p.tip-account-press {
+  margin: 0.45rem 0 0;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+.tip-paper p.tip-account-press::before {
+  content: "→\00a0";
+}
+
 .tip-topics {
   display: flex;
   flex-wrap: wrap;

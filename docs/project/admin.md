@@ -690,6 +690,12 @@ lives in the address bar like every other view state ([url-state.md](url-state.m
 `dir` parser with the shelf and having a `by` default of its own — newest sign-up first, because a
 list of accounts is a list of things that arrived.
 
+**`?user=<id>` marks one account** in the whole table, rather than filtering to it, so it can still
+be compared with everyone else: the row is highlighted (`aria-current`), scrolled to once when the
+list arrives, and named above the table with a *Clear*; an id not in the list says so. It is what
+the links on `/admin/vouchers` point at, and `/admin/costs` uses the same name for the same id
+([261019k](../plans/261019k-admin-vouchers-links-each-account-to-admin-users-with-a-usage-card.md)).
+
 Dates read as *"3 days ago"* with the exact timestamp on hover, through
 [`relative-time.ts`](../../src/web/relative-time.ts) — the same function the shelf uses, so the two
 pages cannot come to disagree about what "yesterday" means. That is the "human-readable format"
@@ -841,7 +847,10 @@ restores it.
 **The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
 [`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
 from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
-loader is a compile error). A create form — address, articles (20 by default), private note, and a
+loader is a compile error). It opens with three short paragraphs saying what a voucher, a starter
+article and an author gift each are: one kind of gift and a shortcut to it, not two separate gifts
+([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). A create
+form — address, articles (20 by default), private note, and a
 note to them that goes in their email, with a sketch of that email beside it showing where the note
 lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
 the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body), and
@@ -870,6 +879,19 @@ Every write is followed by a fresh read, and a refusal is shown in the server's 
 row. The wire shape is [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), a flat import-free
 module shared by the store and the client because the browser may not import `pg-vouchers.ts`, even
 for a type. `tests/admin-vouchers-page.test.tsx` mounts it.
+
+**Each account on the page links to `/admin/users?user=<id>`**, with a card on the link summarising
+its usage — Greg, 2026-10-19 (`spya-qdd2vc`): *"create link from each user to /admin/users , with a
+tooltip summarising their usage"*. A claimed voucher's link is its claimant's current address in
+Status, found by id; a waiting one's is the address in the first column, when exactly one account
+already holds it (two accounts can share an address, and a guess would name the wrong one). A revoked
+voucher nobody claimed, or an address nobody has signed up with, is plain text. The card's facts are
+read off the same `GET /api/admin/users` rows `/admin/users` draws, so it shows nothing that page
+does not; when that read fails the page says what is missing, keeps last-read usage on id-based
+claimed links with a warning, and removes address-matched waiting links until a fresh account list
+arrives. *Refresh* reads both lists. The link and card are
+[`AdminUserCard.tsx`](../../src/web/AdminUserCard.tsx), which knows nothing about
+vouchers ([261019k](../plans/261019k-admin-vouchers-links-each-account-to-admin-users-with-a-usage-card.md)).
 
 **Each voucher sends two emails, and the Status cell says what became of each**: *Email to them*
 (the gift, sent when the voucher is made and again when its address is corrected) and *Email to you*

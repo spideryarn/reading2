@@ -23,11 +23,11 @@
  * Tailwind utilities rather than styles.css, like every other chrome page —
  * note the `tw:` prefix, without which the class does nothing.
  */
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChartColumn, FileText, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
-import { throttle, useQueryState } from "nuqs";
+import { parseAsString, throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
 import { FEEDBACK_FROM, type AdminFeedbackReport, type FeedbackFrom } from "../types.js";
@@ -302,6 +302,10 @@ export function AdminUsersPage() {
 
   const [by, setBy] = useQueryState("by", adminByParam);
   const [rawDir, setDir] = useQueryState("dir", sortDirParam);
+  /* `?user=<id>`: the account a link from /admin/vouchers pointed at, marked
+     in the whole table rather than filtered to, so it can still be compared
+     with everyone else (plan 261019k). The name `/admin/costs` uses for it. */
+  const [pointedAt, setPointedAt] = useQueryState("user", parseAsString);
 
   const columns = useMemo(() => adminColumns(now), [now]);
   const natural = useMemo(() => naturalDirections(columns), [columns]);
@@ -352,6 +356,24 @@ export function AdminUsersPage() {
     () => (primary ? sinkLast(rows, (r) => r.getValue(primary) === undefined) : rows),
     [rows, primary],
   );
+  const pointedUser = pointedAt === null || users === null ? undefined : users.find((u) => u.id === pointedAt);
+
+  /* Scrolled to once per id, when the list that holds it arrives, so a
+     refresh or a re-sort does not drag the page back to it. Recorded only once
+     the row was found and scrolled, and forgotten when `?user=` changes. The
+     effect runs again when the pointed-at user arrives or changes. */
+  const tableBox = useRef<HTMLDivElement>(null);
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (scrolledTo.current !== pointedAt) scrolledTo.current = null;
+    if (!pointedUser || scrolledTo.current === pointedUser.id) return;
+    const row = [...(tableBox.current?.querySelectorAll<HTMLElement>("tr[data-row-id]") ?? [])].find(
+      (tr) => tr.dataset.rowId === pointedUser.id,
+    );
+    if (!row) return;
+    row.scrollIntoView({ block: "center" });
+    scrolledTo.current = pointedUser.id;
+  }, [pointedAt, pointedUser]);
 
   return (
     <Shell title="Users" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
@@ -418,12 +440,56 @@ export function AdminUsersPage() {
           upstream of this page.
         </p>
       ) : (
-        <DataTable table={table} rows={sorted} caption="Everyone with an account" />
+        <>
+          {pointedAt !== null && (
+            <PointedAtLine id={pointedAt} user={pointedUser} onClear={() => void setPointedAt(null)} />
+          )}
+          <div ref={tableBox}>
+            <DataTable
+              table={table}
+              rows={sorted}
+              caption="Everyone with an account"
+              markedRowId={pointedUser ? pointedUser.id : null}
+            />
+          </div>
+        </>
       )}
     </Shell>
   );
 }
 
+/**
+ * The line above the table while `?user=` names an account: which one is
+ * marked, or that it is not in the list — an account deleted since the link
+ * was made, most likely — rather than a table with nothing marked and nothing
+ * said (docs/reusable/silent-success.md).
+ */
+function PointedAtLine({ id, user, onClear }: { id: string; user: AdminUser | undefined; onClear: () => void }) {
+  return (
+    <p
+      data-pointed-at=""
+      role="status"
+      className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground"
+    >
+      {user ? (
+        <span>
+          Marked: <span className="tw:text-foreground">{user.email}</span>
+        </span>
+      ) : (
+        <span>
+          The account <span className="tw:font-mono">{id}</span> is not in this list.
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onClear}
+        className="tw:inline-flex tw:h-6 tw:items-center tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground"
+      >
+        Clear
+      </button>
+    </p>
+  );
+}
 
 /**
  * `/admin/feedback` — the bug reports, newest first.

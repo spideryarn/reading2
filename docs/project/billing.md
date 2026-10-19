@@ -1123,15 +1123,23 @@ one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review
   always been so; a test now holds it
   ([261011k](../plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md)).
 
-**The starter article becomes the recipient's when they claim it** (since 2026-10-11, Greg:
+**The starter article may become the recipient's when they claim it** (since 2026-10-11, Greg:
 *"when the recipient of the gift voucher with an associated article signs in, we actually want to
 transfer ownership … so that they then own that article and can use chat and everything else
 fully"*). Inside the claim's transaction, in a savepoint, all or nothing: the article moves to the
 claimant only when it is still the voucher creator's, private, the starter of no other unrevoked
 voucher, and carries none of the creator's own words (comments, chats and the like); otherwise the
-voucher is claimed as before and the admin moves it by hand on `/admin/articles`. A move makes it
+voucher is claimed as before and the article stays with its current owner. The admin can move it by
+hand on `/admin/articles` when that is appropriate. A move makes it
 private and freezes the creator's ledger rows for it, so the article never counts against the
-recipient's allowance and the creator's bill does not move with it. The reading view asks this same
+recipient's allowance and the creator's bill does not move with it. Reading one that stays through
+the link in its gift email charges nobody. So receiving and reading a gift's article costs
+the recipient nothing either way. Later choices are charged as usual: High-powered AI on a moved
+one, or a copy of their own of one that stayed. An author gift is the same voucher once sent.
+`tests/claim-starter-article.test.ts` § *costs the
+recipient none of their free articles* holds it, after a production read that day found the one
+claimed starter at zero rows for its recipient
+([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). The reading view asks this same
 route once when a signed-in reader opens a private link, and re-reads the article as theirs if its
 slug comes back in `claimedArticles`. What moves, what is reset and what is deleted is
 [admin.md § `/admin/articles`](admin.md#adminarticles-moving-an-article-to-another-account); the
