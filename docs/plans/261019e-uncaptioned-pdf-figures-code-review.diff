@@ -1,0 +1,338 @@
+diff --git a/src/assets.ts b/src/assets.ts
+index 08349dc85..9ce0be479 100644
+--- a/src/assets.ts
++++ b/src/assets.ts
+@@ -238,6 +238,13 @@ export type PdfFigureFailure =
+    * src/pdf-figures.ts; docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
+    */
+   | "caption-not-in-page-text"
++  /**
++   * The figure prints no caption, so nothing ties a picture on its page to it.
++   * Its block is kept and marked all the same, so the reader is told it is
++   * missing rather than never knowing it was there.
++   * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md.
++   */
++  | "uncaptioned"
+   /**
+    * **The page was the narrow case the drawn-figure route exists for, and no
+    * drawing on it could be proved to be this caption's.** One figure marker,
+diff --git a/src/collect-assets.ts b/src/collect-assets.ts
+index d198fc9a9..4bfeac216 100644
+--- a/src/collect-assets.ts
++++ b/src/collect-assets.ts
+@@ -408,9 +408,10 @@ export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[]
+  * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md). The same walk as `pdfFigureMarkersIn` above, and only
+  * the refs *it* hands back, so a ref two blocks carry gets no caption either.
+  * A marker whose element has no caption is simply absent: neither recovery
+- * route can attach a picture without caption evidence. A bitmap pairing that
+- * reaches the caption gate is refused `caption-not-in-page-text`, and the
+- * drawn route is not tried.
++ * route can attach a picture without caption evidence. The bitmap route refuses
++ * it `uncaptioned`, and the drawn route and the locator are not tried. A PDF
++ * figure with no printed caption has been kept as such a marker since
++ * 2026-10-19 (docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md).
+  */
+ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, string> {
+   const captions = new Map<string, string>();
+diff --git a/src/collect-pdf-figures.ts b/src/collect-pdf-figures.ts
+index cf795c065..4149b85fb 100644
+--- a/src/collect-pdf-figures.ts
++++ b/src/collect-pdf-figures.ts
+@@ -454,9 +454,10 @@ export async function collectPdfFigures(
+       return;
+     }
+ 
+-    /* A marker the article gave no caption is refused `caption-not-in-page-text`
+-       here, since there is nothing to check its page against — and the drawn
+-       route below would refuse it for the same want. */
++    /* A marker the article gave no caption is refused `uncaptioned` here, since
++       there is nothing to check its page against — and the drawn route and the
++       locator below are only asked about captioned markers.
++       docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md. */
+     const { outcomes } = pairPageFigures({
+       markers: looked,
+       candidates: read.candidates,
+@@ -1226,6 +1227,8 @@ function pdfFigureFailure(reason: PairingFailure): PdfFigureFailure {
+       return "ambiguous";
+     case "caption-not-in-page-text":
+       return "caption-not-in-page-text";
++    case "uncaptioned":
++      return "uncaptioned";
+     case "unsupported-kind":
+       return "unsupported-kind";
+     case "grayscale-1bpp":
+diff --git a/src/pdf-figures.ts b/src/pdf-figures.ts
+index ec75787e5..393cd9ed3 100644
+--- a/src/pdf-figures.ts
++++ b/src/pdf-figures.ts
+@@ -641,7 +641,15 @@ export type PdfFigureFailure =
+    * picture on *that* page is the previous figure's.
+    * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md.
+    */
+-  | "caption-not-in-page-text";
++  | "caption-not-in-page-text"
++  /**
++   * **The figure has no caption, so there is nothing to check its page
++   * against.** Not `caption-not-in-page-text`, which claims a caption the
++   * figure does not have. Pairing one safely needs where the picture sits
++   * between the prose around it, which this gate does not read yet:
++   * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md § Stage B.
++   */
++  | "uncaptioned";
+ 
+ /** What became of one marker. Exactly one of these exists per marker. */
+ export type FigureOutcome =
+@@ -702,6 +710,12 @@ export function pairPageFigures(input: {
+   for (const marker of input.markers) {
+     const markersHere = markersByPage.get(marker.page) ?? [];
+     const usableHere = usableByPage.get(marker.page) ?? [];
++    /* First, and still counted on its page above: a captioned figure beside it
++       must not take a picture that may be this one's. */
++    if ((input.captions.get(marker.ref) ?? "").trim() === "") {
++      outcomes.push({ status: "refused", marker, reason: "uncaptioned" });
++      continue;
++    }
+     if (markersHere.length !== 1 || usableHere.length > 1) {
+       outcomes.push({ status: "refused", marker, reason: "ambiguous" });
+       continue;
+@@ -872,12 +886,23 @@ export const PDF_FIGURE_REF_VERSION = "pdffig1";
+  * Throws on anything that is not a lowercase sha256 and two positive whole
+  * numbers, because a malformed ref does not fail here — it fails much later, as
+  * a lookup that never matches and a figure that never appears.
++ *
++ * **`context` is for a figure with no caption**, and only for one: the prose
++ * either side of it, which is what tells two captionless figures on a page
++ * apart once page and ordinal are all that is left. Without it, a
++ * re-extraction that found one more captionless figure earlier on the page
++ * would hand this figure's ref — and through `emptyKey` in src/blocks.ts, its
++ * block id — to the new one (GPT Sol, plan review of 261019e, finding 4).
++ * Absent, the hash is byte-for-byte what it was before `context` existed, so
++ * no captioned ref stored today moves and the version tag does not change: no
++ * captionless ref existed before it.
+  */
+ export function pdfFigureRef(input: {
+   rawSha256: string;
+   page: number;
+   ordinal: number;
+   caption: string;
++  context?: string;
+ }): string {
+   if (!/^[0-9a-f]{64}$/.test(input.rawSha256)) {
+     throw new Error("pdf-figures: a figure ref needs the raw PDF's lowercase sha256");
+@@ -885,16 +910,11 @@ export function pdfFigureRef(input: {
+   if (!isPositiveWholeNumber(input.page) || !isPositiveWholeNumber(input.ordinal)) {
+     throw new Error(`pdf-figures: bad page/ordinal ${input.page}/${input.ordinal} for a figure ref`);
+   }
+-  const caption = input.caption.replace(/\s+/g, " ").trim();
+-  const captionDigest = createHash("sha256").update(caption, "utf8").digest("hex");
+-  const digest = createHash("sha256")
+-    .update(
+-      [PDF_FIGURE_REF_VERSION, input.rawSha256, String(input.page), String(input.ordinal), captionDigest].join(
+-        "\n",
+-      ),
+-      "utf8",
+-    )
+-    .digest("hex");
++  const digestOf = (text: string) =>
++    createHash("sha256").update(text.replace(/\s+/g, " ").trim(), "utf8").digest("hex");
++  const fields = [PDF_FIGURE_REF_VERSION, input.rawSha256, String(input.page), String(input.ordinal), digestOf(input.caption)];
++  if (input.context !== undefined) fields.push(digestOf(input.context));
++  const digest = createHash("sha256").update(fields.join("\n"), "utf8").digest("hex");
+   /* Half a sha256. The ref only has to be unguessable-by-accident and unique
+      within one article; the whole thing would double the length of an attribute
+      that sits in every figure's stored HTML. */
+diff --git a/src/pdf-read.ts b/src/pdf-read.ts
+index 1371ef5c7..4331bcafe 100644
+--- a/src/pdf-read.ts
++++ b/src/pdf-read.ts
+@@ -1863,11 +1863,14 @@ export function mendSeamHyphens(
+  * a second claimant on any page holding both and turn a recoverable figure into
+  * an `ambiguous` one. docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md.
+  *
+- * **A record with no caption still produces nothing at all**, because of the
+- * `if (!text) continue` a few lines below — so a captionless figure has no
+- * block, no marker and nothing to re-mint. That is v1's boundary rather than an
+- * oversight; giving those a media block of their own is a separate decision.
+- * GPT Sol, I-3.
++ * **A figure with no caption is a figure**, marked and empty: `<figure
++ * data-spya-pdf-figure="…"></figure>`. Until 2026-10-19 the `if (!text)` below
++ * skipped it, and a book whose diagrams print no caption lost every one without
++ * a word — 27 of 33 figures in Rovelli's *The Order of Time*, report
++ * spya-x9gn3d. Any other empty record still produces nothing. Its ref folds in
++ * the prose either side of it (`neighbourContext`), since page and ordinal alone
++ * would let a re-extraction move its id onto another figure.
++ * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md.
+  *
+  * **A table's cells are written inside its `<figure>`, after the caption**,
+  * since 2026-10-01. Rule 7 of the prompt has always asked for them as
+@@ -1929,6 +1932,11 @@ export function renderHtml(
+     const target = targets[i];
+     const into = target === null || target === undefined ? undefined : blockOf.get(target);
+     const text = record.text.trim();
++    if (!text && record.type === "figure" && into === undefined) {
++      blockOf.set(i, blocks.length);
++      blocks.push({ record, text, uncertain: record.uncertain, pieces: [{ page: record.page, start: 0 }] });
++      continue;
++    }
+     if (!text) {
+       /* A seam repair can consume a one-word continuation. Keep its place in
+          the precomputed target chain so the following piece still reaches the
+@@ -1975,7 +1983,7 @@ export function renderHtml(
+     const caption = text ? `<figcaption>${escapeHtml(text)}</figcaption>` : "";
+     const html =
+       record.type === "figure" || record.type === "table"
+-        ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}>${caption}${tableHtml(rows ?? [], rowsUncertain ?? false)}</figure>`
++        ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals, text ? undefined : neighbourContext(blocks, b))}>${caption}${tableHtml(rows ?? [], rowsUncertain ?? false)}</figure>`
+         : `<${tag}${cls}>${withLines(record.type, text, withMarkers(text, markers.filter((m) => m.block === b)))}</${tag}>`;
+     parts.push(html);
+   }
+@@ -2544,15 +2552,36 @@ function figureMarker(
+   caption: string,
+   rawSha256: string,
+   ordinals: Map<number, number>,
++  context?: string,
+ ): string {
+   if (record.type !== "figure") return "";
+   const ordinal = (ordinals.get(record.page) ?? 0) + 1;
+   ordinals.set(record.page, ordinal);
+-  const figureRef = pdfFigureRef({ rawSha256, page: record.page, ordinal, caption });
++  const figureRef = pdfFigureRef({ rawSha256, page: record.page, ordinal, caption, ...(context === undefined ? {} : { context }) });
+   const value = pdfFigureMarkerValue({ figureRef, page: record.page, ordinal });
+   return ` ${RESERVED_ATTRS.pdfFigure}="${value}"`;
+ }
+ 
++/** How much of each neighbour names a captionless figure. Enough to differ, short enough not to churn. */
++const NEIGHBOUR_CHARS = 80;
++
++/**
++ * **What a captionless figure is called instead of its caption**: the end of
++ * the block before it and the start of the block after it, as rendered.
++ *
++ * An identity, not evidence of where the picture is — it only has to stay the
++ * same for the same transcript and differ between two captionless figures on
++ * one page. Proving which picture is this figure's needs positions on the page,
++ * which this does not carry (docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md
++ * § Stage B). A neighbour that is itself a captionless figure contributes its
++ * empty text, which is still a fact about the order.
++ */
++function neighbourContext(blocks: readonly RenderBlock[], at: number): string {
++  const before = blocks[at - 1]?.text ?? "";
++  const after = blocks[at + 1]?.text ?? "";
++  return `${before.slice(-NEIGHBOUR_CHARS)}\n${after.slice(0, NEIGHBOUR_CHARS)}`;
++}
++
+ // ─────────────────────────────────────────────────────────── the stage
+ 
+ /**
+diff --git a/tests/pdf-figures.test.ts b/tests/pdf-figures.test.ts
+index 2976cf99b..924948236 100644
+--- a/tests/pdf-figures.test.ts
++++ b/tests/pdf-figures.test.ts
+@@ -672,14 +672,28 @@ describe("pairPageFigures", () => {
+     expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
+   });
+ 
+-  it("refuses a marker with no caption to check, rather than pairing it blind", () => {
++  it("refuses a marker with no caption to check as uncaptioned, rather than pairing it blind", () => {
++    /* Not `caption-not-in-page-text`, which claims a caption that is not there.
++       A picture for an uncaptioned figure needs evidence of position, which
++       this gate does not have yet: docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md § Stage B. */
+     const result = pairPageFigures({
+       markers: [marker({ ref: "nameless", page: 4 })],
+       candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "fig" })],
+       captions: new Map(),
+       pageText: new Map([[4, "Figure 1. Something."]]),
+     });
+-    expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
++    expect(verdicts(result)).toEqual(["refused:uncaptioned"]);
++  });
++
++  it("counts an uncaptioned marker on its page, so a captioned one beside it cannot take its picture", () => {
++    /* One picture and two figures on the page: the picture may be either's. */
++    const result = pairPageFigures({
++      markers: [marker({ ref: "captioned", page: 4, ordinal: 1 }), marker({ ref: "nameless", page: 4, ordinal: 2 })],
++      candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "fig" })],
++      captions: new Map([["captioned", "Figure 1. Something."]]),
++      pageText: new Map([[4, "Figure 1. Something."]]),
++    });
++    expect(verdicts(result)).toEqual(["refused:ambiguous", "refused:uncaptioned"]);
+   });
+ 
+   it("refuses to carry on if a marker is offered twice", () => {
+diff --git a/tests/pdf-read.test.ts b/tests/pdf-read.test.ts
+index 0e5167d5a..01c5a61db 100644
+--- a/tests/pdf-read.test.ts
++++ b/tests/pdf-read.test.ts
+@@ -24,7 +24,8 @@ import {
+   withoutRepeats,
+   wordsOf,
+ } from "../src/pdf-read.js";
+-import { parsePdfFigureMarker } from "../src/assets.js";
++import { parsePdfFigureMarker, pdfFigureMarkerValue } from "../src/assets.js";
++import { pdfFigureRef } from "../src/pdf-figures.js";
+ import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
+ import { loadMathsRenderer } from "../src/maths-server.js";
+ 
+@@ -360,14 +361,54 @@ describe("records into HTML", () => {
+     );
+   });
+ 
+-  it("leaves a captionless figure with no element and therefore no marker", () => {
+-    /* v1's boundary, stated rather than discovered: `renderHtml` skips an
+-       empty-text record before it builds anything, so a figure with no printed
+-       caption has no block to address and nothing to re-mint. Giving those a
+-       media block of their own is a separate decision. GPT Sol, I-3. */
+-    const html = renderHtml([record({ type: "figure", text: "   " })], "T", RAW_SHA);
+-    expect(html).not.toContain("<figure");
+-    expect(html).not.toContain("data-spya-pdf-figure");
++  it("keeps a captionless figure as a marked figure with no caption", () => {
++    /* Until 2026-10-19 this was skipped, and a book whose diagrams print no
++       caption lost every one of them without a word: 27 of 33 figures in
++       Rovelli's *The Order of Time*. docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md. */
++    const html = renderHtml(
++      [
++        record({ text: "Those of Leonidas are shown below:" }),
++        record({ type: "figure", text: "   " }),
++        record({ text: "The temporal structure of the universe is very similar." }),
++      ],
++      "T",
++      RAW_SHA,
++    );
++    expect(html).toMatch(/<figure data-spya-pdf-figure="[^"]+"><\/figure>/);
++    expect(html).not.toContain("<figcaption>");
++    const marker = /data-spya-pdf-figure="([^"]+)"/.exec(html)?.[1];
++    expect(parsePdfFigureMarker(marker ?? "")).toEqual({ ref: marker, page: 1, ordinal: 1 });
++  });
++
++  it("names a captionless figure by the prose either side of it", () => {
++    /* With no caption, page and ordinal would be all a ref had: a re-extraction
++       that found one more captionless figure earlier on the page would hand this
++       figure's ref, and through it its block id, to the new one. The neighbours
++       make it a different figure. GPT Sol, plan review of 261019e, finding 4. */
++    const refOf = (before: string, after: string) =>
++      /data-spya-pdf-figure="([^"]+)"/.exec(
++        renderHtml(
++          [record({ text: before }), record({ type: "figure", text: "" }), record({ text: after })],
++          "T",
++          RAW_SHA,
++        ),
++      )?.[1];
++    expect(refOf("Shown below:", "After it.")).toBe(refOf("Shown below:", "After it."));
++    expect(refOf("Shown below:", "After it.")).not.toBe(refOf("Shown here:", "After it."));
++    expect(refOf("Shown below:", "After it.")).not.toBe(refOf("Shown below:", "Something else."));
++  });
++
++  it("leaves a captioned figure's ref exactly as it was, neighbours or not", () => {
++    /* Every ref stored today is a captioned one; folding the neighbours into
++       those would move every carried-forward picture. */
++    const html = renderHtml(
++      [record({ text: "Before." }), record({ type: "figure", text: "Figure 1. A drawing." }), record({ text: "After." })],
++      "T",
++      RAW_SHA,
++    );
++    const marker = parsePdfFigureMarker(/data-spya-pdf-figure="([^"]+)"/.exec(html)?.[1] ?? "");
++    const figureRef = pdfFigureRef({ rawSha256: RAW_SHA, page: 1, ordinal: 1, caption: "Figure 1. A drawing." });
++    expect(marker?.ref).toBe(pdfFigureMarkerValue({ figureRef, page: 1, ordinal: 1 }));
+   });
+ 
+   it("marks a block the model could not fully read, so the reader can see it", () => {

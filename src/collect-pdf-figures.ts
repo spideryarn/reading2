@@ -454,9 +454,10 @@ export async function collectPdfFigures(
       return;
     }
 
-    /* A marker the article gave no caption is refused `caption-not-in-page-text`
-       here, since there is nothing to check its page against — and the drawn
-       route below would refuse it for the same want. */
+    /* A marker the article gave no caption is refused `uncaptioned` here, since
+       there is nothing to check its page against — and the drawn route and the
+       locator below are only asked about captioned markers.
+       docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md. */
     const { outcomes } = pairPageFigures({
       markers: looked,
       candidates: read.candidates,
@@ -1226,6 +1227,8 @@ function pdfFigureFailure(reason: PairingFailure): PdfFigureFailure {
       return "ambiguous";
     case "caption-not-in-page-text":
       return "caption-not-in-page-text";
+    case "uncaptioned":
+      return "uncaptioned";
     case "unsupported-kind":
       return "unsupported-kind";
     case "grayscale-1bpp":

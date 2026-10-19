@@ -408,9 +408,10 @@ export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[] 
  * docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md). The same walk as `pdfFigureMarkersIn` above, and only
  * the refs *it* hands back, so a ref two blocks carry gets no caption either.
  * A marker whose element has no caption is simply absent: neither recovery
- * route can attach a picture without caption evidence. A bitmap pairing that
- * reaches the caption gate is refused `caption-not-in-page-text`, and the
- * drawn route is not tried.
+ * route can attach a picture without caption evidence. The bitmap route refuses
+ * it `uncaptioned`, and the drawn route and the locator are not tried. A PDF
+ * figure with no printed caption has been kept as such a marker since
+ * 2026-10-19 (docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md).
  */
 export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, string> {
   const captions = new Map<string, string>();
