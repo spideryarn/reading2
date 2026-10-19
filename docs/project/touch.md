@@ -530,14 +530,18 @@ has the numbers.
 [261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
 depends on the side.)
 
-**On a narrow touch screen there is no column, since 2026-10-18.** Under
-`(max-width: 731px) and (hover: none)` the right pad shrinks to a narrow strip. At rest it holds only
+**On a no-hover touch screen there is no column**: on a phone since 2026-10-18, and on every
+no-hover screen, the iPad included, since 2026-10-19. Under `(hover: none)` the right pad shrinks
+to a narrow strip and the left one edges towards the spine. At rest it holds only
 state: the marks, without their counts, and the reading-time hairline at the outer edge. The tap that
 selects a row turns the gutter into a horizontal bar above the paragraph. Everything below about
 which row is selected still holds; only where the icons are drawn changes. Greg, on a phone: *"we
 only need it when there's an explicit action"* (spya-k49y3q,
-[261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). A full-width iPad
-keeps the column; a narrow iPad split view meets the query and uses the bar.
+[261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). The iPad followed
+the next day, when Greg asked for more line in portrait with Marginalia on (spya-eebnxu,
+[261019d](../plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md)).
+`(hover: none)` is the primary pointer, so a touchscreen laptop driven by its mouse keeps the
+column it reveals on hover.
 
 **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
 The bookmark and the blue chat mark are facts about the article and are always there; the permalink,

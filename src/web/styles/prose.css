@@ -126,8 +126,10 @@ tbody tr:first-child td.text.kind-heading {
    right because the gutter was on the left; since 2026-10-03 the gutter is on
    the right too (261003c), in the cell's right pad, so on a heading row the
    chevron ends the line and the heading's icons start `--blk-gutter-x` further
-   on. Neighbours, at every root: both are one `--blk-slot` wide and the pad is
-   exactly a slot plus two insets (GPT Sol, plan review of 261003c).
+   on. They are neighbours on a hover-capable screen: both are one `--blk-slot`
+   wide and the pad is exactly a slot plus two insets (GPT Sol, plan review of
+   261003c). On a no-hover screen, the deliberately narrower pad leaves the
+   accepted 4px overlap recorded in narrow-window.css § a no-hover screen.
 
    **It follows the measure the way the gutter does, mirrored.** `.prose` is
    `clamp(45ch, 90vw, --reading-measure)` and centred in the cell (§ text), so

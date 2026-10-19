@@ -160,6 +160,8 @@ export function FeedbackSendBox({
           type="button"
           className="fb-copy fb-reply-send"
           disabled={sending || held || dictate.busy || over || value.trim() === ""}
+          /* Working, so drawn at full strength rather than dimmed (plan 261019c). */
+          data-working={sending ? "" : undefined}
           onClick={trySend}
         >
           {sending ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}

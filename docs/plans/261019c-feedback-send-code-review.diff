@@ -1,0 +1,167 @@
+diff --git a/docs/project/feedback.md b/docs/project/feedback.md
+index c1fbc104a..35468255d 100644
+--- a/docs/project/feedback.md
++++ b/docs/project/feedback.md
+@@ -177,6 +177,23 @@ the test can stand inside the `sending` stage and look. If the report says other
+ screen, the thing to suspect is not the markup: the POST body is built **synchronously** before the
+ first `await`, so a large pasted screenshot is stringified before React gets to paint the spinner.
+ 
++**And it is drawn at full strength, since 2026-10-19.** Greg again, on an iPad, from a dictated
++report with no screenshot:
++
++> When I click send in this feedback dialog, it seems to take a few seconds to take effect, where
++> there is no UI feedback at all, no spinner
++>
++> — Greg, 2026-10-18 (`spya-an90k0`)
++
++The server's handler answered in 81ms, and the label changed within about 100ms in a browser. But
++*Sending* was drawn as a disabled button at `opacity: 0.45`, which is both faint and, on an iPad,
++our leading suspect for a button that paints nothing
++([260912c](../plans/260912c-send-button-icon-and-primary-style.md)). So a working button now
++carries `data-working` and `.fb-send[data-working]:disabled` puts it back at full opacity; Send
++reply and Send addendum the same. Not proved on a real iPad.
++[261019c](../plans/261019c-feedback-send-shows-it-is-working-at-once.md) has the evidence, and the
++next step if it comes back: time press → render → session → fetch in the browser.
++
+ ### Send always does something, since 2026-10-10
+ 
+ > I could see the send button, but when I tried to press it, nothing happened.
+diff --git a/src/web/FeedbackDialog.tsx b/src/web/FeedbackDialog.tsx
+index dd80cff2e..93993103c 100644
+--- a/src/web/FeedbackDialog.tsx
++++ b/src/web/FeedbackDialog.tsx
+@@ -1579,6 +1579,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
+                the microphone and sends once the words land (`send`). Plan
+                261010f; it used to be disabled here while still reading Send. */
+             disabled={(!somethingSaid && !dictationBusy) || over || stage.kind === "sending" || preparing}
++            /* **Working, so not dimmed** like a Send that cannot be pressed:
++               the three spinner labels below. Greg saw "no spinner" on an iPad
++               while it said Sending at `opacity: 0.45` (spya-an90k0, plan
++               261019c). A data attribute, not `aria-busy`, which may hold back
++               announcing the very label that changes. */
++            data-working={stage.kind === "sending" || preparing || dictate.readOnly ? "" : undefined}
+           >
+             {stage.kind === "sending" ? (
+               <>
+diff --git a/src/web/FeedbackSendBox.tsx b/src/web/FeedbackSendBox.tsx
+index f9244d11b..16d5cbce3 100644
+--- a/src/web/FeedbackSendBox.tsx
++++ b/src/web/FeedbackSendBox.tsx
+@@ -160,6 +160,8 @@ export function FeedbackSendBox({
+           type="button"
+           className="fb-copy fb-reply-send"
+           disabled={sending || held || dictate.busy || over || value.trim() === ""}
++          /* Working, so drawn at full strength rather than dimmed (plan 261019c). */
++          data-working={sending ? "" : undefined}
+           onClick={trySend}
+         >
+           {sending ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
+diff --git a/src/web/styles/feedback.css b/src/web/styles/feedback.css
+index da749340e..0f379bb79 100644
+--- a/src/web/styles/feedback.css
++++ b/src/web/styles/feedback.css
+@@ -390,6 +390,8 @@ a.fb-earlier-page:focus-visible {
+   gap: 0.5rem;
+ }
+ .fb-reply-send:disabled { opacity: 0.45; cursor: default; }
++/* Sending: disabled, but working, so not dimmed — as `.fb-send` below. */
++.fb-reply-send[data-working]:disabled { opacity: 1; cursor: progress; }
+ /* **Green to send, red to put off**, in a Needs-a-decision thread only — Greg,
+    2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
+    shortcut, as colour-scales.md asks of a red/green pair. The addendum box
+@@ -772,6 +774,12 @@ details.fb-threads-group > summary { cursor: pointer; }
+ .fb-cancel { color: var(--ink-soft); }
+ .fb-send { color: var(--positive); border-color: currentColor; }
+ .fb-send:disabled { opacity: 0.45; cursor: default; }
++/* **Working is not "cannot be pressed".** Sending, Adding the picture: the
++   button is disabled, but its spinner and word are the only sign anything is
++   happening, and at 0.45 Greg saw neither on an iPad (spya-an90k0) — where a
++   disabled button at `opacity < 1` is also our leading suspect for one that
++   paints nothing (plan 260912c). Plan 261019c. */
++.fb-send[data-working]:disabled { opacity: 1; cursor: progress; }
+ .fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
+ /* The thread pager again, in Earlier's footer beside Close, kept to the right. */
+ .fb-foot-pager { justify-content: flex-end; }
+diff --git a/tests/feedback-dialog.test.tsx b/tests/feedback-dialog.test.tsx
+index f876493de..18f497368 100644
+--- a/tests/feedback-dialog.test.tsx
++++ b/tests/feedback-dialog.test.tsx
+@@ -24,6 +24,7 @@ import { CONTACT_EMAIL } from "../src/site-text.js";
+ import { MAX_FEEDBACK_QUESTION_BODY_CHARS } from "../src/feedback-question-values.js";
+ import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
+ import { exactly } from "../src/web/relative-time.js";
++import { readerCssNoComments } from "./helpers/stylesheets.js";
+ 
+ const posts: { input: string; init: RequestInit }[] = [];
+ /** Handed the request's init, so an answer can watch its `signal` (plan 261010f). */
+@@ -679,6 +680,7 @@ describe("the feedback dialog", () => {
+ 
+     const button = host.querySelector<HTMLButtonElement>("button.fb-send");
+     expect(button?.disabled, "Send stayed live while the picture was decoding").toBe(true);
++    expect(button?.hasAttribute("data-working"), "Adding the picture was drawn dimmed").toBe(true);
+     /* And the keyboard path, which does not go through `disabled` at all. */
+     send();
+     await act(async () => {});
+@@ -748,6 +750,8 @@ describe("the feedback dialog", () => {
+     mount();
+     type("Said out loud, being written down");
+     expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
++    /* Writing that down is work on the reader's behalf too (plan 261019c). */
++    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.hasAttribute("data-working")).toBe(true);
+     send();
+     await act(async () => {});
+     expect(posts).toHaveLength(0);
+@@ -1140,6 +1144,7 @@ describe("the feedback dialog", () => {
+   it("spins on Send while the report is in flight", async () => {
+     mount();
+     type("It broke.");
++    expect(host.querySelector("button.fb-send")?.hasAttribute("data-working")).toBe(false);
+     const flight: { land: (() => void) | null } = { land: null };
+     answer = () =>
+       new Promise<Response>((resolve) => {
+@@ -1155,12 +1160,36 @@ describe("the feedback dialog", () => {
+     /* And it is not pressable meanwhile. The ref latch is what stops two clicks
+        in one frame (above); this is the half a reader can see. */
+     expect(button?.disabled).toBe(true);
++    /* **Working, so drawn at full strength**, not dimmed as a button that
++       cannot be pressed (spya-an90k0, plan 261019c): the rule below. */
++    expect(button?.hasAttribute("data-working")).toBe(true);
+ 
+     await act(async () => {
+       flight.land?.();
+     });
+     expect(host.querySelector("button.fb-send")?.textContent).not.toContain("Sending");
+   });
++
++  /**
++   * **A button that is working is never dimmed** (spya-an90k0, plan 261019c).
++   * Greg, on an iPad: *"no UI feedback at all, no spinner"* — and the spinner
++   * and "Sending" were there, under the `opacity: 0.45` every disabled Send
++   * gets, which is also our leading iPad suspect for a button that paints
++   * nothing (plan 260912c). The busy rule must outweigh the dimming one.
++   */
++  it("draws a working Send, and a working Send reply, at full opacity", () => {
++    const css = readerCssNoComments();
++    for (const [dimmed, working] of [
++      [".fb-send:disabled", ".fb-send[data-working]:disabled"],
++      [".fb-reply-send:disabled", ".fb-reply-send[data-working]:disabled"],
++    ] as const) {
++      expect(css).toMatch(new RegExp(`${dimmed.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*opacity:\\s*0\\.45`));
++      const escaped = working.replace(/[.[\]]/g, "\\$&");
++      const found = [...css.matchAll(new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`, "g"))];
++      expect(found, `one rule for ${working}`).toHaveLength(1);
++      expect(found[0]?.[1]).toMatch(/opacity:\s*1\s*;/);
++    }
++  });
+ });
+ 
+ /**
+@@ -3536,6 +3565,8 @@ describe("the Earlier tab", () => {
+         click(sendButton);
+         click(sendButton);
+         expect(posts).toHaveLength(1);
++        /* In flight: drawn at full strength, not dimmed (plan 261019c). */
++        expect(thread().querySelector(".fb-reply-send")?.hasAttribute("data-working")).toBe(true);
+         await act(async () => gate.release?.());
+         await settle();
+         expect(thread().querySelector(".fb-question-answer")).not.toBeNull();

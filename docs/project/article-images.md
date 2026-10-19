@@ -300,6 +300,21 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   a region tied to the wrong caption may not. The locator is now asked about every refused
   figure, not only one with a picture nearby, still capped at `MAX_LOCATE_CALLS` —
   [261001q § Stage 2](../plans/261001q-pdf-tables-and-composite-figures.md).
+- **Since 2026-10-19 a PDF figure with no printed caption is kept, and says it was not
+  recovered.** Every route above proves ownership by the caption, and the renderer used to drop a
+  figure record with an empty caption before any route saw it: 27 of 33 figures in a book, with
+  nothing in any manifest (report spya-x9gn3d,
+  [261019b](../postmortems/261019b-a-figure-without-the-usual-evidence-was-treated-as-no-figure.md)).
+  Now it is an empty marked `<figure>`, the gate refuses it `uncaptioned` by name, and the reader
+  sees *"We couldn't recover this figure"* where the diagram belongs. **The rule this follows: a
+  step may drop what is not the article, but not what is the article merely because a later step
+  cannot resolve it.** Its ref folds in the page's figure count and the prose either side, since
+  page and ordinal alone would let a re-extraction move its block id onto another figure, and
+  adjacent empty figures otherwise have empty neighbours. Recovering its picture needs where it
+  sits between that prose on the page, and "the prose is on the page" is not enough: it would pass
+  260924e's wrong pairing. That positional route is
+  [261019e § Stage B](../plans/261019e-uncaptioned-pdf-figures-are-kept.md#stage-b-written-up-queued-for-greg-recover-the-picture-by-position),
+  waiting on Greg.
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now

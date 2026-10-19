@@ -139,8 +139,10 @@
      symmetric in the two pads: it is the inset from the cell's right edge now,
      and the "left of where the words start" caveat is "right of where they
      end". Heading rows: § folding a section in prose.css puts the fold chevron
-     at the prose's right edge, and this column starts `--blk-gutter-x` past
-     it — neighbours, never on top of each other, at every root. */
+     at the prose's right edge, and on a hover-capable screen this column starts
+     `--blk-gutter-x` past it. The no-hover strip is deliberately 4px narrower
+     than a full slot at the ordinary root, so a marked heading is the accepted
+     overlap recorded in narrow-window.css § a no-hover screen. */
   right: calc(
     var(--blk-gutter-x) +
       max(
@@ -1086,29 +1088,43 @@ td.text.kind-heading .blk-gutter[data-open] {
   }
 }
 
-/* -------------------------------------- a narrow screen and a finger -----
-   **On a phone the column of icons is gone, and a tap brings them up in a bar
-   above the paragraph instead**, since 2026-10-18. Greg, on a phone in
-   portrait (spya-k49y3q):
+/* ---------------------------------------------- a no-hover screen -------
+   **Under a finger the column of icons is gone, and a tap brings them up in a
+   bar above the paragraph instead** — on a phone since 2026-10-18, and on
+   every no-hover screen, the iPad included, since 2026-10-19. Greg, on a phone
+   in portrait (spya-k49y3q):
 
    > it does seem like a waste that there's a bit of space to the right of
    > every single paragraph on a portrait mobile phone where that horizontal
    > real estate is really precious that we're not using most of the time, and
    > that we only need it when there's an explicit action.
 
-   The condition is narrow-window.css's, plus a finger: the same query shrinks
-   the right pad there to a narrow strip, which holds only what the column shows
-   at rest. docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md
-   has the measurements and the options passed over.
+   and then on an iPad in portrait with Marginalia on (spya-eebnxu): *"I still
+   feel like we could be making more use of the horizontal real estate … even
+   on a portrait iPad when I've got marginalia mode on"*.
+
+   **`(hover: none)` means the primary pointer cannot hover**, which is a
+   phone or a tablet, not every screen that can be touched: a touchscreen
+   laptop whose primary pointer is a mouse reports `hover: hover` and keeps the
+   column it reveals on hover. narrow-window.css § a no-hover screen shrinks the
+   right pad under the same query to a narrow strip, which holds only what the
+   column shows at rest. Nothing here depends on the width: the bar is at most
+   four 24px controls against the cell's right edge.
+   docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md has the
+   phone's measurements and the options passed over;
+   docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md
+   the iPad's.
 
    **At rest it is the same element, flush with the cell's right edge**
    (`--blk-gutter-x` is 0 here) and still a 24px-wide box, so a mark keeps its
-   24px target. The box reaches a few px past the pad into the prose, which costs
-   nothing because the empty slots are `pointer-events: none`. Only a row with a
-   mark has a target there. The glyph is pushed to the box's right so it is drawn
-   inside the pad, and the reading-time hairline moves to the cell's outer edge,
-   because the pad has no room for both a gap and a glyph. The counts wait for
-   the bar.
+   24px target on an ordinary row. The box reaches a few px past the pad into the
+   prose, which costs nothing because the empty slots are `pointer-events: none`.
+   Only a row with a mark has a target there. On a heading the later fold control
+   owns those few pixels, leaving the accepted 20px target recorded in
+   narrow-window.css § a no-hover screen. The glyph is pushed to the box's right
+   so it is drawn inside the pad, and the reading-time hairline moves to the
+   cell's outer edge, because the pad has no room for both a gap and a glyph. The
+   counts wait for the bar.
 
    **A tap turns the same element into the bar.** It is the same element, so it
    has the same handlers and the same one copy of every control (§ What "…"
@@ -1129,7 +1145,7 @@ td.text.kind-heading .blk-gutter[data-open] {
    heading's bottom-aligned box and a footnote's offset (both (0,3,1)). The
    opacities are left alone: § the touch reveal's 0.705 is measured against
    `--page`, which is what the bar paints. */
-@media (max-width: 731px) and (hover: none) {
+@media (hover: none) {
   .blk-gutter > * {
     justify-content: flex-end;
     padding-inline-end: 4px;
