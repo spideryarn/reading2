@@ -530,6 +530,103 @@ describe("the users page", () => {
 });
 
 /**
+ * `?user=<id>` — the link each account on /admin/vouchers carries (plan
+ * 261019k). The whole table, with that one row marked and named above it.
+ */
+describe("the users page, pointed at one account", () => {
+  const marked = (el: HTMLElement) => [...el.querySelectorAll("tbody tr[aria-current='true']")];
+  /* jsdom draws no layout and has no `scrollIntoView`; the page calls it on the marked row. */
+  let scrolled: Element[];
+  beforeEach(() => {
+    scrolled = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+  });
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it("marks that account's row, and names it above the table", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    expect(rows(el)).toHaveLength(2);
+    const rowsMarked = marked(el);
+    expect(rowsMarked).toHaveLength(1);
+    expect(rowsMarked[0]?.textContent).toContain("alice@example.test");
+    const line = el.querySelector("[data-pointed-at]");
+    expect(line?.textContent).toContain("alice@example.test");
+    /* Once, onto that row, however many renders followed. */
+    expect(scrolled).toEqual([rowsMarked[0]]);
+  });
+
+  it("scrolls once the list arrives, not before", async () => {
+    history.replaceState(null, "", `/admin/users?user=${BOB.id}`);
+    let answer: (r: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((go) => (answer = go))));
+    const el = await show();
+    expect(scrolled).toHaveLength(0);
+    await act(async () => answer(jsonOk({ users: [ALICE, BOB] })));
+    await settle();
+    expect(scrolled).toHaveLength(1);
+    expect(scrolled[0]?.textContent).toContain("bob@example.test");
+    expect(marked(el)).toHaveLength(1);
+  });
+
+  it("scrolls once again when the address points at a different account", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    expect(scrolled.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("alice@example.test"),
+    ]);
+
+    await act(async () => history.pushState(null, "", `/admin/users?user=${BOB.id}`));
+    await settle();
+
+    expect(marked(el)).toHaveLength(1);
+    expect(marked(el)[0]?.textContent).toContain("bob@example.test");
+    expect(scrolled.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("alice@example.test"),
+      expect.stringContaining("bob@example.test"),
+    ]);
+  });
+
+  it("clears the mark when Clear is pressed", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    const clear = [...el.querySelectorAll("[data-pointed-at] button")].find((b) => b.textContent?.trim() === "Clear");
+    expect(clear, "a Clear button").toBeTruthy();
+    await act(async () => (clear as HTMLButtonElement).click());
+    await settle();
+    await waitFor("the mark went", () => marked(el).length === 0);
+    expect(location.search).not.toContain("user=");
+    expect(el.querySelector("[data-pointed-at]")).toBeNull();
+  });
+
+  it("says so when the account is not in the list, rather than marking nothing quietly", async () => {
+    history.replaceState(null, "", `/admin/users?user=${OTHER_ACCOUNT}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    expect(marked(el)).toHaveLength(0);
+    expect(scrolled).toHaveLength(0);
+    expect(el.querySelector("[data-pointed-at]")?.textContent).toContain("not in this list");
+  });
+
+  it("marks nothing without the parameter", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    expect(marked(el)).toHaveLength(0);
+    expect(el.querySelector("[data-pointed-at]")).toBeNull();
+  });
+});
+
+/**
  * The build stamp on `/admin`, both ways round.
  *
  * `vite.config.ts` compiles the commit and the build time into the bundle, so

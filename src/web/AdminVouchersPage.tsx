@@ -25,6 +25,7 @@
 import { useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
+import type { AdminUser } from "../admin.js";
 import {
   type VoucherEmailState,
   RECIPIENT_NAME_MAX,
@@ -38,6 +39,7 @@ import { readableDate } from "../billing-plan.js";
 import { addressBoxChange, normaliseEmail } from "../email-address.js";
 import type { LibraryEntry } from "../types.js";
 import { AuthorGifts } from "./AdminAuthorGifts.js";
+import { type AccountUsage, AdminUserLink } from "./AdminUserCard.js";
 import {
   BUTTON,
   INPUT,
@@ -65,6 +67,7 @@ import {
   useAdminVouchers,
   type VoucherPatchInput,
 } from "./useAdminVouchers.js";
+import { type UseAdminUsers, useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
 
@@ -759,16 +762,44 @@ function EmailLine({
   );
 }
 
-/** Waiting / Claimed by … on … / Revoked — the status column. */
-function status(v: AdminVoucherRow): string {
+/**
+ * Waiting / Claimed by … on … / Revoked — the status column. The claimant is
+ * named by their address now, and that address is the link to their account
+ * (plan 261019k): the row's first column is the address the voucher was sent
+ * to, which they may since have left.
+ */
+function Status({ v, account, now }: { v: AdminVoucherRow; account: RowAccount | null; now: number }) {
+  const claimant = (fallback: string) => {
+    /* `claimantEmail` is normally the freshest address, from the vouchers
+       read itself. If that read could not resolve it but the independently
+       fetched, non-stale user row did, the id match is still authoritative. */
+    const resolvedEmail = account?.usage.kind === "loaded" ? account.usage.user.email : null;
+    const words = v.claimantEmail ?? resolvedEmail ?? fallback;
+    return account && v.claimedBy !== null ? (
+      <AdminUserLink id={account.id} usage={account.usage} now={now}>
+        {words}
+      </AdminUserLink>
+    ) : (
+      words
+    );
+  };
   if (v.revokedAt !== null) {
     const when = readableDate(v.revokedAt);
-    const claimed = v.claimedBy !== null ? ` (had been claimed by ${v.claimantEmail ?? "an account"})` : "";
-    return `Revoked${when ? ` on ${when}` : ""}${claimed}`;
+    return (
+      <>
+        Revoked{when ? ` on ${when}` : ""}
+        {v.claimedBy !== null && <> (had been claimed by {claimant("an account")})</>}
+      </>
+    );
   }
-  if (v.claimedBy === null) return "Waiting for sign-up";
+  if (v.claimedBy === null) return <>Waiting for sign-up</>;
   const when = v.claimedAt === null ? null : readableDate(v.claimedAt);
-  return `Claimed by ${v.claimantEmail ?? "an account whose address could not be read"}${when ? ` on ${when}` : ""}`;
+  return (
+    <>
+      Claimed by {claimant("an account whose address could not be read")}
+      {when ? ` on ${when}` : ""}
+    </>
+  );
 }
 
 /**
@@ -827,16 +858,54 @@ function StarterLine({ starter }: { starter: AdminVoucherRow["starter"] }) {
   );
 }
 
+/** The account a row is about, and what the page knows of its usage. */
+type RowAccount = { readonly id: string; readonly usage: AccountUsage };
+
+/**
+ * **Which account a voucher's row is about**, for its link to /admin/users
+ * (plan 261019k). A claimed voucher names its claimant by id, so it links
+ * whether or not the user list has arrived, from the claimant's address in
+ * Status. A waiting one is matched by address, and only to exactly one account:
+ * two accounts can hold one address (src/store/admin-accounts.ts treats that as
+ * ambiguous too), and a guess between them would link the wrong person; it
+ * links from the Email column. No match, no link: nobody has signed up with it.
+ * A revoked voucher nobody claimed is about an address, not an account.
+ */
+export function accountForVoucher(
+  v: Pick<AdminVoucherRow, "claimedBy" | "email" | "revokedAt">,
+  list: Pick<UseAdminUsers, "users" | "error">,
+): RowAccount | null {
+  const { users, error } = list;
+  if (v.claimedBy !== null) {
+    const id = v.claimedBy;
+    if (users === null) return { id, usage: error === null ? { kind: "loading" } : { kind: "failed", error } };
+    const user = users.find((u) => u.id === id);
+    if (!user) return { id, usage: error === null ? { kind: "missing" } : { kind: "failed", error } };
+    return { id, usage: error === null ? { kind: "loaded", user } : { kind: "stale", user, error } };
+  }
+  /* A failed refresh leaves `users` in memory. That is useful for the usage
+     on an id-based claimed link, but not evidence that an address still
+     belongs to the same account: suppress waiting-row links until a fresh
+     list arrives rather than pointing one at yesterday's address holder. */
+  if (users === null || error !== null || v.revokedAt !== null) return null;
+  const address = normaliseEmail(v.email);
+  const holders: AdminUser[] = users.filter((u) => normaliseEmail(u.email) === address);
+  const only = holders.length === 1 ? holders[0] : undefined;
+  return only ? { id: only.id, usage: { kind: "loaded", user: only } } : null;
+}
+
 function VoucherRow({
   voucher,
   update,
   retry,
   now,
+  account,
 }: {
   voucher: AdminVoucherRow;
   update: UseAdminVouchers["update"];
   retry: UseAdminVouchers["retry"];
   now: number;
+  account: RowAccount | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [articles, setArticles] = useState(String(voucher.articles));
@@ -935,6 +1004,10 @@ function VoucherRow({
             }}
             className={`${INPUT} tw:w-56`}
           />
+        ) : account && voucher.claimedBy === null ? (
+          <AdminUserLink id={account.id} usage={account.usage} now={now}>
+            {voucher.email}
+          </AdminUserLink>
         ) : (
           voucher.email
         )}
@@ -1018,7 +1091,7 @@ function VoucherRow({
       </td>
       <td className={`${CELL} tw:whitespace-nowrap`}>{readableDate(voucher.createdAt) ?? "—"}</td>
       <td className={`${CELL} tw:min-w-48`}>
-        {status(voucher)}
+        <Status v={voucher} account={account} now={now} />
         {voucher.emails.gift && <EmailLine label="Email to them" email={voucher.emails.gift} now={now} retry={retry} />}
         {voucher.emails.claimed && (
           <EmailLine label="Email to you" email={voucher.emails.claimed} now={now} retry={retry} />
@@ -1103,6 +1176,9 @@ export function AdminVouchersPage() {
   const readerId = useContext(SignedInReader);
   /* For the *may or may not have gone* warning on a send stuck past ten minutes. */
   const now = useNow();
+  /* The accounts the rows link to, and the usage on each link's card: the
+     same read /admin/users makes (plan 261019k). */
+  const accounts = useAdminUsers();
 
   return (
     <Shell title="Gift vouchers" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
@@ -1127,6 +1203,17 @@ export function AdminVouchersPage() {
       )}
 
       {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}
+      {/* Without the accounts a waiting voucher's address looks exactly like
+          one nobody has signed up with, so the page says which it is. */}
+      {accounts.error && (
+        <Refusal
+          message={
+            accounts.users
+              ? `Refreshing the accounts failed. Claimed links show usage from the last successful read; waiting vouchers are not linked until the accounts can be refreshed. ${accounts.error}`
+              : `Could not read the accounts, so vouchers waiting for sign-up are not linked to Users, and the links on claimed ones show no usage. ${accounts.error}`
+          }
+        />
+      )}
 
       <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
         <span className="tw:text-xs tw:text-muted-foreground">
@@ -1134,15 +1221,18 @@ export function AdminVouchersPage() {
         </span>
         <button
           type="button"
-          onClick={() => void reload()}
-          disabled={loading}
+          onClick={() => {
+            void reload();
+            void accounts.reload();
+          }}
+          disabled={loading || accounts.loading}
           aria-label="Refresh the vouchers"
-          data-tip="Refresh the vouchers"
+          data-tip="Refresh the vouchers and their accounts"
           data-tip-describes="off"
           className={BUTTON}
         >
           <RefreshCw size={12} />
-          {loading ? "Loading…" : "Refresh"}
+          {loading || accounts.loading ? "Loading…" : "Refresh"}
         </button>
       </div>
 
@@ -1178,7 +1268,14 @@ export function AdminVouchersPage() {
             </thead>
             <tbody>
               {vouchers.map((v) => (
-                <VoucherRow key={v.id} voucher={v} update={update} retry={retry} now={now} />
+                <VoucherRow
+                  key={v.id}
+                  voucher={v}
+                  update={update}
+                  retry={retry}
+                  now={now}
+                  account={accountForVoucher(v, accounts)}
+                />
               ))}
             </tbody>
           </table>
