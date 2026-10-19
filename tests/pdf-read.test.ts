@@ -24,7 +24,8 @@ import {
   withoutRepeats,
   wordsOf,
 } from "../src/pdf-read.js";
-import { parsePdfFigureMarker } from "../src/assets.js";
+import { parsePdfFigureMarker, pdfFigureMarkerValue } from "../src/assets.js";
+import { pdfFigureRef } from "../src/pdf-figures.js";
 import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
 import { loadMathsRenderer } from "../src/maths-server.js";
 
@@ -360,14 +361,54 @@ describe("records into HTML", () => {
     );
   });
 
-  it("leaves a captionless figure with no element and therefore no marker", () => {
-    /* v1's boundary, stated rather than discovered: `renderHtml` skips an
-       empty-text record before it builds anything, so a figure with no printed
-       caption has no block to address and nothing to re-mint. Giving those a
-       media block of their own is a separate decision. GPT Sol, I-3. */
-    const html = renderHtml([record({ type: "figure", text: "   " })], "T", RAW_SHA);
-    expect(html).not.toContain("<figure");
-    expect(html).not.toContain("data-spya-pdf-figure");
+  it("keeps a captionless figure as a marked figure with no caption", () => {
+    /* Until 2026-10-19 this was skipped, and a book whose diagrams print no
+       caption lost every one of them without a word: 27 of 33 figures in
+       Rovelli's *The Order of Time*. docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md. */
+    const html = renderHtml(
+      [
+        record({ text: "Those of Leonidas are shown below:" }),
+        record({ type: "figure", text: "   " }),
+        record({ text: "The temporal structure of the universe is very similar." }),
+      ],
+      "T",
+      RAW_SHA,
+    );
+    expect(html).toMatch(/<figure data-spya-pdf-figure="[^"]+"><\/figure>/);
+    expect(html).not.toContain("<figcaption>");
+    const marker = /data-spya-pdf-figure="([^"]+)"/.exec(html)?.[1];
+    expect(parsePdfFigureMarker(marker ?? "")).toEqual({ ref: marker, page: 1, ordinal: 1 });
+  });
+
+  it("names a captionless figure by the prose either side of it", () => {
+    /* With no caption, page and ordinal would be all a ref had: a re-extraction
+       that found one more captionless figure earlier on the page would hand this
+       figure's ref, and through it its block id, to the new one. The neighbours
+       make it a different figure. GPT Sol, plan review of 261019e, finding 4. */
+    const refOf = (before: string, after: string) =>
+      /data-spya-pdf-figure="([^"]+)"/.exec(
+        renderHtml(
+          [record({ text: before }), record({ type: "figure", text: "" }), record({ text: after })],
+          "T",
+          RAW_SHA,
+        ),
+      )?.[1];
+    expect(refOf("Shown below:", "After it.")).toBe(refOf("Shown below:", "After it."));
+    expect(refOf("Shown below:", "After it.")).not.toBe(refOf("Shown here:", "After it."));
+    expect(refOf("Shown below:", "After it.")).not.toBe(refOf("Shown below:", "Something else."));
+  });
+
+  it("leaves a captioned figure's ref exactly as it was, neighbours or not", () => {
+    /* Every ref stored today is a captioned one; folding the neighbours into
+       those would move every carried-forward picture. */
+    const html = renderHtml(
+      [record({ text: "Before." }), record({ type: "figure", text: "Figure 1. A drawing." }), record({ text: "After." })],
+      "T",
+      RAW_SHA,
+    );
+    const marker = parsePdfFigureMarker(/data-spya-pdf-figure="([^"]+)"/.exec(html)?.[1] ?? "");
+    const figureRef = pdfFigureRef({ rawSha256: RAW_SHA, page: 1, ordinal: 1, caption: "Figure 1. A drawing." });
+    expect(marker?.ref).toBe(pdfFigureMarkerValue({ figureRef, page: 1, ordinal: 1 }));
   });
 
   it("marks a block the model could not fully read, so the reader can see it", () => {

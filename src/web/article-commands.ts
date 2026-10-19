@@ -236,3 +236,43 @@ export function exportCommand(run: Run): Command {
     run,
   };
 }
+
+/**
+ * **Open the original** — the page the article was made from, or the PDF the
+ * owner uploaded: whichever `originalOf` (SourceLink.tsx) says there is, and no
+ * row when there is neither. Greg, 2026-10-18 (spya-r6a5s5): *"I want a way to
+ * be able to open the original from the command bar. I tried typing original
+ * into the command bar and didn't find anything."* Plan 261019f.
+ *
+ * **Not bare `source`**, which is a prefix of the Sources mode's name and must
+ * stay its. **Nor does Plain answer to `original` any more**: it did, as one
+ * of its nicknames, and that is the row Greg found instead of this one.
+ *
+ * Which kind of original it opens is the caller's (CommandBar.tsx §
+ * `originalRow`); the words are the same for both.
+ */
+export function originalCommand(run: Run): Command {
+  return {
+    kind: "action",
+    id: "original",
+    label: "Open the original",
+    /* **One sentence for both kinds, and no host.** The command pick's model
+       reads these words out of a checked-in file, one entry per (id, label)
+       (tests/command-pick-catalogue.test.ts), so words that moved with the
+       article would be frozen there as one article's — GPT Sol's F3 on the
+       plan. The masthead already shows the host. */
+    description: "The web page or the PDF this article was made from, in a new tab.",
+    /* Literal, and few (Sol's F4): `view original` and `open original`
+       because matching is contiguous and the label has a `the` in it. */
+    aliases: ["view the original", "view original", "open original", "original page", "original pdf", "source page"],
+    generates: false,
+    typedOnly: true,
+    /* **`false`, though it only opens a tab**: a row the model picks from a
+       sentence runs after an `await` when this is `true`
+       (CommandBar.tsx § `onlyMovesTheReader`), and a tab opened after an
+       await is a blocked popup — nothing on screen at all. `false` draws the
+       row and waits for an Enter, which is a gesture. */
+    opensOnly: false,
+    run,
+  };
+}

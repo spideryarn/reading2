@@ -1539,6 +1539,10 @@ describe("POST /api/feedback", () => {
           online: true,
           timezone: "America/Argentina/Buenos_Aires",
           colorScheme: "dark",
+          appearance: "system",
+          theme: "dark",
+          brightness: "dimmest",
+          textSize: "largest",
           reducedMotion: false,
         },
         api: Array.from({ length: 50 }, () => ({

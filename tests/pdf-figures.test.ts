@@ -672,14 +672,28 @@ describe("pairPageFigures", () => {
     expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
   });
 
-  it("refuses a marker with no caption to check, rather than pairing it blind", () => {
+  it("refuses a marker with no caption to check as uncaptioned, rather than pairing it blind", () => {
+    /* Not `caption-not-in-page-text`, which claims a caption that is not there.
+       A picture for an uncaptioned figure needs evidence of position, which
+       this gate does not have yet: docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md § Stage B. */
     const result = pairPageFigures({
       markers: [marker({ ref: "nameless", page: 4 })],
       candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "fig" })],
       captions: new Map(),
       pageText: new Map([[4, "Figure 1. Something."]]),
     });
-    expect(verdicts(result)).toEqual(["refused:caption-not-in-page-text"]);
+    expect(verdicts(result)).toEqual(["refused:uncaptioned"]);
+  });
+
+  it("counts an uncaptioned marker on its page, so a captioned one beside it cannot take its picture", () => {
+    /* One picture and two figures on the page: the picture may be either's. */
+    const result = pairPageFigures({
+      markers: [marker({ ref: "captioned", page: 4, ordinal: 1 }), marker({ ref: "nameless", page: 4, ordinal: 2 })],
+      candidates: [rgb(4, 4, [1, 2, 3], { page: 4, key: "fig" })],
+      captions: new Map([["captioned", "Figure 1. Something."]]),
+      pageText: new Map([[4, "Figure 1. Something."]]),
+    });
+    expect(verdicts(result)).toEqual(["refused:ambiguous", "refused:uncaptioned"]);
   });
 
   it("refuses to carry on if a marker is offered twice", () => {
@@ -747,6 +761,13 @@ describe("pdfFigureRef", () => {
 
   it("is unmoved by whitespace the renderer might change", () => {
     expect(pdfFigureRef({ ...base, caption: "  Figure 1.\n A plot. " })).toBe(pdfFigureRef(base));
+  });
+
+  it("refuses neighbour context on a captioned figure", () => {
+    /* Passing it accidentally would move an existing stored ref without a
+       version bump, despite the API's promise that context is only the missing
+       caption's identity. Refuse that misuse at the seam. */
+    expect(() => pdfFigureRef({ ...base, context: "Before.\nAfter." })).toThrow(/uncaptioned/);
   });
 
   it("refuses to mint a ref from something that is not a PDF hash", () => {

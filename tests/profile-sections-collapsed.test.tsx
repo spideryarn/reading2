@@ -225,7 +225,7 @@ describe("the profile page's contents list", () => {
   it.each([
     ["hide experimental features", ["Settings"]],
     ["archived articles", []],
-    ["font size", []],
+    ["font size", ["Settings"]],
     ["usage", ["Plan"]],
     ["bill", ["Plan"]],
   ])("uses Profile's vocabulary for %s", async (query, labels) => {

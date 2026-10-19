@@ -188,7 +188,8 @@ import { useDictationField } from "./useDictationField.js";
 import { type MetadataSection, type Mode, type LearnView, modeParam, learnInSearch, withSection } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LABEL, RERUN_LANDS_IN, type MetadataRerunStep, rerunCommand } from "./rerun-commands.js";
 import { rewriteHeld } from "./rewrite-hold.js";
-import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "./article-commands.js";
+import { SECTION_ROWS, archiveCommand, exportCommand, originalCommand, sectionCommand } from "./article-commands.js";
+import { openUploadedOriginal, type Original } from "./SourceLink.js";
 import { downloadExport } from "./export-download.js";
 import type { ArchiveControl } from "./useArchive.js";
 import {
@@ -299,6 +300,12 @@ export interface CommandBarArticle {
    * alone: there is no band on the Metadata page.
    */
   readonly executor?: CommandExecutor | undefined;
+  /**
+   * **What *Open the original* opens**, or absent for no row — `originalOf`'s
+   * answer (SourceLink.tsx), worked out by the page from the article's meta,
+   * since the Dock has none. Plan 261019f.
+   */
+  readonly original?: Original | undefined;
 }
 
 /**
@@ -717,10 +724,65 @@ function goToSection(article: CommandBarArticle, section: MetadataSection): Acti
  */
 function metadataRows(article: CommandBarArticle): readonly Command[] {
   const own = article.shelfRow;
+  const original = article.original;
   return [
     ...SECTION_ROWS.map((row) => sectionCommand(row, () => goToSection(article, row.section))),
+    ...(original === undefined ? [] : [originalRow(article.slug, original)]),
     ...(own === undefined ? [] : [...archiveRows(own.archive), exportRow(article.slug)]),
   ];
+}
+
+/**
+ * **Open the original, in a new tab** — the web address, or the uploaded PDF
+ * through the fetch Metadata's *View the original* makes (SourceLink.tsx §
+ * `openUploadedOriginal`). Plan 261019f.
+ *
+ * **Both open their tab before anything is awaited**, because `activate` calls
+ * `run()` inside the key or click handler and a tab opened later is a blocked
+ * popup. That is also why the row is not `opensOnly` (article-commands.ts).
+ *
+ * **And not at all outside a gesture.** A double press on Stop presses Enter
+ * from an effect once the words arrive (`onDone` above), which may be after
+ * the browser's few seconds of activation have run out — and then `window.open`
+ * is refused without a word, or the PDF arm's fallback replaces this very tab.
+ * So the row asks the browser first (`hasGesture`), and with no gesture it
+ * stays drawn and asks to be chosen again, which is one (GPT Sol's F2 on the plan).
+ *
+ * The web arm closes at once: a popup the browser refused anyway has no
+ * answer to wait for, and `noopener` makes `window.open` return `null` either
+ * way. The PDF arm waits, so a refusal stays under the box as a sentence.
+ */
+/* No key named: a finger has no Enter, and a tap on the row is a gesture too
+   (tests/words-that-name-a-key-have-something-to-press.test.ts). */
+const PRESS_TO_OPEN = "Choose it again to open the original in a new tab.";
+
+/**
+ * **May this call open a tab?** — the browser's own answer where it has one
+ * (`navigator.userActivation`, in every current engine), and *yes* where it
+ * does not, which is what the code did before it asked.
+ */
+function hasGesture(): boolean {
+  const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
+  return activation === undefined || activation.isActive;
+}
+
+function originalRow(slug: string, original: Original): Command {
+  return originalCommand((): ActionOutcome | Promise<ActionOutcome> => {
+    if (!hasGesture()) return { kind: "stay", message: PRESS_TO_OPEN };
+    switch (original.kind) {
+      case "web":
+        window.open(original.url, "_blank", "noopener,noreferrer");
+        return CLOSE;
+      case "pdf":
+        return openUploadedOriginal(slug).then((result) =>
+          result.ok ? CLOSE : { kind: "stay", message: result.message },
+        );
+      default: {
+        const never: never = original;
+        return never;
+      }
+    }
+  });
 }
 
 /**

@@ -45,6 +45,11 @@ type Allowed = { file: string; contains: string; why: string };
 const ALLOWLIST: readonly Allowed[] = [
   // ---- theme-neutral: these are the same on either ground ----
   {
+    file: "src/web/styles/reading-comfort.css",
+    contains: "background: rgb(0 0 0 / var(--comfort-dim, 0))",
+    why: "Brightness: black at alpha a takes away that share of the light, of ink and page alike, in either theme",
+  },
+  {
     file: "src/web/styles/site.css",
     contains: "color: #000",
     why: "@media print: the headline on paper, which is white whatever the screen's theme",

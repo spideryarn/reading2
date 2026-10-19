@@ -406,6 +406,38 @@ describe("appearance", () => {
   });
 });
 
+describe("reading comfort", () => {
+  it("reports non-default choices and the server keeps them", () => {
+    stubBrowser();
+    vi.stubGlobal("window", {
+      ...(globalThis.window as object),
+      localStorage: {
+        getItem: (key: string) =>
+          key === "spya.brightness" ? "dimmest" : key === "spya.text-size" ? "largest" : null,
+      },
+    });
+
+    const device = collectFeedbackDiagnostics().device;
+    expect(device?.brightness).toBe("dimmest");
+    expect(device?.textSize).toBe("largest");
+    const parsed = parseFeedbackDiagnostics(collectFeedbackDiagnostics());
+    expect(parsed?.device?.brightness).toBe("dimmest");
+    expect(parsed?.device?.textSize).toBe("largest");
+  });
+
+  it("drops unknown choices and reads reports from before the fields as null", () => {
+    const unknown = parseFeedbackDiagnostics({
+      device: { brightness: "brightest", textSize: "tiny" },
+    });
+    expect(unknown?.device?.brightness).toBeNull();
+    expect(unknown?.device?.textSize).toBeNull();
+
+    const old = parseFeedbackDiagnostics({ device: { appearance: "dark", theme: "dark" } });
+    expect(old?.device?.brightness).toBeNull();
+    expect(old?.device?.textSize).toBeNull();
+  });
+});
+
 describe("the caps", () => {
   /**
    * **The most recent entries, not the oldest.**

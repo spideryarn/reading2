@@ -62,6 +62,7 @@ import type {
   FeedbackJobState,
 } from "../feedback-payload.js";
 import { currentTheme, readAppearance } from "./appearance.js";
+import { BRIGHTNESS, readComfort, TEXT_SIZE } from "./reading-comfort.js";
 import { readFeedbackArticleContext, readFeedbackJobContext } from "./feedback-context.js";
 import { readLogBuffer, type ApiLogEntry, type ClientErrorLogEntry } from "./log-buffer.js";
 
@@ -188,6 +189,8 @@ function device(): FeedbackDevice | null {
     colorScheme: colourScheme(),
     appearance: safely(() => readAppearance()),
     theme: safely(() => currentTheme()),
+    brightness: safely(() => readComfort(BRIGHTNESS)),
+    textSize: safely(() => readComfort(TEXT_SIZE)),
     reducedMotion: matches("(prefers-reduced-motion: reduce)"),
   };
 }

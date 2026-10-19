@@ -1,0 +1,1314 @@
+diff --git a/docs/plans/261019g-plan-review-prompt.md b/docs/plans/261019g-plan-review-prompt.md
+new file mode 100644
+index 000000000..46d1a55a2
+--- /dev/null
++++ b/docs/plans/261019g-plan-review-prompt.md
+@@ -0,0 +1,10 @@
++You are reviewing a plan, read-only, before it is built. Repository: this checkout (Spideryarn, a web reading app; React + Vite, CSS in src/web/styles and styles/).
++
++Read docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md. Also read the prior plan it supersedes in part, docs/plans/261003a-reading-text-size-setting.md, and docs/plans/261003e-light-dark-and-system-appearance-on-profile.md for the Appearance machinery it copies (src/web/appearance.ts, src/web/AppearanceSetting.tsx, index.html's appearance-boot script, tests/appearance.test.ts).
++
++Check the plan's claims against the code, especially:
++1. That scaling the html root font-size (112.5/125/137.5%) keeps the type hierarchy and layout working: are there px-based font sizes, line-heights, heights, offsets or JS constants (src/web/layout.ts, src/web/reader/measure.ts, gutter, sticky bars, spine, marginalia, virtualisation/row-height estimates, scroll restoration) that assume a 16px root and would misalign or overflow? Name file:line.
++2. That an html::after fixed overlay with pointer-events:none and z-index max is safe: anything that uses elementFromPoint, hit testing, top-layer dialogs/popovers not listed, html::after already used, screenshots, print styles (should dimming be off in print?), iOS Safari overscroll/safe-area gaps.
++3. Whether per-device localStorage is right vs a profile column, given the reasons stated.
++4. Anything simpler, or any step missing (e.g. signed-out site pages built by scripts/build-site-pages.ts or client-shell.ts that might not include the boot script; /help text; the /design bigRoot switch interacting with data-text-size).
++Write findings ranked P0/P1/P2 with file:line evidence, then a one-line verdict: BUILD AS IS, BUILD WITH CHANGES, or STOP.
+diff --git a/docs/plans/261019g-plan-review-sol.md b/docs/plans/261019g-plan-review-sol.md
+new file mode 100644
+index 000000000..701b11752
+--- /dev/null
++++ b/docs/plans/261019g-plan-review-sol.md
+@@ -0,0 +1,29 @@
++## P0
++
++None.
++
++## P1
++
++1. **A cross-tab text-size change can reflow the article without preserving the reader’s place.** The proposed `resize` event makes `useRootFontPx()` update ([measure.ts:154](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/reader/measure.ts:154)), but the reflow key omits the root size ([Reader.tsx:718](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/reader/Reader.tsx:718)). At widths where fitted column widths remain unchanged, every paragraph can rewrap while `layoutKey` does not change. Scroll restoration explicitly treats an unchanged key as “nothing reflowed” ([useReadingPosition.ts:155](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/reader/useReadingPosition.ts:155)), and the position spy has the same dependency ([useReadingPosition.ts:185](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/reader/useReadingPosition.ts:185)). Add `rootFontPx` or the text-size value to `layoutKey`, with a regression test where root size changes but `tableW`/`modeW` do not.
++
++2. **The plan’s preserved-contrast claim is false.** It says the overlay keeps text/page contrast at the same ratio ([plan:121](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md:121)). Alpha compositing scales encoded RGB values, while WCAG contrast uses linear luminance plus a `0.05` term; the ratio therefore falls, often sharply. This matters because several muted colours were calibrated just above 4.5:1 ([tokens.css:182](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/styles/tokens.css:182)). Keep the overlay design, but describe it honestly and calibrate the three levels for readable body, muted, disabled, and danger text in both themes. Pixel brightness alone is insufficient acceptance evidence.
++
++3. **The claim that JS layout “gives up columns sooner” is only partly true, and the browser matrix misses the risky boundaries.** Standard bands retain fixed `MODE_MIN`/`MODE_IDEAL` values ([layout.ts:232](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/layout.ts:232)), fixed prose thresholds ([layout.ts:59](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/layout.ts:59), [layout.ts:125](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/layout.ts:125)), and the same 700px cover crossover ([layout.ts:482](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/layout.ts:482)). Marginalia remains 200/288/384px while its text grows ([layout.ts:529](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/layout.ts:529)). At a 22px root, the 400px prose floor is substantially narrower in characters than the 30.2ch measured at 16px. Either scale the type-readability thresholds or explicitly accept that trade-off and test 700px, the band-plus-marginalia crossover, narrow landscape, and a dense mode—not only 390px and 820px Plain/Glossary.
++
++4. **Dimming needs an explicit print exemption and a real installed-iPad check.** A fixed overlay can otherwise darken printed pages/PDFs; the repository already removes screen-only effects in print ([site.css:218](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/styles/site.css:218), [dock.css:1072](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/styles/dock.css:1072)). Add a print rule disabling the overlay and dialog filter. Also, the proposed Playwright run cannot answer the plan’s acknowledged iOS-standalone uncertainty: safe-area insets are zero on every development machine ([tokens.css:201](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/styles/tokens.css:201)). Require an installed-iPad pass covering first paint, portrait/landscape, elastic overscroll seams, status-bar/home-indicator edges, and an open dialog.
++
++## P2
++
++- **The px-font guard is narrower than its stated guarantee.** A stylesheet-only scan misses Tailwind arbitrary sizes and inline/SVG sizes, including [AddArticle.tsx:331](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/AddArticle.tsx:331), [DataTable.tsx:546](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/lib/DataTable.tsx:546), and [SketchView.tsx:110](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/SketchView.tsx:110). Either scan TS/TSX with a reasoned allowlist or narrow the claim to CSS. Add 18px and 22px to the existing layout and rotation sweeps, which currently stop at 20px ([layout.test.ts:186](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/tests/layout.test.ts:186), [reader-after-a-rotation-in-a-browser.test.ts:121](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/tests/reader-after-a-rotation-in-a-browser.test.ts:121)).
++
++- **The modal inventory is incomplete.** Sketch ([SketchView.tsx:553](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/SketchView.tsx:553)) and Command Bar ([CommandBar.tsx:2235](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/CommandBar.tsx:2235)) also use `showModal()`. The generic selector covers them, but test at least the full-viewport Command Bar. The `::backdrop` filter is unnecessary and relies on custom-property inheritance that existing styles deliberately avoid ([lightbox.css:62](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/styles/lightbox.css:62)); filter the dialog itself and leave its already-dark backdrop alone.
++
++- **`/design` is not prior proof and conflicts with the new setting.** Its comment calls the 20px root a diagnostic for mixed-unit failures ([DesignPage.tsx:616](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/DesignPage.tsx:616)). It writes an inline `20px`, overriding `data-text-size`; under “Largest,” enabling it would shrink the page ([DesignPage.tsx:635](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/DesignPage.tsx:635)). Define it as an explicit override, disable it under a saved non-default size, or replace it with a computed-root display.
++
++- **Support/documentation steps should be explicit.** Add both comfort values to feedback diagnostics, which currently record only Appearance and resolved theme ([feedback-diagnostics.ts:179](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/feedback-diagnostics.ts:179)). Make the Help update unconditional and regenerate the committed corpus ([help-page.md:112](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/docs/project/help-page.md:112)). The runtime module should also copy Appearance’s `pageshow`/bfcache and failed-write behavior, not merely its storage listener ([appearance.ts:113](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/appearance.ts:113)).
++
++Per-device `localStorage` is the right choice for this version: both values must exist before first paint, brightness is plainly device/environment-specific, and server synchronization would still need a local cache and conflict policy. Signed-out/static pages already preserve the boot script because page generation replaces only the managed head region ([build-site-pages.ts:82](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/scripts/build-site-pages.ts:82), [page-head.ts:253](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/public/page-head.ts:253)).
++
++The overlay’s `pointer-events:none` is safe for the existing `elementFromPoint` navigation ([keynav.ts:695](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/keynav.ts:695)). Spine and sticky offsets measure actual DOM geometry rather than assuming 16px ([Spine.tsx:188](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/Spine.tsx:188), [scroll.ts:179](/var/tmp/spideryarn-worktrees/fbq645m0-dim-mode-and-text-size/src/web/scroll.ts:179)); I found no virtualised row-height constant that needs conversion.
++
++**BUILD WITH CHANGES**
+\ No newline at end of file
+diff --git a/docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md b/docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md
+new file mode 100644
+index 000000000..178b9a483
+--- /dev/null
++++ b/docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md
+@@ -0,0 +1,288 @@
++# 261019g — Reading comfort on /profile: a brightness setting and a text size
++
++Two admin reports from Greg, 2026-10-18, on a portrait iPad in its home-screen app, batched as Overseer
++queue item `qi-7f32x9h3` (note: [261018_2348-dimmer-dark-mode-and-a-text-size-setting.md](../user-feedback/261018_2348-dimmer-dark-mode-and-a-text-size-setting.md)).
++
++> I'm in a dark bedroom, reading on my iPad, and I'm in dark mode for Spideryarn. But even so, it's
++> not quite as dark as I would like. The text is still quite bright, even with the brightness
++> setting down as low as it will go. So I wonder if it would be possible to have a brightness
++> setting, which probably doesn't really need many, many gradations, so that I can make the
++> background darker and the text slightly darker as well, to enable the iPad, in effect, to show
++> less light even than its own brightness setting allows.
++>
++> — Greg, 2026-10-18 (`spya-q645m0`)
++
++> I would like to be able to increase the size of the text. […] I've done the thing on the iPad
++> where you can share it to the home screen […] But I can't seem to figure out how to change the
++> text size in the browser. […] If I had to guess, I suppose I would imagine that we'd want to
++> change all of the text sizes accordingly, that we'd have some kind of global baseline or default
++> or whatever, and everything is sized relative to that. […] it's not worth enormous amounts of
++> implementational complexity, especially not if it's going to create bugs or make things hard to
++> maintain. If you do see a way forward that isn't too complex and that you do think is the best of
++> all worlds, then proceed using screenshots and making sure to document accordingly, so that going
++> forwards, future modes and UI changes naturally do the right thing.
++>
++> As we were saying just a moment ago, for the brightness setting, I think because this isn't
++> article specific, the setting for it should live in the user profile rather than in the article
++> metadata.
++>
++> — Greg, 2026-10-18 (`spya-ast8cu`)
++
++## What changed since "not now"
++
++A text-size setting was declined on 2026-10-08 ([q-wux4k7](../user-feedback/questions/q-wux4k7.md),
++plan [261003a](261003a-reading-text-size-setting.md)) because browser zoom covers it. Greg's new
++fact: a home-screen web app on iOS has no browser zoom and no Safari "aA" menu. So the reason for
++"not now" is gone for exactly the device he reads on.
++
++261003a's decisive finding was that **only the prose follows `--reading-size`**; headings, captions
++and footnotes are fixed `rem`, so scaling `--reading-size` alone inverts the hierarchy. That finding
++is about scaling *one variable*. It does not apply to the design below, which scales the root.
++
++## Text size: scale the root font-size, and let `rem` do the rest
++
++**The design is one rule.** A `data-text-size` attribute on `<html>`, set before first paint, and
++
++```css
++:root[data-text-size="large"]   { font-size: 112.5%; }  /* 18px at a 16px default */
++:root[data-text-size="larger"]  { font-size: 125%;   }  /* 20px */
++:root[data-text-size="largest"] { font-size: 137.5%; }  /* 22px */
++```
++
++Default sets nothing. Percentages, not px, so a reader's own browser default still compounds under it.
++
++Why this is small rather than a project, measured in the tree today:
++
++- **The app is already written in `rem`.** 497 `font-size` declarations in `rem`, 5 in `px`
++  (`ideas.css:360`, three Diagram force-graph labels at `diagram.css:280-282`, and none elsewhere).
++  Headings, captions, footnotes, mode-band text roles (`--type-item` and friends), controls
++  (`--control-h: 2.25rem`) and `--reading-size` itself are all `rem`, so all of them move together
++  and the hierarchy is kept exactly — the 261003a problem does not arise.
++- **The JS layout already follows the root.** `layout.ts`'s type-sized widths
++  (`PROSE_ALONE_MAX_REM`, `WIDE_IDEAL_REM`, Structure's columns, `MARG_GAP_REM`) are multiplied by
++  `rootFontPx`, read live from `getComputedStyle(document.documentElement).fontSize`
++  (`reader/measure.ts` § `useRootFontPx`), because a reader whose *browser* default is 20px already
++  gets exactly this. Its comment already names "a settings change" as a thing that moves it.
++- **The app is already tested at a non-16px root.** `/design` has a "larger root" switch that sets
++  `<html>` to 20px (`DesignPage.tsx` § `bigRoot`), and `controls.md` notes the close cross is in px
++  "because the app supports a 12px root".
++
++So this is the same thing a reader with a larger browser default gets, which the app already
++supports, behind a control. In Greg's case — Plain on a portrait iPad — the measure is
++`clamp(45ch, 90vw, 65ch)` in the prose's own font, so the line widens into the empty margins he
++described, up to the `PROSE_ALONE_MAX_REM` cap, which grows with the root too.
++
++**Everything scales, not just the article — which is Greg's guess, and the better choice here.**
++Reading apps (Kindle, Books, Readwise) scale the content only; but their chrome is native and
++follows the OS's own text size. Ours is web, and in a home-screen app nothing else will scale it.
++And scaling the root needs no second scale, so a future mode does the right thing by using `rem` —
++the house idiom already — rather than by remembering to opt in.
++
++**What the web research found** (a Sonnet subagent, 2026-10-19, asked at Greg's suggestion). WCAG
++1.4.4 counts an on-page control that enlarges *all* text (technique G178) as one way to meet it,
++and lists percent and `em` font sizes as sufficient techniques
++([Understanding 1.4.4](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)). `rem` in a
++media query resolves against the browser's initial size, not the CSS root (confirmed, see below). It
++could not confirm what Kindle, Readwise and the rest do in their web versions, or any iOS-standalone
++quirk; the device check below is what answers those.
++
++What does *not* scale, by design or by accident:
++
++- **CSS media queries.** `rem`/`em` in a media query mean the *initial* font size, never the
++  root's, and ours are in px anyway. So breakpoints stay put; at a larger size the JS layout gives
++  up columns sooner (its ideals are in rem), which is the right direction.
++- **The five px font sizes**, Lucide icons (sized in px at the call site), and the deliberate px
++  rows in controls.md. Icons beside bigger text look a little small; tolerable, and the same as a
++  reader with a 20px browser default sees today.
++- **A live change while an article is open.** The control lives on `/profile`, where none is
++  mounted, so the next article mounts at the new size. A change from another tab arrives by the
++  `storage` event; after applying it we dispatch one `resize` so `useRootFontPx` re-reads — the
++  hook's own comment calls `resize` the cheapest thing that notices.
++
++A guard so it stays true: a test that no stylesheet under `src/web/styles/` or `styles/` declares a
++`font-size` in px outside a short allowlist with reasons. That is the "future modes naturally do the
++right thing" Greg asked for, and it fails on the day someone writes `font-size: 13px`.
++
++## Brightness: one dimming layer over everything
++
++**The design is one pseudo-element.** A `data-brightness` attribute on `<html>`, set before first
++paint, and
++
++```css
++:root[data-brightness]::after {
++  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 2147483647;
++  background: rgb(0 0 0 / var(--dim));
++}
++:root[data-brightness="dim"]     { --dim: 0.3; }   /* 70% of the light */
++:root[data-brightness="dimmer"]  { --dim: 0.5; }   /* 50% */
++:root[data-brightness="dimmest"] { --dim: 0.65; }  /* 35% */
++```
++
++Black at alpha *a* over a pixel scales its encoded value by 1 − *a*: the page, the ink,
++highlights, pictures, the model-painted Illustrated images, everything — which is what "show less
++light than its own brightness setting allows" means. *(Corrected after review: through sRGB's
++gamma that leaves about (1 − a)^2.2 of the light, not 1 − a, and contrast falls rather than holding
++— the levels were recalibrated to 0.2 / 0.35 / 0.5; see § Plan review.)*
++
++**Passed over: a third palette** (a `data-theme="dim"` with darker values of every token). It is
++what "darker background and slightly darker text" literally describes, but the dark page is already
++`#0a0a0a`, nearly black, so the light that matters is the ink's, and a palette would mean a third
++value for every colour token and every categorical scale — 261003e needed a test just to keep two
++in step. It would also leave pictures at full brightness. The overlay needs no tokens, and every
++future colour follows it for free.
++
++**Passed over: `filter: brightness()` on the root.** Same effect, but a filter makes the element a
++containing block for `position: fixed` (the root is exempt in the spec, not reliably in every
++engine), and it re-filters the whole page on every scroll frame. An overlay is one composited layer.
++
++Two places the layer cannot reach, and what covers them:
++
++- **Top-layer dialogs** (`showModal()`: the Lightbox, Feedback, the purpose prompt, Illustrated's
++  dialog) draw above any `z-index`. `:root[data-brightness] dialog[open]` gets
++  `filter: brightness(calc(1 - var(--dim)))`, and `::backdrop` the same. A filter on a dialog is
++  harmless: it is already the containing block of its own contents.
++- **The browser's own furniture** (the status bar, the scrollbar) is outside the page. Nothing to do.
++
++It works in Light as well as Dark — same rule, no theme check — which is simpler and not wrong.
++
++## Where it lives, and why not on the profile row
++
++Greg: *"the setting for it should live in the user profile rather than in the article metadata."*
++Both controls go in `/profile`'s **Settings** card under Appearance, as two more rows of native
++radios like `AppearanceSetting.tsx`.
++
++Stored **per device, in `localStorage`**, like Appearance, and not as a `reader_profiles` column:
++
++- **Both must be known before first paint.** A brightness that arrives with `GET /api/reader`
++  is a full-brightness flash in a dark bedroom on every page load — the very thing being fixed.
++  A text size that arrives late re-lays the page under the reader after `?at=` has placed them.
++- **Both are facts about the screen, not the person.** Dimmest on the iPad in bed and full on the
++  desk is the point; synced, one would overwrite the other.
++- **No migration, no route field, no store.** The same reason Appearance is per device
++  ([261003e § Key decisions 1](261003e-light-dark-and-system-appearance-on-profile.md#key-decisions)).
++
++## The pieces
++
++1. **`src/web/reading-comfort.ts`** — the two settings: values, keys (`spya.brightness`,
++   `spya.text-size`), `parse…`, guarded reads and writes, `applyComfort()` (sets or removes the two
++   attributes), a `storage` listener started from `main.tsx` beside `startAppearance()`, and
++   `useBrightness()` / `useTextSize()` hooks with the same "couldn't save" state Appearance has.
++   *Not* folded into `appearance.ts`: that file is about the theme, and these are not.
++2. **`index.html`** — the inline `appearance-boot` script also sets the two attributes. One script,
++   because one head script is enough and each `<script>` is a parse; the test lifts it as today.
++3. **`src/web/styles/reading-comfort.css`** — the overlay, the dialog filters and the three root
++   sizes, imported with the other app styles.
++4. **`src/web/ReadingComfortSettings.tsx`** — two radio rows, Brightness (Full · Dim · Dimmer ·
++   Dimmest) and Text size (Default · Large · Larger · Largest), applied on change, one "Saved on
++   this device" line; rendered in `ProfilePage.tsx`'s Settings card after `AppearanceSetting`, and
++   the section's search keywords gain *brightness, dim, night, text size, font, bigger*.
++5. **Tests, red first** — `tests/reading-comfort.test.ts`: parse (unknown and throwing storage read
++   as the default), the inline script agrees with the module for every stored value (the
++   `appearance.test.ts` pattern), the control writes and applies; and the px `font-size` guard.
++6. **Docs** — `typography.md` gains *§ The reader's text size scales the root* (the rule for future
++   code: size type in `rem`; px only on the allowlist, with a reason); `design-css-overview.md`
++   one line; `web-client.md § Appearance` a paragraph and a pointer for brightness;
++   `reader-profile.md` the two rows; the `/help` page's settings text if it lists them; the
++   `ProfilePage.tsx` header line that still says typography settings were rejected.
++
++## Browser check (Sonnet subagent, Playwright on the box)
++
++At 820×1180 (Greg's portrait iPad) and 390×844, Dark: Plain and Glossary at each text size, with
++before/after screenshots kept under `docs/plans/261019g-shot-*.png`. Ask for: no horizontal scroll,
++hierarchy intact (h2 > h3 > body), gutter icons on their lines, the band giving up columns cleanly,
++the masthead and controls bar not overlapping. Brightness: a pixel read of the page and of body ink
++at each level (expect ≈ 70/50/35%), taps still reach links and buttons through the layer, and the
++Lightbox open under Dimmest is dimmed too.
++
++## Done looks like
++
++Greg, on the iPad home-screen app, opens /profile, picks Dimmest and Larger; every page after that,
++including the first paint of the next launch, is dimmer and bigger, and the article fills the margins
++he pointed at.
++
++## The simpler options passed over
++
++- **Text size: body text only** (261003a's option A) — inverted hierarchy, rejected there.
++- **Text size: the article's type scale only** (261003a's B) — about ten rules rewritten as ratios,
++  and every future mode has to choose which scale it is on. More work than the root, and it leaves
++  the chrome small on the one device where nothing else can enlarge it.
++- **Brightness: Greg turns on iOS's own "Reduce White Point"** (Settings → Accessibility → Display),
++  which dims below the slider for every app. Worth telling him either way — it is free and works now
++  — but it is system-wide, buried, and he asked for it in Spideryarn.
++
++## Plan review (GPT Sol, 2026-10-19) and what changed
++
++[261019g-plan-review-sol.md](261019g-plan-review-sol.md), `--sandbox review`, effort high: no P0,
++**build with changes**. Each finding checked against the code; all accepted:
++
++1. **P1 — a text-size change rewraps every paragraph under an unchanged `layoutKey`**
++   (`Reader.tsx`), so `useReadingPosition` would take it for "nothing moved". Confirmed: the key had
++   widths only. `rootFontPx` is in it now, with a red-first test.
++2. **P1 — "contrast keeps its ratio" was false.** Confirmed by arithmetic: alpha scales encoded
++   values, light goes as their 2.2 power, and WCAG adds 0.05. The levels were recalibrated from
++   0.3 / 0.5 / 0.65 (which would have left 46 / 22 / 10% of the light and body contrast 2.8:1 at
++   Dimmest) to **0.2 / 0.35 / 0.5: about 60 / 38 / 22% of the light, body ink 11.5 / 7.7 / 4.8:1,
++   muted ink 4.0 / 3.0 / 2.2:1** — every step keeps body text past 4.5. The numbers are in the
++   stylesheet's comment.
++3. **P1 — `layout.ts`'s screen thresholds stay px**, so at Largest the prose floor holds fewer
++   characters. Accepted for v1 and written into typography.md; the layout and rotation sweeps gained
++   18 and 22px roots; the browser check adds 700px and Marginalia.
++4. **P1 — print, and a real iPad.** A print rule turns the layer and the dialog filter off. A real
++   installed-iPad pass is not something the box can do; it is Greg's, after deploy, and the note says
++   so.
++5. **P2 — the px guard reads stylesheets only.** True; the claim in typography.md is narrowed to say
++   so rather than widened to TSX, where the px sizes are SVG and chart labels.
++6. **P2 — the dialog inventory missed the command bar and Sketch**, both `showModal()`, both covered
++   by the generic `dialog[open]` rule. The `::backdrop` filter was dropped: the backdrop is already
++   dark and `lightbox.css` records why custom properties do not reliably reach it. The overlay was
++   also shrunk from `inset: -50vh -50vw` to `inset: 0`, since a fixed box already covers an iOS
++   overscroll.
++7. **P2 — `/design`'s 20px root switch** overrides the setting while on; its comment now says it is a
++   diagnostic, not a preview. **Feedback diagnostics** now record `brightness` and `textSize`. Help
++   updated and the corpus regenerated. `pageshow`/bfcache and failed-write handling were already
++   copied from Appearance.
++
++It confirmed per-device `localStorage`, and that the signed-out pages keep the boot script
++(`build-site-pages.ts` replaces only the managed head region).
++
++## Browser evidence (2026-10-19, Playwright on the box, Dark, article `scaling-hypothesis`)
++
++A Sonnet subagent, then one measurement of my own. No horizontal page scroll in any case. The root
++is 16 / 18 / 20 / 22px across the four sizes.
++
++**Greg's case, Plain at 820px**: the prose grows into the margins he pointed at.
++
++| Size | Body | Prose width | Margin left / right |
++|---|---|---|---|
++| Default | 17px | 573 | 123 / 124 |
++| Large | 19.1px | 632 | 93 / 95 |
++| Larger | 21.3px | 696 | 60 / 64 |
++| Largest | 23.4px | 729 | 43 / 48 |
++
++- **Hierarchy scales together**: h2 20 → 27.5px, h3 17 → 23.4px (h3 equals body at every size, as
++  it already does at the default).
++- **Glossary at 820**: the band keeps ~320px and the prose narrows 462 → 448px. **At 700px, Largest**:
++  prose 332px beside the band, which is cramped but does not overflow — the screen thresholds in
++  § Plan review 3.
++- **Marginalia at 820, Largest**: the subagent reported the notes clipped at the edge. Measured: the
++  note boxes sit at 556–820px at all four sizes, their contents end at 809–812px, and the "…" it saw
++  is the folded note's own ellipsis. Not a regression.
++- **A phone at Largest**: the Dock shows fewer of its buttons and scrolls sideways for the rest,
++  which it is built to do (`dock.css` § `overflow-x: auto`). Accepted.
++- **Brightness**: the layer reads `rgba(0,0,0,0.2 / 0.35 / 0.5)`; sampled pixels of ink (245 →
++  196 / 159 / 122) and page both scale by 0.80 / 0.65 / 0.50, as designed. At Dimmest a click on
++  "Show counts" and on a Dock button both went through. The Feedback dialog computes
++  `filter: brightness(0.5)` and is visibly dimmed. The image Lightbox was not opened.
++- **/profile**: the two rows sit under Appearance in Settings and apply at once.
++
++Screenshots: [820 Plain, Default](261019g-shot-820-plain-default.png) ·
++[820 Plain, Largest](261019g-shot-820-plain-largest.png) ·
++[390 Plain, Largest](261019g-shot-390-plain-largest.png) ·
++[700 Glossary, Largest](261019g-shot-700-glossary-largest.png) ·
++[820 Marginalia, Largest](261019g-shot-820-marginalia-largest.png) ·
++[820 Plain, Dimmest](261019g-shot-820-plain-dimmest.png) ·
++[Feedback dialog, Dimmest](261019g-shot-820-feedback-dialog-dimmest.png) ·
++[/profile's rows](261019g-shot-820-profile-rows.png).
++
++**Not checkable here**: the installed iPad app itself — first paint from a cold launch, the status
++bar and home-indicator edges, an overscroll bounce. That pass is Greg's, after the deploy.
+diff --git a/docs/project/reader-profile.md b/docs/project/reader-profile.md
+index a2f323071..4dd43b78f 100644
+--- a/docs/project/reader-profile.md
++++ b/docs/project/reader-profile.md
+@@ -959,6 +959,7 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
+ | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
+ | [`src/web/SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | the Settings card on the same page — [experimental-features.md](experimental-features.md), which is about what the app shows rather than what the model is told |
+ | [`src/web/AppearanceSetting.tsx`](../../src/web/AppearanceSetting.tsx) | the card's first row: Light, Dark or System, kept on the device rather than on this row — [web-client.md § Appearance](web-client.md#appearance-light-dark-and-system) |
++| [`src/web/ReadingComfortSettings.tsx`](../../src/web/ReadingComfortSettings.tsx) | the next two rows: Brightness and Text size, kept on the device for the same reason — [typography.md § The reader's text size scales the root](typography.md#the-readers-text-size-scales-the-root) |
+ | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |
+ | [`tests/route-profile-concurrency.test.ts`](../../tests/route-profile-concurrency.test.ts) | that the profile read really starts before the artefact read has finished, and that the artefact's error still wins |
+ | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |
+diff --git a/docs/project/typography.md b/docs/project/typography.md
+index 45a277cc4..39d61917b 100644
+--- a/docs/project/typography.md
++++ b/docs/project/typography.md
+@@ -206,6 +206,39 @@ browser's **top layer** and so does not appear in the z-index budget at all
+ ([design-css-overview.md § the stacking order](design-css-overview.md#the-stacking-order-which-is-real-even-though-it-is-not-a-scale));
+ its header says what else the platform's modal gives for free, and what it does not.
+ 
++## The reader's text size scales the root
++
++**Since 2026-10-19 a reader can make everything bigger** — `/profile` → Settings → Text size:
++Default, Large, Larger, Largest, which set `<html>`'s `font-size` to 100 / 112.5 / 125 / 137.5%
++([`styles/reading-comfort.css`](../../src/web/styles/reading-comfort.css),
++[`reading-comfort.ts`](../../src/web/reading-comfort.ts)). Greg asked for it on an iPad home-screen
++app, where there is no browser zoom:
++
++> If I had to guess, I suppose I would imagine that we'd want to change all of the text sizes
++> accordingly, that we'd have some kind of global baseline or default or whatever, and everything is
++> sized relative to that.
++>
++> — Greg, 2026-10-18 (`spya-ast8cu`)
++
++**The root is the baseline, so the rule for new code is one line: size type in `rem`.** Then it
++follows the setting with nothing else to remember — the prose, its headings, a mode's rows, the
++controls, all in proportion, so the hierarchy is kept. A `font-size` in px does not follow, and
++[`tests/reading-comfort.test.ts`](../../tests/reading-comfort.test.ts) fails on one in a stylesheet
++outside a short allowlist with a reason (a px floor beside a rem, like `max(1rem, 16px)`, passes).
++It reads stylesheets only: a px size inline in TSX (a Tailwind `text-[11px]`, an SVG `fontSize`)
++is not checked, so do not write one for text a reader reads. The JS layout
++follows because it reads the root (`reader/measure.ts` § `useRootFontPx`), the same path a reader
++whose browser default is 20px has always taken.
++
++What does not follow, on purpose: media queries (a `rem` there is the browser's initial size, never
++the root's, and ours are px anyway), Lucide icons, the px rows [controls.md](controls.md) names,
++and `layout.ts`'s screen thresholds — `MODE_MIN`, the prose floor, the 700px point where a band
++starts covering the prose — which are widths of screen, so at Largest the prose they protect holds
++fewer characters than at Default. Accepted for v1; the layout and rotation sweeps run at 18 and
++22px roots so it at least never overflows. Why the root rather than `--reading-size` alone, which only the paragraphs follow:
++[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md), after
++[261003a](../plans/261003a-reading-text-size-setting.md) measured the inverted hierarchy that gave.
++
+ ## See also
+ 
+ - [design-css-overview.md](design-css-overview.md) — the map this was split out of:
+diff --git a/docs/project/web-client.md b/docs/project/web-client.md
+index 509f36706..f1c632ae2 100644
+--- a/docs/project/web-client.md
++++ b/docs/project/web-client.md
+@@ -10,7 +10,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
+ - [§ Adding a mode](#adding-a-mode) — a pointer to mode.md
+ - [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) — `FeatureBoundary`, `ModeBoundary`, what they cannot catch
+ - [§ Tailwind and shadcn components](#tailwind-and-shadcn-components) — what Tailwind may touch, the four guards, the focus ring, never delete a semantic class
+-- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes
++- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes, and Brightness (a dimming layer, not a third palette)
+ - [§ Reading an API response](#reading-an-api-response) — `readJson`/`fetchOk`, why a body never becomes a message, "none yet" as `200 null`
+ - [§ Empty is not the same as not asked yet](#empty-is-not-the-same-as-not-asked-yet) — loading, failed and empty states; reload that must keep the list; the waiting spinner
+ - [§ Three more ways client state goes wrong](#client-state-traps) — out-of-order replies, `[]`-dep effects, flags nobody clears
+@@ -641,6 +641,20 @@ once that nobody working on it could see.
+   band put it. `tw:bg-highlight/20` is a plausible-looking substitution that renders subtly wrong on
+   half its uses.
+ 
++### Brightness: a layer, not a third palette
++
++**Since 2026-10-19 a reader can dim the whole page below the screen's own lowest setting** —
++`/profile` → Settings → Brightness: Full, Dim, Dimmer, Dimmest (about 60 / 38 / 22% of the light; the stylesheet has the contrast each leaves). Greg,
++2026-10-18 (`spya-q645m0`), in a dark bedroom on an iPad: *"to enable the iPad, in effect, to show
++less light even than its own brightness setting allows."* It is one black `:root::after` layer with
++`pointer-events: none` over everything, in either theme, kept on the device and set before first
++paint by the same head script as the theme —
++[`styles/reading-comfort.css`](../../src/web/styles/reading-comfort.css) says why it is not a
++filter, and how the top-layer dialogs it cannot reach dim themselves. **So a new colour needs no
++dim value**, and a new `showModal()` dialog is covered by the `dialog[open]` rule; anything else that
++reaches the top layer (a `popover`) would need adding there. Why not a darker palette:
++[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md#brightness-one-dimming-layer-over-everything).
++
+ ## Reading an API response
+ 
+ Every `fetch` in the client reads its response through
+diff --git a/docs/user-feedback/261002_2036-a-reading-text-size-setting.md b/docs/user-feedback/261002_2036-a-reading-text-size-setting.md
+index a712ec383..74da0df74 100644
+--- a/docs/user-feedback/261002_2036-a-reading-text-size-setting.md
++++ b/docs/user-feedback/261002_2036-a-reading-text-size-setting.md
+@@ -26,3 +26,9 @@ are in [261003a § The question for Greg](../plans/261003a-reading-text-size-set
+ 
+ **Declined, on Greg's answer.** 2026-10-08, in the Feedback dialog, to
+ [q-wux4k7](questions/q-wux4k7.md): *"C"* — not now. Recorded by the feedback sweep.
++
++**Built later, on a new fact (2026-10-19).** Greg reads in an iPad home-screen app, which has no
++browser zoom ([spya-ast8cu](261018_2348-dimmer-dark-mode-and-a-text-size-setting.md)), so the
++setting now exists. It scales the root, not `--reading-size` alone, so the inverted hierarchy this
++report's plan found does not arise:
++[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md).
+diff --git a/docs/user-feedback/261018_2348-dimmer-dark-mode-and-a-text-size-setting.md b/docs/user-feedback/261018_2348-dimmer-dark-mode-and-a-text-size-setting.md
+new file mode 100644
+index 000000000..55a411b0a
+--- /dev/null
++++ b/docs/user-feedback/261018_2348-dimmer-dark-mode-and-a-text-size-setting.md
+@@ -0,0 +1,60 @@
++---
++reports: spya-q645m0, spya-ast8cu
++ending: shipped
++comment: Profile → Settings now has Brightness (down to about a fifth of the light) and Text size (up to 137%, everything in proportion), both kept on this device. Please try them on the iPad app once deployed.
++---
++# A dimmer dark mode, and a text size setting, for reading on an iPad in the dark
++
++Two suggestions from Greg (admin), 2026-10-18, on a portrait iPad in its home-screen app, both on
++`https://www.spideryarn.com/read/rovelli-order-of-time-7098a4fca8e95ec987b96f1c97-spya-r26sug?at=spya-g83jsr`,
++build `956a2380`, batched by the Overseer as queue item `qi-7f32x9h3`. Re-read with
++`feedback-reporter.ts` before writing this: both rows an administrator's, **no addenda** on either.
++
++- `spya-q645m0` (#612, SPIDERYARN-READING2-K3, 23:48 UTC):
++
++  > I'm in a dark bedroom, reading on my iPad, and I'm in dark mode for Spideryarn. But even so,
++  > it's not quite as dark as I would like. The text is still quite bright, even with the
++  > brightness setting down as low as it will go. So I wonder if it would be possible to have a
++  > brightness setting, which probably doesn't really need many, many gradations, so that I can make
++  > the background darker and the text slightly darker as well […]
++
++- `spya-ast8cu` (#613, SPIDERYARN-READING2-K4, 23:54 UTC):
++
++  > I would like to be able to increase the size of the text. I'm reading on a portrait iPad, and if
++  > I have it in plain mode […] there's quite a lot of horizontal margin either side, and the text is
++  > quite small from a distance. […] If you do see a way forward that isn't too complex and that you
++  > do think is the best of all worlds, then proceed using screenshots and making sure to document
++  > accordingly, so that going forwards, future modes and UI changes naturally do the right thing.
++
++**Ending: Shipped**, on `dev`. Plan
++[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md), with GPT Sol's
++plan and code reviews and screenshots at the iPad's width.
++
++**A text size was declined "not now" on 2026-10-08** ([q-wux4k7](questions/q-wux4k7.md), note
++[261002_2036](261002_2036-a-reading-text-size-setting.md)) because browser zoom covered it. The new
++fact is that the iPad home-screen app has no browser zoom, so that reason no longer holds on the
++device Greg reads on.
++
++What changed:
++
++- **/profile → Settings → Brightness: Full, Dim, Dimmer, Dimmest.** One black layer over the whole
++  page, so the ink, the page and pictures all give off less light: about 60 / 38 / 22% of it. Body
++  text keeps at least 4.8:1 contrast even at Dimmest. Dialogs dim too, and taps go straight through.
++- **/profile → Settings → Text size: Default, Large, Larger, Largest** (100 / 112.5 / 125 / 137.5%).
++  It scales the root font size, so everything written in `rem` grows in proportion: the article,
++  its headings, the modes and the controls. That is nearly all of the app's type. On the iPad in
++  Plain, the article widens into the empty margins: 123px either side at Default, about 45px at
++  Largest.
++- **Both are kept on this device** and applied before the page first draws. So there is no bright
++  flash in the dark, and the iPad can be dim while the desk stays bright.
++- **For future modes**: [typography.md § The reader's text size scales the root](../project/typography.md#the-readers-text-size-scales-the-root)
++  is the rule (size type in `rem`), and a test fails on a px `font-size` in any stylesheet that is
++  not on its allowlist. [web-client.md § Brightness](../project/web-client.md#brightness-a-layer-not-a-third-palette)
++  explains why a new colour needs no dim value. A Help page mentions both settings, and feedback
++  reports now record them.
++
++Known limits, written down in the plan: the layout's screen-width thresholds stay in px, so at
++Largest a band beside the prose leaves it narrower in characters; on a phone at Largest the Dock
++scrolls further sideways. Not tested on a real installed iPad, which the box cannot do. **Free
++today, independent of this:** iOS's Settings → Accessibility → Display & Text Size → Reduce White
++Point dims every app below the brightness slider.
+diff --git a/index.html b/index.html
+index 09606de46..83af7ba5f 100644
+--- a/index.html
++++ b/index.html
+@@ -160,7 +160,9 @@
+     <!-- **The reader's appearance, before first paint.** A second copy of
+          src/web/appearance.ts § resolveTheme, because it has to run before any
+          module does; tests/appearance.test.ts runs this exact script and checks
+-         the two agree. Same key, same default (dark), same theme colours. -->
++         the two agree. Same key, same default (dark), same theme colours.
++         It also sets brightness and text size, whose module copy is
++         src/web/reading-comfort.ts and whose test is tests/reading-comfort.test.ts. -->
+     <script id="appearance-boot">
+       (function () {
+         var choice = null;
+@@ -176,6 +178,20 @@
+         if (scheme) scheme.setAttribute("content", theme);
+         var tc = document.querySelector('meta[name="theme-color"]');
+         if (tc) tc.setAttribute("content", theme === "light" ? "#fafafa" : "#0a0a0a");
++        /* Brightness and text size: src/web/reading-comfort.ts. The first value
++           of each is its default, which sets no attribute. */
++        var comfort = [
++          ["spya.brightness", "data-brightness", ["full", "dim", "dimmer", "dimmest"]],
++          ["spya.text-size", "data-text-size", ["default", "large", "larger", "largest"]]
++        ];
++        for (var i = 0; i < comfort.length; i++) {
++          var value = null;
++          try { value = localStorage.getItem(comfort[i][0]); } catch (e) {}
++          var values = comfort[i][2];
++          if (value !== values[0] && values.indexOf(value) > 0) {
++            document.documentElement.setAttribute(comfort[i][1], value);
++          }
++        }
+       })();
+     </script>
+   </head>
+diff --git a/src/feedback-payload.ts b/src/feedback-payload.ts
+index 3dbe3f8d3..125eee6e3 100644
+--- a/src/feedback-payload.ts
++++ b/src/feedback-payload.ts
+@@ -101,6 +101,11 @@ export interface FeedbackDevice {
+       all three facts for. `null` on reports from before 2026-10-03. */
+   appearance: string | null;
+   theme: string | null;
++  /** The reader's Brightness and Text size on /profile (src/web/reading-comfort.ts):
++      a dimmed or enlarged page is what a "too dark" or "doesn't fit" report
++      needs to know first. `null` on reports from before 2026-10-19. */
++  brightness: string | null;
++  textSize: string | null;
+   reducedMotion: boolean | null;
+ }
+ 
+@@ -187,6 +192,9 @@ const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
+    file is the server's, and the client module pulls in React. */
+ const APPEARANCES = ["system", "light", "dark"] as const;
+ const THEMES = ["light", "dark"] as const;
++/* src/web/reading-comfort.ts's two lists, copied for the same reason. */
++const BRIGHTNESSES = ["full", "dim", "dimmer", "dimmest"] as const;
++const TEXT_SIZES = ["default", "large", "larger", "largest"] as const;
+ 
+ /**
+  * `STEP_ORDER` in src/step-order.ts, copied. See the header for why it is copied
+@@ -502,6 +510,8 @@ function device(value: unknown): FeedbackDevice | null {
+     colorScheme: oneOf(source.colorScheme, COLOUR_SCHEMES),
+     appearance: oneOf(source.appearance, APPEARANCES),
+     theme: oneOf(source.theme, THEMES),
++    brightness: oneOf(source.brightness, BRIGHTNESSES),
++    textSize: oneOf(source.textSize, TEXT_SIZES),
+     reducedMotion: bool(source.reducedMotion),
+   };
+ }
+diff --git a/src/web/DesignPage.tsx b/src/web/DesignPage.tsx
+index 51deb0336..30ecc3e03 100644
+--- a/src/web/DesignPage.tsx
++++ b/src/web/DesignPage.tsx
+@@ -629,6 +629,11 @@ export function DesignPage() {
+    * in one meets a height in the other, the agreement recorded in
+    * controls.md § The numbers is an agreement at a 16px root only.
+    *
++   * An inline style, so while it is on it overrides the reader's own Text size
++   * (reading-comfort.css), which also sets the root — at Largest it makes the
++   * page smaller. It is a diagnostic at a fixed 20px, not a preview of that
++   * setting.
++   *
+    * Restored on unmount, or leaving `/design` would leave the whole app at
+    * 20px with nothing on screen to say why.
+    */
+diff --git a/src/web/ProfilePage.tsx b/src/web/ProfilePage.tsx
+index 662c7b49d..5e5b2f16a 100644
+--- a/src/web/ProfilePage.tsx
++++ b/src/web/ProfilePage.tsx
+@@ -43,8 +43,7 @@
+  * Not here, and each was considered rather than forgotten: **expertise
+  * sliders** (the original's beginner/intermediate/expert axis, rejected twice
+  * in this repo — the free-text box above *is* the single global setting its own
+- * doc recommended instead); **typography settings** (*"a reader who wants
+- * bigger text has a browser zoom"*); **a difficulty score**, for the reason
++ * doc recommended instead); **a difficulty score**, for the reason
+  * docs/plans/260825e-metadata-page.md gives; and **streaks or anything that counts at you**, which
+  * the original's homepage did not have either. This is a reading tool.
+  */
+@@ -66,6 +65,7 @@ import type { SynonymTable } from "./page-search.js";
+ import { Section } from "./PageSection.js";
+ import { SettingsSection } from "./SettingsSection.js";
+ import { AppearanceSetting } from "./AppearanceSetting.js";
++import { ReadingComfortSettings } from "./ReadingComfortSettings.js";
+ import { SiteFooter } from "./SiteFooter.js";
+ import { useProfile } from "./useProfile.js";
+ import { useSlow } from "./useSlow.js";
+@@ -342,11 +342,12 @@ export function ProfilePage() {
+       <Section
+         icon={SlidersHorizontal}
+         label="Settings"
+-        keywords="theme dark mode light mode system appearance colour color night experimental features beta preferences options switch toggle"
++        keywords="theme dark mode light mode system appearance colour color night brightness dim dimmer low light text size font size bigger larger zoom experimental features beta preferences options switch toggle"
+         collapsible
+       >
+         <div className={`${CARD} tw:flex tw:flex-col tw:gap-4 tw:p-4`}>
+           <AppearanceSetting />
++          <ReadingComfortSettings />
+           <SettingsSection />
+         </div>
+       </Section>
+diff --git a/src/web/ReadingComfortSettings.tsx b/src/web/ReadingComfortSettings.tsx
+new file mode 100644
+index 000000000..e9b9bc178
+--- /dev/null
++++ b/src/web/ReadingComfortSettings.tsx
+@@ -0,0 +1,83 @@
++/**
++ * **Brightness and Text size** — the rows under Appearance in `/profile`'s
++ * Settings card. Greg, 2026-10-18 (spya-q645m0, spya-ast8cu): *"the setting
++ * for it should live in the user profile rather than in the article metadata."*
++ *
++ * Native radios in a `<fieldset>`, applied the moment one is picked, for the
++ * reasons AppearanceSetting.tsx gives; kept on this device for the reasons
++ * reading-comfort.ts gives.
++ */
++import {
++  BRIGHTNESS,
++  type Brightness,
++  type ComfortSetting,
++  setComfort,
++  TEXT_SIZE,
++  type TextSize,
++  useComfort,
++  useComfortSaved,
++} from "./reading-comfort.js";
++
++const BRIGHTNESS_LABEL: Record<Brightness, string> = {
++  full: "Full",
++  dim: "Dim",
++  dimmer: "Dimmer",
++  dimmest: "Dimmest",
++};
++const TEXT_SIZE_LABEL: Record<TextSize, string> = {
++  default: "Default",
++  large: "Large",
++  larger: "Larger",
++  largest: "Largest",
++};
++
++function Row<V extends string>({
++  legend,
++  name,
++  setting,
++  labels,
++}: {
++  legend: string;
++  name: string;
++  setting: ComfortSetting<V>;
++  labels: Record<V, string>;
++}) {
++  const choice = useComfort(setting);
++  return (
++    <fieldset className="tw:m-0 tw:flex tw:flex-col tw:gap-1.5 tw:border-0 tw:p-0">
++      <legend className="tw:mb-1.5 tw:p-0 tw:text-sm tw:text-foreground">{legend}</legend>
++      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1.5">
++        {setting.values.map((value) => (
++          <label key={value} className="tw:flex tw:items-center tw:gap-1.5 tw:text-sm tw:text-foreground">
++            <input
++              type="radio"
++              name={name}
++              value={value}
++              className="tw:[accent-color:var(--highlight-text)]"
++              checked={choice === value}
++              onChange={() => setComfort(setting, value)}
++            />
++            <span>{labels[value]}</span>
++          </label>
++        ))}
++      </div>
++    </fieldset>
++  );
++}
++
++export function ReadingComfortSettings() {
++  const saved = useComfortSaved();
++  return (
++    <div className="tw:flex tw:flex-col tw:gap-4">
++      <Row legend="Brightness" name="brightness" setting={BRIGHTNESS} labels={BRIGHTNESS_LABEL} />
++      <Row legend="Text size" name="text-size" setting={TEXT_SIZE} labels={TEXT_SIZE_LABEL} />
++      <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
++        Brightness dims the whole page, below your screen's own lowest setting. Text size scales
++        everything, as zooming in would.{" "}
++        {!saved
++          ? "Couldn't save it on this device, so it lasts until you close this page."
++          : "Saved on this device."}
++      </p>
++    </div>
++  );
++}
+diff --git a/src/web/feedback-diagnostics.ts b/src/web/feedback-diagnostics.ts
+index 8115f6f46..4ae65d7ad 100644
+--- a/src/web/feedback-diagnostics.ts
++++ b/src/web/feedback-diagnostics.ts
+@@ -62,6 +62,7 @@ import type {
+   FeedbackJobState,
+ } from "../feedback-payload.js";
+ import { currentTheme, readAppearance } from "./appearance.js";
++import { BRIGHTNESS, readComfort, TEXT_SIZE } from "./reading-comfort.js";
+ import { readFeedbackArticleContext, readFeedbackJobContext } from "./feedback-context.js";
+ import { readLogBuffer, type ApiLogEntry, type ClientErrorLogEntry } from "./log-buffer.js";
+ 
+@@ -188,6 +189,8 @@ function device(): FeedbackDevice | null {
+     colorScheme: colourScheme(),
+     appearance: safely(() => readAppearance()),
+     theme: safely(() => currentTheme()),
++    brightness: safely(() => readComfort(BRIGHTNESS)),
++    textSize: safely(() => readComfort(TEXT_SIZE)),
+     reducedMotion: matches("(prefers-reduced-motion: reduce)"),
+   };
+ }
+diff --git a/src/web/help/pages/reader-profile.md b/src/web/help/pages/reader-profile.md
+index f3d1ecb7a..e49477b51 100644
+--- a/src/web/help/pages/reader-profile.md
++++ b/src/web/help/pages/reader-profile.md
+@@ -1,7 +1,7 @@
+ ---
+ title: Your reader profile
+ summary: What telling the AI about yourself, and why you are reading, changes in what it writes for you.
+-keywords: about me background expertise interests who i am personalise tailored why reading purpose written for you older
++keywords: about me background expertise interests who i am personalise tailored why reading purpose written for you older brightness dim dark night text size font bigger zoom appearance
+ related: ai-words, faq-older-profile, faq-shared-personalised
+ ---
+ 
+@@ -24,3 +24,8 @@ history” is what helps — the quiz, for one, aims more of its questions at wh
+   to do here](/help/keyboard).
+ - The article’s parts and sections are never personalised, so they are the same for everyone.
+ - To stop the AI using a profile at all, empty both boxes.
++
++The same page's **Settings** also holds how the app looks on this device: **Appearance** (light or
++dark), **Brightness**, which dims the whole page below your screen's own lowest setting for reading
++in the dark, and **Text size**, which makes everything bigger, as zooming in would — useful where
++there is no zoom, such as Spideryarn added to an iPad's home screen.
+diff --git a/src/web/main.tsx b/src/web/main.tsx
+index 955278550..74d60c28d 100644
+--- a/src/web/main.tsx
++++ b/src/web/main.tsx
+@@ -9,6 +9,7 @@ import { watchConnection } from "./offline.js";
+ import { watchUncaughtErrors } from "./log-buffer.js";
+ import { sweepDictations } from "./dictation-keep.js";
+ import { startAppearance } from "./appearance.js";
++import { startReadingComfort } from "./reading-comfort.js";
+ import { watchForDeploy } from "./stale-shell.js";
+ import { OfflineStrip } from "./OfflineStrip.js";
+ import { TipCard } from "./TipCard.js";
+@@ -223,6 +224,7 @@ setTimeout(() => void sweepDictations(), 5000);
+  * from the back-forward cache. appearance.ts.
+  */
+ startAppearance();
++startReadingComfort();
+ 
+ /**
+  * Ask whether a different build has gone live: when the page wakes, and every
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index bd6b12604..76ec58ba1 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -747,7 +747,11 @@ export function Reader({
+   // the section start under an unchanged 44px bar (261003h postmortem).
+   const tallCrumbsBar =
+     showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
+-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
++  //
++  // `rootFontPx` since 2026-10-19: the reader's Text size scales the root, which
++  // rewraps every paragraph and can leave every width above unchanged (GPT Sol,
++  // plan review of 261019g, P1).
++  const layoutKey = `${windowWidth}|${rootFontPx}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
+ 
+   /**
+    * **Is the prose on screen, for the reading-time recorder** — only this
+diff --git a/src/web/reading-comfort.ts b/src/web/reading-comfort.ts
+new file mode 100644
+index 000000000..536278841
+--- /dev/null
++++ b/src/web/reading-comfort.ts
+@@ -0,0 +1,155 @@
++/**
++ * **Brightness and text size** — two reading-comfort settings on `/profile`,
++ * each kept on this device and written onto `<html>` as one attribute that
++ * `styles/reading-comfort.css` reads. Greg, 2026-10-18, on an iPad in a dark
++ * bedroom (spya-q645m0, spya-ast8cu): a way to show less light than the iPad's
++ * lowest brightness, and bigger text in a home-screen app that has no zoom.
++ *
++ * - **Brightness** draws one black layer over the whole page, so every pixel
++ *   gives off a fixed share of its light — ink, page and pictures alike.
++ * - **Text size** sets the root font-size, so every `rem` grows, which is
++ *   nearly all of the app's type, and the JS layout follows by reading the root
++ *   (reader/measure.ts § `useRootFontPx`). typography.md § The reader's text
++ *   size scales the root says what that asks of new code.
++ *
++ * **On this device, and in `localStorage`**, for the reason appearance.ts
++ * gives: both have to be right before first paint, and a brightness that
++ * arrived with `GET /api/reader` would be a full-brightness flash in the dark
++ * on every load. `index.html`'s `appearance-boot` script is the before-paint
++ * copy of `parse` here; tests/reading-comfort.test.ts runs it and checks the
++ * two agree. The default value sets no attribute at all, so a page whose script
++ * never ran is today's page.
++ * docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md.
++ */
++import { useSyncExternalStore } from "react";
++
++export interface ComfortSetting<V extends string> {
++  /** The `localStorage` key; `index.html`'s inline script reads it too. */
++  readonly key: string;
++  /** The attribute on `<html>`, absent at the default. */
++  readonly attribute: string;
++  readonly values: readonly V[];
++  readonly fallback: V;
++  parse(raw: string | null | undefined): V;
++}
++
++function setting<V extends string>(
++  key: string,
++  attribute: string,
++  values: readonly V[],
++): ComfortSetting<V> {
++  const fallback = values[0]!;
++  return {
++    key,
++    attribute,
++    values,
++    fallback,
++    parse: (raw) => (values as readonly string[]).includes(raw ?? "") ? (raw as V) : fallback,
++  };
++}
++
++export type Brightness = "full" | "dim" | "dimmer" | "dimmest";
++export type TextSize = "default" | "large" | "larger" | "largest";
++
++/** The first value of each is its default. */
++export const BRIGHTNESS = setting<Brightness>("spya.brightness", "data-brightness", [
++  "full",
++  "dim",
++  "dimmer",
++  "dimmest",
++]);
++export const TEXT_SIZE = setting<TextSize>("spya.text-size", "data-text-size", [
++  "default",
++  "large",
++  "larger",
++  "largest",
++]);
++
++const SETTINGS: readonly ComfortSetting<string>[] = [BRIGHTNESS, TEXT_SIZE];
++
++/** Guarded: a private window or blocked storage throws on access. */
++function readStored<V extends string>(s: ComfortSetting<V>): V {
++  try {
++    return s.parse(window.localStorage.getItem(s.key));
++  } catch {
++    return s.fallback;
++  }
++}
++
++/* The value on this page, and whether its last write failed — in which case it
++   holds for this visit only and the control has to say so, as Appearance does. */
++const current = new Map<string, string>();
++const volatile = new Set<string>();
++const listeners = new Set<() => void>();
++
++function apply<V extends string>(s: ComfortSetting<V>, value: V): void {
++  const root = document.documentElement;
++  if (value === s.fallback) root.removeAttribute(s.attribute);
++  else root.setAttribute(s.attribute, value);
++  /* The JS layout reads the root font-size on `resize` (reader/measure.ts §
++     `useRootFontPx`), and a CSS change to it fires none. */
++  if (s.key === TEXT_SIZE.key) window.dispatchEvent(new Event("resize"));
++}
++
++/** The value on this page now — for the control, and for a feedback report. */
++export function readComfort<V extends string>(s: ComfortSetting<V>): V {
++  return (current.get(s.key) as V | undefined) ?? readStored(s);
++}
++
++/** Save the choice on this device and apply it at once. Returns whether it was saved. */
++export function setComfort<V extends string>(s: ComfortSetting<V>, value: V): boolean {
++  let saved = true;
++  try {
++    window.localStorage.setItem(s.key, value);
++  } catch {
++    saved = false;
++  }
++  current.set(s.key, value);
++  if (saved) volatile.delete(s.key);
++  else volatile.add(s.key);
++  apply(s, value);
++  for (const l of listeners) l();
++  return saved;
++}
++
++function refreshFromStorage(s: ComfortSetting<string>): void {
++  const value = readStored(s);
++  current.set(s.key, value);
++  volatile.delete(s.key);
++  apply(s, value);
++  for (const l of listeners) l();
++}
++
++let started = false;
++
++/**
++ * Once, from main.tsx: follow another tab that changes either setting, and
++ * repair a page restored from the back-forward cache under a choice made since
++ * (a choice this page could not save is kept, as appearance.ts keeps its own).
++ */
++export function startReadingComfort(): void {
++  if (started) return;
++  started = true;
++  window.addEventListener("storage", (e) => {
++    for (const s of SETTINGS) if (e.key === s.key || e.key === null) refreshFromStorage(s);
++  });
++  window.addEventListener("pageshow", (e) => {
++    if (!e.persisted) return;
++    for (const s of SETTINGS) if (!volatile.has(s.key)) refreshFromStorage(s);
++  });
++}
++
++function subscribe(l: () => void): () => void {
++  listeners.add(l);
++  return () => listeners.delete(l);
++}
++
++/** The current choice, for the /profile control. */
++export function useComfort<V extends string>(s: ComfortSetting<V>): V {
++  return useSyncExternalStore(subscribe, () => readComfort(s), () => s.fallback);
++}
++
++/** Whether every current choice survived its last `localStorage` write. */
++export function useComfortSaved(): boolean {
++  return useSyncExternalStore(subscribe, () => volatile.size === 0, () => true);
++}
+diff --git a/src/web/styles.css b/src/web/styles.css
+index 93165b5a7..bd72c8e77 100644
+--- a/src/web/styles.css
++++ b/src/web/styles.css
+@@ -72,3 +72,4 @@
+ @import "./styles/changelog.css";
+ @import "./styles/voices.css";
+ @import "./styles/logo-animations.css";
++@import "./styles/reading-comfort.css";
+diff --git a/src/web/styles/ideas.css b/src/web/styles/ideas.css
+index f57f27bb9..c35b35779 100644
+--- a/src/web/styles/ideas.css
++++ b/src/web/styles/ideas.css
+@@ -357,7 +357,7 @@
+   margin: 0;
+   padding: 0.15rem 0.75rem 0.3rem;
+   font-family: var(--font-ui);
+-  font-size: 10.5px;
++  font-size: 0.65625rem; /* 10.5px, in rem so it follows the reader's text size */
+   line-height: 1.35;
+   color: var(--ink-faint);
+ }
+diff --git a/src/web/styles/reading-comfort.css b/src/web/styles/reading-comfort.css
+new file mode 100644
+index 000000000..232adbae5
+--- /dev/null
++++ b/src/web/styles/reading-comfort.css
+@@ -0,0 +1,63 @@
++/* **Brightness and text size**, the reader's two comfort settings on /profile.
++   Each is one attribute on <html>, absent at its default, written before first
++   paint by index.html's appearance-boot script and kept right afterwards by
++   src/web/reading-comfort.ts.
++   docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md. */
++
++/* **Text size scales the root**, so every rem in the app grows with it — the
++   prose, its headings, the mode band, the controls — and the JS layout follows
++   because it reads the root (reader/measure.ts § useRootFontPx). Percentages,
++   so a reader's own browser default still compounds underneath.
++   typography.md § The reader's text size scales the root: size new type in
++   rem, or it will not follow. */
++:root[data-text-size="large"] { font-size: 112.5%; }   /* 18px at a 16px default */
++:root[data-text-size="larger"] { font-size: 125%; }    /* 20px */
++:root[data-text-size="largest"] { font-size: 137.5%; } /* 22px */
++
++/* **Brightness is one black layer over everything.** Black at alpha a scales
++   every pixel's encoded value by 1 − a — page, ink and pictures alike — which,
++   through sRGB's gamma, leaves about (1 − a)^2.2 of its light. So the three
++   steps leave the ink about 60 / 38 / 22% of its light: Dimmest gives off
++   under a quarter of what the screen's own lowest setting does.
++   **Contrast falls too, it is not kept**: body ink on the page goes from 18:1
++   to 11.5 / 7.7 / 4.8:1, still past WCAG's 4.5 at every step; muted ink
++   (--muted-foreground) from 5.9 to 4.0 / 3.0 / 2.2. WCAG's formula assumes a
++   lit room, which is the one thing a reader choosing this does not have (GPT
++   Sol, plan review of 261019g, P1 — the first draft claimed the ratio held).
++   pointer-events: none, so every tap and hover goes through it, and
++   elementFromPoint skips it.
++   Not a filter on the root: a filter makes a containing block for fixed
++   descendants in some engines and re-filters the page on every scroll frame. */
++:root[data-brightness="dim"] { --comfort-dim: 0.2; }
++:root[data-brightness="dimmer"] { --comfort-dim: 0.35; }
++:root[data-brightness="dimmest"] { --comfort-dim: 0.5; }
++
++:root[data-brightness]::after {
++  content: "";
++  position: fixed;
++  /* The viewport, not past it: a fixed box stays put through iOS's rubber-band
++     overscroll, so it covers what the bounce reveals, and one larger than the
++     viewport risks a browser counting it as overflow. */
++  inset: 0;
++  z-index: 2147483647;
++  pointer-events: none;
++  background: rgb(0 0 0 / var(--comfort-dim, 0));
++}
++
++/* **A dialog opened with showModal() sits in the top layer**, above any
++   z-index, so the layer cannot reach it: the Lightbox, Feedback, the command
++   bar, Sketch and Illustrated's enlargements, the purpose prompt. It dims
++   itself instead; a filter on a dialog costs nothing, since it is already the
++   containing block of everything inside it. Its ::backdrop is left alone: it is
++   already a dark wash, and a custom property does not reliably reach it
++   (lightbox.css says why). Anything else that reaches the top layer — a
++   `popover` — would need adding here. */
++:root[data-brightness] dialog[open] {
++  filter: brightness(calc(1 - var(--comfort-dim, 0)));
++}
++
++/* Paper gives off no light. */
++@media print {
++  :root[data-brightness]::after { display: none; }
++  :root[data-brightness] dialog[open] { filter: none; }
++}
+diff --git a/src/web/styles/shell.css b/src/web/styles/shell.css
+index ef748dc37..470053941 100644
+--- a/src/web/styles/shell.css
++++ b/src/web/styles/shell.css
+@@ -232,7 +232,7 @@ body {
+   padding: 3rem;
+   color: var(--ink-soft);
+   font-family: var(--font-mono);
+-  font-size: 13px;
++  font-size: 0.8125rem; /* 13px */
+   white-space: pre-wrap;
+ }
+ 
+diff --git a/tests/layout.test.ts b/tests/layout.test.ts
+index 2c2b1382a..f949e4bac 100644
+--- a/tests/layout.test.ts
++++ b/tests/layout.test.ts
+@@ -184,7 +184,7 @@ describe("a wide band", () => {
+   });
+ 
+   it("holds its invariants at every width, root and rail", () => {
+-    for (const root of [9, 12, 16, 20]) {
++    for (const root of [9, 12, 16, 18, 20, 22]) {
+       for (const spine of [null, false] as const) {
+         for (let w = 320; w <= 2400; w++) {
+           const f = wide(w, root, spine);
+@@ -266,7 +266,7 @@ describe("a roomy band", () => {
+   });
+ 
+   it("holds its invariants at every width, root and rail", () => {
+-    for (const root of [9, 12, 16, 20]) {
++    for (const root of [9, 12, 16, 18, 20, 22]) {
+       for (const spine of [null, false] as const) {
+         for (let w = 320; w <= 2400; w++) {
+           const f = roomy(w, root, spine);
+@@ -318,7 +318,7 @@ describe("a band past the prose's measure", () => {
+ 
+   it("changes nothing until the prose cell is wider than the prose can use", () => {
+     for (const shape of ["standard", "roomy"] as const) {
+-      for (const root of [9, 12, 16, 20]) {
++      for (const root of [9, 12, 16, 18, 20, 22]) {
+         for (const spine of [null, false] as const) {
+           for (let w = 320; w <= 2400; w++) {
+             const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root, showSpine: spine });
+diff --git a/tests/reader-after-a-rotation-in-a-browser.test.ts b/tests/reader-after-a-rotation-in-a-browser.test.ts
+index be86172cc..1ea0d3abc 100644
+--- a/tests/reader-after-a-rotation-in-a-browser.test.ts
++++ b/tests/reader-after-a-rotation-in-a-browser.test.ts
+@@ -118,7 +118,7 @@ describe("the inert half: `fitView` never asks for more width than it was given"
+         for (const margin of [false, true])
+           for (const showSpine of [null, false])
+             for (const bandShape of ["standard", "structure", "wide", "roomy"] as const)
+-              for (const rootFontPx of [12, 16, 20]) {
++              for (const rootFontPx of [12, 16, 18, 20, 22]) {
+                 const f = fitView({ windowWidth: w, modeBand, margin, showSpine, bandShape, rootFontPx });
+                 if (f.minWidth > w) over.push(`${w} ${JSON.stringify({ modeBand, margin, showSpine, bandShape, rootFontPx })}`);
+               }
+diff --git a/tests/reading-comfort.test.ts b/tests/reading-comfort.test.ts
+new file mode 100644
+index 000000000..4e70f595c
+--- /dev/null
++++ b/tests/reading-comfort.test.ts
+@@ -0,0 +1,191 @@
++// @vitest-environment jsdom
++/**
++ * **Brightness and text size** — src/web/reading-comfort.ts, the copy of its
++ * parse that runs before first paint in index.html, the /profile control, and
++ * the guard that keeps every font size following the reader's text size.
++ * docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md.
++ */
++import { readdirSync, readFileSync } from "node:fs";
++import { join } from "node:path";
++import { act, createElement } from "react";
++import { createRoot } from "react-dom/client";
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++import {
++  BRIGHTNESS,
++  TEXT_SIZE,
++  type ComfortSetting,
++  startReadingComfort,
++} from "../src/web/reading-comfort.js";
++import { ReadingComfortSettings } from "../src/web/ReadingComfortSettings.js";
++
++const repo = join(import.meta.dirname, "..");
++const html = readFileSync(join(repo, "index.html"), "utf8");
++const inline = /<script id="appearance-boot">([\s\S]*?)<\/script>/.exec(html)?.[1];
++
++const SETTINGS: readonly ComfortSetting<string>[] = [BRIGHTNESS, TEXT_SIZE];
++
++function runInline(stored: Record<string, string> | "throws"): Document {
++  const doc = document.implementation.createHTMLDocument("t");
++  const storage = {
++    getItem: (k: string) => {
++      if (stored === "throws") throw new Error("SecurityError");
++      return stored[k] ?? null;
++    },
++  };
++  const matchMedia = () => ({ matches: true });
++  new Function("localStorage", "matchMedia", "document", inline!)(storage, matchMedia, doc);
++  return doc;
++}
++
++afterEach(() => {
++  for (const s of SETTINGS) document.documentElement.removeAttribute(s.attribute);
++  Reflect.deleteProperty(window, "localStorage");
++  vi.restoreAllMocks();
++});
++
++describe("the two settings", () => {
++  it("default to full brightness and the default size, which set no attribute", () => {
++    expect(BRIGHTNESS.fallback).toBe("full");
++    expect(TEXT_SIZE.fallback).toBe("default");
++    expect(BRIGHTNESS.parse("Dim")).toBe("full");
++    expect(TEXT_SIZE.parse(null)).toBe("default");
++    expect(TEXT_SIZE.parse("larger")).toBe("larger");
++  });
++});
++
++describe("index.html's before-paint script", () => {
++  for (const s of SETTINGS) {
++    for (const value of [...s.values, "wibble", ""]) {
++      it(`agrees with ${s.key} for ${JSON.stringify(value)}`, () => {
++        const doc = runInline({ [s.key]: value });
++        const expected = s.parse(value);
++        const attr = doc.documentElement.getAttribute(s.attribute);
++        expect(attr).toBe(expected === s.fallback ? null : expected);
++      });
++    }
++  }
++
++  it("sets nothing when storage throws", () => {
++    const doc = runInline("throws");
++    for (const s of SETTINGS) expect(doc.documentElement.getAttribute(s.attribute)).toBeNull();
++    expect(doc.documentElement.getAttribute("data-theme")).toBe("dark");
++  });
++});
++
++describe("every value has a rule, and every rule a value", () => {
++  const css = readFileSync(join(repo, "src/web/styles/reading-comfort.css"), "utf8");
++  for (const s of SETTINGS) {
++    it(`${s.attribute}`, () => {
++      const inCss = new Set(
++        [...css.matchAll(new RegExp(`\\[${s.attribute}="([a-z]+)"\\]`, "g"))].map((m) => m[1]),
++      );
++      expect([...inCss].sort()).toEqual(s.values.filter((v) => v !== s.fallback).sort());
++    });
++  }
++  it("the stylesheet is imported", () => {
++    expect(readFileSync(join(repo, "src/web/styles.css"), "utf8")).toContain(
++      '@import "./styles/reading-comfort.css";',
++    );
++  });
++});
++
++describe("the /profile control", () => {
++  it("applies and saves a choice, and says when it could not save", () => {
++    const store: Record<string, string> = {};
++    let blocked = false;
++    Object.defineProperty(window, "localStorage", {
++      configurable: true,
++      value: {
++        getItem: (k: string) => store[k] ?? null,
++        setItem: (k: string, v: string) => {
++          if (blocked) throw new DOMException("blocked", "SecurityError");
++          store[k] = v;
++        },
++      },
++    });
++    const resized = vi.fn();
++    window.addEventListener("resize", resized);
++    startReadingComfort();
++    const host = document.createElement("div");
++    const root = createRoot(host);
++    act(() => root.render(createElement(ReadingComfortSettings)));
++    const radio = (name: string, value: string) =>
++      host.querySelector<HTMLInputElement>(`input[name="${name}"][value="${value}"]`)!;
++    expect(radio("brightness", "full").checked).toBe(true);
++    expect(radio("text-size", "default").checked).toBe(true);
++
++    act(() => radio("brightness", "dimmest").click());
++    expect(document.documentElement.getAttribute("data-brightness")).toBe("dimmest");
++    expect(store["spya.brightness"]).toBe("dimmest");
++
++    act(() => radio("text-size", "larger").click());
++    expect(document.documentElement.getAttribute("data-text-size")).toBe("larger");
++    expect(resized).toHaveBeenCalled();
++    expect(host.textContent).toContain("Saved on this device.");
++
++    act(() => radio("text-size", "default").click());
++    expect(document.documentElement.hasAttribute("data-text-size")).toBe(false);
++
++    blocked = true;
++    act(() => radio("brightness", "dim").click());
++    expect(document.documentElement.getAttribute("data-brightness")).toBe("dim");
++    expect(host.textContent).toContain("Couldn't save it on this device");
++
++    /* Another tab's write wins over this page's unsaved one. */
++    store["spya.brightness"] = "full";
++    act(() => {
++      window.dispatchEvent(new StorageEvent("storage", { key: "spya.brightness" }));
++    });
++    expect(document.documentElement.hasAttribute("data-brightness")).toBe(false);
++    expect(radio("brightness", "full").checked).toBe(true);
++    act(() => root.unmount());
++    window.removeEventListener("resize", resized);
++  });
++});
++
++/**
++ * **A font size in px does not follow the reader's text size**, which scales
++ * the root (typography.md § The reader's text size scales the root). So a new
++ * one has to be added here with its reason, or written in rem.
++ */
++describe("no font size in px outside the allowlist", () => {
++  const ALLOWED: Record<string, string> = {
++    "src/web/styles/diagram.css": "Force's node labels: diagram.ts budgets each label's width in px",
++  };
++  const dirs = ["styles", "src/web/styles"];
++  const files = dirs.flatMap((d) =>
++    readdirSync(join(repo, d))
++      .filter((f) => f.endsWith(".css"))
++      .map((f) => `${d}/${f}`),
++  );
++  it("finds the stylesheets", () => expect(files.length).toBeGreaterThan(20));
++  for (const f of files) {
++    it(f, () => {
++      const css = readFileSync(join(repo, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
++      /* A px floor beside a rem — narrow-window.css's `max(1rem, 16px)`, the
++         iOS focus-zoom threshold — still grows with the root, so it passes. */
++      const px = [...css.matchAll(/font-size:\s*([^;]*\d+(?:\.\d+)?px[^;]*)/g)]
++        .map((m) => m[0])
++        .filter((decl) => !/max\([^)]*rem/.test(decl));
++      if (f in ALLOWED) return;
++      expect(px).toEqual([]);
++    });
++  }
++});
++
++/**
++ * **A text-size change reflows every paragraph without changing a width**, so
++ * the reader's `layoutKey` has to carry the root size or `useReadingPosition`
++ * takes the rewrap for "nothing moved" and the reader loses their place (GPT
++ * Sol, plan review of 261019g, P1). How a key change puts the reader back is
++ * tests/reading-position-holds-across-a-reflow.test.tsx; this checks the key.
++ */
++describe("the reader's layout key", () => {
++  it("carries the root font size", () => {
++    const src = readFileSync(join(repo, "src/web/reader/Reader.tsx"), "utf8");
++    const key = /const layoutKey = `([^`]*)`/.exec(src)?.[1];
++    expect(key).toBeTruthy();
++    expect(key).toContain("${rootFontPx}");
++  });
++});

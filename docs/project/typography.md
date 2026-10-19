@@ -206,6 +206,40 @@ browser's **top layer** and so does not appear in the z-index budget at all
 ([design-css-overview.md § the stacking order](design-css-overview.md#the-stacking-order-which-is-real-even-though-it-is-not-a-scale));
 its header says what else the platform's modal gives for free, and what it does not.
 
+## The reader's text size scales the root
+
+**Since 2026-10-19 a reader can make everything bigger** — `/profile` → Settings → Text size:
+Default, Large, Larger, Largest, which set `<html>`'s `font-size` to 100 / 112.5 / 125 / 137.5%
+([`styles/reading-comfort.css`](../../src/web/styles/reading-comfort.css),
+[`reading-comfort.ts`](../../src/web/reading-comfort.ts)). Greg asked for it on an iPad home-screen
+app, where there is no browser zoom:
+
+> If I had to guess, I suppose I would imagine that we'd want to change all of the text sizes
+> accordingly, that we'd have some kind of global baseline or default or whatever, and everything is
+> sized relative to that.
+>
+> — Greg, 2026-10-18 (`spya-ast8cu`)
+
+**The root is the baseline, so the rule for new code is one line: size type in `rem`.** Then it
+follows the setting with nothing else to remember — the prose, its headings, a mode's rows, the
+controls, all in proportion, so the hierarchy is kept. A `font-size` in px does not follow, and
+[`tests/reading-comfort.test.ts`](../../tests/reading-comfort.test.ts) fails on one — including in a
+`font` shorthand — outside an exact allowlist with a reason (a px floor beside a rem, like
+`max(1rem, 16px)`, passes).
+It reads stylesheets only: a px size inline in TSX (a Tailwind `text-[11px]`, an SVG `fontSize`)
+is not checked, so do not write one for text a reader reads. The JS layout
+follows because it reads the root (`reader/measure.ts` § `useRootFontPx`), the same path a reader
+whose browser default is 20px has always taken.
+
+What does not follow, on purpose: media queries (a `rem` there is the browser's initial size, never
+the root's, and ours are px anyway), Lucide icons, the px rows [controls.md](controls.md) names,
+and `layout.ts`'s screen thresholds — `MODE_MIN`, the prose floor, the 700px point where a band
+starts covering the prose — which are widths of screen, so at Largest the prose they protect holds
+fewer characters than at Default. Accepted for v1; the layout and rotation sweeps run at 18 and
+22px roots so it at least never overflows. Why the root rather than `--reading-size` alone, which only the paragraphs follow:
+[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md), after
+[261003a](../plans/261003a-reading-text-size-setting.md) measured the inverted hierarchy that gave.
+
 ## See also
 
 - [design-css-overview.md](design-css-overview.md) — the map this was split out of:

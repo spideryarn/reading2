@@ -446,6 +446,14 @@ that fails keeps the bar open with the sentence, and both are offered only where
 row to act on — not on the fixture. Words in
 [`src/web/article-commands.ts`](../../src/web/article-commands.ts).
 
+**_Open the original_ (`original`, `view original`, `source page`), since 2026-10-19**, opens the
+article's web address in a new tab, or the owner's uploaded PDF through the fetch Metadata's
+*View the original* makes; no row when there is neither (`originalOf` in
+[`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx)). Outside a gesture — a dictation's late
+Enter — it opens nothing and asks to be chosen again, since a tab opened then is a silently blocked popup.
+Plain no longer answers to `original`: that nickname is what Greg found instead
+([261019f](../plans/261019f-open-the-original-from-the-command-bar.md)).
+
 **`find <words>` searches the article** — also `search`, `search for`, `does it mention` and Greg's
 own *"do they talk about X?"*. It offers *Find “X” in this article*, which opens Search in
 words mode with the words lit up: free, instant, and only when the query starts with one of those

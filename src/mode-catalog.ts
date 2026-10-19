@@ -279,8 +279,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* The way *out* of a mode, so the words are the ones somebody reaches for
        when they want the piece and nothing else. `article` first because that
        is what they are asking for; the mode's own name is a description of
-       what is missing rather than of what they get. */
-    aliases: ["article", "text", "reading", "just the article", "prose", "original", "no mode", "no panel"],
+       what is missing rather than of what they get. **Not `original`**, since
+       2026-10-19: Greg typed it meaning the publisher's page and found only
+       this (spya-r6a5s5), so it is *Open the original*'s (plan 261019f). */
+    aliases: ["article", "text", "reading", "just the article", "prose", "no mode", "no panel"],
     experimental: false,
   },
   chat: {

@@ -184,7 +184,7 @@ describe("a wide band", () => {
   });
 
   it("holds its invariants at every width, root and rail", () => {
-    for (const root of [9, 12, 16, 20]) {
+    for (const root of [9, 12, 16, 18, 20, 22]) {
       for (const spine of [null, false] as const) {
         for (let w = 320; w <= 2400; w++) {
           const f = wide(w, root, spine);
@@ -266,7 +266,7 @@ describe("a roomy band", () => {
   });
 
   it("holds its invariants at every width, root and rail", () => {
-    for (const root of [9, 12, 16, 20]) {
+    for (const root of [9, 12, 16, 18, 20, 22]) {
       for (const spine of [null, false] as const) {
         for (let w = 320; w <= 2400; w++) {
           const f = roomy(w, root, spine);
@@ -318,7 +318,7 @@ describe("a band past the prose's measure", () => {
 
   it("changes nothing until the prose cell is wider than the prose can use", () => {
     for (const shape of ["standard", "roomy"] as const) {
-      for (const root of [9, 12, 16, 20]) {
+      for (const root of [9, 12, 16, 18, 20, 22]) {
         for (const spine of [null, false] as const) {
           for (let w = 320; w <= 2400; w++) {
             const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root, showSpine: spine });

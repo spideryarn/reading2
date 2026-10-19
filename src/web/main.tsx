@@ -9,6 +9,7 @@ import { watchConnection } from "./offline.js";
 import { watchUncaughtErrors } from "./log-buffer.js";
 import { sweepDictations } from "./dictation-keep.js";
 import { startAppearance } from "./appearance.js";
+import { startReadingComfort } from "./reading-comfort.js";
 import { watchForDeploy } from "./stale-shell.js";
 import { OfflineStrip } from "./OfflineStrip.js";
 import { TipCard } from "./TipCard.js";
@@ -223,6 +224,7 @@ setTimeout(() => void sweepDictations(), 5000);
  * from the back-forward cache. appearance.ts.
  */
 startAppearance();
+startReadingComfort();
 
 /**
  * Ask whether a different build has gone live: when the page wakes, and every

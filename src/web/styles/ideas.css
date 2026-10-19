@@ -357,7 +357,7 @@
   margin: 0;
   padding: 0.15rem 0.75rem 0.3rem;
   font-family: var(--font-ui);
-  font-size: 10.5px;
+  font-size: 0.65625rem; /* 10.5px, in rem so it follows the reader's text size */
   line-height: 1.35;
   color: var(--ink-faint);
 }
