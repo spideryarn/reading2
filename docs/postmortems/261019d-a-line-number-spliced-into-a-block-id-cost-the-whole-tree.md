@@ -52,12 +52,14 @@ by `3f09cf8bf` (261001s stage 1, 2026-10-02) unchanged. The odds changed under i
 
 ## The fix shipped, and the one that is right for the long term
 
-**Shipped (261019l):** for the whole-document call only, an unresolvable start is never a refusal on
-its own. A first child is not asked; a spliced line number resolves to the line it was copied from
-when the rest of the string agrees with that line's id; a start whose `sourceHeading` names exactly
-one heading between its neighbours resolves to it; anything else drops that one child into its
-predecessor. More than one unrecoverable start in five still refuses. Recoveries are counted in
-`recoveredStarts` on the step's log line.
+**Shipped (261019l):** for the whole-document call only, a first child's start is not asked, and a
+spliced line number resolves to the line it was copied from when exactly one split agrees with that
+line's id and falls between the starts the tiling can keep. Anything else still refuses the first
+answer so the in-step re-ask runs. On the last answer only — the re-ask, a first answer with no time
+left for one, or a replayed checkpoint — an unrecoverable child is dropped into its predecessor if
+the sibling set keeps at least two children and the whole answer loses no more than one in ten of
+its non-first starts (always allowing one). The step's log line counts both outcomes as
+`startsRecovered` and `startsDropped`.
 
 **Right for the long term:** stop inviting the splice. The id and the line number should not sit
 side by side in the line the model copies from, or the model should think on this call. Both are

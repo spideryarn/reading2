@@ -93,6 +93,120 @@ export type StartRangeResult<C extends StartProposal> =
       proposedChildren: number;
     } & PlannedEvidence);
 
+interface RecoveredClaims {
+  claimed: number[];
+  dropped: Set<number>;
+  droppedChildren: string[];
+  unresolvedStarts: UnresolvedStart[];
+  refusedChildIndex?: number;
+}
+
+/** Resolve the opt-in whole-document exceptions before the ordinary tiling planner runs. */
+function recoverStartClaims<C extends StartProposal>(opts: {
+  children: readonly C[];
+  resolved: readonly (number | undefined)[];
+  parent: readonly [number, number];
+  blocks: readonly Block[];
+  where: string;
+  unresolved: Exclude<UnresolvedStarts, "refuse">;
+}): RecoveredClaims {
+  const { children, resolved, blocks, where, unresolved } = opts;
+  const [p0, p1] = opts.parent;
+  const claimed: number[] = [];
+  const dropped = new Set<number>();
+  const droppedChildren: string[] = [];
+  const unresolvedStarts: UnresolvedStart[] = [];
+  let lastKeptStart = p0;
+
+  for (const [childIndex, child] of children.entries()) {
+    const real = resolved[childIndex];
+    if (real !== undefined) {
+      claimed.push(real);
+      /* The first child will be pinned to `p0`. Later real claims advance the
+         recovery window only when clamping and ordering will keep them. Using
+         the raw prior claim here could recover a start outside the parent or
+         behind a sibling the planner keeps, only for the planner to drop it. */
+      if (childIndex > 0) {
+        const effective = Math.min(Math.max(real, p0), p1);
+        if (effective > lastKeptStart) lastKeptStart = effective;
+      }
+      continue;
+    }
+    /* A first child is pinned to its parent's start whatever it says, so an
+       unresolvable one costs nothing and is not recorded. */
+    if (childIndex === 0) {
+      claimed.push(p0);
+      continue;
+    }
+    const nextReal = resolved.slice(childIndex + 1).find((at) => at !== undefined);
+    const before = Math.min(nextReal ?? p1 + 1, p1 + 1);
+    const line = splicedLineNumber(child.start, blocks, lastKeptStart + 1, before - 1);
+    if (line !== undefined) {
+      claimed.push(line);
+      lastKeptStart = line;
+      unresolvedStarts.push({
+        where: `${where} > child ${childIndex + 1}`,
+        childIndex,
+        outcome: "line-number",
+      });
+      continue;
+    }
+    if (unresolved === "recover") {
+      return { claimed, dropped, droppedChildren, unresolvedStarts, refusedChildIndex: childIndex };
+    }
+    /* `recover-or-drop`: nothing says where this child begins, so it is not
+       built. The placeholder keeps `claimed` indexed by child; the planning
+       loop below skips it. */
+    dropped.add(childIndex);
+    claimed.push(lastKeptStart);
+    droppedChildren.push(`${where} > child ${childIndex + 1}`);
+    unresolvedStarts.push({
+      where: `${where} > child ${childIndex + 1}`,
+      childIndex,
+      outcome: "dropped",
+    });
+  }
+
+  return { claimed, dropped, droppedChildren, unresolvedStarts };
+}
+
+type KeptClaims =
+  | { ok: true; kept: { childIndex: number; start: number }[] }
+  | { ok: false; outsideChildIndex: number };
+
+/** Apply the policy's range rule and discard claims that mark no new split point. */
+function keepStartClaims(opts: {
+  claimed: readonly number[];
+  dropped: ReadonlySet<number>;
+  parent: readonly [number, number];
+  policy: StartRangePolicy;
+  where: string;
+  droppedChildren: string[];
+}): KeptClaims {
+  const { claimed, dropped, policy, where, droppedChildren } = opts;
+  const [p0, p1] = opts.parent;
+  if (policy.outsideParent === "refuse") {
+    const outsideChildIndex = claimed.findIndex((at) => at < p0 || at > p1);
+    if (outsideChildIndex !== -1) return { ok: false, outsideChildIndex };
+  }
+
+  const clamp = (at: number) => Math.min(Math.max(at, p0), p1);
+  const kept: { childIndex: number; start: number }[] = [];
+  for (const [childIndex, raw] of claimed.entries()) {
+    if (dropped.has(childIndex)) continue;
+    const at = policy.outsideParent === "clamp" ? clamp(raw) : raw;
+    const previous = kept.at(-1);
+    if (previous === undefined) {
+      kept.push({ childIndex, start: p0 });
+    } else if (at <= previous.start) {
+      droppedChildren.push(`${where} > child ${childIndex + 1}`);
+    } else {
+      kept.push({ childIndex, start: at });
+    }
+  }
+  return { ok: true, kept };
+}
+
 /** Derive one sibling set without mutating its proposals, blocks, index or policy. */
 export function deriveStartRanges<C extends StartProposal>(opts: {
   children: readonly C[];
@@ -148,40 +262,28 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
   }
 
   /* **Recovery, in document order.** A recovered start must land strictly
-     after the previous start this set resolved (or the parent's start) and
+     after the previous start the tiling will keep (or the parent's start) and
      strictly before the next start that was a real id (or at most the parent's
      end), so it can neither reorder its siblings nor leave its parent. */
-  const claimed: number[] = [];
-  const dropped = new Set<number>();
-  for (const [childIndex, child] of children.entries()) {
-    const real = resolved[childIndex];
-    if (real !== undefined) {
-      claimed.push(real);
-      continue;
-    }
-    /* A first child is pinned to its parent's start whatever it says, so an
-       unresolvable one costs nothing and is not recorded. */
-    if (childIndex === 0) {
-      claimed.push(p0);
-      continue;
-    }
-    const after = claimed.filter((_, i) => !dropped.has(i)).at(-1) ?? p0;
-    const nextReal = resolved.slice(childIndex + 1).find((at) => at !== undefined);
-    const before = Math.min(nextReal ?? p1 + 1, p1 + 1);
-    const line = splicedLineNumber(child.start, blocks, after + 1, before - 1);
-    if (line !== undefined) {
-      claimed.push(line);
-      unresolvedStarts.push({ where: `${where} > child ${childIndex + 1}`, childIndex, outcome: "line-number" });
-      continue;
-    }
-    if (unresolved === "recover") return refuse(childIndex);
-    /* `recover-or-drop`: nothing says where this child begins, so it is not
-       built. The placeholder keeps `claimed` indexed by child; the planning
-       loop below skips it. */
-    dropped.add(childIndex);
-    claimed.push(after);
-    droppedChildren.push(`${where} > child ${childIndex + 1}`);
-    unresolvedStarts.push({ where: `${where} > child ${childIndex + 1}`, childIndex, outcome: "dropped" });
+  let claimed: number[];
+  let dropped: Set<number>;
+  if (unresolved === "refuse") {
+    claimed = resolved as number[];
+    dropped = new Set<number>();
+  } else {
+    const recovered = recoverStartClaims({
+      children,
+      resolved,
+      parent: [p0, p1],
+      blocks,
+      where,
+      unresolved,
+    });
+    claimed = recovered.claimed;
+    dropped = recovered.dropped;
+    droppedChildren.push(...recovered.droppedChildren);
+    unresolvedStarts.push(...recovered.unresolvedStarts);
+    if (recovered.refusedChildIndex !== undefined) return refuse(recovered.refusedChildIndex);
   }
 
   /* **Every claim is range-checked, the first one included.** The check once sat
@@ -189,35 +291,27 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
      sibling section passed with that sibling's title and gist attached to this
      parent's prose. The pin is a rule about the parent's own first block, not a
      licence to believe a claim from outside it. */
-  if (policy.outsideParent === "refuse") {
-    const outside = claimed.findIndex((at) => at < p0 || at > p1);
-    if (outside !== -1) {
-      return {
-        ok: false,
-        reason: "outside-parent",
-        childIndex: outside,
-        start: children[outside]!.start,
-        repairs,
-        droppedChildren,
-        unresolvedStarts,
-      };
-    }
+  const plannedClaims = keepStartClaims({
+    claimed,
+    dropped,
+    parent: [p0, p1],
+    policy,
+    where,
+    droppedChildren,
+  });
+  if (!plannedClaims.ok) {
+    const outside = plannedClaims.outsideChildIndex;
+    return {
+      ok: false,
+      reason: "outside-parent",
+      childIndex: outside,
+      start: children[outside]!.start,
+      repairs,
+      droppedChildren,
+      unresolvedStarts,
+    };
   }
-
-  const clamp = (at: number) => Math.min(Math.max(at, p0), p1);
-  const kept: { childIndex: number; start: number }[] = [];
-  for (const [childIndex, raw] of claimed.entries()) {
-    if (dropped.has(childIndex)) continue;
-    const at = policy.outsideParent === "clamp" ? clamp(raw) : raw;
-    const previous = kept.at(-1);
-    if (previous === undefined) {
-      kept.push({ childIndex, start: p0 });
-    } else if (at <= previous.start) {
-      droppedChildren.push(`${where} > child ${childIndex + 1}`);
-    } else {
-      kept.push({ childIndex, start: at });
-    }
-  }
+  const { kept } = plannedClaims;
 
   /* **A drop may fold one section into its neighbour, not a sibling set into
      one section.** Two children with the second dropped would leave the first
@@ -307,9 +401,12 @@ export function splicedLineNumber(
   for (let k = 1; k <= digits.length; k++) {
     if (k > 1 && digits[0] === "0") break;
     const line = Number(digits.slice(0, k));
+    /* No real block array can reach an unsafe integer. Stop as soon as a
+       positive decimal prefix passes it; every longer prefix is larger. */
+    if (!Number.isSafeInteger(line)) break;
     const rest = digits.slice(k) + tail;
     const own = blocks[line]?.id.slice("spya-".length);
-    if (own !== undefined && own.startsWith(rest)) candidates.push(line);
+    if (own?.startsWith(rest)) candidates.push(line);
   }
   const only = candidates.length === 1 ? candidates[0]! : undefined;
   return only !== undefined && only >= lo && only <= hi ? only : undefined;

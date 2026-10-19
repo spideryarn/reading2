@@ -167,6 +167,53 @@ const threeParts = (start: string) =>
 const SPLICED = threeParts("spya-1rsk");
 /** A middle start that names nothing: refused by a first answer, dropped by the last. */
 const DROPPABLE = threeParts("spya-zzz999");
+/**
+ * The first reading refuses at root child 2. The last-answer reading drops that child, then reaches
+ * a distinct nested refusal under child 3. This makes which error escaped observable.
+ */
+const DIFFERENT_FALLBACK_ERROR = JSON.stringify({
+  root: {
+    title: "The whole piece",
+    gist: "A gist.",
+    question: "The whole piece — what does it say?",
+    children: [
+      { title: "Opening", gist: "The heading.", question: "Opening — what?", start: BLOCKS[0]!.id },
+      { title: "First refusal", gist: "Not kept.", question: "Why?", start: "spya-first0" },
+      {
+        title: "The rest",
+        gist: "The rest.",
+        question: "The rest — what?",
+        start: BLOCKS[2]!.id,
+        children: [
+          { title: "Nested opening", gist: "Nested.", start: BLOCKS[2]!.id },
+          { title: "Fallback refusal", gist: "Not kept.", start: "spya-second" },
+        ],
+      },
+    ],
+  },
+});
+/** A recovered root boundary followed by a fatal nested boundary, for failure telemetry. */
+const RECOVERED_THEN_FATAL = JSON.stringify({
+  root: {
+    title: "The whole piece",
+    gist: "A gist.",
+    question: "The whole piece — what does it say?",
+    children: [
+      { title: "Opening", gist: "The heading.", question: "Opening — what?", start: BLOCKS[0]!.id },
+      { title: "Turnips", gist: "The turnips.", question: "Turnips — why?", start: "spya-1rsk" },
+      {
+        title: "The rest",
+        gist: "The rest.",
+        question: "The rest — what?",
+        start: BLOCKS[2]!.id,
+        children: [
+          { title: "Nested opening", gist: "Nested.", start: BLOCKS[2]!.id },
+          { title: "Fatal", gist: "Not kept.", start: "spya-fatal0" },
+        ],
+      },
+    ],
+  },
+});
 
 function memoryCheckpoints(): CheckpointStore & { entries: Map<string, unknown> } {
   const entries = new Map<string, unknown>();
@@ -322,11 +369,18 @@ describe("a start that names no block", () => {
 
   it("is read as the line number it splices in, on the first answer, with no second call", async () => {
     answers = [{ text: SPLICED }];
-    const result = await run();
+    const checkpoints = memoryCheckpoints();
+    const result = await run({ checkpoints });
     expect(wholeDocumentCalls).toBe(1);
     expect(titles(result)).toEqual(["Opening", "Turnips", "The rest"]);
     expect(result.startsRecovered).toBe(1);
     expect(result.startsDropped).toBe(0);
+
+    wholeDocumentCalls = 0;
+    const again = await run({ checkpoints });
+    expect(wholeDocumentCalls, "the checkpoint gate rejected a recoverable answer").toBe(0);
+    expect(again.wholeDocumentResumed).toBe(true);
+    expect(again.startsRecovered).toBe(1);
   });
 
   it("buys the re-ask, and the re-ask may drop it rather than fail the step", async () => {
@@ -338,7 +392,7 @@ describe("a start that names no block", () => {
     expect(result.startsDropped).toBe(1);
     expect(result.droppedChildren).toBe(1);
 
-    /* And what it stored is replayed: a recovered answer must not be bought again on every
+    /* And what it stored is replayed: a dropped answer must not be bought again on every
        run because the checkpoint's own gate refuses it. ⟨Sol r2, finding 2⟩ */
     expect([...checkpoints.entries.values()]).toEqual([expect.objectContaining({ answer: DROPPABLE })]);
     wholeDocumentCalls = 0;
@@ -357,10 +411,25 @@ describe("a start that names no block", () => {
   });
 
   it("fails the step on the first refusal when even the last-answer reading refuses", async () => {
-    answers = [{ text: INVENTED, ms: 100_000 }, { text: SOUND }];
+    answers = [{ text: DIFFERENT_FALLBACK_ERROR, ms: 100_000 }, { text: SOUND }];
     await expect(run({ deadlineAt: Date.now() + 100_000 + 140_000 })).rejects.toThrow(
-      /at root > child 2: start "spya-zzz999"/,
+      /^Node range not in blocks\.json — at root > child 2: start not a block id \(a 11-character string, withheld\)$/,
     );
+    expect(wholeDocumentCalls).toBe(1);
+  });
+
+  it("reports a prior recovery without claiming that zero boundaries were mended", async () => {
+    answers = [{ text: RECOVERED_THEN_FATAL, ms: 100_000 }, { text: SOUND }];
+    try {
+      await run({ deadlineAt: Date.now() + 100_000 + 140_000 });
+      throw new Error("the fatal nested start built a tree");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        "It had also read 1 start(s) that named no block: root > child 2 (line-number).",
+      );
+      expect((error as Error).message).not.toContain("mended 0 boundary");
+    }
     expect(wholeDocumentCalls).toBe(1);
   });
 });

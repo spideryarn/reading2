@@ -2869,17 +2869,20 @@ export async function generateStructure(opts: {
       const spent = [...new Set(built.repairs.map((r) => r.at))].length;
       /* A start recovered and then a fatal one elsewhere: without this the
          recovery vanishes into the re-ask. ⟨GPT Sol, plan review, finding 6⟩ */
-      const recovered = built.unresolvedStarts.length === 0
+      const unresolvedEvidence = built.unresolvedStarts.length === 0
         ? ""
         : `  It had also read ${built.unresolvedStarts.length} start(s) that named no block: ` +
           `${built.unresolvedStarts.map((u) => `${u.where} (${u.outcome})`).join("; ")}.\n`;
-      throw new Error(
-        `${err instanceof Error ? err.message : String(err)}\n` +
-          recovered +
-          `  Before this it mended ${spent} boundary(ies), moving ` +
+      const repairEvidence = built.repairs.length === 0
+        ? ""
+        : `  Before this it mended ${spent} boundary(ies), moving ` +
           `${repairedBlockCount(built.repairs)} block(s): ` +
           `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
-          `This line is the only place those numbers are visible on a run that failed.`,
+          `This line is the only place those numbers are visible on a run that failed.`;
+      throw new Error(
+        `${err instanceof Error ? err.message : String(err)}\n` +
+          unresolvedEvidence +
+          repairEvidence,
       );
       /* No `cause`, for the reason the label stage gives at the same shape:
          src/log.ts follows cause chains and would write the original message into

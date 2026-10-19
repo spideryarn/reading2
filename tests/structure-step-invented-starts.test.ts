@@ -109,6 +109,22 @@ describe("a spliced line number resolves to the line it was copied from", () => 
   it("not a number with a leading zero, read as a shorter line", () => {
     expect(splicedLineNumber("spya-012", blocks, 0, 29)).toBeUndefined();
   });
+
+  it("stops before an overflowing digit prefix is used as an array index", () => {
+    const guarded = new Proxy(blocks, {
+      get(target, property, receiver) {
+        if (
+          typeof property === "string" &&
+          /^\d+$/.test(property) &&
+          !Number.isSafeInteger(Number(property))
+        ) {
+          throw new Error(`unsafe array index ${property}`);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    expect(splicedLineNumber(`spya-${"9".repeat(100)}`, guarded, 0, 29)).toBeUndefined();
+  });
 });
 
 describe("a first child's start is not asked", () => {
@@ -183,6 +199,68 @@ describe("a later start that names nothing", () => {
     expect(() =>
       build([{ title: "Opening", start: id(0) }, { title: "Lost", start: "spya-zzzzzz" }], "recover-or-drop"),
     ).toThrow('Node range not in blocks.json — at root > child 2: start "spya-zzzzzz"');
+  });
+
+  it("does not recover behind the start that clamping and ordering will keep", () => {
+    /* The nested parent starts at 10. Its wrong-but-real first claim at 0 is pinned to 10;
+       `spya-5` must not then recover outside the parent and be clamped onto that first child.
+       That used to return a one-child tiling whose first title covered both sections' prose. */
+    const children: StartsOnlyNode[] = [
+      { title: "Opening", start: id(0) },
+      {
+        title: "Nested parent",
+        start: id(10),
+        children: [
+          { title: "Pinned opening", start: id(0) },
+          { title: "Must not disappear", start: "spya-5" },
+        ],
+      },
+      { title: "After", start: id(20) },
+    ];
+    expect(() => build(children, "recover")).toThrow(
+      /^Node range not in blocks\.json — at root > child 2 > child 2: start not a block id/,
+    );
+    expect(() => build(children, "recover-or-drop")).toThrow(
+      /^Node range not in blocks\.json — at root > child 2 > child 2: start not a block id/,
+    );
+  });
+
+  it("applies the drop budget after recursively converting the whole answer", () => {
+    const nested = Array.from({ length: 18 }, (_, i): StartsOnlyNode => ({
+      title: `Nested ${i}`,
+      start: id(10 + i),
+    }));
+    const { outcomes } = build(
+      [
+        { title: "Opening", start: id(0) },
+        { title: "Lost one", start: "spya-zzzzzz" },
+        { title: "Lost two", start: "spya-yyyyyy" },
+        { title: "Nested", start: id(10), children: nested },
+      ],
+      "recover-or-drop",
+    );
+    /* Three root non-first starts plus seventeen nested ones: two losses are
+       exactly the answer-wide one-in-ten allowance. */
+    expect(droppedStartBudget(20)).toBe(2);
+    expect(outcomes).toEqual(["root > child 2: dropped", "root > child 3: dropped"]);
+  });
+
+  it("does not let descendants of a dropped child inflate the answer-wide budget", () => {
+    const lostChildren = Array.from({ length: 20 }, (_, i): StartsOnlyNode => ({
+      title: `Lost nested ${i}`,
+      start: id(Math.min(i, 29)),
+    }));
+    expect(() =>
+      build(
+        [
+          { title: "Opening", start: id(0) },
+          { title: "Lost one", start: "spya-zzzzzz", children: lostChildren },
+          { title: "Lost two", start: "spya-yyyyyy", children: lostChildren },
+          { title: "Closing", start: id(20) },
+        ],
+        "recover-or-drop",
+      ),
+    ).toThrow(/\(2 of 3 starts named no block, past the 1 an answer may lose\)$/);
   });
 });
 

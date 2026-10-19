@@ -103,7 +103,7 @@ For a child whose `start` is not a block id:
    leading zero) and a remainder; a split is a candidate when `N` is a block of this sibling set's
    window and the remainder plus the rest is a prefix, possibly empty, of block `N`'s six
    characters. **Exactly one candidate**, or no recovery. The window is the independent evidence:
-   strictly after the previous resolved start (or the parent's start), strictly before the next
+   strictly after the previous start the tiling will keep (or the parent's start), strictly before the next
    start that resolved as a real id (or at most the parent's end). So a recovered start can never
    reorder or leave its parent, and it is the line the model was copying from, `[N] spya-<six>`.
    Covers `spya-582xcf0dz`, `spya-582xcf` and `spya-582`.
