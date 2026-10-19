@@ -1,7 +1,7 @@
 ---
 reports: spya-m53cdk
 ending: shipped
-comment: Shipped: Open in Sources centres and flashes the work, the list has more room, and each cited work gets a checked note from its abstract. Open question: a web search for the clicked work, and free API keys for more coverage.
+comment: Shipped: Open in Sources lands on the work, each cited work gets a checked note from its abstract, and a work with no note gets one web search for its own page. Waiting on you for the Semantic Scholar and OpenAlex keys.
 ---
 
 # Open in Sources lands on the work and flashes it, a roomier list, and a note per cited work
@@ -44,5 +44,10 @@ design [261017h stage 3](../plans/261017h-stage-3-design-citation-blurbs.md), sp
   than the page. So notes are made, on Haiku 5.5, whenever a Bibliography is made, each checked
   against its abstract by code and by a second call, with nothing shown when nothing authoritative
   was found. The (i) and each note's card say exactly that.
-- **What is open:** coverage on Greg's paper is 40% (the coding paper 64%), and a web search for
-  the one clicked work was not built. Both are question [q-ny49p3](questions/q-ny49p3.md).
+- **Then, after [q-ny49p3](questions/q-ny49p3.md) (Greg: *"1B / 2B"*)**, plan
+  [261018o](../plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md):
+  *Open in Sources* on a work with no note runs one web search for it, owner only, and keeps a
+  note only from the work's own doi.org or arXiv page, quoted and checked. Semantic Scholar
+  abstracts and OpenAlex title search are built, each off until its key is set.
+- **What is open:** the keys (and Semantic Scholar's non-commercial licence), and whether to loosen
+  the web search: [q-x9srvv](questions/q-x9srvv.md). Coverage is re-measured once the keys exist.

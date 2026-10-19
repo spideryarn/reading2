@@ -1,10 +1,11 @@
 ---
 id: q-ny49p3
 report: spya-m53cdk
-status: open
+status: answered
 asked: 2026-10-18
 title: Citation notes: also web-search the one citation I clicked, and get free Semantic Scholar and OpenAlex keys?
-refs: SPIDERYARN-READING2-JF · qi-e94mtfjx · docs/plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md · docs/investigations/261017c-citation-blurbs-cost-and-quality.md · docs/user-feedback/261017_2026-sources-land-flash-and-citation-blurbs.md
+refs: SPIDERYARN-READING2-JF · qi-e94mtfjx · docs/plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md · docs/investigations/261017c-citation-blurbs-cost-and-quality.md · docs/user-feedback/261017_2026-sources-land-flash-and-citation-blurbs.md · docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md
+acted: spya-dzhqj8
 ---
 Two questions about the short note now shown under each cited work in Sources › Bibliography.
 
@@ -31,3 +32,9 @@ The note on a row is in the AI's font, with a quiet "From the abstract · Crossr
 Why no note for many works: many works have no DOI or arXiv id, so we can only search by title, and we accept a title match only when the first author and year agree. For an uploaded file (which may be a confidential manuscript) we do not search by title at all, only by identifier. Books, chapters and web pages rarely have an abstract in these catalogues.
 
 Why no key means less: without a key, Semantic Scholar refused most requests (rate limits), and OpenAlex's free daily search allowance for the box ran out on the day of the spike. So v1 leaves Semantic Scholar out, and asks OpenAlex only by exact DOI.
+
+Greg's reply, 2026-10-18 (spya-dzhqj8, in the Feedback dialog):
+
+> 1B / 2B
+
+Acted on by the feedback sweep, 2026-10-19 (queue item qi-nkc5gbyh), plan 261018o. 1B: Open in Sources on a citation with no note now runs one web search for that work, owner only, and keeps a note only from the work's own doi.org or arXiv page, quoted and checked by a second call. 2B: Semantic Scholar (abstracts) and OpenAlex (title search) are built, each off until its key is set; Semantic Scholar also needs an approval setting, because its free licence is non-commercial. The follow-ups (making the accounts, the licence, and whether to loosen the web search) are a new question, q-x9srvv.

@@ -313,3 +313,34 @@ during the review, which F10 confirms is the right design.)
   finishes and stores after a disconnect; before, a dead connection spends nothing. The client test
   is on the hover card's *Open in Sources* callback, not on a row click.
 - **R10 (P3), noted.** Keys in headers only; no query-string fallback.
+
+## The code reviews, and what they changed
+
+- **Stage 1**, GPT Sol, read-only: [prompt](261018o-stage-1-code-review-prompt.md),
+  [answer](261018o-stage-1-code-review-sol.md). *Rework*, six findings, all fixed (commit
+  74125968d): Semantic Scholar refused at the one request door unless key **and** approval are set;
+  no OpenAlex key in any URL, the eval included, swept by a test; a keyed request's failure rebuilt
+  from safe fields, so a transport error cannot carry the key; the keyless budget boundary as
+  before; a 429 test; "four public indexes".
+- **Stage 2**, GPT Sol, write mode: [prompt](261018o-stage-2-code-review-prompt.md),
+  [answer](261018o-stage-2-code-review-sol.md). *Rework*. It fixed five itself (DOI boundaries, the
+  re-read after the allowance now re-reads the row and the article, malformed answers transient,
+  client failures shown, the (i) sentence). Of the three it reported:
+  - **#2 (P1), taken, and it narrows R1 again.** A page carrying the DOI with the work's exact
+    title can still be a citation index or a review. So a page is the work's own **only at the
+    DOI resolver (`doi.org/<doi>`) or arXiv's own `/abs|pdf|html/<id>`**; the prompt asks for the
+    doi.org result when there is one. Accepting the publisher host the registry gives for a DOI is
+    deferred, in `bibliography.md § Deferred`, and loosening is q-x9srvv's question 2.
+  - **#5 (P2), taken as a stated limit.** A second press while one runs is refused *busy* (429),
+    not made to wait: no duplicate spend, and the reader's tab sends one at a time. R4's
+    wait-then-reread is not built.
+  - **#8 (P3), taken.** Route tests for the registry's 503 and for the two ledger rows.
+
+## Live smoke (2026-10-19, $0.049)
+
+Three real presses' writer calls, on the shipped request (`citation-web-note`, Haiku, Exa):
+Bryson, *Robots should be slaves* (DOI) — a supported note from `doi.org`; Nagel, *What is it like
+to be a bat?* (DOI) — declined, the extract was a fragment; Chollet, *On the measure of
+intelligence* (arXiv) — refused *too-long* at first, then, with the limit in the prompt, a note
+from `arxiv.org/abs`. 4–7 s and $0.008 a call. The request without a `response_format` schema
+answered readable JSON every time.

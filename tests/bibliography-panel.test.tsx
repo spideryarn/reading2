@@ -22,6 +22,7 @@ import {
   BLURB_FOUND_BY_TITLE,
   blurbBasis,
   CITE_LIST_READ_ABSTRACTS,
+  CITE_LIST_WEB_NOTES,
 } from "../src/citation-blurb-words.js";
 
 const {
@@ -431,6 +432,7 @@ function owner(over: Partial<UseBibliography> = {}): UseBibliography {
     webNoting: null,
     webNoteStage: null,
     webNoteNone: null,
+    webNoteFailed: null,
     findWebNote: async () => {},
     ...over,
   };
@@ -2381,6 +2383,13 @@ describe("a cited work's note from one web search", () => {
     await draw(owner({ bibliography: artefact([{ ...NOTED, webNote: WEB_NOTE }]) }));
     expect(row(NOTED.id).querySelectorAll(".cite-blurb")).toHaveLength(1);
     expect(row(NOTED.id).querySelector(".cite-blurb-basis")?.textContent).toBe("From the abstract · arXiv");
+  });
+
+  it("explains the web note in the (i) even when every visible row already has its own read-status line", async () => {
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, linkFrom: "web", webNote: WEB_NOTE }]) }));
+    const about = await aboutText();
+    expect(readNoteOf({ ...CENTRAL, linkFrom: "web" })).not.toBeNull();
+    expect(about).toContain(CITE_LIST_WEB_NOTES);
   });
 
   it("says what the search is doing while it runs, by stage, on that row only", async () => {

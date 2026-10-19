@@ -154,6 +154,8 @@ export interface CitationWebNoteSearch {
   webNoteStage: WebNoteStage | null;
   /** The work whose press, this session, found no page we could be sure of. */
   webNoteNone: string | null;
+  /** A transient press failure, safe reader-facing copy from the server. */
+  webNoteFailed: { id: string; message: string } | null;
   /**
    * **Look for one work's own page on the web**, unless the row already has a
    * note of either kind. The server refuses for nothing what it has already
@@ -658,8 +660,8 @@ export function useBibliographyRead(slug: string): BibliographyRead {
    *   list read again behind it.
    * - **A press answered for nothing** — the 409s — is quiet: a `searched`
    *   says the row's *found none* line again; the rest say nothing new.
-   * - **A failure says nothing on the row**: nothing was stored, the row says
-   *   what it said before, and the next press asks again.
+   * - **A failure is transient**: nothing is stored, but its safe server copy
+   *   stays on this row so the reader is not left to infer what stopped.
    * - **Leaving the article stops the reading, not the search**: the server
    *   finishes and stores a press it has started.
    */
@@ -667,6 +669,7 @@ export function useBibliographyRead(slug: string): BibliographyRead {
   const [webNoting, setWebNoting] = useState<string | null>(null);
   const [webNoteStage, setWebNoteStage] = useState<WebNoteStage | null>(null);
   const [webNoteNone, setWebNoteNone] = useState<string | null>(null);
+  const [webNoteFailed, setWebNoteFailed] = useState<{ id: string; message: string } | null>(null);
   const findWebNote = useCallback(
     async (id: string) => {
       if (webNoteLive.current) return;
@@ -678,6 +681,7 @@ export function useBibliographyRead(slug: string): BibliographyRead {
       setWebNoting(id);
       setWebNoteStage(null);
       setWebNoteNone((was) => (was === id ? null : was));
+      setWebNoteFailed((was) => (was?.id === id ? null : was));
       try {
         const res = await apiFetch(
           `/api/bibliography/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/web-note`,
@@ -713,9 +717,8 @@ export function useBibliographyRead(slug: string): BibliographyRead {
             : current,
         );
         void refresh();
-      } catch {
-        /* Nothing stored, so nothing new to say on the row; a press is not a
-           read, and the reader is not left with an error to dismiss. */
+      } catch (err) {
+        if (!controller.signal.aborted && mine()) setWebNoteFailed({ id, message: describeFetchFailure(err as Error) });
       } finally {
         if (mine()) {
           webNoteLive.current = null;
@@ -740,6 +743,7 @@ export function useBibliographyRead(slug: string): BibliographyRead {
       setWebNoting(null);
       setWebNoteStage(null);
       setWebNoteNone(null);
+      setWebNoteFailed(null);
       setInvestigating(null);
       setInvestigateStage(null);
       setInvestigateDraft(null);
@@ -771,6 +775,7 @@ export function useBibliographyRead(slug: string): BibliographyRead {
     webNoting,
     webNoteStage,
     webNoteNone,
+    webNoteFailed,
     findWebNote,
   };
 }
@@ -812,6 +817,7 @@ export function useBibliography(slug: string, read: BibliographyRead, enabled = 
     webNoting,
     webNoteStage,
     webNoteNone,
+    webNoteFailed,
     findWebNote,
   } = read;
   /**
@@ -890,6 +896,7 @@ export function useBibliography(slug: string, read: BibliographyRead, enabled = 
     webNoting,
     webNoteStage,
     webNoteNone,
+    webNoteFailed,
     findWebNote,
   };
 }

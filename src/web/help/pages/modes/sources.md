@@ -50,8 +50,7 @@ for that.
   shared article see them too.
 - **A work with no note can get one from the web.** Point at a citation in the article and press
   *Open in Sources* on its card: if the work has a DOI or an arXiv id, we search the web once for
-  its own page — its DOI page, its arXiv page, or a publisher’s page that carries its DOI under its
-  title — and an AI writes a sentence from the search engine’s extract of that page, which code
+  its own page — its DOI page or its arXiv page, and no other — and an AI writes a sentence from the search engine’s extract of that page, which code
   and a second check hold to the page’s own words. While it looks, the row says so; it labels the
   note *From a web search ·* and the page’s site. A web page can say more or less than the paper,
   so it can be wrong. If no page could be shown to be the work’s own, the row says that, and it is

@@ -28,11 +28,12 @@
  *    src/citation-find.ts), and **what is stored is the annotation's**: its
  *    URL, its title, its extract. The model's answer is a pointer.
  * 2. **The page is the work's own by its identifier (R1)** — `pageIsTheWork`:
- *    `doi.org/<the DOI>`, `arxiv.org/abs|pdf/<the id>` (host checked, the id
- *    exact, so `2001.083612` is not `2001.08361`), or a page that carries the
- *    exact DOI in its address or extract **and** whose own title is the work's
- *    whole title (`titleNamesWork`). `resultIsTheWork`'s looser title rule is
- *    not used: it cannot tell the work's page from a blog titled like it, and
+ *    `doi.org/<the DOI>` or arXiv's own `abs|pdf|html` page for the id (host
+ *    checked, the id exact, so `2001.083612` is not `2001.08361`), and
+ *    nothing else. A publisher's page carrying the DOI under the work's title
+ *    was accepted until GPT Sol's review #2 on this stage: a DOI and a title
+ *    show a page is *about* the work, and a citation index or a review can
+ *    carry both. `resultIsTheWork`'s looser title rule is not used either.
  *    Greg's promise was the work's own page, never someone else's. So a row
  *    with no identifier gets no search at all.
  * 3. **The page is not the article being read** — not its source address, its
@@ -95,10 +96,9 @@ import {
   readCheckAnswer,
   WEB_EXTRACT_EVIDENCE,
 } from "./citation-blurbs.js";
-import { rowIdentity } from "./citation-blurbs-identity.js";
+import { BLURB_MAX_CHARS, rowIdentity } from "./citation-blurbs-identity.js";
 import { type EvidenceDeps, resolveWorkId } from "./citation-evidence.js";
 import { FIND_TIMEOUT_MS, MAX_TOTAL_RESULTS } from "./citation-find.js";
-import { titleNamesWork } from "./citation-lookup.js";
 import {
   CITATION_WEB_NOTE_PROMPT_VERSION,
   CITATION_WEB_NOTE_VALIDATION_VERSION,
@@ -194,13 +194,14 @@ export const WEB_NOTE_SYSTEM = [
   "Run ONE web search for it — use its exact DOI or arXiv id, which is given. Do not search again.",
   "Then answer with only a JSON object and nothing else:",
   '{"url": "<the search result URL that is this work\'s own page>", "sentences": [{"text": "<one sentence>", "quote": "<words copied from that result>"}]}',
-  "The work's own page is its DOI landing page, its publisher's page, its arXiv page, or the author's own copy.",
+  "The work's own page is its doi.org address, or its arXiv page (arxiv.org/abs/, /pdf/ or /html/ with its id). When the search returns its doi.org address, name that one.",
   "A page that only mentions, cites, reviews or summarises the work is not its page.",
   'If no result is this work itself, answer {"url": null, "sentences": []}.',
   "Copy the URL exactly as the search result gave it. Never write a URL that was not one of the search results.",
   "",
   "The sentences come ONLY from the text the search returned for the result you named: never from anything you remember about the work, and never from another result.",
   "Write ONE sentence on what the work argues or finds. Add a second only when that text separately supports something the first does not say. Most works need one.",
+  `The whole note is at most two sentences and under ${BLURB_MAX_CHARS} characters in all.`,
   "Never say more than that text does: no stronger claim, no wider scope, no method, evidence or result it does not state.",
   "Do not just restate the title: say something the title does not.",
   "With each sentence, copy one quote of 6 to 30 words, exactly as it appears in that text, that the sentence rests on. Copy it character for character, in one piece.",
@@ -263,37 +264,27 @@ export function webNoteRequest(work: WebNoteWork): AiRequestBody {
 
 /* ------------------------------------------------------------- the rules -- */
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function decodedLower(url: string): string {
-  try {
-    return decodeURIComponent(url).toLowerCase();
-  } catch {
-    return url.toLowerCase();
-  }
-}
-
 const DOI_HOSTS = new Set(["doi.org", "dx.doi.org"]);
 const ARXIV_HOSTS = new Set(["arxiv.org", "export.arxiv.org"]);
 
 /**
  * **Is this search result the work's own page, by its identifier? (R1)**
- * Every branch needs the identifier exactly:
+ * Two branches, each needing the identifier exactly, and nothing else:
  *
- * - **a DOI resolver** (`doi.org`, `dx.doi.org`) whose path is this DOI;
+ * - **a DOI resolver** (`doi.org`, `dx.doi.org`) whose path is this DOI —
+ *   parsed whole, so a longer DOI is not this one;
  * - **arXiv's own** `/abs/`, `/pdf/` or `/html/` page for this id, any
  *   version — arXiv's host, not a mirror's. (`/html/` is beyond R1's
  *   *abs|pdf*: it is the paper's full text, and its id is as exact.)
- * - **any other page carrying this DOI** in its address or its extract,
- *   bounded so a longer DOI is not this one, **and whose own title is the
- *   work's whole title** (`titleNamesWork` → `"whole"`): a citing paper's
- *   reference list carries the DOI too, under its own title. A cut title is
- *   not enough here. An arXiv id is checked by address only, as
- *   `resultIsTheWork` does — its digits are too common in prose.
+ *
+ * **No other host**, whatever its address, extract or title carries (GPT
+ * Sol's review #2 on stage 2): a publisher's page, a repository, a citation
+ * index and a review of the work can all carry its DOI under its title, and
+ * nothing code holds tells them apart. Accepting publishers by a list of
+ * hosts from the registry is the way back, deferred (bibliography.md §
+ * Deferred).
  */
-export function pageIsTheWork(page: Pick<SearchEvidence, "url" | "title" | "excerpt">, anchor: WorkId, workTitle: string): boolean {
+export function pageIsTheWork(page: Pick<SearchEvidence, "url" | "title" | "excerpt">, anchor: WorkId): boolean {
   let u: URL;
   try {
     u = new URL(page.url);
@@ -309,10 +300,7 @@ export function pageIsTheWork(page: Pick<SearchEvidence, "url" | "title" | "exce
     if (!/^\/(?:abs|pdf|html)\//.test(u.pathname)) return false;
     return parsed !== null && doiFor(parsed) === doiFor(anchor);
   }
-  if (!anchor.startsWith("doi:")) return false;
-  const doi = new RegExp(`(?<![a-z0-9])${escapeRegExp(doiFor(anchor))}(?![a-z0-9-])`);
-  const carries = doi.test(decodedLower(page.url)) || doi.test((page.excerpt ?? "").toLowerCase());
-  return carries && titleNamesWork(page.title, workTitle) === "whole";
+  return false;
 }
 
 /** The article, as the self-refusal reads it: its source address and its prose, shingled once. */
@@ -369,11 +357,29 @@ export function readWebNote(json: unknown, work: WebNoteWork, self: ArticleSelf)
     return { kind: "transient", why: "unreadable" };
   }
   if (answer === null || typeof answer !== "object" || Array.isArray(answer)) return { kind: "transient", why: "unreadable" };
-  const { url: rawUrl, sentences } = answer as { url?: unknown; sentences?: unknown };
-  if (rawUrl === null || rawUrl === undefined || (typeof rawUrl === "string" && rawUrl.trim() === "")) {
+  const fields = Object.keys(answer).sort();
+  if (fields.length !== 2 || fields[0] !== "sentences" || fields[1] !== "url") return { kind: "transient", why: "unreadable" };
+  const { url: rawUrl, sentences } = answer as { url: unknown; sentences: unknown };
+  if (!Array.isArray(sentences)) return { kind: "transient", why: "unreadable" };
+  for (const sentence of sentences) {
+    if (sentence === null || typeof sentence !== "object" || Array.isArray(sentence)) return { kind: "transient", why: "unreadable" };
+    const sentenceFields = Object.keys(sentence).sort();
+    const shaped = sentence as { text?: unknown; quote?: unknown };
+    if (
+      sentenceFields.length !== 2 ||
+      sentenceFields[0] !== "quote" ||
+      sentenceFields[1] !== "text" ||
+      typeof shaped.text !== "string" ||
+      typeof shaped.quote !== "string"
+    ) {
+      return { kind: "transient", why: "unreadable" };
+    }
+  }
+  if (rawUrl === null) {
+    if (sentences.length !== 0) return { kind: "transient", why: "unreadable" };
     return { kind: "none", why: "none-picked", page: null };
   }
-  if (typeof rawUrl !== "string") return { kind: "transient", why: "unreadable" };
+  if (typeof rawUrl !== "string" || rawUrl.trim() === "") return { kind: "transient", why: "unreadable" };
 
   /* Rule 1: an exact key in the annotations' map; `isWebUrl` first so a
      `javascript:` string is never even a lookup key. Rule 2 follows from it:
@@ -382,7 +388,7 @@ export function readWebNote(json: unknown, work: WebNoteWork, self: ArticleSelf)
   const page = isWebUrl(url) ? results.get(url) : undefined;
   if (page === undefined) return { kind: "none", why: "not-a-result", page: null };
   if (hasCredentials(page.url) || page.url.length > WEB_NOTE_URL_CAP) return { kind: "none", why: "not-the-work", page };
-  if (!pageIsTheWork(page, work.anchor, work.title)) return { kind: "none", why: "not-the-work", page };
+  if (!pageIsTheWork(page, work.anchor)) return { kind: "none", why: "not-the-work", page };
   if (isTheArticle(page, self)) return { kind: "none", why: "the-article", page };
   const extract = page.excerpt ?? "";
   if (extract.trim() === "") return { kind: "none", why: "no-extract", page };
@@ -505,13 +511,13 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
     const refusal = storedRefusal(shown, first, now());
     if (refusal) throw refusal;
 
-    const article = await deps.reader.loadArticle(slug);
+    let article = await deps.reader.loadArticle(slug);
     const line = log("model").child({ slug, entryId });
 
     /* R1: no identifier, no search. A title-only row is searched by title
        only for an article from a public address (G6), as the notes are. */
-    const row = first.row;
-    const resolved = await resolveWorkId(row, { titleSearch: importedFromAPublicAddress(article.meta) }, await deps.evidence());
+    let row = first.row;
+    let resolved = await resolveWorkId(row, { titleSearch: importedFromAPublicAddress(article.meta) }, await deps.evidence());
     if (resolved.kind === "transient") {
       line.warn({ why: resolved.why }, "citation web note: no identifier this time");
       throw httpError(503, WEB_NOTE_REGISTRY_BUSY.message);
@@ -534,14 +540,39 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
       await deps.allowance.finish(lease);
     };
 
-    /* **Read again, holding the allowance** (R4): a second press waited for
-       the first's slot, and now finds the first's answer rather than paying
-       for it again. The allowance runs one press at a time per reader. */
+    /* **Read again, holding the allowance** (R4): what made a press free may
+       have changed between the first read and the slot — another tab's press
+       finished, a note arrived, the list was made again. **A second press
+       does not wait for the first's slot**: the allowance answers
+       `concurrency` at once and that is a 429 busy (`refusedBy`), so two
+       simultaneous presses never pay twice, but the second is refused rather
+       than given the first's answer. R4's wait-then-reread would need a
+       disconnect-aware wait on the shared allowance (GPT Sol's review #5);
+       the in-tab client is single-flight anyway (useBibliography.ts §
+       `findWebNote`), so only a second tab or a script meets the 429. */
     try {
+      const { bibliography: currentBibliography } = await deps.reader.loadBibliography(slug);
+      article = await deps.reader.loadArticle(slug);
+      const currentShown = currentBibliography.citations.find((w) => w.id === entryId);
       const again = await deps.notes.read(slug, entryId);
-      if (again === null) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
-      const late = storedRefusal(shown, again, now());
+      if (currentShown === undefined || again === null) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
+      const late = storedRefusal(currentShown, again, now());
       if (late) throw late;
+      /* A bibliography run can replace the row while this press waits for its
+         slot. Search the row that is current now, never the old work under a
+         reused stable id; and repeat the identifier refusal for nothing. */
+      if (rowIdentity(again.row) !== rowIdentity(row)) {
+        row = again.row;
+        resolved = await resolveWorkId(row, { titleSearch: importedFromAPublicAddress(article.meta) }, await deps.evidence());
+        if (resolved.kind === "transient") {
+          line.warn({ why: resolved.why }, "citation web note: no identifier this time");
+          throw httpError(503, WEB_NOTE_REGISTRY_BUSY.message);
+        }
+        if (resolved.kind === "none") {
+          line.info({ outcome: "no-identifier", why: resolved.why }, "citation web note");
+          throw new WebNoteRefused("no-identifier", WEB_NOTE_NO_IDENTIFIER);
+        }
+      }
     } catch (err) {
       await freeLease();
       throw err;

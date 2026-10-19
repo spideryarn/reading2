@@ -14,7 +14,7 @@
  * The provider is `globalThis.fetch`, stubbed — nothing here spends.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { rowIdentity } from "../src/citation-blurbs-identity.js";
@@ -32,6 +32,8 @@ loadEnvLocal();
 
 const SLUG = "test-citation-web-note-route";
 const WORK = "spya-nvrt3b";
+/* A title-only row: its identifier must come from Crossref's title search. */
+const TITLED = "spya-nvrt4c";
 const TITLE = "Scaling Laws for Neural Language Models";
 const EXTRACT =
   "We study empirical scaling laws for language model performance on the cross-entropy loss. " +
@@ -74,8 +76,13 @@ const CHECK = {
 /** The gateway, stubbed: the writer (it carries the search tool) and the check. `hold` keeps the writer waiting. */
 function provider(opts: { hold?: Promise<void> } = {}) {
   const jobs: string[] = [];
+  const outside: string[] = [];
   globalThis.fetch = (async (url: string | URL, init?: { body?: string }) => {
-    if (!String(url).startsWith("https://openrouter.ai/")) return new Response("", { status: 404 });
+    /* A registry answers 500: an error, which cools nothing in the shared limiter. */
+    if (!String(url).startsWith("https://openrouter.ai/")) {
+      outside.push(new URL(String(url)).host);
+      return new Response("", { status: 500 });
+    }
     const body = init?.body ?? "";
     const writer = body.includes("openrouter:web_search");
     jobs.push(writer ? "writer" : "check");
@@ -87,7 +94,7 @@ function provider(opts: { hold?: Promise<void> } = {}) {
       text: async () => JSON.stringify(writer ? WRITER : CHECK),
     } as unknown as Response;
   }) as unknown as typeof fetch;
-  return { jobs };
+  return { jobs, outside };
 }
 
 async function currentRevision(): Promise<string> {
@@ -128,12 +135,28 @@ beforeAll(async () => {
     generator: "test",
     slug: SLUG,
     sourceHash: "test",
-    citations: [work],
+    citations: [
+      work,
+      {
+        ...work,
+        id: TITLED,
+        key: "work:titled",
+        title: "Hippocampo-cortical coupling mediates memory consolidation during sleep",
+        authors: "Maingret, N.",
+        year: "2016",
+        url: "https://scholar.google.com/scholar?q=Hippocampo-cortical%20coupling",
+        linkFrom: "search",
+      },
+    ],
     capped: false,
     generatedAt: "2026-10-19T00:00:00.000Z",
     elapsedMs: 1,
   };
-  await getDb().update(articleRevisions).set({ bibliography }).where(eq(articleRevisions.id, await currentRevision()));
+  /* Fetched from a public address, so a title-only row may be searched for by title (G6). */
+  await getDb()
+    .update(articleRevisions)
+    .set({ bibliography, finalUrl: "https://essays.example/coupling", rawFilename: null })
+    .where(eq(articleRevisions.id, await currentRevision()));
 }, 120_000);
 
 afterAll(async () => {
@@ -282,6 +305,45 @@ describe("POST /api/bibliography/:slug/:id/web-note", () => {
     await handleApi(call.req, call.res, acceptAny);
     expect(call.status()).toBe(404);
     expect(stub.jobs).toEqual([]);
+  });
+
+  it("is a JSON 503 when the catalogue a title-only row's identifier comes from fails, with no model call and nothing stored", async () => {
+    const stub = provider();
+    const call = serve("POST", pressUrl(TITLED));
+    await handleApi(call.req, call.res, acceptAny);
+    expect(call.status()).toBe(503);
+    expect(JSON.parse(call.body())).toMatchObject({ error: expect.stringContaining("[cite-web-note-registry]") });
+    expect(stub.outside).toContain("api.crossref.org");
+    expect(stub.jobs).toEqual([]);
+    const rows = await getDb().select().from(citationWebNotes).where(eq(citationWebNotes.articleId, article?.articleId ?? ""));
+    expect(rows).toEqual([]);
+    /* And no allowance was taken: the refusal comes before it. */
+    const taken = await getDb()
+      .select()
+      .from(rateLimitEvents)
+      .where(and(eq(rateLimitEvents.ownerId, TEST_OWNER), eq(rateLimitEvents.bucket, "citation-web-note")));
+    expect(taken).toEqual([]);
+  });
+
+  it("puts both calls on the cost ledger, as the writer's and the check's jobs, against this article", async () => {
+    /* The real seam: `openRouterJson` meters every call into `spideryarn.ai_calls`
+       (src/ai-call.ts § Meter); this asks what it wrote for this press. */
+    const since = new Date();
+    provider();
+    const call = serve("POST", pressUrl());
+    await handleApi(call.req, call.res, acceptAny);
+    expect(frames(call.body()).at(-1)?.name).toBe("done");
+    const rows = (
+      await getDb().execute(
+        sql`select purpose, scope_kind from spideryarn.ai_calls
+             where article_slug = ${SLUG} and started_at >= ${since.toISOString()}::timestamptz
+             order by started_at`,
+      )
+    ).rows as Record<string, unknown>[];
+    expect(rows).toEqual([
+      { purpose: "citation-web-note", scope_kind: "request" },
+      { purpose: "citation-web-note-check", scope_kind: "request" },
+    ]);
   });
 
   it("is a 404 for somebody who does not own the article — a visitor's press spends nothing", async () => {

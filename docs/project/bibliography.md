@@ -296,15 +296,23 @@ never for every work. `POST /api/bibliography/:slug/:id/web-note`
    rows than 1B imagined — most rows with no note have no identifier. Loosening it to pages titled
    as the work is Greg's call, below.
 3. **Its own allowance**, `citation-web-note` — one at a time per reader, 10 an hour and 30 a day,
-   a global fuse of 200 presses a day (about $5) — then the store is read again, so a second press
-   that waited finds the first's answer.
+   a global fuse of 200 presses a day (about $5) — then the list, the article and the store are
+   read again, so a note or an abstract that arrived meanwhile still makes the press free. **A
+   second press while one runs is refused at once** (429 busy), not made to wait for the first's
+   answer, which R4 had asked: there is no duplicate spend either way, the reader's own tab sends
+   one press at a time, and waiting would need a disconnect-aware wait on the shared allowance
+   (GPT Sol's review #5 on this stage).
 4. **`searching`**: one Haiku call with one Exa search, five results, *Run ONE web search*, the
    prompt's JSON answer `{url, sentences: [{text, quote}]}` (not a `response_format` schema: none
    has been measured beside the search tool, and under `require_parameters` an unsupported field is
    a 404 — `src/reception.ts` found the same). Then code, every clause required: the URL is one of
    the call's own annotations and what is kept is the annotation's; **the page is the work's own by
-   its identifier** — `doi.org/<the DOI>`, arXiv's own `/abs/`, `/pdf/` or `/html/` page for the
-   exact id, or a page carrying the exact DOI under the work's whole title (`pageIsTheWork`); the
+   its identifier** — `doi.org/<the DOI>`, or arXiv's own `/abs/`, `/pdf/` or `/html/` page for the
+   exact id, and nothing else (`pageIsTheWork`). A publisher's page carrying the DOI under the
+   work's whole title was accepted until GPT Sol's review of this stage: a DOI and a title show a
+   page is *about* the work, and a citation index or a review carries both. The prompt asks for
+   the doi.org result when the search returns one, and states the note's limit (two sentences,
+   under `BLURB_MAX_CHARS` characters), which an early live run overshot; the
    page is not the article being read (its address, or a copy of its prose by shingle density, or a
    quote in the article's own words); and `judgeNote` over the page's extract.
 5. **`checking`**: the abstract notes' separate check, made provenance-neutral (it is told its
@@ -329,9 +337,9 @@ a reading of the paper, and a web page can say more or less than the paper, so i
 checked that it rests on these words of the page:* the quotes, a link to the page
 (`rel="noopener noreferrer nofollow"`) on the band's card, and *To look closer, ask in chat.* A
 search that found nothing says, on that row, *We searched the web for this work's own page and found
-none we could be sure of.* A failed press, or a row with no identifier, says nothing new. The band's
-(i) adds a sentence about web notes once one is on screen. Marginalia's *Cites* line does not draw
-web notes in v1.
+none we could be sure of.* A failed press stores nothing and leaves its safe failure sentence on the
+row for this session; a row with no identifier says nothing new. The band's (i) adds a sentence
+about web notes once one is on screen. Marginalia's *Cites* line does not draw web notes in v1.
 
 **Kept in `citation_web_notes`**, one row per `(article, entry)`, overwritten by a later press
 ([database.md](database.md)); it is reader state, so it goes with deletion, transfer, export and
@@ -1209,9 +1217,12 @@ v1.
 ## Deferred
 
 **The web note's open edges** (plan 261018o stage 2): showing it to a visitor; giving it to chat's
-`article_citations`; and loosening R1 to pages titled as the work but carrying no identifier,
-labelled as possibly someone else's — which goes to Greg with the yield once measured, since it
-reopens the *only the work's own page* promise he chose. Drawing it in Marginalia's *Cites* line.
+`article_citations`; accepting a publisher's or repository's page by a list of hosts the
+registry gives for the DOI (Crossref's `link`, a resolver redirect), so that a page off doi.org
+and arXiv can count as the work's own on evidence code holds; and loosening R1 to pages titled as
+the work but carrying no identifier, labelled as possibly someone else's — which goes to Greg with
+the yield once measured, since it reopens the *only the work's own page* promise he chose.
+Drawing it in Marginalia's *Cites* line.
 
 **Not deferred, but next door:** the article's hyperlinks that are not works have their own list,
 [Sources › Links](sources.md#links), whose row says *In Bibliography* when its address is a work's

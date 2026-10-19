@@ -22,15 +22,21 @@ import { REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
  * hide a note (as for the abstract notes, a new prompt keeps a checked note on
  * screen), but it says which prompt wrote it.
  */
-export const CITATION_WEB_NOTE_PROMPT_VERSION = "citation-web-note/1";
+export const CITATION_WEB_NOTE_PROMPT_VERSION = "citation-web-note/2";
 
 /**
  * **The checks a web note must pass to be shown**: the identity rule (R1), the
  * article-copy refusal, the quote and length rules and the check call's
  * prompt. Bump it when any of them changes: every stored note and negative is
  * then detached and the next press asks again.
+ *
+ * `/2` tightened the DOI-in-a-page rule (GPT Sol's review #1 on stage 2);
+ * `/3` dropped that rule altogether (its #2): a page is the work's own only
+ * at the DOI resolver or arXiv's own page. A note or a *none* stored under
+ * either earlier rule may rest on a page the rule now refuses, so neither is
+ * shown or trusted.
  */
-export const CITATION_WEB_NOTE_VALIDATION_VERSION = "citation-web-note-checks/1";
+export const CITATION_WEB_NOTE_VALIDATION_VERSION = "citation-web-note-checks/3";
 
 /** The page's own title, as stored and as shown. */
 export const WEB_NOTE_TITLE_CAP = 300;

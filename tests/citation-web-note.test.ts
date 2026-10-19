@@ -41,7 +41,9 @@ import {
   type WebNoteCall,
   WebNoteRefused,
   type WebNoteWork,
+  WEB_NOTE_SYSTEM,
 } from "../src/citation-web-note.js";
+import { BLURB_MAX_CHARS } from "../src/citation-blurbs-identity.js";
 import {
   attachWebNotes,
   CITATION_WEB_NOTE_PROMPT_VERSION,
@@ -142,34 +144,36 @@ describe("pageIsTheWork (R1): the work's own page by its identifier, never a pag
   const doiTitle = "Gibbon population declines in Borneo";
 
   it("takes a DOI resolver for the exact DOI, and arXiv's own abs and pdf pages for the exact id", () => {
-    expect(pageIsTheWork({ url: "https://doi.org/10.1038/nature05357" }, doi, doiTitle)).toBe(true);
-    expect(pageIsTheWork({ url: "https://dx.doi.org/10.1038/NATURE05357" }, doi, doiTitle)).toBe(true);
-    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.08361" }, ANCHOR, TITLE)).toBe(true);
-    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.08361v2" }, ANCHOR, TITLE)).toBe(true);
-    expect(pageIsTheWork({ url: "https://arxiv.org/pdf/2001.08361" }, ANCHOR, TITLE)).toBe(true);
-    expect(pageIsTheWork({ url: "https://arxiv.org/pdf/2001.08361v1" }, ANCHOR, TITLE)).toBe(true);
-    expect(pageIsTheWork({ url: "https://arxiv.org/html/2001.08361v1" }, ANCHOR, TITLE)).toBe(true);
+    expect(pageIsTheWork({ url: "https://doi.org/10.1038/nature05357" }, doi)).toBe(true);
+    expect(pageIsTheWork({ url: "https://dx.doi.org/10.1038/NATURE05357" }, doi)).toBe(true);
+    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.08361" }, ANCHOR)).toBe(true);
+    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.08361v2" }, ANCHOR)).toBe(true);
+    expect(pageIsTheWork({ url: "https://arxiv.org/pdf/2001.08361" }, ANCHOR)).toBe(true);
+    expect(pageIsTheWork({ url: "https://arxiv.org/pdf/2001.08361v1" }, ANCHOR)).toBe(true);
+    expect(pageIsTheWork({ url: "https://arxiv.org/html/2001.08361v1" }, ANCHOR)).toBe(true);
   });
 
   it("refuses a sibling id, another DOI, arXiv's listing pages and an arXiv mirror", () => {
-    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.083612" }, ANCHOR, TITLE)).toBe(false);
-    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.08362" }, ANCHOR, TITLE)).toBe(false);
-    expect(pageIsTheWork({ url: "https://arxiv.org/list/cs.LG/2001.08361" }, ANCHOR, TITLE)).toBe(false);
+    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.083612" }, ANCHOR)).toBe(false);
+    expect(pageIsTheWork({ url: "https://arxiv.org/abs/2001.08362" }, ANCHOR)).toBe(false);
+    expect(pageIsTheWork({ url: "https://arxiv.org/list/cs.LG/2001.08361" }, ANCHOR)).toBe(false);
     /* arXiv's download-format chooser names the id and holds no text of the paper. */
-    expect(pageIsTheWork({ url: "https://arxiv.org/format/2001.08361" }, ANCHOR, TITLE)).toBe(false);
-    expect(pageIsTheWork({ url: "https://doi.org/10.1038/nature05358" }, doi, doiTitle)).toBe(false);
-    expect(pageIsTheWork({ url: "https://doi.org/10.1038/nature05357.2" }, doi, doiTitle)).toBe(false);
+    expect(pageIsTheWork({ url: "https://arxiv.org/format/2001.08361" }, ANCHOR)).toBe(false);
+    expect(pageIsTheWork({ url: "https://doi.org/10.1038/nature05358" }, doi)).toBe(false);
+    expect(pageIsTheWork({ url: "https://doi.org/10.1038/nature05357.2" }, doi)).toBe(false);
     /* A page about the paper, under the paper's own title: it is not the paper's. */
-    expect(pageIsTheWork({ url: "https://huggingface.co/papers/2001.08361", title: TITLE }, ANCHOR, TITLE)).toBe(false);
+    expect(pageIsTheWork({ url: "https://huggingface.co/papers/2001.08361", title: TITLE }, ANCHOR)).toBe(false);
   });
 
-  it("takes a publisher's page carrying the exact DOI only under the work's whole title", () => {
+  it("refuses any other host, even one carrying the exact DOI under the work's whole title", () => {
+    /* Sol's review #2 on stage 2: a DOI and a title are evidence that a page is
+       about the work, not that it is the work's own; a citation index or a
+       review can carry both. Only the resolver and arXiv prove the page. */
     const page = { url: "https://www.nature.com/articles/nature05357", title: `${doiTitle} | Nature`, excerpt: "doi:10.1038/nature05357" };
-    expect(pageIsTheWork(page, doi, doiTitle)).toBe(true);
-    expect(pageIsTheWork({ ...page, excerpt: "", url: "https://pubs.example/doi/10.1038/nature05357" }, doi, doiTitle)).toBe(true);
-    /* A cut title is not enough here, and neither is the DOI alone. */
-    expect(pageIsTheWork({ ...page, title: "Gibbon population declines…" }, doi, doiTitle)).toBe(false);
-    expect(pageIsTheWork({ url: page.url, excerpt: page.excerpt }, doi, doiTitle)).toBe(false);
+    expect(pageIsTheWork(page, doi)).toBe(false);
+    expect(pageIsTheWork({ ...page, excerpt: "", url: "https://pubs.example/doi/10.1038/nature05357" }, doi)).toBe(false);
+    expect(pageIsTheWork({ ...page, title: "Gibbon population declines…" }, doi)).toBe(false);
+    expect(pageIsTheWork({ url: page.url, excerpt: page.excerpt }, doi)).toBe(false);
   });
 
   it("refuses a citing site whose address carries the DOI under its own title", () => {
@@ -178,16 +182,29 @@ describe("pageIsTheWork (R1): the work's own page by its identifier, never a pag
       title: "What the gibbon census got wrong",
       excerpt: "We reanalyse doi:10.1038/nature05357.",
     };
-    expect(pageIsTheWork(citing, doi, doiTitle)).toBe(false);
+    expect(pageIsTheWork(citing, doi)).toBe(false);
     /* Nor a longer DOI that starts with this one. */
-    expect(pageIsTheWork({ ...citing, title: doiTitle, url: "https://x.example/10.1038/nature05357-supp", excerpt: "" }, doi, doiTitle)).toBe(false);
+    expect(pageIsTheWork({ ...citing, title: doiTitle, url: "https://x.example/10.1038/nature05357-supp", excerpt: "" }, doi)).toBe(false);
+    expect(pageIsTheWork({ ...citing, title: doiTitle, url: "https://x.example/10.1038/nature05357.2", excerpt: "" }, doi)).toBe(false);
+    /* A citing page's query names what it cites, not what page it is. */
+    expect(pageIsTheWork({ ...citing, title: doiTitle, url: "https://x.example/citing?doi=10.1038%2Fnature05357", excerpt: "" }, doi)).toBe(false);
+    /* Nor the exact DOI in another host's path, encoded or in another case. */
+    expect(pageIsTheWork({ ...citing, title: doiTitle, url: "https://x.example/paper/10.1038%2FNATURE05357", excerpt: "" }, doi)).toBe(false);
+    /* Nor may a longer DOI in the extract stand in for this one. */
+    expect(pageIsTheWork({ ...citing, title: doiTitle, url: "https://x.example/paper", excerpt: "doi:10.1038/nature05357.2" }, doi)).toBe(false);
+    expect(
+      pageIsTheWork(
+        { ...citing, title: doiTitle, url: "https://x.example/paper", excerpt: "doi:10.9999/prefix/10.1038/nature05357" },
+        doi,
+      ),
+    ).toBe(false);
   });
 
   it("checks an arXiv id by its address only, never by a page's prose", () => {
-    expect(pageIsTheWork({ url: "https://site.example/p", title: TITLE, excerpt: "arXiv:2001.08361" }, ANCHOR, TITLE)).toBe(false);
+    expect(pageIsTheWork({ url: "https://site.example/p", title: TITLE, excerpt: "arXiv:2001.08361" }, ANCHOR)).toBe(false);
     /* Not even arXiv's own DOI for it, on somebody else's page under its whole title. */
     const arxivDoi = { url: "https://site.example/10.48550/arXiv.2001.08361", title: TITLE, excerpt: "doi:10.48550/arXiv.2001.08361" };
-    expect(pageIsTheWork(arxivDoi, ANCHOR, TITLE)).toBe(false);
+    expect(pageIsTheWork(arxivDoi, ANCHOR)).toBe(false);
   });
 });
 
@@ -209,10 +226,14 @@ describe("readWebNote: every clause is code's", () => {
   });
 
   it("refuses the article itself: its own address, and a copy of its prose", () => {
+    /* The work's own resolver page, which is also where the article was read
+       from (an article that cites its own DOI), and a resolver page whose
+       extract is the article's prose. */
     const doiWork: WebNoteWork = { ...WORK, anchor: "doi:10.1000/scaling" as WorkId };
-    const own = { url: "https://essays.example/scaling", title: TITLE, content: `doi:10.1000/scaling ${EXTRACT}` };
-    expect(readWebNote(answer({ url: own.url, results: [own] }), doiWork, SELF)).toMatchObject({ kind: "none", why: "the-article" });
-    const copy = { url: "https://mirror.example/10.1000/scaling", title: TITLE, content: ARTICLE_TEXT };
+    const fromDoi = articleSelf({ ...ARTICLE, meta: { ...ARTICLE.meta, url: "https://doi.org/10.1000/scaling" } });
+    const own = { url: "https://doi.org/10.1000/scaling", title: TITLE, content: EXTRACT };
+    expect(readWebNote(answer({ url: own.url, results: [own] }), doiWork, fromDoi)).toMatchObject({ kind: "none", why: "the-article" });
+    const copy = { url: "https://doi.org/10.1000/scaling", title: TITLE, content: ARTICLE_TEXT };
     expect(readWebNote(answer({ url: copy.url, results: [copy] }), doiWork, SELF)).toMatchObject({ kind: "none", why: "the-article" });
   });
 
@@ -238,6 +259,33 @@ describe("readWebNote: every clause is code's", () => {
     expect(readWebNote(answer({ finish: "length" }), WORK, SELF)).toEqual({ kind: "transient", why: "cut-off" });
     expect(readWebNote(answer({ content: "not json" }), WORK, SELF)).toEqual({ kind: "transient", why: "unreadable" });
     expect(readWebNote(answer({ finish: "tool_calls" }), WORK, SELF)).toEqual({ kind: "transient", why: "unreadable" });
+  });
+
+  it("calls a malformed prompt-specified object transient instead of caching it as a completed none", () => {
+    for (const content of [
+      JSON.stringify({ url: null }),
+      JSON.stringify({ url: null, sentences: [{ text: SENTENCE, quote: QUOTE }] }),
+      JSON.stringify({ url: ARXIV_PAGE.url, sentences: [{ text: SENTENCE, quote: 7 }] }),
+      JSON.stringify({ url: ARXIV_PAGE.url, sentences: [{ text: SENTENCE, quote: QUOTE }], extra: true }),
+    ]) {
+      expect(readWebNote(answer({ content }), WORK, SELF)).toEqual({ kind: "transient", why: "unreadable" });
+    }
+  });
+});
+
+describe("the writer's prompt", () => {
+  it("names only the pages code will accept, the doi.org address first", () => {
+    /* Sol's review #2: code takes only the resolver and arXiv, so a prompt that
+       sent the model to a publisher's page would buy a refusal every time. */
+    expect(WEB_NOTE_SYSTEM).toContain("The work's own page is its doi.org address, or its arXiv page");
+    expect(WEB_NOTE_SYSTEM).not.toMatch(/publisher's page|author's own copy/);
+    expect(CITATION_WEB_NOTE_PROMPT_VERSION).toBe("citation-web-note/2");
+  });
+
+  it("states the note's length limit, from the number code enforces", () => {
+    /* The live smoke of 2026-10-19: a Chollet note over 400 characters was
+       refused `too-long`, a paid search for nothing. */
+    expect(WEB_NOTE_SYSTEM).toContain(`at most two sentences and under ${BLURB_MAX_CHARS} characters in all`);
   });
 });
 
@@ -326,6 +374,7 @@ describe("shownWebNote and attachWebNotes: the read guard (R8)", () => {
   it("hides it when the row is no longer the one it was made for, or the checks have moved", () => {
     expect(shownWebNote(stored(), work({ title: "Scaling Laws for Autoregressive Generative Modeling" }))).toBeNull();
     expect(shownWebNote({ ...stored(), validationVersion: "citation-web-note-checks/0" }, work())).toBeNull();
+    expect(shownWebNote({ ...stored(), validationVersion: "citation-web-note-checks/1" }, work())).toBeNull();
   });
 
   it("hides an address with credentials in it, or that is not a web address", () => {
@@ -373,6 +422,8 @@ interface Harness {
 function harness(opts: {
   row?: CitedWork;
   shown?: CitedWork;
+  /** What the owner-visible list shows after the allowance is taken. */
+  shownAfterAllowance?: CitedWork;
   note?: CitationWebNote | null;
   /** What the second store read (after the allowance) returns; default the first's. */
   noteAfterAllowance?: CitationWebNote | null;
@@ -380,10 +431,14 @@ function harness(opts: {
   check?: () => unknown;
   allowance?: AllowanceTaken;
   article?: Article;
+  /** What the article read after the allowance returns. */
+  articleAfterAllowance?: Article;
   save?: (n: CitationWebNote) => Promise<void>;
 } = {}): Harness {
   const row = opts.row ?? work();
   const h: Harness = { calls: [], saved: [], taken: 0, finished: 0, reads: 0, deps: undefined as unknown as CitationWebNoteDeps };
+  let bibliographyReads = 0;
+  let articleReads = 0;
   const call: WebNoteCall = async (job) => {
     h.calls.push(job);
     const json = job === "citation-web-note" ? await (opts.writer ?? (() => answer({})))() : (opts.check ?? (() => verdicts([true])))();
@@ -391,8 +446,15 @@ function harness(opts: {
   };
   h.deps = {
     reader: {
-      loadBibliography: async () => ({ bibliography: { citations: [opts.shown ?? row] } as never, stale: false, outdated: false }),
-      loadArticle: async () => opts.article ?? ARTICLE,
+      loadBibliography: async () => {
+        bibliographyReads++;
+        const shown = bibliographyReads > 1 && opts.shownAfterAllowance !== undefined ? opts.shownAfterAllowance : (opts.shown ?? row);
+        return { bibliography: { citations: [shown] } as never, stale: false, outdated: false };
+      },
+      loadArticle: async () => {
+        articleReads++;
+        return articleReads > 1 && opts.articleAfterAllowance !== undefined ? opts.articleAfterAllowance : (opts.article ?? ARTICLE);
+      },
     },
     notes: {
       read: async () => {
@@ -523,6 +585,23 @@ describe("the press", () => {
     expect(h.calls).toEqual([]);
     expect(h.taken).toBe(1);
     expect(h.finished).toBe(1);
+  });
+
+  it("re-reads the owner-visible row after taking the slot, so a newly landed abstract note is still free", async () => {
+    const h = harness({ shownAfterAllowance: { ...work(), blurb: BLURB } });
+    const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 409, reason: "abstract-note" });
+    expect(h.calls).toEqual([]);
+    expect(h.saved).toEqual([]);
+    expect(h.finished).toBe(1);
+  });
+
+  it("checks the found page against the article snapshot current after the wait", async () => {
+    const h = harness({ articleAfterAllowance: { ...ARTICLE, meta: { ...ARTICLE.meta, url: ARXIV_PAGE.url } } as Article });
+    const events = await drain(await makeCitationWebNote(h.deps)(SLUG, ID));
+    expect(events.at(-1)).toEqual({ type: "done", done: { outcome: "none", why: "the-article" } });
+    expect(h.calls).toEqual(["citation-web-note"]);
+    expect(h.saved).toEqual([expect.objectContaining({ state: "none", why: "the-article" })]);
   });
 
   it("finishes and stores a press whose client left after the search began (R9)", async () => {

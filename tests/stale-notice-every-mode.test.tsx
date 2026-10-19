@@ -503,6 +503,7 @@ function bibliographyOwner(): UseBibliography {
     webNoting: null,
     webNoteStage: null,
     webNoteNone: null,
+    webNoteFailed: null,
     findWebNote: async () => {},
   };
 }

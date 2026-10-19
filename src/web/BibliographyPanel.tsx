@@ -1024,7 +1024,7 @@ export function BibliographyPanel({
             this (...) behind an information-tooltip"*). Still only while a
             visible row relies on it (plan 261011c). */}
         {showListReadNote && <p>{listReadNote}</p>}
-        {showListReadNote && listWebNote && <p>{CITE_LIST_WEB_NOTES}</p>}
+        {listWebNote && <p>{CITE_LIST_WEB_NOTES}</p>}
         {bibliography.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
@@ -1517,8 +1517,8 @@ export function CiteBlurb(
             <p className="tip-soon-how">{blurb ? blurbCardNote(blurb) : webNote ? webNoteCardNote(webNote) : null}</p>
             {blurb?.via === "title" && <p className="tip-soon-how">{BLURB_FOUND_BY_TITLE}</p>}
             <p className="tip-soon-how">{blurb ? blurbQuotesLead(sentences.length) : webNoteQuotesLead(sentences.length)}</p>
-            {sentences.map((s, i) => (
-              <p key={i} className="cite-blurb-quote">
+            {sentences.map((s) => (
+              <p key={`${s.text}\u241f${s.quote}`} className="cite-blurb-quote">
                 <q>{s.quote}</q>
               </p>
             ))}
@@ -1575,15 +1575,15 @@ export function CiteBlurb(
 }
 
 /** What `WebNoteProgress` reads of the owner's press (useBibliography.ts § `CitationWebNoteSearch`). */
-export type WebNoteProgressState = Pick<CitationWebNoteSearch, "webNoting" | "webNoteStage" | "webNoteNone">;
+export type WebNoteProgressState = Pick<CitationWebNoteSearch, "webNoting" | "webNoteStage" | "webNoteNone" | "webNoteFailed">;
 
 /**
  * **The row's one line about a web-note press** (plan 261018o stage 2) — what
  * the search is doing while the ~6 s go by, by stage, or that it found no page
- * we could be sure was the work's own. Nothing otherwise: a press that failed,
- * or a row with no identifier to search by, says nothing new (the row already
- * says what we have and have not read). In the app's face: these are our
- * words about the search, not the model's.
+ * we could be sure was the work's own. A failed press leaves the server's safe
+ * sentence for this session; a row with no identifier to search by says nothing
+ * new (the row already says what we have and have not read). In the app's face:
+ * these are our words about the search, not the model's.
  */
 export function WebNoteProgress({ work, webNote }: { work: Pick<ShownWork, "id">; webNote: WebNoteProgressState | null }) {
   if (webNote === null) return null;
@@ -1595,6 +1595,13 @@ export function WebNoteProgress({ work, webNote }: { work: Pick<ShownWork, "id">
     );
   }
   if (webNote.webNoteNone === work.id) return <p className="cite-read cite-web-note-none">{WEB_NOTE_NONE}</p>;
+  if (webNote.webNoteFailed?.id === work.id) {
+    return (
+      <p className="cite-read cite-web-note-failed" role="alert">
+        {webNote.webNoteFailed.message}
+      </p>
+    );
+  }
   return null;
 }
 

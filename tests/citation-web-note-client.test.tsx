@@ -243,7 +243,7 @@ describe("the prose card's Open in Sources on a row with no note", () => {
     expect(posts).toBe(0);
   });
 
-  it("says nothing on the row when the press fails before or during the stream", async () => {
+  it("keeps the server's reader-facing sentence on the row when the press fails", async () => {
     reply = { status: 429, body: { error: "busy" } };
     await open();
     await act(async () => pressCard());
@@ -251,5 +251,6 @@ describe("the prose card's Open in Sources on a row with no note", () => {
     expect(posts).toBe(1);
     expect(hook?.webNoteNone).toBeNull();
     expect(hook?.webNoting).toBeNull();
+    expect(hook?.webNoteFailed).toEqual({ id: ID, message: "busy" });
   });
 });

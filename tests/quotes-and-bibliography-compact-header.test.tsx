@@ -252,6 +252,7 @@ function citeOwner(c: Bibliography): UseBibliography {
     webNoting: null,
     webNoteStage: null,
     webNoteNone: null,
+    webNoteFailed: null,
     findWebNote: async () => {},
   };
 }

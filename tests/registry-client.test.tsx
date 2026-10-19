@@ -183,6 +183,7 @@ function owner(citations: CitedWork[]): UseBibliography {
     webNoting: null,
     webNoteStage: null,
     webNoteNone: null,
+    webNoteFailed: null,
     findWebNote: async () => {},
   } as UseBibliography;
 }
