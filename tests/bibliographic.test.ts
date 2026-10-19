@@ -286,6 +286,25 @@ describe("parseDatacite", () => {
   });
 });
 
+describe("a registry DOI", () => {
+  it("cannot carry a NUL into bibliographic_records", () => {
+    /* DOI_SHAPE accepts any non-whitespace suffix character, including NUL.
+       A bad registry value therefore has to be cleaned before that test, or
+       this text column fails with 22021 and the lookup is silently lost. */
+    const fallback = "10.1000/fallback";
+    expect(
+      parseCrossref(id(fallback), fallback, {
+        message: { title: ["A title"], DOI: "10.1000/bad\u0000doi" },
+      })?.doi,
+    ).toBe(fallback);
+    expect(
+      parseDatacite(id(fallback), fallback, {
+        data: { attributes: { titles: [{ title: "A title" }], doi: "10.1000/bad\u0000doi" } },
+      })?.doi,
+    ).toBe(fallback);
+  });
+});
+
 describe("the abstract a registry holds (plan 261017h stage 3a)", () => {
   const JATS =
     '<jats:title>Abstract</jats:title><jats:p>We show that sleep spindles &amp; ripples couple the ' +
@@ -344,6 +363,11 @@ describe("plainRegistryText", () => {
   it("caps what it keeps", () => {
     expect(plainRegistryText("x".repeat(1500))).toHaveLength(1000);
     expect(plainRegistryText(42)).toBeNull();
+  });
+
+  it("makes control characters spaces, decoded ones included", () => {
+    /* `bibliographic_records` is text; a NUL there is a 22021. docs/plans/261019h. */
+    expect(plainRegistryText("Deep\u0000learning&#1;today")).toBe("Deep learning today");
   });
 });
 

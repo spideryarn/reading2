@@ -167,6 +167,16 @@ describe("parseAnswer", () => {
     expect(parseAnswer(body(good))).toEqual(good);
   });
 
+  it("makes the model's control characters spaces, so no NUL reaches Postgres", () => {
+    /* docs/plans/261019h: a NUL in any of these is a 22021 at commit. */
+    const answer = parseAnswer(
+      body({ ...good, title: "A\u0000title", abstract: "An\u0002abstract", authors: ["Ada\u0000Lovelace"] }),
+    );
+    expect(answer.title).toBe("A title");
+    expect(answer.abstract).toBe("An abstract");
+    expect(answer.authors).toEqual(["Ada Lovelace"]);
+  });
+
   it("refuses an answer that broke the schema", () => {
     const refusals: unknown[] = [
       null,

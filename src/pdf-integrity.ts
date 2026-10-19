@@ -1,3 +1,4 @@
+import { CONTROL_CHARACTERS, controlsAsSpaces } from "./control-characters.js";
 import { baselineFor, type Pass0, type PdfRecord, type RecordType } from "./pdf.js";
 import { mathsAsText } from "./pdf-tex.js";
 
@@ -87,7 +88,19 @@ export function validateChunkReading(value: unknown): ReadingShapeVerdict {
     }
   }
 
-  return { kind: "valid", reading: value as unknown as ValidatedChunkReading };
+  /* **The one seam every transcription passes**, fresh, recovered or replayed
+     from a checkpoint, before it is scored or kept: its control characters
+     become spaces here, and are counted with the rest of what was cleaned.
+     A NUL from the model failed job spya-k0ytd8. src/control-characters.ts. */
+  let replaced = 0;
+  const records = (value.records as { text: string }[]).map((record) => {
+    const found = record.text.match(CONTROL_CHARACTERS)?.length ?? 0;
+    if (found === 0) return record;
+    replaced += found;
+    return { ...record, text: controlsAsSpaces(record.text) };
+  });
+  const reading = replaced === 0 ? value : { ...value, records, stripped: value.stripped + replaced };
+  return { kind: "valid", reading: reading as unknown as ValidatedChunkReading };
 }
 
 export type StructuralIssue =

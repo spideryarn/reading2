@@ -401,6 +401,17 @@ export function checkpointJson(value: unknown): string {
         "See checkpointJson in src/store/checkpoints.ts.",
     );
   }
+  /* `jsonb` stores no U+0000 (22P05), and the test fake has to refuse it too or
+     it is the one store that will. Job spya-k0ytd8's checkpoints were refused
+     for exactly this while every test stayed green. docs/plans/261019h. The
+     escape counts only after an even run of backslashes: `\\u0000` is a
+     backslash and five characters of text, which jsonb takes. */
+  if (/(?<!\\)(?:\\\\)*\\u0000/.test(json)) {
+    throw new CheckpointRequestError(
+      "A checkpoint value must not hold U+0000, which Postgres's jsonb will not store. " +
+        "Clean it where the text came in. See checkpointJson in src/store/checkpoints.ts.",
+    );
+  }
   return json;
 }
 

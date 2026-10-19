@@ -47,6 +47,7 @@
  * paper can use the same lookup while finding its canonical page.
  */
 
+import { controlsAsSpaces } from "./control-characters.js";
 import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { errorFields, log, type Log } from "./log.js";
@@ -287,20 +288,24 @@ const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"'
 
 /**
  * A registry string as plain text: markup stripped (Crossref titles carry
- * `<i>`, `<sub>` and sometimes MathML), the common entities decoded, whitespace
- * collapsed. Null when nothing is left.
+ * `<i>`, `<sub>` and sometimes MathML), the common entities decoded, control
+ * characters made spaces (src/control-characters.ts), whitespace collapsed.
+ * Null when nothing is left.
  */
 export function plainRegistryText(value: unknown, maxLength = 1000): string | null {
   if (typeof value !== "string") return null;
-  const text = value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, name: string) => {
-      if (name[0] === "#") {
-        const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
-        return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
-      }
-      return ENTITIES[name.toLowerCase()] ?? whole;
-    })
+  /* Controls cleaned after the decoding, since `&#1;` decodes to one. src/control-characters.ts. */
+  const text = controlsAsSpaces(
+    value
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, name: string) => {
+        if (name[0] === "#") {
+          const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+          return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+        }
+        return ENTITIES[name.toLowerCase()] ?? whole;
+      }),
+  )
     .replace(/\s+/g, " ")
     .trim();
   if (text === "") return null;
@@ -376,8 +381,11 @@ function author(family: unknown, given: unknown): WorkAuthor | null {
   return g === null ? { family: f } : { family: f, given: g };
 }
 
+/** A registry's DOI, with controls made harmless before its shape is trusted. */
 function normaliseDoi(value: unknown, fallback: string): string {
-  return typeof value === "string" && DOI_SHAPE.test(value.trim()) ? value.trim().toLowerCase() : fallback;
+  if (typeof value !== "string") return fallback;
+  const cleaned = controlsAsSpaces(value).trim();
+  return DOI_SHAPE.test(cleaned) ? cleaned.toLowerCase() : fallback;
 }
 
 /**

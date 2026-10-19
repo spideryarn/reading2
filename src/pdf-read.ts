@@ -1430,6 +1430,10 @@ interface OpenRouterResponse {
  * carries meaning, and a model emits them: on the `easy` fixture, reliably,
  * where a URL is hyphenated across a line, `…/27/rock␦waga.html`.
  *
+ * Not the control characters, NUL among them: those become spaces in
+ * `validateChunkReading` (src/pdf-integrity.ts), which every reading passes,
+ * a replayed checkpoint included. src/control-characters.ts.
+ *
  * Stripping them here rather than in the renderer is deliberate — this is the
  * boundary where a stranger's model output becomes our data, and the cached
  * chunk should hold the cleaned version so a renderer fix does not have to

@@ -14,7 +14,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ownIdsOfPdf } from "../src/article-registry.js";
-import { frontPageRecord, frontPagesWithStamps } from "../src/pdf.js";
+import { frontPageRecord, frontPagesWithStamps, itemText } from "../src/pdf.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const ARXIV = path.join(ROOT, "evals/pdf/titles/arxiv-arnn-eeg-stamp/source.pdf");
@@ -76,6 +76,20 @@ describe("frontPageRecord", () => {
 
   it("skips an item that is not a text run", () => {
     expect(frontPageRecord(1, [{ type: "beginMarkedContent" }, { str: "x", transform: upright, hasEOL: false }]).text).toBe("x");
+  });
+
+  it("makes spaces of the control characters a font with no ToUnicode map reads as", () => {
+    /* pdf.js on job spya-k0ytd8's maths pages: U+0002 for a minus. A U+0000 in
+       the same place is a string Postgres will not store. docs/plans/261019h. */
+    expect(frontPageRecord(1, [{ str: "U(\u0000πτ) \u0002 U(π0)", transform: upright, hasEOL: false }]).text).toBe(
+      "U( πτ) U(π0)",
+    );
+  });
+});
+
+describe("itemText", () => {
+  it("keeps tab, newline and CR, and makes every other C0 control, and DEL, a space", () => {
+    expect(itemText("a\u0000b\u0001c\u0008\td\ne\u000bf\u000c\rg\u001fh\u007fi")).toBe("a b c \td\ne f \rg h i");
   });
 });
 

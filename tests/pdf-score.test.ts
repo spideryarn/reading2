@@ -12,7 +12,8 @@
  */
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import type { Pass0, PdfRecord } from "../src/pdf.js";
+import { validateChunkReading } from "../src/pdf-integrity.js";
+import { itemText, type Pass0, type PdfRecord } from "../src/pdf.js";
 import { check, coverageOf, scorePage, THRESHOLDS } from "../src/pdf-score.js";
 
 interface Fixture {
@@ -38,6 +39,34 @@ const pass: Pass0 = {
 };
 
 const REQUESTED = [1, 2];
+
+describe("control characters in the baseline and transcription", () => {
+  it("keeps the words separated and scores the two cleaned entrances alike", () => {
+    const baseline = itemText("alpha\u0002beta gamma delta epsilon zeta eta theta");
+    const pass: Pass0 = {
+      pages: [{ page: 1, text: baseline, words: baseline.split(/\s+/).length, items: [] }],
+      isScan: false,
+      metaTitle: null,
+      furniture: new Set(),
+    };
+    const verdict = validateChunkReading({
+      records: [{ page: 1, type: "paragraph", text: "alpha\u0000beta gamma delta epsilon zeta eta theta", continues: false, uncertain: false }],
+      stripped: 0,
+      finish: "stop",
+      usage: { input: 1, output: 1 },
+      ms: 1,
+    });
+    if (verdict.kind !== "valid") throw new Error(`not valid: ${verdict.code}`);
+
+    const result = check(verdict.reading.records, [1], pass);
+    expect(baseline).toBe("alpha beta gamma delta epsilon zeta eta theta");
+    expect(verdict.reading.records[0]!.text).toBe(baseline);
+    expect(result.overall.base).toBe(8);
+    expect(result.overall.got).toBe(8);
+    expect(result.overall.recall).toBe(1);
+    expect(result.overall.precision).toBe(1);
+  });
+});
 
 describe("every way a transcription goes wrong, and the two that are tolerated", () => {
   for (const candidate of fixture.candidates) {

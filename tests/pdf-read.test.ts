@@ -12,7 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import { check } from "../src/pdf-score.js";
-import { PdfReadingShapeError } from "../src/pdf-integrity.js";
+import { PdfReadingShapeError, validateChunkReading } from "../src/pdf-integrity.js";
 import {
   instructionFor,
   parseRecords,
@@ -440,6 +440,48 @@ describe("what comes back from the model", () => {
     expect(stripped).toBe(2);
   });
 
+  it("makes control characters spaces, NUL above all, and keeps tab and newline", () => {
+    /* Job spya-k0ytd8 (report spya-u5azdm): pages set in a maths font with no
+       usable ToUnicode map, which pdf.js reads as U+0002 and U+0003, and a
+       transcription of them with a U+0000 in it. Postgres stores no NUL in
+       `text` or `jsonb`, so the checkpoint was refused (22P05) and then the
+       whole article was (22021). docs/plans/261019h. Spaces, not nothing, so
+       two words either side of one stay two words for the scorer. */
+    const json = JSON.stringify({
+      records: [record({ text: "U(πτ)\u0000 \u0002 U(π0)\u0003 = ΔU\u001f\tkept\nkept\u007fword" })],
+      finish: "stop",
+    });
+    expect(json).toContain("\\u0000");
+    const parsed = parseRecords(json);
+    const verdict = validateChunkReading({ ...parsed, finish: "stop", ms: 1, usage: { input: 1, output: 1 } });
+    if (verdict.kind !== "valid") throw new Error(`not valid: ${verdict.code}`);
+    expect(verdict.reading.records[0]!.text).toBe("U(πτ)    U(π0)  = ΔU \tkept\nkept word");
+    expect(verdict.reading.stripped).toBe(5);
+  });
+
+  it("cleans a replayed checkpoint the same way, since it never passed parseRecords", () => {
+    /* A cached chunk can hold any control but NUL (jsonb took them), and it
+       comes back through `validateChunkReading` alone. */
+    const cached = {
+      records: [record({ text: "a\u0002b" })],
+      stripped: 0,
+      finish: "stop",
+      ms: 1,
+      usage: { input: 1, output: 1 },
+    };
+    const verdict = validateChunkReading(cached);
+    if (verdict.kind !== "valid") throw new Error(`not valid: ${verdict.code}`);
+    expect(verdict.reading).not.toBe(cached);
+    expect(cached.records[0]!.text).toBe("a\u0002b");
+    expect(verdict.reading.records[0]!.text).toBe("a b");
+    expect(verdict.reading.stripped).toBe(1);
+
+    const again = validateChunkReading(verdict.reading);
+    if (again.kind !== "valid") throw new Error(`not valid: ${again.code}`);
+    expect(again.reading).toBe(verdict.reading);
+    expect(again.reading.stripped).toBe(1);
+  });
+
   it("refuses a record with no page number, rather than defaulting it", () => {
     const json = JSON.stringify({ records: [{ type: "paragraph", text: "x" }] });
     expect(() => parseRecords(json)).toThrow(/no page number/);
@@ -537,6 +579,42 @@ describe("the whole stage, with the model stubbed out", () => {
        `runExtract` returns for a web page, which is what lets stage 3 onwards
        stay ignorant of which extractor ran. */
     expect(result.extractedHtml).toContain("<article>");
+  }, 30_000);
+
+  it("hands the store no NUL when the model wrote one", async () => {
+    /* Through `parseRecords`, as `openRouterReader` is: the model's answer is
+       JSON text, and a NUL arrives in it as the escape `\u0000`. Job
+       spya-k0ytd8 failed on exactly this, first at the checkpoint and then at
+       `extracted_html`. docs/plans/261019h. */
+    const bytes = new Uint8Array(await readFile(EASY));
+    const pass = await pass0(bytes);
+    const honest = honestReader(pass, (records) =>
+      records.map((r, i) => (i === 3 ? { ...r, text: `${r.text.slice(0, 5)}\u0000${r.text.slice(5)}` } : r)),
+    );
+    const throughTheWire: PdfReader = {
+      id: "test/wire",
+      async read(pdf, instruction) {
+        const answer = await honest.read(pdf, instruction);
+        return { ...answer, ...parseRecords(JSON.stringify({ records: answer.records })) };
+      },
+    };
+    const checkpoints = memoryCheckpoints({ slug: "nul", articleId: "article-nul" });
+    const result = await runPdfExtract({
+      frontMatter: null,
+      authors: null,
+      bytes,
+      url: "https://example.test/nul.pdf",
+      checkpoints,
+      slug: "nul",
+      reader: throughTheWire,
+    });
+
+    expect(result.extractedHtml).not.toContain("\u0000");
+    expect(JSON.stringify(result.meta)).not.toContain("\\u0000");
+    expect(JSON.stringify(result.transcript)).not.toContain("\\u0000");
+    expect(result.stripped).toBeGreaterThan(0);
+    expect(checkpoints.entries.size).toBeGreaterThan(0);
+    for (const json of checkpoints.entries.values()) expect(json).not.toContain("\\u0000");
   }, 30_000);
 
   it("makes a PDF Info title plain before meta and rendered HTML diverge", async () => {

@@ -139,6 +139,29 @@ function keyHolding(checkpoints: MemoryCheckpoints, page: number): string {
 }
 
 describe("structural recovery", () => {
+  it("cleans an old cached control without rewriting its checkpoint or counting it twice", async () => {
+    const checkpoints = store();
+    await run(stubReader(sourcePass), checkpoints);
+    const dirtyKey = keyHolding(checkpoints, 1);
+    const dirty = JSON.parse(checkpoints.entries.get(dirtyKey)!) as ChunkReading;
+    dirty.records[0]!.text = dirty.records[0]!.text.replace(" ", "\u0002");
+    checkpoints.entries.set(dirtyKey, JSON.stringify(dirty));
+    const writes = checkpoints.calls.writes;
+
+    const firstReplay = stubReader(sourcePass);
+    const first = await run(firstReplay, checkpoints);
+    expect(firstReplay.calls).toEqual([]);
+    expect(first.extractedHtml).not.toContain("\u0002");
+    expect(first.stripped).toBe(1);
+    expect(checkpoints.calls.writes).toBe(writes);
+
+    const secondReplay = stubReader(sourcePass);
+    const second = await run(secondReplay, checkpoints);
+    expect(secondReplay.calls).toEqual([]);
+    expect(second.stripped).toBe(1);
+    expect(checkpoints.calls.writes).toBe(writes);
+  });
+
   it("recovers source pages 5-6 when their chunk invents labels 1-2, preserves final HTML order, and reuses the recovered checkpoint", async () => {
     const checkpoints = store();
     const first = stubReader(sourcePass, (pages, records) =>

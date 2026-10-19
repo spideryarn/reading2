@@ -27,6 +27,7 @@
  * evals/pdf/minimal-metadata/score.mts.
  */
 import { openRouterJson, type AiRequestBody } from "./ai-call.js";
+import { controlsAsSpaces } from "./control-characters.js";
 import { DOI_ORG, doiOfUrl } from "./doi-url.js";
 import { PAPER_METADATA_MODEL } from "./models.js";
 import { firstPagesText } from "./pdf.js";
@@ -123,8 +124,10 @@ export function metadataRequest(text: string, model: string = PAPER_METADATA_MOD
 }
 
 /** Collapse whitespace and trim; an empty result is `null`. */
+/* Every string of the model's answer passes here, so its control characters
+   become spaces here: src/control-characters.ts. */
 function oneLine(s: string): string | null {
-  const t = s.replace(/\s+/g, " ").trim();
+  const t = controlsAsSpaces(s).replace(/\s+/g, " ").trim();
   return t ? t : null;
 }
 
