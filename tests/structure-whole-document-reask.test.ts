@@ -125,13 +125,19 @@ const SOUND = JSON.stringify({
 });
 /** Broken three characters from the end, the way the book's second answer was. */
 const BROKEN = `${SOUND.slice(0, -2)}]}`;
-/** A child that starts at a block the article does not have — refused by the starts-only conversion. */
+/**
+ * A child that starts at a block the article does not have — refused by the starts-only
+ * conversion on any answer. It is the **second** of two: a first child's start is not asked, and
+ * dropping the second would leave one child covering the whole article
+ * (src/start-ranges.ts § `UnresolvedStarts`).
+ */
 const INVENTED = JSON.stringify({
   root: {
     title: "The whole piece",
     gist: "A gist.",
     question: "The whole piece — what does it say?",
     children: [
+      { title: "Opening", gist: "A gist.", question: "Opening — what?", start: BLOCKS[0]!.id },
       {
         title: "Part",
         gist: "A gist.",
@@ -142,6 +148,25 @@ const INVENTED = JSON.stringify({
     ],
   },
 });
+
+/** Three parts, the middle one's start given as `start`. */
+const threeParts = (start: string) =>
+  JSON.stringify({
+    root: {
+      title: "The whole piece",
+      gist: "A gist.",
+      question: "The whole piece — what does it say?",
+      children: [
+        { title: "Opening", gist: "The heading.", question: "Opening — what?", start: BLOCKS[0]!.id },
+        { title: "Turnips", gist: "The turnips.", question: "Turnips — why?", start },
+        { title: "The rest", gist: "The rest.", question: "The rest — what?", start: BLOCKS[2]!.id },
+      ],
+    },
+  });
+/** The prompt's line number spliced into the id: `[1] spya-rsk002` written as `spya-1rsk`. */
+const SPLICED = threeParts("spya-1rsk");
+/** A middle start that names nothing: refused by a first answer, dropped by the last. */
+const DROPPABLE = threeParts("spya-zzz999");
 
 function memoryCheckpoints(): CheckpointStore & { entries: Map<string, unknown> } {
   const entries = new Map<string, unknown>();
@@ -285,5 +310,57 @@ describe("what is not asked for again", () => {
     const result = await run();
     expect(wholeDocumentCalls).toBe(1);
     expect(result.wholeDocumentCalls).toBe(1);
+  });
+});
+
+/* docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md */
+describe("a start that names no block", () => {
+  const titles = (result: Awaited<ReturnType<typeof run>>) => {
+    const tree = result.parts.tree;
+    return tree.nodes[tree.rootId]!.children.map((child) => tree.nodes[child]!.title);
+  };
+
+  it("is read as the line number it splices in, on the first answer, with no second call", async () => {
+    answers = [{ text: SPLICED }];
+    const result = await run();
+    expect(wholeDocumentCalls).toBe(1);
+    expect(titles(result)).toEqual(["Opening", "Turnips", "The rest"]);
+    expect(result.startsRecovered).toBe(1);
+    expect(result.startsDropped).toBe(0);
+  });
+
+  it("buys the re-ask, and the re-ask may drop it rather than fail the step", async () => {
+    answers = [{ text: DROPPABLE }, { text: DROPPABLE }];
+    const checkpoints = memoryCheckpoints();
+    const result = await run({ checkpoints });
+    expect(wholeDocumentCalls).toBe(2);
+    expect(titles(result)).toEqual(["Opening", "The rest"]);
+    expect(result.startsDropped).toBe(1);
+    expect(result.droppedChildren).toBe(1);
+
+    /* And what it stored is replayed: a recovered answer must not be bought again on every
+       run because the checkpoint's own gate refuses it. ⟨Sol r2, finding 2⟩ */
+    expect([...checkpoints.entries.values()]).toEqual([expect.objectContaining({ answer: DROPPABLE })]);
+    wholeDocumentCalls = 0;
+    const again = await run({ checkpoints });
+    expect(wholeDocumentCalls).toBe(0);
+    expect(again.wholeDocumentResumed).toBe(true);
+    expect(again.startsDropped).toBe(1);
+  });
+
+  it("is dropped from a first answer that has no time left for a re-ask, which is the last answer", async () => {
+    answers = [{ text: DROPPABLE, ms: 100_000 }, { text: SOUND }];
+    const result = await run({ deadlineAt: Date.now() + 100_000 + 140_000 });
+    expect(wholeDocumentCalls).toBe(1);
+    expect(titles(result)).toEqual(["Opening", "The rest"]);
+    expect(result.startsDropped).toBe(1);
+  });
+
+  it("fails the step on the first refusal when even the last-answer reading refuses", async () => {
+    answers = [{ text: INVENTED, ms: 100_000 }, { text: SOUND }];
+    await expect(run({ deadlineAt: Date.now() + 100_000 + 140_000 })).rejects.toThrow(
+      /at root > child 2: start "spya-zzz999"/,
+    );
+    expect(wholeDocumentCalls).toBe(1);
   });
 });

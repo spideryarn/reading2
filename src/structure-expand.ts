@@ -841,7 +841,7 @@ const VERDICTS: readonly string[] = ["needs-deeper", "finished"];
 
 /** An answer that never reached the derivation planned nothing. */
 function nothingPlanned(): BuildReport {
-  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
 }
 
 /**

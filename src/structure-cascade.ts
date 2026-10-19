@@ -1430,6 +1430,7 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: [],
     droppedQuestions: [],
   };
   if (!result.ok) {

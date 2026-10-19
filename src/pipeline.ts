@@ -3772,6 +3772,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              anything at all — nothing about the tiling refuses an answer now.
              src/structure.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
+          /* **Starts that named no block and did not cost the article.** A
+             prompt drifting into copying line numbers instead of ids shows up
+             here and nowhere else, because every such answer now builds.
+             src/structure.ts § `BuildReport.unresolvedStarts`. */
+          startsRecovered: run.startsRecovered,
+          startsDropped: run.startsDropped,
           droppedHeadings: run.droppedHeadings,
           /* **Socratic questions written but not kept.** Nothing on screen
              distinguishes a question the model chose not to write from one
