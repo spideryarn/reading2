@@ -120,32 +120,9 @@
      the merge that introduced the second and third readers, 2026-09-05. */
   .reader { --text-pad-l: 0.9rem; }
 
-  /* **On a finger, the column of icons gives its room back to the prose**,
-     since 2026-10-18. Greg, on a phone in portrait: *"it does seem like a
-     waste that there's a bit of space to the right of every single paragraph
-     … where that horizontal real estate is really precious that we're not
-     using most of the time"* (spya-k49y3q). The icons come up in a bar above
-     the paragraph a tap selects (gutter.css § a narrow screen and a finger),
-     so the right pad only has to hold the state the column shows at rest: a
-     15px mark, its 4px end inset and the reading-time hairline. The 19px floor
-     keeps those fixed-pixel pieces inside the pad at the smaller browser roots
-     the reader supports; 1.25rem still wins at the ordinary 16px root. And the
-     text edges towards the spine, as he asked. About 20px more line at 390 wide.
-
-     `(hover: none)` because a narrow window with a mouse has no tap to
-     select a row, and keeps the column it reveals on hover. That also means
-     an iPad in a narrow split view gets this, which is right: the question
-     is room and a finger, not the device. `--blk-gutter-x` goes to zero
-     because the gutter's box now sits flush with the cell's right edge, and
-     every rule that offsets by it (the gutter, a footnote's gutter) follows.
-     docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md. */
-  @media (hover: none) {
-    .reader {
-      --text-pad-l: 0.6rem;
-      --text-pad-r: max(1.25rem, 19px);
-      --blk-gutter-x: 0px;
-    }
-  }
+  /* Under a finger the right pad is narrower again, and the left one too: §
+     a no-hover screen, after this block, which has to come later than the line
+     above to beat it. */
 
   /* ------------------------------------------------------------------------
      The two bars that were silently eating their own controls.
@@ -288,6 +265,50 @@
   }
   .dock-modes { margin-inline: 0.15rem; }
 
+}
+
+/* ----------------------------------------------- § a no-hover screen -----
+   **On a finger, the column of icons gives its room back to the prose**, on a
+   phone since 2026-10-18 and on every no-hover screen, the iPad included, since
+   2026-10-19. Greg, on a phone in portrait: *"it does seem like a waste that
+   there's a bit of space to the right of every single paragraph … where that
+   horizontal real estate is really precious that we're not using most of the
+   time"* (spya-k49y3q); and on an iPad in portrait with Marginalia on: *"I
+   still feel like we could be making more use of the horizontal real estate …
+   especially on the right-hand side, and maybe even a tiny bit on the
+   left-hand side to move it closer to the spine"* (spya-eebnxu).
+
+   The icons come up in a bar above the paragraph a tap selects (gutter.css §
+   a no-hover screen), so the right pad only has to hold the state the column
+   shows at rest: a 15px mark, its 4px end inset and the reading-time hairline.
+   The 19px floor keeps those fixed-pixel pieces inside the pad at the smaller
+   browser roots the reader supports; 1.25rem still wins at the ordinary 16px
+   root. And the text edges towards the spine, as he asked. About 20px more
+   line at 390 wide, and 28px at an iPad's 820 with Marginalia on, where the
+   prose cell is held at 544 beside the notes. Where the line is already at
+   the 65ch measure, the pads that went become whitespace either side of it.
+
+   **The box a mark sits in is still 24px, so it reaches 4px into the prose**
+   (gutter.css § a no-hover screen). On a heading the fold chevron, which is later
+   in the DOM, takes those 4px, so a mark on a heading has a 20px target. GPT
+   Sol raised it at the plan review of 261019d; a full-slot pad would cost
+   every line 4px to fix it on marked headings only, and it was not taken.
+
+   `(hover: none)` because a window with a mouse has no tap to select a row,
+   and keeps the column it reveals on hover. That is the primary pointer, so a
+   touchscreen laptop driven by its mouse keeps the column too. Top level and
+   after the `max-width: 731px` block, so it beats that block's
+   `--text-pad-l: 0.9rem` by source order. `--blk-gutter-x` goes to zero because the gutter's box now sits
+   flush with the cell's right edge, and every rule that offsets by it (the
+   gutter, a footnote's gutter) follows.
+   docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md,
+   docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md. */
+@media (hover: none) {
+  .reader {
+    --text-pad-l: 0.6rem;
+    --text-pad-r: max(1.25rem, 19px);
+    --blk-gutter-x: 0px;
+  }
 }
 
 /* ------------------------------------------------ § a band with no room ----

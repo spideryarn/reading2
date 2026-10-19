@@ -1,0 +1,245 @@
+diff --git a/docs/project/touch.md b/docs/project/touch.md
+index 4ad516f8b..5a1f34404 100644
+--- a/docs/project/touch.md
++++ b/docs/project/touch.md
+@@ -530,14 +530,18 @@ has the numbers.
+ [261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
+ depends on the side.)
+ 
+-**On a narrow touch screen there is no column, since 2026-10-18.** Under
+-`(max-width: 731px) and (hover: none)` the right pad shrinks to a narrow strip. At rest it holds only
++**On a touch screen there is no column**: on a phone since 2026-10-18, and on every no-hover
++screen, the iPad included, since 2026-10-19. Under `(hover: none)` the right pad shrinks to a
++narrow strip and the left one edges towards the spine. At rest it holds only
+ state: the marks, without their counts, and the reading-time hairline at the outer edge. The tap that
+ selects a row turns the gutter into a horizontal bar above the paragraph. Everything below about
+ which row is selected still holds; only where the icons are drawn changes. Greg, on a phone: *"we
+ only need it when there's an explicit action"* (spya-k49y3q,
+-[261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). A full-width iPad
+-keeps the column; a narrow iPad split view meets the query and uses the bar.
++[261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). The iPad followed
++the next day, when Greg asked for more line in portrait with Marginalia on (spya-eebnxu,
++[261019d](../plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md)).
++`(hover: none)` is the primary pointer, so a touchscreen laptop driven by its mouse keeps the
++column it reveals on hover.
+ 
+ **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
+ The bookmark and the blue chat mark are facts about the article and are always there; the permalink,
+diff --git a/src/web/styles/gutter.css b/src/web/styles/gutter.css
+index 204080a46..90e53b845 100644
+--- a/src/web/styles/gutter.css
++++ b/src/web/styles/gutter.css
+@@ -1086,20 +1086,32 @@ td.text.kind-heading .blk-gutter[data-open] {
+   }
+ }
+ 
+-/* -------------------------------------- a narrow screen and a finger -----
+-   **On a phone the column of icons is gone, and a tap brings them up in a bar
+-   above the paragraph instead**, since 2026-10-18. Greg, on a phone in
+-   portrait (spya-k49y3q):
++/* --------------------------------------------------- a touch screen -------
++   **Under a finger the column of icons is gone, and a tap brings them up in a
++   bar above the paragraph instead** — on a phone since 2026-10-18, and on
++   every no-hover screen, the iPad included, since 2026-10-19. Greg, on a phone
++   in portrait (spya-k49y3q):
+ 
+    > it does seem like a waste that there's a bit of space to the right of
+    > every single paragraph on a portrait mobile phone where that horizontal
+    > real estate is really precious that we're not using most of the time, and
+    > that we only need it when there's an explicit action.
+ 
+-   The condition is narrow-window.css's, plus a finger: the same query shrinks
+-   the right pad there to a narrow strip, which holds only what the column shows
+-   at rest. docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md
+-   has the measurements and the options passed over.
++   and then on an iPad in portrait with Marginalia on (spya-eebnxu): *"I still
++   feel like we could be making more use of the horizontal real estate … even
++   on a portrait iPad when I've got marginalia mode on"*.
++
++   **`(hover: none)` means the primary pointer cannot hover**, which is a
++   phone or a tablet, not every screen that can be touched: a touchscreen
++   laptop whose primary pointer is a mouse reports `hover: hover` and keeps the
++   column it reveals on hover. narrow-window.css § a touch screen shrinks the
++   right pad under the same query to a narrow strip, which holds only what the
++   column shows at rest. Nothing here depends on the width: the bar is at most
++   four 24px controls against the cell's right edge.
++   docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md has the
++   phone's measurements and the options passed over;
++   docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md
++   the iPad's.
+ 
+    **At rest it is the same element, flush with the cell's right edge**
+    (`--blk-gutter-x` is 0 here) and still a 24px-wide box, so a mark keeps its
+@@ -1129,7 +1141,7 @@ td.text.kind-heading .blk-gutter[data-open] {
+    heading's bottom-aligned box and a footnote's offset (both (0,3,1)). The
+    opacities are left alone: § the touch reveal's 0.705 is measured against
+    `--page`, which is what the bar paints. */
+-@media (max-width: 731px) and (hover: none) {
++@media (hover: none) {
+   .blk-gutter > * {
+     justify-content: flex-end;
+     padding-inline-end: 4px;
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index 3dffb278c..ecf070f74 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -120,32 +120,9 @@
+      the merge that introduced the second and third readers, 2026-09-05. */
+   .reader { --text-pad-l: 0.9rem; }
+ 
+-  /* **On a finger, the column of icons gives its room back to the prose**,
+-     since 2026-10-18. Greg, on a phone in portrait: *"it does seem like a
+-     waste that there's a bit of space to the right of every single paragraph
+-     … where that horizontal real estate is really precious that we're not
+-     using most of the time"* (spya-k49y3q). The icons come up in a bar above
+-     the paragraph a tap selects (gutter.css § a narrow screen and a finger),
+-     so the right pad only has to hold the state the column shows at rest: a
+-     15px mark, its 4px end inset and the reading-time hairline. The 19px floor
+-     keeps those fixed-pixel pieces inside the pad at the smaller browser roots
+-     the reader supports; 1.25rem still wins at the ordinary 16px root. And the
+-     text edges towards the spine, as he asked. About 20px more line at 390 wide.
+-
+-     `(hover: none)` because a narrow window with a mouse has no tap to
+-     select a row, and keeps the column it reveals on hover. That also means
+-     an iPad in a narrow split view gets this, which is right: the question
+-     is room and a finger, not the device. `--blk-gutter-x` goes to zero
+-     because the gutter's box now sits flush with the cell's right edge, and
+-     every rule that offsets by it (the gutter, a footnote's gutter) follows.
+-     docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md. */
+-  @media (hover: none) {
+-    .reader {
+-      --text-pad-l: 0.6rem;
+-      --text-pad-r: max(1.25rem, 19px);
+-      --blk-gutter-x: 0px;
+-    }
+-  }
++  /* Under a finger the right pad is narrower again, and the left one too: §
++     a touch screen, after this block, which has to come later than the line
++     above to beat it. */
+ 
+   /* ------------------------------------------------------------------------
+      The two bars that were silently eating their own controls.
+@@ -290,6 +267,50 @@
+ 
+ }
+ 
++/* ---------------------------------------------------- § a touch screen -----
++   **On a finger, the column of icons gives its room back to the prose**, on a
++   phone since 2026-10-18 and on every no-hover screen, the iPad included, since
++   2026-10-19. Greg, on a phone in portrait: *"it does seem like a waste that
++   there's a bit of space to the right of every single paragraph … where that
++   horizontal real estate is really precious that we're not using most of the
++   time"* (spya-k49y3q); and on an iPad in portrait with Marginalia on: *"I
++   still feel like we could be making more use of the horizontal real estate …
++   especially on the right-hand side, and maybe even a tiny bit on the
++   left-hand side to move it closer to the spine"* (spya-eebnxu).
++
++   The icons come up in a bar above the paragraph a tap selects (gutter.css §
++   a touch screen), so the right pad only has to hold the state the column
++   shows at rest: a 15px mark, its 4px end inset and the reading-time hairline.
++   The 19px floor keeps those fixed-pixel pieces inside the pad at the smaller
++   browser roots the reader supports; 1.25rem still wins at the ordinary 16px
++   root. And the text edges towards the spine, as he asked. About 20px more
++   line at 390 wide, and 28px at an iPad's 820 with Marginalia on, where the
++   prose cell is held at 544 beside the notes. Where the line is already at
++   the 65ch measure, the pads that went become whitespace either side of it.
++
++   **The box a mark sits in is still 24px, so it reaches 4px into the prose**
++   (gutter.css § a touch screen). On a heading the fold chevron, which is later
++   in the DOM, takes those 4px, so a mark on a heading has a 20px target. GPT
++   Sol raised it at the plan review of 261019d; a full-slot pad would cost
++   every line 4px to fix it on marked headings only, and it was not taken.
++
++   `(hover: none)` because a window with a mouse has no tap to select a row,
++   and keeps the column it reveals on hover. That is the primary pointer, so a
++   touchscreen laptop driven by its mouse keeps the column too. Top level and
++   after the `max-width: 731px` block, so it beats that block's
++   `--text-pad-l: 0.9rem` by source order. `--blk-gutter-x` goes to zero because the gutter's box now sits
++   flush with the cell's right edge, and every rule that offsets by it (the
++   gutter, a footnote's gutter) follows.
++   docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md,
++   docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md. */
++@media (hover: none) {
++  .reader {
++    --text-pad-l: 0.6rem;
++    --text-pad-r: max(1.25rem, 19px);
++    --blk-gutter-x: 0px;
++  }
++}
++
+ /* ------------------------------------------------ § a band with no room ----
+    **A mode is a full-screen panel once the band and the prose cannot share a
+    screen.**
+diff --git a/tests/gutter-phone-bar.test.ts b/tests/gutter-phone-bar.test.ts
+index c796f7f64..b414928ed 100644
+--- a/tests/gutter-phone-bar.test.ts
++++ b/tests/gutter-phone-bar.test.ts
+@@ -1,8 +1,10 @@
+ /**
+- * **On a narrow touch screen the gutter's column gives its room to the prose,
+- * and a tap brings the icons up in a bar above the paragraph** — gutter.css
+- * § a narrow screen and a finger, narrow-window.css's matching pad tokens.
+- * docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md.
++ * **On a touch screen the gutter's column gives its room to the prose, and a
++ * tap brings the icons up in a bar above the paragraph** — gutter.css § a
++ * touch screen, narrow-window.css's matching pad tokens. On a phone since
++ * docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md, and
++ * on every touch screen, the iPad included, since
++ * docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md.
+  *
+  * The browser check is the real evidence (a desktop Chrome harness never
+  * matches `(hover: none)`); this pins the declarations it depends on, so a
+@@ -10,11 +12,11 @@
+  */
+ import { describe, expect, it } from "vitest";
+ import { readFileSync } from "node:fs";
+-import { mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
++import { enclosing, mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
+ 
+ const css = readerCssNoComments();
+ const component = readFileSync(new URL("../src/web/BlockGutter.tsx", import.meta.url), "utf8");
+-const PHONE = "(max-width: 731px) and (hover: none)";
++const TOUCH = "(hover: none)";
+ const ROOTS = [9, 12, 16, 20, 24];
+ 
+ /** The declarations of one rule inside `block`, whitespace flattened. */
+@@ -28,25 +30,32 @@ function rule(block: string, selector: string): string {
+   throw new Error(`no rule for \`${selector}\``);
+ }
+ 
+-describe("a narrow touch screen: the gutter as a bar above the paragraph", () => {
+-  const block = mediaBlock(css, PHONE, ".blk-permalink");
++describe("a touch screen: the gutter as a bar above the paragraph", () => {
+   const BAR = "tr.row-active td.text .blk-gutter";
++  const block = mediaBlock(css, TOUCH, `${BAR} >`);
++  const pads = mediaBlock(css, TOUCH, "--text-pad-r");
++
++  it("applies at every width, not only a phone's", () => {
++    for (const marker of [`${BAR} >`, "--text-pad-r: max("]) {
++      const at = css.indexOf(marker, css.indexOf(`@media ${TOUCH}`));
++      const preludes = enclosing(css, at).slice(1);
++      expect(preludes.some((p) => p.includes("max-width")), `${marker} sits under a width query`).toBe(false);
++    }
++  });
+ 
+   it("narrows both pads, and only under a finger", () => {
+-    const narrow = mediaBlock(css, "(max-width: 731px)", "--text-pad-l: 0.9rem");
+-    const touch = mediaBlock(narrow, "(hover: none)", "--text-pad-r");
++    const touch = pads;
+     expect(touch).toMatch(/--text-pad-l:\s*0\.6rem/);
+     expect(touch).toMatch(/--text-pad-r:\s*max\(1\.25rem,\s*19px\)/);
+     expect(touch).toMatch(/--blk-gutter-x:\s*0px/);
+   });
+ 
+   it.each(ROOTS)("keeps the mark glyph inside the right pad at a %ipx root", (root) => {
+-    const narrow = mediaBlock(css, "(max-width: 731px)", "--text-pad-l: 0.9rem");
+-    const touch = mediaBlock(narrow, "(hover: none)", "--text-pad-r");
++    const touch = pads;
+     const pad = /--text-pad-r:\s*max\(\s*([\d.]+)rem\s*,\s*([\d.]+)px\s*\)/.exec(touch);
+     const glyph = /const GLYPH\s*=\s*([\d.]+);/.exec(component);
+     const inset = /padding-inline-end:\s*([\d.]+)px/.exec(rule(block, ".blk-gutter > *"));
+-    expect(pad, "the phone pad has no px floor for the fixed-pixel glyph").not.toBeNull();
++    expect(pad, "the touch pad has no px floor for the fixed-pixel glyph").not.toBeNull();
+     expect(glyph, "BlockGutter's glyph size is no longer a numeric constant").not.toBeNull();
+     expect(inset, "the at-rest glyph has no numeric end inset").not.toBeNull();
+     const padPx = Math.max(Number(pad?.[1]) * root, Number(pad?.[2]));
