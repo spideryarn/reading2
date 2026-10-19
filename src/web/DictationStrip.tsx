@@ -95,7 +95,9 @@ function dictationWords(d: UseDictation, sendingAfter: boolean, done: DoneAction
   if (d.transcribing) {
     return sendingAfter ? DONE_WORDS[done].strip : "Turning that into text…";
   }
-  if (d.phase === "opening") return "Opening the microphone…";
+  /* "Wait" because `opening` is now exactly the time before the device is open,
+     and anything said into it is lost: told as well as shown. Plan 261019m. */
+  if (d.phase === "opening") return "Wait — opening the microphone…";
   /* **Before `quiet`**: being stopped in a minute is the more urgent of the
      two, and it is true whether or not the microphone hears anything. The
      seconds are not in this sentence because the live region says it — the
@@ -292,12 +294,10 @@ export function DictationButton({
     >
     <button
       type="button"
-      /* Four phases, three appearances. `.on` — the orange — is worn only once
-         `audiostart` has fired and the microphone is genuinely open; `.opening`
-         is the second before that and looks different on purpose. The old code
-         went orange on the line after `start()`, a measured 1.1 seconds before
-         the microphone could hear anything, which meant the button's one piece
-         of feedback was wrong exactly when the reader was watching it. */
+      /* Four phases, three appearances. `.on` — the orange — is worn once the
+         track is ours and the tape is recording; `.opening` is the permission,
+         lock and `getUserMedia` gap before that and looks different on purpose.
+         Anything said in `opening` is lost, which is why the strip says Wait. */
       className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
         dictation.phase === "opening" ? " opening" : ""
       }${busy ? " busy" : ""}`}

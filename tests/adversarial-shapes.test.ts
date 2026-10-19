@@ -151,6 +151,7 @@ describe("an old hand-written HTML page whose only heading is its title", () => 
       rangelessChildren: [],
       droppedHeadings: [],
       collapsedRungs: [],
+      unresolvedStarts: [],
       droppedQuestions: [],
     };
     const tree = buildTree(proposal, {}, blocks, "old-html-one-heading", report);

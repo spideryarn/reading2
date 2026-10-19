@@ -226,6 +226,7 @@ async function waveOne(): Promise<Tree> {
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: [],
     droppedQuestions: [],
   });
 }
@@ -242,6 +243,7 @@ async function rebuild(root: import("../src/structure.js").ModelNode): Promise<T
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: [],
     droppedQuestions: [],
   });
 }
@@ -400,7 +402,7 @@ describe("which sections a wave asks about", () => {
         {},
         plain,
         SLUG,
-        { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+        { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] },
       );
     })();
     const fake = fakeExecutor();
@@ -1200,7 +1202,7 @@ describe("what the width gate did while the wave ran", () => {
       {},
       plain,
       SLUG,
-      { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+      { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] },
     );
     const out = await deepenTree({
       power: "standard",
@@ -1945,7 +1947,7 @@ describe("the question on a part the cascade built", () => {
       {},
       BLOCKS,
       SLUG,
-      { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+      { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] },
     );
   }
 
@@ -1974,6 +1976,7 @@ describe("the question on a part the cascade built", () => {
       rangelessChildren: [],
       droppedHeadings: [],
       collapsedRungs: [],
+      unresolvedStarts: [],
       droppedQuestions: [],
     };
     return { tree: buildTree(root, {}, BLOCKS, SLUG, report), report };

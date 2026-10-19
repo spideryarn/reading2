@@ -12,8 +12,9 @@
  *
  * So the properties here are mostly about **not claiming things**:
  *
- * - the timer's zero is `audiostart`, not the press, because the 1.1 seconds
- *   before the microphone opens are not seconds of recording;
+ * - the timer's zero is the moment the track is ours, not the press, because
+ *   the time before the microphone opens is not seconds of recording (it was
+ *   `audiostart` until plan 261019m, which on Chrome lost the first second);
  * - the recorder's zero is the same event, or the saved file is longer than the
  *   timer beside it says;
  * - a refused permission does not quietly become a start on a different device;
@@ -335,23 +336,33 @@ afterEach(() => {
 
 describe("the timer's zero", () => {
   it("is not the press", async () => {
+    /* Until plan 261019m this looked after the capture settled and found no
+       zero, because the zero waited for `audiostart`. The press is still not
+       the zero; the track arriving is. */
     const h = drive();
     act(() => h.get().toggle());
-    await settle();
     expect(h.get().phase).toBe("opening");
     expect(h.get().startedAt).toBeNull();
+    vi.setSystemTime(new Date("2026-08-27T14:32:01"));
+    await settle();
+    expect(h.get().startedAt).toBeGreaterThanOrEqual(new Date("2026-08-27T14:32:01").getTime());
     h.unmount();
   });
 
-  it("is `audiostart`, the moment there is actually audio", async () => {
+  it("is the moment the track is ours, and `audiostart` does not move it", async () => {
+    /* Was "is `audiostart`, the moment there is actually audio". On Chrome the
+       track is delivering audio 1.1 seconds before `audiostart`, and that
+       second was lost; plan 261019m. */
     const h = drive();
     act(() => h.get().toggle());
     await settle();
-    vi.setSystemTime(new Date("2026-08-27T14:32:01"));
+    const zero = h.get().startedAt;
+    expect(zero).not.toBeNull();
+    vi.setSystemTime(new Date("2026-08-27T14:32:05"));
     await act(async () => {
       latest().onaudiostart?.();
     });
-    expect(h.get().startedAt).toBe(new Date("2026-08-27T14:32:01").getTime());
+    expect(h.get().startedAt).toBe(zero);
     h.unmount();
   });
 
@@ -567,15 +578,18 @@ describe("which microphone it opens", () => {
 /* --------------------------------------------------------- the recording -- */
 
 describe("the audio it keeps", () => {
-  /* The recorder's zero has to be the timer's zero. `getUserMedia` hands back a
-     track that is already live a measured 1.1 seconds before `audiostart`, so a
-     recorder started on arrival captures a second the timer says does not
-     exist. GPT Sol's review, item 4. */
-  it("does not start recording until the microphone is actually open", async () => {
+  /* The recorder's zero has to be the timer's zero (GPT Sol's review, item 4).
+     Until plan 261019m both were `audiostart`, on the reasoning that a recorder
+     started on the track's arrival captures a second the timer did not count.
+     That second was the reader talking, so both zeros are now the track's
+     arrival — and this test, which used to say "does not start recording until
+     the microphone is actually open", says the opposite. */
+  it("starts recording when the track is ours, without waiting for audiostart", async () => {
     const h = drive();
     act(() => h.get().toggle());
-    await settle();
     expect(recorders).toHaveLength(0);
+    await settle();
+    expect(recorders).toHaveLength(1);
     await act(async () => {
       latest().onaudiostart?.();
     });

@@ -141,7 +141,7 @@ function target(from: number, to: number, where: string): ExpansionTarget {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
 }
 
 const state = (

@@ -206,10 +206,27 @@ squeezing the child into one borrowed block writes a boundary nobody proposed. T
 a tiling fault still costs anything, so it is **counted on its own** rather than as another kind of
 repair: a moved boundary keeps every section the model named, and this does not.
 
-Still refused, because it is a fault in what the model *said* rather than in how its sections line
-up: **an endpoint that is not a block id**. One unresolvable child leaves its whole sibling set
-underived, so the precise error survives instead of being buried by a tree built as though that child
-had never been proposed.
+**An endpoint that is not a block id was refused outright until 2026-10-19**, on the argument that it
+is a fault in what the model *said* rather than in how its sections line up, and that the precise
+error should survive. That stopped being a fair trade once the call went to effort `low` with a JSON
+schema and the model stopped thinking: one line number spliced into one id
+(`[582] spya-xcf0dz` written as `spya-582xcf0dz`) cost a reader's 648-block PDF its whole tree three
+times running, and every mode built on it
+([261019d](../postmortems/261019d-a-line-number-spliced-into-a-block-id-cost-the-whole-tree.md)).
+**For the whole-document answer only** (`generateStructure`; the scoped cascade and the long-document
+slices still refuse), src/start-ranges.ts § `UnresolvedStarts`:
+
+- **a first child's start is not asked** — it is pinned to its parent's start whatever it says;
+- **a spliced line number is read as that line**, if exactly one split of the digits names a block
+  whose id the rest agrees with, and that block falls between the child's neighbours;
+- **anything else refuses a first answer**, so the in-step re-ask below runs; and **on the last
+  answer** — the re-ask, a first answer with no time left for one, or a replayed checkpoint — the
+  child is dropped into its predecessor, as long as its sibling set keeps two children and the
+  answer loses no more than one start in ten.
+
+Both outcomes are counted, `startsRecovered` and `startsDropped` on the step's log line, because a
+prompt that drifted into writing line numbers would otherwise look healthy: every answer would build.
+[261019l](../plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md).
 
 **A child with no range at all stopped being a live-answer case in `toc/11`.** The earlier ranged
 answer could omit `range`; the builder derived one — pinned if first, the previous child's end + 1
