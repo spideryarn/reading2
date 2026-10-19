@@ -167,8 +167,9 @@ it: *the one address a reader is shown* in `tests/site-footer.test.tsx`.
 
 It has done since 2026-09-01: the button's label is a four-way switch, and three of the four are
 `.cmt-spinner` plus a word — *Sending*, *Adding the picture*, *Writing that down*
-([icons.md](icons.md#the-loading-spinner)). It is `disabled` throughout, and a `sending` ref latch
-behind that is what stops two clicks inside one frame filing two reports.
+([icons.md](icons.md#the-loading-spinner)). It is disabled for the first two; while it is writing
+down a transcript it stays live so another press can queue the send. A `sending` ref latch is what
+stops two clicks inside one frame filing two reports.
 
 **Nothing was pinning the spinner**, though, so a refactor of that switch could have dropped it with
 every test in the file still green. *Spins on Send while the report is in flight* in
@@ -176,6 +177,24 @@ every test in the file still green. *Spins on Send while the report is in flight
 the test can stand inside the `sending` stage and look. If the report says otherwise on a real
 screen, the thing to suspect is not the markup: the POST body is built **synchronously** before the
 first `await`, so a large pasted screenshot is stringified before React gets to paint the spinner.
+
+**And it is drawn at full strength, since 2026-10-19.** Greg again, on an iPad, from a dictated
+report with no screenshot:
+
+> When I click send in this feedback dialog, it seems to take a few seconds to take effect, where
+> there is no UI feedback at all, no spinner
+>
+> — Greg, 2026-10-18 (`spya-an90k0`)
+
+The server's handler answered in 81ms, and the label changed within 110ms in a desktop
+browser test. But the code drew *Sending* as a disabled button at `opacity: 0.45`, which is both
+faint and, on an iPad, our leading suspect for a button that paints nothing
+([260912c](../plans/260912c-send-button-icon-and-primary-style.md)). So a working button now
+carries `data-working`; the two disabled states are put back at full opacity, and *Writing that
+down* is already enabled. Send reply and Send addendum get the same full-opacity sending state. Not
+proved on a real iPad.
+[261019c](../plans/261019c-feedback-send-shows-it-is-working-at-once.md) has the evidence, and the
+next step if it comes back: time press → render → session → fetch in the browser.
 
 ### Send always does something, since 2026-10-10
 

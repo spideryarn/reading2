@@ -390,6 +390,8 @@ a.fb-earlier-page:focus-visible {
   gap: 0.5rem;
 }
 .fb-reply-send:disabled { opacity: 0.45; cursor: default; }
+/* Sending: disabled, but working, so not dimmed — as `.fb-send` below. */
+.fb-reply-send[data-working]:disabled { opacity: 1; cursor: progress; }
 /* **Green to send, red to put off**, in a Needs-a-decision thread only — Greg,
    2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
    shortcut, as colour-scales.md asks of a red/green pair. The addendum box
@@ -772,6 +774,12 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-cancel { color: var(--ink-soft); }
 .fb-send { color: var(--positive); border-color: currentColor; }
 .fb-send:disabled { opacity: 0.45; cursor: default; }
+/* **Working is not "cannot be pressed".** Sending, Adding the picture: the
+   button is disabled, but its spinner and word are the only sign anything is
+   happening, and those states were coded at 0.45 when Greg saw neither on an
+   iPad (spya-an90k0) — where a disabled button at `opacity < 1` is also our
+   leading suspect for one that paints nothing (plan 260912c). Plan 261019c. */
+.fb-send[data-working]:disabled { opacity: 1; cursor: progress; }
 .fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
 /* The thread pager again, in Earlier's footer beside Close, kept to the right. */
 .fb-foot-pager { justify-content: flex-end; }
