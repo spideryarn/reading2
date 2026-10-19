@@ -499,7 +499,172 @@ describe("a reflow under a reader who is staying put", () => {
     await settle();
 
     expect(scrollY).toBe(24 * LANDSCAPE);
+    /* The centred hold on block 20 is over; what holds now is the restore's
+       own arrival at the address's block (plan 261019a). */
+    expect(arrivalAnchor()).toEqual({ id: block(24), passage: undefined });
+  });
+});
+
+/**
+ * **An arrival at `?at=` holds until the reader moves** — report spya-qspg5a,
+ * plan docs/plans/261019a-reopen-lands-on-the-paragraph-you-were-reading.md.
+ *
+ * Measured on a cold load: the restore scrolls to `?at=`, and seconds later the
+ * prose face finishes loading and every row above rewraps, carrying the block
+ * 3,000px down with `scrollY` unchanged. That is a reflow with **no** layout key
+ * change and no scroll event, so neither the re-anchor above nor the spy hears
+ * it — and the spy's next measurement wrote the section above into `?at=` and
+ * into the reader's memory of the article, one section further back on every
+ * reopen. Here the swap is `rowHeight` growing and a `loadingdone` on a stub
+ * `document.fonts`, which is the event `onFontsChanged` listens for.
+ */
+describe("an arrival at ?at= while the fonts are still arriving", () => {
+  const SWAPPED = 130;
+  let fonts: EventTarget;
+
+  beforeEach(() => {
+    fonts = new EventTarget();
+    Object.defineProperty(document, "fonts", { configurable: true, value: fonts });
+  });
+  afterEach(() => {
+    delete (document as { fonts?: unknown }).fonts;
+  });
+
+  /** The font lands: every row taller, no scroll event, then the font event. */
+  function swapFont(): void {
+    rowHeight = SWAPPED;
+    fonts.dispatchEvent(new Event("loadingdone"));
+  }
+
+  it("keeps the block it arrived at at the top when the prose face lands", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("k");
+    await settle();
+    expect(scrollY).toBe(15 * PORTRAIT);
+
+    swapFont();
+    await settle();
+
+    expect(scrollY).toBe(15 * SWAPPED);
+    expect(atNow()).toBe(block(15));
+  });
+
+  /** The order the browser trace showed: the reflow is visible to a scroll-
+      frame measurement before the font event arrives. The spy must not write
+      down what it sees in that frame. */
+  it("does not write the section above into ?at= when the spy measures before the font event", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(12)}`);
+    render("k");
+    await settle();
+
+    rowHeight = SWAPPED; // block 12 is now 360px below the line; the line is in block 9
+    window.dispatchEvent(new Event("scroll"));
+    await settle();
+    expect(atNow()).toBe(block(12));
+
+    fonts.dispatchEvent(new Event("loadingdone"));
+    await settle();
+    expect(scrollY).toBe(12 * SWAPPED);
+    expect(atNow()).toBe(block(12));
+  });
+
+  /** Measured at 390px wide: the reflow moved `scrollY` by a pixel and fired a
+      scroll event in the frame it moved the block, before any font or resize
+      callback. The page's height changed, so that is the layout moving, not
+      the reader: the hold re-aligns rather than ending. */
+  it("is not ended by a scroll event that a reflow fires before it is reported", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("k");
+    await settle();
+
+    rowHeight = SWAPPED;
+    scrollY -= 1;
+    window.dispatchEvent(new Event("scroll"));
+    await settle();
+
+    expect(scrollY).toBe(15 * SWAPPED);
+    expect(atNow()).toBe(block(15));
+  });
+
+  /** The reader's own movement ends it: a later swap is not allowed to drag
+      them back to where they arrived. */
+  it("lets go once the reader scrolls", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("k");
+    await settle();
+
+    window.dispatchEvent(new Event("wheel"));
+    scrollY = 20 * PORTRAIT;
+    window.dispatchEvent(new Event("scroll"));
+    await settle();
+
+    swapFont();
+    await settle();
+    expect(scrollY).toBe(20 * PORTRAIT);
+  });
+
+  /** A key pressed between the instant move and its corrective frame cancels
+      that frame too, or it would pull the reader back one frame later (GPT
+      Sol's plan review, F2). */
+  it("cancels the corrective frame when the reader presses a key straight after arriving", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("k");
+    expect(scrollY).toBe(15 * PORTRAIT);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    scrollY = 17 * PORTRAIT; // the key's own scroll
+    rowHeight = SWAPPED;
+    await settle();
+    expect(scrollY).toBe(17 * PORTRAIT);
+  });
+
+  /** A newer movement owns the page: a jump elsewhere is not pulled back to
+      the restored block by the next font event (F1). */
+  it("is ended by any newer movement", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("k");
+    await settle();
+
+    scrollToBlock(block(24), "auto");
+    await settle();
+    swapFont();
+    await settle();
+    expect(scrollY).toBe(24 * PORTRAIT);
+  });
+
+  /** The hold belongs to this reading view. Leaving it must remove the font
+      and resize watchers even if its old rows have not left the DOM yet. */
+  it("ends the hold when the reading view unmounts", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("k");
+    await settle();
+
+    act(() => root.unmount());
+    scrollY = 4 * PORTRAIT;
+    swapFont();
+    await settle();
+
+    expect(scrollY).toBe(4 * PORTRAIT);
     expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("keeps the hold through StrictMode's effect replay", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    act(() =>
+      root.render(
+        createElement(
+          NuqsAdapter,
+          null,
+          createElement(StrictMode, null, createElement(Harness, { layoutKey: "k", sections: SECTIONS })),
+        ),
+      ),
+    );
+    await settle();
+
+    swapFont();
+    await settle();
+
+    expect(scrollY).toBe(15 * SWAPPED);
+    expect(arrivalAnchor()).toEqual({ id: block(15), passage: undefined });
   });
 });
 

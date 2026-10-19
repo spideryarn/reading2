@@ -27,8 +27,13 @@
  *    (AGENTS.md § The one contract that matters, docs/project/block-ids.md).
  *
  * The cost, stated plainly: reopening a link puts you at the top of the section
- * you were in, not at the paragraph you were on. Within a section that is a few
- * paragraphs of backtracking.
+ * you were in, not at the paragraph you were on. That was "a few paragraphs of
+ * backtracking" on the example article and was seven minutes of reading on a
+ * book (spya-qspg5a, 2026-10-18), so **the reader's own memory of the article
+ * keeps the paragraph** (§ `readingRow`, last-view.ts § The paragraph, not only
+ * the section): reopening at a bare address puts a paragraph in `?at=`, which
+ * the spy then leaves standing like any finer value. A link somebody copies
+ * while scrolling still carries the section.
  *
  * What it is NOT is a node id. Node ids (`n0003`) are handed out sequentially
  * when the tree is generated and are regenerated whenever `tree.json` is
@@ -260,4 +265,40 @@ export function positionToWrite(opts: {
   if (visible === null) return null;
   if (visible === sectionContaining(sections, rowOf, held)) return null;
   return { at: visible };
+}
+
+/**
+ * **The paragraph at the reading line**, as an index into the article's rows,
+ * or `null` when no visible row has reached the line yet — plan 261019a,
+ * report spya-qspg5a. Not what the spy writes into `?at=`, which stays a
+ * section (§ positionToWrite); what the reader's memory of the article keeps
+ * in its place (last-view.ts § The paragraph, not only the section).
+ *
+ * The last row whose top is at or above `line`, by binary search over the
+ * rows' tops in document order, so a long article costs about a dozen rect
+ * reads (`topOf` reads one) rather than one per row. A hidden row
+ * (`hidden`, fold.ts § `isRowHidden`) has no height and sits at the top of
+ * the next visible row, so it is never the answer: the search can only end
+ * on one in a hidden run at the very end of the article, and walks back from
+ * there. The caller canonicalises what is left with `visibleNear`, as for
+ * every id it names.
+ */
+export function readingRow(
+  count: number,
+  topOf: (i: number) => number,
+  line: number,
+  hidden: (i: number) => boolean,
+): number | null {
+  let lo = 0;
+  let hi = count - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (topOf(mid) <= line) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  while (found >= 0 && hidden(found)) found--;
+  return found >= 0 ? found : null;
 }

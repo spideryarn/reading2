@@ -175,7 +175,7 @@ import {
   subModeParams,
 } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
-import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
+import { arrivalTarget, endCentredArrival, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
@@ -447,10 +447,14 @@ export function Reader({
   /* A centred arrival belongs to this layout. A mode switch can remove the
      passage marks and Skim's door without scrolling a pixel, so end the
      hold before the new band can ask where the reader is. The first setup also
-     drops module state left by a reading view that just unmounted. */
+     drops module state left by a reading view that just unmounted. A kept
+     arrival at `?at=` is left holding: it is a block of the prose rather than
+     a mark, and keeps itself aligned through the reflow (scroll.ts §
+     `endCentredArrival`; one left by an unmounted view lapses when its row is
+     not found, § `arrivalAnchor`). */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `mode` is the layout-change trigger; the effect deliberately reads no mode value.
   useLayoutEffect(() => {
-    clearArrivalAnchor();
+    endCentredArrival();
   }, [mode]);
 
   /* The tab: the article first, then the mode — and nothing for whichever mode

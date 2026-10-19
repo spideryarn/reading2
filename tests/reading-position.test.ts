@@ -37,7 +37,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BlockId } from "../src/types.js";
 import { stepTarget } from "../src/web/keynav.js";
-import { positionToWrite, sectionContaining, type Section } from "../src/web/position.js";
+import { positionToWrite, readingRow, sectionContaining, type Section } from "../src/web/position.js";
 
 /* Thirty blocks, ids in the real shape because these are the values that go in
    the URL (docs/project/block-ids.md). */
@@ -254,5 +254,52 @@ describe("a centred arrival owns the position until the reader scrolls", () => {
 
   it("still waits for a jump in flight", () => {
     expect(spy(9, block(3), { anchored: LAST, jumpInFlight: true })).toBeNull();
+  });
+});
+
+/* Plan 261019a (spya-qspg5a): the paragraph at the reading line, which the
+   reader's memory of the article keeps in place of the section. Rows here are
+   ten pixels tall; a hidden row has no height and sits at the top of the next
+   visible one, as fold.ts draws it. */
+describe("the paragraph at the reading line", () => {
+  const tenEach = (scroll: number, hidden: ReadonlySet<number> = new Set()) => {
+    const tops: number[] = [];
+    let y = 0;
+    for (let i = 0; i < 30; i++) {
+      tops.push(y - scroll);
+      if (!hidden.has(i)) y += 10;
+    }
+    return { topOf: (i: number) => tops[i]!, hidden: (i: number) => hidden.has(i) };
+  };
+
+  it("is the last row whose top has reached the line", () => {
+    const { topOf, hidden } = tenEach(173);
+    expect(readingRow(30, topOf, 0, hidden)).toBe(17);
+  });
+
+  it("is a row exactly on the line", () => {
+    const { topOf, hidden } = tenEach(170);
+    expect(readingRow(30, topOf, 0, hidden)).toBe(17);
+  });
+
+  it("is nothing while every row is still below the line", () => {
+    const { topOf, hidden } = tenEach(-5);
+    expect(readingRow(30, topOf, 0, hidden)).toBeNull();
+  });
+
+  it("is never a hidden row, even one tied with the row at the line", () => {
+    /* Rows 0 and 1 are the masthead's echo: no height, tied with row 2. */
+    const { topOf, hidden } = tenEach(3, new Set([0, 1]));
+    expect(readingRow(30, topOf, 0, hidden)).toBe(2);
+  });
+
+  it("walks back over a hidden run at the end of the article", () => {
+    const { topOf, hidden } = tenEach(500, new Set([26, 27, 28, 29]));
+    expect(readingRow(30, topOf, 0, hidden)).toBe(25);
+  });
+
+  it("is nothing when every row up to the line is hidden", () => {
+    const { topOf, hidden } = tenEach(0, new Set([0, 1, 2]));
+    expect(readingRow(3, topOf, 0, hidden)).toBeNull();
   });
 });
