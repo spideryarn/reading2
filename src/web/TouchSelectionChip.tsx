@@ -1,5 +1,5 @@
 /**
- * **What a finger's selection gets: one button, docked at the screen edge away from the words.**
+ * **What a finger's selection gets: one button, on the side of the words with more room.**
  *
  * Selecting prose highlights it from `mouseup` (TableView.tsx § onMouseUp), and
  * a long-press selection on iOS and iPadOS fires no `mouseup` at all — so on an
@@ -22,12 +22,13 @@
  *
  * Three rules it has to keep, each of which fails silently:
  *
- * - **Touch only.** The last pointer down decides. A mouse selection keeps its
+ * - **Touch only.** The last pointer down decides, and a `touchstart` (only
+ *   the glass sends one) also counts as a finger. A mouse selection keeps its
  *   mouseup and never sees this; a hybrid machine gets whichever made the
  *   selection.
  * - **It answers to the words that will be saved** — the *clamped* range
  *   (`readSelectionWithRange`), not a drag that ran on into the next
- *   paragraph — and docks at the screen edge with more room (`placeFor`).
+ *   paragraph — and sits on the side with more room (`placeFor`).
  * - **It cannot open a box on stale words.** iOS may collapse the selection as
  *   the tap lands, so the last anchor is kept — but only for `GRACE_MS`, and
  *   only while its paragraph is still in the document. A press prefers a fresh
@@ -64,7 +65,7 @@ export const SETTLE_MS = 300;
  */
 export const GRACE_MS = 300;
 
-/** Which screen edge the chip docks at: the one further from the words. */
+/** Which side of the words the chip uses: toward the screen edge with more room. */
 export type ChipEdge = "top" | "bottom";
 
 interface Shown {
@@ -74,6 +75,8 @@ interface Shown {
   edge: ChipEdge;
   /** Viewport x of the last rectangle of the clamped range. */
   left: number;
+  /** Px between the words and the chosen viewport edge: how far it may come in. */
+  room: number;
 }
 
 interface ArmedPress {
@@ -83,7 +86,7 @@ interface ArmedPress {
 }
 
 /**
- * Where the chip docks for the saved words, or `null` when they are not on screen.
+ * Which side the chip uses for the saved words, or `null` when they are not on screen.
  *
  * **The edge with more room between it and the words**, because iOS draws its
  * own selection menu right beside them — above when there is room, below when
@@ -94,6 +97,14 @@ interface ArmedPress {
  * while keeping native selection, so ours keeps away. A selection tall enough
  * to leave no room at either edge gets the larger of two small gaps; nothing
  * can promise clearance there.
+ *
+ * **On that side, only as far as the iOS menu needs**, since 2026-10-19: the
+ * CSS puts it 80px past the words (`room`), and at the edge only when the gap
+ * cannot hold the edge's own offset, the chip and those 80px. Docked at the far
+ * edge, a tall iPad put it 600px from the words, and Greg saw nothing
+ * (spya-kwcn4x): *"didn't seem to show me any kind of Spideryarn context
+ * menu."* The 80px is a guess at the handle plus a one-row menu, unmeasured
+ * (docs/plans/261019b-…). `room: 0`, with no geometry, means docked.
  *
  * Measured against the layout viewport (`innerHeight`), the one the fixed
  * chip is positioned in, so the edge chosen and the edge drawn agree. A
@@ -108,18 +119,21 @@ interface ArmedPress {
  * the reader could not see (browser check, 2026-10-03). jsdom has no range
  * geometry at all, and there the chip docks at the bottom, at the left edge.
  */
-function placeFor(range: Range): Pick<Shown, "edge" | "left"> | null {
+function placeFor(range: Range): Pick<Shown, "edge" | "left" | "room"> | null {
   const rects = typeof range.getClientRects === "function" ? Array.from(range.getClientRects()) : [];
   if (rects.length === 0 && typeof range.getBoundingClientRect === "function") {
     rects.push(range.getBoundingClientRect());
   }
   const last = rects[rects.length - 1];
-  if (!last) return { edge: "bottom", left: 0 };
+  if (!last) return { edge: "bottom", left: 0, room: 0 };
   const height = window.innerHeight;
   const top = Math.max(0, Math.min(...rects.map((r) => r.top)));
   const bottom = Math.min(height, Math.max(...rects.map((r) => r.bottom)));
   if (bottom < 0 || top > height) return null;
-  return { edge: height - bottom >= top ? "bottom" : "top", left: last.left };
+  const below = height - bottom;
+  return below >= top
+    ? { edge: "bottom", left: last.left, room: below }
+    : { edge: "top", left: last.left, room: top };
 }
 
 function isFinger(e: Event): boolean {
@@ -245,6 +259,15 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
       const { read } = readSelectionWithRange(window.getSelection());
       if (read.kind === "anchor" && !shownRef.current) schedule();
     };
+    /* **A `touchstart` says "a finger" too**, and only the glass (a finger or
+       a Pencil) sends one. What iPadOS sends on a long-press has never been
+       measured on a device, so this is a second witness to `pointerdown`'s
+       label, not a replacement: it neither hides nor schedules. Greg saw no
+       chip on an iPad, 2026-10-19 (spya-kwcn4x); docs/plans/261019b-…. */
+    const onTouchStart = (e: Event) => {
+      if (chip.current && e.target instanceof Node && chip.current.contains(e.target)) return;
+      finger.current = true;
+    };
     /* Its coordinates are the viewport's, so a scroll or a resize makes them
        wrong. Hidden until things settle rather than chased. */
     const onMove = () => {
@@ -264,6 +287,7 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("pointerup", onPointerEnd, true);
     document.addEventListener("pointercancel", onPointerEnd, true);
+    document.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
     window.addEventListener("scroll", onMove, { capture: true, passive: true });
     window.addEventListener("resize", onMove);
     return () => {
@@ -271,6 +295,7 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("pointerup", onPointerEnd, true);
       document.removeEventListener("pointercancel", onPointerEnd, true);
+      document.removeEventListener("touchstart", onTouchStart, true);
       window.removeEventListener("scroll", onMove, { capture: true });
       window.removeEventListener("resize", onMove);
       clearTimers();
@@ -333,7 +358,7 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
          selection it is about. */
       tabIndex={-1}
       data-edge={shown.edge}
-      style={{ "--chip-x": `${shown.left}px` } as CSSProperties}
+      style={{ "--chip-x": `${shown.left}px`, "--chip-room": `${shown.room}px` } as CSSProperties}
       /* Neither press may move focus or start a selection of its own: either
          can clear the words this is for. The action itself is on pointerup, so
          it does not depend on a cancelled pointerdown producing a click. */

@@ -481,13 +481,13 @@ it("brings the chip back when the words are scrolled on screen again", async () 
   });
 });
 
-/* **It docks at the screen edge furthest from the words**, because iOS puts its
+/* **It uses the side with more room beyond the words**, because iOS puts its
    own selection menu right beside them, above or below as it sees fit, and
    draws it over anything of ours that is there. Greg, 2026-10-18 (spya-bynh22),
    on an iPhone: *"I could see the iPhone, like, default standard menu for copy
    and other stuff on top, and I could see there was something underneath it."*
    docs/plans/261018c-touch-selection-chip-docks-away-from-the-ios-callout.md */
-it("docks at the bottom for words in the top half of the screen, and at the top for the bottom half", async () => {
+it("uses the bottom side for words in the top half, and the top side for the bottom half", async () => {
   const text = await mounted();
   const cases: [number, string][] = [
     [40, "bottom"],
@@ -519,7 +519,7 @@ function withRectsAt<T>(spans: [number, number][], run: () => T): T {
   }
 }
 
-it("a tall selection docks on the side with more room, counting only what is on screen", async () => {
+it("a tall selection uses the side with more room, counting only what is on screen", async () => {
   const text = await mounted();
   const h = window.innerHeight;
   const cases: [[number, number][], string, string][] = [
@@ -538,12 +538,128 @@ it("a tall selection docks on the side with more room, counting only what is on 
   }
 });
 
-it("the docked chip has one height for each edge, and keeps only its x from the words", () => {
+/* **Near the words, not at the far edge**, since 2026-10-19. Docked at the
+   screen edge, a 1194px iPad put the button 600px from the words, and Greg
+   saw no button at all (spya-kwcn4x): *"it showed me the iPad text selection
+   menu with cut and copy and whatever, but didn't seem to show me any kind of
+   Spideryarn context menu."* It now goes only as far past the words as the
+   iOS menu needs, and uses the old docked floor when the gap cannot also hold
+   that edge's offset and the chip.
+   docs/plans/261019b-ipad-selection-chip-sits-near-the-words-and-a-finger-is-known-from-touchstart.md */
+it("tells the CSS how much room lies between the words and the edge it chose", async () => {
+  const text = await mounted();
+  const h = window.innerHeight;
+  const cases: [number, string, number][] = [
+    [100, "bottom", h - 120],
+    [h - 120, "top", h - 120],
+  ];
+  for (const [top, edge, room] of cases) {
+    withRangeAt(top, () => {
+      pointerDown(text.parentElement!, "touch");
+      select(text, 20);
+      wait(SETTLE_MS);
+      expect(chip()?.getAttribute("data-edge"), `words at y=${top}`).toBe(edge);
+      expect(chip()?.style.getPropertyValue("--chip-room"), `words at y=${top}`).toBe(`${room}px`);
+    });
+  }
+});
+
+it("each edge keeps its old docked offset as the floor, and otherwise sits a fixed clearance past the words", () => {
   const source = readFileSync("src/web/styles/annotations.css", "utf8");
-  expect(source).toMatch(/\.touch-select-chip\[data-edge="top"\]\s*\{[^}]*var\(--bar-bottom\)/);
-  expect(source).toMatch(
-    /\.touch-select-chip\[data-edge="bottom"\]\s*\{[^}]*max\(var\(--dock-bottom\), var\(--safe-bottom\)\)[^}]*var\(--hint-now\)/,
+  expect(source, "px: the iOS menu does not grow with our root size").toMatch(/--chip-clear:\s*80px;/);
+  expect(source, "the subtracted height is the chip's actual outer height").toMatch(
+    /\.touch-select-chip\s*\{[^}]*box-sizing:\s*border-box;[^}]*block-size:\s*var\(--control-h-lg\);/,
   );
-  expect(source, "the chip no longer follows the words down the screen").not.toMatch(/--chip-y/);
+  const near = String.raw`calc\(var\(--chip-room, 0px\) - var\(--chip-clear\) - var\(--control-h-lg\)\)`;
+  expect(source).toMatch(
+    new RegExp(String.raw`\.touch-select-chip\[data-edge="top"\]\s*\{[^}]*top:\s*max\(\s*calc\(var\(--bar-bottom\) \+ 0\.5rem\),\s*` + near),
+  );
+  expect(source).toMatch(
+    new RegExp(
+      String.raw`\.touch-select-chip\[data-edge="bottom"\]\s*\{[^}]*bottom:\s*max\(\s*calc\(max\(var\(--dock-bottom\), var\(--safe-bottom\)\) \+ var\(--hint-now\) \+ 0\.5rem\),\s*` + near,
+    ),
+  );
   expect(source).toContain("var(--chip-x, 0px)");
+});
+
+/* **A `touchstart` says "a finger" too.** The chip waited on a `pointerdown`
+   labelled `touch`, and what iPadOS sends on a long-press has never been
+   measured; WebKit has mislabelled an iPad's pointer before (260924c).
+   Current iOS WebKit sends `touchstart` after `pointerdown`, though the spec
+   leaves their relative order open; only touch input sends it. */
+it("a finger whose pointerdown said mouse still gets the chip, once its touchstart arrives", async () => {
+  const text = await mounted();
+  pointerDown(text.parentElement!, "mouse");
+  act(() => {
+    text.parentElement!.dispatchEvent(new Event("touchstart", { bubbles: true }));
+  });
+  select(text, 20);
+  wait(SETTLE_MS);
+  expect(chip()).not.toBeNull();
+});
+
+it("a press on the chip, with its own touchstart, still opens the words the tap collapsed", async () => {
+  const text = await mounted();
+  pointerDown(text.parentElement!, "mouse");
+  act(() => {
+    text.parentElement!.dispatchEvent(new Event("touchstart", { bubbles: true }));
+  });
+  const quote = select(text, 20);
+  wait(SETTLE_MS);
+  const button = chip()!;
+  act(() => {
+    button.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "touch" }));
+    button.dispatchEvent(new Event("touchstart", { bubbles: true }));
+  });
+  collapse();
+  act(() => {
+    button.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, pointerType: "touch" }));
+  });
+  expect(boxQuote()).toBe(quote);
+});
+
+it("a touchstart alone does not hide a chip", async () => {
+  const text = await mounted();
+  pointerDown(text.parentElement!, "mouse");
+  act(() => {
+    text.parentElement!.dispatchEvent(new Event("touchstart", { bubbles: true }));
+  });
+  select(text, 20);
+  wait(SETTLE_MS);
+  expect(chip(), "the touchstart listener must have corrected the pointer label").not.toBeNull();
+  act(() => {
+    text.parentElement!.dispatchEvent(new Event("touchstart", { bubbles: true }));
+  });
+  expect(chip(), "hiding is pointerdown's job").not.toBeNull();
+});
+
+it("the touchstart listener is passive, capturing, and removed on cleanup", async () => {
+  const added = vi.spyOn(document, "addEventListener");
+  const removed = vi.spyOn(document, "removeEventListener");
+  try {
+    const text = await mounted();
+    expect(added).toHaveBeenCalledWith(
+      "touchstart",
+      expect.any(Function),
+      expect.objectContaining({ capture: true, passive: true }),
+    );
+
+    pointerDown(text.parentElement!, "touch");
+    select(text, 20);
+    wait(SETTLE_MS);
+    tap(chip()!);
+    expect(removed).toHaveBeenCalledWith("touchstart", expect.any(Function), true);
+  } finally {
+    added.mockRestore();
+    removed.mockRestore();
+  }
+});
+
+it("with no range geometry the room is 0, which docks at the bottom edge", async () => {
+  const text = await mounted();
+  pointerDown(text.parentElement!, "touch");
+  select(text, 20);
+  wait(SETTLE_MS);
+  expect(chip()?.getAttribute("data-edge")).toBe("bottom");
+  expect(chip()?.style.getPropertyValue("--chip-room")).toBe("0px");
 });

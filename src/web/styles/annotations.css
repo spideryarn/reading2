@@ -1410,11 +1410,12 @@ td.text.has-hit[data-hues="8"] {
 /* **What a finger's selection gets** — TouchSelectionChip.tsx, and
    docs/project/touch.md § A finger's selection gets a button.
 
-   - **Docked at the screen edge with more room between it and the words**
-     (`data-edge`, chosen in the component): at the bottom above the bottom bar
-     and install hint, or at the top under the top bar. iOS draws its own
-     selection menu right beside the words, above or below as it chooses, and
-     over anything of ours that is there (Greg, 2026-10-18, spya-bynh22).
+   - **On the side with more room between it and the words** (`data-edge`,
+     chosen in the component), 80px beyond the words when that fits. Otherwise
+     it keeps the old docked floor: above the bottom bar and install hint, or
+     under the top bar. iOS draws its own selection menu right beside the words,
+     above or below as it chooses, and over anything of ours that is there
+     (Greg, 2026-10-18, spya-bynh22).
    - **Across, it follows the words**: `--chip-x` is the viewport x of the end
      of the words that will be saved, clamped inside the side safe areas. The
      width is stated so the right-hand clamp can be arithmetic rather than a
@@ -1428,6 +1429,7 @@ td.text.has-hit[data-hues="8"] {
      (44–46); under every dialog (70) and the bottom bar (96). */
 .touch-select-chip {
   --chip-w: 13rem;
+  --chip-clear: 80px;
   position: fixed;
   z-index: 50;
   left: clamp(
@@ -1460,9 +1462,22 @@ td.text.has-hit[data-hues="8"] {
   -webkit-touch-callout: none;
   touch-action: manipulation;
 }
-.touch-select-chip[data-edge="top"] { top: calc(var(--bar-bottom) + 0.5rem); }
+/* `--chip-clear` past the words, clear of the iOS menu, or at the old docked
+   floor when `--chip-room` cannot hold that floor, the chip, and the clearance
+   (TouchSelectionChip.tsx § placeFor; docs/plans/261019b-…). Px, not rem: the
+   system draws that menu, and it does not grow with our root size. A guess
+   until seen on an iPad. */
+.touch-select-chip[data-edge="top"] {
+  top: max(
+    calc(var(--bar-bottom) + 0.5rem),
+    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--control-h-lg))
+  );
+}
 .touch-select-chip[data-edge="bottom"] {
-  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.5rem);
+  bottom: max(
+    calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.5rem),
+    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--control-h-lg))
+  );
 }
 .touch-select-chip svg { flex: none; color: var(--highlight-text); }
 .touch-select-chip:active { background: var(--highlight-wash); }

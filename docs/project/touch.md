@@ -875,8 +875,8 @@ tooltip, it does not say on an iPad.**
 Selecting prose highlights it from `mouseup` (`TableView.tsx` § `onMouseUp`), and a long-press
 selection on iOS and iPadOS fires no `mouseup`. So on an iPad nothing of ours appeared.
 
-**Now a touch selection in the prose, once it has settled, shows one button, docked at the screen
-edge with more room between it and the selected words: "Highlight or comment".** The code is
+**Now a touch selection in the prose, once it has settled, shows one button on the side with more
+room between it and the selected words: "Highlight or comment".** The code is
 [`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), mounted in `Reader.tsx` beside the
 boxes it opens; the tests are `tests/touch-selection-chip.test.tsx`.
 
@@ -910,25 +910,33 @@ as is for now"*; `[Q-touch-auto-highlight]` in
 
 The rules it keeps:
 
-- **Touch only.** The last pointer that went down decides (`touch` or `pen`). A mouse selection
-  keeps its mouseup exactly as before and never sees the button; a hybrid machine gets whichever
-  input made the selection.
+- **Touch only.** The last pointer that went down decides (`touch` or `pen`), and a `touchstart`,
+  which only the glass sends, also counts as a finger, in case iPadOS labels a long-press's
+  `pointerdown` otherwise (unmeasured; [261019b](../plans/261019b-ipad-selection-chip-sits-near-the-words-and-a-finger-is-known-from-touchstart.md)).
+  A mouse selection keeps its mouseup exactly as before and never sees the button; a hybrid machine
+  gets whichever input made the selection.
 - **Same floor, same clamp.** It reads the selection with the function mouseup uses, so a selection
   under the floor shows nothing and one that runs into the next paragraph is clamped to the first
-  ([comments.md § Deliberate limits](comments.md#deliberate-limits)). Where the button docks is
+  ([comments.md § Deliberate limits](comments.md#deliberate-limits)). Which side the button uses is
   decided by the *clamped* words, the ones that will be saved.
-- **Docked at the edge with more room, since 2026-10-18**: at the bottom of the screen, above the
-  bottom bar and install hint, when there is more room below the selected words; under the top bar
-  when there is more room above. Measured over the part of the selection on screen, against the
-  layout viewport the fixed button lives in; pinch-zoomed, the button can be off the glass, as it
-  could before. Across, it still follows the end of the words. iOS draws its own selection
+- **On the side with more room, 80px past the words, since 2026-10-19**: below the selected words
+  when there is more room below, above them when there is more room above, and docked at that
+  screen edge (above the bottom bar and install hint, or under the top bar) only when the gap cannot
+  hold that edge's old offset, 80px and the button. From 2026-10-18 it always docked at the edge,
+  which on a tall iPad was 600px from the words, and Greg saw no button at all (spya-kwcn4x,
+  [261019b](../plans/261019b-ipad-selection-chip-sits-near-the-words-and-a-finger-is-known-from-touchstart.md)).
+  80px is in px because the system draws its menu, and is a guess at the handle plus a one-row menu.
+  Measured over the part of the selection on screen, against the layout viewport the fixed button
+  lives in; pinch-zoomed, the button can be off the glass, as it could before. Across, it still
+  follows the end of the words. iOS draws its own selection
   menu right beside the words, above them when there is room and below when there isn't, and over
   anything of ours that is there; no supported web API hides or moves it
   ([261018c](../plans/261018c-touch-selection-chip-docks-away-from-the-ios-callout.md) has the
   research). Until then the button sat a rem and a quarter below the words, and Greg found the iOS
-  menu over it on an iPhone (spya-bynh22). A selection that fills the screen leaves no clear edge,
-  and gets the larger of two small gaps. Hidden on scroll,
-  resize, a new touch, or the handles moving, and shown again when things settle. **Not shown at all
+  menu over it on an iPhone (spya-bynh22). A selection that cannot hold the old offset, 80px and the
+  button at either edge gets the larger of two small gaps, docked, and may meet the menu or its own
+  words. Hidden on scroll, resize, a new pointerdown, or the handles moving, and shown again when
+  things settle. **Not shown at all
   while the selected words are off screen**: a press would open the box on a passage the reader
   cannot see.
 - **The press is the finger lifting (`pointerup`), not the `click`.** The button prevents its
@@ -949,8 +957,11 @@ The rules it keeps:
 
 1. Whether the tap on the button really does collapse the selection first, and whether 300ms is
    long enough when it does.
-2. Whether the docked button, away from the words, is found at all, and whether a selection tall
-   enough to leave little room at either edge still has iOS's menu land on it.
+2. **Whether the button appears on an iPad at all.** Greg saw none on 2026-10-18 (spya-kwcn4x), and
+   emulation shows it every time. 261019b moved it near the words and took `touchstart` as a finger;
+   if it is still missing, the next step is a trace of the real events, not another guess. Also
+   whether 80px clears iOS's menu, and whether a selection tall enough to leave little room at
+   either edge still has the menu land on it.
 3. Answered by Greg's iPhone on 2026-10-18: iOS does put its menu below the selection, over the
    button as it then was. The docking above is the fix, and is itself unchecked on a device.
 4. Whether `selectionchange` goes quiet for long enough between handle drags that the button
