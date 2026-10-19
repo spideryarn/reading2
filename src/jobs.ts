@@ -134,6 +134,7 @@ import {
   type PaidPurchase,
   type StepName,
   type StepPreview,
+  type StepProgress,
 } from "./types.js";
 import { articlePower, type ModelPower } from "./models.js";
 import { highPowerStore } from "./store/index.js";
@@ -1228,14 +1229,32 @@ function stillForced(step: JobStep): boolean {
 type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
 
 /**
- * **A running step's preview: put on the job row, and taken off before the
- * step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
+ * **How often a step's counted progress may reach the job row**: at the first
+ * report that carries one, then no more than once per this many milliseconds.
+ * Two steps count (PDF extract, assets), so this is at most one row write per
+ * five seconds per such step: ~44 for the slowest measured PDF extract (216 s),
+ * ~148 for a step that ran a whole 740 s window. A count that arrives inside
+ * the interval waits for the next one that does not, or for the step's end,
+ * whose own write replaces it. Plan 261020a § B1, and GPT Sol's plan review,
+ * finding 7, on why reports without a count are not saved.
+ */
+export const REPORT_SAVE_EVERY_MS = 5_000;
+
+/**
+ * **A running step's preview and its report: put on the job row, and taken
+ * off before the step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
  * src/pipeline.ts). `runStep`'s, lifted out so the rule is in one place.
  *
  * `show` sets it on the step and writes the row through `note`, once per call,
- * chained so two calls land in the order they were made. `settle` waits for
- * whatever write is still on its way and then deletes the preview from the
- * step in memory, so the write that settles the step carries none.
+ * chained so two calls land in the order they were made. `report` sets
+ * `detail`, and `progress` when the step is counting; only a counted report
+ * writes, through the same chain, and only when `REPORT_SAVE_EVERY_MS` has
+ * passed since the last one it wrote. Until plan 261020a no report wrote, and
+ * PDF extract and assets make no other write while running, so their counts
+ * never reached a reader's poll. `settle` waits for
+ * whatever write is still on its way and then deletes the preview and the
+ * progress from the step in memory, so the write that settles the step carries
+ * neither. (`detail` is the step's to set again: success writes the product's.)
  *
  * **Why `settle` waits.** `noteProgress` replaces the whole `steps` array and
  * is fenced on the claim, not on this step. A preview write that reached
@@ -1254,17 +1273,24 @@ type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
  * **The preview is never logged**: it is the model's words about the article
  * (docs/project/logging.md). The line below carries the error's class only.
  */
-function stepPreviews(
+function stepNotes(
   job: Job,
   step: JobStep,
   note: () => Promise<unknown>,
   jlog: Log,
-): { show(preview: StepPreview): void; settle(): Promise<void> } {
+  now: () => number = Date.now,
+): {
+  show(preview: StepPreview): void;
+  report(detail: string, progress?: StepProgress): void;
+  settle(): Promise<void>;
+} {
   let written: Promise<void> = Promise.resolve();
+  let reportedAt: number | null = null;
+  let settled = false;
   const notWritten = (err: unknown): void => {
     jlog.debug(
       { step: step.name, error: err instanceof Error ? err.name : typeof err },
-      `step preview not written: ${step.name} — ${job.slug}`,
+      `step note not written: ${step.name} — ${job.slug}`,
     );
   };
   return {
@@ -1272,9 +1298,23 @@ function stepPreviews(
       step.preview = preview;
       written = written.then(() => note()).then(() => undefined, notWritten);
     },
+    report(detail, progress) {
+      /* After `settle` the step is the commit's: a report from work the step
+         left running must not write it back to `running`. */
+      if (settled) return;
+      step.detail = detail;
+      if (!progress) return;
+      step.progress = progress;
+      const at = now();
+      if (reportedAt !== null && at - reportedAt < REPORT_SAVE_EVERY_MS) return;
+      reportedAt = at;
+      written = written.then(() => note()).then(() => undefined, notWritten);
+    },
     async settle() {
+      settled = true;
       await written;
       delete step.preview;
+      delete step.progress;
     },
   };
 }
@@ -1350,18 +1390,17 @@ async function runStep(
      nothing downstream read either one. Both went with the filesystem store;
      a step is told where its artefacts go by the `ArtifactStore` it is handed
      and by nothing else. */
-  const shown = stepPreviews(job, step, note, jlog);
+  const shown = stepNotes(job, step, note, jlog);
   const ctx: StepContext = {
     slug: job.slug,
     ...(job.url ? { url: job.url } : {}),
     ...(job.upload ? { upload: job.upload } : {}),
-    // In memory only. Persisting at this rate would be two writes a second
-    // per running job, to record something nobody reads afterwards.
-    report: (detail: string) => {
-      step.detail = detail;
-    },
+    /* In memory, unless it carries a count: then saved at most every
+       `REPORT_SAVE_EVERY_MS` (`stepNotes`, plan 261020a). Saving every report
+       would be two writes a second per running job. */
+    report: shown.report,
     /* Persisted, unlike `report`: once per call, which for `simple` is once
-       per step. See `stepPreviews`. */
+       per step. See `stepNotes`. */
     preview: shown.show,
     signal: controller.signal,
     /* The same instant the abort timer above is set for, passed rather than
@@ -1484,6 +1523,7 @@ async function runStep(
      (src/store/pg-jobs.ts § `settledSteps`), so the last attempt's preview
      would otherwise be shown under this one. */
   delete step.preview;
+  delete step.progress;
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
   const starting = await note();
 
@@ -1573,7 +1613,7 @@ async function runStep(
       },
     });
     /* **The preview comes off before the step settles**, and only once its own
-       write has landed (`stepPreviews`). What it showed is in `product` now
+       write has landed (`stepNotes`). What it showed is in `product` now
        and is stored by the commit below; the job row keeps nothing of it. */
     await shown.settle();
     step.detail = product.detail;

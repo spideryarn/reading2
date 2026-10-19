@@ -151,11 +151,25 @@ const readPurpose = (slug: string, offline = false): Response =>
   );
 /** What `GET /api/reader` says the reader's setting is. Replaced per test. */
 let readerAutoModes = true;
+/** The reader's About you, as `GET /api/reader` reads it; `null` is none (spya-kan788). */
+let readerProfile: string | null = null;
+/** How a PATCH of About you answers. Replaced per test; the default stores it. */
+let profileAnswer: (body: { profile: string | null }) => Promise<Response> = async (body) => {
+  readerProfile = body.profile;
+  return new Response(JSON.stringify({ profile: readerProfile }), { status: 200 });
+};
+/** Whether `GET /api/reader` fails. */
+let readerReadFails = false;
 vi.mock("../src/web/lib/api.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/web/lib/api.js")>();
   return {
     ...actual,
     apiFetch: async (input: string, init: RequestInit = {}) => {
+      if (input === "/api/reader" && init.method === "PATCH" && String(init.body).includes('"profile"')) {
+        const body = JSON.parse(String(init.body)) as { profile: string | null };
+        events.push(`profile:${JSON.stringify(body)}`);
+        return profileAnswer(body);
+      }
       if (input === "/api/reader" && init.method === "PATCH") {
         const body = JSON.parse(String(init.body)) as { autoModes: boolean };
         events.push(`reader:${JSON.stringify(body)}`);
@@ -163,7 +177,8 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
         return new Response(JSON.stringify({ autoModes: readerAutoModes }), { status: 200 });
       }
       if (input === "/api/reader") {
-        return new Response(JSON.stringify({ autoModes: readerAutoModes }), { status: 200 });
+        if (readerReadFails) return new Response(JSON.stringify({ error: "down" }), { status: 503 });
+        return new Response(JSON.stringify({ autoModes: readerAutoModes, profile: readerProfile }), { status: 200 });
       }
       if (input.startsWith("/api/reader?slug=") && (init.method ?? "GET") === "GET") {
         const slug = decodeURIComponent(input.slice("/api/reader?slug=".length));
@@ -185,6 +200,10 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
     },
     /* The `keepalive` write `pagehide` sends. Recorded, not applied. */
     leavingFetch: (input: string, init: RequestInit = {}) => {
+      if (input === "/api/reader") {
+        events.push(`leave-profile:${String(init.body)}`);
+        return Promise.resolve();
+      }
       events.push(`leave:${decodeURIComponent(input.slice("/api/library/".length))}:${String(init.body)}`);
       return Promise.resolve();
     },
@@ -373,6 +392,12 @@ beforeEach(() => {
   purposes.clear();
   notYet.clear();
   readerAutoModes = true;
+  readerProfile = null;
+  readerReadFails = false;
+  profileAnswer = async (body) => {
+    readerProfile = body.profile;
+    return new Response(JSON.stringify({ profile: readerProfile }), { status: 200 });
+  };
   events.length = 0;
   reads.length = 0;
   navigations.length = 0;
@@ -1417,6 +1442,10 @@ describe("a repeat paste of an article already on the shelf", () => {
     render(URL_SOURCE);
     await settle();
     expect(navigations).toEqual([]);
+    expect(
+      [...host.querySelectorAll("[data-add-ready]")].map((bar) => bar.getAttribute("data-add-ready")),
+      "a repeat did not make completion equally visible at both ends of the page",
+    ).toEqual(["top", "bottom"]);
     const open = button(OPEN)!;
     act(() => { open.click(); open.click(); });
     await settle();
@@ -1590,5 +1619,164 @@ describe("an address somebody else has made public", () => {
     await settle();
     expect(addCalls).toEqual(["plain"]);
     expect(host.querySelector("[data-add-public]")).not.toBeNull();
+  });
+});
+
+/**
+ * **Both boxes near the top, About you for a reader with none, and Ready at
+ * both ends** — Greg, 2026-10-19 (spya-kan788, spya-jk0cgg); plan 261020a § Part A.
+ */
+describe("the boxes at the top, About you, and Ready twice", () => {
+  const aboutBox = () => host.querySelector<HTMLTextAreaElement>("#add-about-you");
+  function typeAbout(value: string): void {
+    const el = aboutBox();
+    if (!el) throw new Error("no About you box");
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  const profiles = () => events.filter((e) => e.startsWith("profile:") || e.startsWith("leave-profile:"));
+
+  it("draws the purpose box straight under the heading, and four rows tall", async () => {
+    await JOB.start();
+    const boxes = host.querySelector("[data-add-boxes]");
+    expect(boxes).not.toBeNull();
+    expect(host.querySelector("header")?.nextElementSibling).toBe(boxes);
+    expect(box().id).toBe("add-purpose");
+    expect(box().rows).toBe(4);
+  });
+
+  it("offers About you, marked as for every article, to a reader with no profile", async () => {
+    await JOB.start();
+    expect(aboutBox()).not.toBeNull();
+    const boxes = host.querySelector("[data-add-boxes]");
+    expect(boxes?.textContent).toContain("This article");
+    expect(boxes?.textContent).toContain("Every article");
+  });
+
+  it("does not offer it to a reader who already has one", async () => {
+    readerProfile = "A statistician.";
+    await JOB.start();
+    expect(aboutBox()).toBeNull();
+  });
+
+  it("saves About you after a pause, and keeps the box once it has saved", async () => {
+    await JOB.start();
+    typeAbout("A nurse, new to statistics.");
+    await pause(2_000);
+    await settle();
+    expect(profiles()).toEqual([`profile:${JSON.stringify({ profile: "A nurse, new to statistics." })}`]);
+    expect(aboutBox(), "the box vanished once the reader had a profile").not.toBeNull();
+  });
+
+  it("waits, with Ready at the top and the bottom, when About you is unsaved at the finish", async () => {
+    await JOB.start();
+    act(() => aboutBox()?.focus());
+    typeAbout("A nurse");
+    await JOB.finish();
+    expect(navigations).toEqual([]);
+    const bars = [...host.querySelectorAll("[data-add-ready]")].map((b) => b.getAttribute("data-add-ready"));
+    expect(bars).toEqual(["top", "bottom"]);
+    expect(host.querySelector('[data-add-ready="top"]')?.textContent).toContain("Your article is ready.");
+    const topOpen = [...host.querySelectorAll<HTMLButtonElement>('[data-add-ready="top"] button')].find(
+      (b) => b.textContent?.trim() === OPEN,
+    );
+    if (!topOpen) throw new Error("no Open at the top");
+    act(() => topOpen.click());
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(profiles()[0]).toBe(`profile:${JSON.stringify({ profile: "A nurse" })}`);
+    expect(runs()).toEqual(NO_RUNS);
+  });
+
+  it("opens by itself when the profile could not be read, rather than waiting behind a box never drawn", async () => {
+    readerReadFails = true;
+    await JOB.start();
+    expect(aboutBox()).toBeNull();
+    await JOB.finish();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+  });
+
+  it("waits for About you's save on Open, and a refusal keeps the page with Open without saving", async () => {
+    await JOB.start();
+    act(() => aboutBox()?.focus());
+    typeAbout("A nurse");
+    await JOB.finish();
+    const held = heldResponse();
+    profileAnswer = () => held.promise;
+    act(() => aboutBox()?.blur());
+    press(OPEN);
+    await settle();
+    expect(navigations, "opened before About you had saved").toEqual([]);
+    held.answer(new Response(JSON.stringify({ error: "Too long." }), { status: 400 }));
+    await settle();
+    expect(navigations, "a refused About you was hidden by leaving").toEqual([]);
+    expect(aboutBox()?.value).toBe("A nurse");
+    press(OPEN_UNSAVED);
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    unmount();
+    expect(events.filter((e) => e.startsWith("leave-profile:")), "the abandoned draft was sent anyway").toEqual([]);
+  });
+
+  it("waits for a retried About-you save after its first refusal", async () => {
+    await JOB.start();
+    act(() => aboutBox()?.focus());
+    typeAbout("A nurse");
+    await JOB.finish();
+    profileAnswer = async () => new Response(JSON.stringify({ error: "Try again." }), { status: 503 });
+    press(OPEN);
+    await settle();
+    expect(navigations).toEqual([]);
+    expect(button(OPEN_UNSAVED)).toBeTruthy();
+
+    const retry = heldResponse();
+    profileAnswer = () => retry.promise;
+    press(OPEN);
+    await settle();
+    expect(navigations, "the page left while the retried About-you save was still in flight").toEqual([]);
+    expect(button("Saving…")?.disabled).toBe(true);
+    retry.answer(new Response(JSON.stringify({ profile: "A nurse" }), { status: 200 }));
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+  });
+
+  it("does not offer to abandon both drafts while either save is still in flight", async () => {
+    await JOB.start();
+    type("the evidence");
+    typeAbout("A nurse");
+    await JOB.finish();
+    patchAnswer = async () => new Response(JSON.stringify({ error: "The shelf is unavailable." }), { status: 503 });
+    const profileSave = heldResponse();
+    profileAnswer = () => profileSave.promise;
+    press(OPEN);
+    await settle();
+    expect(navigations).toEqual([]);
+    expect(
+      button(OPEN_UNSAVED),
+      "Open without saving cannot abandon an About-you PATCH that has already left",
+    ).toBeUndefined();
+
+    profileSave.answer(new Response(JSON.stringify({ profile: "A nurse" }), { status: 200 }));
+    await settle();
+    expect(button(OPEN_UNSAVED), "the escape did not appear after both requests had settled").toBeTruthy();
+  });
+
+  it("keeps the whole of an over-long paste, and asks before leaving with it", async () => {
+    await JOB.start();
+    const long = "x".repeat(1_600);
+    typeAbout(long);
+    expect(aboutBox()?.value.length, "the browser cut the paste").toBe(1_600);
+    expect(host.querySelector(".prof-count.over")).not.toBeNull();
+    expect(leaving()).toBe(true);
+  });
+
+  it("still opens by itself when neither box was touched", async () => {
+    await JOB.start();
+    await JOB.finish();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(host.querySelector("[data-add-ready]")).toBeNull();
+    expect(profiles()).toEqual([]);
   });
 });

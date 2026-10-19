@@ -40,8 +40,17 @@ wiring.
 
 | Box | Scope | Stored | Edited at |
 |---|---|---|---|
-| **About you** | you, always | `reader_profiles.profile` | `/profile` |
+| **About you** | you, always | `reader_profiles.profile` | `/profile`; also offered on the add page to a reader who has none |
 | **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Skim's band |
+
+**On the add page since 2026-10-20 both boxes sit at the top**, the purpose box four rows and
+growing with its words, and *About you* under it for a reader whose stored profile is empty —
+decided from the first read and kept, so it does not vanish as their first words save. Each label
+carries its scope (*This article*, *Every article*). About you holds the page as the purpose does: a
+reader in it, or with words unsaved, is not navigated away at the finish, and *Open the article*
+waits for both saves. Greg (`spya-kan788`): *"if they haven't filled out a user profile yet at all,
+perhaps also add a box for that too … Make it clear which is which and how they're different."*
+[Plan 261020a](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md).
 
 The purpose is asked for in two more places since 2026-09-30, both writing through
 [`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved

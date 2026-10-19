@@ -1158,6 +1158,141 @@ describe("one claim walks the whole job", () => {
   });
 
   /**
+   * **A step's report reaches the row while it runs, throttled, and its
+   * counted progress is gone once it ends** (plan 261020a § B1, Greg's
+   * spya-skq3fg). Until then `ctx.report` was in memory only, so PDF extract's
+   * chunk count never reached a reader's poll.
+   */
+  describe("a step's report", () => {
+    const stored = async (id: string) => (await pgJobStore.get(id, OWNER))?.steps ?? [];
+
+    async function untilProgressStored(id: string): Promise<JobStep | undefined> {
+      for (let i = 0; i < 100; i += 1) {
+        const [first] = await stored(id);
+        if (first?.progress) return first;
+        await new Promise((go) => setTimeout(go, 20));
+      }
+      return (await stored(id))[0];
+    }
+
+    it("is on the stored row while the step runs, and its progress is gone once it succeeds", async () => {
+      const seen: { during?: JobStep | undefined; after?: JobStep | undefined } = {};
+      const names: StepName[] = ["fetch", "extract"];
+      const { job, parts } = await fixture("test-walk-report-success", names, {
+        fetch: async (ctx) => {
+          ctx.report("3/12 chunks, page 4", { done: 3, total: 12, unit: "chunk" });
+          seen.during = await untilProgressStored(job.id);
+        },
+        extract: async () => {
+          seen.after = (await stored(job.id))[0];
+        },
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(seen.during?.status).toBe("running");
+      expect(seen.during?.detail).toBe("3/12 chunks, page 4");
+      expect(seen.during?.progress).toEqual({ done: 3, total: 12, unit: "chunk" });
+      expect(seen.after?.status).toBe("done");
+      expect(seen.after?.progress, "a finished step still says it is part-way").toBeUndefined();
+      expect(advanced?.job.status).toBe("done");
+      expect((await stored(job.id)).map((s) => s.progress)).toEqual([undefined, undefined]);
+    });
+
+    it("is gone from the row once the step fails", async () => {
+      let during: JobStep | undefined;
+      const { job, parts } = await fixture("test-walk-report-failure", ["fetch"], {
+        fetch: async (ctx) => {
+          ctx.report("1/4 images", { done: 1, total: 4, unit: "image" });
+          during = await untilProgressStored(job.id);
+          throw new Error("the second half fell over");
+        },
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(during?.progress, "it has to have been stored for its absence to mean anything").toEqual({
+        done: 1,
+        total: 4,
+        unit: "image",
+      });
+      expect(advanced?.job.steps[0]?.status).toBe("error");
+      expect((await stored(job.id))[0]?.progress).toBeUndefined();
+    });
+
+    it("does not write the row for a report without a count", async () => {
+      const { job, parts } = await fixture("test-walk-report-uncounted", ["fetch"], {
+        fetch: (ctx) => {
+          ctx.report("thinking about the glossary");
+        },
+      });
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      const detailsWritten: (string | undefined)[] = [];
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (steps[0]?.status === "running") detailsWritten.push(steps[0].detail);
+        return await realNote(id, attempt, steps, title);
+      });
+
+      await advanceAsOwner(job.id, parts);
+
+      expect(detailsWritten, "only the step-starting write, before the report").toEqual([undefined]);
+    });
+
+    it("writes the row once for a burst of reports, not once per report", async () => {
+      const names: StepName[] = ["fetch"];
+      const { job, parts } = await fixture("test-walk-report-throttle", names, {
+        fetch: (ctx) => {
+          for (let done = 1; done <= 20; done += 1) ctx.report(`${done}/20 chunks`, { done, total: 20, unit: "chunk" });
+        },
+      });
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let reported = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (steps.some((s) => s.progress)) reported += 1;
+        return await realNote(id, attempt, steps, title);
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(reported, "twenty reports in a burst are one write").toBe(1);
+      expect(advanced?.job.status).toBe("done");
+    });
+
+    it("waits for a write still in flight before settling, so a late one cannot put the step back", async () => {
+      const names: StepName[] = ["fetch", "extract"];
+      const seen: { midWalk?: JobStep[] } = {};
+      let late: Promise<unknown> = Promise.resolve();
+      const { job, parts } = await fixture("test-walk-report-late", names, {
+        fetch: (ctx) => {
+          ctx.report("5/5 chunks", { done: 5, total: 5, unit: "chunk" });
+        },
+        extract: async () => {
+          await new Promise((go) => setTimeout(go, 500));
+          await late.catch(() => undefined);
+          seen.midWalk = await stored(job.id);
+        },
+      });
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let delayed = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (!steps.some((s) => s.progress)) return await realNote(id, attempt, steps, title);
+        delayed += 1;
+        const asAsked = structuredClone(steps);
+        const landing = new Promise((go) => setTimeout(go, 200)).then(() => realNote(id, attempt, asAsked, title));
+        late = landing;
+        return await landing;
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(delayed, "the report's write has to have been the delayed one").toBe(1);
+      expect(seen.midWalk?.[0]?.status, "the late write put the settled step back to running").toBe("done");
+      expect(seen.midWalk?.[0]?.progress).toBeUndefined();
+      expect(advanced?.job.status).toBe("done");
+    });
+  });
+
+  /**
    * **The ways a claim was put down wrongly, or not put down at all** — the
    * seventh sweep's tier 0 for the queue
    * (docs/plans/261007b-seventh-sweep-job-queue-tier-0.md). The builder watched

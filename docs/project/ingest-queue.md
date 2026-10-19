@@ -1682,8 +1682,8 @@ The trap that measurement fell into three times in one day is in [261007g-ingest
 a guess, so past it the reader is told the step *has been running for a while* — not that it is
 longer than usual, which would be a statistical claim from no statistics.
 
-**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and never persists it,
-so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
+**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and persists it only
+beside a counted `progress` (below), so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
 correctly suppresses the re-render — the elapsed time would freeze at whatever it read when the step
 began. Both surfaces use `useNow(1000)` while busy and `null` — off — otherwise. It
 said *a day* and called it a timer that never fires; it fired, once a day, per card.
@@ -1798,9 +1798,20 @@ as the reader's import; it matches `job.upload.id` now, which is the thing it me
 
 Once per shelf, only while something is importing, and on the add page under its card. Until there is
 a real background runner this is simply true, and calling the thing a queue without saying it
-over-promises. **No determinate progress bar**, ever, for the same reason: response size and provider
-latency are both unknown, so a percentage would be a number we invented —
+over-promises. **No bar of time, and no percentage**, for the same reason: response size and provider
+latency are both unknown, so a time left or a percentage would be a number we invented —
 [silent-success.md](../reusable/silent-success.md) with a decimal point.
+
+**A bar of a count is allowed, since 2026-10-20.** Greg asked for *"a loading bar with some kind of
+estimation of how long it will take (especially that extraction step)"* (`spya-skq3fg`). A step that
+counts real units passes them as `ctx.report(detail, { done, total, unit })`: PDF `extract` its
+chunks, `assets` its images. That `progress` is saved to the row at most every five seconds
+(`REPORT_SAVE_EVERY_MS`, `stepNotes` in [`src/jobs.ts`](../../src/jobs.ts)), dropped when the step
+ends however it ends (`settledSteps` in [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), and
+drawn under the running step as a `<progress>` and *23 of 69 sections of the file done*. A report
+with no count stays in memory, as every report did before. The estimate of time Greg asked for was
+measured and declined for now: eleven imports, and URL extraction ranging 3–122 s with no relation
+to length — [plan 261020a § Part B](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md#part-b--how-far-the-import-has-got).
 
 The sentences themselves live in `src/job-state.ts` rather than `src/messages.ts`, and carry no
 bracketed codes, because none of them is a failure — [copy.md](copy.md).
