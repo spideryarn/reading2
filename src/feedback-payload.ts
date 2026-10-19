@@ -101,6 +101,11 @@ export interface FeedbackDevice {
       all three facts for. `null` on reports from before 2026-10-03. */
   appearance: string | null;
   theme: string | null;
+  /** The reader's Brightness and Text size on /profile (src/web/reading-comfort.ts):
+      a dimmed or enlarged page is what a "too dark" or "doesn't fit" report
+      needs to know first. `null` on reports from before 2026-10-19. */
+  brightness: string | null;
+  textSize: string | null;
   reducedMotion: boolean | null;
 }
 
@@ -187,6 +192,9 @@ const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
    file is the server's, and the client module pulls in React. */
 const APPEARANCES = ["system", "light", "dark"] as const;
 const THEMES = ["light", "dark"] as const;
+/* src/web/reading-comfort.ts's two lists, copied for the same reason. */
+const BRIGHTNESSES = ["full", "dim", "dimmer", "dimmest"] as const;
+const TEXT_SIZES = ["default", "large", "larger", "largest"] as const;
 
 /**
  * `STEP_ORDER` in src/step-order.ts, copied. See the header for why it is copied
@@ -502,6 +510,8 @@ function device(value: unknown): FeedbackDevice | null {
     colorScheme: oneOf(source.colorScheme, COLOUR_SCHEMES),
     appearance: oneOf(source.appearance, APPEARANCES),
     theme: oneOf(source.theme, THEMES),
+    brightness: oneOf(source.brightness, BRIGHTNESSES),
+    textSize: oneOf(source.textSize, TEXT_SIZES),
     reducedMotion: bool(source.reducedMotion),
   };
 }

@@ -26,3 +26,9 @@ are in [261003a § The question for Greg](../plans/261003a-reading-text-size-set
 
 **Declined, on Greg's answer.** 2026-10-08, in the Feedback dialog, to
 [q-wux4k7](questions/q-wux4k7.md): *"C"* — not now. Recorded by the feedback sweep.
+
+**Built later, on a new fact (2026-10-19).** Greg reads in an iPad home-screen app, which has no
+browser zoom ([spya-ast8cu](261018_2348-dimmer-dark-mode-and-a-text-size-setting.md)), so the
+setting now exists. It scales the root, not `--reading-size` alone, so the inverted hierarchy this
+report's plan found does not arise:
+[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md).

@@ -1,0 +1,63 @@
+/* **Brightness and text size**, the reader's two comfort settings on /profile.
+   Each is one attribute on <html>, absent at its default, written before first
+   paint by index.html's appearance-boot script and kept right afterwards by
+   src/web/reading-comfort.ts.
+   docs/plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md. */
+
+/* **Text size scales the root**, so every rem in the app grows with it — the
+   prose, its headings, the mode band, the controls — and the JS layout follows
+   because it reads the root (reader/measure.ts § useRootFontPx). Percentages,
+   so a reader's own browser default still compounds underneath.
+   typography.md § The reader's text size scales the root: size new type in
+   rem, or it will not follow. */
+:root[data-text-size="large"] { font-size: 112.5%; }   /* 18px at a 16px default */
+:root[data-text-size="larger"] { font-size: 125%; }    /* 20px */
+:root[data-text-size="largest"] { font-size: 137.5%; } /* 22px */
+
+/* **Brightness is one black layer over everything.** Black at alpha a scales
+   every pixel's encoded value by 1 − a — page, ink and pictures alike — which,
+   through sRGB's gamma, leaves about (1 − a)^2.2 of its light. So the three
+   steps leave the ink about 60 / 38 / 22% of its light: Dimmest gives off
+   under a quarter of what the screen's own lowest setting does.
+   **Contrast falls too, it is not kept**: body ink on the page goes from 18:1
+   to 11.5 / 7.7 / 4.8:1, still past WCAG's 4.5 at every step; muted ink
+   (--muted-foreground) from 5.9 to 4.0 / 3.0 / 2.2. WCAG's formula assumes a
+   lit room, which is the one thing a reader choosing this does not have (GPT
+   Sol, plan review of 261019g, P1 — the first draft claimed the ratio held).
+   pointer-events: none, so every tap and hover goes through it, and
+   elementFromPoint skips it.
+   Not a filter on the root: a filter makes a containing block for fixed
+   descendants in some engines and re-filters the page on every scroll frame. */
+:root[data-brightness="dim"] { --comfort-dim: 0.2; }
+:root[data-brightness="dimmer"] { --comfort-dim: 0.35; }
+:root[data-brightness="dimmest"] { --comfort-dim: 0.5; }
+
+:root[data-brightness]::after {
+  content: "";
+  position: fixed;
+  /* The viewport, not past it: a fixed box stays put through iOS's rubber-band
+     overscroll, so it covers what the bounce reveals, and one larger than the
+     viewport risks a browser counting it as overflow. */
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  background: rgb(0 0 0 / var(--comfort-dim, 0));
+}
+
+/* **A dialog opened with showModal() sits in the top layer**, above any
+   z-index, so the layer cannot reach it: the Lightbox, Feedback, the command
+   bar, Sketch and Illustrated's enlargements, the purpose prompt. It dims
+   itself instead; a filter on a dialog costs nothing, since it is already the
+   containing block of everything inside it. Its ::backdrop is left alone: it is
+   already a dark wash, and a custom property does not reliably reach it
+   (lightbox.css says why). Anything else that reaches the top layer — a
+   `popover` — would need adding here. */
+:root[data-brightness] dialog[open] {
+  filter: brightness(calc(1 - var(--comfort-dim, 0)));
+}
+
+/* Paper gives off no light. */
+@media print {
+  :root[data-brightness]::after { display: none; }
+  :root[data-brightness] dialog[open] { filter: none; }
+}

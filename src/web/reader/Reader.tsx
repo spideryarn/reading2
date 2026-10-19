@@ -747,7 +747,11 @@ export function Reader({
   // the section start under an unchanged 44px bar (261003h postmortem).
   const tallCrumbsBar =
     showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
+  //
+  // `rootFontPx` since 2026-10-19: the reader's Text size scales the root, which
+  // rewraps every paragraph and can leave every width above unchanged (GPT Sol,
+  // plan review of 261019g, P1).
+  const layoutKey = `${windowWidth}|${rootFontPx}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this

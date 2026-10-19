@@ -629,6 +629,11 @@ export function DesignPage() {
    * in one meets a height in the other, the agreement recorded in
    * controls.md § The numbers is an agreement at a 16px root only.
    *
+   * An inline style, so while it is on it overrides the reader's own Text size
+   * (reading-comfort.css), which also sets the root — at Largest it makes the
+   * page smaller. It is a diagnostic at a fixed 20px, not a preview of that
+   * setting.
+   *
    * Restored on unmount, or leaving `/design` would leave the whole app at
    * 20px with nothing on screen to say why.
    */

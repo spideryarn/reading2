@@ -43,8 +43,7 @@
  * Not here, and each was considered rather than forgotten: **expertise
  * sliders** (the original's beginner/intermediate/expert axis, rejected twice
  * in this repo — the free-text box above *is* the single global setting its own
- * doc recommended instead); **typography settings** (*"a reader who wants
- * bigger text has a browser zoom"*); **a difficulty score**, for the reason
+ * doc recommended instead); **a difficulty score**, for the reason
  * docs/plans/260825e-metadata-page.md gives; and **streaks or anything that counts at you**, which
  * the original's homepage did not have either. This is a reading tool.
  */
@@ -66,6 +65,7 @@ import type { SynonymTable } from "./page-search.js";
 import { Section } from "./PageSection.js";
 import { SettingsSection } from "./SettingsSection.js";
 import { AppearanceSetting } from "./AppearanceSetting.js";
+import { ReadingComfortSettings } from "./ReadingComfortSettings.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { useProfile } from "./useProfile.js";
 import { useSlow } from "./useSlow.js";
@@ -342,11 +342,12 @@ export function ProfilePage() {
       <Section
         icon={SlidersHorizontal}
         label="Settings"
-        keywords="theme dark mode light mode system appearance colour color night experimental features beta preferences options switch toggle"
+        keywords="theme dark mode light mode system appearance colour color night brightness dim dimmer low light text size font size bigger larger zoom experimental features beta preferences options switch toggle"
         collapsible
       >
         <div className={`${CARD} tw:flex tw:flex-col tw:gap-4 tw:p-4`}>
           <AppearanceSetting />
+          <ReadingComfortSettings />
           <SettingsSection />
         </div>
       </Section>

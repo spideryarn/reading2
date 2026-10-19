@@ -10,7 +10,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Adding a mode](#adding-a-mode) — a pointer to mode.md
 - [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) — `FeatureBoundary`, `ModeBoundary`, what they cannot catch
 - [§ Tailwind and shadcn components](#tailwind-and-shadcn-components) — what Tailwind may touch, the four guards, the focus ring, never delete a semantic class
-- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes
+- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes, and Brightness (a dimming layer, not a third palette)
 - [§ Reading an API response](#reading-an-api-response) — `readJson`/`fetchOk`, why a body never becomes a message, "none yet" as `200 null`
 - [§ Empty is not the same as not asked yet](#empty-is-not-the-same-as-not-asked-yet) — loading, failed and empty states; reload that must keep the list; the waiting spinner
 - [§ Three more ways client state goes wrong](#client-state-traps) — out-of-order replies, `[]`-dep effects, flags nobody clears
@@ -640,6 +640,20 @@ once that nobody working on it could see.
   `--panel` rather than `--page` — which is exactly where the active gist cell and the active spine
   band put it. `tw:bg-highlight/20` is a plausible-looking substitution that renders subtly wrong on
   half its uses.
+
+### Brightness: a layer, not a third palette
+
+**Since 2026-10-19 a reader can dim the whole page below the screen's own lowest setting** —
+`/profile` → Settings → Brightness: Full, Dim, Dimmer, Dimmest (about 60 / 38 / 22% of the light; the stylesheet has the contrast each leaves). Greg,
+2026-10-18 (`spya-q645m0`), in a dark bedroom on an iPad: *"to enable the iPad, in effect, to show
+less light even than its own brightness setting allows."* It is one black `:root::after` layer with
+`pointer-events: none` over everything, in either theme, kept on the device and set before first
+paint by the same head script as the theme —
+[`styles/reading-comfort.css`](../../src/web/styles/reading-comfort.css) says why it is not a
+filter, and how the top-layer dialogs it cannot reach dim themselves. **So a new colour needs no
+dim value**, and a new `showModal()` dialog is covered by the `dialog[open]` rule; anything else that
+reaches the top layer (a `popover`) would need adding there. Why not a darker palette:
+[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md#brightness-one-dimming-layer-over-everything).
 
 ## Reading an API response
 

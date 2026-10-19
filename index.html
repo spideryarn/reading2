@@ -160,7 +160,9 @@
     <!-- **The reader's appearance, before first paint.** A second copy of
          src/web/appearance.ts § resolveTheme, because it has to run before any
          module does; tests/appearance.test.ts runs this exact script and checks
-         the two agree. Same key, same default (dark), same theme colours. -->
+         the two agree. Same key, same default (dark), same theme colours.
+         It also sets brightness and text size, whose module copy is
+         src/web/reading-comfort.ts and whose test is tests/reading-comfort.test.ts. -->
     <script id="appearance-boot">
       (function () {
         var choice = null;
@@ -176,6 +178,20 @@
         if (scheme) scheme.setAttribute("content", theme);
         var tc = document.querySelector('meta[name="theme-color"]');
         if (tc) tc.setAttribute("content", theme === "light" ? "#fafafa" : "#0a0a0a");
+        /* Brightness and text size: src/web/reading-comfort.ts. The first value
+           of each is its default, which sets no attribute. */
+        var comfort = [
+          ["spya.brightness", "data-brightness", ["full", "dim", "dimmer", "dimmest"]],
+          ["spya.text-size", "data-text-size", ["default", "large", "larger", "largest"]]
+        ];
+        for (var i = 0; i < comfort.length; i++) {
+          var value = null;
+          try { value = localStorage.getItem(comfort[i][0]); } catch (e) {}
+          var values = comfort[i][2];
+          if (value !== values[0] && values.indexOf(value) > 0) {
+            document.documentElement.setAttribute(comfort[i][1], value);
+          }
+        }
       })();
     </script>
   </head>
