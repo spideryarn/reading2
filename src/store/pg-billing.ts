@@ -1520,50 +1520,69 @@ export type HighPowerSwitch =
   | Stale;
 
 /**
- * Lock this article's running, paid import and read the weight Fetch settled
- * on. The caller already holds billing and the article; this is deliberately
+ * **Lock this article's live, paid imports and read the weight Fetch settled
+ * on.** The caller already holds billing and the article; this is deliberately
  * job then reservation, the same nested order as `priceFetchedPdf`.
+ *
+ * **Alive is "its reservation is unsettled", not `status = 'running'`** (Sol's
+ * C2-F1). A deadline hand-back puts a job back to `queued` with its
+ * reservation and fetch kept, and a retry's fresh job is `queued` against an
+ * article that already exists; matching only `running` read both as nothing in
+ * flight and charged High-powered one slot for ever. Every terminal ending
+ * settles or releases the reservation in its own transaction, so an unsettled
+ * one names a job still alive. With no status in the predicate, a claim moving
+ * `queued` to `running` concurrently is simply waited for by the `for update`.
+ *
+ * **More than one can match** — an article holds a line of jobs, and nothing
+ * stops two of them each carrying a reservation (a *Read this* beside a
+ * re-add, say). So every match is locked, in id order so two callers cannot
+ * deadlock on each other, and the answer fails safe: not ready if any of them
+ * has not fetched, and the largest weight among them otherwise. A reservation
+ * that settled while this waited for its job is skipped — the charged row is
+ * then the durable answer, through `chargedSlotsOf`.
  */
 async function activeImportPrice(
   tx: BillingTx,
   ownerId: OwnerId,
   slug: string,
 ): Promise<{ readonly ready: boolean; readonly slots: number | null }> {
-  const [activeJob] = await tx
+  const live = await tx
     .select({ steps: jobRows.steps, ingestEventId: jobRows.ingestEventId })
     .from(jobRows)
     .where(
       and(
         eq(jobRows.ownerId, ownerId),
         eq(jobRows.slug, slug),
-        eq(jobRows.status, "running"),
-        sql`${jobRows.ingestEventId} is not null`,
+        sql`${jobRows.ingestEventId} in (
+          select e.id from spideryarn.ingest_events e
+           where e.succeeded_at is null and e.released_at is null)`,
       ),
     )
-    .for("update")
-    .limit(1);
-  if (!activeJob?.ingestEventId) return { ready: true, slots: null };
+    .orderBy(jobRows.id)
+    .for("update");
 
-  const [reservation] = await tx
-    .select({
-      kind: ingestEvents.kind,
-      slots: ingestEvents.slots,
-      succeededAt: ingestEvents.succeededAt,
-      releasedAt: ingestEvents.releasedAt,
-    })
-    .from(ingestEvents)
-    .where(eq(ingestEvents.id, activeJob.ingestEventId))
-    .for("update")
-    .limit(1);
-  if (!reservation || reservation.succeededAt !== null || reservation.releasedAt !== null) {
-    return { ready: true, slots: null };
+  let ready = true;
+  let slots: number | null = null;
+  for (const job of live) {
+    if (!job.ingestEventId) continue;
+    const [reservation] = await tx
+      .select({
+        kind: ingestEvents.kind,
+        slots: ingestEvents.slots,
+        succeededAt: ingestEvents.succeededAt,
+        releasedAt: ingestEvents.releasedAt,
+      })
+      .from(ingestEvents)
+      .where(eq(ingestEvents.id, job.ingestEventId))
+      .for("update")
+      .limit(1);
+    /* Rechecked under its own lock: it may have settled while this waited. */
+    if (!reservation || reservation.succeededAt !== null || reservation.releasedAt !== null) continue;
+    const fetch = job.steps.find((step) => step.name === "fetch");
+    if (!(fetch?.status === "done" || fetch?.status === "skipped")) ready = false;
+    if (reservation.kind === "ingest") slots = Math.max(slots ?? 1, reservation.slots);
   }
-
-  const fetch = activeJob.steps.find((step) => step.name === "fetch");
-  return {
-    ready: fetch?.status === "done" || fetch?.status === "skipped",
-    slots: reservation.kind === "ingest" ? reservation.slots : null,
-  };
+  return { ready, slots };
 }
 
 /**

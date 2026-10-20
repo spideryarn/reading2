@@ -93,11 +93,59 @@ describe("HighPowerIntent", () => {
     expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: false });
   });
 
-  it("takes a 404 as final once the job has ended", async () => {
-    const { put } = scripted(refusal(404, "No article artefacts"));
+  /* Sol's C2-F2. A 409 schedules another go; the job then fails or is stopped.
+     The scheduled go must not happen: a PUT after a long import has died could
+     charge High-powered at one slot for an article that never got its price. */
+  it("sends nothing more once a job dies with a 409 retry scheduled, and resumes on Retry", async () => {
+    const { put, calls } = scripted(refusal(409, "Fetch is still pricing it"), SINCE);
+    const intent = new HighPowerIntent(put, 10);
+    intent.observe("a-long-pdf", true, false);
+    intent.want(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveLength(1);
+    expect(intent.get()).toEqual({ kind: "waiting" });
+
+    intent.observe("a-long-pdf", false, false);
+    await vi.runAllTimersAsync();
+    expect(calls, "a PUT went out after the job had died").toHaveLength(1);
+
+    /* JobCard's Retry: the same add, alive again, and the intent goes out. */
+    intent.observe("a-long-pdf", true, false);
+    await vi.runAllTimersAsync();
+    expect(calls).toHaveLength(2);
+    expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: false });
+  });
+
+  /* Ticked over a job that has died: nothing is sent (C2-F2), and the intent
+     waits for Retry rather than charging against an unpriced article. */
+  it("sends nothing when ticked over a dead job, and goes out on Retry", async () => {
+    const { put, calls } = scripted(SINCE);
     const intent = new HighPowerIntent(put, 10);
     intent.observe("an-essay", false, false);
     intent.want(true);
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([]);
+    expect(intent.get()).toEqual({ kind: "waiting" });
+    intent.observe("an-essay", true, false);
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([["an-essay", true]]);
+  });
+
+  it("sends a waiting intent when the page observes a completion, which is not a death", async () => {
+    /* A repeat paste: no job, a completion, and the article is already priced. */
+    const repeat = scripted(SINCE);
+    const later = new HighPowerIntent(repeat.put, 10);
+    later.want(true);
+    later.observe("on-the-shelf", false, false, true);
+    await vi.runAllTimersAsync();
+    expect(repeat.calls).toEqual([["on-the-shelf", true]]);
+  });
+
+  it("takes a 404 as final once the import has completed", async () => {
+    const { put } = scripted(refusal(404, "No article artefacts"));
+    const intent = new HighPowerIntent(put, 10);
+    intent.want(true);
+    await intent.settle("an-essay");
     await vi.runAllTimersAsync();
     expect(intent.get()).toEqual({
       kind: "refused",

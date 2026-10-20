@@ -71,6 +71,8 @@ export class HighPowerIntent {
   private notYet = 0;
   /** A terminal pre-claim 404 or pre-price 409 is waiting for Retry to make the job live again. */
   private retryOnNextAlive = false;
+  /** `settle` has been called: the import completed, so the row and its price exist. */
+  private settled = false;
   private disposed = false;
   private readonly listeners = new Set<() => void>();
 
@@ -90,13 +92,30 @@ export class HighPowerIntent {
    * **The page's job, as it now stands** — called on every render. `slug` is
    * `job.slug` or the completion's, never one derived from the address.
    */
-  observe(slug: string | null, jobAlive: boolean, lateRisk: boolean): void {
+  observe(slug: string | null, jobAlive: boolean, lateRisk: boolean, completed = false): void {
     /* Once this add has a slug, a transient poll with no matching job must not
        erase the only safe target for an unknown write's compensating switch-off. */
     if (slug !== null) this.slug = slug;
+    /* **A completion is not a death**: the article and its price exist (an
+       import that finished, or a repeat paste of one already on the shelf), so
+       a waiting intent may go out exactly as `settle` would send it. */
+    if (completed) {
+      this.settled = true;
+      this.retryOnNextAlive = false;
+    }
     const wasAlive = this.jobAlive;
     this.jobAlive = jobAlive;
     this.lateRisk = lateRisk;
+    if (!jobAlive && wasAlive && !this.settled && this.state.kind === "waiting") {
+      /* **The job died with the intent still waiting** (Sol's C2-F2): a
+         scheduled not-yet go is cancelled, and nothing is sent until Retry
+         makes the job live again. A PUT now would reach an article whose import
+         never got its price, and could charge High-powered at one slot. The
+         state stays `waiting` because a completion looks the same from here
+         and `settle` sends it then. */
+      this.clearRetry();
+      this.retryOnNextAlive = true;
+    }
     if (jobAlive && !wasAlive && this.retryOnNextAlive && !this.disposed) {
       /* A failed job can end before its claim creates the article row. Its 404
          is final for that attempt, but Retry is still the same reader intent. */
@@ -114,6 +133,9 @@ export class HighPowerIntent {
       this.retryOnNextAlive = false;
       if (this.state.kind === "on" || (this.state.kind === "refused" && this.state.on)) return;
       this.set({ kind: "waiting" });
+      /* Ticked over a dead job: nothing goes out now (`kick`), and a Retry
+         that makes the job live again sends it. */
+      if (!this.jobAlive && !this.settled) this.retryOnNextAlive = true;
       this.kick();
       return;
     }
@@ -149,6 +171,8 @@ export class HighPowerIntent {
   settle(slug: string): Promise<void> {
     this.slug = slug;
     this.jobAlive = false;
+    this.settled = true;
+    this.retryOnNextAlive = false;
     this.clearRetry();
     this.kick();
     return this.inFlight ?? Promise.resolve();
@@ -162,6 +186,10 @@ export class HighPowerIntent {
 
   private kick(): void {
     if (this.disposed || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
+    /* **Only while the job is alive, or once the import has completed**
+       (`settle`): a dead job's article may exist without its final price, and
+       switching on then could charge one slot for a long PDF (C2-F2). */
+    if (!this.jobAlive && !this.settled) return;
     if (this.slug) this.send(this.slug, true);
   }
 

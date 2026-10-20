@@ -434,6 +434,102 @@ describe("the paths that skip stage 1 carry the weight", () => {
   });
 });
 
+/* ----------------------------------- High-powered against a queued import -- */
+
+/**
+ * **A queued import is as alive as a running one** (Sol's C2-F1, P0). A
+ * deadline hand-back puts a running job back to `queued` with its reservation
+ * and its fetch kept; a retry's fresh job is queued against an article that
+ * already exists. Either way the reservation is unsettled, and High-powered
+ * must wait for it or charge its weight — never charge one slot for ever.
+ * On a 20-article tier, so the price is what is under test.
+ */
+describe("High-powered AI waits for, or charges, a queued import's weight", () => {
+  const PRICE = "price_long_pdf_db_hp";
+  const TIERS = [
+    {
+      id: "long-pdf-db-hp",
+      productName: "Spideryarn Long PDF DB",
+      description: "Twenty articles a month.",
+      ingestsPerPeriod: 20,
+      lookupKey: "spideryarn_long_pdf_db_hp_monthly",
+      stripePriceId: PRICE,
+      livemode: false,
+      active: true,
+      sortOrder: 32,
+      amounts: { usd: 1000 },
+    },
+  ] as const;
+
+  async function givenPaid(): Promise<void> {
+    await pool.query(
+      `insert into spideryarn.billing_accounts
+         (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
+          current_period_start, current_period_end)
+       values ($1, $2, $3, $4, 'active', now() - interval '5 days', now() + interval '25 days')
+       on conflict (owner_id) do update set price_id = excluded.price_id, status = 'active',
+         current_period_start = excluded.current_period_start, current_period_end = excluded.current_period_end`,
+      [OWNER, `cus_${OWNER}`, `sub_${OWNER}`, PRICE],
+    );
+  }
+
+  /** An unsettled one-slot-or-more reservation, and a queued job carrying it. */
+  async function givenQueued(name: string, slots: number, fetch: "done" | "skipped" | "pending") {
+    await givenArticle(name);
+    const { rows } = await pool.query<{ id: string }>(
+      "insert into spideryarn.ingest_events (owner_id, slots) values ($1, $2) returning id",
+      [OWNER, slots],
+    );
+    const reservation = rows[0]!.id;
+    const id = mintId();
+    await pool.query(
+      `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, ingest_event_id)
+       values ($1, $2, $3, $4::jsonb, 'queued', $5, $6)`,
+      [
+        id,
+        OWNER,
+        `${SLUG}${name}`,
+        JSON.stringify([{ name: "fetch", label: "Fetching the article", status: fetch }]),
+        `work-${id}`,
+        reservation,
+      ],
+    );
+    return { id, reservation };
+  }
+
+  const switchOn = (name: string) =>
+    runAsOwner(OWNER, () => switchOnHighPower(OWNER, `${SLUG}${name}`, TIERS));
+
+  async function upgradeSlots(): Promise<number[]> {
+    const { rows } = await pool.query<{ slots: number }>(
+      "select slots from spideryarn.ingest_events where owner_id = $1 and kind = 'high_power'",
+      [OWNER],
+    );
+    return rows.map((r) => r.slots);
+  }
+
+  it("a job handed back to the queue with a priced 5-slot reservation charges 5", async () => {
+    await givenPaid();
+    await givenQueued("hp-handed-back", 5, "done");
+    expect((await switchOn("hp-handed-back")).kind).toBe("on");
+    expect(await upgradeSlots()).toEqual([5]);
+  });
+
+  it("a queued fresh job not yet fetched answers pending, and charges nothing", async () => {
+    await givenPaid();
+    await givenQueued("hp-queued-fresh", 1, "pending");
+    expect((await switchOn("hp-queued-fresh")).kind).toBe("pending");
+    expect(await upgradeSlots()).toEqual([]);
+  });
+
+  it("a retry's fresh job carrying the old weight charges that weight once its fetch is skipped", async () => {
+    await givenPaid();
+    await givenQueued("hp-retry", 3, "skipped");
+    expect((await switchOn("hp-retry")).kind).toBe("on");
+    expect(await upgradeSlots()).toEqual([3]);
+  });
+});
+
 /* ------------------------------------------------------- sharing offer -- */
 
 describe("the sharing offer answers the request's own cost", () => {
