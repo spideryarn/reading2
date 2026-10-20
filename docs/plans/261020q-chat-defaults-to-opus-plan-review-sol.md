@@ -1,0 +1,27 @@
+The core design is correct, but the plan misses one failing test and two documentation boundaries.
+
+1. **Medium — the existing effort test must change.** Standard-power chat now resolves to Opus, so `wireEffort` sends and stores `"high"`; the test still expects `"default"` at [tests/chat-effort.test.ts:81](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/tests/chat-effort.test.ts:81). The plan mentions effort following the model and adds a model/Candidates test, but does not account for this existing assertion ([plan:28](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/docs/plans/261020q-chat-defaults-to-opus.md:28), [plan:32](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/docs/plans/261020q-chat-defaults-to-opus.md:32)). The focused run produced **101 passing, 1 failing** on precisely this assertion.
+
+2. **Low — define the boundary around “Every chat” and the cost estimate.** The opening claim at [plan:11](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/docs/plans/261020q-chat-defaults-to-opus.md:11) sounds broader than the implementation. It should explicitly say this changes typed answer calls billed as `chat`, while leaving these independent calls alone:
+
+   - Model-calling tools receive the article’s actual power at [src/chat-tools.ts:253](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/chat-tools.ts:253), [src/chat-tools.ts:1602](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/chat-tools.ts:1602), and [src/chat-tools.ts:2713](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/chat-tools.ts:2713).
+   - The post-answer gist uses its separate small model and job at [src/chat-gist.ts:131](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/chat-gist.ts:131) and [src/chat-gist.ts:212](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/chat-gist.ts:212).
+   - Live uses fixed OpenAI models at [src/live.ts:633](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/live.ts:633) and [src/live-gpt.ts:541](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/live-gpt.ts:541).
+   - The guide greeting is explicitly not a model call ([src/web/GuideGreeting.tsx:2](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/web/GuideGreeting.tsx:2)); the notes digest is ordinary formatting ([src/reader-notes.ts:389](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/reader-notes.ts:389)).
+
+   Those tools should **not** automatically follow Chat to Opus: they have separate jobs, model policies, and cost rows. Consequently, “the same conversation costs roughly twice” at [plan:47](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/docs/plans/261020q-chat-defaults-to-opus.md:47) should say “the chat-job model-call portion”; a tool-using turn’s total need not double. The numerical projection itself is honest: doubling the $7.28 Sonnet share adds $7.28, making chat $17.60 and total spend about 12.7% higher.
+
+3. **Low — one source comment becomes false.** `ConverseRequest.power` still says the article’s switch determines “which capable model answers” at [src/converse.ts:2209](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/converse.ts:2209). It should instead say this is the article power retained for Candidates and tool subcalls, while ordinary chat applies `powerFor`.
+
+Everything else checks out:
+
+- `jobFor` maps all five intended typed kinds to `chat` and keeps Candidates separate ([src/converse.ts:147](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/converse.ts:147)).
+- The sole production caller passes no explicit `model`, so `defaultModel` controls send, retry, and edit ([src/routes.ts:3964](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/routes.ts:3964)); the explicit model option is documented as a test/eval seam ([src/converse.ts:2209](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/converse.ts:2209)).
+- Environment overrides still win in `resolveModel` ([src/models.ts:1867](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/models.ts:1867)).
+- Ceiling and effort key off the actual requested model ([src/converse.ts:245](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/converse.ts:245), [src/ai-call.ts:1398](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/ai-call.ts:1398)).
+- Message provenance uses the returned model and sent effort; `ChatThreadAbout` reads stored values rather than today’s article setting ([src/converse.ts:4086](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/converse.ts:4086), [src/web/ChatThreadAbout.tsx:28](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/web/ChatThreadAbout.tsx:28)).
+- Cost rows store requested and answered models independently ([src/ai-spend.ts:1193](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/ai-spend.ts:1193)).
+- There is no chat artefact freshness conflict; the general freshness mechanism already treats Sonnet and Opus as one generation ([src/models.ts:313](/var/tmp/spideryarn-worktrees/fbht4hf4-chat-defaults-to-opus/src/models.ts:313)).
+- Excluding Candidates is correct: it is a distinct job, prompt, ceiling, and cost line.
+
+**VERDICT: APPROVE WITH CHANGES**

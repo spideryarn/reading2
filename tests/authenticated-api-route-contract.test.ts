@@ -2980,6 +2980,13 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       expect(simple?.id).toBe(modelFor("simple", "high"));
     });
 
+    it("reports Chat on Opus even for a standard article (plan 261020q)", async () => {
+      const reply = await call("GET", "/api/models");
+      const chat = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "chat");
+      expect(chat?.id).toBe(modelFor("chat", powerFor("chat", "standard")));
+      expect(chat?.id).toBe(modelFor("chat", "high"));
+    });
+
     it("sends each task's wire in the real model response", async () => {
       const reply = await call("GET", "/api/models");
       expect(reply.status).toBe(200);
