@@ -151,6 +151,16 @@ export class AddPurposeSession {
   private asking: Attempt | null = null;
   private wait: unknown = null;
   private idle: unknown = null;
+  /**
+   * **A dictation is running in the box** (plan 261020r § Stage 2). Chromium's
+   * live guesses arrive as ordinary text and the transcript replaces them, so
+   * nothing is saved by itself until it ends: no idle timer, and a stored
+   * purpose that is read meanwhile is held in `heldSeed` rather than adopted.
+   * Adopting it could put a stored sentence into the box under the hook's
+   * span, and its commit would save the rough guesses.
+   */
+  private paused = false;
+  private heldSeed: string | null = null;
 
   private readonly timers: PurposeTimers;
   private readonly listeners = new Set<() => void>();
@@ -238,8 +248,31 @@ export class AddPurposeSession {
     this.changed();
   };
 
+  /**
+   * Hold or release the saves made by themselves while a dictation runs. On
+   * release a held read is adopted, which commits, and otherwise a dirty box
+   * waits its usual pause. Commits the caller asks for are not held: the
+   * dictation's own at its end is one of them.
+   */
+  setPaused = (paused: boolean): void => {
+    if (this.done || this.paused === paused) return;
+    this.paused = paused;
+    if (paused) {
+      this.arm();
+      return;
+    }
+    if (this.heldSeed !== null) {
+      const stored = this.heldSeed;
+      this.heldSeed = null;
+      this.seed(stored);
+      return;
+    }
+    this.arm();
+  };
+
   /** `pagehide`: the `keepalive` write, now, with nothing awaited. */
   leaveNow = (): void => {
+    if (this.heldSeed !== null) this.adopt();
     if (this.done || this.abandoned || this.slug === null || this.saved === null) return;
     const text = this.wanted();
     if (text !== this.saved) this.io.leave(this.slug, text);
@@ -316,6 +349,9 @@ export class AddPurposeSession {
       this.timers.clear(this.wait);
       this.wait = null;
     }
+    /* A read held behind a dictation is still the server's text: without it
+       the flush below would not know what to compare against. */
+    if (this.heldSeed !== null) this.adopt();
     this.done = this.before.then(() => this.flight ?? undefined).then(() => this.flush());
     return this.done;
   }
@@ -390,6 +426,7 @@ export class AddPurposeSession {
 
   private kick(): void {
     if (this.done || !this.ready || this.slug === null || this.saved !== null) return;
+    if (this.heldSeed !== null) return;
     if (this.asking !== null || this.wait !== null || this.gaveUp) return;
     if (!this.alive) {
       if (!this.lastTry) return;
@@ -426,7 +463,8 @@ export class AddPurposeSession {
     /* Fresh, and an explicit `false`: an offline copy is not evidence the
        article exists (F5), and `purposeFailed: true` covers *not yet*. */
     if (answer !== null && answer.fresh === true && answer.purposeFailed === false) {
-      this.seed(answer.purpose ?? "");
+      if (this.paused) this.heldSeed = answer.purpose ?? "";
+      else this.seed(answer.purpose ?? "");
       return;
     }
     this.tries += 1;
@@ -446,15 +484,24 @@ export class AddPurposeSession {
   }
 
   private seed(stored: string): void {
+    this.heldSeed = stored;
+    this.adopt();
+    this.changed();
+    this.commit();
+  }
+
+  /** Take the held read as what the server has. No listener is told, and nothing is sent. */
+  private adopt(): void {
+    const stored = this.heldSeed;
+    if (stored === null) return;
+    this.heldSeed = null;
     this.saved = stored;
     /* A blank box takes what is stored, and that text is not the reader's.
-       Typed words stay, and the commit below sends them at once. */
+       Typed words stay, and the commit after this sends them at once. */
     if (this.text.trim() === "") {
       this.text = stored;
       this.touched = false;
     }
-    this.changed();
-    this.commit();
   }
 
   private snap(): AddPurposeSnapshot {
@@ -485,15 +532,19 @@ export class AddPurposeSession {
     if (this.abandoned || previous.text !== this.snapshot.text ||
         previous.inFlight !== this.snapshot.inFlight ||
         (previous.state.kind === "dirty") !== (this.snapshot.state.kind === "dirty")) {
-      if (this.idle !== null) this.timers.clear(this.idle);
-      this.idle = null;
-      if (!this.abandoned && this.snapshot.state.kind === "dirty") {
-        this.idle = this.timers.set(() => {
-          this.idle = null;
-          if (!this.abandoned && this.snapshot.state.kind === "dirty") this.commit();
-        }, ADD_PURPOSE_IDLE_MS);
-      }
+      this.arm();
     }
     for (const listener of [...this.listeners]) listener();
+  }
+
+  /** (Re)start the pause before a dirty box saves by itself: none while abandoned or dictating. */
+  private arm(): void {
+    if (this.idle !== null) this.timers.clear(this.idle);
+    this.idle = null;
+    if (this.abandoned || this.paused || this.snapshot.state.kind !== "dirty") return;
+    this.idle = this.timers.set(() => {
+      this.idle = null;
+      if (!this.abandoned && !this.paused && this.snapshot.state.kind === "dirty") this.commit();
+    }, ADD_PURPOSE_IDLE_MS);
   }
 }

@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReasoningEffort } from "../src/ai-call.js";
 import { converse } from "../src/converse.js";
-import type { ModelPower } from "../src/models.js";
+import { type ModelPower, modelFor } from "../src/models.js";
 import type { AnswerEffort, Block, Meta } from "../src/types.js";
 
 /* `AnswerEffort` is a literal copy for the browser's sake; it must be the
@@ -55,9 +55,17 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-async function finish(power: ModelPower) {
+async function finish(power: ModelPower, model?: string) {
   let done: { effort: AnswerEffort } | null = null;
-  for await (const event of converse({ power, meta, blocks, history: [], question: "why?", slug: "example" })) {
+  for await (const event of converse({
+    power,
+    ...(model ? { model } : {}),
+    meta,
+    blocks,
+    history: [],
+    question: "why?",
+    slug: "example",
+  })) {
     if (event.type === "done") done = event;
   }
   return done;
@@ -79,7 +87,10 @@ describe("the effort an answer stores", () => {
   }
 
   it("says default when nothing was sent, and high on the high-power model", async () => {
-    expect((await finish("standard"))?.effort).toBe("default");
+    /* Chat is on the high-power model at either power since plan 261020q, so
+       the standard model is reached only by naming it. */
+    expect((await finish("standard", modelFor("chat", "standard")))?.effort).toBe("default");
+    expect((await finish("standard"))?.effort).toBe("high");
     expect((await finish("high"))?.effort).toBe("high");
   });
 });

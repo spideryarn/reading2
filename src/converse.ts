@@ -95,7 +95,7 @@ import {
   TOOL_CALL_LOST,
   saidNothing,
 } from "./messages.js";
-import { type ModelPower, modelFor } from "./models.js";
+import { type ModelPower, modelFor, powerFor } from "./models.js";
 import { isHighPowerModel } from "./high-power-model.js";
 /* **Candidates' system prompt, and only that.** It is a hundred lines of
    instructions with no logic in it, and it lives in its own module for the
@@ -164,9 +164,14 @@ export const jobFor = (kind: ThreadKind): ConverseJob =>
  * variable was an override that silently did nothing
  * (src/referee-promises-run.ts says so beside its own); passing the kind is what
  * stops `SPIDERYARN_REFEREE_CANDIDATES_MODEL` being the same non-event.
+ *
+ * **Through `powerFor`**, because `chat` is on Opus for every article
+ * (`ALWAYS_HIGH_POWER`, plan 261020q) and membership does nothing unless the
+ * call site asks. `power` is still the article's own, and still what
+ * Candidates and the chat tools run at.
  */
 export const defaultModel = (power: ModelPower, kind: ThreadKind = "chat"): string =>
-  modelFor(jobFor(kind), power);
+  modelFor(jobFor(kind), powerFor(jobFor(kind), power));
 
 /**
  * How long the whole exchange may take.
@@ -2112,9 +2117,11 @@ export interface ConverseRequest {
    */
   experience?: GuideExperience | null;
   /**
-   * Which capable model answers — the article's High-powered AI setting
-   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
-   * still overrides it for a test or an eval.
+   * The article's High-powered AI setting (plan 260930f). Required, so a route
+   * cannot forget to ask. It picks Candidates' model and is what the chat tools
+   * that call a model run at; the `chat` job itself is on the high-power model
+   * at either power (`defaultModel`, plan 261020q). `model` below still
+   * overrides both for a test or an eval.
    */
   power: ModelPower;
   model?: string;

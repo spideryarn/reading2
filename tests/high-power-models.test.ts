@@ -1,11 +1,13 @@
 /**
  * **High-powered AI, the model half** — docs/plans/260930f-high-powered-ai-per-article.md.
  *
- * One switch moves an article's capable-tier calls from Sonnet 5 to Opus 5.5.
+ * One switch moves an article's capable-tier calls from Sonnet 5 to Opus 5.5,
+ * except for the tasks that already use Opus on every article.
  * What these hold, each because it fails quietly if it is wrong:
  *
- * - **Every capable task moves and nothing else does.** A quick-tier job on Opus
- *   costs twenty times what it should and nobody reads a difference.
+ * - **The tier resolver moves every capable task and nothing else.** A
+ *   quick-tier job on Opus costs twenty times what it should and nobody reads
+ *   a difference. `powerFor` applies the always-high exceptions before it.
  * - **An environment override still wins.** A comparison run is on purpose.
  * - **Freshness sees one generation; checkpoints see two.** A toggle must not
  *   make an article's work look stale (and pay to redo it), and it must not let
@@ -21,6 +23,7 @@ import { investigateContextHash, type InvestigateContext } from "../src/citation
 import { type LookupContext, lookupContextHash } from "../src/citation-lookup.js";
 import { messagesWireBody } from "../src/messages-stream.js";
 import {
+  ALWAYS_HIGH_POWER,
   CAPABLE_MODEL,
   CAPABLE_GENERATION_KEY,
   CAPABLE_MODEL_OPENROUTER,
@@ -31,6 +34,7 @@ import {
   HIGH_POWER_MODEL_OPENROUTER,
   modelFor,
   PIPELINE_TASKS,
+  powerFor,
   QUICK_MODEL_OPENROUTER,
   resolveModel,
   sameGenerator,
@@ -45,8 +49,8 @@ afterEach(() => {
   delete process.env.SPIDERYARN_CHAT_MODEL;
 });
 
-describe("which model a task sends at each power", () => {
-  it("moves every capable-tier task to Opus at high power", () => {
+describe("which model the tier resolver returns at each power", () => {
+  it("maps every capable-tier task to Opus at high power", () => {
     const capable = ALL_TASKS.filter((t) => TASK_TIER[t] === "capable");
     /* Not vacuous: the table is nearly all capable. */
     expect(capable.length).toBeGreaterThan(20);
@@ -64,6 +68,13 @@ describe("which model a task sends at each power", () => {
         task === "simple-check" ? "openai/gpt-5.6-luna" : QUICK_MODEL_OPENROUTER,
       );
       expect(modelFor(task, "high"), task).toBe(modelFor(task, "standard"));
+    }
+  });
+
+  it("resolves every always-high task to Opus on a standard article", () => {
+    expect(ALWAYS_HIGH_POWER.size).toBeGreaterThan(0);
+    for (const task of ALWAYS_HIGH_POWER) {
+      expect(modelFor(task, powerFor(task, "standard")), task).toBe(HIGH_POWER_MODEL_OPENROUTER);
     }
   });
 

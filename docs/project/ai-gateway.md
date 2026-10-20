@@ -1250,7 +1250,8 @@ The research is
 ## The box's key has a monthly limit, and it runs out
 
 The OpenRouter key in the box's `.env.local`, which every local call and every eval spends, has a
-monthly limit that Greg sets in OpenRouter's dashboard: $300 until 2026-10-05, $400 since. On
+monthly limit that Greg sets in OpenRouter's dashboard: $300 until 2026-10-05, then $400, and $500 by 2026-10-20, when it ran out
+again (`usage_monthly` $500.03, `limit_remaining` 0). On
 2026-10-05 it was spent by the 5th of the month, and stayed at nothing for five hours until Greg
 raised it.
 
