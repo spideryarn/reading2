@@ -238,6 +238,9 @@ const MANIFEST = [
      root size is the baseline for all rem type, and a top-layer dialog needs
      its dimming rule after the dialog's own appearance. Plan 261019g. */
   "reading-comfort.css",
+  /* Last so the shared green-to-send / red-to-back-out tone wins over the
+     shape-owning family sheets at equal specificity. Plan 261020f. */
+  "button-tone.css",
 ];
 
 /**
