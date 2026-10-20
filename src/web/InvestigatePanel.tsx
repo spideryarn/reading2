@@ -226,7 +226,11 @@ export function InvestigatePanel({
                    by one author in one year would otherwise read alike (the
                    browser pass on plan 261020n). The article's words, so the
                    author's face; the question around them is ours. */
-                const byline = workShortName({ title: "", authors: work.authors, year: work.year }).trim();
+                const byline = workShortName({
+                  title: "",
+                  ...(work.authors !== undefined ? { authors: work.authors } : {}),
+                  ...(work.year !== undefined ? { year: work.year } : {}),
+                }).trim();
                 const words = (
                   <>
                     How has{" "}
