@@ -421,8 +421,9 @@ const CHAT: BandShape = {
      inline JSX to a fragment passed as `head` — so it is the one part where
      "the DOM did not change" is a claim rather than a restatement of the diff.
      The way back was an unlabelled × at the far end until plan 261008c § 1
-     (spya-pd9fnc): on a phone nobody could tell it was the way back. */
-  headChildren: ["button.chat-back.tap-target[aria-label,data-tip,data-tip-describes,type]", "h2", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
+     (spya-pd9fnc): on a phone nobody could tell it was the way back. Copy
+     this conversation sits before the delete since plan 261020w. */
+  headChildren: ["button.chat-back.tap-target[aria-label,data-tip,data-tip-describes,type]", "h2", "button.chat-icon[aria-label,data-tip,type]", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
@@ -441,8 +442,8 @@ const LEARN: BandShape = {
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
      since plan 261001m (2026-10-01), no "All conversations" close: Learn is
      one conversation and has no list to close back to. `subMode` renders
-     nothing for this fixture. */
-  headChildren: ["h2", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
+     nothing for this fixture. Copy this conversation before it, plan 261020w. */
+  headChildren: ["h2", "button.chat-icon[aria-label,data-tip,type]", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
