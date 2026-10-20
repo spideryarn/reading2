@@ -533,8 +533,8 @@ export const TOOL_NAMES = new Set(CHAT_TOOLS.map((t) => t.function.name));
  * The ninth tool, and **deliberately not in `CHAT_TOOLS`**.
  *
  * `CHAT_TOOLS` is what Live flattens into its session (src/live.ts) and what
- * Recall, Tutorial and Candidates are offered, and none of them should have
- * this: Live's tool endpoint has no thread to exclude, Recall and Tutorial are
+ * Recall and Candidates are offered, and none of them should have
+ * this: Live's tool endpoint has no thread to exclude, Recall is
  * about the article and are told not to guess at the reader, and Candidates is
  * Referee machinery. GPT Sol's review of
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md,
@@ -553,7 +553,10 @@ export const READER_NOTES_TOOL: FunctionTool = {
     description:
       "The reader's own notes on THIS article: their comments, highlights and bookmarks, each " +
       "with the block it is on, followed by a list of their other conversations about the " +
-      "article. Give a conversation's id as `thread` to read that conversation instead. Use it " +
+      "article. Give a conversation's id as `thread` to read that conversation instead: its " +
+      "questions and answers, numbered from 1 for the oldest: the newest that fit, in order; " +
+      "when the answer says there are earlier ones, call again with the `before` it names. " +
+      "Use it " +
       "with no `thread` when the reader asks what they think, what they marked or wrote, or " +
       "refers to an earlier conversation. When the list of their other conversations that " +
       "comes with the question shows one that took up what they are asking now, pass its " +
@@ -570,6 +573,12 @@ export const READER_NOTES_TOOL: FunctionTool = {
             "Optional. The id of one of their other conversations, exactly as this tool listed " +
             "it. Omit to see the notes and the list.",
         },
+        before: {
+          type: "integer",
+          description:
+            "Optional, with `thread`. Read the exchanges numbered below this one. Use the " +
+            "number a previous answer told you to; omit to read the newest.",
+        },
       },
     },
   },
@@ -578,8 +587,8 @@ export const READER_NOTES_TOOL: FunctionTool = {
 /**
  * **Chat reads a paper the article cites** (plan 261011w), and **deliberately
  * not in `CHAT_TOOLS`**, for `READER_NOTES_TOOL`'s reason: Live flattens that
- * list, and a 25-second PDF read is no part of a spoken turn; Learn, Tutorial
- * and Candidates have no use for it; the guide is about how to read. Offered
+ * list, and a 25-second PDF read is no part of a spoken turn; Learn and
+ * Candidates have no use for it; the guide is about how to read. Offered
  * to `chat` and `explore` only. src/read-cited-work.ts is the tool.
  */
 export const READ_CITED_WORK_TOOL: FunctionTool = {
@@ -872,7 +881,6 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
     case "explore":
       return CHAT_TOOLS_WITH_NOTES;
     case "learn":
-    case "tutorial":
     case "candidates":
       return CHAT_TOOLS;
     case "guide":
@@ -2397,6 +2405,17 @@ async function readReaderNotes(
 ): Promise<ToolOutcome> {
   const label = describeCall("reader_notes", args);
   const wanted = typeof args.thread === "string" ? args.thread.trim() : "";
+  const hasBefore = Object.hasOwn(args, "before");
+  /* `before` is a place in one conversation. Without one it would quietly
+     become the notes and the list, which is not what was asked for. */
+  if (wanted === "" && hasBefore) {
+    return {
+      label,
+      detail: "no conversation named",
+      content:
+        "`before` reads the earlier part of one conversation, so it needs that conversation's id as `thread`. Nothing was read.",
+    };
+  }
 
   let comments: Comment[];
   let threads: ChatThread[];
@@ -2427,7 +2446,19 @@ async function readReaderNotes(
   }
 
   if (wanted !== "") {
-    const transcript = threadTranscript(threads, wanted, ctx.threadId);
+    /* A model may send the number as a string. Anything else it sends becomes
+       NaN, which threadTranscript answers with a sentence: never a throw, and
+       never a quiet fall back to the newest page. */
+    const raw = args.before;
+    const before =
+      !hasBefore
+        ? undefined
+        : typeof raw === "number"
+          ? raw
+          : typeof raw === "string" && raw.trim() !== ""
+            ? Number(raw)
+            : Number.NaN;
+    const transcript = threadTranscript(threads, wanted, ctx.threadId, before);
     log("model").info(
       {
         tool: "reader_notes",

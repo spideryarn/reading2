@@ -331,7 +331,7 @@
  {
   "id": "mode:learn",
   "label": "Learn",
-  "description": "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
+  "description": "Take the piece in and think it through: Recall what it says (read it yet or not), a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
   "aliases": [
    "recall",
    "remember",
@@ -823,36 +823,15 @@
  {
   "id": "submode:learn:recall",
   "label": "Recall",
-  "description": "Say what you took from the piece, and find out where it holds up",
+  "description": "Say what you took from the piece, and find out where it holds up. Not read it yet? It takes you through it a piece at a time",
   "aliases": [
    "Learn",
    "Recall Learn",
    "Learn Recall",
    "Recall mode",
    "Recall Remember",
-   "Remember Recall"
-  ],
-  "kind": "submode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:learn:tutorial",
-  "label": "Tutorial",
-  "description": "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
-  "aliases": [
-   "Learn",
-   "Tutorial Learn",
-   "Learn Tutorial",
-   "Tutorial mode",
-   "Tutorial Remember",
-   "Remember Tutorial"
+   "Remember Recall",
+   "tutorial"
   ],
   "kind": "submode",
   "generates": false,

@@ -85,9 +85,7 @@ describe("the other three things it holds", () => {
     const d = createChatDrafts();
     expect(d.learn("learn")).toBe("");
     d.setLearn("learn", "what I took from it");
-    d.setLearn("tutorial", "what I remember");
     expect(d.learn("learn")).toBe("what I took from it");
-    expect(d.learn("tutorial")).toBe("what I remember");
     expect(d.learn("explore")).toBe("");
   });
 

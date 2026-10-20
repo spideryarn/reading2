@@ -45,14 +45,14 @@ import { ChatPanel, type SendHow } from "../../ChatPanel.js";
 import { chatDraftsFor } from "../../chat-draft.js";
 
 /**
- * **Learn's four sub-modes, and the one place their URL rules live.**
+ * **Learn's three sub-modes, and the one place their URL rules live.**
  *
  * Learn is `recall` — the reader says what they took from the article and the
- * model shows them where that comes apart — `tutorial`, where model and reader
- * take short teaching turns, `explore`, where the reader works out what they
- * think and the model starts from what they marked, or `quiz`, where the
- * questions come from the article instead. One mode, four views, and
- * `?learn=` says which.
+ * model shows them where that comes apart, or, for a reader who has not read
+ * it, takes them through it a piece at a time (Tutorial, folded in on
+ * 2026-10-20) — `explore`, where the reader works out what they think and the
+ * model starts from what they marked, or `quiz`, where the questions come from
+ * the article instead. One mode, three views, and `?learn=` says which.
  * docs/plans/260831al-review-quiz-sub-mode.md.
  *
  * ## Why this is a component rather than two conditions up in `Reader`
@@ -175,26 +175,13 @@ export function LearnBand({
         onDiscuss={onDiscussQuizMark}
       />
     );
-  if (learn === "tutorial")
-    return (
-      <ConversationBand
-        /* Its own key, so Recall and Tutorial never share a mounted band — a
-           focus nonce or a latch carried across would belong to the other
-           conversation. (Their unsent words are kept apart by kind, not by
-           this key: src/web/chat-draft.ts.) */
-        key="learn-tutorial"
-        slug={slug}
-        blocks={blocks}
-        onJump={onJump}
-        kind="tutorial"
-        subMode={toggle}
-      />
-    );
   if (learn === "explore")
     return (
       <ConversationBand
-        /* Its own key, for Tutorial's reason: three conversations, and none of
-           them shares a mounted band with another. */
+        /* Its own key, so Recall and Explore never share a mounted band — a
+           focus nonce or a latch carried across would belong to the other
+           conversation. (Their unsent words are kept apart by kind, not by
+           this key: src/web/chat-draft.ts.) */
         key="learn-explore"
         slug={slug}
         blocks={blocks}
@@ -455,11 +442,6 @@ type ConversationVisibilityByKind = {
     kind: "learn";
     onScreen?: never;
   };
-  /** Learn's Tutorial: the same rule as Recall's. */
-  tutorial: {
-    kind: "tutorial";
-    onScreen?: never;
-  };
   /** Learn's Explore: about the reader's thinking, not where they are on the page. */
   explore: {
     kind: "explore";
@@ -471,19 +453,19 @@ type ConversationVisibilityByKind = {
  * **Which kinds of conversation offer Live**, the spoken one
  * (docs/project/live-conversation.md). A capability per kind, written out for
  * every kind, so a new one has to say — it was a `kind === "tutorial"` check
- * until Explore, which would have got a Live button by default and a 400 from
+ * (Tutorial, folded into Recall on 2026-10-20) until Explore, which would
+ * have got a Live button by default and a 400 from
  * the server on its first spoken turn (GPT Sol's review of plan 261003l, PR-5).
  *
  * It has to agree with `SpokenKind` in src/chat.ts, the kinds a spoken turn
  * may create or join: tests/learn-own-thread.test.tsx holds the two
- * together. Tutorial has none yet because Greg said Live "doesn't work very
- * well at the moment"; Explore has none for the same reason, and because a
- * spoken turn carries no notes digest.
+ * together. Explore has none because Greg said Live "doesn't work very well
+ * at the moment" (of Tutorial, which had none either), and because a spoken
+ * turn carries no notes digest.
  */
 export const OFFERS_LIVE: Readonly<Record<ConversationKind, boolean>> = {
   chat: true,
   learn: true,
-  tutorial: false,
   explore: false,
 };
 
@@ -513,7 +495,7 @@ type ConversationBandProps = {
    */
   onOrigin?: ((origin: ThreadOrigin) => void) | undefined;
   /**
-   * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Learn's
+   * **The Recall | Explore | Quiz control**, when this band is one of Learn's
    * conversation views. Absent in chat mode. Built by `LearnBand` above and passed straight
    * through to `ChatPanel`, which is where it is drawn.
    */
@@ -604,8 +586,8 @@ export function ConversationBand({
     learn: learnParam,
     thread: threadParam,
   });
-  /* Recall, Tutorial and Explore: each one conversation per article, no
-     list. Named for Learn because that is where all three live. */
+  /* Recall and Explore: each one conversation per article, no list. Named
+     for Learn because that is where both live. */
   const single = isLearnKind(kind) ? kind : null;
   const learning = single !== null;
   /**
@@ -1419,10 +1401,10 @@ export function ConversationBand({
       onNew={startNew}
       /* **Owned above this panel**, which is remounted on every conversation
          switch — see the note where the hook is called. */
-      /* **No Live in Tutorial or Explore, yet** (`OFFERS_LIVE` above). Short
-         alternating turns are ideal spoken, and Greg said so, but also that
-         Live "doesn't work very well at the moment" — so both are typed or
-         dictated first, and a spoken turn cannot create one (`SpokenKind` in
+      /* **No Live in Explore, yet** (`OFFERS_LIVE` above), nor in Tutorial
+         while it existed. Short alternating turns are ideal spoken, and Greg
+         said so, but also that Live "doesn't work very well at the moment" —
+         so Explore is typed or dictated first, and a spoken turn cannot create one (`SpokenKind` in
          src/chat.ts is chat, learn and guide). Omitted here rather than refused
          by the server, so there is no button. */
       /* Nor on a conversation whose origin the server does not have yet

@@ -306,15 +306,15 @@ describe("the mode door", () => {
   const rows: ModeCommand[] = [
     { kind: "mode", mode: "summary" },
     { kind: "mode", mode: "structure" },
-    { kind: "submode", sub: { mode: "learn", view: "tutorial" } },
+    { kind: "submode", sub: { mode: "learn", view: "explore" } },
   ];
 
   it("offers exactly the rows it is handed, each with the mode's own marker", () => {
     const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() });
-    expect([...door.targets.keys()]).toEqual(["mode:summary", "mode:structure", "submode:learn:tutorial"]);
+    expect([...door.targets.keys()]).toEqual(["mode:summary", "mode:structure", "submode:learn:explore"]);
     expect(door.targets.get("mode:summary")?.generates).toBe(true);
     expect(door.targets.get("mode:structure")?.generates).toBe(false);
-    expect(door.targets.get("submode:learn:tutorial")?.label).toBe("Learn › Tutorial");
+    expect(door.targets.get("submode:learn:explore")?.label).toBe("Learn › Explore");
     expect(door.targets.has("mode:debate")).toBe(false);
   });
 
@@ -325,8 +325,8 @@ describe("the mode door", () => {
     expect(executor.sources.modes?.has("mode:summary")).toBe(true);
     expect(executor.runners.mode?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
     expect(mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
-    expect(executor.runners.mode?.({ id: "mode", key: "submode:learn:tutorial" })).toEqual({ kind: "close" });
-    expect(sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
+    expect(executor.runners.mode?.({ id: "mode", key: "submode:learn:explore" })).toEqual({ kind: "close" });
+    expect(sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "explore" } });
     expect(mode).toHaveBeenCalledTimes(1);
     expect(sub).toHaveBeenCalledTimes(1);
   });

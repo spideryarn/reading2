@@ -108,7 +108,7 @@ export const REMEMBERED = [
   "referee", // which referee sub-mode
   "crits", // which criteria are selected
   "refscale", // which diverging ramp
-  "learn", // recall, tutorial, explore or quiz — `remember` until 2026-10-06, now in NEVER_REMEMBERED
+  "learn", // recall, explore or quiz — `remember` until 2026-10-06, now in NEVER_REMEMBERED; `tutorial` until 2026-10-20, lifted to recall (router.ts § `liftLegacyLearnTutorial`)
   "sort", // glossary order
   "gate", // glossary threshold
   "rank", // quotes order

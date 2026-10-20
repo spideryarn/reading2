@@ -82,7 +82,6 @@ export const SOURCE_PASSAGE = "About a passage";
  */
 const LEARN_VIEW_OF: Readonly<Record<LearnKind, LearnConversationView>> = {
   learn: "recall",
-  tutorial: "tutorial",
   explore: "explore",
 };
 
@@ -135,7 +134,6 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
   }
   switch (kind) {
     case "learn":
-    case "tutorial":
     case "explore": {
       const view = LEARN_VIEW_OF[kind];
       return {

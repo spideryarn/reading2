@@ -2,7 +2,8 @@
  * **Where `widerWorld` lands in each prompt that carries it, and which variant.**
  *
  * The section is shared (src/wider-world.ts) but its position is not: Recall
- * must still end on its nudge and hint, Tutorial on its task, Quiz may not
+ * must still end on its nudge and hint (Tutorial, until it was folded into
+ * Recall on 2026-10-20, on its task), Quiz may not
  * open with a verdict, and Chat already has `CLAIM_ORIGINS`. These pin the
  * variant each prompt asked for and its place against the rule it must not
  * break, because a later tidy-up that moves one section past another changes
@@ -88,11 +89,10 @@ describe("widerWorld", () => {
 });
 
 describe("in each prompt", () => {
-  it("is in only Chat, Recall and Tutorial among conversation kinds, exactly once", () => {
+  it("is in only Chat and Recall among conversation kinds, exactly once", () => {
     const expected = {
       chat: 1,
       learn: 1,
-      tutorial: 1,
       explore: 0,
       candidates: 0,
       guide: 0,
@@ -121,21 +121,11 @@ describe("in each prompt", () => {
     expect(worldBullet).toBeLessThan(tone);
     expect(worldBullet).toBeLessThan(worldSection);
     expect(s.indexOf("CITING THE ARTICLE — THE ONE RULE THAT MATTERS")).toBeLessThan(worldSection);
-    expect(s).toContain("then the nudge, which is still the last sentence before the hint");
+    expect(s).toMatch(/then your question, which is still the last sentence before\s+the hint/);
     expect(s).toContain(OWN_LABELS);
     expect(s).toContain(SEARCHES);
     expect(s).toContain(PRIVATE);
     expect(s).toContain(NEVER_AGAINST);
-  });
-
-  it("Tutorial: the task stays last", () => {
-    const s = flat(systemOf("tutorial"));
-    const worldSection = s.indexOf(WORLD_SECTION);
-    expect(s.indexOf("CITING THE ARTICLE — THE ONE RULE THAT MATTERS")).toBeLessThan(worldSection);
-    expect(s).toContain("then the task, which is still last");
-    expect(s).toContain("A check you already have reason to make is the narrow exception below");
-    expect(s).toContain(SEARCHES);
-    expect(s).toContain(PRIVATE);
   });
 
   it("Quiz marking: cannot search, article first, and no advert for Chat", () => {

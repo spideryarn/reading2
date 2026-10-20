@@ -3,7 +3,7 @@
  * review, P1).
  *
  * `exportArticle` wrote `kind` as a Learn-or-chat ternary, so a Candidates
- * thread came back from a round trip as a chat, and so would a Tutorial one —
+ * thread came back from a round trip as a chat, and so would an Explore one —
  * answered next time with chat's prompt, and listed in Chat, with nothing
  * failing. No fixture in `data/` has either kind, so
  * tests/store-roundtrip.test.ts cannot see it; the rows are made here, as
@@ -63,7 +63,7 @@ describe("db:export and a conversation's kind", () => {
     await db.delete(chatThreads).where(eq(chatThreads.articleId, ARTICLE_ID));
     const at = new Date("2026-10-02T10:00:00.000Z");
     await db.insert(chatThreads).values(
-      (["chat", "learn", "candidates", "tutorial", "explore", "guide"] as const).map((kind, i) => ({
+      (["chat", "learn", "candidates", "explore", "guide"] as const).map((kind, i) => ({
         articleId: ARTICLE_ID,
         id: `spya-knd${"abcdef"[i]}23`,
         ownerId: owner,
@@ -107,7 +107,7 @@ describe("db:export and a conversation's kind", () => {
     if (out) await rm(out, { recursive: true, force: true });
   });
 
-  it("writes every kind as itself, Tutorial, Explore, Candidates and the guide included", async () => {
+  it("writes every kind as itself, Explore, Candidates and the guide included", async () => {
     const file = JSON.parse(await readFile(path.join(EXPORTED_ARTICLE, "chat.json"), "utf8")) as {
       threads: ChatThread[];
     };
@@ -115,7 +115,6 @@ describe("db:export and a conversation's kind", () => {
       chat: "chat",
       learn: "learn",
       candidates: "candidates",
-      tutorial: "tutorial",
       explore: "explore",
       guide: "guide",
     });
@@ -124,7 +123,7 @@ describe("db:export and a conversation's kind", () => {
   it("restores every exported kind as itself", async () => {
     const db = getDb();
     await db.delete(chatThreads).where(eq(chatThreads.articleId, ARTICLE_ID));
-    expect(await seedChatFromFiles(SLUG)).toEqual({ threads: 6, messages: 1 });
+    expect(await seedChatFromFiles(SLUG)).toEqual({ threads: 5, messages: 1 });
     const restored = await db
       .select({ title: chatThreads.title, kind: chatThreads.kind })
       .from(chatThreads)
@@ -136,7 +135,6 @@ describe("db:export and a conversation's kind", () => {
       { title: "explore", kind: "explore" },
       { title: "guide", kind: "guide" },
       { title: "learn", kind: "learn" },
-      { title: "tutorial", kind: "tutorial" },
     ]);
   });
 
@@ -214,29 +212,6 @@ describe("db:export and a conversation's kind", () => {
     const cause = (err as { cause?: unknown } | null)?.cause;
     expect(String((cause as { message?: string } | undefined)?.message ?? cause ?? err)).toMatch(
       /chat_threads_one_guide/,
-    );
-  });
-
-  it("enforces one Tutorial thread per article", async () => {
-    const db = getDb();
-    const err: unknown = await db
-      .insert(chatThreads)
-      .values({
-        articleId: ARTICLE_ID,
-        id: "spya-kndz23",
-        ownerId: currentOwnerId(),
-        title: "another tutorial",
-        kind: "tutorial",
-      })
-      .then(
-        () => null,
-        (e: unknown) => e,
-      );
-    /* Drizzle wraps the driver's error as "Failed query: …"; the index name is
-       on the cause. */
-    const cause = (err as { cause?: unknown } | null)?.cause;
-    expect(String((cause as { message?: string } | undefined)?.message ?? cause ?? err)).toMatch(
-      /chat_threads_one_tutorial/,
     );
   });
 });

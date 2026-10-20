@@ -527,12 +527,12 @@ describe("Learn keeps its unsent words by kind", () => {
     expect(box().value).toBe("typed before the other tab sent");
   });
 
-  it("without Recall's words turning up in Tutorial's box", async () => {
+  it("without Recall's words turning up in Explore's box", async () => {
     await arrive("learn");
     await type("Recall's words");
     await go("structure");
-    await go("learn", { learn: "tutorial" });
-    expect(open()?.kind).toBe("tutorial");
+    await go("learn", { learn: "explore" });
+    expect(open()?.kind).toBe("explore");
     expect(box().value).toBe("");
   });
 

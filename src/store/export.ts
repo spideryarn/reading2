@@ -668,7 +668,7 @@ export async function exportArticle(
            the moment anything touches it — the same transitional state `tools`
            passed through. */
         /* The stored kind whenever it is one we know — Candidates and Tutorial
-           were exported as chats until 2026-10-02, because this was a
+           (retired since) were exported as chats until 2026-10-02, because this was a
            Learn-or-chat ternary. GPT Sol's plan review of 261002i. Explore
            (2026-10-03) rode through `isThreadKind` with nothing to do here.
 

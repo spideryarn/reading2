@@ -142,8 +142,8 @@ arrives is a count in `usage` — which is why the panel renders it as one row s
 searches ran. **It does not say what was searched for, because we do not know**, and a plausible
 invented query would be the most convincing wrong thing on the screen.
 
-**Every typed conversation but the guide has it** — Chat, Learn's Recall, Tutorial and Explore, and
-Referee's Candidates (on Exa).
+**Every typed conversation but the guide has it** — Chat, Learn's Recall and Explore, and
+Referee's Candidates (on Exa). (Tutorial had it too, until Recall took it in on 2026-10-20.)
 
 > I think we should allow web searches in all of the chat modes because very often users are going
 > to wanting to be situating this article relative to other stuff on the web, and it's too strict
@@ -364,7 +364,7 @@ model to say the paper was not read. One deadline covers the registry and the pa
 [`tests/read-cited-work.test.ts`](../../tests/read-cited-work.test.ts).
 
 **Chat and Explore only**, beside `reader_notes` in `toolsFor`: not Live (a 25-second PDF read in a
-spoken turn), not Learn, Tutorial, Candidates or the guide.
+spoken turn), not Learn, Candidates or the guide.
 
 **Measured before the button was built**, because a tool the model never calls looks built
 (`evals/read-cited-work.ts`, 2026-10-11, four articles): called 4 of 4 times, the paper read 2 of 4;
@@ -399,7 +399,9 @@ This is the plumbing it needs, and Chat got it first.
 ```
 reader_notes()                    → the reader's comments, highlights and bookmarks on this
                                     article, then a list of their other conversations about it
-reader_notes({ thread: "<id>" })  → one of those conversations
+reader_notes({ thread: "<id>" })  → one of those conversations, newest exchanges first into the space
+reader_notes({ thread: "<id>", before: n })
+                                  → the exchanges of it numbered below n
 ```
 
 The formatting is [`src/reader-notes.ts`](../../src/reader-notes.ts): pure functions with no store
@@ -434,9 +436,16 @@ reads and what to say when one fails.
 - **A direct read obeys the same rule as the index.** Naming a Candidates thread's id gets the
   sentence an unknown id gets, word for word. The current thread's id gets its own sentence. None
   of them throws.
-- **One conversation is its finished exchanges, as whole pairs.** The newest
-  `MAX_TRANSCRIPT_EXCHANGES` (10) that fit `TRANSCRIPT_CHARS` (8,000) including headings and
-  fence, each turn clipped to `TRANSCRIPT_TURN_CHARS` (700) and carrying its time, shown oldest first.
+- **One conversation is its finished exchanges, as whole pairs, and all of it can be read.** The
+  newest `MAX_TRANSCRIPT_EXCHANGES` (40) that fit `TRANSCRIPT_CHARS` (32,000) including headings
+  and fence, each turn shown whole up to `TRANSCRIPT_TURN_CHARS` (6,000), numbered from 1 for the
+  oldest, carrying its time, shown oldest first. A call that does not reach exchange 1 says so and
+  names the call for the rest, `reader_notes({ thread, before: n })`, which shows the exchanges
+  numbered below `n`. Until 2026-10-20 it was 10 exchanges, 700 characters a turn and 8,000 in all,
+  with no way to the earlier part: 79% of Chat answers on production were longer than 700, and an
+  Explore model asked to pick up from a Recall conversation told the reader it could not read all
+  of it (`spya-sfpcmm`, plan
+  [261020k](../plans/261020k-reading-another-conversation-in-full.md)).
 - **An unfinished turn is never shown as a finished one** (PR-4). A failed answer keeps its partial
   prose in storage, and an interrupted spoken one keeps words nobody heard. So failed, pending and
   interrupted exchanges are left out and counted in a sentence. An answer the reader stopped, or one
@@ -449,7 +458,7 @@ reads and what to say when one fails.
   of our rows.
 
 **Who gets it: typed Chat and Explore.** It is not in `CHAT_TOOLS`. `toolsFor(kind)` returns the
-shared eight plus this for `chat` and `explore`, the shared eight for Recall, Tutorial and
+shared eight plus this for `chat` and `explore`, the shared eight for Recall and
 Candidates, and the guide's five for the guide; the `switch` is exhaustive, so a new kind has to be
 given an answer. Chat reaches for it when the reader
 asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
@@ -458,9 +467,9 @@ conversation in full. Why each of the others is left out (PR-3):
 
 - **Live** shares `CHAT_TOOLS`, and its tool endpoint is given a tool's name and an article and no
   thread. It could not leave the current conversation out, and it is callable on its own.
-- **Recall and Tutorial** are about the article, and their prompts say not to guess how far the
-  reader has got. A tool that tempts them off that job is better withheld than argued with in the
-  prompt. Either can be added later, with a check of how it behaves.
+- **Recall** is about the article, and its prompt says not to guess how far the reader has got
+  (Tutorial's said the same, until Recall took it in). A tool that tempts it off that job is better
+  withheld than argued with in the prompt. It can be added later, with a check of how it behaves.
 - **Candidates** is Referee machinery.
 
 **The offer is not the gate.** `runTool` asks the applicable list again before it runs **any** name,
@@ -490,6 +499,10 @@ query and fragment, which bounds how much can leave in one request; a short note
 on bulk, and a single note can still leave. The tool's description tells the model never to put
 what it read in a search or a URL, which is advice to a model and not a boundary. The fix is the
 same allowlist as before ([§ Still open](#still-open)), and this is one more thing waiting on it.
+**Since 2026-10-20 there is more to take**: one call shows up to 32,000 characters of a
+conversation rather than 8,000, and `before` reaches its oldest exchanges, which were unreachable
+before ([261020k](../plans/261020k-reading-another-conversation-in-full.md)). The owner boundary
+and the URL caps are unchanged; what an injected model can see, and how far back, is not.
 
 **And since 2026-10-08 part of it is in the prompt without a call.** Every typed Chat turn now
 carries the index of the reader's other conversations, each with a model-written line on what it
@@ -645,7 +658,7 @@ Since 2026-10-05, for report `spya-hyfqkq`
 ([261005i](../plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md), D5).
 From 2026-10-01 it showed chats only.
 
-- **What is listed.** Chats, and Learn's Recall, Tutorial and Explore conversations. Referee's
+- **What is listed.** Chats, and Learn's Recall and Explore conversations. Referee's
   Candidates thread is not: it is not a conversation the reader had. **The guide is not listed but
   pinned** (since 2026-10-07,
   [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)): one row above the
@@ -662,7 +675,7 @@ From 2026-10-01 it showed chats only.
   (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Sources › Claims*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
+  from a claim in Sources › Claims*), one of Learn's conversation kinds (`learn` or `explore`,
   rendered as *From Learn › Recall* and its siblings), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
@@ -871,7 +884,7 @@ of the one column a shared transcript would have to publish.
 **Two smaller things its own plan must also handle**, both found in the same review and both
 verified against the schema:
 
-- **`chat_threads.kind` is `'chat' | 'learn' | 'candidates' | 'tutorial' | 'explore'`**
+- **`chat_threads.kind` is `'chat' | 'learn' | 'candidates' | 'explore' | 'guide'`**
   ([`schema.ts`](../../src/db/schema.ts) § `chatThreads`; [`types.ts`](../../src/types.ts) §
   `THREAD_KINDS`). A public query that does not filter `kind = 'chat'`
   **in SQL** publishes Learn conversation transcripts and Referee candidate machinery, whatever the visitor's
@@ -1133,7 +1146,7 @@ prompt.
   ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
   `quick-search:<words>` is the bar's own *Quick search “X”* row (the words take `find`'s rule;
   it *generates*; in a chat surface its press runs in place, below), and `mode:<catalogue key>` —
-  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
+  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Aquiz]` — opens a mode or a
   sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
   at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
   [`command-runners.ts`](../../src/web/command-runners.ts), whose rows are
@@ -1159,7 +1172,7 @@ prompt.
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
+- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`

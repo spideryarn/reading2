@@ -240,8 +240,8 @@ export function modeDoor(commands: readonly ModeCommand[], activate: ModeActivat
     byKey.set(key, command);
     targets.set(key, {
       key,
-      /* A sub-mode's own label is one word of its parent's (*Tutorial*), so
-         the chip names both, as the plan's sketch does: *Open Learn › Tutorial*. */
+      /* A sub-mode's own label is one word of its parent's (*Quiz*), so
+         the chip names both, as the plan's sketch does: *Open Learn › Quiz*. */
       label: command.kind === "submode" ? `${MODE_LABEL[command.sub.mode]} › ${label}` : label,
       description,
       generates: command.kind === "mode" ? modeGenerates(command.mode) : subModeGenerates(command.sub),

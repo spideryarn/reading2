@@ -76,7 +76,7 @@
     "eval:caching": "tsx evals/prompt-caching.ts",
     "eval:reorder": "tsx evals/reorder-quality.ts",
     "eval:learn": "tsx evals/learn-recall.ts",
-    "eval:tutorial": "tsx evals/learn-tutorial.ts",
+    "eval:recall-turns": "tsx evals/learn-recall-turns.ts",
     "eval:explore": "tsx evals/learn-explore.ts",
     "eval:quiz": "tsx evals/quiz.ts",
     "eval:wider-world": "tsx evals/wider-world.ts",
