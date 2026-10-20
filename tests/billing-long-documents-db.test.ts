@@ -53,7 +53,10 @@ import {
   usageFor,
   wallUsed,
 } from "../src/store/pg-billing.js";
+import { getDb } from "../src/db/client.js";
+import { adminQueries } from "../src/store/pg-admin.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
+import { updateVoucher } from "../src/store/pg-vouchers.js";
 import { pgVisibilityStore } from "../src/store/pg-visibility.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -157,6 +160,7 @@ async function clear(): Promise<void> {
   await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.article_visibility_changes where actor_owner_id = $1", [OWNER]);
   await pool.query("delete from spideryarn.articles where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.billing_vouchers where claimed_by = $1 or created_by = $1", [OWNER]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
 }
 
@@ -180,6 +184,13 @@ describe("usage prices slots and counts rows", () => {
     expect(wallUsed(usage)).toBe(600);
     expect(ingestsUsed(usage)).toBe(1);
     expect(ingestSlotsUsed(usage)).toBe(3);
+  });
+
+  it("the admin aggregate counts the row once and sums its slots", async () => {
+    await givenCharged(await givenArticle("u-admin"), 3);
+    const rows = await adminQueries(getDb()).ingests;
+    const mine = rows.find((r) => r.owner === OWNER);
+    expect(mine).toMatchObject({ lifetime: 1, slots: { lifetime: 3 } });
   });
 
   it("public halves every slot, and deletion freezes the half", async () => {
@@ -428,10 +439,20 @@ async function raced<A, B>(
   params: unknown[],
   first: () => Promise<A>,
   second: () => Promise<B>,
+  /**
+   * Which of the two must be waiting on the held row. Both, ordinarily. A
+   * reprice on a claim whose lease has lapsed is **not**: its `for update`
+   * carries `liveAttempt`, and a row outside the predicate is not waited on —
+   * it is refused at once, which is the fence working (the same as
+   * `beginPaidStep`).
+   */
+  blocks: readonly [boolean, boolean] = [true, true],
 ): Promise<[Settled<A>, Settled<B>]> {
   const holder = await pool.connect();
+  let open = false;
   try {
     await holder.query("begin isolation level read committed");
+    open = true;
     await holder.query(lock, params);
     const answered = [false, false];
     const a = settle(first()).then((r) => {
@@ -443,10 +464,18 @@ async function raced<A, B>(
       return r;
     });
     await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(answered, "a writer answered while the row was held").toEqual([false, false]);
+    expect(answered, "a writer that should wait answered while the row was held").toEqual([
+      !blocks[0],
+      !blocks[1],
+    ]);
     await holder.query("commit");
+    open = false;
     return await Promise.all([a, b]);
   } finally {
+    /* **Rolled back before it goes back to the pool**, or a failed case hands
+       its row lock, still held, to whichever case draws this connection next —
+       which is how one red case here once turned the next one red too. */
+    if (open) await holder.query("rollback").catch(() => {});
     holder.release();
   }
 }
@@ -487,6 +516,8 @@ describe("a reprice against every other writer finishes without deadlock", () =>
       [job.id],
       () => price(job, 150),
       () => pgJobStore.requestCancel(job.id, OWNER),
+      /* The lease has lapsed, so the reprice is refused at once rather than waiting. */
+      [false, true],
     );
     expect("ok" in stopped).toBe(true);
     /* The lease had lapsed, so the fence refuses the reprice whichever went first. */
@@ -532,6 +563,7 @@ describe("a reprice against every other writer finishes without deadlock", () =>
         [job.id],
         () => price(job, 150),
         () => pgJobStore.settleExpired(undefined, OWNER, budget),
+        [false, true],
       );
       expect("ok" in swept).toBe(true);
       /* A lapsed lease is outside the fence either way. */
@@ -542,6 +574,31 @@ describe("a reprice against every other writer finishes without deadlock", () =>
       /* Requeued keeps the reservation in flight; terminal releases it. */
       expect(after.released).toBe(budget === 0);
     }
+  });
+
+  it("against a voucher revocation, both behind the billing row", async () => {
+    /* A gift of 2 makes a free account 5 slots (1,000 points): a 200-page PDF
+       (4 slots) fits with it and not without it. Whichever of the two takes the
+       billing row first decides — and the other must see what it committed. */
+    await pool.query(`insert into spideryarn.billing_accounts (owner_id) values ($1) on conflict do nothing`, [OWNER]);
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.billing_vouchers (email, articles, created_by, claimed_by, claimed_at)
+       values ($1, 2, $2, $2, now()) returning id`,
+      [`long-pdf-${OWNER}@spideryarn.local`, OWNER],
+    );
+    const voucher = rows[0]!.id;
+    const reservation = await reserved();
+    const job = await givenRunningJob("voucher", reservation);
+    const [repriced, revoked] = await raced(
+      HOLD_BILLING,
+      [OWNER],
+      () => price(job, 200),
+      () => updateVoucher(voucher, { revoked: true }),
+    );
+    expect("ok" in revoked, "the revocation failed").toBe(true);
+    const answer = "ok" in repriced ? repriced.ok : undefined;
+    expect(answer?.kind === "priced" || answer?.kind === "refused").toBe(true);
+    expect((await row(reservation)).slots).toBe(answer?.kind === "priced" ? 4 : 1);
   });
 
   it("against a visibility change, both behind the billing row", async () => {

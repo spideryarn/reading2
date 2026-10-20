@@ -2902,6 +2902,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      tests holding real rows; and the fetch step pricing an upload, Storage too. */
   "tests/billing-long-documents-db.test.ts": "private-postgres",
   "tests/long-pdf-fetch-step.test.ts": "private-postgres",
+  "tests/long-pdf-fetch-matrix.test.ts": "private-postgres",
   /* 261001m Stage 3: the thin article. `pgReady`, its own two seeded readers,
      and uploads through the real routes — so Storage too, as
      `an-upload-is-queued-…` below — and its oracle is the rows it wrote. */
@@ -3926,6 +3927,9 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      ledger row, job and upload hangs off the `auth.users` foreign key. */
   "tests/billing-long-documents-db.test.ts": {
     "0b11a1a0-0000-4000-8000-00000010ba01": { kind: "seeded" },
+  },
+  "tests/long-pdf-fetch-matrix.test.ts": {
+    "0b11a1a0-0000-4000-8000-00000010ba02": { kind: "seeded" },
   },
   "tests/long-pdf-fetch-step.test.ts": {
     "33333333-3333-4333-8333-3333000ba5e5": { kind: "seeded" },

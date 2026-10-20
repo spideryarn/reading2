@@ -18,6 +18,7 @@
 import { createHash } from "node:crypto";
 
 import { sql } from "drizzle-orm";
+import { strToU8, zipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -63,12 +64,32 @@ async function pdfWithPages(count: number): Promise<Uint8Array> {
   return doc.save();
 }
 
+/** The smallest Word document mammoth reads: one paragraph. */
+function aDocx(text: string): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": strToU8(
+      `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+    ),
+    "_rels/.rels": strToU8(
+      `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+    ),
+    "word/document.xml": strToU8(
+      `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+        `<w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
+    ),
+  });
+}
+
 const shaOf = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
 /** An upload minted, claimed and in staging, and a context whose pricing is `answer`. */
-async function readyToVerify(bytes: Uint8Array, answer?: (pages: number) => StagePricing) {
+async function readyToVerify(bytes: Uint8Array, answer?: (pages: number) => StagePricing, filename = "book.pdf") {
   const minted = await mintUpload(
-    { filename: "book.pdf", bytes: bytes.byteLength, sha256: shaOf(bytes), owner: OWNER },
+    { filename, bytes: bytes.byteLength, sha256: shaOf(bytes), owner: OWNER },
     async (key) => ({ url: `https://x.test/${key}`, expiresAt: new Date(Date.now() + 3600_000).toISOString() }),
     stagingKey,
   );
@@ -82,7 +103,7 @@ async function readyToVerify(bytes: Uint8Array, answer?: (pages: number) => Stag
   const asked: { pages: number; previous: number | null }[] = [];
   const ctx: StepContext = {
     slug: `test-long-pdf-${id.slice(0, 8)}`,
-    upload: { id, filename: "book.pdf" },
+    upload: { id, filename },
     report: () => {},
     preview: () => {},
     signal: new AbortController().signal,
@@ -146,6 +167,63 @@ describe("the fetch step prices a long PDF before anything paid begins", () => {
       expect(product.detail).not.toMatch(/uses \d+ of your articles/);
       expect(product.parts?.raw?.pages).toBe(50);
     }
+  });
+
+  it("stage 2 refuses an unpriced long PDF before transcription, with [pdf-unpriced]", async () => {
+    const bytes = await pdfWithPages(150);
+    const { ctx } = await readyToVerify(bytes, (pages) => ({ kind: "priced", slots: 3, pages }));
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
+    const manifest = product.parts?.raw;
+    if (!manifest) throw new Error("the fetch step returned no manifest");
+    artefacts.plant(ctx.slug, "fetch", "raw", manifest);
+
+    const asked: number[] = [];
+    const extractCtx: StepContext = {
+      ...ctx,
+      pdfIsPriced: async (pages) => {
+        asked.push(pages);
+        return "underpriced";
+      },
+    };
+    /* Thrown before `runPdfExtract`, so no model is asked: the step's own
+       first paid call is the front-matter reader inside it. */
+    await expect(STEPS.extract.run(extractCtx, artefacts, nullCheckpointStore())).rejects.toThrow(/\[pdf-unpriced\]/);
+    expect(asked).toEqual([150]);
+  });
+
+  /* Word and an uploaded web page have no page count: one slot, never asked. */
+  for (const [what, filename, bytes] of [
+    ["a Word file", "notes.docx", aDocx(`Notes ${Date.now()}`)],
+    ["a web page", "saved.html", new TextEncoder().encode(`<html><body><p>Saved ${Date.now()}</p></body></html>`)],
+    /* And a PDF named as something else is still a PDF, so it is priced. */
+  ] as const) {
+    it(`${what} is not priced by pages`, async () => {
+      const asked: number[] = [];
+      const { ctx } = await readyToVerify(bytes, (pages) => {
+        asked.push(pages);
+        return { kind: "priced", slots: 1, pages };
+      }, filename);
+      const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
+      const manifest = product.parts?.raw;
+      if (!manifest) throw new Error("the step returned no manifest");
+      rubbish.push(() => blobs.remove(canonicalKey(manifest.storedSha256 as string, "html")));
+      rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "docx")));
+      expect(manifest.kind).toBe("html");
+      expect(asked).toEqual([]);
+      expect(manifest.pages).toBeUndefined();
+    });
+  }
+
+  it("a long PDF uploaded under a misleading name is priced by its pages", async () => {
+    const bytes = await pdfWithPages(120);
+    const asked: number[] = [];
+    const { ctx } = await readyToVerify(bytes, (pages) => {
+      asked.push(pages);
+      return { kind: "priced", slots: 3, pages };
+    }, "page.html");
+    const product = await STEPS.fetch.run(ctx, artefacts, nullCheckpointStore());
+    expect(product.parts?.raw?.kind).toBe("pdf");
+    expect(asked).toEqual([120]);
   });
 
   it("with no pricing callback nothing is asked, and the manifest still carries the pages", async () => {

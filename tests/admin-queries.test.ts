@@ -178,17 +178,18 @@ describe("the three child counts", () => {
 describe("the ingest ledger's half-price split", () => {
   it("falls back to the price frozen at deletion, in both windows", () => {
     const sql = sqlOf(q.ingests);
-    /* Four times: once per window, for each of the two kinds of charge (an
-       ingest, and a High-powered AI upgrade, plan 260930k) — the same
-       duplication `usageSql` has, which is why this asserts a count rather than
-       a presence. */
+    /* Eight times: once per window, for each of the two kinds of charge (an
+       ingest, and a High-powered AI upgrade, plan 260930k), and each of those
+       twice — counted and summed in slots (plan 261020b) — the same duplication
+       `usageSql` has, which is why this asserts a count rather than a
+       presence. */
     const matches = sql.match(
       /coalesce\("articles"\."visibility", "ingest_events"\."article_visibility_at_delete", 'private'\) = 'public'/g,
     );
     expect(
       matches ?? [],
       "expected the fallback once per window for each kind of charge",
-    ).toHaveLength(4);
+    ).toHaveLength(8);
   });
 
   it("never asks bare `visibility = 'public'`, which is the drift", () => {
