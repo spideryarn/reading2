@@ -15,7 +15,7 @@
 -- this file gets the three statements without it, and that file would be
 -- wrong.
 --
--- Production, read-only on 2026-10-20: 7 `learn` threads, 2 `tutorial`
+-- Production, read-only on 2026-10-20: 9 `learn` threads, 2 `tutorial`
 -- threads (6 messages), and one article that has both.
 --
 -- **Keeper is the Recall thread**, not the earlier one (20261001143901 kept
@@ -73,6 +73,19 @@ BEGIN
     WHERE "m"."status" = 'pending' AND "m"."attempt_id" IS NOT NULL
   ) THEN
     RAISE EXCEPTION 'fold_tutorial_into_recall: a Tutorial thread to be folded has an answer still in flight; nothing was changed';
+  END IF;
+
+  -- Code review F1: the folded row is deleted, and with it a title the
+  -- reader typed. Production had none renamed (2026-10-20); one that appears
+  -- is for a person to settle, not this file.
+  IF EXISTS (
+    SELECT 1
+    FROM "spideryarn"."chat_threads" "t"
+    JOIN "tutorial_fold" "f"
+      ON "t"."article_id" = "f"."article_id" AND "t"."id" = "f"."folded_id"
+    WHERE "t"."renamed_at" IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'fold_tutorial_into_recall: a Tutorial thread to be folded was renamed by its reader, and its title would be lost; nothing was changed';
   END IF;
 
   SELECT "cm"."article_id", "cm"."thread_id", "cm"."message_id" INTO "mention"

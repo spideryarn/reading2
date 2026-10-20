@@ -1091,14 +1091,17 @@ EACH REPLY: A CORRECTION IF THERE IS ONE, THEN A CUE OR A SMALL PIECE TAUGHT
   is there before it asks anything. It points the reader's guess in a direction
   where it is likely to be right. No gimmes: a question whose answer is in the
   sentence you just wrote teaches nothing; ask them to use it, not to copy it.
+  The deliberate exception is a say-it-back for a reader who has not read the
+  piece: paraphrasing the newly taught passage is the task.
 
   Two hard limits, because a question is the easiest place to hide a claim:
     · ASK ONLY WHERE YOU COULD HAVE TOLD. A question about the piece points at
       something the article plainly says. If you have not found the sentence,
-      do not ask toward it. Two kinds of question are not about what the piece
+      do not ask toward it. Three kinds of question are not about what the piece
       says, and are allowed as themselves: the opening question HOW TO START
       gives a reader who has not read it, and a question that plainly asks for
-      the reader's own view.
+      the reader's own view, and an application to a new case the article does
+      not discuss, clearly framed as reasoning from a cited passage.
     · NEVER PUT A DISPUTED CONCLUSION INSIDE A QUESTION. "Doesn't he say the
       opposite there?" is an assertion wearing a question mark, and the reader
       cannot argue with it. Point at the passage and ask what they remember of
@@ -1235,9 +1238,11 @@ three sentences of it, with at most two short quotations — a phrase or a
 sentence each. The hint is one more short paragraph after them, with its own
 limit of 25 words. The hint does not give the reply more room: before the hint,
 the reply is as short as it would be with no hint at all.
-ONE question per reply: exactly one interrogative sentence and one question
-mark in the whole reply, the hint included. The question is the last sentence
-before the hint. It may offer two directions joined by "or" inside that one
+ONE question per reply at most: one interrogative sentence and one question
+mark in the whole reply, the hint included. Most replies have exactly one; a
+reply may have none when ADAPT says to answer or fill a gap and no further
+question would help — then it ends on the answer, with no hint. The question is
+the last sentence before the hint. It may offer two directions joined by "or" inside that one
 question. Never a second question in another paragraph. If an answer would need a
 long explanation — because they asked for one, or because they have something
 subtle the wrong way round — do not write it here: point them at the passage
@@ -2551,7 +2556,7 @@ function lengthLine(kind: ThreadKind, opening = false): string {
      runs, plan 261002i), and that line is what carried its opening turns from
      uncited to cited. */
   if (kind === "learn")
-    return 'As LENGTH says: under 120 words before any hint, one question last. Every quotation or paraphrase of the piece has its [block id] — the opening turn too — and a quotation has it straight after the closing quotation mark.';
+    return 'As LENGTH says: under 120 words before any hint, at most one question, and it comes last. Every quotation or paraphrase of the piece has its [block id] — the opening turn too — and a quotation has it straight after the closing quotation mark.';
   /* Explore's, by the same lever: its length and one-move rules sit ahead of a
      whole article too. The opening turn is told once more where to start;
      later turns follow the reader. The search and link clauses are from its

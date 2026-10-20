@@ -4410,7 +4410,7 @@ export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates
  * same map. A rename of a kind adds its old word here, pointing at the final
  * one. `tutorial` is the one retirement that is also a fold: a file holding
  * both a Tutorial and a Recall thread gets the second's messages appended to
- * the first, as the migration does (`foldRetiredThreads` in src/chat.ts).
+ * the first, as the migration does (`foldRetiredTutorial` in src/chat.ts).
  * docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md.
  */
 export const RETIRED_THREAD_KINDS = {

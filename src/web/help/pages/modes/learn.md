@@ -28,7 +28,6 @@ it again. For something you will not need next week, it is not worth the effort.
   clue if you want one. Say you don’t remember and it fills the gap instead. It does not praise or
   grade you, and disagreeing with the author is not counted as misunderstanding. There is one Recall
   conversation per article; the bin icon starts it over.
-
   It’s fine if you haven’t read it yet, or haven’t finished: just start. Recall then begins with the
   piece’s main claim and takes you through it a little at a time — each reply teaches one small
   piece, links the passage, and asks you to put it in your own words, explain why the author needs

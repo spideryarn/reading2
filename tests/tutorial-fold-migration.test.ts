@@ -360,6 +360,46 @@ describe("the Tutorial fold migration", () => {
     });
   });
 
+  /* Code review F1: deleting the folded row would lose a title the reader
+     typed. Production had none renamed; if one appears, a person decides. */
+  it("refuses, changing nothing, when the Tutorial thread to be folded was renamed by the reader", async () => {
+    await inRolledBack(async (c) => {
+      await seed(c);
+      await c.query(
+        `update spideryarn.chat_threads set title = 'my own name', renamed_at = now()
+         where article_id = $1 and id = $2`,
+        [A, TUT_A],
+      );
+      const before = await snapshot(c);
+
+      await c.query("savepoint fold");
+      await expect(migrate(c)).rejects.toThrow(/renamed/);
+      await c.query("rollback to savepoint fold");
+
+      expect(await snapshot(c)).toBe(before);
+    });
+  });
+
+  it("refuses, changing nothing, when the two threads contain the same message id (F8)", async () => {
+    await inRolledBack(async (c) => {
+      await seed(c);
+      /* Message ids are unique within a thread, not across an article, so this
+         is valid before the fold but would collide in the keeper. */
+      await c.query(
+        `update spideryarn.chat_messages set id = 'spya-rca003'
+          where article_id = $1 and thread_id = $2 and id = 'spya-tua003'`,
+        [A, TUT_A],
+      );
+      const before = await snapshot(c);
+
+      await c.query("savepoint fold");
+      await expect(migrate(c)).rejects.toThrow(/chat_messages_pkey|duplicate key/);
+      await c.query("rollback to savepoint fold");
+
+      expect(await snapshot(c)).toBe(before);
+    });
+  });
+
   it("leaves no Tutorial index, and a CHECK that refuses the old word", async () => {
     await inRolledBack(async (c) => {
       await seed(c);

@@ -289,7 +289,11 @@ Recall's chip card and its empty-state invitation. What moved where:
 - **The eval.** `evals/learn-tutorial.ts` became
   [`evals/learn-recall-turns.ts`](../../evals/learn-recall-turns.ts), Recall's multi-turn half, run
   against kind `learn`, counting hints (a hint after a say-it-back is a defect);
-  [`evals/learn-recall.ts`](../../evals/learn-recall.ts) stays the single-turn half.
+  [`evals/learn-recall.ts`](../../evals/learn-recall.ts) stays the single-turn half. Both were run
+  on the old prompts and three drafts of the new one:
+  [261020c](../investigations/261020c-merged-recall-prompt-against-recall-and-tutorial-evals.md).
+  The draft that taught everybody a say-it-back is why that task is now kept for a reader who has
+  not read the piece: for one who has, it gives up the act of recall.
 
 ### What Tutorial was (2026-10-02 to 2026-10-20)
 
@@ -591,10 +595,10 @@ Greg, `spya-fryxrf`, 2026-10-04, on questions like "Do you remember what comes n
 the passage that answers it, so they can go and look instead of remembering. Under a new answer is a
 closed **Hint** button. Pressed, it opens one line that makes the answer much easier to reach without
 being the answer. A pure clarification has neither link nor hint. Recall only: Explore and Chat have
-no hint. Since Recall took Tutorial in (2026-10-20), three kinds of Recall question carry **no
-hint**: the not-read reader's opening question, a question asking the reader's own view, and a
-say-it-back, whose answer is the piece just taught — `splitHint` fails open, so a reply without one
-is drawn as written.
+no hint. Since Recall took Tutorial in (2026-10-20), four kinds of Recall question carry **no
+hint**: the not-read reader's opening question, a question asking the reader's own view, a
+say-it-back whose answer is the piece just taught, and an application to a case the article does
+not discuss — `splitHint` fails open, so a reply without one is drawn as written.
 
 **The model writes the hint in the same reply**, so the button opens at once and costs no second
 call. The contract is one shape, and `LEARN_SYSTEM` asks for exactly it:

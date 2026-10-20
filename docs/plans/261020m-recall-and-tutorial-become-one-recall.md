@@ -46,7 +46,7 @@ a reader who has not read it not clicking "Recall", is fixed in the copy, not th
   learning"* (`spya-c8x66d`); Tutorial was always the teaching end of the same exchange
   ([learning-vision.md](../project/learning-vision.md)). The merged mode's default path is the
   reader speaking first, which is Recall's shape.
-- **It is the default chip** (`?learn=` omitted means Recall), the one with the data (7 threads in
+- **It is the default chip** (`?learn=` omitted means Recall), the one with the data (9 threads in
   production against Tutorial's 2), the Hint button and Live.
 - **Far less churn.** Recall's identifiers are the thread kind `learn` and the URL value `recall`;
   keeping them means Tutorial is **retired** rather than anything being renamed. Taking Tutorial's
@@ -87,11 +87,12 @@ Conflicts the merged prompt settles explicitly (several from Opus's read of both
    the nudge.
 4. **Which questions carry an id and a hint.** A question whose answer is in the article (why,
    what comes next, connect, apply, the reach-back) carries its passage id and a hint, as Recall's
-   nudge does now. Three kinds carry **no hint**, and the first two **no id**, named as exceptions
-   to "ask only where you could have told": the not-read reader's opening prediction, a question
-   asking the reader's own view, and a say-it-back (whose answer is the turn just written, so a
-   hint would be a gimme; its id is the piece's, already given). `splitHint` fails open, so a reply
-   without a hint is drawn as written. The eval counts a hint on a say-it-back as a defect.
+   nudge does now. Four kinds carry **no hint**: the not-read reader's opening prediction, a question
+   asking the reader's own view, a say-it-back (whose answer is the turn just written, so a hint
+   would be a gimme; its id is the piece's, already given), and an application to a case the article
+   does not discuss (which cites the passage its reasoning starts from). The opening prediction and
+   own-view question carry **no id**. `splitHint` fails open, so a reply without a hint is drawn as
+   written. The eval counts a hint on a say-it-back as a defect.
 5. **"Do not restate what they said" vs "confirm a specific thing".** Compatible, and said so:
    confirm a claim of the article, never echo the reader's words.
 6. **Framing that assumes they have read it.** The opening ("The reader has just read an
@@ -114,7 +115,7 @@ short cited quotation, the reader sent into the passage), with the eval as its c
 
 ## Stored data
 
-Production, read-only on 2026-10-20: 7 `learn` threads (22 messages), 2 `tutorial` threads (6
+Production, read-only on 2026-10-20: 9 `learn` threads (54 messages), 2 `tutorial` threads (6
 messages), one article that has both.
 
 One migration, in the shape of the two that came before
@@ -248,3 +249,49 @@ findings, verdict "revise before build". What each changed:
   stage 2's sweep.
 - **F11 (the name's reasoning)** — fair: churn is not a reason for a label. The reason is the
   product one (§ Why keep Recall's name).
+
+## What landed
+
+- **Stage 1 (prompt and eval)**: three drafts measured against both evals —
+  [261020c](../investigations/261020c-merged-recall-prompt-against-recall-and-tutorial-evals.md).
+  One change beyond the plan: the second draft taught a say-it-back to every stuck reader, which
+  for one who *has* read the piece replaces recall with repetition. So a say-it-back is now for a
+  reader who has not read it; a stuck reader who has gets a cue, a why or a connect after the gap
+  is filled.
+- **Stage 2 (retire `tutorial`)**: as planned, in commit `5d5d9da91`, built by a subagent and
+  read by me. The migration is
+  [`20261020063618_fold_tutorial_into_recall.sql`](../../drizzle/20261020063618_fold_tutorial_into_recall.sql).
+  There is no bundle *importer* in the app, so F4's file-side fold lives in `loadThreads`, the
+  `chat.json` reader the test seeding uses. `quiz.css`'s narrow-head tightening now starts at three
+  chips, which the browser pass checks at phone and iPad widths.
+
+**A correction to the numbers above.** The first reads quoted here as "production" went through the
+Supabase MCP tool, which on the box reaches the **local** stack (`127.0.0.1:54361`), not
+production. They were re-read from production itself, read-only, the way
+[database.md](../project/database.md) describes: 9 `learn` threads (54 messages), 2 `tutorial`
+threads (6 messages), one article with both, and on the Tutorial side no stored
+`submode:learn:tutorial` chip, no mention, no renamed title and nothing pending. The decisions that
+rested on them stand; the Recall counts are corrected above.
+
+## Changed by GPT Sol's code review
+
+[261020m-recall-tutorial-code-review-sol.md](261020m-recall-tutorial-code-review-sol.md), seven
+findings, verdict "revise before merge". It fixed F3, F4, F6 and F7 itself; I read its diff.
+
+- **F1 (a reader's title lost in the fold)** — Learn conversations cannot be renamed from any
+  screen, and production has no renamed Tutorial or Recall thread. → The migration now refuses,
+  changing nothing, if a Tutorial thread it would fold has `renamed_at`, as it refuses a mention
+  or an answer in flight. Red test first. (The local database had run the file before this edit,
+  so its one ledger row was restamped after checking the postcondition in the catalogue, per
+  [database.md § A watermark is not a ledger](../project/database.md#a-watermark-is-not-a-ledger).)
+- **F2 (the prompt both allowed and forbade a reply with no question)** — taken: LENGTH now says
+  at most one, usually one, none when the reader asked to be told and no question would help; the
+  recency line says the same.
+- **F3, F4 (fixed by the reviewer)** — an application to a case the article does not discuss is
+  named beside the opening question and the own-view question as allowed; the no-gimmes rule
+  names the say-it-back for a not-read reader as its deliberate exception.
+- **F5 (reading-view-overview.md still said Learn cannot be used to avoid reading)** — corrected.
+  It is a signposting line's description, not a rule's wording.
+- **F6 (no test of the duplicate-id refusal)** — the reviewer added one; it passes on the local
+  database.
+- **F7 (names)** — fixed by the reviewer.

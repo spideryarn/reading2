@@ -81,3 +81,22 @@ Files: `evals/results/261020m-baseline-recall.md`, `261020m-baseline-tutorial.md
 Still imperfect: a quotation's id more often comes later in the sentence than straight after it
 (23 against Tutorial's 10). The banned-phrase hits are the word *actually* inside the article's
 own rainstorm sentence. And `richRecall`'s second turn ran to 127 words.
+
+## Run 4, after the code review
+
+GPT Sol's code review changed the prompt three more times. LENGTH now allows a reply with no question
+when the reader asked to be told. An application to a case the article does not discuss is named
+as allowed. And a say-it-back is named as the exception to *no gimmes*. Run again on the final
+prompt (`evals/results/261020m-merged-recall-4.md`, `261020m-merged-tutorial-4.md`):
+
+- On Recall's 13: one reply over 120 words, and one closing question with no id of its own (the
+  expert's, which has its id in the sentence before). The one closing question with no hint is
+  `unclear`'s clarification. Three hints ran 27–28 words against the 25 limit, and the baseline
+  had two such breaks. The four *actually* hits are inside the article's rainstorm sentence, or in
+  `unclear`'s *"not actually creating consciousness"*.
+- On the 4×5: none over the ceiling, none uncited, no more than one question mark anywhere, 18
+  turns with a hint and none of them after a say-it-back. One own-view flag, the expert's opening
+  *"which link do you think carries the most weight"*, is the harder question about the argument
+  that an expert is meant to get.
+
+So the final prompt is where run 3 was.

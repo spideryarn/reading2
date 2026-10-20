@@ -162,7 +162,8 @@ describe("the Learn prompt itself", () => {
     expect(system).toContain("FILL THE GAP");
     expect(system).toContain("EVERY REPLY POINTS INTO THE ARTICLE");
     expect(system).toMatch(/120 is the ceiling for the reply\s+before the hint/);
-    expect(system).toContain("exactly one interrogative sentence and one");
+    expect(system).toMatch(/ONE question per reply at most: one interrogative sentence and one/);
+    expect(system).toMatch(/a\s+reply may have none when ADAPT says/);
     expect(system).toContain('directions joined by "or"');
   });
 
@@ -253,6 +254,18 @@ describe("the Learn prompt itself", () => {
     it("gives no hint where a hint would be the answer or there is no answer", () => {
       expect(system).toMatch(/NO HINT after a say-it-back/);
       expect(system).toMatch(/after a question about a\s+case the article does not discuss/);
+    });
+
+    it("names novel application as an allowed question beyond the article's claims", () => {
+      expect(system).toMatch(
+        /Three kinds of question are not about what the piece\s+says[\s\S]*a new case the article does\s+not discuss/,
+      );
+    });
+
+    it("makes newly taught say-it-back the deliberate exception to the no-gimmes rule", () => {
+      expect(system).toMatch(
+        /No gimmes[\s\S]*deliberate exception[\s\S]*say-it-back[\s\S]*newly taught/,
+      );
     });
 
     it("offers a reader who has not read it a way in, in the opening line", () => {
