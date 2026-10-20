@@ -116,7 +116,8 @@ You receive the article as a numbered list of blocks. Each block has an id
 STRUCTURE
 
 Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
-"start". Give each child one "start": the id of the first block it covers. Do
+"start". Give each child one "start": the number in square brackets of the first block it
+covers — for the line "[582] spya-xcf0dz <h1>: …" that is 582, an integer. Do
 not give an end — ends are computed from the next child's start, and the last
 child ends where its parent ends. The first child must start where its parent
 starts. List children in document order; after the first child, each "start"
@@ -233,7 +234,7 @@ JSON only, no prose, no code fence:
 {"root": {"title": "...", "gist": "...", "question": "...",
           "sourceHeading": "...", "children": [
             {"title": "...", "gist": "...", "question": "...",
-             "start": "<firstBlockId>", "children": [ ... ]}
+             "start": <firstBlockNumber>, "children": [ ... ]}
           ]}}
 
 Use only block ids that appear in the input. Do not invent ids.

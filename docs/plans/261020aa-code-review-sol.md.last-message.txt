@@ -1,0 +1,12 @@
+Review complete with scoped fixes. Findings are in [261020aa-code-review-sol.md](/var/tmp/spideryarn-worktrees/fbmxdf6r-structure-json-schema/docs/plans/261020aa-code-review-sol.md).
+
+Verdict: **ship after my fixes**.
+
+Validation:
+
+- 121 focused/regression tests passed.
+- All TypeScript projects passed via `node --import tsx scripts/typecheck.ts`.
+- `npm run typecheck` itself was blocked by sandbox IPC permissions, not type errors.
+- `git diff --check` passed.
+- No commit or push performed.
+- Protected eval directories were not edited.

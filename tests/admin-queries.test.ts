@@ -233,7 +233,12 @@ describe("active days", () => {
     expect(sql).toMatch(/select "owner_id", "started_at" as "at" from "ai_calls"/);
   });
 
-  it("takes exactly the four intended sources and excludes the site account", () => {
+  it("counts when the account opened an article, not only each article's latest open", () => {
+    /* Plan 261020y: keyed on the account, so no join and no shelf predicate. */
+    expect(sqlOf(q.activity)).toMatch(/union all \(select "owner_id", "opened_at" from "article_open_times"\)/);
+  });
+
+  it("takes exactly the five intended sources and excludes the site account", () => {
     const sql = sqlOf(q.activity);
     const params = paramsOf(q.activity);
     expect(sql).toMatch(/union all \(select "owner_id", "reserved_at" from "ingest_events"\)/);

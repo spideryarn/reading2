@@ -225,7 +225,9 @@ describe("the admin user list", () => {
    * 40 days ago, so `activeDays` is 2 and `activeDays30` is 1 — the same day
    * twice must count once, and an old day must count only in the total. And a
    * reservation dated tomorrow, which a closed window must not call recent
-   * (Sol's plan review, finding 3) but which is still a day: 3 and 1.
+   * (Sol's plan review, finding 3) but which is still a day: 3 and 1. And one
+   * `article_open_times` row ten days ago, a day nothing else knows about —
+   * a day spent only reading (plan 261020y): 4 and 2.
    *
    * Reading: two rows on a published scratch article total 7.5 seconds. A zero
    * here would be `mergeUsers`'s fallback and would prove neither the query nor
@@ -238,7 +240,7 @@ describe("the admin user list", () => {
     const { randomUUID } = await import("node:crypto");
     const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
     const { getDb } = await import("../src/db/client.js");
-    const { importRecords, ingestEvents, readingTime } = await import("../src/db/schema.js");
+    const { articleOpenTimes, importRecords, ingestEvents, readingTime } = await import("../src/db/schema.js");
     const { eq, sql } = await import("drizzle-orm");
     const { RECENT_FAILURES_SHOWN } = await import("../src/admin.js");
     const { scratchArticleInPg } = await import("./helpers/scratch-article.js");
@@ -263,6 +265,11 @@ describe("the admin user list", () => {
       for (const at of [noon, noon - 3_600_000, noon - 40 * DAY, noon + DAY]) {
         await db.insert(ingestEvents).values({ ownerId: owner, reservedAt: new Date(at), releasedAt: new Date(at) });
       }
+      await db.insert(articleOpenTimes).values({
+        ownerId: owner,
+        slot: new Date(noon - 10 * DAY),
+        openedAt: new Date(noon - 10 * DAY + 60_000),
+      });
       for (let i = 0; i < 13; i++) {
         const at = new Date(noon - i * 60_000);
         await db.insert(importRecords).values({
@@ -282,8 +289,8 @@ describe("the admin user list", () => {
       const mine = (await pgAdminStore.listUsersAcrossOwners()).find((u) => u.id === owner);
 
       expect(mine, `the seeded account ${owner} is not in the admin list`).toBeDefined();
-      expect(mine?.activeDays, "today, 40 days ago, tomorrow").toBe(3);
-      expect(mine?.activeDays30, "today only: tomorrow is not recent").toBe(1);
+      expect(mine?.activeDays, "today, 10 and 40 days ago, tomorrow").toBe(4);
+      expect(mine?.activeDays30, "today and 10 days ago: tomorrow is not recent").toBe(2);
       expect(mine?.lastActiveAt).toBe(new Date(noon + DAY).toISOString());
       expect(mine?.importFailures, "twelve errors; the cancellation is not one").toBe(12);
       expect(mine?.recentImportFailures).toHaveLength(RECENT_FAILURES_SHOWN);

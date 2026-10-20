@@ -1,7 +1,8 @@
 ---
 id: q-xcc7xq
 report: spya-shf45w
-status: open
+status: answered
+acted: spya-p5ktx3
 asked: 2026-10-20
 title: Active days misses days spent only reading. Should we record which days each reader used Spideryarn?
 refs: SPIDERYARN-READING2-KD · spya-g8bw5j · qi-4mgrdyx7 · docs/plans/261020c-admin-users-engagement-active-days-reading-time-failed-imports-fewer-default-columns.md · docs/user-feedback/261020_0100-admin-users-engagement-columns.md · qi-ajznwhmm
@@ -12,6 +13,16 @@ A. Leave it as built. No new data about readers. The count stays an undercount, 
 B. Record the date of each day a signed-in reader uses Spideryarn (recommended). The date only, not the time and not what they did: one row per reader per day. Active days then counts every day from the day this ships. Earlier days stay as they are now, because they cannot be recovered. The privacy page gets one new line saying we keep this. About half a day's work, and almost no running cost.
 
 Pick A if you would rather not keep a history of when people used the app. Pick B if the exact count matters more than that.
+
+Greg, 2026-10-20 (reply `spya-p5ktx3`):
+
+> B yes. e.g. store which days (and times?) they've opened an article
+
+Built as
+[261020y](../../plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md), on dev:
+`article_open_times` keeps the time a reader opens one of their articles, at most once per half
+hour and not which article, and Active days counts it. It records article opens rather than any
+request, and keeps the time as well as the date, following the reply. `/privacy` says so.
 
 Details
 

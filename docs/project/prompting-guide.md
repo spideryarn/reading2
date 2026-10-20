@@ -201,6 +201,12 @@ happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts
     force a mistyped prefix to finish as *some* real id, a wrong id let through silently. Ids are
     still resolved against the article after the parse, exactly as before — a schema makes the
     syntax right, not the id.
+  - **Where the prompt numbers its blocks, ask for the number, not the id.** A schema cannot make a
+    copied id right, and nor can a regex `pattern` on it. Structure copied `[582] spya-xcf0dz` as
+    `spya-582xcf0dz`. Held to the id's pattern, it wrote a real neighbour's id instead: a silent
+    wrong boundary in 10 of 20 answers. Asked for the integer, it was right 20 of 20, and cheaper.
+    [261020aa](../plans/261020aa-structure-answers-the-block-number-not-its-id.md). Most stages render
+    ids without numbers, so for them this is a measured change of its own.
   - **No recursion**: Anthropic refuses a self-referencing `$ref`. Unroll to the depth the prompt
     asks for (Structure's three levels).
   - **The chat adapter validates OpenAI's stricter subset too**: its root is an object and every
