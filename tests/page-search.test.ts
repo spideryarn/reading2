@@ -143,6 +143,15 @@ describe("searchSections", () => {
     ).toEqual(["Note one", "Note two"]);
   });
 
+  it("does not let a repeated query word change the ranking", () => {
+    const balanced = [
+      section("Alpha page", { keywords: "beta" }),
+      section("Beta page", { keywords: "alpha" }),
+    ];
+    expect(searchSections("alpha beta", balanced, [])).toEqual(["Alpha page", "Beta page"]);
+    expect(searchSections("alpha beta beta", balanced, [])).toEqual(["Alpha page", "Beta page"]);
+  });
+
   it("needs every word to hit somewhere — two words narrow rather than widen", () => {
     expect(find("delete cost")).toEqual([]);
     expect(find("source fingerprint")).toEqual(["Technical details"]);

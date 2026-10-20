@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HELP_CHAT_PATH } from "../src/help-chat.js";
 import { SignedInShell } from "../src/web/BackLink.js";
-import { HelpAsk, useHelpAsk } from "../src/web/help/HelpAsk.js";
+import { HelpBox, useHelpAsk } from "../src/web/help/HelpAsk.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,7 +69,7 @@ afterEach(() => {
 
 function Box() {
   const state = useHelpAsk();
-  return <HelpAsk state={state} />;
+  return <HelpBox state={state} matches={null} onGo={() => false} />;
 }
 
 function draw(signedIn: boolean, node: ReactNode = <Box />): void {
@@ -99,7 +99,7 @@ describe("Ask about Spideryarn", () => {
     history.replaceState(null, "", "/help/questions#faq-older-profile");
     draw(false);
     expect(host.querySelector("textarea")).toBeNull();
-    expect(host.textContent).toContain("Sign in to ask a question about Spideryarn.");
+    expect(host.textContent).toContain("Sign in to ask a question about Spideryarn, as well as search.");
     const link = host.querySelector("a");
     /* Back to this page once signed in. */
     expect(link?.getAttribute("href")).toBe(

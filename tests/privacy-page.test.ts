@@ -361,7 +361,7 @@ describe("the privacy page", () => {
        check cannot notice this disclosure being deleted. Held to the job: if
        the call moves to another model, this clause should move with it. */
     const prose = PAGE.replace(/\s+/g, " ");
-    expect(prose).toContain("to answer a question you ask in Help’s <em>Ask about Spideryarn</em>");
+    expect(prose).toContain("to answer a question you ask with the <em>Ask</em> button in Help’s");
     expect(prose).toContain("box, for which it is shown that question and the Help pages, and nothing of yours besides");
     expect(prose).toContain("the question is not kept, and is not written to our logs");
     const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");

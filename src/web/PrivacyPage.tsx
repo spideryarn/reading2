@@ -532,7 +532,7 @@ export function PrivacyPage() {
           for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our
-          list of commands, and to answer a question you ask in Help’s <em>Ask about Spideryarn</em>{" "}
+          list of commands, and to answer a question you ask with the <em>Ask</em> button in Help’s{" "}
           box, for which it is shown that question and the Help pages, and nothing of yours besides
           (the question is not kept, and is not written to our logs);{" "}
           <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,

@@ -36,7 +36,7 @@ annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
 the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
-*Ask about Spideryarn* box on every Help page
+box at the top of every Help page
 ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
 fourteenth is three lines. **A box for more than a few words of the reader's prose gets one by
 default** (Greg, 2026-10-19, `spya-wc4vku`), and
@@ -363,7 +363,7 @@ the stop button, then it should automatically send that message after it's finis
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's
 `sendingAfter` and `doubleStop` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
 Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
-quiz answer (Answer) and Help's Ask box (Ask). The annotate box saves (Save, never Ask AI), so its
+quiz answer (Answer) and Help's signed-in box (Ask). The annotate box saves (Save, never Ask AI), so its
 button and strip take `done="save"`; the command bar presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 

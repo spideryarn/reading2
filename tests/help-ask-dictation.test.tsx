@@ -67,7 +67,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 }));
 
 const { SignedInShell } = await import("../src/web/BackLink.js");
-const { HelpAsk, useHelpAsk } = await import("../src/web/help/HelpAsk.js");
+const { HelpBox, useHelpAsk } = await import("../src/web/help/HelpAsk.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -78,7 +78,7 @@ let moveTo: ((place: "contents" | "page") => void) | null = null;
 
 /**
  * The page's shape: the state held above, the box drawn in one of two places
- * (HelpPage.tsx draws it under the search on `/help` and in the column on a
+ * (HelpPage.tsx draws it above the contents on `/help` and in the column on a
  * page), so moving between them remounts the box and not the state.
  */
 function Page() {
@@ -88,11 +88,11 @@ function Page() {
   moveTo = setPlace;
   return place === "contents" ? (
     <main key="contents">
-      <HelpAsk state={s} />
+      <HelpBox state={s} matches={null} onGo={() => false} />
     </main>
   ) : (
     <aside key="page">
-      <HelpAsk state={s} />
+      <HelpBox state={s} matches={null} onGo={() => false} />
     </aside>
   );
 }

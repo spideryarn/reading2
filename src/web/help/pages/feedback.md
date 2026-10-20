@@ -21,6 +21,7 @@ The **Earlier** tab lists what you have sent and the page you sent it from, and 
 **Shipped** once a change made for it is live. Most things that go wrong here fail quietly, so even
 a two-line report helps.
 
-For a question about how something in Spideryarn works, try **Ask about Spideryarn** first: the box
-beside every Help page (under the search on [the contents page](/help)) answers from these pages and
-links the one it used. It is there once you are signed in.
+For a question about how something in Spideryarn works, try the Help's own box first: the one
+beside every Help page, and at the top of [the contents page](/help). Type and it lists the pages
+that match; press **Ask** and it answers from these pages and links the one it used. Asking is
+there once you are signed in.
