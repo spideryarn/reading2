@@ -63,8 +63,10 @@ Two of Sources' three sub-modes on its segmented control
 (`?sources=reception` or `?sources=claims`; Bibliography is the default):
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
-  says something about it. Pages that link or quote the piece come first; pages that only name it
-  by title follow under a heading that says so. Nothing is hidden by default, and there is no
+  says something about it. Since 2026-10-20 it opens as an outline
+  ([§ The outline](#the-outline-what-reception-opens-on)). **Every page** is open, and lists every
+  row: the pages that link or quote the piece come first, and the pages that only name it by title
+  follow under *Mentions its title only — may be another piece*. Nothing is hidden by default, and there is no
   identification slider any more: the old default hid the published replies and citing papers the
   search exists to find
   ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)).
@@ -86,15 +88,63 @@ deadline) is not started again by the job's next window, which fails it with *Pr
 it* instead (`oncePerJob`,
 [261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)).
 
-Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
+In Claims, threads and key sources narrow the list; in Reception they are sections
+([§ The outline](#the-outline-what-reception-opens-on)). **The stored search cannot be
 steered**: its Reception search chooses its own queries, and what it keeps is one result per article,
 the same for the owner and for every visitor. What the owner can do, since 2026-10-05, is start a
-chat from it: about any one claim ([§ Check a claim in chat](#check-a-claim-in-chat)), or from an
-angle of their own typed into the box at the top
-([§ Look at the debate from an angle](#look-at-the-debate-from-an-angle)).
+chat from it: about any one claim ([§ Check a claim in chat](#check-a-claim-in-chat)), or, since
+2026-10-20, with a question of their own or a suggested one in Sources › Investigate
+([sources.md § Investigate](sources.md#investigate)).
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## The outline: what Reception opens on
+
+> The Reception sub-mode UI is really confusing - I can't tell what's what.
+>
+> Perhaps start with things default-collapsed, so it's easier to see the grouping/hierarchy/relationships?
+>
+> — Greg, 2026-10-19 (spya-dk4tfq), in [261020n](../plans/261020n-sources-reception-layout-and-a-sources-chat-sub-mode.md)
+
+Since 2026-10-20, top to bottom:
+
+- **The order bar.** It sorts the rows inside every section.
+- **A frame labelled *AI · What the AI noticed in these sources***, holding collapsed sections:
+  **Key sources**, then **each theme** in the model's order, each with its count and the theme's
+  gist. A row appears in every section that names it, so a gist that says "three sources" opens on
+  three. **The theme names stay inside the AI frame**, because the panel's rule is that a heading in
+  our own voice is a claim we stand behind. Only Reception's own themes are drawn: a theme made only
+  of an older search's claim rows is left out.
+- **Every page**, open by default. It holds every stored row, so nothing is behind a press
+  ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)),
+  and its count is the chip's.
+- **Cited by**, collapsed, with its count (below).
+
+**A row is two lines until its toggle opens it.**
+
+- The first line is the lean's icon, a star on a key source, and the title (the link out).
+- The second line is the site, the year, a ⚑ *title only, may be another piece* where that is true,
+  and one AI-tagged word: `relation` on a Reception row (*disputes it*), `bears` on a claim row.
+
+The open row adds, in order:
+
+1. the AI's key-source reason;
+2. the quotation;
+3. the full AI line;
+4. the AI interpretation fence;
+5. the authors;
+6. how the page names the piece, in plain words, with its evidence;
+7. the address and the way out.
+
+The LINKS / NAMES THIS PIECE chip is gone, because three of five readers read it as a stance.
+
+**`?receptionthread=`** no longer filters Reception. It opens that section and scrolls the list's
+own scroller to it, on arrival and on any later change; a stale id does nothing. Claims still
+filters by its `?receptionthread=`.
+
+What the five readers, three naive and two designers, said about the old layout, and what was
+passed over (a stance tally, one home per row), are in the plan.
 
 ## The claims list
 
@@ -293,6 +343,11 @@ lifetime, and Live), [`chat-anchors-refresh.test.tsx`](../../tests/chat-anchors-
 journey, through the app).
 
 ## Look at the debate from an angle
+
+**Since 2026-10-20 the box is Sources › Investigate's**, as its question box, and *Your angles* is
+its *Your questions*: [sources.md § Investigate](sources.md#investigate). The question it sends is
+now `askInSources`, and the chat's title begins *Question:*. Reception has no box any more. What
+follows is the history, and the lens origin, which is unchanged.
 
 Since 2026-10-05, for the owner. Plan
 [261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md),

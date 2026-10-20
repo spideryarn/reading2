@@ -1567,6 +1567,55 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
 
+  /**
+   * **And so is Investigate** (plan 261020n § Visitors): every one of its rows hands a
+   * question to Chat, and a visitor has no chat. A shared `?sources=investigate`
+   * draws Bibliography, with no Investigate chip, no question box and no question
+   * row, and asks nothing but the public payload.
+   */
+  it("reads a shared ?sources=investigate as Bibliography, with no Investigate chip and no senders, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      bibliography: {
+        citations: [
+          {
+            id: "w1",
+            title: PUBLIC_WORK,
+            authors: "Tononi",
+            year: "2004",
+            why: "The theory the piece argues against.",
+            relevance: 0.9,
+            mentions: [],
+            citedAt: [],
+            firstCited: "spya-cccccc",
+            citedInBody: false,
+            url: "https://doi.org/10.1186/1471-2202-5-42",
+            linkFrom: "doi",
+          },
+        ],
+        capped: false,
+      },
+    };
+    await open("?mode=sources&sources=investigate");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    expect(readable(band as Element)).toContain(PUBLIC_WORK);
+    const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".rcp-views [role='radio']") ?? [])];
+    expect(chips.map((chip) => chip.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Bibliography",
+      "Links",
+      "Reception",
+      "Claims",
+    ]);
+    expect(chips[0]?.getAttribute("aria-checked"), "Bibliography is the one drawn").toBe("true");
+    expect(host.querySelector(".investigate-box, .investigate-q, .investigate-section"), "no sender is mounted").toBeNull();
+    expect(host.textContent).not.toContain("How has this piece been received");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+  });
+
   it("draws a stored debate from the payload, asking nothing", async () => {
     await remount();
     served = {
@@ -1621,6 +1670,10 @@ describe("a signed-out browser on a shared document", () => {
     const band = host.querySelector(".mode-band");
     expect(band, "a band is open").not.toBeNull();
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    /* A row is two lines until opened (plan 261020n): the quotation is one
+       press away, and the press asks the server nothing. */
+    expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
+    await act(async () => band?.querySelector<HTMLButtonElement>(".rcp-item > button.rcp-more")?.click());
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_RECEPTION_QUOTE);
     /* Reception draws the search about the piece; the other search's row is in
@@ -1637,7 +1690,7 @@ describe("a signed-out browser on a shared document", () => {
     const claims = chips.find((chip) => chip.textContent?.startsWith("Claims"));
     expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
     await act(async () => claims?.click());
-    await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
+    await until(() => band?.querySelector('a[href="https://answers.example.org/on-claims"]') != null);
     expect(new URLSearchParams(location.search).get("sources")).toBe("claims");
     expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the
@@ -2258,12 +2311,14 @@ describe("a signed-out browser on a shared document", () => {
       /* Sources in each of its sub-modes, and the two old words. Links
          (plan 261011d) is read off the blocks and must ask nothing at all;
          Not cited (plan 261011ac) is the owner's, and a visitor's band reads
-         it as Bibliography, never asking `/api/related-work`. */
+         it as Bibliography, never asking `/api/related-work`; Investigate (plan
+         261020n) likewise, never posting to Chat. */
       "sources",
       "sources&sources=not-cited",
       "sources&sources=links",
       "sources&sources=reception",
       "sources&sources=claims",
+      "sources&sources=investigate",
       "citations",
       "reception",
     ]) {

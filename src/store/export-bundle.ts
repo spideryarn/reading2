@@ -61,6 +61,7 @@ import {
 } from "./article-rows.js";
 import { escapeHtml, normaliseText } from "../html.js";
 import { log } from "../log.js";
+import { yourWordsMarkdown } from "./your-words.js";
 import { articleUrl, isWebUrl } from "../urls.js";
 import { isUsableSimpleSummary } from "../types.js";
 
@@ -275,6 +276,11 @@ export async function articleBundle(slug: string): Promise<ArticleBundle> {
 
   put("README.md", readme());
   put("article.json", articleJson(rows));
+  /* The reader's own words, as one Markdown file a person can read — the same
+     words as comments.json, quiz-attempts.json and chat.json below, for people
+     rather than programs. Always written, like article.json: a file that says
+     "nothing yet" is clearer than one that is missing. src/store/your-words.ts. */
+  put("your-words.md", yourWordsMarkdown(rows, exportedAt));
   for (const [path, text] of contentFiles(rows)) put(path, text);
   for (const [path, text] of augmentationFiles(rows)) put(path, text);
 
@@ -635,6 +641,12 @@ one thing that will make the rest of these files make sense.
     article.json           The article on your shelf: your title for it, when you opened it,
                            your purpose for reading it, and whether it is shared.
     README.md              This file.
+    your-words.md          Everything you wrote about the article, as Markdown a person can read
+                           or paste into another AI: your title, purpose and tags, your comments
+                           and notes in article order, your quiz answers, and every conversation
+                           (Referee's candidate threads aside). The AI's words are marked as its
+                           own. The same words are in the JSON files below; those are the ones to
+                           import from.
 
     content/
       revision.json        This reading of the article, as data: the byline, the site, the
@@ -857,6 +869,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "manifest.json": "What this export is, when it was made, what was left out, and the two addresses \u2014 the original\u2019s and this article\u2019s on Spideryarn.",
   "article.json": "The article on your shelf: your title, your purpose, sharing state.",
   "README.md": "The format, file by file, for whoever writes an importer.",
+  "your-words.md":
+    "Everything you wrote about this article \u2014 comments, notes, quiz answers and every conversation \u2014 as one page of Markdown to read or paste into another AI.",
   "index.html": "This page.",
   "content/revision.json": "This reading of the article: byline, site, language, excerpt, published date, how it was fetched and extracted, and the counts.",
   "content/stamped.html": "The article as Spideryarn reads it, with a block id on every element. This is the one to open.",

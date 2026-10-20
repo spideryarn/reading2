@@ -1,4 +1,4 @@
-/* reception.css — Sources › Reception and Claims (ReceptionAndClaimsPanel.tsx): the host, the quotation from a
+/* reception.css — Sources › Reception and Claims (ReceptionAndClaimsPanel.tsx), and Sources › Investigate (InvestigatePanel.tsx): the host, the quotation from a
    stranger's page, the fenced-off block of things a model guessed, and the
    relevance bar the reader sets over Claims' list. The rest is
    `.gloss`'s, unchanged.
@@ -16,7 +16,8 @@
    What is here is only what a debate row has and an event does not: the
    **work** — its title, the headline, and its site — a quotation from a
    stranger's page, and a model's reading of it, labelled *AI* on one line and
-   fenced off in full behind `more`. Those three are the design
+   fenced off in full, both behind the row's toggle since plan 261020n; and
+   Reception's sections, the AI's frame and *Every page* (§ sections). Those three are the design
    (ReceptionAndClaimsPanel.tsx), and the whole job of this section is to make them look
    like three different kinds of claim. The order buttons are `.gloss-sort`'s,
    unchanged.
@@ -100,7 +101,8 @@
    never be confused with. */
 
 /* **Only headings we can stand behind** (ReceptionAndClaimsPanel.tsx § Two sub-modes):
-   *Names this piece by its title only* over Reception's title-only rows, and in
+   *Mentions its title only — may be another piece* over Reception's title-only
+   rows inside *Every page*, and in
    Claims each claim in the article's own words with the way to it. Stance is
    never one, because a heading saying *Critical* would be the model's reading
    in our voice. Small and quiet, so a heading reads as a label on the rows
@@ -269,7 +271,7 @@
 }
 
 /* **Checking the claims** (ReceptionAndClaimsPanel.tsx § OwnerListedClaims, plan 261008i
-   stage 3): the box and Check are the angle box's row below (`.gloss-ask`),
+   stage 3): the box and Check are Investigate's question box's row below (`.gloss-ask`),
    wrapping the button under the box in a narrow band. Under each claim its
    checked rows, the sentence for a claim with nothing to read, and the
    failure sentence, set as the empty sentence is. A typed claim is a group
@@ -293,38 +295,42 @@
   .rcp-dig { min-height: 2.5rem; }
 }
 
-/* **Look at the debate from an angle** (ReceptionAndClaimsPanel.tsx § Angles, plan
-   261005k): the owner's box at the top of the panel and *Your angles* under
-   it.
+/* **Sources › Investigate** (InvestigatePanel.tsx, plan 261020n Stage 2): the owner's box at
+   the top, then the questions in four short sections. The box and *Your
+   questions* were Reception's angle box and *Your angles* (plan 261005k)
+   until that plan moved them here.
 
    The box, its row and its button are Glossary's *Look up a term*
    (footnotes.css § `.gloss-ask`), which rules it off below and leaves room for
    the band's (i) (glossary.css). Set here: the button keeps its words on one
    line and gives the box the rest, and on a coarse pointer the button and each
-   line of the list are a finger tall (docs/project/touch.md). The field's 1rem
-   floor on a touch screen is narrow-window.css's, for every field.
+   question are a finger tall (docs/project/touch.md). The field's 1rem floor on
+   a touch screen is narrow-window.css's, for every field.
 
-   A line of the list is the claim's mark again (origin-chat.css): an
-   icon, the words on one line cut with an ellipsis, and a count. The words are
-   the reader's and take their face from voices.css (`.voice-reader`); the
+   A question is one press: Chat's bubbles and the words, which wrap rather
+   than clip, because the row has to say in full what it will send. A line of
+   *Your questions* is the claim's mark again (origin-chat.css): an icon, the
+   words on one line cut with an ellipsis, and a count. Whose words are whose
+   is voices.css's (`.voice-author`, `.voice-reader`, `.voice-ai`); the
    quotation marks and the count are ours. */
-.rcp-lens-send { flex: none; white-space: nowrap; }
+.investigate-send { flex: none; white-space: nowrap; }
 /* In a narrow band the button goes under the box, not beside it: side by side
-   on an iPad the box was 117px and its placeholder read "Look at the d…"
-   (seen in the browser, 2026-10-06). The box asks for 12rem before it shares
-   its line. */
-.rcp-lens-row { flex-wrap: wrap; }
-.rcp-lens-row .gloss-ask-input { flex: 1 1 12rem; }
-.rcp-angles { margin-top: 0.35rem; }
-.rcp-angles-head { padding-top: 0.15rem; }
-.rcp-angles-list { margin: 0; padding: 0; list-style: none; }
-.rcp-angle {
+   on an iPad the box was 117px and its placeholder clipped (seen in the
+   browser, 2026-10-06, on the angle box). The box asks for 12rem before it
+   shares its line. */
+.investigate-box-row { flex-wrap: wrap; }
+.investigate-box-row .gloss-ask-input { flex: 1 1 12rem; }
+.investigate-section { padding: 0.2rem 0.7rem 0.35rem; }
+.investigate-head { padding-top: 0.15rem; }
+.investigate-list { margin: 0; padding: 0; list-style: none; }
+.investigate-q,
+.investigate-yours-line {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.35rem;
   width: 100%;
   min-width: 0;
-  padding: 0.15rem 0;
+  padding: 0.2rem 0;
   border: 0;
   background: none;
   color: var(--ink-soft);
@@ -333,29 +339,51 @@
   text-align: left;
   cursor: pointer;
 }
-.rcp-angle > svg { flex: none; color: var(--ink-faint); }
-.rcp-angle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.rcp-angle:active { color: var(--ink); }
+.investigate-q > svg,
+.investigate-yours-line > svg { flex: none; color: var(--ink-faint); align-self: center; }
+.investigate-q:focus-visible,
+.investigate-yours-line:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.investigate-q:active,
+.investigate-yours-line:active { color: var(--ink); }
 @media (hover: hover) {
-  .rcp-angle:hover { color: var(--ink); }
+  .investigate-q:hover,
+  .investigate-yours-line:hover { color: var(--ink); }
 }
-.rcp-angle-quoted {
+.investigate-q-words { min-width: 0; overflow-wrap: anywhere; }
+/* A long claim is cut at two lines: the row is a pointer to the claim, which
+   Claims draws in full. */
+.investigate-claims .investigate-q-words {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* A claim or a work with a chat: its words, and the mark under them. */
+.investigate-asked {
+  padding: 0.2rem 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+.investigate-mark { margin-top: 0.15rem; }
+.investigate-yours-line { align-items: center; }
+.investigate-yours-quoted {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rcp-angle-count {
+.investigate-yours-count {
   flex: none;
   margin-left: auto;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
-/* The gist on its own line under the angle, lined up with the words after the
-   icon; two lines then an ellipsis, from `.origin-chat-gist` (plan 261011c). */
-.rcp-angle:has(.rcp-angle-gist) { flex-wrap: wrap; }
-.rcp-angle-gist {
+/* The gist on its own line under the question, lined up with the words after
+   the icon; two lines then an ellipsis, from `.origin-chat-gist` (plan 261011c). */
+.investigate-yours-line:has(.investigate-yours-gist) { flex-wrap: wrap; }
+.investigate-yours-gist {
   flex: 1 0 100%;
   min-width: 0;
   padding-left: calc(12px + 0.35rem);
@@ -363,9 +391,10 @@
   font-size: 0.78rem;
 }
 @media (pointer: coarse) {
-  .rcp-lens-send,
-  .rcp-angle,
-  .rcp-angles-more { min-height: 2.5rem; }
+  .investigate-send,
+  .investigate-q,
+  .investigate-yours-line,
+  .investigate-yours-more { min-height: 2.5rem; }
 }
 
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no
@@ -405,11 +434,12 @@
 }
 
 /* **Cited by** — the papers that cite the piece, from OpenAlex, at the end of
-   the owner's Reception (ReceptionAndClaimsPanel.tsx § `CitedBy`). A group like *Names this
-   piece by its title only*: the same small-caps heading, then a sentence, then
-   rows. Set apart from the web search's rows above by a rule, because it is a
-   different list from a different source and is not counted with them. */
-.rcp-citers { margin-top: 0.9rem; border-top: 1px solid var(--rule); }
+   the owner's Reception (ReceptionAndClaimsPanel.tsx § `CitedBy`). A closed
+   section since plan 261020n, drawn like *Every page* (§ sections): a
+   summary, then a sentence, then rows. Set apart from the web search's
+   sections above by a rule, because it is a different list from a different
+   source and is not counted with them. */
+.rcp-section.rcp-citers { margin-top: 0.6rem; border-top: 1px solid var(--rule); }
 .rcp-citers-note {
   margin: 0 0 0.35rem;
   color: var(--ink-soft);
@@ -424,7 +454,7 @@
 .rcp-citer:first-child { border-top: none; }
 /* A citing paper's title: the link out, in the row title's colour and face but
    a step lighter and smaller — it is one line in a list we have not read, not a
-   source we checked. Whole rather than clamped: there is no `more` to open. */
+   source we checked. Whole rather than clamped: there is no toggle to open. */
 .rcp-citer-title {
   color: var(--highlight-ink);
   font-family: var(--font-ui);
@@ -461,65 +491,44 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   line-height: 1.45;
 }
 
-/* **The chip on a row about this piece**, on the small line under the title.
-
-   **The three identification levels are drawn identically**, and that is a
-   decision this file must not quietly undo. They are ordered — a link is
-   stronger than a title — but colouring them along that order would be a scale,
-   and a scale over one fact is precisely the composite this mode refused
-   (docs/project/quotes.md). The order is in the threshold, where the reader
-   sets it; on the row it is a name.
-
-   Claim rows have had no chip since 2026-09-29: *On what it claims* said the
-   same thing on every row, and the claim itself now says it. */
-.rcp-mark {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.08rem 0.4rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: 999px;
-  background: none;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-/* A button, because it opens a card — and it does nothing on press, which is
-   what `help` says. */
-button.rcp-mark { cursor: help; }
-button.rcp-mark:hover { color: var(--ink); border-color: var(--ink-faint); }
-button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-
-/* The card behind the chip: every signal found, one to a line. Narrow because
-   the band it hangs off is 288px at its narrowest (`MODE_MIN` in layout.ts). */
-.tooltip.rcp-mark-card { max-width: 21rem; }
-.rcp-mark-card-head {
-  display: block;
-  margin: 0 0 0.35rem;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-.rcp-mark-card-list {
-  margin: 0;
-  padding: 0 0 0 1rem;
-  color: var(--ink);
-  font-size: 0.8rem;
-  line-height: 1.45;
-}
-.rcp-mark-card-list li + li { margin-top: 0.3rem; }
-/* A URL in a signal is the evidence itself, so it wraps rather than truncating:
-   half an address is not one. */
-.rcp-mark-card-list li { overflow-wrap: anywhere; }
-
 .rcp-list { margin: 0; padding: 0; list-style: none; }
-.rcp-item { padding: 0.5rem 0; border-top: 1px solid var(--rule); }
+/* **A row is two lines until opened** (ReceptionAndClaimsPanel.tsx § Row, plan
+   261020n). Two columns: the toggle in the first, so the toggles line up down
+   the list, and everything else in the second — the head line, the meta line,
+   and what the toggle opens — so an open row's detail sits under its title
+   rather than under the chevron. */
+.rcp-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.2rem;
+  align-items: start;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--rule);
+}
 .rcp-item:first-child { border-top: none; }
+.rcp-item > :not(.rcp-more) { grid-column: 2; }
+/* Line one: the lean's icon, the key star, and the title, which wraps beside
+   them rather than under them. */
+.rcp-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0;
+  min-width: 0;
+}
+/* The lean at a glance, the icon alone and in its direction's colour (the
+   same three `.rcp-lean-*` tones as the word in the open row); the word is on
+   hover, in its accessible name, and in the open row. Raised to sit on the
+   title's first line, since an icon has no baseline of its own. */
+.rcp-lean-mark,
+.rcp-key-mark {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+  cursor: help;
+}
+.rcp-row-head > .rcp-lean-mark,
+.rcp-row-head > .rcp-key-mark { align-self: flex-start; padding-top: 0.12rem; }
 
 /* **The row's headline: what the work is.** The title, in the full ink and the
    largest type on the row — it was the site until 2026-09-29, and three readers
@@ -529,14 +538,15 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
    app does: leaving for somebody else's page is the one thing on the row worth
    colouring.
 
-   **Two lines, then an ellipsis**, by `line-clamp` — so the whole title stays in
-   the accessibility tree and in the link's accessible name; only the paint is
-   cut. `more` (`.rcp-item.open`) lifts the clamp. */
+   **One line, then an ellipsis**, by `line-clamp` — the metadata beneath is the
+   closed row's second line. The whole title stays in the accessibility tree and
+   in the link's accessible name; only the paint is cut. Opening the row
+   (`.rcp-item.open`) lifts the clamp. */
 .rcp-title {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
   overflow: hidden;
   overflow-wrap: anywhere;
   color: var(--highlight-ink);
@@ -549,11 +559,14 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 .rcp-title:hover { text-decoration: underline; text-underline-offset: 2px; }
 .rcp-title svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
 .rcp-title:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+/* In the row's head line the title takes the width and wraps beside the icons. */
+.rcp-row-head > .rcp-title { flex: 1; min-width: 0; }
 
-/* The small line under the title: the site, and on a row about this piece its
-   identification chip. Stage 2 adds *authors · year* in front of the site in
-   `.rcp-byline`. The site stays readable text rather than fading to nothing —
-   it is still the one authority signal a reader can judge for themselves. */
+/* **Line two**, under the title: the site, the year, the title-only flag and
+   one AI-tagged word (plan 261020n). The site stays readable text rather than
+   fading to nothing — it is still the one authority signal a reader can judge
+   for themselves. Each part but the AI word carries its own leading dot, so a part that wraps
+   to a new line takes its dot with it. */
 .rcp-meta {
   display: flex;
   flex-wrap: wrap;
@@ -565,17 +578,32 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   font-size: var(--type-meta);
   line-height: 1.35;
 }
+.rcp-meta-part { display: inline-flex; align-items: center; gap: 0.3rem; min-width: 0; }
 .rcp-site { overflow-wrap: anywhere; }
-/* **Authors and year, as the AI read them off the page** (the plan's F2) —
-   found in the extract, not proven to be this page's byline. So quieter than
-   the site beside them and in italics, the way this app sets a reading rather
-   than a record, with the caveat on hover and in words inside `more`. */
-.rcp-byline {
+/* **The year, as the AI read it off the page or a registry gave it** (260929h's
+   F2) — quieter than the site beside it and in italics, the way this app sets
+   a reading rather than a record, with whose it is on hover. The authors are
+   the open row's (`.rcp-authors`). */
+.rcp-year {
   color: var(--ink-faint);
   font-style: italic;
-  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
   cursor: help;
 }
+/* *Title only, may be another piece*: the one exception the closed row marks.
+   The faint ink of a fact about the evidence, not a warning colour: the page
+   may well be a citing paper or a published reply. */
+.rcp-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--ink-faint);
+}
+.rcp-flag svg { flex: none; }
+/* The one AI word, with its tag: the line's last part, at its end and with no
+   dot before it, so a wrap never leaves a `·` at the start of a line. */
+.rcp-ai-word { display: inline-flex; align-items: center; gap: 0.3rem; }
+.rcp-meta-ai { margin-inline-start: auto; }
 
 /* The two lines inside a flat order that say what is **missing** — *not
    judged for relevance*, *no year found* — and the marker at the article's own
@@ -610,7 +638,7 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 }
 .rcp-marker::before { flex: 0 0 0.6rem; }
 
-/* Every author, in `more` — the byline shows three at most. */
+/* Every author, in the open row. */
 .rcp-authors {
   margin: 0.3rem 0 0;
   color: var(--ink-soft);
@@ -621,8 +649,9 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 
 /* **The AI's reading, one line, labelled.** The small *AI* tag is the fence's
    label at the size of a line: everything after it is a model's reading of a
-   stranger's page. Up here rather than last because it is what a reader
-   decides with. The paragraph behind it lives in `.rcp-ai`, under `more`. */
+   stranger's page. In the open row since plan 261020n, after the quotation,
+   so the evidence is read first; the closed row keeps one word of it
+   (`.rcp-ai-word`). The paragraph behind it lives in `.rcp-ai`. */
 .rcp-ai-line {
   display: flex;
   flex-wrap: wrap;
@@ -648,14 +677,9 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
    left is the provenance mark this app already uses for "these are not our
    words" (`.gloss-part-senseHere`, and § timeline mode reuses it for the same
    reason) — a third way of drawing the same distinction would teach the reader
-   it means three things. Three lines until `more`, by the same clamp as the
-   title and for the same reason. */
+   it means three things. Whole: it is drawn only in the open row, since plan
+   261020n, so there is no clamp to lift. */
 .rcp-quote {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  overflow: hidden;
   margin: 0.3rem 0 0;
   padding: 0 0 0 0.55rem;
   border-left: 2px solid var(--rule-strong);
@@ -663,17 +687,19 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   font-size: var(--type-quote);
   line-height: 1.5;
 }
-.rcp-item.open .rcp-title,
-.rcp-item.open .rcp-quote {
+.rcp-item.open .rcp-title {
   display: block;
   -webkit-line-clamp: unset;
   line-clamp: none;
   overflow: visible;
 }
 
-/* **`more`** — the disclosure that replaced the ⓘ card. Quiet, like
-   `.gloss-sort-btn`, because the row is readable without it; a real button, so a
-   tap and a keyboard get what a pointer gets. The chevron turns when open. */
+/* **`.rcp-more`** — a row's toggle since plan 261020n (it was the word
+   *more* under the quotation, and replaced the ⓘ card), and the *Show all*
+   under a long list. Quiet, like `.gloss-sort-btn`, because the row is
+   readable without it; a real button, so a tap and a keyboard get what a
+   pointer gets. A row's is the chevron alone, which turns down when open, and
+   a finger tall on a touch screen. */
 .rcp-more {
   display: inline-flex;
   align-items: center;
@@ -689,10 +715,13 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 }
 .rcp-more:hover { color: var(--ink); }
 .rcp-more:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.rcp-item > .rcp-more { margin: 0; padding: 0.15rem 0.1rem 0 0; }
 .rcp-more svg { transition: transform 120ms ease; }
-.rcp-more[aria-expanded="true"] svg { transform: rotate(180deg); }
-
-/* What `more` opens. `hidden` does the hiding — this is only its spacing. */
+.rcp-item > .rcp-more[aria-expanded="true"] svg { transform: rotate(90deg); }
+@media (pointer: coarse) {
+  .rcp-item > .rcp-more { min-width: 2.25rem; min-height: 2.25rem; justify-content: center; padding: 0; }
+}
+/* What the toggle opens. `hidden` does the hiding — this is only its spacing. */
 .rcp-detail { margin: 0.15rem 0 0; }
 
 /* **The fence.** Everything outside it is the wire's or the article's;
@@ -771,7 +800,7 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   line-height: 1.4;
 }
 
-/* What `more` holds under the fence — what the ⓘ card held until 2026-09-29.
+/* What the open row holds under the fence — what the ⓘ card held until 2026-09-29.
    The full address, which the row shows only the host of: wrapping rather than
    truncating, because half a URL is not an address and the reader is looking
    at this precisely to decide whether to follow it. */
@@ -783,6 +812,29 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+/* **How the page identifies the article**, in the open row (plan 261020n):
+   the level in plain words, then every signal it earned, one to a line — the
+   card behind the LINKS / NAMES chip until then. All three levels drawn
+   identically: ordered, but a colour along that order would be a scale over
+   one fact, the composite docs/project/quotes.md refuses. A URL in a signal is
+   the evidence itself, so it wraps rather than truncating. */
+.rcp-identifies { margin: 0.35rem 0 0; }
+.rcp-identifies-level {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.rcp-identifies-list {
+  margin: 0.15rem 0 0;
+  padding: 0 0 0 1rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.rcp-identifies-list li + li { margin-top: 0.2rem; }
 /* A direct row's witness that this page names *this* article — the check that
    is the whole difference between the two kinds of row. */
 .rcp-ref {
@@ -822,7 +874,8 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 
 /* ---------------------------------------------------------------- threads --
    **The themes the sources share, and the key sources** — plan 260930j
-   (SPIDERYARN-READING2-6M). A box above the rows, inside the scroller: it is
+   (SPIDERYARN-READING2-6M), as Claims' filter since plan 261020n; Reception's
+   are sections (§ sections). A box above the rows, inside the scroller: it is
    a reading of the list, so it scrolls with it rather than pinning over it
    like the bars do. Each thread is a toggle in the order bar's register
    (`.gloss-sort-btn`: transparent until pressed, `--surface-raised` and a rule
@@ -926,14 +979,15 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   line-height: 1.4;
 }
 
-/* **A key row says so above its title.** One line in the AI line's register,
-   the reason after it in the row's quieter ink. */
+/* **A key row says why, first in its open row** (plan 261020n: *AI's key
+   source:* and the why-sentence; the closed row has the star). One line in the
+   AI line's register, the reason after it in the row's quieter ink. */
 .rcp-key-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.2rem 0.4rem;
-  margin: 0 0 0.25rem;
+  margin: 0.3rem 0 0;
   font-size: 0.8rem;
   line-height: 1.35;
 }
@@ -945,3 +999,114 @@ button.rcp-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   letter-spacing: 0.02em;
 }
 .rcp-key-why { flex-basis: 100%; color: var(--ink-soft); }
+
+/* --------------------------------------------------------------- sections --
+   **Reception, default-collapsed** (ReceptionAndClaimsPanel.tsx §
+   `ReceptionSections`, `EveryPage`; plan 261020n, spya-dk4tfq). Greg:
+   *"Perhaps start with things default-collapsed, so it's easier to see the
+   grouping/hierarchy/relationships?"*
+
+   - **The AI's frame**: one ruled box, headed with the *AI* tag and *What the
+     AI noticed in these sources*, round the key sources and the themes. The
+     box is what says whose those headings are, so it is the threads box's
+     look (§ threads) carried over rather than a new one.
+   - **A section** is a native `<details>`. Its summary is a row: the house's
+     own disclosure triangle, the name, the count pushed to the right, and
+     under them a theme's gist — two lines then an ellipsis while closed, so
+     the outline fits on a phone, and whole once open.
+   - ***Every page*** and *Cited by* are sections outside the frame, in our
+     voice, so in the small-caps label register of `.rcp-group-head`.
+
+   The theme's name and gist are the model's words (voices.css); *Key
+   sources*, *Every page* and every count are ours. */
+.rcp-sections-ai {
+  margin: 0.3rem 0 0.5rem;
+  padding: 0.35rem 0.5rem 0.4rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+}
+.rcp-sections-ai-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.15rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.rcp-section-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.35rem;
+  padding: 0.3rem 0;
+  list-style: none;
+  cursor: pointer;
+}
+.rcp-section-head::-webkit-details-marker { display: none; }
+.rcp-section-head::before {
+  content: "▸";
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.rcp-section[open] > .rcp-section-head::before { content: "▾"; }
+.rcp-section-head:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (pointer: coarse) {
+  .rcp-section-head { min-height: var(--control-h-lg); align-content: center; }
+}
+.rcp-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.rcp-section-name { min-width: 0; overflow-wrap: anywhere; }
+@media (hover: hover) {
+  .rcp-section-head:hover .rcp-section-name { color: var(--highlight-ink); }
+}
+.rcp-section-count {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  color: var(--ink-faint);
+  font-size: var(--type-count);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.rcp-section-gist {
+  grid-column: 2;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  margin-top: 0.05rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.rcp-section[open] > .rcp-section-head .rcp-section-gist {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+}
+/* A section's rows, and Every page's, sit at the summary's text, past the
+   triangle. */
+.rcp-section > :not(summary) { margin-left: 1.05rem; }
+.rcp-sections-ai .rcp-section + .rcp-section { border-top: 1px dotted var(--rule); }
+/* Our sections' summaries are labels of ours: the small-caps register. */
+.rcp-every > .rcp-section-head .rcp-section-label,
+.rcp-citers > .rcp-section-head .rcp-section-label {
+  color: var(--ink-faint);
+  font-size: var(--type-label);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.rcp-every { margin-top: 0.2rem; }

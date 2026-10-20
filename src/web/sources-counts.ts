@@ -1,5 +1,5 @@
 /**
- * **The numbers on Sources' five chips, and the rows behind them** —
+ * **The numbers on Sources' chips, and the rows behind them** —
  * pure selectors, used by the chip row (SourcesMode.tsx §
  * `SourcesViews`) and by the panels that draw the lists (BibliographyPanel,
  * NotCitedPanel, LinksPanel, ReceptionAndClaimsPanel), so a chip's number and the list under it are one derivation
@@ -17,12 +17,17 @@
  *   taken out — no number until the owner's stored answer is read, and never
  *   one for a visitor, who has no such chip.
  * - **Links**: distinct external addresses in the article's own markup.
- * - **Reception**: the rows about the piece, through the thread the reader
- *   picked (`?receptionthread=`), as Reception's segment counted them.
+ * - **Reception**: every stored row about the piece. Since plan 261020n
+ *   (spya-dk4tfq) a thread no longer narrows Reception: its themes and key
+ *   sources are sections the reader opens, and *Every page* holds every row,
+ *   so the chip counts what *Every page* lists. `?receptionthread=` opens a
+ *   section there and moves no number.
  * - **Claims**: the listed claims, until the reader's checks have put
  *   sources on screen, and then those sources plus any rows an older search
  *   kept (plan 261008i § 5); with no list, the older search's rows through
  *   the relevance bar and the thread.
+ * - **Investigate** has no number: there is nothing to count before a press, and its
+ *   *Your questions* is not a list the chip should number (plan 261020n).
  *
  * Imports no React, so a test can call it on fixtures alone.
  */
@@ -61,22 +66,31 @@ export function receptionThreads(reception: AnyReception | null): Thread[] {
   return threadsOf(reception !== null ? readStoredSynthesis(reception) : null);
 }
 
-/** **Reception, through the thread**: the threads it offers, the one selected, and the rows shown. */
-export interface ReceptionSelection {
-  threads: Thread[];
-  thread: Thread | null;
-  shown: DirectRow[];
+/** One of Reception's AI sections: a theme, or the key sources, and the stored rows it names. */
+export interface ReceptionSection {
+  thread: Thread;
+  rows: DirectRow[];
 }
 
-export function receptionSelection(
-  reception: AnyReception | null,
-  threads: readonly Thread[],
-  threadParam: string | null,
-): ReceptionSelection {
+/**
+ * **Reception, as sections** (plan 261020n): every stored row, which is what
+ * *Every page* lists and the chip counts, and each thread **with a stored row
+ * here** as a section of its own (`threadsWithin`, GPT Sol's F4 on that plan —
+ * a theme made only of an older search's claim rows is neither drawn nor
+ * counted in Reception). A row is in every section that names it, so the
+ * sections' counts may add up to more than the chip's.
+ */
+export interface ReceptionSelection {
+  rows: DirectRow[];
+  sections: ReceptionSection[];
+}
+
+export function receptionSelection(reception: AnyReception | null, threads: readonly Thread[]): ReceptionSelection {
   const rows: readonly DirectRow[] = reception?.direct.rows ?? NO_DIRECT;
-  const within = threadsWithin(threads, rows);
-  const thread = selectedThread(within, threadParam);
-  return { threads: within, thread, shown: inThread(rows, thread) };
+  return {
+    rows: [...rows],
+    sections: threadsWithin(threads, rows).map((thread) => ({ thread, rows: inThread(rows, thread) })),
+  };
 }
 
 /**
@@ -150,19 +164,19 @@ export interface SourcesCountsInput {
   checked: number;
   /** `?bears=`, null for untouched. */
   relevance: SourcesClaimsBears | null;
-  /** `?receptionthread=`. */
+  /** `?receptionthread=` — Claims' filter; it moves no number in Reception. */
   thread: string | null;
 }
 
 export function sourcesCounts(input: SourcesCountsInput): SourcesCounts {
   const threads = receptionThreads(input.reception);
-  const reception = receptionSelection(input.reception, threads, input.thread);
+  const reception = receptionSelection(input.reception, threads);
   const claims = claimsSelection(input.reception, threads, input.relevance, input.thread);
   return {
     bibliography: input.works === null ? null : input.works.length,
     notCited: input.notCited?.kind === "found" ? input.notCited.works.length : null,
     links: input.links.length,
-    reception: reception.shown.length,
+    reception: reception.rows.length,
     claims: claimsCount(input.listed, input.checked, claims.shown.length),
   };
 }

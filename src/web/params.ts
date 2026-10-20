@@ -1445,7 +1445,7 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' five sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' six sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
@@ -1457,7 +1457,9 @@ export function learnInSearch(search: string): LearnView {
  * `links` is the web addresses in the article's own markup;
  * `reception` is what others have written about the piece itself; `claims` is
  * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
- * § 2), with an older search's claim sources under it. The last two were
+ * § 2), with an older search's claim sources under it; `investigate` is the owner's
+ * launcher of questions for Chat (since 2026-10-20, plan 261020n Stage 2).
+ * Reception and Claims were
  * Debate's `?debate=` from 2026-10-03, which this replaced: an old
  * `?mode=debate&debate=claims` is lifted to `?mode=sources&sources=claims`
  * before anything reads it (router.ts § `liftLegacySources`). *Which thing, within this
@@ -1474,30 +1476,39 @@ export function learnInSearch(search: string): LearnView {
  * (activation.ts § `activationForSources`). Links, the article's own
  * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
  * off the blocks in the browser. Not cited arms nothing either: its search is
- * the panel's own button, because it sends the piece's words to OpenAlex. Back,
- * a pasted link and a last-view restore arrive here and buy nothing.
+ * the panel's own button, because it sends the piece's words to OpenAlex. Investigate
+ * arms nothing: each of its rows is one press that sends one chat question.
+ * Back, a pasted link and a last-view restore arrive here and buy nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims"] as const;
+export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims", "investigate"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
- * **The sub-modes a visitor's band draws**: all but Not cited, which is the
- * owner's (its route is owner-only, and a visitor's search would spend our
- * OpenAlex allowance — plan 261011ac § Who sees it).
+ * **The sub-modes a visitor's band draws**: all but Not cited and Investigate, which
+ * are the owner's. Not cited's route is owner-only, and a visitor's search
+ * would spend our OpenAlex allowance (plan 261011ac § Who sees it); Investigate's
+ * every row hands a question to Chat, and a visitor has no chat (plan
+ * 261020n § Visitors).
  */
-export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter((v) => v !== "not-cited");
+export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter(
+  (v) => v !== "not-cited" && v !== "investigate",
+);
 /**
  * **What a visitor's band draws for `?sources=`**: the view it names, or
  * Bibliography for one the visitor does not have, so a shared
- * `?sources=not-cited` link opens the default list rather than an empty band.
+ * `?sources=not-cited` or `?sources=investigate` link opens the default list rather
+ * than an empty band.
  */
 export function visitorSourcesView(view: SourcesView): SourcesView {
   return VISITOR_SOURCES_VIEWS.includes(view) ? view : "bibliography";
 }
 /**
  * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
- * Bibliography, Not cited and Links have a panel each.
+ * Bibliography, Not cited, Links and Investigate have a panel each. A positive union
+ * rather than Sources' views minus the others, so a new sub-mode cannot widen
+ * it by being added (GPT Sol's F5 on plan 261020n): both SourcesMode
+ * controllers route each view with an exhaustive `switch`.
  */
-export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "not-cited" | "links">;
+export type ReceptionAndClaimsView = "reception" | "claims";
 
 export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),

@@ -443,3 +443,67 @@ describe("the Export button", () => {
     expect(alert?.textContent).not.toContain("Cannot read");
   });
 });
+
+/* ------------------------------------- your words, as Markdown (plan 261020w) */
+
+const wordsButton = (): HTMLButtonElement | undefined =>
+  [...host.querySelectorAll("button")].find((b) =>
+    (b.textContent ?? "").includes("Download your notes and conversations"),
+  );
+
+describe("the your-words button beside it", () => {
+  it("asks its own route and hands the browser a named Markdown file", async () => {
+    await open();
+    expect(host.textContent).toContain("as one Markdown file to read, keep");
+    await act(async () => wordsButton()?.click());
+    await settle();
+    expect(asked).toEqual([`/api/export/${SLUG}/your-words`]);
+    expect(clicked).toEqual([
+      { href: created[0] ?? "", download: `${SLUG}-your-words.md`, inDocument: true },
+    ]);
+  });
+
+  /**
+   * **Two files, two waits.** The in-flight guard was keyed by slug, so asking
+   * for the Markdown while the zip was building came back `busy` — which the
+   * page reads as "already on its way" and says nothing — and no file came.
+   * GPT Sol's F8 on the plan.
+   */
+  it("still downloads while the zip is being built", async () => {
+    exportAnswer = null;
+    await open();
+    await act(async () => exportButton()?.click());
+    expect(exportButton()?.disabled ?? true).toBe(true);
+    expect(wordsButton()?.disabled).toBe(false);
+
+    exportAnswer = () => new Response(new Blob(["# words"]), { status: 200 });
+    await act(async () => wordsButton()?.click());
+    await settle();
+    expect(asked).toEqual([`/api/export/${SLUG}`, `/api/export/${SLUG}/your-words`]);
+    expect(clicked.map((c) => c.download)).toEqual([`${SLUG}-your-words.md`]);
+
+    await act(async () => release?.());
+    await settle();
+    expect(clicked.map((c) => c.download)).toEqual([`${SLUG}-your-words.md`, `${SLUG}.zip`]);
+  });
+
+  it("does not let one file's old failure hide the other file's failure", async () => {
+    let call = 0;
+    exportAnswer = () =>
+      new Response(JSON.stringify({ error: call++ === 0 ? "The zip failed." : "The Markdown failed." }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    await open();
+
+    await act(async () => exportButton()?.click());
+    await settle();
+    await act(async () => wordsButton()?.click());
+    await settle();
+
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent ?? "");
+    expect(alerts).toHaveLength(2);
+    expect(alerts.some((text) => text.includes("The zip failed."))).toBe(true);
+    expect(alerts.some((text) => text.includes("The Markdown failed."))).toBe(true);
+  });
+});

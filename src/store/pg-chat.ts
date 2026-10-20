@@ -219,7 +219,7 @@ export function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
  * The middle case — a block with no quote — is a chat started from a
  * paragraph's chat button rather than from a selection.
  */
-function anchorOf(t: {
+export function anchorOf(t: {
   anchorBlockId: string | null;
   anchorQuote: string | null;
   anchorStart: number | null;

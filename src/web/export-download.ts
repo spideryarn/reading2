@@ -32,7 +32,7 @@ export type ExportResult =
   | { readonly kind: "failed"; readonly message: string };
 
 /**
- * **The articles whose zip is being built right now**, across every caller.
+ * **The files being built right now**, by request path, across every caller.
  *
  * The button was the guard until this was shared: it is disabled while its own
  * request is out, so a second press could not start a second assembly and hand
@@ -40,17 +40,36 @@ export type ExportResult =
  * button's state — the bar is open over the page, and the button's request
  * carries on underneath it — so the guard moved in here, beside the request it
  * guards. Module state, because the thing it protects (one assembly per
- * article at a time, from this tab) is not any one component's.
+ * file at a time, from this tab) is not any one component's.
+ *
+ * **Keyed by the path, not the slug**, since the article got a second file
+ * (your-words.md, plan 261020w, GPT Sol's F8): the zip and the Markdown are
+ * different downloads, and asking for one while the other is building must
+ * not come back `busy` — which a caller reads as "your file is already on its
+ * way" and says nothing.
  */
 const building = new Set<string>();
 
-export async function downloadExport(slug: string): Promise<ExportResult> {
-  if (building.has(slug)) return { kind: "busy" };
-  building.add(slug);
+/** One article's zip: everything Spideryarn holds for it. docs/project/export.md. */
+export function downloadExport(slug: string): Promise<ExportResult> {
+  return downloadFile(`/api/export/${encodeURIComponent(slug)}`, `${slug}.zip`);
+}
+
+/**
+ * The reader's own words on one article, as Markdown — your-words.md, the
+ * same file the zip carries (src/store/your-words.ts).
+ */
+export function downloadYourWords(slug: string): Promise<ExportResult> {
+  return downloadFile(`/api/export/${encodeURIComponent(slug)}/your-words`, `${slug}-your-words.md`);
+}
+
+async function downloadFile(path: string, filename: string): Promise<ExportResult> {
+  if (building.has(path)) return { kind: "busy" };
+  building.add(path);
   try {
-    /* The zip is assembled on the server before a byte is sent, so this is a
+    /* The file is assembled on the server before a byte is sent, so this is a
        real wait — a second or two on a long article. */
-    const res = await apiFetch(`/api/export/${encodeURIComponent(slug)}`);
+    const res = await apiFetch(path);
     /* `failure`, not `readJson`: the success body is a zip and reading it as
        text to look for an `error` key would consume the bytes we came for.
        On a refusal it hands back the server's own sentence. */
@@ -68,7 +87,7 @@ export async function downloadExport(slug: string): Promise<ExportResult> {
     link.href = url;
     /* The route names the file in `Content-Disposition`, and every header is
        lost through a blob URL — without this the reader gets an unnamed file. */
-    link.download = `${slug}.zip`;
+    link.download = filename;
     /* In the document, not detached: Firefox has never dispatched the default
        action for a `click()` on an anchor that is not in a tree, and the
        symptom is nothing happening at all. */
@@ -105,6 +124,6 @@ export async function downloadExport(slug: string): Promise<ExportResult> {
           : `Couldn't build the download. ${codeOfMessage(why) ? why : `${why} [export-failed]`}`,
     };
   } finally {
-    building.delete(slug);
+    building.delete(path);
   }
 }

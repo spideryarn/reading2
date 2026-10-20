@@ -84,6 +84,7 @@ import {
   X,
 } from "lucide-react";
 import { withoutCommandLines } from "../citable.js";
+import { conversationDocument, type MarkdownArticle } from "../chat-markdown.js";
 import { worthRetrying } from "../messages.js";
 import { splitHint } from "../recall-hint.js";
 import { MODE_LABEL } from "../title-text.js";
@@ -131,6 +132,7 @@ import {
   CHAT_FROM_LABEL,
   GUIDE_LABEL,
   type LearnConversationView,
+  LENS_BACK,
   narrowed,
   originBack,
   sourcesIn,
@@ -730,16 +732,22 @@ export function ChatPanel({
                an empty one has nothing to start over from, and one still being
                answered or not yet named by the server would need a DELETE held
                for a name. Plan 261001m § 4 and F1. */
-            open && canStartOver && (
-              <ArmedDelete
-                key={open.id}
-                onDelete={() => onDelete(open.id)}
-                tip="Start over — delete this conversation"
-                armedTip="Press again to delete this conversation and start over"
-              />
-            )
+            <>
+              {open && (
+                <CopyConversation thread={open} article={{ slug, title: articleTitle }} blocks={blocks} />
+              )}
+              {open && canStartOver && (
+                <ArmedDelete
+                  key={open.id}
+                  onDelete={() => onDelete(open.id)}
+                  tip="Start over — delete this conversation"
+                  armedTip="Press again to delete this conversation and start over"
+                />
+              )}
+            </>
           ) : open ? (
             <>
+              <CopyConversation thread={open} article={{ slug, title: articleTitle }} blocks={blocks} />
               {/* The same delete the list offers, where the reader actually is.
                   Greg, 2026-08-26: *"Also add a Delete button within a chat."*
                   Asking twice rather than once, unlike the list — see
@@ -1399,7 +1407,7 @@ function OriginBack({ origin, onBack }: { origin: ThreadOrigin; onBack(origin: T
       <span className="chat-origin-back-text">
         Back to{" "}
         {back.quote === null ? (
-          "your angle"
+          LENS_BACK
         ) : (
           <span className={withVoice("chat-origin-back-quote", "author")}>“{back.quote}”</span>
         )}{" "}
@@ -3063,6 +3071,82 @@ function CopyAnswer({ text }: { text: string }) {
       <span className="sr-only" aria-live="polite">
         {state === "copied"
           ? "Answer copied."
+          : state === "failed"
+            ? "Copy refused by the browser."
+            : ""}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * **Put the whole conversation on the clipboard, as Markdown** — for pasting
+ * into a note or another AI. Greg, 2026-10-19 (`spya-p88dcx`): *"provide a way
+ * to export the whole of a chat (in a nice machine-readable and ideally also
+ * human-readable format that could be pasted into another AI)"*.
+ *
+ * The text is src/chat-markdown.ts § `conversationDocument`, the renderer
+ * your-words.md uses too. No fetch: the panel already holds every message.
+ * A command button's line is left out on the same test `CopyAnswer` uses, so
+ * the executor is the one this thread's own answers draw with
+ * (`ChatCommandsFor`, which the header sits outside of).
+ *
+ * The three states and the live region are `CopyAnswer`'s, for its reasons.
+ * Not drawn on a conversation with nothing in it yet.
+ */
+export function CopyConversation(props: {
+  thread: ChatThreadView;
+  article: MarkdownArticle;
+  blocks: Map<string, string>;
+}) {
+  if (props.thread.messages.length === 0) return null;
+  return (
+    <ChatCommandsFor kind={props.thread.kind}>
+      <CopyConversationButton {...props} />
+    </ChatCommandsFor>
+  );
+}
+
+function CopyConversationButton({
+  thread,
+  article,
+  blocks,
+}: {
+  thread: ChatThreadView;
+  article: MarkdownArticle;
+  blocks: Map<string, string>;
+}) {
+  const { state, copy } = useCopy({ copiedMs: 1600, failedMs: 1600 });
+  const commands = useChatCommands() ?? undefined;
+  const label = "Copy this conversation as Markdown";
+  return (
+    <button
+      type="button"
+      className="chat-icon"
+      aria-label={label}
+      data-tip={
+        state === "failed"
+          ? "Your browser would not allow the copy — an insecure connection is the usual reason"
+          : `${label}, to paste into a note or another AI`
+      }
+      onClick={() =>
+        copy(
+          conversationDocument(thread, article, new Date(), {
+            isButton: (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+          }),
+        )
+      }
+    >
+      {state === "copied" ? (
+        <ClipboardCheck size={14} />
+      ) : state === "failed" ? (
+        <TriangleAlert size={14} />
+      ) : (
+        <Copy size={14} />
+      )}
+      <span className="sr-only" aria-live="polite">
+        {state === "copied"
+          ? "Conversation copied."
           : state === "failed"
             ? "Copy refused by the browser."
             : ""}

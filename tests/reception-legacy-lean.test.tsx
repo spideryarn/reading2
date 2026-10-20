@@ -143,7 +143,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 /* Reception (rows about the piece) unless a test says Claims — the two
    sub-modes each draw one search's rows since 2026-10-03 (plan 261003o). */

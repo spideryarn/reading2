@@ -218,6 +218,7 @@ import {
   ExternalLink,
   FileArchive,
   FileText,
+  NotebookText,
   IdCard,
   FileQuestion,
   FileType,
@@ -283,7 +284,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { downloadExport } from "./export-download.js";
+import { downloadExport, downloadYourWords, type ExportResult } from "./export-download.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
@@ -2242,6 +2243,50 @@ function CostSection({ slug }: { slug: string }) {
  * to export, and a control whose only outcome is a 404 is worse than no control
  * because pressing it is how you find out.
  */
+/** The Export section's buttons: quiet at rest, tinted on hover. */
+const EXPORT_BUTTON =
+  "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:text-muted-foreground tw:disabled:opacity-50 tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+
+/**
+ * **One Export button's wait and failure.** The file is assembled on the
+ * server before a byte is sent, so this is a real wait — a second or two on a
+ * long article — and the button is disabled for it. Not only to say so: a
+ * second press would start a second assembly and hand the reader two copies of
+ * the same file. The request itself, and the guard that also covers the
+ * command bar's Export row, are export-download.ts's since 2026-10-02 (plan
+ * 261002c).
+ */
+function useDownload(start: () => Promise<ExportResult>): {
+  busy: boolean;
+  error: string | null;
+  run: () => Promise<void>;
+} {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    const result = await start();
+    /* `busy` is a bar press already building this file: that one will arrive,
+       so this press has nothing to say. */
+    if (result.kind === "failed") setError(result.message);
+    setBusy(false);
+  }
+  return { busy, error, run };
+}
+
+/** One download's own failure, beside the control that made it. */
+function DownloadError({ message }: { message: string | null }) {
+  return message ? (
+    <p
+      role="alert"
+      className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
+    >
+      <TriangleAlert size={12} /> {message}
+    </p>
+  ) : null;
+}
+
 function ExportSection({
   slug,
   offer,
@@ -2250,25 +2295,10 @@ function ExportSection({
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
 }) {
-  /* The zip is assembled on the server before a byte is sent, so this is a real
-     wait — a second or two on a long article — and the button is disabled for
-     it. Not only to say so: a second press would start a second assembly and
-     hand the reader two copies of the same file. The request itself, and the
-     guard that also covers the command bar's Export row, are
-     export-download.ts's since 2026-10-02 (plan 261002c). */
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function download(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    const result = await downloadExport(slug);
-    /* `busy` is a bar press already building this zip: that one will arrive,
-       so this press has nothing to say. */
-    if (result.kind === "failed") setError(result.message);
-    setBusy(false);
-  }
-
+  const zip = useDownload(() => downloadExport(slug));
+  /* The reader's own words, as one Markdown file — plan 261020w. Its own
+     state, so the zip building does not hold this button, nor the reverse. */
+  const words = useDownload(() => downloadYourWords(slug));
   if (!offer) return null;
 
   return (
@@ -2285,14 +2315,14 @@ function ExportSection({
             destructive tint: nothing here changes the article. */}
         <button
           type="button"
-          onClick={() => void download()}
-          disabled={busy}
-          className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:text-muted-foreground tw:disabled:opacity-50 tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground"
+          onClick={() => void zip.run()}
+          disabled={zip.busy}
+          className={EXPORT_BUTTON}
         >
           {/* Not `Download`, which this page has already spent on the fetch
               stage (`STAGE_ICONS`) — two meanings on one glyph, on one page. */}
           <FileArchive size={14} />
-          {busy ? "Building the zip…" : "Export this article"}
+          {zip.busy ? "Building the zip…" : "Export this article"}
         </button>
 
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
@@ -2301,18 +2331,31 @@ function ExportSection({
           without Spideryarn. It does not include the original file or web page, or the image files
           themselves — those are listed rather than included.
         </p>
+        <DownloadError message={zip.error} />
 
-        {/* `role="alert"`, because the rest of a failed export is invisible: no
-            file arrives, and nothing else on the page moves. Same reason
-            SourceLink's arm carries one. */}
-        {error ? (
-          <p
-            role="alert"
-            className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
-          >
-            <TriangleAlert size={12} /> {error}
-          </p>
-        ) : null}
+        {/* **Your own words, as one page** — Greg, 2026-10-19 (`spya-p88dcx`):
+            *"Provide a way to export the user's input/content from an
+            article."* The zip has them as JSON; this is the same words for a
+            person, or for pasting into another AI. src/store/your-words.ts. */}
+        <button
+          type="button"
+          onClick={() => void words.run()}
+          disabled={words.busy}
+          className={`${EXPORT_BUTTON} tw:mt-4`}
+        >
+          {/* Not `FileText`, which this page spends on the extract stage. */}
+          <NotebookText size={14} />
+          {words.busy ? "Gathering your words…" : "Download your notes and conversations"}
+        </button>
+
+        <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          Everything you wrote about this article — your comments and notes, quiz answers and every
+          conversation, with the AI's replies marked as its own — as one Markdown file to read, keep,
+          or paste into another AI.
+        </p>
+        {/* Each file keeps its own alert. If both fail, hiding one behind the
+            other's older error would make the second press fail silently. */}
+        <DownloadError message={words.error} />
       </div>
     </Section>
   );

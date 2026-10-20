@@ -105,6 +105,11 @@ const SEARCH_ROOTS = [".", "docs/project", "docs/reusable"];
 const EXTERNAL = new Set([
   "docs/reference/DESIGN_COLORS_FONTS.md",
   "docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md",
+  /* Not docs at all: the Markdown file a reader's export writes
+     (src/store/your-words.ts), and its download name `<slug>-your-words.md`.
+     Plan 261020w. */
+  "your-words.md",
+  "-your-words.md",
 ]);
 
 /**
