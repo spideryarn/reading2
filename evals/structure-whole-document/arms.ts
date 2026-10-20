@@ -140,7 +140,7 @@ export type ArmSpec =
       comparison: Comparison;
       call: CallSpec;
       seed: Seed;
-      prompt?: "toc10-frozen" | "toc11-think-first";
+      prompt?: "toc10-frozen" | "toc12-frozen" | "toc11-think-first";
     }
   /**
    * L1 in one call, then one call per part for the next level, recursively to
@@ -305,6 +305,16 @@ export const ARMS: readonly ArmSpec[] = [
     call: INCUMBENT,
     seed: "none",
     prompt: "toc10-frozen",
+  },
+  /* toc/13's baseline (plan 261020aa): the id as a string start — the prompt
+     and schema before the change. toc12-frozen.ts. */
+  {
+    name: "toc12-frozen",
+    kind: "one-call",
+    comparison: "baseline",
+    call: INCUMBENT,
+    seed: "none",
+    prompt: "toc12-frozen",
   },
   {
     name: "toc11-think-first",

@@ -6,7 +6,8 @@
  *
  * 1. The `@layer` statement must come FIRST, before the @imports. A layer
  *    statement is one of the few things allowed to precede @import, and it is
- *    what fixes the order: app styles beat preflight, utilities beat app styles.
+ *    what fixes the order: app styles beat preflight, utilities beat app styles,
+ *    and the one `tone` sheet (button-tone.css, below) beats the utilities.
  *
  * 2. `prefix(tw)` is not taste. Tailwind's scanner is a plain TEXT scanner: it
  *    pulls bare words out of source files and generates a utility for any that
@@ -35,7 +36,7 @@
  * silently does nothing. Its own nested @import of tokens.css inherits the
  * layer, so tokens.css needs no change.
  */
-@layer theme, base, app, utilities;
+@layer theme, base, app, utilities, tone;
 
 /* The reading face, self-hosted. Three files, not one: Fontsource splits its
    @font-face rules by `unicode-range`, so a latin-only page downloads only the
@@ -116,6 +117,14 @@
 @custom-variant hover-none (@media (hover: none));
 
 @import "./styles.css" layer(app);
+
+/* **The one sheet above the utilities**: green to send, red to back out
+   (`.tone-positive`, `.tone-negative`). It has to beat a `tw:` colour on a
+   shadcn Button or an admin button string, which nothing in `@layer app` can,
+   so it gets the last layer in the statement above and lives beside this file
+   rather than in styles/. Nothing else belongs in `tone`: a rule there beats
+   every utility on any element it matches. Its header says more; plan 261020z. */
+@import "./button-tone.css" layer(tone);
 
 /* The motion guard, written once and globally, BEFORE most of the motion it
    guards exists. The original app learned this the expensive way: it had a

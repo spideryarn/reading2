@@ -540,7 +540,7 @@ stayed grey until 2026-10-20. The app's convention of the way out to the left of
 
 **Green to send, red to back out, throughout the dialog** (`spya-as0et6`, Greg, 2026-10-19:
 *"color the buttons red and green, and for close as well"*). One shared pair, `.tone-positive`
-and `.tone-negative` in [`button-tone.css`](../../src/web/styles/button-tone.css), replaces the
+and `.tone-negative` in [`button-tone.css`](../../src/web/button-tone.css), replaces the
 Feedback-only rules: Send, Send addendum and Send reply green; Cancel (Write's and the addendum's),
 Close and Defer for now red. The pager, Bring back, *Add to this report* and the header's ✕ stay
 neutral. Red is a direction, not a warning: the addendum's Cancel still discards its own draft

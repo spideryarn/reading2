@@ -354,6 +354,9 @@ describe("/admin/vouchers", () => {
     const email = waiting?.querySelector('input[type="email"]');
     expect(email).not.toBeNull();
     expect(document.activeElement).toBe(email);
+    /* Plan 261020z: Save green, Cancel red. */
+    expect(buttonIn(waiting, "Save")?.classList.contains("tone-positive")).toBe(true);
+    expect(buttonIn(waiting, "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => buttonIn(waiting, "Cancel")?.click());
     expect(document.activeElement).toBe(buttonIn(waiting, "Edit"));
 

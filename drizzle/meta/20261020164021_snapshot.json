@@ -1,5 +1,5 @@
 {
-  "id": "c6c37451-9ce8-41e7-81c3-91bf63a8c0e9",
+  "id": "ce55cc37-fcbc-4f7c-a5e9-6c37489d05fb",
   "prevId": "2c4236c7-7c35-4205-8ebb-80b5e3d2d256",
   "version": "7",
   "dialect": "postgresql",
@@ -536,6 +536,46 @@
       },
       "isRLSEnabled": false
     },
+    "spideryarn.article_open_times": {
+      "name": "article_open_times",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "article_open_times_owner_id_slot_pk": {
+          "name": "article_open_times_owner_id_slot_pk",
+          "columns": [
+            "owner_id",
+            "slot"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "spideryarn.article_revisions": {
       "name": "article_revisions",
       "schema": "spideryarn",
@@ -681,12 +721,6 @@
         },
         "raw_byte_count": {
           "name": "raw_byte_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "raw_pages": {
-          "name": "raw_pages",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -1080,10 +1114,6 @@
         "article_revisions_status": {
           "name": "article_revisions_status",
           "value": "\"spideryarn\".\"article_revisions\".\"status\" in ('draft','published','failed')"
-        },
-        "article_revisions_raw_pages": {
-          "name": "article_revisions_raw_pages",
-          "value": "\"spideryarn\".\"article_revisions\".\"raw_pages\" is null or \"spideryarn\".\"article_revisions\".\"raw_pages\" > 0"
         },
         "article_revisions_reading_language": {
           "name": "article_revisions_reading_language",
@@ -5980,19 +6010,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "slots": {
-          "name": "slots",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "pages": {
-          "name": "pages",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -6109,14 +6126,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "ingest_events_slots": {
-          "name": "ingest_events_slots",
-          "value": "\"spideryarn\".\"ingest_events\".\"slots\" between 1 and 8"
-        },
-        "ingest_events_pages": {
-          "name": "ingest_events_pages",
-          "value": "\"spideryarn\".\"ingest_events\".\"pages\" is null or \"spideryarn\".\"ingest_events\".\"pages\" > 0"
-        },
         "ingest_events_settled_once": {
           "name": "ingest_events_settled_once",
           "value": "num_nonnulls(\"spideryarn\".\"ingest_events\".\"succeeded_at\", \"spideryarn\".\"ingest_events\".\"released_at\") <= 1"

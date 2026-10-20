@@ -233,8 +233,14 @@ blocks, and a node's children exactly partition its range — no gaps, no
 overlaps, no reordering. The first child starts where its parent starts; the
 last child ends where its parent ends.`;
 
+/* **`start` is the block's number since `toc/13`** (2026-10-20), not its id:
+   copying `[582] spya-xcf0dz` the model wrote `spya-582xcf0dz`, and constrained
+   to the id's own pattern it landed on a neighbour's id instead. Asked for the
+   number, it started Part VI at its heading in 20 answers of 20.
+   docs/plans/261020aa-structure-answers-the-block-number-not-its-id.md. */
 const TOC11_STRUCTURE = `Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
-"start". Give each child one "start": the id of the first block it covers. Do
+"start". Give each child one "start": the number in square brackets of the first block it
+covers — for the line "[582] spya-xcf0dz <h1>: …" that is 582, an integer. Do
 not give an end — ends are computed from the next child's start, and the last
 child ends where its parent ends. The first child must start where its parent
 starts. List children in document order; after the first child, each "start"
@@ -248,7 +254,7 @@ const TOC10_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "..."
 const TOC11_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "...",
           "sourceHeading": "...", "children": [
             {"title": "...", "gist": "...", "question": "...",
-             "start": "<firstBlockId>", "children": [ ... ]}
+             "start": <firstBlockNumber>, "children": [ ... ]}
           ]}}`;
 
 function replacePromptBlock(prompt: string, before: string, after: string): string {
@@ -264,6 +270,10 @@ export const SYSTEM = replacePromptBlock(
 );
 
 const stringSchema = { type: "string" } as const;
+/* A block's number in the prompt (`renderBlocks`' `[i]`). Anthropic's subset has
+   no `minimum`/`maximum`, so the range is checked where it is resolved:
+   src/structure-starts.ts § `startAsId`. */
+const blockNumberSchema = { type: "integer" } as const;
 const nonEmptyArrayOf = (items: Readonly<Record<string, unknown>>) => ({ type: "array", items, minItems: 1 }) as const;
 const objectSchema = (
   properties: Readonly<Record<string, unknown>>,
@@ -274,7 +284,7 @@ const depth2Schema = objectSchema(
   {
     title: stringSchema,
     gist: stringSchema,
-    start: stringSchema,
+    start: blockNumberSchema,
     sourceHeading: stringSchema,
   },
   ["title", "gist", "start"],
@@ -285,7 +295,7 @@ const depth1Schema = objectSchema(
     title: stringSchema,
     gist: stringSchema,
     question: stringSchema,
-    start: stringSchema,
+    start: blockNumberSchema,
     sourceHeading: stringSchema,
     /* **Optional, unlike the root's.** A chapter with no sections is an answer
        the model gives often — 184 of 882 chapters across the 70 measured
@@ -858,8 +868,8 @@ function usableWholeDocument(value: unknown, fingerprint: string, blocks: readon
    */
   try {
     /* `recover-or-drop`, as `treeFrom` reads a stored answer: an answer that
-       built only by recovering a start would otherwise be refused here and
-       bought again on every run. ⟨GPT Sol, plan review r2, finding 2⟩ */
+       built only by dropping an unresolved start would otherwise be refused
+       here and bought again on every run. ⟨GPT Sol, plan review r2, finding 2⟩ */
     parseWholeDocumentAnswer(entry.answer, blocks, undefined, "recover-or-drop");
   } catch {
     return null;
@@ -1124,13 +1134,13 @@ export interface BuildReport {
    */
   droppedChildren: string[];
   /**
-   * **Starts that were not block ids and did not refuse the answer** — recovered
-   * from a spliced line number, or dropped (and then in `droppedChildren` too).
+   * **Starts that named no block and did not refuse the answer** — dropped,
+   * and so in `droppedChildren` too.
    * Only a whole-document answer read with `unresolved` other than `refuse` can
    * add one; src/start-ranges.ts § `UnresolvedStarts`.
    *
-   * Counted because a prompt that drifted into writing line numbers would
-   * otherwise look healthy for ever: every answer would build.
+   * Counted because a prompt that drifted into naming blocks that do not exist
+   * would otherwise look healthy for ever: every last answer would build.
    * docs/postmortems/261019d-a-line-number-spliced-into-a-block-id-cost-the-whole-tree.md.
    */
   unresolvedStarts: UnresolvedStart[];
@@ -2376,11 +2386,9 @@ export interface StructureRun {
    */
   droppedChildren: number;
   /**
-   * **Starts that were not block ids**, by what became of them: read as the
-   * line number the model spliced in, or dropped (and so in `droppedChildren`
+   * **Starts that named no block**, dropped (and so in `droppedChildren`
    * as well). Normally 0. src/structure.ts § `BuildReport.unresolvedStarts`.
    */
-  startsRecovered: number;
   startsDropped: number;
   droppedHeadings: number;
   /**
@@ -2816,8 +2824,8 @@ export async function generateStructure(opts: {
   /**
    * `unresolved` is how hard a start that names no block may be argued with —
    * src/start-ranges.ts § `UnresolvedStarts`. A first fresh answer gets
-   * `recover`, so anything worse than a spliced line number still buys the
-   * re-ask below; the re-ask is the last answer this step will get, so it may
+   * `recover`, so any non-first start that names no block buys the re-ask
+   * below; the re-ask is the last answer this step will get, so it may
    * also drop a child rather than cost the reader the whole tree. A stored
    * answer is read the same way as the re-ask: only an answer that built is
    * ever stored, so it builds again identically.
@@ -2853,10 +2861,10 @@ export async function generateStructure(opts: {
        * look at it. GPT Sol, finding 7.
        *
        * No tiling fault reaches here any more (`planChildRanges` derives the
-       * partition rather than checking it). What can still throw is an invented
+       * partition rather than checking it). What can still throw is an unresolved
        * start during the starts-only conversion or an invalid derived tree. The
        * repair figures are still worth attaching: a node whose siblings were
-       * all mended and which then failed on an invented id is a different story
+       * all mended and which then failed on another start is a different story
        * from one that failed on its own.
        *
        * `where`, `kind`, `at` and `size` are all derived from the shape of the
@@ -2867,8 +2875,8 @@ export async function generateStructure(opts: {
        */
       if (built.repairs.length === 0 && built.unresolvedStarts.length === 0) throw err;
       const spent = [...new Set(built.repairs.map((r) => r.at))].length;
-      /* A start recovered and then a fatal one elsewhere: without this the
-         recovery vanishes into the re-ask. ⟨GPT Sol, plan review, finding 6⟩ */
+      /* A start dropped and then a fatal one elsewhere: without this the
+         earlier fault vanishes into the re-ask. ⟨GPT Sol, plan review, finding 6⟩ */
       const unresolvedEvidence = built.unresolvedStarts.length === 0
         ? ""
         : `  It had also read ${built.unresolvedStarts.length} start(s) that named no block: ` +
@@ -3551,8 +3559,7 @@ function finishStructureRun(
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
-    startsRecovered: built.unresolvedStarts.filter((u) => u.outcome === "line-number").length,
-    startsDropped: built.unresolvedStarts.filter((u) => u.outcome === "dropped").length,
+    startsDropped: built.unresolvedStarts.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
     droppedQuestions: built.droppedQuestions.length,

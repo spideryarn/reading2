@@ -5,13 +5,13 @@
  *   step, wider, and taller on a window tall enough, above the 1024px step
  *   261008i made.
  * - **Green to send, red to back out** (`spya-zjsqe6`, plan 261011h, then
- *   `spya-as0et6`, plan 261020f): one shared pair, `.tone-positive` and
- *   `.tone-negative` in button-tone.css, weighty enough to beat every family
- *   rule that can paint a Feedback button.
+ *   `spya-as0et6`, plans 261020f and 261020z): one shared pair,
+ *   `.tone-positive` and `.tone-negative` in button-tone.css, in the `tone`
+ *   layer above the utilities, so it beats every family rule and utility that
+ *   can paint a button, in every state.
  *
  * The classes reaching the right buttons is `feedback-dialog.test.tsx`'s job.
  */
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   enclosing,
@@ -59,10 +59,6 @@ function expectUnconditional(selector: string, prop: string, value: string): voi
   }
 }
 
-/** Specificity for the simple class/attribute/pseudo-class selectors below. */
-function specificity(selector: string): number {
-  return (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length;
-}
 
 /** The Feedback dialog's button hooks, and the two shared tones. */
 const BUTTON_HOOK = /\.(?:fb-(?:copy|reply-thread|reply-send|defer|send|cancel)|tone-(?:positive|negative))\b/;
@@ -106,16 +102,29 @@ describe("green to send, red to back out: button-tone.css", () => {
     [".tone-positive", "var(--positive)"],
     [".tone-negative", "var(--danger)"],
   ] as const;
-  /** Every state a rival rule paints, as the tone selector that answers it. */
-  const STATES = ["", ":hover", '[aria-disabled="true"]:hover'] as const;
 
-  it("draws the text and the border in the tone, in every state, with no wash behind", () => {
+  it("draws the text and the border in the tone without replacing a family's resting background", () => {
     for (const [tone, colour] of TONES) {
-      for (const state of STATES) {
-        expectUnconditional(`${tone}${state}`, "color", colour);
-        expectUnconditional(`${tone}${state}`, "border-color", "currentColor");
-        /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
-        expect(declared(CSS, `${tone}${state}`, "background"), tone).toEqual([]);
+      expectUnconditional(tone, "color", colour);
+      expectUnconditional(tone, "border-color", "currentColor");
+      /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
+      expect(declared(CSS, tone, "background"), tone).toEqual([]);
+      expect(declared(CSS, tone, "background-color"), tone).toEqual([]);
+      expect(declared(CSS, `${tone}:hover`, "background-color"), tone).toEqual([]);
+    }
+    /* Annotate Save owns a real resting face rather than a hover wash. A
+       generic toned :hover rule used to remove it only under the pointer. */
+    expect(declared(CSS, ".annotate-save", "background")).toEqual(["var(--page)"]);
+  });
+
+  it("removes the low-contrast hover wash from the two families that have one", () => {
+    for (const [tone] of TONES) {
+      for (const selector of [
+        `[data-slot="button"][data-variant="outline"]${tone}:hover`,
+        `[data-slot="button"][data-variant="ghost"]${tone}:hover`,
+        `.chat-icon${tone}:hover`,
+      ]) {
+        expectUnconditional(selector, "background-color", "transparent");
       }
     }
   });
@@ -127,30 +136,11 @@ describe("green to send, red to back out: button-tone.css", () => {
     }
   });
 
-  it("is the last sheet styles.css imports, so a family rule of equal weight loses", () => {
-    const imports = [...readFileSync("src/web/styles.css", "utf8").matchAll(/^@import\s+"([^"]+)"/gm)].map(
-      (m) => m[1],
-    );
-    expect(imports.at(-1)).toBe("./styles/button-tone.css");
-  });
-
-  it("matches or outweighs every other paint rule on a Feedback button, state for state", () => {
-    const rivals = buttonPaint(CSS)
-      .map((line) => line.split(" | ")[0]!)
-      .filter((selector) => !/\.tone-/.test(selector));
-    expect(rivals.length).toBeGreaterThan(0);
-    for (const rival of rivals) {
-      const state = !rival.includes(":hover")
-        ? STATES[0]
-        : rival.includes("[aria-disabled")
-          ? STATES[2]
-          : STATES[1];
-      for (const [tone] of TONES) {
-        expect(specificity(`${tone}${state}`), `${tone}${state} vs ${rival}`).toBeGreaterThanOrEqual(
-          specificity(rival),
-        );
-      }
-    }
+  it("is the last of the reader sheets, the one in the tone layer above the utilities", () => {
+    /* Layer, not order or weight, is what wins: tests/styles-entry-is-imports-only
+       holds tailwind.css to `@import "./button-tone.css" layer(tone)` and the
+       layer statement to `…, utilities, tone`. */
+    expect(readerSheets().at(-1)?.path).toBe("src/web/button-tone.css");
   });
 
   it("accounts for every paint rule that can name a Feedback button hook or a tone", () => {
@@ -167,16 +157,14 @@ describe("green to send, red to back out: button-tone.css", () => {
       ".fb-send | background: none",
       ".tone-positive | color: var(--positive)",
       ".tone-positive | border-color: currentColor",
-      ".tone-positive:hover | color: var(--positive)",
-      ".tone-positive:hover | border-color: currentColor",
-      '.tone-positive[aria-disabled="true"]:hover | color: var(--positive)',
-      '.tone-positive[aria-disabled="true"]:hover | border-color: currentColor',
       ".tone-negative | color: var(--danger)",
       ".tone-negative | border-color: currentColor",
-      ".tone-negative:hover | color: var(--danger)",
-      ".tone-negative:hover | border-color: currentColor",
-      '.tone-negative[aria-disabled="true"]:hover | color: var(--danger)',
-      '.tone-negative[aria-disabled="true"]:hover | border-color: currentColor',
+      '[data-slot="button"][data-variant="outline"].tone-positive:hover | background-color: transparent',
+      '[data-slot="button"][data-variant="outline"].tone-negative:hover | background-color: transparent',
+      '[data-slot="button"][data-variant="ghost"].tone-positive:hover | background-color: transparent',
+      '[data-slot="button"][data-variant="ghost"].tone-negative:hover | background-color: transparent',
+      ".chat-icon.tone-positive:hover | background-color: transparent",
+      ".chat-icon.tone-negative:hover | background-color: transparent",
     ]);
   });
 
@@ -187,8 +175,8 @@ describe("green to send, red to back out: button-tone.css", () => {
       ["fb-cancel", "src/web/styles/feedback.css"],
       ["fb-reply-send", null],
       ["fb-defer", null],
-      ["tone-positive", "src/web/styles/button-tone.css"],
-      ["tone-negative", "src/web/styles/button-tone.css"],
+      ["tone-positive", "src/web/button-tone.css"],
+      ["tone-negative", "src/web/button-tone.css"],
     ] as const) {
       expect(
         readerSheets()

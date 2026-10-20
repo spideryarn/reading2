@@ -1534,10 +1534,10 @@ function RenameRow({
           if (e.key === "Escape") onCancel();
         }}
       />
-      <button type="button" className="chat-icon" data-tip="Save" data-tip-describes="off" aria-label="Save" onClick={() => onDone(value)}>
+      <button type="button" className="chat-icon tone-positive" data-tip="Save" data-tip-describes="off" aria-label="Save" onClick={() => onDone(value)}>
         <Check size={12} />
       </button>
-      <button type="button" className="chat-icon" data-tip="Cancel" data-tip-describes="off" aria-label="Cancel" onClick={onCancel}>
+      <button type="button" className="chat-icon tone-negative" data-tip="Cancel" data-tip-describes="off" aria-label="Cancel" onClick={onCancel}>
         <X size={12} />
       </button>
     </div>
@@ -3274,14 +3274,14 @@ function EditQuestion({
       <div className="chat-actions">
         <button
           type="button"
-          className="chat-icon"
+          className="chat-icon tone-positive"
           data-tip={canAsk ? "Ask again (Enter)" : "Stop the answer and ask again (Enter)"}
           aria-label="Ask again"
           onClick={ask}
         >
           <Check size={12} />
         </button>
-        <button type="button" className="chat-icon" data-tip="Cancel (Esc)" aria-label="Cancel" onClick={onCancel}>
+        <button type="button" className="chat-icon tone-negative" data-tip="Cancel (Esc)" aria-label="Cancel" onClick={onCancel}>
           <X size={12} />
         </button>
       </div>

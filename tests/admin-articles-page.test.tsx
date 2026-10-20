@@ -293,6 +293,9 @@ describe("/admin/articles", () => {
     expect(options.find((o) => o.value === ALICE)?.disabled).toBe(true);
     expect(options.find((o) => o.value === UNCONFIRMED)?.disabled).toBe(true);
     expect(buttonIn(confirmation(), "Transfer")?.disabled).toBe(true);
+    /* Plan 261020z: left neutral on purpose. */
+    expect(buttonIn(confirmation(), "Transfer")?.className).not.toMatch(/tone-/);
+    expect(buttonIn(confirmation(), "Cancel")?.className).not.toMatch(/tone-/);
 
     await choose(BOB);
     const listReadsBefore = calls.filter((c) => c.url === "/api/admin/articles").length;

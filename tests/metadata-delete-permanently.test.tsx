@@ -425,6 +425,9 @@ describe("Delete permanently — the two-step confirm", () => {
     await press(trigger());
     /* The question is up, and nothing has been asked of the server. */
     expect(confirmButton()).toBeTruthy();
+    /* Plan 261020z: left neutral on purpose. */
+    expect(confirmButton()?.className).not.toMatch(/tone-/);
+    expect(keepButton()?.className).not.toMatch(/tone-/);
     expect(asked.filter((a) => a.startsWith("DELETE"))).toEqual([]);
   });
 

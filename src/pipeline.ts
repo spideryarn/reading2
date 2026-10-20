@@ -3928,10 +3928,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/structure.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
           /* **Starts that named no block and did not cost the article.** A
-             prompt drifting into copying line numbers instead of ids shows up
-             here and nowhere else, because every such answer now builds.
+             prompt drifting into naming blocks that do not exist shows up here
+             and nowhere else, because a last answer with one still builds.
              src/structure.ts § `BuildReport.unresolvedStarts`. */
-          startsRecovered: run.startsRecovered,
           startsDropped: run.startsDropped,
           droppedHeadings: run.droppedHeadings,
           /* **Socratic questions written but not kept.** Nothing on screen

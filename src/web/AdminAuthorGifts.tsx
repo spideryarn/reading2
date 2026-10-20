@@ -380,10 +380,10 @@ function Notes({
             className={`${TEXTAREA} tw:w-full`}
           />
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <button type="submit" disabled={busy || movedOn || lookupRunning} className={BUTTON}>
+            <button type="submit" disabled={busy || movedOn || lookupRunning} className={`${BUTTON} tone-positive`}>
               {busy ? "Saving…" : "Save notes"}
             </button>
-            <button type="button" disabled={busy} onClick={() => setEditing(false)} className={BUTTON}>
+            <button type="button" disabled={busy} onClick={() => setEditing(false)} className={`${BUTTON} tone-negative`}>
               Cancel
             </button>
           </div>
@@ -537,10 +537,10 @@ function DraftEditor({
         />
       </label>
       <div className="tw:flex tw:flex-wrap tw:gap-2">
-        <button type="submit" disabled={busy} className={BUTTON}>
+        <button type="submit" disabled={busy} className={`${BUTTON} tone-positive`}>
           {busy ? "Saving…" : "Save"}
         </button>
-        <button type="button" disabled={busy} onClick={done} className={BUTTON}>
+        <button type="button" disabled={busy} onClick={done} className={`${BUTTON} tone-negative`}>
           Cancel
         </button>
       </div>
@@ -809,13 +809,15 @@ function GiftCard({
           <div className="tw:flex tw:flex-wrap tw:gap-2">
             <Button
               type="button"
+              variant="outline"
               size="sm"
+              className="tone-positive"
               disabled={busy || running || (needsRights && !rights)}
               onClick={() => void sendNow()}
             >
               {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
             </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(null)}>
+            <Button type="button" variant="ghost" size="sm" className="tone-negative" disabled={busy} onClick={() => setConfirming(null)}>
               Cancel
             </Button>
           </div>

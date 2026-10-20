@@ -5,11 +5,15 @@
 checkpoint gate, a first answer with no time left for a re-ask, a drop must leave two children; all
 four taken and pinned by a test). Where revision 2's text below disagrees with
 src/start-ranges.ts, the code and [structure-step.md](../project/structure-step.md) are current.
+**Rule 2, the line-number decoder, was removed on 2026-10-20** by
+[261020aa](261020aa-structure-answers-the-block-number-not-its-id.md): since `toc/13` the answer gives
+the block's number, an integer, so there is no id to splice it into. Rules 1, 3 and 4 stand.
 
 **Checked against the real answers**, 2026-10-19: the four repro answers through the new parser over
 the production body — runs 2 and 3 build on a first answer (`root > child 9: line-number`); runs 1
 and 4 refuse a first answer and build on the last, each dropping one sub-section (`3 > 3`, `3 > 2`).
-Under today's code all four refuse.
+Under today's code all four refuse on the first-answer reading; the last-answer reading may still
+drop the affected child within its budget.
 
 Feedback: spya-c09nnb (#627, SPIDERYARN-READING2-KP) and spya-e2vxrw (#628, SPIDERYARN-READING2-KQ),
 both from Greg, 2026-10-19, about one article a new reader imported that evening. Overseer queue item

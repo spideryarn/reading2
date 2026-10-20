@@ -299,6 +299,10 @@ describe("PurposePrompt", () => {
     session.set(MARK, SLUG);
     render();
     await settle();
+    /* Plan 261020z: left neutral on purpose. */
+    const named = (n: string) => [...host.querySelectorAll("button")].find((x) => x.textContent?.trim() === n);
+    expect(named("Done")?.className).not.toMatch(/tone-/);
+    expect(named("Not now")?.className).not.toMatch(/tone-/);
     press("Not now");
     await settle();
     expect(isOpen()).toBe(false);

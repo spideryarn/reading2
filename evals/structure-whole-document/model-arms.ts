@@ -48,6 +48,7 @@ import type { Block, Tree } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 import { parseToc10WholeDocumentAnswer, toc10FrozenRequest } from "./toc10-frozen.js";
+import { toc12FrozenRequest } from "./toc12-frozen.js";
 
 /** How long any one structure call may take before it counts as a failure. */
 export const CALL_TIMEOUT_MS = 10 * 60_000;
@@ -1040,7 +1041,9 @@ export async function runModelArm(
     case "one-call": {
       const base = arm.prompt === "toc10-frozen"
         ? toc10FrozenRequest(body)
-        : wholeDocumentRequest(body);
+        : arm.prompt === "toc12-frozen"
+          ? toc12FrozenRequest(body)
+          : wholeDocumentRequest(body);
       const system = arm.prompt === "toc11-think-first"
         ? `${base.system}\n\nThink the problem through before you answer.`
         : base.system;

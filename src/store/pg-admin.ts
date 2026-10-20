@@ -76,6 +76,7 @@ import type { Db } from "../db/client.js";
 import { getDb } from "../db/client.js";
 import {
   aiCalls,
+  articleOpenTimes,
   articles,
   billingAccounts,
   chatThreads,
@@ -854,18 +855,23 @@ export function adminQueries(db: Db) {
  * - `comments.created_at`, through the article and on the shelf, as every
  *   article-shaped count in this file is.
  * - `articles.last_opened_at`, on the shelf — **one** day per article, the
- *   latest open.
+ *   latest open. Kept beside the next because it is the only trace of the days
+ *   before that table existed.
+ * - `article_open_times.opened_at` — when the account opened an article, at
+ *   most once per UTC half-hour, since 2026-10-20 (plan 261020y). Keyed on the
+ *   account rather than the article, so a deleted or transferred article keeps
+ *   its days for whoever opened it, and no shelf predicate applies.
  *
  * **Not `reader_arrivals`**, which looks like the sign-up day and is not: its
  * migration backfilled every account in the shared Auth project with its
  * creation date, including accounts that never used this app (Sol, finding 1).
  *
- * **What it cannot see is a day of reading alone.** Opening an article bumps a
- * counter and overwrites `last_opened_at`; reading time is a running total with
- * no date (/privacy promises *"the totals, not a history"*). So such a day is
- * counted only while it is an article's most recent open. Making that exact
- * needs a new record of which days somebody used the app, which is a question
- * for Greg in the plan rather than something built here.
+ * **Before 2026-10-20 it cannot see a day of reading alone.** Opening an
+ * article bumped a counter and overwrote `last_opened_at`, and reading time is a
+ * running total with no date, so such a day is counted only while it is an
+ * article's most recent open. Greg chose to record opens from then on
+ * (question q-xcc7xq); nothing was backfilled, so no day is claimed that was
+ * not seen.
  */
 export function activitySources(db: Db) {
   return unionAll(
@@ -887,6 +893,7 @@ export function activitySources(db: Db) {
       .select({ owner: articles.ownerId, at: sql<Date>`${articles.lastOpenedAt}`.as("at") })
       .from(articles)
       .where(and(onTheShelf(), isNotNull(articles.lastOpenedAt))),
+    db.select({ owner: articleOpenTimes.ownerId, at: articleOpenTimes.openedAt }).from(articleOpenTimes),
   );
 }
 

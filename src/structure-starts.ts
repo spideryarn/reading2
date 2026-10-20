@@ -8,12 +8,13 @@
  * `ModelNode.range` therefore remains a required `[string, string]` everywhere
  * downstream.
  *
- * This is a conversion seam, not an id trust seam. Every proposed start is still
- * resolved against the body. An invented id refuses with `buildTree`'s existing
- * message unless the caller passes `unresolved` (src/start-ranges.ts §
- * `UnresolvedStarts`), while a wrong-but-real id remains possible exactly as it
- * is for the ranged answer. The live `toc/11` path calls this module at its parse boundary;
- * the frozen `toc/10` eval arm deliberately keeps the old ranged parser.
+ * This is a conversion seam, not a trust seam. Every proposed number is first
+ * mapped against the exact body the prompt numbered, then resolved by the
+ * shared kernel. An out-of-range number or legacy invented id refuses unless
+ * the caller passes `unresolved` (src/start-ranges.ts § `UnresolvedStarts`),
+ * while an in-range but wrong number remains a possible wrong-but-real boundary.
+ * The live `toc/13` path calls this module at its parse boundary; the frozen
+ * `toc/10` eval arm deliberately keeps the old ranged parser.
  */
 import { nameValue } from "./ids.js";
 import type { BuildReport, ModelNode } from "./structure.js";
@@ -33,7 +34,8 @@ interface StartsOnlyFields {
 }
 
 export interface StartsOnlyNode extends StartsOnlyFields {
-  start: string;
+  /** The block's number in the prompt since `toc/13`; its id in an older stored answer. */
+  start: number | string;
   children?: StartsOnlyNode[];
 }
 
@@ -62,6 +64,20 @@ function fieldsOf(node: StartsOnlyFields): Omit<ModelNode, "range" | "children">
  */
 export function droppedStartBudget(nonFirstStarts: number): number {
   return Math.max(1, Math.floor(nonFirstStarts / 10));
+}
+
+/**
+ * **The id a start names.** A number is the `[i]` that `renderBlocks` printed
+ * before the block, so it indexes exactly the array the prompt was rendered
+ * from — which is why every caller parses against the array it asked about
+ * (the body, or one slice of it). A number that is not an integer in range is
+ * returned unchanged, so it reaches the kernel as a start that names no block
+ * and is refused or dropped like any other. A string — an id, from an answer
+ * stored before `toc/13` — passes through as before.
+ */
+export function startAsId(start: unknown, blocks: readonly Block[]): unknown {
+  if (typeof start !== "number") return start;
+  return Number.isInteger(start) ? (blocks[start]?.id ?? start) : start;
 }
 
 /** Convert one starts-only answer without changing it or any of its descendants. */
@@ -96,8 +112,9 @@ export function modelNodeFromStarts(
     where: string,
   ): ModelNode[] | undefined => {
     if (children === undefined || children.length === 0) return undefined;
+    const named = children.map((child) => ({ ...child, start: startAsId(child.start, blocks) as string }));
     const planned = deriveStartRanges({
-      children,
+      children: named,
       parent,
       blocks,
       index,
