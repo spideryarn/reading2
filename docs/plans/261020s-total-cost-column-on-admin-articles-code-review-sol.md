@@ -1,0 +1,13 @@
+1. **P2 — All-unpriced calls appeared as `$0.0000` in the tooltip.** Evidence: [AdminArticlesPage.tsx:81](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/src/web/AdminArticlesPage.tsx:81), [admin-articles-page.test.tsx:220](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/tests/admin-articles-page.test.tsx:220). Changed: the tooltip now says “No recorded amount” and the test covers both visible and accessible text.
+
+2. **P2 — Comments and UI copy incorrectly equated ID-only totals with Metadata’s slug-fallback totals.** Evidence: [admin-articles.ts:47](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/src/admin-articles.ts:47), [AdminArticlesPage.tsx:53](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/src/web/AdminArticlesPage.tsx:53). Changed: all wording now names `/admin/costs`’ ID-only attribution rule explicitly.
+
+3. **P2 — The route integration test could pass if every article cost were hard-coded to zero.** Evidence: [article-transfer.test.ts:620](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/tests/article-transfer.test.ts:620). Changed: it now inserts priced and unpriced calls for another owner’s private article and asserts the exact aggregate, zero fallback, and continued title/slug privacy.
+
+4. **P2 — Cost semantics and exact details were hover-only.** Evidence: [AdminArticlesPage.tsx:411](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/src/web/AdminArticlesPage.tsx:411). Changed: the header has an accessible description and each cell supplies screen-reader text while preserving the compact visual format.
+
+5. **nit — Privacy documentation said “money only,” although call counts also cross owners.** Evidence: [admin.md:1006](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/docs/project/admin.md:1006), [owner-isolation.test.ts:492](/var/tmp/spideryarn-worktrees/fbvjyev3-admin-article-cost/tests/owner-isolation.test.ts:492). Changed: documentation now accurately says spend and call counts tied to opaque IDs, already exposed by `/admin/costs`.
+
+Checks: browser test passed, 13/13; all four TypeScript projects passed with 3,865 files covered; `git diff --check` passed. The database-backed tests could not run because this sandbox denies the local Postgres connection. The normal `npm run typecheck` launcher was also denied its IPC socket, so the same script was run successfully via `node --import tsx`.
+
+VERDICT: ship after fixes made
