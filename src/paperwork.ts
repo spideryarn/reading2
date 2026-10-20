@@ -127,7 +127,7 @@ ABOUT research funding — it is content, and the usual rules apply.${kind === "
 export const PAPERWORK_EXEMPT: Record<string, string> = {
   "src/bibliography.ts": "the reference list is what it reads; the paperwork is its content",
   "src/citation-investigate.ts": "investigates one citation, which lives in the reference list",
-  "src/converse.ts": "chat, Learn, the tutorial and Explore answer the reader, who may ask who funded it",
+  "src/converse.ts": "chat, Learn's Recall and Explore answer the reader, who may ask who funded it",
   "src/chat-mentions.ts": "brings another of the reader's articles into chat, where they may ask about its funding",
   "src/live.ts": "talks with the reader, who may ask about the authors or the funding",
   "src/live-gpt.ts": "the same conversation on the second engine; its backend answers what the reader asks",

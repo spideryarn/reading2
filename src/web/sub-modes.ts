@@ -1,6 +1,6 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
- * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's six views,
+ * band: Learn's Recall | Explore | Quiz, Diagram's five pictures, Referee's six views,
  * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Sources' Bibliography |
  * Not cited | Links | Reception | Claims.
  *
@@ -57,8 +57,9 @@ export type ModeWithSubModes = SubMode["mode"];
  * pictures are (Learn's Explore was, from 2026-10-05 to 2026-10-11); every
  * other mode puts the whole mode behind it or none.
  *
- * `aliases` is for a sub-mode a reader knows by another word, and one has them:
- * Summary's Thread, which was the Tweets mode until 2026-10-03. They are the
+ * `aliases` is for a sub-mode a reader knows by another word, and two have
+ * them: Summary's Thread, which was the Tweets mode until 2026-10-03, and
+ * Learn's Recall, which took Learn's Tutorial in on 2026-10-20. They are the
  * row's own and not its parent's, because the parent's catalog aliases find the
  * *mode* row, which opens whatever view the address already names — typing
  * `tweets` would open Summary at Brief (GPT Sol, F3 of the 261003l review;
@@ -71,16 +72,20 @@ export interface SubModeWords {
   readonly aliases?: readonly string[];
 }
 
-/** Learn's four parts. The chip's words, QuizPanel.tsx § `LearnSubModeToggle`. */
+/** Learn's three parts. The chip's words, QuizPanel.tsx § `LearnSubModeToggle`. */
 export const LEARN_SUB_MODES: Readonly<Record<LearnView, SubModeWords>> = {
   recall: {
     label: "Recall",
-    description: "Say what you took from the piece, and find out where it holds up",
-    experimental: false,
-  },
-  tutorial: {
-    label: "Tutorial",
-    description: "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
+    /* The second half since 2026-10-20, when Recall took Tutorial in: the one
+       thing Tutorial's name said better was that a reader who has not read
+       the piece is welcome too (docs/plans/261020m-recall-and-tutorial-become-one-recall.md). */
+    description:
+      "Say what you took from the piece, and find out where it holds up. Not read it yet? It takes you through it a piece at a time",
+    /* Tutorial was its own chip from 2026-10-02 to 2026-10-20. The word still
+       finds Recall in the command bar — a search word, not the live door's
+       check (chat-commands.ts), which retires `submode:learn:tutorial` as it
+       does any other retired target (GPT Sol's F7 on plan 261020m). */
+    aliases: ["tutorial"],
     experimental: false,
   },
   explore: {
@@ -105,7 +110,7 @@ export const LEARN_SUB_MODES: Readonly<Record<LearnView, SubModeWords>> = {
  * behind the experimental-features switch, plus all of them when the switch is
  * on, plus the one the reader is in (`current`) — the bar's own rule,
  * experimental-visibility.ts. No part of Learn is behind the switch since
- * Explore came out on 2026-10-11, so today this returns all four; it stays
+ * Explore came out on 2026-10-11, so today this returns all three; it stays
  * as the one place a new part would be gated.
  *
  * One function for the two places in the band that list the parts, the chips
@@ -402,15 +407,13 @@ export function subModeParams(sub: SubMode): SubModeParams {
   switch (sub.mode) {
     case "learn": {
       /* Each view by name: Recall is the default and so absent, Quiz clears
-         `thread` (rule 1), and Tutorial and Explore keep it as Recall does —
-         each band overrules a stale one and writes its own. Mapping "not quiz" to Recall
+         `thread` (rule 1), and Explore keeps it as Recall does — each band
+         overrules a stale one and writes its own. Mapping "not quiz" to Recall
          was right with two views and silently wrong with three. */
       const view = sub.view;
       switch (view) {
         case "quiz":
           return { mode: "learn", learn: "quiz", thread: null };
-        case "tutorial":
-          return { mode: "learn", learn: "tutorial" };
         case "explore":
           return { mode: "learn", learn: "explore" };
         case "recall":
@@ -453,7 +456,7 @@ export function subModeParams(sub: SubMode): SubModeParams {
  * `subModeParams`' answer for Quiz, the same as the chip and the command bar's
  * row write, rather than a second copy of the rule.
  *
- * Only Quiz. Recall, Tutorial and Explore each overrule a stale thread
+ * Only Quiz. Recall and Explore each overrule a stale thread
  * themselves and write their own, and no other mode's sub-mode touches a second
  * key. Both doors ask this: Reader.tsx § the Dock's `onMode`, and Dock.tsx §
  * `modeLinkHref` for the metadata page's link.

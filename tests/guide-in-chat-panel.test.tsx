@@ -115,25 +115,38 @@ let guideOpened = 0;
 
 function paint(
   listed: ChatThread[],
-  over: { from?: ChatFrom | null; threadId?: string | null; guide?: ChatThread | null; live?: LiveApi } = {},
+  over: {
+    from?: ChatFrom | null;
+    threadId?: string | null;
+    guide?: ChatThread | null;
+    live?: LiveApi;
+    kind?: ThreadKind;
+  } = {},
 ) {
   const guide = over.guide ?? null;
+  const kind = over.kind ?? "chat";
   act(() => {
     root.render(
       createElement(ChatPanel, {
         slug: "a-piece",
         articleTitle: "Attention Is All You Need",
-        kind: "chat" as const,
+        kind,
         loaded: true,
         loadFailed: false,
-        listed,
-        threads: [...listed.filter((t) => t.kind === "chat"), ...(guide ? [guide] : [])],
-        guide: {
-          thread: guide,
-          onOpen: () => {
-            guideOpened += 1;
-          },
-        },
+        listed: kind === "chat" ? listed : undefined,
+        threads:
+          kind === "chat"
+            ? [...listed.filter((t) => t.kind === "chat"), ...(guide ? [guide] : [])]
+            : listed.filter((t) => t.kind === kind),
+        guide:
+          kind === "chat"
+            ? {
+                thread: guide,
+                onOpen: () => {
+                  guideOpened += 1;
+                },
+              }
+            : undefined,
         threadId: over.threadId ?? null,
         from: over.from ?? null,
         onFrom: () => {},
@@ -731,11 +744,38 @@ describe("the guide's offer to save", () => {
     });
   });
 
-  it("draws no card in a chat, whatever its runs say", async () => {
-    const chat = { ...guideWith([REASON]), id: "spya-chtoff", kind: "chat" as const };
-    paint([chat], { threadId: chat.id });
-    await settle();
-    expect(host.querySelector(".guide-offer")).toBeNull();
+  /* Plan 261020o: Chat and Explore offer About you too, always pressed. */
+  describe("in a chat or Explore", () => {
+    const ABOUT: Offer & { now: true; route: "exact" } = {
+      field: "profile",
+      text: "Prefers brief answers.",
+      basis: null,
+      now: true,
+      route: "exact",
+    };
+    const drawAs = async (kind: "chat" | "explore", offers: Offer[], status?: "pending") => {
+      const t = { ...guideWith(offers, status ? { status } : {}), id: "spya-chtoff", kind };
+      paint([t], { kind, threadId: t.id });
+      await settle();
+    };
+
+    it.each(["chat", "explore"] as const)("draws no reason card in %s, whatever its runs say", async (kind) => {
+      await drawAs(kind, [REASON]);
+      expect(host.querySelector(".guide-offer")).toBeNull();
+    });
+
+    it.each(["chat", "explore"] as const)(
+      "%s draws an About you card that waits for the press, even one a stored run marks now",
+      async (kind) => {
+        await drawAs(kind, [ABOUT], "pending");
+        markAnsweredHere("spya-gdea02");
+        await drawAs(kind, [ABOUT]);
+        expect(host.querySelector(".guide-offer-text")?.textContent).toBe("Prefers brief answers.");
+        expect(patches, "nothing saves without the press").toEqual([]);
+        await press(OFFER_WORDS.profile.save);
+        expect(patches).toEqual([{ profile: "Prefers brief answers." }]);
+      },
+    );
   });
 });
 

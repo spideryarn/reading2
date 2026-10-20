@@ -249,7 +249,7 @@ describe("buildConverseMessages — only a Chat turn carries the list", () => {
   });
 
   it("leaves it out of every other kind", () => {
-    for (const kind of ["explore", "tutorial", "guide", "candidates", "learn"] as ThreadKind[]) {
+    for (const kind of ["explore", "guide", "candidates", "learn"] as ThreadKind[]) {
       expect(finalUser(kind)).not.toContain(others);
     }
   });

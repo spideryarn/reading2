@@ -422,7 +422,7 @@ describe("what the session is created with", () => {
       chatStore.begin(SLUG, {
         threadId: "spya-vaaagt",
         question: "Teach me this",
-        kind: "tutorial",
+        kind: "explore",
       }),
     );
     minted = null;

@@ -72,6 +72,7 @@ so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
 | Question | Where |
 |---|---|
 | What has this article cost, in total and by mode? | the **What it cost** section of the article's metadata page — the administrator, on their own articles |
+| Which articles have the highest recorded totals, across every owner? | `/admin/articles`, the Total cost column — [admin.md](admin.md#adminarticles-moving-an-article-to-another-account) |
 | What has each account cost this month? | `/admin/users`, the spend column — [admin.md](admin.md#the-spend-column-and-the-two-things-that-keep-it-honest) |
 | Which user, article, mode or model is the money going on, and when? | `/admin/costs` — [admin-costs.md](admin-costs.md) |
 | Where are the inefficiencies, with a report Greg can read? | `npm run cost:analyse` — [admin-costs.md § Running an analysis](admin-costs.md#running-an-analysis) |

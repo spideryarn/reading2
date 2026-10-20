@@ -329,14 +329,12 @@ describe("threadIndexRows — the reader's other conversations", () => {
       [
         thread("spya-t00001", { kind: "chat" }),
         thread("spya-t00002", { kind: "learn" }),
-        thread("spya-t00003", { kind: "tutorial" }),
         thread("spya-t00004", { kind: "explore" }),
       ],
       undefined,
     ).rows.join("\n");
     expect(rows).toContain("a chat");
     expect(rows).toContain("Recall");
-    expect(rows).toContain("Tutorial");
     expect(rows).toContain("Explore");
     expect(rows).not.toContain("learn");
     expect(rows).not.toContain("explore");
@@ -917,12 +915,18 @@ describe("toolsFor — who is offered the reader's notes (PR-3)", () => {
     expect(READER_NOTES_TOOL.function.name).toBe("reader_notes");
   });
 
-  /* And `read_cited_work` after it, the other chat-and-explore tool (plan 261011w). */
+  /* And `read_cited_work` after it, the other chat-and-explore tool (plan
+     261011w), then the press-only `offer_to_save` (plan 261020o). */
   it.each(["chat", "explore"] as const)("gives it to %s, after the shared eight", (kind) => {
-    expect(names(kind)).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
+    expect(names(kind)).toEqual([
+      ...CHAT_TOOLS.map((t) => t.function.name),
+      "reader_notes",
+      "read_cited_work",
+      "offer_to_save",
+    ]);
   });
 
-  it.each(["learn", "tutorial", "candidates"] as const)("gives %s the shared eight only", (kind) => {
+  it.each(["learn", "candidates"] as const)("gives %s the shared eight only", (kind) => {
     expect(names(kind)).toEqual(CHAT_TOOLS.map((t) => t.function.name));
   });
 
@@ -1079,7 +1083,7 @@ describe("runTool — reader_notes", () => {
     expect(out.content).not.toContain("<<<UNTRUSTED");
   });
 
-  it.each(["learn", "tutorial", "candidates"] as const)(
+  it.each(["learn", "candidates"] as const)(
     "is not a tool at all for a %s thread, and reads nothing",
     async (kind) => {
       const out = await runTool("reader_notes", {}, ctx({ kind }));
@@ -1216,15 +1220,16 @@ describe("converse — the request it sends, per thread kind", () => {
   it("offers reader_notes to a chat, and runs it with the thread the turn is in", async () => {
     const { offered, result } = await turn("chat");
     expect(offered).toContain("reader_notes");
-    /* Web search, reader_notes and read_cited_work (plan 261011w). */
-    expect(offered).toHaveLength(CHAT_TOOLS.length + 3);
+    /* Web search, reader_notes and read_cited_work (plan 261011w), and
+       offer_to_save (plan 261020o). */
+    expect(offered).toHaveLength(CHAT_TOOLS.length + 4);
     expect(result).toContain("a note of mine");
     expect(result).toContain("an earlier one");
     // `threadId` reached the tool: the conversation asking is not listed back to itself.
     expect(result).not.toContain("THE-THREAD-THIS-TURN-IS-IN");
   });
 
-  it.each(["learn", "tutorial", "candidates"] as const)(
+  it.each(["learn", "candidates"] as const)(
     "does not offer it to %s, and a model that asks anyway is told there is no such tool",
     async (kind) => {
       const { offered, result } = await turn(kind);

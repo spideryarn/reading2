@@ -1,0 +1,1934 @@
+diff --git a/docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md b/docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md
+new file mode 100644
+index 000000000..ba7ab2c8d
+--- /dev/null
++++ b/docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md
+@@ -0,0 +1,187 @@
++# A microphone on the add page's two boxes, and on every prose box by default
++
++Report `spya-wc4vku` (#658, `SPIDERYARN-READING2-MQ`), an admin suggestion from Greg
++(`feedback-reporter.ts` exit 0), 2026-10-19 21:54 UTC. Overseer queue item `qi-syvf7st3`.
++
++> In the sort of page that shows after they add something while it's importing, make sure there's a
++> dictation button next to the Why are you reading this? input box. And indeed, we really want a
++> dictate button next to pretty much all of our input boxes that are going to have more than a few
++> words of text typed into them. Let's make a minimal tweak to our docs and/or design system to make
++> this more likely going forwards.
++>
++> — Greg, 2026-10-19
++
++Handed back unbuilt by
++[261020a § C2](261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md#c2-a-microphone-on-both-add-page-boxes-not-built-here-handed-back-to-the-sweep),
++whose Part C plan review ([261020a-part-c-plan-review-sol.md](261020a-part-c-plan-review-sol.md))
++found four P1s. Those four are the spec here, and each has its section below.
++
++## Why the add page is the hard place
++
++Every other box with a microphone sits on a page the reader leaves by pressing something. The add
++page **leaves by itself**: when the import finishes and neither box is in use, it opens the
++article. And dictation's unmount *aborts* — the recording and the transcription with it (the
++keeper may offer the words back on the next mount of the same box, but only best-effort). So a
++microphone here needs the page to know when one is running, at every exit, not only completion.
++
++## Stage 1 — the two boxes get the microphone
++
++`PurposeBox` and `AboutYouBox` each call `useDictationField` exactly as
++[dictation.md § Adding it to a box](../project/dictation.md#adding-it-to-a-box) says: the
++`DictationButton` in the label row beside the scope tag, the `DictationStrip` under the textarea,
++`readOnly={dictate.readOnly}` on the textarea, `report: dictationReporter("add")` (a new
++`DictationSurface`, `"add"`, so a failure says where it happened).
++
++- **Context.** About you: `{ kind: "profile" }`, as `/profile`'s box. Purpose: `{ kind: "article",
++  slug }` once `job?.slug ?? completion?.slug` exists, `{ kind: "profile" }` before (Sol P2-5). The
++  hook snapshots context at the press, so a slug arriving mid-sentence is safe.
++- **Keeper keys** (Sol P1-4): `add:purpose:${wanted}` — `wanted` is the normalised URL or the
++  upload id; `source` is empty for every upload and would collide them all — and `add:about-you`,
++  source-independent because About you is one field for every article. No reader id: the keeper is
++  already partitioned by reader (dictation-keep.ts).
++- **A source change while dictating** (the component is reused when the address after `/add/`
++  changes) changes the purpose key, so the words come back as `[mic-moved]` and are offered back
++  rather than put in the new article's box. That is the existing machinery
++  ([dictation.md § Words go only where they were said](../project/dictation.md#words-go-only-where-they-were-said));
++  nothing new to build.
++- **Commit at the end.** Purpose: `onCommit: purpose.commit`. About you: `onCommit: profile.commit`.
++  The hook's `onChange` for purpose is the page's own (`purposeTouchedRef = true`,
++  `purpose.setText(v, true)`), so the dictated words are the reader's like typed ones.
++- No double press on Stop: neither box sends.
++
++## Stage 2 — nothing saves the rough guesses (Sol P1-3)
++
++Chromium's live guesses arrive through `onChange` before the transcript replaces them.
++
++- **About you**: `useIdleCommit`'s `paused` is `dictate.busy`, as `ProfileBox` does.
++- **Purpose**: a new `AddPurposeSession.setPaused(paused)`. While paused the idle timer is not
++  armed (and one already armed is cleared), and **a seed that lands is held, not applied**: the box
++  keeps the reader's words exactly as they are (no stored purpose adopted into a blank box under a
++  live dictation, which would move the text under the hook's span), and nothing is committed. On
++  unpause a held seed is applied — the same `seed()` — and that commits; otherwise a dirty box
++  re-arms the idle timer. The page calls `setPaused` from the box's busy callback and from a layout
++  effect on `[purpose]` that reads the busy ref, so a session replaced mid-dictation (the slug arriving) is paused before its first read can
++  answer, since the read is a network round trip.
++- Explicit commits are not paused: the blur that pressing the microphone causes commits only the
++  pre-dictation words (Sol's closing note). **A hidden tab does not commit the purpose while it is
++  dictating** (Sol's plan review P1-1, taken in part): hiding is not an exit, and a rough purpose
++  could be read by the first modes before the transcript corrects it. About you's hidden-tab save
++  still runs, as `ProfileBox`'s does; the dictation's own commit follows in seconds.
++- **At an exit the box's visible words are sent**, rough or not: `pagehide`, unmount, and a
++  session retired mid-dictation. The rest of Sol's P1-1 asked for a snapshot of the pre-dictation
++  draft to send instead; declined, on the house rule that an exit keeps the words the reader could
++  see rather than none (dictation.md § Adding it to a box, *the guard is for a press*; the annotate
++  box's Opus arbitration in comments.md), and Opus agreed on 2026-10-20. **Accepted, and named**:
++  a session retired mid-dictation while the page carries on — Retry landing on another slug, or
++  the source changing — flushes Chromium's rough guesses to the article the reader has moved away
++  from, and nothing corrects them. Rare, Chromium-only, and on an article no longer on screen.
++
++## Stage 3 — the page does not leave, or unmount a box, while either is busy
++
++**Busy, said upward** (Sol P1-2). Each box reports `dictate.busy` (armed — including *opening*,
++before the device is open — or transcribing) from a layout effect, into two refs on the page
++(`purposeBusyRef`, `aboutYouBusyRef`) for same-tick checks, and one piece of state
++(`dictating`, their OR) for rendering. Two refs, because one shared boolean is last-writer-wins
++across two boxes.
++
++**Every exit checks it:**
++
++1. **Completion** (`useEffect` on `completionKey`): busy counts like focus — the page waits at
++   *ready* rather than leaving. Same for the repeat paste's ready-vs-repeat choice.
++2. **Both Ready bars' *Open the article***, the purpose box's ⌘/Ctrl+Enter (which is *Open* once
++   ready), **Open without saving**, and the repeat's *Open*: refused while busy, and the buttons
++   `disabled` (the house rule: a guard and a disabled button, never a lit button that refuses).
++3. **The waiting effect** (`phase.opening`): does not `leave` while busy. Busy cannot start there
++   anyway — see the next point — but a dictation already transcribing when *Open* was pressed would
++   otherwise be cut off when the save lands. Since Open is disabled while busy, this is belt and
++   braces, and cheap.
++4. **Once Open is waiting** (`phase.opening`, or `phase.kind` `gift` / `opened`), both microphones
++   are disabled, so "press Open, then start dictating before the PATCH answers" cannot happen.
++
++**Boxes stay mounted while busy** (Sol P1-1). `showPurpose` is false over a public-copy answer
++(`choosing`) and over a failed queue request, and either would unmount a live recording. So
++`showPurpose` gains `|| dictating`: a busy box stays on screen through those transitions and goes
++when its words have landed. And **the public copy's *Read the public copy* link is disabled while
++busy** (it navigates; `chooseOwnCopy` does not — it re-posts and the boxes stay).
++`askAboutYouNow` is latched, so About you does not vanish on its own.
++
++The source change is the one transition that is not held: the page is reused for the new
++address, the boxes stay mounted, and the purpose key changing does the right thing (Stage 1).
++
++**Not held: the reader's own navigations away.** *Back to the shelf*, a failed job card's ×, the
++quota notice's links and the sharing disclosure's Help link stay live while a box is dictating
++(Sol's plan review P1-3, declined; Opus agreed). They are a reader choosing to go elsewhere, as on
++every other page with a microphone, and the keeper offers the recording back. The Open buttons are
++held because they are this page's own next step, pressed right after speaking. Opus flagged the
++job card's × as the borderline one — it says *Dismiss* but navigates here — and a one-prop disable
++is available if it ever bites.
++
++**Not changed: a purpose typed before a public-copy answer is not saved by *Read the public
++copy*** (Sol P1-2, declined; Opus agreed). That is true of a typed purpose today, since the
++reader's own copy has no slug to save to, and the draft is back in its box after *Add my own
++copy*. The microphone adds no loss: the link is disabled while a box is dictating.
++
++## Stage 4 — tests (Sol P2-6)
++
++A lifecycle test file, `tests/add-page-dictation.test.tsx`, with a fake transcriber and the
++existing add-page harness (whatever `tests/add-page*.test.tsx` uses):
++
++- completion while opening / listening / transcribing → page waits at ready, does not navigate;
++  when the words land and the box is left, it still waits (the reader was in it — like focus);
++- a public-copy answer while busy → box stays mounted, the Read link is disabled; then unmounts
++  after the words land;
++- both Ready bars' Open, ⌘+Enter and Open without saving are disabled and refuse while busy;
++- Open pressed (waiting on a save) → both microphones disabled;
++- purpose: a seed landing during a dictation is held and the box unchanged; applied and committed
++  after `onEnd`; no idle commit of live guesses (fake timers);
++- About you: no autosave while busy;
++- two uploads get different purpose keys; a source change mid-dictation yields `[mic-moved]`;
++- `dictation_surface: "add"` pinned once.
++
++Plus unit tests of `setPaused` in the existing add-purpose session tests.
++
++## Stage 5 — making it the default (the docs and the design system)
++
++- **A ratchet test**, `tests/prose-boxes-have-a-microphone.test.ts`: every `<textarea` under
++  `src/web/` (a recursive scan) is found with **the top-level component it is drawn in**, and that
++  component must set up a microphone (`useDictationField`, or a `DictationButton`,
++  `DictationStrip` or `ProfileBox` it draws), or be named in an exemption list **with its reason**
++  — a specimen on `/design`, a read-only report, an admin-only form, or *not yet: queued in the
++  sweep* for the five reader prose boxes found without one: Skim's purpose box, Referee's
++  new-criterion box, the Candidates search's scope, rewriting a chat question and editing a
++  comment's note. Per component rather than per file (Sol P2-4): a file-level check passed
++  `ChatPanel.tsx`, whose question-rewrite box has no microphone. A stale exemption fails too. A
++  new textarea without a microphone then fails a test and its author has to decide. Not a lint over `<input>`: a mechanical check cannot tell a prose
++  box from a search field, but almost every textarea is prose, and the list is where the
++  exceptions say why. The fleet dashboard (`tools/fleet/`) has its own `DictationControl` and is
++  out of scope.
++- **dictation.md**: the box count (eleven → thirteen, naming the add page's two) and the keeper
++  inventory (`add:purpose:<source>`, `add:about-you`); a line in § Adding it to a box pointing at
++  this page as the worked example of a box on a page that leaves by itself.
++- **controls.md: a row for "takes more than a few words of the reader's prose"**, pointing at
++  `useDictationField` and the ratchet test. That is a rule doc, so the exact wording goes to Greg
++  as a question file before it is edited
++  ([edit-important-docs.md](../reusable/edit-important-docs.md)); nothing in controls.md changes in
++  this run.
++- **The sweep of the three boxes the ratchet lists as *not yet*** is its own Overseer queue entry
++  (each has its own send/leave behaviour to check), filed before the note says shipped.
++
++## The simpler option passed over
++
++**Leave the add page without a microphone and only write the rule.** That was 261020a's choice,
++for the reason above. Greg asked for this page by name, so the rule alone would decline the
++concrete half of the report.
++
++**Disable the microphone once the import finishes**, rather than holding the page. Simpler — no
++held exits — but the moment the import finishes is exactly when a reader is most likely to be
++mid-sentence in the box, and a microphone that switches off under them is the loss we are guarding
++against, made visible.
++
++## Review
++
++**Plan review, GPT Sol (gpt-5.6-sol, high, read-only), 2026-10-20** —
++[261020r-dictation-plan-review-sol.md](261020r-dictation-plan-review-sol.md). *Revise before
++build*, five findings. P1-1 taken in part (no hidden-tab commit while dictating) and the rest
++declined, P1-2 and P1-3 declined, all three with Opus arbitrating (Stages 2 and 3 say why). P2-4
++taken: the ratchet is per component and lists `EditQuestion` and `CommentBody`. P3-5 taken: no
++separate purpose-busy state; the replacement effect reads the ref.
+diff --git a/docs/plans/261020r-dictation-plan-review-prompt.md b/docs/plans/261020r-dictation-plan-review-prompt.md
+new file mode 100644
+index 000000000..f202e4fd2
+--- /dev/null
++++ b/docs/plans/261020r-dictation-plan-review-prompt.md
+@@ -0,0 +1,13 @@
++You are reviewing a plan before it is built. Read-only: do not edit any file.
++
++Plan: docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md
++Background: docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md § C2, and your own earlier review docs/plans/261020a-part-c-plan-review-sol.md (its four P1s are meant to be the spec; check each is fully answered).
++Code: src/web/AddPage.tsx (PurposeBox, AboutYouBox, ReadyBar, PublicChoice, the completion effect, openTheArticle, the waiting effect, showPurpose), src/web/add-purpose.ts (AddPurposeSession: seed, changed, commit, idle timer), src/web/useDictationField.ts, src/web/useDictation.ts (armed/opening, keeper box change, unmount abort), src/web/ProfileBox.tsx (the reference box with a microphone), src/web/dictation-keep.ts, src/web/dictation-report.ts, docs/project/dictation.md § Adding it to a box.
++
++Questions:
++1. Does any exit, unmount or save path still lose or corrupt dictated words? Think about StrictMode, a session replaced when the slug first appears mid-dictation, the held seed, the repeat-paste path, the author-gift phase, failure answers, Retry.
++2. Is the held-seed design in Stage 2 right, or is there a simpler correct one?
++3. Is the ratchet test in Stage 5 sound and worth it, and is its file scan robust?
++4. Anything simpler that is still correct.
++
++Write findings as a numbered list, each with severity (P1/P2/P3), file:line evidence and a concrete fix. End with a one-line verdict: "build as planned", "build with the changes above", or "revise before build".
+diff --git a/docs/plans/261020r-dictation-plan-review-sol.md b/docs/plans/261020r-dictation-plan-review-sol.md
+new file mode 100644
+index 000000000..f19af5848
+--- /dev/null
++++ b/docs/plans/261020r-dictation-plan-review-sol.md
+@@ -0,0 +1,11 @@
++1. **P1 — The pause does not cover every persistence path, so rough Chromium guesses can still become stored text.** The plan explicitly allows hidden-tab commits while dictating (`docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md:52-67`), while `AddPage.tsx:1368-1377` commits on visibility change and retires on unmount, and `useAutosavedText.ts:269-301` commits or sends About-you text on hidden/pagehide/unmount. The proposed held-seed implementation also adopts the seed and flushes the current—potentially rough—text from `leaveNow` and `retire` (`src/web/add-purpose.ts:273-278`, `src/web/add-purpose.ts:336-365`). Closing the page can therefore leave rough text as the final value; merely hiding it can let publication consume rough purpose text before the transcript corrects it. Replace `heldSeed` with one transactional pause boundary: capture the pre-dictation draft, suppress idle, shortcut, visibility, pagehide and retirement writes of the live draft, record a returned seed without changing the box, and only expose/commit the final draft when `onEnd` releases the pause. A retired session must flush at most its pre-dictation snapshot, never its live guesses. Test hidden, pagehide, unmount, first-slug arrival, source change and Retry-to-another-slug while busy.
++
++2. **P1 — A public-copy answer still silently discards a completed purpose dictation.** The plan deliberately unmounts the boxes after the words land (`docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md:91-96`, `:106-109`), but a public answer never supplies the purpose session with a slug, because the public slug must not enter `Completion` (`docs/plans/261009j-a-public-copy-offered-at-import.md:187-190`). Consequently `AddPurposeSession.commit` cannot save (`src/web/add-purpose.ts:228-230`), yet *Read the public copy* becomes navigable once `busy` clears (`src/web/AddPage.tsx:2047-2074`). Keep the purpose draft visible and require an explicit “Read without saving this reason” choice, or provide another durable carry path; do not treat “transcript reached the textarea” as safely finished. Add the public-answer/no-slug case to the lifecycle tests.
++
++3. **P1 — “Every exit” omits several real navigation paths.** Stage 3 guards the Ready and public-copy actions (`docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md:77-95`), but the page also has an always-live *Back to the shelf* link (`src/web/AddPage.tsx:2031-2035`), the failed/cancelled job’s dismiss action navigates through `onHide` (`src/web/AddArticle.tsx:738-748`), quota failures link away (`src/web/QuotaNotice.tsx:124-134`), and the sharing disclosure links to Help (`src/web/AddSharing.tsx:144-152`). Each can unmount `useDictation`, whose cleanup aborts the recording/transcription (`src/web/useDictation.ts:2094-2136`). Add one page-level busy navigation gate and visibly disable or replace every in-page navigation affordance while busy; test Back, job dismiss, quota and Help navigation during opening, listening and transcribing. The author-gift exit itself is otherwise sound because it cannot begin while busy and disables new dictation while waiting.
++
++4. **P2 — The ratchet’s file-level test is neither sound nor robust enough to support its claim.** The plan accepts any textarea file containing a `DictationButton` or `ProfileBox` (`docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md:122-130`), so a new unmic’d textarea in an already-covered file passes. This already happens: `ChatPanel.tsx:3176-3195` has a prose rewrite textarea without dictation, while another component’s buttons at `ChatPanel.tsx:3900-3907` make the whole file look compliant. Keep the ratchet—it is worthwhile—but make it an exact recursive inventory of textarea occurrences/components, with an expected count and reason per exempt occurrence rather than per file. Parse JSX or scan recursively without relying on a shell `**` glob, and add `EditQuestion` to the sweep/exemption list.
++
++5. **P3 — The busy-to-purpose plumbing can be simpler.** The plan already has authoritative per-box refs plus one rendered OR state (`docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md:71-75`); it does not need another purpose-busy state solely to pause replacement sessions. Have the purpose callback update `purposeBusyRef` and pause the current session immediately, then have the session-replacement layout effect call `purpose.setPaused(purposeBusyRef.current)`. Retain only the combined state used to render disabled controls.
++
++revise before build
+\ No newline at end of file
+diff --git a/docs/project/dictation.md b/docs/project/dictation.md
+index be558ed23..f9e6e075b 100644
+--- a/docs/project/dictation.md
++++ b/docs/project/dictation.md
+@@ -14,6 +14,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
+ - [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
+ - [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
+ - [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
++  - [§ A page that leaves by itself](#a-page-that-leaves-by-itself) — the add page, which holds every exit while a box is busy
+ - [§ The hook does not know which server](#the-hook-does-not-know-which-server-it-is-talking-to) — the `transcribe` seam the fleet dashboard reuses
+ - [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
+ - [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
+@@ -27,7 +28,8 @@ Up: [reading-view-overview.md](reading-view-overview.md)
+ - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
+ 
+ A microphone button beside a text box. Press it, talk, press it again, and your words are in the
+-box. It is on eleven boxes today — both profile boxes, the chat composer, the comment follow-up, the
++box. It is on thirteen boxes today — both profile boxes, the add page's two (*Why are you reading
++this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up, the
+ annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
+ ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
+ ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
+@@ -36,7 +38,10 @@ the note under an Illustrated picture
+ ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
+ *Ask about Spideryarn* box on every Help page
+ ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
+-twelfth is three lines.
++fourteenth is three lines. **A box for more than a few words of the reader's prose gets one by
++default** (Greg, 2026-10-19, `spya-wc4vku`), and
++[`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
++fails on a new `<textarea>` without one unless its component is listed there with the reason.
+ 
+ This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
+ back and either of you can cut the other off — is a separate feature, not a setting on this one:
+@@ -559,6 +564,20 @@ be no Enter to press
+ ([261005f](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md)). Anything a
+ dictated box offers next has to be something a finger can press.
+ 
++### A page that leaves by itself
++
++**The add page is the one place a box's page goes away without a press**: when the import
++finishes and nobody is in either box, it opens the article — and unmounting aborts a dictation.
++So its two boxes tell the page when they are `busy` (a layout effect, into one ref per box and
++their OR as state), and the page holds every exit while either is: the completion waits at
++*ready*, both Ready bars' *Open the article*, ⌘+Enter, *Open without saving* and the public
++copy's link are refused and disabled, the boxes stay mounted over a public-copy or failed answer,
++and once *Open* is on its way neither microphone can start. Neither box saves by itself while
++dictating: About you's idle save is paused, and the purpose session holds both its timer and a
++stored purpose read meanwhile (`AddPurposeSession.setPaused`). Plan
++[261020r](../plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md); the
++same-box-across-sources case is the existing `[mic-moved]`.
++
+ ## The hook does not know which server it is talking to
+ 
+ **Since 2026-09-08, `useDictation` takes a `transcribe` function rather than importing one**, and is
+@@ -762,7 +781,9 @@ passed over, and GPT Sol's review.
+   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
+   `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+   `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
+-  `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
++  `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
++  `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,
++  which is empty for every upload) and `add:about-you`. **The name is the partition, so it
+   names everything the words are about**: a per-article box keeping under a name without the slug
+   offered one article's recording back on the next, and Try again put it there (Greg, 2026-10-09,
+   `spya-vzj8fc`; [261009g](../plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)
+diff --git a/docs/user-feedback/261019_2154-a-microphone-on-the-add-page-and-on-every-prose-box-by-default.md b/docs/user-feedback/261019_2154-a-microphone-on-the-add-page-and-on-every-prose-box-by-default.md
+new file mode 100644
+index 000000000..eede4c8a3
+--- /dev/null
++++ b/docs/user-feedback/261019_2154-a-microphone-on-the-add-page-and-on-every-prose-box-by-default.md
+@@ -0,0 +1,46 @@
++---
++reports: spya-wc4vku
++ending: shipped
++comment: Both add-page boxes now have a microphone, and the page waits while you dictate. A test fails on any new writing box without one. The controls.md rule waits on q-ccv9qq; five boxes still without one are queued.
++---
++# A microphone on the add page, and on every prose box by default
++
++`spya-wc4vku` (#658, `SPIDERYARN-READING2-MQ`), suggestion, from Greg (admin; `feedback-reporter.ts`
++exit 0, re-read before this note, no addenda), 2026-10-19 21:54 UTC, from `/`. Overseer queue item
++`qi-syvf7st3`. Plan
++[261020r](../plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md).
++
++> In the sort of page that shows after they add something while it's importing, make sure there's a
++> dictation button next to the Why are you reading this? input box. And indeed, we really want a
++> dictate button next to pretty much all of our input boxes that are going to have more than a few
++> words of text typed into them. Let's make a minimal tweak to our docs and/or design system to make
++> this more likely going forwards.
++
++Handed back unbuilt by
++[261020a § C2](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md),
++whose plan review's four P1s were the spec.
++
++**Ending: Shipped**, on `dev`, with one question to Greg and one deferred half queued.
++
++What changed:
++
++- **Both add-page boxes have the microphone**: *Why are you reading this?* and *About you*, the
++  button in the label row and the strip under the box, as on Profile.
++- **The page waits while either box is dictating.** It does not open the article by itself, both
++  *Open the article* buttons, ⌘+Enter, *Open without saving* and the public copy's link are
++  disabled, and a box stays on screen through a public-copy or failed answer until its words land.
++  Once *Open* is waiting on a save, neither microphone can start.
++- **Nothing saves the half-heard words**: About you's save after a pause, and the purpose box's,
++  wait for the end of a dictation. So does the purpose box's save when the tab is hidden, and a
++  stored purpose read meanwhile.
++- **The default, in the design system**: `tests/prose-boxes-have-a-microphone.test.ts` finds every
++  `<textarea>` in the app with the component it is in, and fails unless that component has a
++  microphone or is listed with its reason. dictation.md says a box for more than a few words gets
++  one by default.
++
++**Asked, `q-ccv9qq`**: the one-row rule for controls.md, before and after, since rule wording goes
++to Greg ([edit-important-docs.md](../reusable/edit-important-docs.md)). controls.md is unchanged.
++
++**Deferred, queued as `qi-d44n9rhc`**: the five reader prose boxes the test lists as *not yet* — Skim's purpose box,
++Referee's new-criterion box, the Candidates search's scope, rewriting a chat question, and editing
++a comment's note. Each has its own send and unmount to check.
+diff --git a/docs/user-feedback/questions/q-ccv9qq.md b/docs/user-feedback/questions/q-ccv9qq.md
+new file mode 100644
+index 000000000..d429063c0
+--- /dev/null
++++ b/docs/user-feedback/questions/q-ccv9qq.md
+@@ -0,0 +1,33 @@
++---
++id: q-ccv9qq
++report: spya-wc4vku
++status: open
++asked: 2026-10-20
++title: Add a rule to controls.md that any box for more than a few words of the reader's writing gets a microphone?
++refs: spya-wc4vku · SPIDERYARN-READING2-MQ · qi-syvf7st3 · qi-d44n9rhc (the five boxes) · docs/user-feedback/261019_2154-a-microphone-on-the-add-page-and-on-every-prose-box-by-default.md · docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md · docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md · docs/project/controls.md · docs/project/dictation.md · tests/prose-boxes-have-a-microphone.test.ts
++---
++The add page's two boxes now have a microphone, and a test fails if anyone adds a new text box without one, unless they give a reason. One part is left for you: may I add one line to controls.md, the design rules page, saying so?
++
++A. Add this row to controls.md's table of controls that look the same everywhere (recommended):
++   "a control that... takes more than a few words of the reader's writing  |  the shared piece: a microphone (DictationButton and DictationStrip, through useDictationField; dictation.md, Adding it to a box)  |  the test: prose-boxes-have-a-microphone (every multi-line text box, or its component listed with the reason)"
++   Costs one line. It puts the rule where someone designing a new box is told to look first.
++
++B. The same row, plus "single-line boxes for a sentence count too, and the reviewer checks them". Wider, but no test can check it, because the code cannot tell a sentence box from a search box.
++
++C. No change to controls.md. The rule stays only in dictation.md and the test, which already go live with this change. Simplest, but someone drawing a new box reads controls.md, not dictation.md.
++
++Recommendation: A.
++
++Details
++
++What you asked, on 2026-10-19 from the page that shows while an article imports (report spya-wc4vku): "make sure there's a dictation button next to the Why are you reading this? input box. And indeed, we really want a dictate button next to pretty much all of our input boxes that are going to have more than a few words of text typed into them. Let's make a minimal tweak to our docs and/or design system to make this more likely going forwards."
++
++What is built and on dev:
++- "Why are you reading this?" and "About you" on the add page each have the microphone button and the strip under the box, like the boxes on your Profile page.
++- The add page opens the article by itself when the import finishes. A microphone would be cut off by that, so while either box is listening or turning speech into words, the page waits: both "Open the article" buttons are greyed out, and the page does not leave by itself. Nothing saves your half-heard words before the real transcript arrives.
++- A new test looks at every multi-line text box in the app. If a box has no microphone and is not on a short list with a reason, the test fails. The list today: the /design page's example, a read-only report box, four admin-only boxes, and five reading boxes that should get a microphone and have not yet: Skim's purpose box, Referee's new-criterion box, the box that scopes the Candidates search, rewriting a question in chat, and editing a comment's note. Those five are queued as their own job.
++- dictation.md now says a box for more than a few words gets a microphone by default, and points at the test.
++
++Why ask you: controls.md is a rules page, and rule wording goes to you before it is edited. Nothing in controls.md has changed.
++
++What would decide it: whether you want the rule where people look when they design a control (A), wider than a test can check (B), or only where the dictation work is described (C).
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index 5cb56e195..61617bf16 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -47,7 +47,7 @@
+  *
+  * See docs/project/ingest-queue.md and docs/project/library.md.
+  */
+-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
++import { type RefObject, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+ import { Link } from "./Link.js";
+ import { JobCard } from "./AddArticle.js";
+ import { normaliseUrl, slugFromUrl } from "../ingest.js";
+@@ -89,6 +89,11 @@ import {
+ } from "./add-purpose.js";
+ import { AUTOSAVE_IDLE_MS, SaveStatus, useIdleCommit, useUnsavedWarning } from "./ProfileBox.js";
+ import { useFitTextarea } from "./useFitTextarea.js";
++import { DictationButton, DictationStrip } from "./DictationStrip.js";
++import { keepDictation } from "./dictation-keep.js";
++import { dictationReporter } from "./dictation-report.js";
++import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
++import { type UseDictationField, useDictationField } from "./useDictationField.js";
+ import { type UseProfile, useProfile } from "./useProfile.js";
+ import type { SaveState } from "./useAutosavedText.js";
+ import { markAskPurpose } from "./ask-purpose.js";
+@@ -856,6 +861,27 @@ export function AddPage({
+   const aboutYouPending = askAboutYouNow === true && aboutYouUnsaved(profile.state, profile.inFlight);
+   const aboutYouRefused = askAboutYouNow === true && profile.state.kind === "error";
+   useUnsavedWarning(aboutYouPending);
++  /**
++   * **A dictation in either box** (plan 261020r § Stage 3). Unmounting a box
++   * aborts its dictation, and this page leaves by itself, so every exit asks.
++   * One ref per box, because two boxes sharing one boolean would be
++   * last-writer-wins, read in the same tick as the change; and the OR as state
++   * for what is drawn (GPT Sol's review of 261020a, P1-2). The purpose box's
++   * also pauses its session's saves.
++   */
++  const purposeBusyRef = useRef(false);
++  const aboutYouBusyRef = useRef(false);
++  const [dictating, setDictating] = useState(false);
++  const busyNow = (): boolean => purposeBusyRef.current || aboutYouBusyRef.current;
++  const tellPurposeBusy = (busy: boolean): void => {
++    purposeBusyRef.current = busy;
++    purposeRef.current?.session.setPaused(busy);
++    setDictating(busyNow());
++  };
++  const tellAboutYouBusy = (busy: boolean): void => {
++    aboutYouBusyRef.current = busy;
++    setDictating(busyNow());
++  };
+   const [phase, setPhase] = useState<Phase>({ kind: "running" });
+   /**
+    * **The once-guard on the terminal decision**, holding the completion's key.
+@@ -1295,6 +1321,14 @@ export function AddPage({
+     purposeRef.current = purposeHeld;
+     purposeHeld.activate();
+   }, [purposeHeld]);
++  /* **No save of the live guesses** (GPT Sol's review of 261020a, P1-3): the
++     session's idle timer and the commit a landing read makes wait for the end
++     of a dictation. Here as well as in `tellPurposeBusy`, because the session
++     is replaced when the job's slug first arrives, which can be mid-sentence;
++     in the same commit as its activation, so before its first read answers. */
++  useLayoutEffect(() => {
++    purpose.setPaused(purposeBusyRef.current);
++  }, [purpose]);
+   const purposeNow = useSyncExternalStore(purpose.subscribe, purpose.get);
+ 
+   /* The read of the stored purpose runs while the add is alive: a job queued
+@@ -1328,7 +1362,10 @@ export function AddPage({
+        session needs its successor, and only a render makes one. */
+     if (purposeRef.current?.session.isRetired) renewPurpose((n) => n + 1);
+     const hidden = (): void => {
+-      if (document.visibilityState === "hidden") purposeRef.current?.session.commit();
++      /* Not mid-dictation: the box holds the recogniser's rough guesses, and
++         its own commit follows in seconds (GPT Sol's review of 261020r, P1-1).
++         Leaving the page still sends what is in the box: `pagehide`, below. */
++      if (document.visibilityState === "hidden" && !purposeBusyRef.current) purposeRef.current?.session.commit();
+     };
+     const leaving = (): void => purposeRef.current?.session.leaveNow();
+     document.addEventListener("visibilitychange", hidden);
+@@ -1382,7 +1419,7 @@ export function AddPage({
+ 
+   /** **Open the article anyway**, after the author gift was refused or lost. Opens; sends nothing more. */
+   const openAnyway = (): void => {
+-    if (phase.kind !== "gift") return;
++    if (phase.kind !== "gift" || busyNow()) return;
+     const done = phase.completion;
+     if (activeCompletionKey.current !== done.key || sourceRef.current !== done.source) return;
+     setPhase({ kind: "opened" });
+@@ -1431,6 +1468,7 @@ export function AddPage({
+          Keep their draft and the save controls instead of hiding a refused save. */
+       setPhase(
+         purposeTouchedRef.current ||
++          busyNow() ||
+           purposeRef.current?.session.get().unsaved ||
+           aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current)
+           ? { kind: "ready", completion: finished, opening: false }
+@@ -1440,9 +1478,12 @@ export function AddPage({
+     }
+     /* **Nothing to wait for**: the box is not focused, and it holds nothing
+        the server does not have. Never typed in, or typed and saved with no
+-       write in flight. Read from the session in this tick, not from a render. */
++       write in flight. Read from the session in this tick, not from a render.
++       And neither box is dictating: pressing the microphone takes the focus
++       out of the box, and leaving would abort the words (plan 261020r). */
+     if (
+       !focusedRef.current &&
++      !busyNow() &&
+       !purposeRef.current?.session.get().unsaved &&
+       !aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current) &&
+       !sharingUnsettled
+@@ -1461,7 +1502,10 @@ export function AddPage({
+     setPhase({ kind: "ready", completion: finished, opening: false });
+   }, [completionKey, completionSlug, completionRepeat, wanted, highPower]);
+ 
++  /* Every press that opens the article is also refused while a box is
++     dictating, and its button is disabled (`ReadyBar`'s `busy`). */
+   const mayOpen = (done: Completion): boolean =>
++    !busyNow() &&
+     claimed.current !== done.key &&
+     activeCompletionKey.current === done.key &&
+     sourceRef.current === done.source;
+@@ -1510,7 +1554,7 @@ export function AddPage({
+       return;
+     }
+     if (!now.unsaved && !aboutYouPending) leave(phase.completion);
+-  }, [phase, purposeNow, aboutYouPending, aboutYouRefused, profile.inFlight]);
++  }, [phase, purposeNow, aboutYouPending, aboutYouRefused, profile.inFlight, dictating]);
+ 
+   /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
+   const openTheRepeat = (): void => {
+@@ -1563,7 +1607,14 @@ export function AddPage({
+      false for a finished job and for an existing-article answer, which are
+      exactly when the box has to stay. While running it also stays over a failed
+      job, whose card has a Retry that may yet finish it (F3). */
+-  const showPurpose = deciding || (phase.kind === "running" && !choosing && (showAutoModes || job !== null));
++  /* **And while either box is dictating, whatever else changed**: a
++     public-copy answer or a failed queue request would otherwise unmount a
++     live recording (GPT Sol's review of 261020a, P1-1). The box goes once its
++     words have landed. */
++  const showPurpose =
++    dictating || deciding || (phase.kind === "running" && !choosing && (showAutoModes || job !== null));
++  /* *Open the article* is on its way, so no new dictation can start under it. */
++  const micOff = (phase.kind === "ready" && phase.opening) || phase.kind === "gift" || phase.kind === "opened";
+   /* A failed or stopped job is not on its way to making the article: its
+      card's Retry may yet, but "it saves once the article exists" would be a
+      promise. The 261001s browser check found that line under a failed import. */
+@@ -1592,6 +1643,7 @@ export function AddPage({
+             : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."
+         }
+         opening={phase.kind === "ready" && phase.opening}
++        busy={dictating}
+         offerWithoutSaving={
+           phase.kind === "ready" &&
+           (cannotSave(purposeNow) || aboutYouRefused) &&
+@@ -1645,6 +1697,11 @@ export function AddPage({
+           <PurposeBox
+             now={purposeNow}
+             stopped={jobStopped}
++            slug={job?.slug ?? completion?.slug ?? null}
++            keeper={`add:purpose:${wanted}`}
++            micOff={micOff}
++            onCommit={purpose.commit}
++            onBusyChange={tellPurposeBusy}
+             onChange={(value) => {
+               /* Straight into the session, which is what a completion landing
+                  before the next render will read. */
+@@ -1664,6 +1721,8 @@ export function AddPage({
+           {askAboutYouNow === true && (
+             <AboutYouBox
+               profile={profile}
++              micOff={micOff}
++              onBusyChange={tellAboutYouBusy}
+               onFocusChange={(focused) => {
+                 aboutYouFocusedRef.current = focused;
+               }}
+@@ -1964,7 +2023,7 @@ export function AddPage({
+ 
+       {readyBar(false)}
+ 
+-      {choosing && <PublicChoice found={publicAnswer} onOwnCopy={chooseOwnCopy} />}
++      {choosing && <PublicChoice found={publicAnswer} busy={dictating} onOwnCopy={chooseOwnCopy} />}
+ 
+       {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
+ 
+@@ -1984,15 +2043,30 @@ export function AddPage({
+  * ordinary import. Greg, 2026-10-09 (`spya-ahvk74`);
+  * docs/plans/261009j-a-public-copy-offered-at-import.md.
+  */
+-function PublicChoice({ found, onOwnCopy }: { found: PublicCopyFound["publicCopy"]; onOwnCopy: () => void }) {
++function PublicChoice({
++  found,
++  busy,
++  onOwnCopy,
++}: {
++  found: PublicCopyFound["publicCopy"];
++  /** A box above is dictating. The link leaves the page and would abort it; *Add my own copy* stays. */
++  busy: boolean;
++  onOwnCopy: () => void;
++}) {
+   return (
+     <div data-add-public className="tw:mt-3">
+       <p className="tw:mt-0 tw:mb-1 tw:text-sm tw:text-foreground">{PUBLIC_COPY_FOUND(found.title)}</p>
+       <p className="tw:mt-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">{PUBLIC_COPY_EXPLAIN}</p>
+       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+-        <Button asChild size="sm">
+-          <Link href={readHref(found.slug)} className="tw:no-underline">{PUBLIC_COPY_READ}</Link>
+-        </Button>
++        {busy ? (
++          <Button type="button" size="sm" disabled>
++            {PUBLIC_COPY_READ}
++          </Button>
++        ) : (
++          <Button asChild size="sm">
++            <Link href={readHref(found.slug)} className="tw:no-underline">{PUBLIC_COPY_READ}</Link>
++          </Button>
++        )}
+         <Button type="button" variant="outline" size="sm" onClick={onOwnCopy}>
+           {PUBLIC_COPY_OWN}
+         </Button>
+@@ -2014,11 +2088,15 @@ function cannotSave(now: AddPurposeSnapshot): boolean {
+  * **"Why are you reading this?"**: a plain textarea in `ProfileBox`'s clothes,
+  * saving as it is typed (plan 261004l).
+  *
+- * Not `ProfileBox` itself: that brings dictation, which the add page has never
+- * loaded, and a microphone running while the page opens the article by itself
+- * is a new way to lose words (the plan's § The simpler option passed over).
+- * It uses the leave warning and status line exported from there. The session
+- * in add-purpose.ts owns the save timer so it also runs during suspended renders.
++ * Not `ProfileBox` itself: the session in add-purpose.ts owns the save timer
++ * so it also runs during suspended renders. It uses the leave warning and
++ * status line exported from there.
++ *
++ * **With a microphone** (Greg, 2026-10-19, spya-wc4vku: *"make sure there's a
++ * dictation button next to the Why are you reading this? input box"*). This
++ * page leaves by itself and unmounting aborts a dictation, so the box tells
++ * the page when it is `busy` and the page holds every exit while it is: plan
++ * docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md.
+  *
+  * Capped rather than counted past: the server refuses more than
+  * `MAX_PURPOSE_CHARS`, and the box is a better place to learn that than a
+@@ -2031,15 +2109,28 @@ function cannotSave(now: AddPurposeSnapshot): boolean {
+ function PurposeBox({
+   now,
+   stopped,
++  slug,
++  keeper,
++  micOff,
+   onChange,
++  onCommit,
+   onFocusChange,
++  onBusyChange,
+   onShortcut,
+ }: {
+   now: AddPurposeSnapshot;
+   /** The job failed or was stopped, so nothing is on its way to making the article. */
+   stopped: boolean;
++  /** The article's slug once the job has one: the dictation's vocabulary. */
++  slug: string | null;
++  /** The keeper's box name: `add:purpose:<wanted>` (GPT Sol's review of 261020a, P1-4). */
++  keeper: string;
++  /** *Open the article* is on its way: no new dictation. Stopping one always works. */
++  micOff: boolean;
+   onChange: (value: string) => void;
++  onCommit: () => void;
+   onFocusChange: (focused: boolean) => void;
++  onBusyChange: (busy: boolean) => void;
+   onShortcut: () => void;
+ }) {
+   const box = useRef<HTMLTextAreaElement>(null);
+@@ -2047,6 +2138,18 @@ function PurposeBox({
+      *"make the 'Why are you reading this?' box bigger/auto-expanding."* Four
+      rows is the floor; useFitTextarea.ts grows it. */
+   useFitTextarea(box, now.text);
++  const dictate = useBusyDictation({
++    value: now.text,
++    onChange,
++    onCommit,
++    box,
++    /* The article's glossary and title once there is an article; the
++       reader's profile before (GPT Sol's review of 261020a, P2-5). Read at
++       the press, so a slug arriving mid-sentence changes nothing. */
++    context: slug === null ? { kind: "profile" } : { kind: "article", slug },
++    keeper,
++    onBusyChange,
++  });
+   return (
+     <div className="prof-box">
+       <div className="prof-box-head">
+@@ -2054,6 +2157,7 @@ function PurposeBox({
+           Why are you reading this?
+         </label>
+         <span className="prof-box-scope">This article</span>
++        <AddMic dictate={dictate} micOff={micOff} />
+       </div>
+       <textarea
+         id="add-purpose"
+@@ -2063,6 +2167,7 @@ function PurposeBox({
+         maxLength={MAX_PURPOSE_CHARS}
+         placeholder="e.g. I want to know how they handled missing data"
+         value={now.text}
++        readOnly={dictate.readOnly}
+         onChange={(e) => onChange(e.target.value)}
+         onFocus={() => onFocusChange(true)}
+         onBlur={() => onFocusChange(false)}
+@@ -2074,6 +2179,7 @@ function PurposeBox({
+           }
+         }}
+       />
++      <DictationStrip dictation={dictate.dictation} />
+       <div className="prof-box-foot">
+         {/* Each sentence has to be true with automatic modes off, on a re-add,
+             and when the import failed after its row was made (Sol's F8). */}
+@@ -2119,23 +2225,41 @@ function aboutYouUnsaved(state: SaveState, inFlight: boolean): boolean {
+  * the first words of each hint.
+  *
+  * `useProfile`'s save, the one `/profile` uses, including the write on the way
+- * out. A plain textarea rather than `ProfileBox`, for `PurposeBox`'s reason:
+- * no microphone on a page that may open the article by itself.
++ * out. A plain textarea rather than `ProfileBox`, whose microphone does not
++ * tell a page that leaves by itself when it is busy. Its own microphone does,
++ * as `PurposeBox`'s.
+  */
+ function AboutYouBox({
+   profile,
++  micOff,
+   onFocusChange,
++  onBusyChange,
+ }: {
+   profile: UseProfile;
++  micOff: boolean;
+   onFocusChange: (focused: boolean) => void;
++  onBusyChange: (busy: boolean) => void;
+ }) {
+   const box = useRef<HTMLTextAreaElement>(null);
+   useFitTextarea(box, profile.draft);
++  const dictate = useBusyDictation({
++    value: profile.draft,
++    onChange: profile.setDraft,
++    onCommit: profile.commit,
++    box,
++    context: { kind: "profile" },
++    /* One field for every article, so not keyed on the source: its words can
++       be offered back on the next add, whatever is being added. */
++    keeper: "add:about-you",
++    onBusyChange,
++  });
++  /* Not while dictating: the live guesses are not the words (ProfileBox.tsx;
++     GPT Sol's review of 261020a, P1-3). The dictation commits at its end. */
+   useIdleCommit({
+     text: profile.draft,
+     dirty: profile.state.kind === "dirty",
+     inFlight: profile.inFlight,
+-    paused: false,
++    paused: dictate.busy,
+     ms: AUTOSAVE_IDLE_MS,
+     commit: profile.commit,
+   });
+@@ -2146,12 +2270,14 @@ function AboutYouBox({
+           About you
+         </label>
+         <span className="prof-box-scope">Every article</span>
++        <AddMic dictate={dictate} micOff={micOff} />
+       </div>
+       <textarea
+         id="add-about-you"
+         ref={box}
+         className="prof-box-input is-fit"
+         rows={3}
++        readOnly={dictate.readOnly}
+         /* No `maxLength`: the browser would silently drop the end of a long
+            paste. Counted past instead, and the server refuses it with the
+            words still here (ProfileBox.tsx; GPT Sol's plan review, finding 3). */
+@@ -2170,6 +2296,7 @@ function AboutYouBox({
+           }
+         }}
+       />
++      <DictationStrip dictation={dictate.dictation} />
+       <div className="prof-box-foot">
+         <p className="prof-box-hint">
+           For every article you read here, not just this one: your background, what you already
+@@ -2185,6 +2312,57 @@ function AboutYouBox({
+   );
+ }
+ 
++/**
++ * **The two boxes' microphone**, the same in each: `useDictationField` as
++ * dictation.md § Adding it to a box has it, plus `busy` told to the page from
++ * a layout effect, so the page's refs have it before any passive effect or
++ * press reads them. The page holds every exit while either box is busy.
++ */
++function useBusyDictation({
++  keeper,
++  onBusyChange,
++  ...field
++}: {
++  value: string;
++  onChange: (value: string) => void;
++  onCommit: () => void;
++  box: RefObject<HTMLTextAreaElement | null>;
++  context: DictationContext;
++  keeper: string;
++  onBusyChange: (busy: boolean) => void;
++}): UseDictationField {
++  const transcribe = useReaderTranscriber();
++  const dictate = useDictationField({
++    ...field,
++    transcribe,
++    report: dictationReporter("add"),
++    keep: keepDictation(keeper),
++  });
++  const tell = useRef(onBusyChange);
++  tell.current = onBusyChange;
++  useLayoutEffect(() => {
++    tell.current(dictate.busy);
++  }, [dictate.busy]);
++  /* A box that has gone is not busy: its dictation was aborted with it. */
++  useLayoutEffect(() => () => tell.current(false), []);
++  return dictate;
++}
++
++/**
++ * The button. Off only while idle, once *Open the article* is on its way: a
++ * button switched off mid-dictation would be a Stop that cannot stop.
++ */
++function AddMic({ dictate, micOff }: { dictate: UseDictationField; micOff: boolean }) {
++  if (!dictate.dictation.supported) return null;
++  return (
++    <DictationButton
++      dictation={dictate.dictation}
++      toggle={dictate.toggle}
++      disabled={micOff && !dictate.busy}
++    />
++  );
++}
++
+ /**
+  * **The import is in, said where the reader is looking.** Greg, 2026-10-19
+  * (spya-kan788): *"when the import process has finished, make that crystal
+@@ -2196,6 +2374,7 @@ function ReadyBar({
+   top,
+   sentence,
+   opening,
++  busy,
+   offerWithoutSaving,
+   onOpen,
+   onOpenWithoutSaving,
+@@ -2203,6 +2382,8 @@ function ReadyBar({
+   top: boolean;
+   sentence: string;
+   opening: boolean;
++  /** A box is dictating: opening now would abort it. The handlers refuse as well. */
++  busy: boolean;
+   offerWithoutSaving: boolean;
+   onOpen: () => void;
+   onOpenWithoutSaving: () => void;
+@@ -2230,13 +2411,13 @@ function ReadyBar({
+       )}
+       <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{sentence}</p>
+       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+-        <Button type="button" size="sm" disabled={opening} onClick={onOpen}>
++        <Button type="button" size="sm" disabled={opening || busy} onClick={onOpen}>
+           {opening ? "Saving…" : "Open the article"}
+         </Button>
+         {/* Only when the words cannot be saved from here: a refusal, or the
+             read of the stored purpose gave up. */}
+         {offerWithoutSaving && (
+-          <Button type="button" variant="ghost" size="sm" onClick={onOpenWithoutSaving}>
++          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onOpenWithoutSaving}>
+             Open without saving
+           </Button>
+         )}
+diff --git a/src/web/add-purpose.ts b/src/web/add-purpose.ts
+index 491272f4e..6558db050 100644
+--- a/src/web/add-purpose.ts
++++ b/src/web/add-purpose.ts
+@@ -151,6 +151,16 @@ export class AddPurposeSession {
+   private asking: Attempt | null = null;
+   private wait: unknown = null;
+   private idle: unknown = null;
++  /**
++   * **A dictation is running in the box** (plan 261020r § Stage 2). Chromium's
++   * live guesses arrive as ordinary text and the transcript replaces them, so
++   * nothing is saved by itself until it ends: no idle timer, and a stored
++   * purpose that is read meanwhile is held in `heldSeed` rather than adopted.
++   * Adopting it could put a stored sentence into the box under the hook's
++   * span, and its commit would save the rough guesses.
++   */
++  private paused = false;
++  private heldSeed: string | null = null;
+ 
+   private readonly timers: PurposeTimers;
+   private readonly listeners = new Set<() => void>();
+@@ -238,8 +248,31 @@ export class AddPurposeSession {
+     this.changed();
+   };
+ 
++  /**
++   * Hold or release the saves made by themselves while a dictation runs. On
++   * release a held read is adopted, which commits, and otherwise a dirty box
++   * waits its usual pause. Commits the caller asks for are not held: the
++   * dictation's own at its end is one of them.
++   */
++  setPaused = (paused: boolean): void => {
++    if (this.done || this.paused === paused) return;
++    this.paused = paused;
++    if (paused) {
++      this.arm();
++      return;
++    }
++    if (this.heldSeed !== null) {
++      const stored = this.heldSeed;
++      this.heldSeed = null;
++      this.seed(stored);
++      return;
++    }
++    this.arm();
++  };
++
+   /** `pagehide`: the `keepalive` write, now, with nothing awaited. */
+   leaveNow = (): void => {
++    if (this.heldSeed !== null) this.adopt();
+     if (this.done || this.abandoned || this.slug === null || this.saved === null) return;
+     const text = this.wanted();
+     if (text !== this.saved) this.io.leave(this.slug, text);
+@@ -316,6 +349,9 @@ export class AddPurposeSession {
+       this.timers.clear(this.wait);
+       this.wait = null;
+     }
++    /* A read held behind a dictation is still the server's text: without it
++       the flush below would not know what to compare against. */
++    if (this.heldSeed !== null) this.adopt();
+     this.done = this.before.then(() => this.flight ?? undefined).then(() => this.flush());
+     return this.done;
+   }
+@@ -390,6 +426,7 @@ export class AddPurposeSession {
+ 
+   private kick(): void {
+     if (this.done || !this.ready || this.slug === null || this.saved !== null) return;
++    if (this.heldSeed !== null) return;
+     if (this.asking !== null || this.wait !== null || this.gaveUp) return;
+     if (!this.alive) {
+       if (!this.lastTry) return;
+@@ -426,7 +463,8 @@ export class AddPurposeSession {
+     /* Fresh, and an explicit `false`: an offline copy is not evidence the
+        article exists (F5), and `purposeFailed: true` covers *not yet*. */
+     if (answer !== null && answer.fresh === true && answer.purposeFailed === false) {
+-      this.seed(answer.purpose ?? "");
++      if (this.paused) this.heldSeed = answer.purpose ?? "";
++      else this.seed(answer.purpose ?? "");
+       return;
+     }
+     this.tries += 1;
+@@ -446,15 +484,24 @@ export class AddPurposeSession {
+   }
+ 
+   private seed(stored: string): void {
++    this.heldSeed = stored;
++    this.adopt();
++    this.changed();
++    this.commit();
++  }
++
++  /** Take the held read as what the server has. No listener is told, and nothing is sent. */
++  private adopt(): void {
++    const stored = this.heldSeed;
++    if (stored === null) return;
++    this.heldSeed = null;
+     this.saved = stored;
+     /* A blank box takes what is stored, and that text is not the reader's.
+-       Typed words stay, and the commit below sends them at once. */
++       Typed words stay, and the commit after this sends them at once. */
+     if (this.text.trim() === "") {
+       this.text = stored;
+       this.touched = false;
+     }
+-    this.changed();
+-    this.commit();
+   }
+ 
+   private snap(): AddPurposeSnapshot {
+@@ -485,15 +532,19 @@ export class AddPurposeSession {
+     if (this.abandoned || previous.text !== this.snapshot.text ||
+         previous.inFlight !== this.snapshot.inFlight ||
+         (previous.state.kind === "dirty") !== (this.snapshot.state.kind === "dirty")) {
+-      if (this.idle !== null) this.timers.clear(this.idle);
+-      this.idle = null;
+-      if (!this.abandoned && this.snapshot.state.kind === "dirty") {
+-        this.idle = this.timers.set(() => {
+-          this.idle = null;
+-          if (!this.abandoned && this.snapshot.state.kind === "dirty") this.commit();
+-        }, ADD_PURPOSE_IDLE_MS);
+-      }
++      this.arm();
+     }
+     for (const listener of [...this.listeners]) listener();
+   }
++
++  /** (Re)start the pause before a dirty box saves by itself: none while abandoned or dictating. */
++  private arm(): void {
++    if (this.idle !== null) this.timers.clear(this.idle);
++    this.idle = null;
++    if (this.abandoned || this.paused || this.snapshot.state.kind !== "dirty") return;
++    this.idle = this.timers.set(() => {
++      this.idle = null;
++      if (!this.abandoned && !this.paused && this.snapshot.state.kind === "dirty") this.commit();
++    }, ADD_PURPOSE_IDLE_MS);
++  }
+ }
+diff --git a/src/web/dictation-report.ts b/src/web/dictation-report.ts
+index 471968c66..ceedcfe1c 100644
+--- a/src/web/dictation-report.ts
++++ b/src/web/dictation-report.ts
+@@ -48,6 +48,7 @@ const NOT_FAILURES = new Set([
+ 
+ /** Every box with a microphone, by name: a closed set, so it can be a tag. */
+ export type DictationSurface =
++  | "add"
+   | "annotate"
+   | "chat"
+   | "command-bar"
+diff --git a/tests/add-page-dictation.test.tsx b/tests/add-page-dictation.test.tsx
+new file mode 100644
+index 000000000..31bd0f35c
+--- /dev/null
++++ b/tests/add-page-dictation.test.tsx
+@@ -0,0 +1,602 @@
++// @vitest-environment jsdom
++/**
++ * **The add page's two microphones, and the page that leaves by itself** —
++ * plan docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md
++ * § Stage 4. Report spya-wc4vku (Greg, 2026-10-19).
++ *
++ * Unmounting a box aborts its dictation, and this page opens the article by
++ * itself when the import finishes. So every exit has to ask whether either box
++ * is busy (armed, or its words on their way), and nothing may save the rough
++ * live guesses by itself. What is pinned:
++ *
++ *  - completion while a box is busy waits at *ready*, and still waits after;
++ *  - every press that opens the article is disabled and refuses while busy;
++ *  - a public-copy answer does not unmount a busy box, and its Read link is
++ *    disabled while it is;
++ *  - once *Open* is waiting on a save, neither microphone can start;
++ *  - no idle save, no hidden-tab save, of live guesses; the dictation's own
++ *    commit at its end saves the transcript;
++ *  - the keeper's box names, and the report's surface.
++ *
++ * `useDictation` is stubbed as tests/help-ask-dictation.test.tsx does, but per
++ * box: both boxes call it, so its options and its armed/transcribing state are
++ * keyed by the keeper's box name. The add-page harness is a cut-down copy of
++ * tests/add-page-purpose.test.tsx's.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { Job } from "../src/types.js";
++import type { UseJobs } from "../src/web/useJobs.js";
++import type { Transfer } from "../src/web/uploadEngine.js";
++import type { DictationFailure } from "../src/web/transcriber.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/* jsdom's storages are shadowed by Node's here (tests/add-page-purpose.test.tsx). */
++for (const name of ["localStorage", "sessionStorage"] as const) {
++  const map = new Map<string, string>();
++  Object.defineProperty(window, name, {
++    configurable: true,
++    value: {
++      getItem: (key: string) => map.get(key) ?? null,
++      setItem: (key: string, value: string) => void map.set(key, value),
++      removeItem: (key: string) => void map.delete(key),
++      clear: () => map.clear(),
++    },
++  });
++}
++
++/* ---------- the microphone, one per box ---------- */
++
++interface MicOptions {
++  onText(text: string): void;
++  onTranscript(text: string): boolean | undefined;
++  onEnd(): void;
++  keep?: { box: string };
++  report(failure: DictationFailure, context: unknown): void;
++}
++const mic = vi.hoisted(() => ({
++  state: new Map<string, { armed: boolean; transcribing: boolean }>(),
++  options: new Map<string, unknown>(),
++  reported: [] as Array<Record<string, string> | undefined>,
++}));
++vi.mock("../src/web/useDictation.js", () => ({
++  useDictation: (options: { keep?: { box: string } }) => {
++    const name = options.keep?.box ?? "(no keeper)";
++    mic.options.set(name, options);
++    const s = mic.state.get(name) ?? { armed: false, transcribing: false };
++    return {
++      supported: true,
++      phase: s.armed ? "listening" : s.transcribing ? "transcribing" : "idle",
++      armed: s.armed,
++      transcribing: s.transcribing,
++      liveText: true,
++      interim: "",
++      level: { current: 0 },
++      meter: "none",
++      quiet: false,
++      error: null,
++      startedAt: null,
++      endsAt: null,
++      deviceLabel: null,
++      deviceId: null,
++      deviceUnavailable: false,
++      recording: null,
++      keptOnDevice: false,
++      canRetry: false,
++      toggle() {},
++      dismiss() {},
++      chooseDevice() {},
++      clearRecording() {},
++      retry() {},
++    };
++  },
++}));
++vi.mock("../src/web/DictationStrip.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/DictationStrip.js")>()),
++  DictationStrip: () => null,
++}));
++vi.mock("../src/web/dictation-upload.js", () => ({
++  useReaderTranscriber: () => async () => {
++    throw new Error("not called");
++  },
++}));
++vi.mock("../src/web/monitoring.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/monitoring.js")>()),
++  captureClientFailure: (_err: unknown, tags?: Record<string, string>) => {
++    mic.reported.push(tags);
++  },
++}));
++
++/* ---------- the queue, the upload, the router, the server ---------- */
++
++const events: string[] = [];
++const patches = () => events.filter((e) => e.startsWith("patch:"));
++const profiles = () => events.filter((e) => e.startsWith("profile:"));
++const navigations: string[] = [];
++
++let jobs: Job[] = [];
++type AddAnswer = Job | { publicCopy: { slug: string; title: string } } | null;
++let addResult: AddAnswer | Promise<AddAnswer> = null;
++const queue: UseJobs = {
++  get jobs() {
++    return jobs;
++  },
++  loaded: true,
++  error: null,
++  driverFailures: {},
++  lastFailure: () => null,
++  add: async () => addResult,
++  addUpload: () => Promise.resolve(null) as ReturnType<UseJobs["addUpload"]>,
++  run: async (request) => {
++    events.push(`run:${request.steps.join(",")}`);
++    return null;
++  },
++  reset: async () => null,
++  cancel: async () => {},
++  retry: async () => null,
++  forget: async () => {},
++};
++vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => queue, useJobSession: () => {} }));
++
++let transfer: Transfer | null = null;
++vi.mock("../src/web/useUpload.js", () => ({ useUpload: () => transfer }));
++vi.mock("../src/web/uploadEngine.js", () => ({ uploadEngine: { retry: () => {}, cancel: () => {} } }));
++vi.mock("../src/web/router.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/router.js")>()),
++  navigate: (href: string) => {
++    navigations.push(href);
++  },
++}));
++
++const json = (body: unknown, status = 200) =>
++  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
++const purposes = new Map<string, string>();
++let readerProfile: string | null = null;
++let patchAnswer: (body: { purpose: string | null }, slug: string) => Promise<Response>;
++let purposeAnswer: (slug: string) => Promise<Response>;
++const readPurpose = (slug: string) =>
++  json({ autoModes: true, purpose: purposes.get(slug) ?? null, purposeFailed: false });
++const storePurpose = (slug: string, body: { purpose: string | null }) => {
++  const value = body.purpose?.trim() ?? "";
++  if (value === "") purposes.delete(slug);
++  else purposes.set(slug, value);
++  return json({ entry: null, purpose: value === "" ? null : value });
++};
++vi.mock("../src/web/lib/api.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/lib/api.js")>()),
++  apiFetch: async (input: string, init: RequestInit = {}) => {
++    if (input === "/api/reader" && init.method === "PATCH" && String(init.body).includes('"profile"')) {
++      const body = JSON.parse(String(init.body)) as { profile: string | null };
++      events.push(`profile:${body.profile}`);
++      readerProfile = body.profile;
++      return json({ profile: readerProfile });
++    }
++    if (input === "/api/reader" && init.method === "PATCH") return json({ autoModes: true });
++    if (input === "/api/reader") return json({ autoModes: true, profile: readerProfile });
++    if (input.startsWith("/api/reader?slug=")) {
++      return purposeAnswer(decodeURIComponent(input.slice("/api/reader?slug=".length)));
++    }
++    if (init.method === "PATCH" && input.startsWith("/api/library/")) {
++      const body = JSON.parse(String(init.body)) as { purpose: string | null };
++      const slug = decodeURIComponent(input.slice("/api/library/".length));
++      events.push(`patch:${slug}:${body.purpose}`);
++      return patchAnswer(body, slug);
++    }
++    if (init.method === "PUT" && input.endsWith("/high-power")) return json({ highPowerSince: null });
++    throw new Error(`unexpected fetch ${input}`);
++  },
++  leavingFetch: (input: string, init: RequestInit = {}) => {
++    events.push(`leave:${input}:${String(init.body)}`);
++    return Promise.resolve();
++  },
++}));
++
++const { AddPage, resetAddPurposeForTests } = await import("../src/web/AddPage.js");
++const { ADD_PURPOSE_IDLE_MS } = await import("../src/web/add-purpose.js");
++const { AUTOSAVE_IDLE_MS } = await import("../src/web/ProfileBox.js");
++const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
++const { PUBLIC_COPY_READ } = await import("../src/messages.js");
++const { normaliseUrl } = await import("../src/ingest.js");
++
++const SLUG = "a-paper";
++const URL_SOURCE = { kind: "url", url: "https://example.com/a-paper" } as const;
++const OPEN = "Open the article";
++const OPEN_UNSAVED = "Open without saving";
++const ABOUT = "add:about-you";
++const makeJob = (id: string, status: Job["status"]): Job =>
++  ({ id, slug: SLUG, status, steps: [] }) as unknown as Job;
++
++let host: HTMLDivElement;
++let root: Root;
++let mounted = false;
++let source: Parameters<typeof AddPage>[0]["source"] = URL_SOURCE;
++
++function render(next = source): void {
++  source = next;
++  act(() => root.render(createElement(AddPage, { source })));
++}
++async function settle(): Promise<void> {
++  for (let i = 0; i < 3; i++) {
++    await act(async () => {
++      await vi.advanceTimersByTimeAsync(0);
++    });
++  }
++}
++async function pause(ms: number): Promise<void> {
++  await act(async () => {
++    await vi.advanceTimersByTimeAsync(ms);
++  });
++  await settle();
++}
++async function start(): Promise<void> {
++  addResult = makeJob("job-1", "running");
++  jobs = [addResult];
++  render(URL_SOURCE);
++  await settle();
++}
++async function finish(): Promise<void> {
++  jobs = [makeJob("job-1", "done")];
++  render();
++  await settle();
++}
++
++const purposeBox = () => host.querySelector<HTMLTextAreaElement>("#add-purpose");
++const aboutBox = () => host.querySelector<HTMLTextAreaElement>("#add-about-you");
++const button = (name: string): HTMLButtonElement | undefined =>
++  [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === name);
++const press = (name: string): void => {
++  const b = button(name);
++  if (!b) throw new Error(`no ${name} button`);
++  act(() => b.click());
++};
++/**
++ * The button's own handler, past `disabled`: a disabled button swallows the
++ * click, so this is how a test asks whether the handler refuses as well.
++ */
++function forceClick(el: Element | undefined): void {
++  if (!el) throw new Error("nothing to click");
++  const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
++  const props = key ? (el as unknown as Record<string, { onClick?: () => void }>)[key] : undefined;
++  if (!props?.onClick) throw new Error("no onClick on the element");
++  act(() => props.onClick?.());
++}
++const openButtons = () =>
++  [...host.querySelectorAll<HTMLButtonElement>("[data-add-ready] button")].filter(
++    (b) => b.textContent?.trim() === OPEN,
++  );
++const bars = () => [...host.querySelectorAll("[data-add-ready]")].map((b) => b.getAttribute("data-add-ready"));
++const mics = () => [...host.querySelectorAll<HTMLButtonElement>("button.prof-mic")];
++
++function type(el: HTMLTextAreaElement | null, value: string): void {
++  if (!el) throw new Error("no box");
++  act(() => {
++    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
++    el.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++}
++
++/** The purpose box's keeper name, whatever the address is. */
++const purposeName = (): string => {
++  const names = [...mic.options.keys()].filter((k) => k.startsWith("add:purpose:"));
++  if (names.length === 0) throw new Error("no purpose microphone drawn");
++  return names[names.length - 1] as string;
++};
++const options = (name: string): MicOptions => {
++  const o = mic.options.get(name);
++  if (!o) throw new Error(`no microphone for ${name}`);
++  return o as MicOptions;
++};
++/** Put a box's microphone into a state, and redraw so the field sees it. */
++function setMic(name: string, state: "armed" | "transcribing" | "idle"): void {
++  mic.state.set(name, { armed: state === "armed", transcribing: state === "transcribing" });
++  render();
++}
++/** A live guess, as Chromium's recogniser hands it over. */
++function live(name: string, text: string): void {
++  act(() => options(name).onText(text));
++}
++/** The dictation ends: the transcript, if any, then the hook's `onEnd`. */
++async function end(name: string, transcript?: string): Promise<void> {
++  act(() => {
++    if (transcript !== undefined) options(name).onTranscript(transcript);
++    mic.state.set(name, { armed: false, transcribing: false });
++    options(name).onEnd();
++  });
++  render();
++  await settle();
++}
++
++beforeEach(() => {
++  vi.useFakeTimers();
++  resetAutoModesSettingForTests();
++  resetAddPurposeForTests();
++  window.localStorage.clear();
++  window.sessionStorage.clear();
++  mic.state.clear();
++  mic.options.clear();
++  mic.reported.length = 0;
++  purposes.clear();
++  readerProfile = null;
++  events.length = 0;
++  navigations.length = 0;
++  jobs = [];
++  addResult = null;
++  transfer = null;
++  source = URL_SOURCE;
++  patchAnswer = async (body, slug) => storePurpose(slug, body);
++  purposeAnswer = async (slug) => readPurpose(slug);
++  host = document.createElement("div");
++  document.body.appendChild(host);
++  root = createRoot(host);
++  mounted = true;
++});
++
++afterEach(async () => {
++  if (mounted) {
++    mounted = false;
++    act(() => root.unmount());
++  }
++  await vi.advanceTimersByTimeAsync(0);
++  host.remove();
++  vi.useRealTimers();
++});
++
++describe.each([
++  { box: "purpose", state: "armed" },
++  { box: "purpose", state: "transcribing" },
++  { box: "about you", state: "armed" },
++] as const)("the import finishes while the $box box is $state", ({ box, state }) => {
++  it("waits at ready with both Open buttons disabled, and still waits once the words are in", async () => {
++    await start();
++    const name = box === "purpose" ? purposeName() : ABOUT;
++    setMic(name, state);
++    await finish();
++    expect(navigations, "the page left, aborting a live dictation").toEqual([]);
++    expect(bars()).toEqual(["top", "bottom"]);
++    expect(openButtons()).toHaveLength(2);
++    for (const b of openButtons()) expect(b.disabled, "Open the article lit while dictating").toBe(true);
++    forceClick(openButtons()[0]);
++    forceClick(openButtons()[1]);
++    await settle();
++    expect(navigations, "Open the article's handler did not refuse while dictating").toEqual([]);
++
++    await end(name);
++    await pause(ADD_PURPOSE_IDLE_MS * 3);
++    expect(navigations, "left by itself once the dictation ended: the reader was in the box").toEqual([]);
++    for (const b of openButtons()) expect(b.disabled).toBe(false);
++    act(() => openButtons()[0]?.click());
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++  });
++});
++
++describe("every press that opens the article", () => {
++  it("⌘/Ctrl+Enter in the purpose box does not open while it is dictating", async () => {
++    await start();
++    const name = purposeName();
++    setMic(name, "armed");
++    await finish();
++    act(() => {
++      purposeBox()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
++      purposeBox()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }));
++    });
++    await settle();
++    expect(navigations).toEqual([]);
++    await end(name);
++    act(() => {
++      purposeBox()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
++    });
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++  });
++
++  it("Open without saving is disabled and refuses while a box is dictating", async () => {
++    patchAnswer = async () => json({ error: "The shelf is unavailable." }, 503);
++    await start();
++    type(purposeBox(), "the evidence");
++    await finish();
++    press(OPEN);
++    await settle();
++    expect(button(OPEN_UNSAVED), "the refusal did not offer Open without saving").toBeTruthy();
++
++    setMic(ABOUT, "armed");
++    expect(button(OPEN_UNSAVED)?.disabled).toBe(true);
++    forceClick(button(OPEN_UNSAVED));
++    await settle();
++    expect(navigations, "Open without saving left over a live dictation").toEqual([]);
++
++    await end(ABOUT);
++    expect(button(OPEN_UNSAVED)?.disabled).toBe(false);
++    press(OPEN_UNSAVED);
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++  });
++
++  it("once Open is waiting on a save, neither microphone can start", async () => {
++    await start();
++    act(() => purposeBox()?.focus());
++    type(purposeBox(), "the evidence");
++    await finish();
++    expect(navigations).toEqual([]);
++    expect(mics()).toHaveLength(2);
++    for (const m of mics()) expect(m.disabled).toBe(false);
++
++    let answer: (r: Response) => void = () => {};
++    patchAnswer = (body, slug) =>
++      new Promise((resolve) => {
++        answer = (r) => {
++          storePurpose(slug, body);
++          resolve(r);
++        };
++      });
++    press(OPEN);
++    await settle();
++    expect(button("Saving…")).toBeTruthy();
++    expect(mics()).toHaveLength(2);
++    for (const m of mics()) expect(m.disabled, "a microphone could start under a pending Open").toBe(true);
++
++    answer(json({ entry: null, purpose: "the evidence" }));
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++  });
++});
++
++describe("somebody else's public copy, answered while the purpose box is dictating", () => {
++  const THEIRS = { slug: "their-public-copy", title: "Their Public Copy" };
++
++  it("keeps the box, disables the Read link, and lets the box go once the words are in", async () => {
++    let answer: (value: AddAnswer) => void = () => {};
++    addResult = new Promise((resolve) => {
++      answer = resolve;
++    });
++    render(URL_SOURCE);
++    await settle();
++    expect(purposeBox(), "no purpose box while the add was asked").not.toBeNull();
++    const name = purposeName();
++    setMic(name, "armed");
++    answer({ publicCopy: THEIRS });
++    await settle();
++
++    expect(host.querySelector("[data-add-public]")).not.toBeNull();
++    expect(purposeBox(), "the answer unmounted a live recording").not.toBeNull();
++    expect(
++      [...host.querySelectorAll("a")].find((a) => a.textContent === PUBLIC_COPY_READ),
++      "a live link away from a live dictation",
++    ).toBeUndefined();
++    expect(button(PUBLIC_COPY_READ)?.disabled).toBe(true);
++    expect(navigations).toEqual([]);
++
++    await end(name);
++    expect(purposeBox()).toBeNull();
++    const read = [...host.querySelectorAll("a")].find((a) => a.textContent === PUBLIC_COPY_READ);
++    expect(read?.getAttribute("href")).toBe(`/read/${THEIRS.slug}`);
++  });
++});
++
++describe("no save of the live guesses", () => {
++  it("purpose: no idle save while armed; the dictation's commit saves the transcript", async () => {
++    await start();
++    const name = purposeName();
++    setMic(name, "armed");
++    live(name, "the rough guess");
++    expect(purposeBox()?.value).toBe("the rough guess");
++    await pause(ADD_PURPOSE_IDLE_MS * 5);
++    expect(patches(), "the live guesses were saved by the idle timer").toEqual([]);
++
++    await end(name, "the transcript");
++    expect(purposeBox()?.value).toBe("the transcript");
++    expect(patches()).toEqual([`patch:${SLUG}:the transcript`]);
++  });
++
++  it("purpose: a hidden tab does not commit while armed; the dictation's commit saves", async () => {
++    await start();
++    const name = purposeName();
++    setMic(name, "armed");
++    live(name, "the rough guess");
++    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
++    try {
++      act(() => {
++        document.dispatchEvent(new Event("visibilitychange"));
++      });
++      await settle();
++      expect(patches(), "a hidden tab saved the live guesses").toEqual([]);
++    } finally {
++      delete (document as { visibilityState?: unknown }).visibilityState;
++    }
++    expect(document.visibilityState).toBe("visible");
++
++    await end(name, "the transcript");
++    expect(patches()).toEqual([`patch:${SLUG}:the transcript`]);
++  });
++
++  it("purpose: a stored purpose read during a dictation is held, and the box unchanged until the end", async () => {
++    purposes.set(SLUG, "why I came");
++    let answer: () => void = () => {};
++    purposeAnswer = (slug) =>
++      new Promise((resolve) => {
++        answer = () => resolve(readPurpose(slug));
++      });
++    await start();
++    const name = purposeName();
++    setMic(name, "armed");
++    answer();
++    await settle();
++    expect(purposeBox()?.value, "a stored purpose moved into the box under a live dictation").toBe("");
++    expect(patches()).toEqual([]);
++
++    await end(name);
++    expect(purposeBox()?.value).toBe("why I came");
++    expect(patches()).toEqual([]);
++  });
++
++  it("purpose: a session made mid-dictation, when the slug arrives, starts paused", async () => {
++    /* An upload has no slug until it is answered with an article, so the
++       session is replaced then, under a dictation that is already running. */
++    purposes.set(SLUG, "why I came");
++    transfer = { uploadId: "up-1", filename: "p.pdf", bytes: 10, phase: { kind: "sending", sent: 4 } };
++    render({ kind: "upload", uploadId: "up-1" });
++    await settle();
++    const name = purposeName();
++    setMic(name, "armed");
++    live(name, "the rough guess");
++    transfer = { uploadId: "up-1", filename: "p.pdf", bytes: 10, phase: { kind: "article", slug: SLUG } };
++    render();
++    await settle();
++    await pause(ADD_PURPOSE_IDLE_MS * 5);
++    expect(navigations).toEqual([]);
++    expect(purposeBox()?.value).toBe("the rough guess");
++    expect(patches(), "the new session saved the live guesses").toEqual([]);
++
++    await end(name, "the transcript");
++    expect(patches()).toEqual([`patch:${SLUG}:the transcript`]);
++  });
++
++  it("About you: no profile save while armed, even past the pause; saved at the end", async () => {
++    await start();
++    expect(aboutBox(), "About you is offered to a reader with no profile").not.toBeNull();
++    setMic(ABOUT, "armed");
++    live(ABOUT, "A nurse, new to");
++    expect(aboutBox()?.value).toBe("A nurse, new to");
++    await pause(AUTOSAVE_IDLE_MS * 3);
++    expect(profiles(), "About you saved the live guesses").toEqual([]);
++
++    await end(ABOUT, "A nurse, new to statistics.");
++    expect(profiles()).toEqual(["profile:A nurse, new to statistics."]);
++  });
++});
++
++describe("the keeper's names and the report's surface", () => {
++  it("names the purpose box by the address and About you by nothing", async () => {
++    await start();
++    expect(purposeName()).toBe(`add:purpose:${normaliseUrl(URL_SOURCE.url)}`);
++    expect(mic.options.has(ABOUT)).toBe(true);
++  });
++
++  it("gives two uploads two purpose names", async () => {
++    transfer = { uploadId: "up-1", filename: "p.pdf", bytes: 10, phase: { kind: "sending", sent: 4 } };
++    render({ kind: "upload", uploadId: "up-1" });
++    await settle();
++    expect(mic.options.has("add:purpose:up-1")).toBe(true);
++    transfer = { uploadId: "up-2", filename: "q.pdf", bytes: 10, phase: { kind: "sending", sent: 4 } };
++    render({ kind: "upload", uploadId: "up-2" });
++    await settle();
++    expect(mic.options.has("add:purpose:up-2")).toBe(true);
++    expect(mic.options.has("add:purpose:")).toBe(false);
++  });
++
++  it("reports a failure in either box as the add page's", async () => {
++    await start();
++    const failure: DictationFailure = {
++      message: "The microphone would not open. [mic-denied]",
++      micError: "NotAllowedError",
++      live: false,
++      chosenMic: "none",
++    } as DictationFailure;
++    options(purposeName()).report(failure, { kind: "article", slug: SLUG });
++    options(ABOUT).report(failure, { kind: "profile" });
++    expect(mic.reported.map((t) => t?.dictation_surface)).toEqual(["add", "add"]);
++  });
++});
+diff --git a/tests/add-purpose.test.ts b/tests/add-purpose.test.ts
+index 96006aede..6893dc695 100644
+--- a/tests/add-purpose.test.ts
++++ b/tests/add-purpose.test.ts
+@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import {
+   type AddPurposeIo,
+   AddPurposeSession,
++  ADD_PURPOSE_IDLE_MS,
+   PURPOSE_READ_DEADLINE_MS,
+   PURPOSE_READ_MAX_TRIES,
+   PURPOSE_READ_FINAL_TRIES,
+@@ -600,6 +601,181 @@ describe("on the way out", () => {
+   });
+ });
+ 
++/**
++ * **Paused while a dictation runs** — plan 261020r § Stage 2. Chromium's live
++ * guesses arrive as ordinary keystrokes, so nothing saves by itself until the
++ * dictation ends, and a stored purpose read meanwhile is held, not adopted.
++ */
++describe("paused while dictating", () => {
++  /** A read the test answers when it chooses. */
++  function heldRead(s: ReturnType<typeof server>) {
++    let answer: (a: PurposeAnswer) => void = () => {};
++    s.world.read = () =>
++      new Promise((resolve) => {
++        answer = resolve;
++      });
++    return (purpose: string | null) => answer({ fresh: true, purpose, purposeFailed: false });
++  }
++
++  it("a dirty box does not save after the pause while paused, and does once unpaused and still", async () => {
++    const s = server();
++    const session = await seeded(s);
++    session.setPaused(true);
++    session.setText("the rough live guess", true);
++    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS * 5);
++    expect(s.saves(), "the live guesses were saved by the idle timer").toEqual([]);
++    expect(session.get().state.kind).toBe("dirty");
++
++    session.setPaused(false);
++    await tick();
++    expect(s.saves(), "unpausing saved at once rather than after the pause").toEqual([]);
++    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS);
++    expect(s.saves()).toEqual([`save:${SLUG}:the rough live guess`]);
++  });
++
++  it("an idle timer already armed when the pause starts does not fire", async () => {
++    const s = server();
++    const session = await seeded(s);
++    session.setText("typed, then the microphone", true);
++    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS / 2);
++    session.setPaused(true);
++    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS * 3);
++    expect(s.saves(), "the timer armed before the pause still fired").toEqual([]);
++  });
++
++  it("holds a read that answers while paused: a blank box does not take the stored text, and nothing is read again", async () => {
++    const s = server({ stored: "why I came" });
++    const answer = heldRead(s);
++    const session = new AddPurposeSession(SLUG, s.io);
++    session.setPaused(true);
++    session.observe(true);
++    await tick();
++    expect(s.reads()).toHaveLength(1);
++    answer("why I came");
++    await tick();
++    expect(session.get().text, "a stored purpose moved into the box under a live dictation").toBe("");
++    expect(session.get().state.kind).toBe("loading");
++    expect(session.get().seeded).toBe(false);
++    expect(s.saves()).toEqual([]);
++
++    /* Neither the page's observe nor completion starts a second read. */
++    s.world.read = null;
++    session.observe(true);
++    session.observe(false);
++    session.observe(true);
++    session.completed();
++    await vi.advanceTimersByTimeAsync(PURPOSE_READ_RETRY_MS * 5);
++    expect(s.reads(), "read again over a held answer").toHaveLength(1);
++    expect(s.saves()).toEqual([]);
++
++    session.setPaused(false);
++    await tick();
++    expect(session.get().text).toBe("why I came");
++    expect(session.get().state.kind).toBe("clean");
++    expect(session.carried(), "the adopted text became the reader's").toBe("");
++    expect(s.saves()).toEqual([]);
++  });
++
++  it("a typed box keeps its words over a held read, and commits them on unpause", async () => {
++    const s = server({ stored: "why I came" });
++    const answer = heldRead(s);
++    const session = new AddPurposeSession(SLUG, s.io);
++    session.setText("the methods", true);
++    session.setPaused(true);
++    session.observe(true);
++    await tick();
++    answer("why I came");
++    await tick();
++    session.setText("the methods and the live guess", true);
++    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS * 3);
++    expect(session.get().text).toBe("the methods and the live guess");
++    expect(s.saves()).toEqual([]);
++
++    session.setText("the methods and the transcript", true);
++    session.setPaused(false);
++    await tick();
++    expect(s.saves()).toEqual([`save:${SLUG}:the methods and the transcript`]);
++    expect(s.stored()).toBe("the methods and the transcript");
++  });
++
++  it("retired while paused over a held read: compares with the stored text, and never clears it", async () => {
++    /* Blank box: nothing to send, and certainly not a clear. */
++    const blank = server({ stored: "why I came" });
++    const answerBlank = heldRead(blank);
++    const a = new AddPurposeSession(SLUG, blank.io);
++    a.setPaused(true);
++    a.observe(true);
++    await tick();
++    answerBlank("why I came");
++    await tick();
++    await a.retire();
++    expect(blank.saves(), "a retired blank box cleared a stored purpose").toEqual([]);
++    expect(blank.stored()).toBe("why I came");
++
++    /* The same words as stored: nothing to send. */
++    const same = server({ stored: "why I came" });
++    const answerSame = heldRead(same);
++    const b = new AddPurposeSession(SLUG, same.io);
++    b.setText("why I came", true);
++    b.setPaused(true);
++    b.observe(true);
++    await tick();
++    answerSame("why I came");
++    await tick();
++    await b.retire();
++    expect(same.saves()).toEqual([]);
++
++    /* Different words: the retired session still owes them to its article. */
++    const typed = server({ stored: "why I came" });
++    const answerTyped = heldRead(typed);
++    const c = new AddPurposeSession(SLUG, typed.io);
++    c.setText("the transcript", true);
++    c.setPaused(true);
++    c.observe(true);
++    await tick();
++    answerTyped("why I came");
++    await tick();
++    await c.retire();
++    expect(typed.saves(), "words over a held read were lost at retire").toEqual([`save:${SLUG}:the transcript`]);
++  });
++
++  it("leaveNow while paused over a held read sends typed words, and nothing for a blank box", async () => {
++    const s = server({ stored: "why I came" });
++    const answer = heldRead(s);
++    const typed = new AddPurposeSession(SLUG, s.io);
++    typed.setText("the transcript", true);
++    typed.setPaused(true);
++    typed.observe(true);
++    await tick();
++    answer("why I came");
++    await tick();
++    typed.leaveNow();
++    expect(s.calls.filter((c) => c.startsWith("leave:"))).toEqual([`leave:${SLUG}:the transcript`]);
++
++    const t = server({ stored: "why I came" });
++    const answerBlank = heldRead(t);
++    const blank = new AddPurposeSession(SLUG, t.io);
++    blank.setPaused(true);
++    blank.observe(true);
++    await tick();
++    answerBlank("why I came");
++    await tick();
++    blank.leaveNow();
++    expect(t.calls.filter((c) => c.startsWith("leave:"))).toEqual([]);
++  });
++
++  it("an explicit commit while paused still saves once seeded", async () => {
++    const s = server();
++    const session = await seeded(s);
++    session.setPaused(true);
++    session.setText("the transcript", true);
++    session.commit();
++    await tick();
++    expect(s.saves()).toEqual([`save:${SLUG}:the transcript`]);
++    expect(session.get().state.kind).toBe("saved");
++  });
++});
++
+ describe("what the page reads", () => {
+   it("hands back the same snapshot until something changes, and tells its listeners when it does", async () => {
+     const s = server();
+diff --git a/tests/prose-boxes-have-a-microphone.test.ts b/tests/prose-boxes-have-a-microphone.test.ts
+new file mode 100644
+index 000000000..68676b110
+--- /dev/null
++++ b/tests/prose-boxes-have-a-microphone.test.ts
+@@ -0,0 +1,118 @@
++/**
++ * **Every box for the reader's prose has a microphone, or says why not** —
++ * plan docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md
++ * § Stage 5.
++ *
++ * Greg, 2026-10-19 (spya-wc4vku): *"we really want a dictate button next to
++ * pretty much all of our input boxes that are going to have more than a few
++ * words of text typed into them. Let's make a minimal tweak to our docs and/or
++ * design system to make this more likely going forwards."*
++ *
++ * A ratchet, read from the source. Every `<textarea>` under `src/web/` is
++ * found, with the top-level component it is drawn in (`File.tsx#Component`),
++ * and that component must set up a microphone — `useDictationField`, or a
++ * `DictationButton` or `ProfileBox` it draws — or be listed below with its
++ * reason. Per component rather than per file, because one file can hold a box
++ * with a microphone and one without (GPT Sol's plan review, P2-4). A new
++ * textarea without one fails here, so its author decides rather than forgets.
++ * How to add one: docs/project/dictation.md § Adding it to a box.
++ *
++ * Textareas only. Almost every textarea is prose; an `<input>` is as often a
++ * search field or a title as a sentence, and no reading of the source can
++ * tell which, so those are left to the reviewer. The fleet dashboard
++ * (`tools/fleet/`) has its own microphone, `DictationControl`, and is not
++ * scanned.
++ *
++ * What it does NOT prove: that the microphone works in that box. That is the
++ * box's own test, and dictation.md's checklist (`busy`, the keeper, the
++ * unmount).
++ */
++import { readdirSync, readFileSync } from "node:fs";
++import { join, relative, resolve } from "node:path";
++import { describe, expect, it } from "vitest";
++
++const ROOT = resolve(import.meta.dirname, "..");
++const WEB = join(ROOT, "src/web");
++
++/** Components whose textareas have no microphone, and why. Each reason is a decision, not an excuse. */
++const WITHOUT: Record<string, string> = {
++  "src/web/DesignPage.tsx#ControlsAcrossModes": "a specimen of the text box's look on /design, not a box anyone writes in",
++  "src/web/ViewportProbe.tsx#ProbePanel": "read-only: a report to copy, not a box to type into",
++  "src/web/AdminVouchersPage.tsx#CreateForm": "admin only: a short note sent with a voucher",
++  "src/web/AdminVouchersPage.tsx#VoucherRow": "admin only: a short note sent with a voucher",
++  "src/web/AdminAuthorGifts.tsx#Notes": "admin only: notes on an author gift",
++  "src/web/AdminAuthorGifts.tsx#DraftEditor": "admin only: the draft of an author gift's email",
++  /* Prose boxes a reader writes in, without a microphone yet. Queued as the
++     sweep in plan 261020r § Stage 5; each has its own send and unmount to
++     check, so each is a change of its own. Delete the line when it lands. */
++  "src/web/SkimPurpose.tsx#PurposeLine": "not yet: queued (Skim's own purpose box)",
++  "src/web/CriteriaPanel.tsx#NewCriterion": "not yet: queued (Referee's new-criterion box)",
++  "src/web/CandidatesPanel.tsx#Composer": "not yet: queued (scoping the candidates search)",
++  "src/web/ChatPanel.tsx#EditQuestion": "not yet: queued (rewriting a question already asked)",
++  "src/web/CommentDialog.tsx#CommentBody": "not yet: queued (editing a comment's note)",
++};
++
++function tsxFiles(dir: string): string[] {
++  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
++    const path = join(dir, entry.name);
++    if (entry.isDirectory()) return tsxFiles(path);
++    return entry.name.endsWith(".tsx") ? [path] : [];
++  });
++}
++
++/** A JSX textarea opening a line: `<textarea` or shadcn's `<Textarea`, never one named in a comment. */
++const TEXTAREA = /^\s*<(?:textarea|Textarea)\b/;
++/** A top-level declaration, at the start of a line: where one component ends and the next begins. */
++const DECLARATION = /^(?:export\s+)?(?:default\s+)?(?:function\s+(\w+)|const\s+(\w+)\s*[=:])/;
++/* The strip counts: every box with a microphone draws one under itself, even
++   where the button is drawn by a small wrapper (the add page's `AddMic`). */
++const MICROPHONE = /useDictationField\(|<DictationButton\b|<DictationStrip\b|<ProfileBox\b/;
++
++interface Box {
++  /** `src/web/File.tsx#Component`. */
++  where: string;
++  mic: boolean;
++}
++
++const boxes: Box[] = tsxFiles(WEB).flatMap((path) => {
++  const file = relative(ROOT, path);
++  const lines = readFileSync(path, "utf8").split("\n");
++  const declarations = lines.flatMap((line, at) => {
++    const m = DECLARATION.exec(line);
++    return m ? [{ name: m[1] ?? m[2] ?? "?", at }] : [];
++  });
++  return lines.flatMap((line, at) => {
++    if (!TEXTAREA.test(line)) return [];
++    const own = declarations.filter((d) => d.at <= at).at(-1);
++    const next = declarations.find((d) => d.at > at);
++    const body = lines.slice(own?.at ?? 0, next?.at ?? lines.length).join("\n");
++    return [{ where: `${file}#${own?.name ?? "?"}`, mic: MICROPHONE.test(body) }];
++  });
++});
++
++describe("prose boxes have a microphone", () => {
++  it("finds the boxes it is about (a scan that matches nothing proves nothing)", () => {
++    const withMic = boxes.filter((b) => b.mic).map((b) => b.where);
++    expect(withMic).toEqual(
++      expect.arrayContaining([
++        "src/web/AddPage.tsx#PurposeBox",
++        "src/web/AddPage.tsx#AboutYouBox",
++        "src/web/ProfileBox.tsx#ProfileBox",
++        "src/web/FeedbackSendBox.tsx#FeedbackSendBox",
++      ]),
++    );
++  });
++
++  it("every textarea is in a component with a microphone, or is listed with its reason", () => {
++    const missing = boxes.filter((b) => !b.mic && !(b.where in WITHOUT)).map((b) => b.where);
++    expect(missing, "add a microphone (docs/project/dictation.md § Adding it to a box), or list it in WITHOUT with why").toEqual([]);
++  });
++
++  it("every listed component still has a textarea and still has no microphone", () => {
++    const stale = Object.keys(WITHOUT).filter((where) => {
++      const found = boxes.filter((b) => b.where === where);
++      return found.length === 0 || found.some((b) => b.mic);
++    });
++    expect(stale, "this exemption no longer describes the code: delete its line").toEqual([]);
++  });
++});

@@ -97,9 +97,10 @@ export const MODES = [
 
      Renamed for the reader to **Learn** on 2026-10-05, and the identifier
      followed on 2026-10-06 (`remember` until then; `?mode=remember` still
-     opens it, through `RETIRED_MODES` below). It is the umbrella over Recall, Tutorial, Explore and
-     Quiz. The catalogue description now distinguishes that whole from a
-     course or flashcards. The rename plans hold the reasons and costs:
+     opens it, through `RETIRED_MODES` below). It is the umbrella over Recall,
+     Explore and Quiz (and Tutorial, until it was folded into Recall on
+     2026-10-20). The catalogue description now distinguishes that whole from
+     a course or flashcards. The rename plans hold the reasons and costs:
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md,
      docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md and
      docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */

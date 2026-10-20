@@ -138,13 +138,14 @@ stamped prompt it reaches, and measure first.
 
 `widerWorld({ search, origins?, placement })` in [`src/wider-world.ts`](../../src/wider-world.ts)
 is a third shared section. It goes in the prompts that answer or mark the reader and otherwise
-keep to the article: Chat, Recall, Tutorial and Quiz marking. It tells the model to speak up
+keep to the article: Chat, Recall and Quiz marking (and Tutorial, until it was folded into
+Recall on 2026-10-20). It tells the model to speak up
 unasked when a checkable fact in the piece is wrong, or when a consensus or a live dispute bears
 on a central claim, and at no other time. The three sources stay apart in the sentence: what the
 article says carries its block id, the model's own memory is said to be memory, and a search is
 linked. The outside view is never used against a reader who read the piece right. Where the note
-goes is each prompt's own `placement`, because Recall must still end on its nudge and Tutorial on
-its task. `tests/wider-world.test.ts` pins each variant and where it sits.
+goes is each prompt's own `placement`, because Recall must still end on its nudge and Quiz may
+not open with a verdict. `tests/wider-world.test.ts` pins each variant and where it sits.
 
 **Not for the prompts that represent the piece**: Summary, Glossary's `senseHere`, FAQ, Tweets.
 Outside knowledge filed under the article's label is the regression § Measuring warns about.
@@ -160,7 +161,7 @@ evidence is [261018c](../investigations/261018c-modes-say-when-the-piece-is-wron
 > — Greg, 2026-10-19 (`spya-u3yw2a`)
 
 `CHAT_PRINCIPLES` in [`src/chat-principles.ts`](../../src/chat-principles.ts) is a fourth shared
-section, for conversations only: Chat, Learn, Tutorial, Explore and the guide. Five principles —
+section, for conversations only: Chat, Learn's Recall, Explore and the guide. Five principles —
 leave the reader sharper, not more dependent, and sooner; candid, not agreeable (recheck under push-back, then
 hold or revise, saying why); make it clear how you know each thing; do not assume they have read
 it; plain, pitched to them, and point at the part of Spideryarn that would serve them better. It

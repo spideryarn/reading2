@@ -1,12 +1,12 @@
 /**
- * **Learn's four parts, one line each** — what Learn's (i) says after
- * the mode's two catalog sentences, in Recall, Tutorial and Explore
+ * **Learn's three parts, one line each** — what Learn's (i) says after
+ * the mode's two catalog sentences, in Recall and Explore
  * (ChatPanel.tsx). Greg, 2026-10-04 (spya-usyhwy), about that card when it was
  * one 110-word paragraph walking through every sub-mode: *"Prefer smaller
  * paragraphs or bullet points because it's much clearer."*
  *
  * Each chip has its own card now (QuizPanel.tsx § `LEARN_VIEW_HOW`), and
- * the four are still listed here because **a chip's card never opens under a
+ * the three are still listed here because **a chip's card never opens under a
  * finger** — a tap presses the chip — while this (i) opens on a tap. The words
  * are the command bar's, so there is no third description of a sub-mode.
  *
@@ -15,7 +15,7 @@
  * importing sub-modes.ts there put that module in both graphs
  * (tests/eager-client-graph.test.ts). Plan 261004f.
  *
- * **It lists the parts the chip row draws**, which is all four since Explore
+ * **It lists the parts the chip row draws**, which is all three since Explore
  * came out of the experimental-features switch on 2026-10-11; a part put
  * behind it again would lose its line too, since a line about a part with no
  * chip would describe something the reader cannot find. The hook

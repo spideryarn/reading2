@@ -463,6 +463,18 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-question-more { align-self: stretch; }
 .fb-question-more > summary { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); }
 .fb-question-more > p { margin-top: 0.35rem; }
+/* **Somebody else's report, marked as such** (spya-y43ha0, 261020p): the words
+   before its number in the orange text colour, and its shut text with an orange
+   rule down its left, so a reader's suggestion is told apart from Greg's own at
+   a glance. `--highlight-text` is the theme's readable orange. */
+.fb-question-whose { color: var(--highlight-text); font-weight: 600; }
+.fb-question-more[data-whose="reader"],
+.fb-question-more[data-whose="admin"] {
+  border-inline-start: 3px solid var(--highlight-text);
+  padding-inline-start: 0.6rem;
+}
+.fb-question-more[data-whose="reader"] > summary,
+.fb-question-more[data-whose="admin"] > summary { color: var(--highlight-text); overflow-wrap: anywhere; }
 .fb-question-answer-one + .fb-question-answer-one { margin-top: 0.4rem; }
 /* Waiting reports no question has been written for (spya-u6h6q8). */
 .fb-orphans { display: flex; flex-direction: column; gap: 0.35rem; }

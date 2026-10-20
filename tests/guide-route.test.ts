@@ -372,6 +372,68 @@ describe("a guide turn", () => {
     });
   });
 
+  const profileOffering = (): Response[] => {
+    const call = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+    return [
+      new Response(
+        call({
+          model: "test/model",
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "toolu_0",
+                    type: "function",
+                    function: {
+                      name: "offer_to_save",
+                      arguments: JSON.stringify({ field: "about_you", text: "A nurse. I prefer brief answers." }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }) +
+          call({ model: "test/model", choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+          "data: [DONE]\n\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+      finishedBody("It is in the second section."),
+    ];
+  };
+
+  /* Plan 261020o: Chat's and Explore's offers of About you record what it
+     held, and wait for the press, whatever words the model chose. */
+  it.each([
+    ["chat", "spya-chrtb2"],
+    ["explore", "spya-xprtb2"],
+  ] as const)("gives a %s About you offer its basis, and never marks it to save at once", async (kind, threadId) => {
+    vi.spyOn(readerStore, "readProfile").mockResolvedValue("A nurse.");
+    replies = profileOffering();
+    expect(await post({ threadId, question: "I prefer brief answers. Where is it?", kind })).toBe(200);
+    const stored = await asTestOwner(() => chatStore.load(SLUG));
+    const answer = stored.find((t) => t.id === threadId)?.messages.at(-1);
+    expect(answer?.tools?.[0]?.offer).toEqual({ field: "profile", text: "A nurse. I prefer brief answers.", basis: "A nurse." });
+  });
+
+  it.each([
+    /* No "o" in an id: the alphabet leaves it out, and an id the route
+       refuses becomes a fresh thread this lookup would not find. */
+    ["chat", "spya-chrtn2"],
+    ["explore", "spya-xprtn2"],
+  ] as const)("gives a %s no unsafe offer when profile use is off", async (kind, threadId) => {
+    const profileRead = vi.spyOn(readerStore, "readProfile");
+    replies = profileOffering();
+    expect(await post({ threadId, question: "I prefer brief answers. Where is it?", kind, useProfile: false })).toBe(200);
+    expect(profileRead).not.toHaveBeenCalled();
+    const stored = await asTestOwner(() => chatStore.load(SLUG));
+    const answer = stored.find((t) => t.id === threadId)?.messages.at(-1);
+    expect(answer?.tools?.[0]?.detail).toBe("not offered");
+    expect(answer?.tools?.[0]?.offer).toBeUndefined();
+  });
+
   it("refuses visible blocks before any model call", async () => {
     const id = article?.blocks[0]?.id;
     expect(await post({ threadId: "spya-gdrtd2", question: "this bit", kind: "guide", visible: [id] })).toBe(400);
@@ -400,7 +462,7 @@ describe("a guide turn", () => {
 });
 
 describe("a turn of any other kind", () => {
-  it.each(["chat", "learn", "tutorial", "explore", "candidates"] as const)(
+  it.each(["chat", "learn", "explore", "candidates"] as const)(
     "%s neither asks for the count nor carries the line",
     async (kind) => {
       const count = vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(0);

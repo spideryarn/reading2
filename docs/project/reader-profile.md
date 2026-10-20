@@ -40,7 +40,7 @@ wiring.
 
 | Box | Scope | Stored | Edited at |
 |---|---|---|---|
-| **About you** | you, always | `reader_profiles.profile` | `/profile`; also offered on the add page to a reader who has none |
+| **About you** | you, always | `reader_profiles.profile` | `/profile`; also offered on the add page to a reader who has none, and by the guide, Chat and Explore as a card under an answer when you tell them something lasting, such as how you want to be answered ([chat-tools.md](chat-tools.md#chat-and-explore-offer-to-keep-an-instruction-in-about-you)) |
 | **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Skim's band |
 
 **On the add page since 2026-10-20 both boxes sit at the top**, the purpose box four rows and
@@ -235,7 +235,10 @@ the code inspects a search query before it goes out. Written down plainly becaus
 of this doc claimed the promise rather than the instruction, and a privacy claim that is really a
 request is worse than no claim. GPT Sol's review, 2026-08-26. The real fence, if this ever matters
 enough, is a check on the tool call's arguments in [`src/chat-tools.ts`](../../src/chat-tools.ts) —
-not more prompt.
+not more prompt. **One tool is the exception on purpose**: `offer_to_save`, whose argument *is*
+About you, offered back to the reader as a card they press. It stays inside Spideryarn, so the
+guide's and Chat's prompts narrow the rule for it
+([chat-tools.md § Chat and Explore offer to keep an instruction](chat-tools.md#chat-and-explore-offer-to-keep-an-instruction-in-about-you)).
 
 ### The command bar's suggestions: the one exception
 

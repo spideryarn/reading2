@@ -272,10 +272,11 @@ export interface ToolContext {
    */
   threadId?: string | undefined;
   /**
-   * What the reader's reason and About you held when this guide turn read
-   * them — the basis `offer_to_save` records, so a card pressed after either
-   * changed does not save over the newer words. Guide turns only; a field the
-   * route could not read is absent, and cannot be offered safely.
+   * What the reader's reason and About you held when this turn read them —
+   * the basis `offer_to_save` records, so a card pressed after either changed
+   * does not save over the newer words. Guide, Chat and Explore turns (the
+   * last two About you only, plan 261020o); a field the route could not read
+   * is absent, and cannot be offered safely.
    */
   saved?: SavedNow | undefined;
   /**
@@ -533,8 +534,8 @@ export const TOOL_NAMES = new Set(CHAT_TOOLS.map((t) => t.function.name));
  * The ninth tool, and **deliberately not in `CHAT_TOOLS`**.
  *
  * `CHAT_TOOLS` is what Live flattens into its session (src/live.ts) and what
- * Recall, Tutorial and Candidates are offered, and none of them should have
- * this: Live's tool endpoint has no thread to exclude, Recall and Tutorial are
+ * Recall and Candidates are offered, and none of them should have
+ * this: Live's tool endpoint has no thread to exclude, Recall is
  * about the article and are told not to guess at the reader, and Candidates is
  * Referee machinery. GPT Sol's review of
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md,
@@ -587,8 +588,8 @@ export const READER_NOTES_TOOL: FunctionTool = {
 /**
  * **Chat reads a paper the article cites** (plan 261011w), and **deliberately
  * not in `CHAT_TOOLS`**, for `READER_NOTES_TOOL`'s reason: Live flattens that
- * list, and a 25-second PDF read is no part of a spoken turn; Learn, Tutorial
- * and Candidates have no use for it; the guide is about how to read. Offered
+ * list, and a 25-second PDF read is no part of a spoken turn; Learn and
+ * Candidates have no use for it; the guide is about how to read. Offered
  * to `chat` and `explore` only. src/read-cited-work.ts is the tool.
  */
 export const READ_CITED_WORK_TOOL: FunctionTool = {
@@ -620,10 +621,6 @@ export const READ_CITED_WORK_TOOL: FunctionTool = {
     },
   },
 };
-
-/* Built once: tools are rendered ahead of system and messages, so they are part
-   of the cached prefix and must be the same bytes on every request of a kind. */
-const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL, READ_CITED_WORK_TOOL];
 
 /**
  * **The guide's tools: this article's, and nothing that leaves it.** The guide
@@ -709,6 +706,50 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
         text: {
           type: "string",
           description: `The words to save, as they would be stored. At most ${MAX_PURPOSE_CHARS} characters for a reason, ${MAX_PROFILE_CHARS} for About you.`,
+        },
+      },
+      required: ["field", "text"],
+    },
+  },
+};
+
+/**
+ * **Chat's and Explore's offer to save to About you: press only** — plan
+ * docs/plans/261020o-chat-offers-to-save-a-broad-instruction-to-about-you.md,
+ * Greg's report `spya-aqnz99`: *"the user might give broad instructions (e.g.
+ * "try to give brief answers", "I already know about X") … offer to make an
+ * appropriate minimal update to the User Profile"*.
+ *
+ * The same tool name and the same `offerToSave` as the guide's, so the card
+ * (src/web/GuideSaveOffer.tsx) and its press are the same; but About you only,
+ * and never saved without the press: `typed` is a guide-only field on the
+ * request (src/routes.ts), so `savesAtOnce` is never asked, and the page drops
+ * any `now` on these kinds as well. Chat's context carries web pages, cited
+ * works and other articles, so a planted instruction can put words on this
+ * card; the reader reads them before pressing (docs/project/security-map.md).
+ */
+export const OFFER_PROFILE_TOOL: FunctionTool = {
+  type: "function",
+  function: {
+    name: "offer_to_save",
+    description:
+      "Offer to add to the reader's About you something they told you that should last beyond this " +
+      "question: how they want you to answer them, or what they already know or do. The reader sees " +
+      "your words under your answer with a button, and nothing is saved unless they press it. Give " +
+      "the whole new text: keep their current About the reader exactly as written and add one short " +
+      "sentence of what they told you, as close to their own words as reads well. If that conflicts " +
+      "with something already there, replace only the conflicting part instead.",
+    parameters: {
+      type: "object",
+      properties: {
+        field: {
+          type: "string",
+          enum: ["about_you"],
+          description: "Always about_you.",
+        },
+        text: {
+          type: "string",
+          description: `The whole new About you, as it would be stored. At most ${MAX_PROFILE_CHARS} characters.`,
         },
       },
       required: ["field", "text"],
@@ -867,6 +908,14 @@ const GUIDE_TYPED_TOOLS: FunctionTool[] = [
 ];
 
 /**
+ * What Chat and Explore offer: the shared eight, the reader's notes, the works
+ * the piece cites, and the press-only offer to save to About you. Built once:
+ * tools are rendered ahead of system and messages, so they are part of the
+ * cached prefix and must be the same bytes on every request of a kind.
+ */
+const CHAT_TYPED_TOOLS: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL, READ_CITED_WORK_TOOL, OFFER_PROFILE_TOOL];
+
+/**
  * The tools of ours a conversation of this kind is offered.
  *
  * Exhaustive, so a fifth `ThreadKind` is a red compile here rather than a
@@ -879,9 +928,8 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
   switch (kind) {
     case "chat":
     case "explore":
-      return CHAT_TOOLS_WITH_NOTES;
+      return CHAT_TYPED_TOOLS;
     case "learn":
-    case "tutorial":
     case "candidates":
       return CHAT_TOOLS;
     case "guide":
@@ -2537,6 +2585,9 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
     ...(settles ? { settles } : {}),
   });
   if (field === null) return refuse(`field must be "reason" or "about_you".`);
+  /* Chat and Explore offer About you only (`OFFER_PROFILE_TOOL`): the reason
+     is the guide's to ask about (plan 261020o). */
+  if (field === "purpose" && ctx.kind !== "guide") return refuse(`only "about_you" can be offered here.`);
   const text = typeof args.text === "string" ? normaliseProfileText(args.text) : null;
   if (text === null) return refuse("text was empty.");
   const max = field === "purpose" ? MAX_PURPOSE_CHARS : MAX_PROFILE_CHARS;
@@ -2553,8 +2604,9 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   if (basis === text) return refuse("those are already their saved words, exactly.", true);
   /* Their typed words, word for word or one sentence of them lightly
      reworded: the page saves it at once, with an Undo (src/save-closeness.ts,
-     plans 261011s and 261012c). Anything else waits for the press. */
-  const now = savesAtOnce({ field, text, basis }, ctx.typed ?? null);
+     plans 261011s and 261012c). Anything else waits for the press, and so
+     does every offer outside the guide (plan 261020o). */
+  const now = ctx.kind === "guide" ? savesAtOnce({ field, text, basis }, ctx.typed ?? null) : null;
   return {
     label,
     detail: "",

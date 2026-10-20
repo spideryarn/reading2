@@ -557,8 +557,11 @@ import {
   type AdminFeedbackQuestionAnswer,
   type AdminFeedbackQuestionV1,
   type AdminFeedbackQuestionV2,
+  type AdminFeedbackQuestionV3,
   type AdminEarlierFeedbackPageV1,
   type AdminEarlierFeedbackPageV2,
+  type AdminEarlierFeedbackPageV3,
+  type FeedbackQuestionReport,
   type AdminFeedbackDeferralReceipt,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
@@ -3281,6 +3284,20 @@ async function guideExperience(
   }
 }
 
+/**
+ * **A request's `kind`, with the one retired word read as what it became.**
+ * Tutorial was folded into Recall on 2026-10-20 (its threads by
+ * drizzle/20261020063618_fold_tutorial_into_recall.sql), so `kind: "tutorial"`
+ * from a tab still running the old client is a Recall turn, and lands in the
+ * article's Recall thread by `targetOf` (src/chat.ts). A permanent alias,
+ * unlike `review` and `remember`, which were renames and get a 400: GPT Sol's
+ * F9 on docs/plans/261020m-recall-and-tutorial-become-one-recall.md.
+ * Everything else passes through unchanged, to be validated by the caller.
+ */
+export function requestKind(sent: unknown): unknown {
+  return sent === "tutorial" ? "learn" : sent;
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -3292,7 +3309,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     useProfile,
     anchor,
     origin,
-    kind,
+    kind: sentKind,
     stance,
     help,
     typed,
@@ -3331,7 +3348,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      of the wrong kind. A tab left open across the deploy fails its next
      Recall turn until it reloads.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages,
-     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
+
+     **`tutorial` is the one alias, and it is permanent** (`requestKind`): it
+     was not renamed but retired into Recall, so a tab open across that deploy
+     asking for a Tutorial turn is asking for what Recall now is. */
+  const kind = requestKind(sentKind);
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
   }
@@ -3477,11 +3499,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingLearn = (storedKind ?? wantedKind) === "learn";
-  /* Tutorial and Explore are dictated too, so they share Learn's long cap
-     rather than chat's 4,000 — the same mistake `MAX_LEARN_CHARS` exists to
-     avoid. */
+  /* Explore is dictated too, so it shares Learn's long cap rather than chat's
+     4,000 — the same mistake `MAX_LEARN_CHARS` exists to avoid. */
   const effectiveKind = storedKind ?? wantedKind;
-  const longInput = askingLearn || effectiveKind === "tutorial" || effectiveKind === "explore";
+  const longInput = askingLearn || effectiveKind === "explore";
   /* **Chat only.** Learn's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -3989,14 +4010,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          `offer_to_save` records as an offer's basis, so a card pressed after
          the words changed saves nothing (plan 261009q). A shelf that could
          not be read leaves the reason out rather than calling it empty, and
-         the tool then refuses to make an offer for that field. */
+         the tool then refuses to make an offer for that field. Chat and
+         Explore offer About you too, press only, so they get that field
+         alone (plan 261020o). */
       saved:
-        thread.kind === "guide" && profileParts !== null
-          ? {
-              profile: normaliseProfileText(profileParts.profile),
-              ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
-            }
-          : null,
+        profileParts === null
+          ? null
+          : thread.kind === "guide"
+            ? {
+                profile: normaliseProfileText(profileParts.profile),
+                ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
+              }
+            : thread.kind === "chat" || thread.kind === "explore"
+              ? { profile: normaliseProfileText(profileParts.profile) }
+              : null,
       /* The question, when the reader typed it and this is the guide: what an
          offer is checked against before it saves without a press (above). */
       typed: thread.kind === "guide" && typed === true ? asked : null,
@@ -4603,8 +4630,8 @@ function liveKind(thread: ChatThread | undefined, sent: unknown): SpokenKind | u
   if (sent !== undefined && !isSpokenKind(sent)) {
     throw httpError(400, "kind must be a conversation that takes a live conversation");
   }
-  /* A caller may omit `kind`, but that does not make a stored Tutorial,
-     Explore or Candidates conversation eligible. Refuse it here, before the
+  /* A caller may omit `kind`, but that does not make a stored Explore or
+     Candidates conversation eligible. Refuse it here, before the
      Realtime mint or GPT-Live journal/create can spend anything; the spoken
      append has the same gate for the later write. */
   if (thread) {
@@ -8962,38 +8989,71 @@ async function fileFeedback(
  * oldest first, as threads (plan 261008i). Each carries the admin's own
  * replies not yet acted on, and (shape 3, 261010h) those an agent has acted
  * on, apart, which group it is in (`questionState`, from every
- * reply and the admin's deferral), and, when it names a report **of theirs**,
- * that report's number, first line and text. Every lookup is owner-scoped in
- * the store, so a question about another reader's report sends `report: null`
- * and another admin's reply or deferral is never this one's. Only the open
+ * reply and the admin's deferral), and the report it names: that report's
+ * number, first line and text. Since shape 4 (261020p, `spya-y43ha0`) that is
+ * **whoever filed it**, read across owners and marked `yours`, `reader` or
+ * `admin`, with the address it was filed under for anyone else's, so Greg can
+ * judge a reader's suggestion beside the question about it; it is the one
+ * cross-owner read here, through `adminStore`, and the route is under the
+ * admin gate. Shapes 1 to 3 keep the owner-scoped lookup, so a question about
+ * another reader's report sends `report: null` there. Replies and deferrals
+ * stay owner-scoped: another admin's is never this one's. Only the open
  * ones: an answered question is not sent, whatever a store hands back. Each is
  * picked field by field; the file's `refs` was never compiled, its `repeats`
  * leave only as report rows' `asked`, and its `acted` ids leave only as the
  * state and as which list each reply is in.
  *
  * `shape` 1 is the answer before 261008i, for a request without
- * `questions=2` or `questions=3`: a tab loaded before the deploy keeps
+ * `questions=2`, `3` or `4`: a tab loaded before the deploy keeps
  * working after it (F3).
  * Six keys, the newest reply of any kind, the report without its text.
  */
 /** At most this many replies in either of a thread's lists, the newest (F12, 261010h). */
 const THREAD_ANSWERS = 5;
 
-async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestion[]>;
+async function questionsForAdmin(shape: 4): Promise<AdminFeedbackQuestion[]>;
+async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestionV3[]>;
 async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestionV2[]>;
 async function questionsForAdmin(shape: 1): Promise<AdminFeedbackQuestionV1[]>;
 async function questionsForAdmin(
-  shape: 1 | 2 | 3,
-): Promise<AdminFeedbackQuestion[] | AdminFeedbackQuestionV2[] | AdminFeedbackQuestionV1[]> {
+  shape: 1 | 2 | 3 | 4,
+): Promise<
+  AdminFeedbackQuestion[] | AdminFeedbackQuestionV3[] | AdminFeedbackQuestionV2[] | AdminFeedbackQuestionV1[]
+> {
   const open = openFeedbackQuestions();
   if (open.length === 0) return [];
   const ids = open.map((question) => question.id);
   const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
-  const [answers, deferrals, reports] = await Promise.all([
+  /* Shape 4 finds a question's report whoever filed it, and only that way:
+     the admin's own first would show their report when a reader's shares its
+     id, so the one rule is one row across every owner or none (261020p, F1). */
+  const [answers, deferrals, reports, across] = await Promise.all([
     feedbackStore.answersTo(ids),
     shape === 1 ? Promise.resolve([]) : feedbackStore.deferrals(ids),
-    feedbackStore.linkedReports(named),
+    shape === 4 ? Promise.resolve([]) : feedbackStore.linkedReports(named),
+    shape === 4 ? adminStore.questionReportsAcrossOwners(named) : Promise.resolve(null),
   ]);
+  if (across !== null && across.ambiguous.length > 0) {
+    log("store").warn(
+      { ambiguous: across.ambiguous.length },
+      "a question names a report id more than one account holds; its thread shows no report",
+    );
+  }
+  const owner = currentOwnerId();
+  /** Shape 4's report: the one row holding that id, and whose it is. */
+  const whoseReport = (report: string | null): FeedbackQuestionReport | null => {
+    const hit = report === null || across === null ? undefined : across.found.find((one) => one.id === report);
+    if (hit === undefined) return null;
+    const mine = hit.ownerId === owner;
+    return {
+      id: hit.id,
+      number: hit.number,
+      firstLine: hit.firstLine,
+      body: hit.body,
+      whose: mine ? "yours" : isAdmin(hit.ownerId) ? "admin" : "reader",
+      from: mine ? null : hit.reporterEmail,
+    };
+  };
   const reply = ({ id, body, createdAt }: AdminFeedbackQuestionAnswer) => ({ id, body, createdAt });
   if (shape === 1) {
     return open.map(({ id, title, body, asked, report }) => {
@@ -9039,11 +9099,15 @@ async function questionsForAdmin(
     /* Shape 3 (261010h, spya-j4sg9g): the acted ones too, bounded the same way,
        so a thread answered and asked again shows what was said. */
     const done = replies.filter((one) => one.acted);
-    return {
+    const withActed: AdminFeedbackQuestionV3 = {
       ...thread,
       actedAnswers: done.slice(-THREAD_ANSWERS).map(reply),
       olderActedAnswers: Math.max(0, done.length - THREAD_ANSWERS),
     };
+    if (shape === 3) return withActed;
+    /* Shape 4 (261020p, spya-y43ha0): the report whoever filed it, and whose. */
+    const latest: AdminFeedbackQuestion = { ...withActed, report: whoseReport(report) };
+    return latest;
   });
 }
 
@@ -10375,7 +10439,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          *everyone*, it would show the administrator's own reports under a filter
          that says it hides them. src/types.ts § `parseFeedbackFrom`. */
       const from = parseFeedbackFrom(query.get("from"));
-      if (from === "malformed") throw httpError(400, "from must be everyone or readers.");
+      if (from === "malformed") throw httpError(400, "from must be everyone, readers or admins.");
       send(
         res,
         200,
@@ -10395,10 +10459,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      Under `/api/admin/`, so the namespace gate has refused everybody else
      before this runs; nothing here asks who the caller is. **Their own list,
      not a view across owners**: `feedbackStore`, owner-scoped like
-     `GET /api/feedback`, never `adminStore`. What the namespace buys is not
-     other people's rows but the richer account of each: its stored number,
-     whether it was ignored or its note says declined or awaiting, and the
-     sentence an agent wrote about it.
+     `GET /api/feedback`. What the namespace buys is not other people's rows
+     but the richer account of each: its stored number, whether it was ignored
+     or its note says declined or awaiting, and the sentence an agent wrote
+     about it. **The one exception is the questions**, since 261020p: at
+     `questions=4` a thread shows the report its question names whoever filed
+     it, through `adminStore` (`questionsForAdmin`), which is what
+     `/admin/feedback` already shows the same admin.
 
      One segment after `feedback/`; the one-report routes below take two, so
      neither can answer for the other. Picked field by field, as the plain
@@ -10454,15 +10521,22 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **Threads only to a client that asks for them** (plan 261008i, F3): a
          tab loaded before the deploy sends no `questions`, and its strict
          check wants the six-key questions it was built against. Anything but
-         `2` or `3` is that older client; `2` is a tab from before 261010h,
-         whose check wants threads without the acted replies. */
+         `2`, `3` or `4` is that older client; `2` is a tab from before
+         261010h, whose check wants threads without the acted replies; `3` one
+         from before 261020p, whose check wants a report without `whose`. */
       const shape = query.get("questions");
-      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV2 | AdminEarlierFeedbackPageV1 =
-        shape === "3"
-          ? { ...envelope, questions: await questionsForAdmin(3) }
-          : shape === "2"
-            ? { ...envelope, questions: await questionsForAdmin(2) }
-            : { ...envelope, questions: await questionsForAdmin(1) };
+      const answer:
+        | AdminEarlierFeedbackPage
+        | AdminEarlierFeedbackPageV3
+        | AdminEarlierFeedbackPageV2
+        | AdminEarlierFeedbackPageV1 =
+        shape === "4"
+          ? { ...envelope, questions: await questionsForAdmin(4) }
+          : shape === "3"
+            ? { ...envelope, questions: await questionsForAdmin(3) }
+            : shape === "2"
+              ? { ...envelope, questions: await questionsForAdmin(2) }
+              : { ...envelope, questions: await questionsForAdmin(1) };
       send(res, 200, answer);
     },
   },

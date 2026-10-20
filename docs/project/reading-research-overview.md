@@ -43,7 +43,7 @@ readers, and ends with what it means for each mode it touches.
   — questions asked before reading help only what they ask; readers judge their own understanding
   poorly; behind Quiz, FAQ and Learn's feedback.
 - [03 Scaffolding and desirable difficulty](../research/261010a-reading-and-learning-evidence/03-scaffolding-and-desirable-difficulty.md)
-  — tutoring, the zone of proximal development, expertise reversal; behind Tutorial and the summary
+  — tutoring, the zone of proximal development, expertise reversal; behind Recall's teaching turns (Tutorial's until 2026-10-20) and the summary
   levels.
 - [04 AI tutors and LLMs in learning](../research/261010a-reading-and-learning-evidence/04-ai-tutors-and-llms-in-learning.md)
   — the 2023–26 trials: help that does the work can leave you worse off afterwards.

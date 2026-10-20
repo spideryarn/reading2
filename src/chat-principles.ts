@@ -1,6 +1,6 @@
 /**
  * **What every conversation about an article is for, once, near the top of
- * each conversation's prompt** — Chat, Learn, Tutorial, Explore and the guide.
+ * each conversation's prompt** — Chat, Learn's Recall, Explore and the guide.
  *
  * > Do we have a system prompt (for Chats) (or something equivalent that all
  * > Chats share)? … We want it to be concise. And probably framed in terms of

@@ -28,6 +28,7 @@ import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
 import { describeFetchFailure } from "../lib/describe-failure.js";
 import type { Begun, HintOutcome, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
+import { withRetiredKinds } from "./retired-kinds.js";
 
 /**
  * A clock on each individual look for a lost answer.
@@ -420,7 +421,8 @@ export async function askForThreads(slug: string, signal?: AbortSignal): Promise
       await apiFetch(`/api/chat/${encodeURIComponent(slug)}`, signal ? { signal } : undefined),
     );
     if (body.error) return { ok: false, error: body.error };
-    return { ok: true, threads: body.threads ?? [] };
+    /* Tutorial read as Recall, for a cached or mid-deploy body (retired-kinds.ts). */
+    return { ok: true, threads: withRetiredKinds(body.threads ?? []) };
   } catch (e) {
     /* Our own caller gave up on it — the spoken repair's deadline aborts this
        after it has already finished — so nothing failed. Not through

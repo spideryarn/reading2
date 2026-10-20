@@ -202,7 +202,7 @@ text. Run before and after a prompt change —
 
 ## `wider-world.ts` — does a mode say when the piece is wrong, labelled, and only then?
 
-Calls production's `converse` (Chat, Recall, Tutorial) and `markAnswerStream` (Quiz) on the
+Calls production's `converse` (Chat and Recall; Tutorial's cases run as Recall since it was folded in on 2026-10-20) and `markAnswerStream` (Quiz) on the
 committed Seth article. Nineteen cases: a date the piece gets wrong, a contested argument, a view
 the piece already calls a minority one, plain passages that want no outside note, and a reader who
 has the piece backwards. Arms never overwrite one another, and `--pairs` writes a blind,
@@ -1219,7 +1219,7 @@ report may be promoted.
 
 **Not yet described here**, though they exist: `plain-words/`, `simple/`, `faq-levels/`, `sketch/`,
 `illustrated/`, `shelf-topics/`, `dictation/`, `live/`, `referee-promises.ts`, `referee-mirror.ts`,
-`learn-recall.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
+`learn-recall.ts`, `learn-recall-turns.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
 or README says what it measures.
 
 ## Results

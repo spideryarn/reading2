@@ -196,13 +196,15 @@ describe("which sub-mode rows the bar offers", () => {
     expect(fullName(first as HTMLElement)).toBe("Learn › Quiz");
   });
 
-  it("offers Tutorial first when the reader types `tutorial`", () => {
+  /* Tutorial was folded into Recall on 2026-10-20 (plan 261020m); the word
+     is Recall's alias now (sub-modes.ts § `LEARN_SUB_MODES`). */
+  it("offers Recall first when the reader types `tutorial`", () => {
     reading();
     openBar();
     type("tutorial");
     const first = rows()[0];
     expect(first?.dataset.kind).toBe("submode");
-    expect(fullName(first as HTMLElement)).toBe("Learn › Tutorial");
+    expect(fullName(first as HTMLElement)).toBe("Learn › Recall");
   });
 
   it("offers Explore first when the reader types `explore`", () => {
@@ -261,11 +263,11 @@ describe("which sub-mode rows the bar offers", () => {
     const names = subRows().map(fullName);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
     /* Learn is in every reader's bar since 2026-10-05 (spya-cnqcjf), and
-       all four of its parts since Explore came out on 2026-10-11 (spya-jm0nfg). */
+       all its parts since Explore came out on 2026-10-11 (spya-jm0nfg);
+       three since Tutorial was folded into Recall on 2026-10-20. */
     expect(modeRows).toContain("Learn");
     expect(names.filter((n) => n.startsWith("Learn"))).toEqual([
       "Learn › Recall",
-      "Learn › Tutorial",
       "Learn › Explore",
       "Learn › Quiz",
     ]);
@@ -335,7 +337,7 @@ describe("which sub-mode rows the bar offers", () => {
         const names = subRows().map(fullName);
         expect(names.includes("Learn › Explore"), search).toBe(offered);
         expect(names).toEqual(expect.arrayContaining([
-          "Learn › Recall", "Learn › Tutorial", "Learn › Quiz",
+          "Learn › Recall", "Learn › Quiz",
         ]));
         act(() => dialog().close());
       }

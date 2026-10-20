@@ -492,10 +492,13 @@ describe("every article lookup names an owner", () => {
    * - `ai-calls-spend-pg.ts` is the per-owner spend aggregate, added 2026-09-02.
    *   It has the same shape and the same justification: `/admin/users` reads it
    *   through that same gate, and `npm run cost -- --owners` reads it from a CLI
-   *   Greg runs on his own machine. It returns **money and an owner id and
-   *   nothing else** — no title, no URL, no slug, no sentence of anybody's
-   *   reading — which is the rule admin.md states for the page and the reason
-   *   this second entry is a widening rather than a hole.
+   *   Greg runs on his own machine. It returns **spend totals and counts, an
+   *   owner id and an opaque article id** (the article id since 2026-10-05,
+   *   for `/admin/costs` and later `/admin/articles`' Total cost column) — no
+   *   title, no URL, no other owner's slug, no sentence of anybody's reading.
+   *   That is the rule admin.md states for the page and the reason this second
+   *   entry is a widening rather than a hole; the file's own header has the
+   *   full list.
    *
    * Adding a third is a decision about who may see across owners, which is why
    * it is a list here rather than a per-file opt-out somewhere quieter.

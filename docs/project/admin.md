@@ -250,6 +250,12 @@ Earlier tab, read through the owner-scoped `feedbackStore`, never `adminStore`. 
 namespace because it carries what no other reader is sent: that a report was ignored, whether its
 note says declined or awaiting, its stored number, and the note's comment
 ([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
+**Its one cross-owner read**, since 2026-10-20: the report each open question names, whoever filed
+it, so Greg can judge a reader's suggestion beside the question about it (`spya-y43ha0`). It goes
+through `adminStore` (`questionReportsAcrossOwners`), answers only for an id exactly one account
+holds, and returns the report's words, number and the address it was filed under, which is what
+`/admin/feedback` already shows the same administrator
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
 The same answer carries the questions agents have put to the administrator, and
 **`POST /api/admin/feedback/answers`** stores a reply to one: a row in `feedback_question_answers`
 under the signed-in administrator's own id, again through `feedbackStore`. It is the second write
@@ -996,6 +1002,14 @@ carries the title's words. A row per article does show how many each reader has 
 `/admin/users` already shows as counts; *which* articles stays in their session. Showing every
 title would be a decision about [§ What it deliberately does not show](#what-it-deliberately-does-not-show),
 and a one-line change in `listArticlesAcrossOwners`.
+
+**Each row's Total cost** is every model call the ledger ties to the article by its id, over its
+whole life and whoever made it (`spendByArticle` in
+[`ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)): `/admin/costs`' rule and
+formatting, a `+` when it is a floor, and only the spend and call counts that `/admin/costs` already
+shows by opaque article id. The table can be ordered highest total cost first. Greg, 2026-10-19
+(`spya-vjyev3`): *"Also show Total Cost per article"* —
+[261020s](../plans/261020s-total-cost-column-on-admin-articles.md).
 
 | Route | Does |
 |---|---|
