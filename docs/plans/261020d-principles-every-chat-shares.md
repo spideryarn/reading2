@@ -52,7 +52,7 @@ building"). What changed because of it, in its numbering:
   because they push back: recheck, then hold or revise your answer and say why."* The universal
   "answer, then leave the next step to them" is cut: Explore says a direct answer can be the whole
   turn, and the guide forbids a question after a content answer.
-- **F8 (taken):** the text is shorter (187 words, a test keeps it under 200) and no longer restates
+- **F8 (taken):** the text is shorter (195 words, a test keeps it under 200) and no longer restates
   how to cite or link: it says *make it clear how you know*, and `CLAIM_ORIGINS`, `widerWorld` and
   `BLOCK_ID_NOTE` keep the how. With that, the written/spoken variant had nothing left to vary, so
   it is one constant, `CHAT_PRINCIPLES`.
@@ -74,7 +74,16 @@ building"). What changed because of it, in its numbering:
   named (one share line, computed by the existing `shareRead`/`isRead`), in
   `docs/user-feedback/questions/`.
 
+**The code review** ([261020d-code-review-sol.md](261020d-code-review-sol.md)) fixed the coverage
+test (driven from the exhaustive record, and the section must be the first named one), saved the
+blind verdicts, and corrected the investigation's claims. Its F7 was right that shortening had
+dropped Greg's *"get there quicker"*: the first line now ends *"and getting there sooner than they
+would alone"*, re-measured as `after2` (12–11, one tie; push-backs held 4 of 4). Its F1 hash
+mismatch was a doc-comment line, shown by reconstruction (the investigation has it).
+
 The rest of this doc is the plan as reviewed; where it disagrees with the above, the above wins.
+The built code and its evidence were reviewed in
+[261020d-code-review-sol.md](261020d-code-review-sol.md).
 
 ## The design
 

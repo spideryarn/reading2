@@ -1,7 +1,7 @@
 ---
 reports: spya-yyc7te, spya-u3yw2a
 ending: shipped
-comment: Every chat about an article now starts from one short set of shared principles. Still waiting on you: should chat also be told roughly how much of the article you have read?
+comment: Every typed chat about an article now starts from one short set of shared principles. Still waiting on you: should chat also be told roughly how much of the article you have read?
 ---
 # The principles every chat shares
 
@@ -30,21 +30,25 @@ Overseer queue item `qi-3tk6d9ga`:
 >
 > — Greg, 2026-10-19 20:48 UTC (`spya-u3yw2a`, #646)
 
-**Ending: Shipped**, to `dev`, not deployed, all but one part. Plan, with both GPT Sol reviews:
-[261020d](../plans/261020d-principles-every-chat-shares.md); the eval:
+**Ending: Shipped**, to `dev`, not deployed, for the five written conversation kinds. Reading
+progress and Live conversation remain separate decisions below. The
+[plan](../plans/261020d-principles-every-chat-shares.md), its
+[plan review](../plans/261020d-plan-review-sol.md), the
+[code review](../plans/261020d-code-review-sol.md), and the eval:
 [261020a](../investigations/261020a-chat-principles-measured.md).
 
 - **Shipped.** The answer to "do we have one?" was no: each chat had its own prompt, and they had
   drifted (Chat even said *"They are reading it."*). Now `CHAT_PRINCIPLES`
-  ([src/chat-principles.ts](../../src/chat-principles.ts)), 187 words, sits near the top of Chat,
-  Learn, Tutorial, Explore and the guide: leave the reader sharper, not more dependent; candid, not
+  ([src/chat-principles.ts](../../src/chat-principles.ts)), 195 words, sits near the top of Chat,
+  Learn, Tutorial, Explore and the guide: leave the reader sharper, not more dependent, and sooner; candid, not
   agreeable (recheck under push-back, then hold or revise, saying why); make it clear how you know
   each thing; do not assume they have read it; plain, pitched to them, and point at the part of
   Spideryarn that would serve them better. Added as already in the vision: say when you do not know
   or the piece does not say, and give the author's strongest reading before a criticism. Each line
-  leaves the detail to the section that already owns it. Blind, overall preference was even (12–12
-  against a 13–10 control); pushed back on with no reason, the old prompts opened by giving way 8
-  of 8 times, the new one by rechecking and holding 4 of 4.
+  leaves the detail to the section that already owns it. Blind, overall preference was even (12–11
+  for the shipped wording, 12–12 for a first one, against a 13–10 control); pushed back on with no
+  reason, the old prompts opened by giving way 8 of 8 times, the new ones by rechecking and saying
+  what still held 8 of 8.
 - **Waiting on Greg: chat told how much of the article you have read.** Sending reading-time data
   to the model is a new disclosure that the privacy page has to cover first, so it is asked, not
   built: question `q-rwkq2e`, queue item `qi-bkdxh4kb`.

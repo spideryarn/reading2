@@ -161,16 +161,18 @@ evidence is [261018c](../investigations/261018c-modes-say-when-the-piece-is-wron
 
 `CHAT_PRINCIPLES` in [`src/chat-principles.ts`](../../src/chat-principles.ts) is a fourth shared
 section, for conversations only: Chat, Learn, Tutorial, Explore and the guide. Five principles —
-leave the reader sharper, not more dependent; candid, not agreeable (recheck under push-back, then
+leave the reader sharper, not more dependent, and sooner; candid, not agreeable (recheck under push-back, then
 hold or revise, saying why); make it clear how you know each thing; do not assume they have read
 it; plain, pitched to them, and point at the part of Spideryarn that would serve them better. It
-sits **near the top**, straight after each prompt's opening paragraph, framed as the spirit behind
-the rules below, so a prompt's own, more specific rules still win. It restates none of the
-sections above: each line leaves the how to `CLAIM_ORIGINS`, `widerWorld`, `plainWords` and
+sits **near the top**, after each prompt's opening description and before its first named rule
+section, framed as the spirit behind the rules below, so a prompt's own, more specific rules still
+win. Its broad intent deliberately overlaps the detailed sections above, but it does not copy their
+mechanics: each line leaves the how to `CLAIM_ORIGINS`, `widerWorld`, `plainWords` and
 `PROFILE_RULES`. `tests/chat-principles.test.ts` holds which kinds carry it (Referee's
 find-reviewers is exempt, with its reason) and keeps it under 200 words. Live's spoken prompts do
 not carry it yet. The plan and the measurement:
-[261020d](../plans/261020d-principles-every-chat-shares.md).
+[261020d](../plans/261020d-principles-every-chat-shares.md) and
+[261020a](../investigations/261020a-chat-principles-measured.md).
 
 ## What the model writes back
 

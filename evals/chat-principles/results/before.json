@@ -287,7 +287,17 @@
       "sourceSha256": {
         "converse": "7d00f057c666d3cf2b701c9960d35cc36e2a30aae5d96528bd52dfa765b34f78",
         "chatPrinciples": "d2bd1ed374ad47fe7937a670ca31cf657fa049ccdb345e55e5975fc11e9312b5"
-      }
+      },
+      "only": [
+        "learn-overreach",
+        "tutorial-cold"
+      ],
+      "rows": [
+        "learn-overreach#1",
+        "tutorial-cold#1",
+        "learn-overreach#2",
+        "tutorial-cold#2"
+      ]
     }
   ]
 }

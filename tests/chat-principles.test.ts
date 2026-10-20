@@ -29,6 +29,7 @@ const COVERAGE: Record<ThreadKind, "carries" | { exempt: string }> = {
       "Referee's find-reviewers: its reader is an editor finding reviewers, not someone reading the piece, and its own rules cover honesty and provenance",
   },
 };
+const coverageKinds = Object.keys(COVERAGE) as ThreadKind[];
 
 const blocks: Block[] = [
   {
@@ -50,7 +51,11 @@ const systemOf = (kind: ThreadKind): string =>
   );
 
 describe("the principles every chat shares", () => {
-  it.each(THREAD_KINDS)("%s: carries them exactly once, or is exempt with a reason", (kind) => {
+  it("keeps the runtime list and the exhaustive coverage record in step", () => {
+    expect([...THREAD_KINDS].sort()).toEqual([...coverageKinds].sort());
+  });
+
+  it.each(coverageKinds)("%s: carries them exactly once, or is exempt with a reason", (kind) => {
     const rule = COVERAGE[kind];
     const system = systemOf(kind);
     const count = system.split(CHAT_PRINCIPLES_HEADING).length - 1;
@@ -63,13 +68,43 @@ describe("the principles every chat shares", () => {
     }
   });
 
-  it("sits near the top, before the prompt's own detailed rules", () => {
-    for (const kind of THREAD_KINDS) {
+  it("is the first named rule section, after the opening description", () => {
+    for (const kind of coverageKinds) {
       if (COVERAGE[kind] !== "carries") continue;
       const system = systemOf(kind);
-      /* Ahead of the plain-words section every one of them ends with. */
-      expect(system.indexOf(CHAT_PRINCIPLES_HEADING)).toBeLessThan(system.indexOf("PLAIN WORDS"));
-      expect(system.indexOf(CHAT_PRINCIPLES_HEADING)).toBeLessThan(2000);
+      const headings = [...system.matchAll(/^([A-Z][A-Z0-9 '’—–,:-]+)$/gm)].map((match) => match[1]);
+      expect(headings[0], kind).toBe(CHAT_PRINCIPLES_HEADING);
+    }
+  });
+
+  it("leaves the fixed system-and-article cache prefix byte-identical between turns", () => {
+    const article = buildConverseMessages({
+      meta,
+      blocks,
+      history: [],
+      question: "first question",
+      kind: "chat",
+    })[1];
+    for (const kind of coverageKinds) {
+      const first = buildConverseMessages({ meta, blocks, history: [], question: "first question", kind });
+      const later = buildConverseMessages({
+        meta,
+        blocks,
+        kind,
+        question: "a different question",
+        profile: "A different profile",
+        history: [
+          {
+            id: "h1",
+            role: "user",
+            text: "an earlier turn",
+            createdAt: "2026-10-20T12:00:00.000Z",
+            status: "done",
+          },
+        ],
+      });
+      expect(later.slice(0, 2), kind).toEqual(first.slice(0, 2));
+      expect(later[1], `${kind}'s article message`).toEqual(article);
     }
   });
 

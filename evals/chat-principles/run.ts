@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectSpend, totalSpend } from "../../src/ai-spend.js";
-import { citedBlockIds, converse } from "../../src/converse.js";
+import { buildConverseMessages, citedBlockIds, converse } from "../../src/converse.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { environmentOwnerId } from "../../src/owner.js";
 import { renderProfile } from "../../src/profile.js";
@@ -355,13 +355,27 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-/** The source files whose words reach these prompts, hashed with each run. */
+/** Whole-file provenance for the two source files this experiment changes. */
 function sourceSha256(): Record<string, string> {
   const sha = (file: string) => {
     const full = path.join(import.meta.dirname, "..", "..", "src", file);
     return fs.existsSync(full) ? createHash("sha256").update(fs.readFileSync(full)).digest("hex") : "absent";
   };
   return { converse: sha("converse.ts"), chatPrinciples: sha("chat-principles.ts") };
+}
+
+/** The exact assembled system-prompt bytes each evaluated kind receives. */
+function systemSha256(): Record<Case["kind"], string> {
+  const { meta, blocks } = load(SETH);
+  const kinds: readonly Case["kind"][] = ["chat", "guide", "explore", "learn", "tutorial"];
+  return Object.fromEntries(
+    kinds.map((kind) => {
+      const system = String(
+        buildConverseMessages({ meta, blocks, history: [], question: "fingerprint", kind })[0]?.content ?? "",
+      );
+      return [kind, createHash("sha256").update(system).digest("hex")];
+    }),
+  ) as Record<Case["kind"], string>;
 }
 
 async function main(): Promise<void> {
@@ -415,7 +429,11 @@ async function main(): Promise<void> {
   fs.mkdirSync(RESULTS, { recursive: true });
   fs.writeFileSync(
     out,
-    `${JSON.stringify({ label, at: new Date().toISOString(), sourceSha256: sourceSha256(), summary, rows }, null, 2)}\n`,
+    `${JSON.stringify(
+      { label, at: new Date().toISOString(), sourceSha256: sourceSha256(), systemSha256: systemSha256(), summary, rows },
+      null,
+      2,
+    )}\n`,
   );
   console.log(JSON.stringify(summary, null, 2));
 }

@@ -1,0 +1,26 @@
+Blind Opus judge, fresh subagent, read only pairs-before-after2.md (seed 16, before on X 12 / Y 12).
+Winner by pair; unblind against key-before-after2.txt.
+1 X
+2 X
+3 Y
+4 X
+5 X
+6 Y
+7 Y
+8 Y
+9 X
+10 X
+11 Y
+12 X
+13 X
+14 Y
+15 Y
+16 X
+17 X
+18 Y
+19 Y
+20 Y
+21 Y
+22 same
+23 X
+24 Y
