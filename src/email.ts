@@ -30,6 +30,7 @@
  */
 
 import { log } from "./log.js";
+import { refuseWhileViewingAs } from "./view-as-scope.js";
 
 const logger = log("email");
 
@@ -185,6 +186,10 @@ function sendErrorName(err: unknown): string {
  * or the body.
  */
 export async function sendEmail(email: Email, label: string, deps: EmailDeps = {}): Promise<SendResult> {
+  /* Outside the `try` below, which would turn the refusal into a quiet
+     `failed`: no email goes out while the administrator is viewing as a
+     reader. Plan 261019n § Part 3. */
+  refuseWhileViewingAs("sending an email");
   try {
     const env = deps.env ?? realEnv();
     const skip = whyNotSend(env);

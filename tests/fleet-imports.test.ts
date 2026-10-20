@@ -82,6 +82,10 @@ const ALLOWED: Record<string, string> = {
   "src/web/dictation-errors.ts": "every recogniser error code to a sentence",
   "src/web/useAudioLevel.ts": "the meter, reading the track being recorded",
   "src/web/audio-level.ts": "the RMS itself",
+  /* `viewAsNonce()`, which hides the microphone in a tab viewing the app as
+     another reader (plan 261019n § round 2, R2-5). It imports nothing, so it
+     brings nothing of the product with it; on the dashboard it answers `null`. */
+  "src/web/lib/view-as.ts": "whether this tab is viewing as another reader",
   "src/web/quiet-chime.ts": "the soft chime when the microphone has heard nothing (plan 261001k)",
   /* The two ends of one arithmetic problem. The browser checks the cap before a
      megabyte goes over the wire and the server checks it again; two copies of

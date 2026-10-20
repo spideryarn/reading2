@@ -22,6 +22,7 @@
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { refuseWhileViewingAs } from "../view-as-scope.js";
 import type { BlobHead, PutResult, RawSourceStore } from "./blobs.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -76,6 +77,8 @@ export function fsBlobs(dir: string = DEFAULT_DIR): RawSourceStore {
     },
 
     async putIfAbsent(key, bytes, contentType): Promise<PutResult> {
+      /* As src/store/blobs-supabase.ts: no write while viewing as. */
+      refuseWhileViewingAs("a Storage write");
       const file = fileFor(dir, key);
       await mkdir(path.dirname(file), { recursive: true });
       /* **A temp file, then `link`** — and the comment here used to say `wx` was
@@ -120,6 +123,7 @@ export function fsBlobs(dir: string = DEFAULT_DIR): RawSourceStore {
     },
 
     async remove(key) {
+      refuseWhileViewingAs("a Storage delete");
       const file = fileFor(dir, key);
       await unlink(file).catch((err: NodeJS.ErrnoException) => {
         if (err.code !== "ENOENT") throw err;

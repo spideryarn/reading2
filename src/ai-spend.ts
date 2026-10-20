@@ -41,6 +41,7 @@ import type { Nanos } from "./pricing.js";
    gateways fill in rather than something looked up from `AI_JOB_WIRE` here. */
 import type { AiJob, Wire } from "./models.js";
 import { currentOwnerId } from "./owner.js";
+import { refuseWhileViewingAs } from "./view-as-scope.js";
 
 /**
  * **Where a call's dollar figure came from — one of three, and never two.**
@@ -863,6 +864,10 @@ export function resetUnscopedCalls(): void {
  * collecting. Called by the two gateways, not by callers.
  */
 export function beginSpend(job: AiJob, model: string): number | null {
+  /* **No paid call while the administrator is viewing as a reader.** The
+     allowlist keeps every spending route off; this is the net under it, before
+     a byte goes over the wire. Plan 261019n § Part 3. */
+  refuseWhileViewingAs("a paid model call");
   if (!persistingSpend() && refusesUnrecordedSpend(processEntry())) throw new UnrecordedSpendRefused(job, model);
   const scope = store.getStore();
   if (!scope) return null;

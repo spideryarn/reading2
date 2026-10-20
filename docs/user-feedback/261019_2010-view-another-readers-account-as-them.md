@@ -1,7 +1,7 @@
 ---
 reports: spya-k06kam, spya-vm5enm
-ending: awaiting
-comment: Planned, not built, because it changes a security rule. Two options: view the app as a reader, read-only, with a bar and Stop; or inspect one article on an admin page. Question q-kyhvkm is waiting for you.
+ending: shipped
+comment: Built. View as on /admin/users (and View as owner on /admin/articles) opens the app as that reader sees it, read-only, for 30 minutes after a reason, with a bar and Stop. The privacy page says so.
 ---
 # Seeing other readers' articles, and viewing the app as them
 
@@ -28,7 +28,9 @@ Addenda: none.
 
 > If I'm an admin, I should be able to see everything about other users' articles
 
-**Ending: Awaiting Greg.** Letting an admin read another reader's article, or act as them, edits a
+**Ending: Shipped, 2026-10-20.** Greg answered A to [q-kyhvkm](questions/q-kyhvkm.md) (reply `spya-kpzvrk`); part 2 was unanswered, so its recommendation (the privacy clause) was taken. Built from [261019n § Part 3](../plans/261019n-admin-sees-other-users-articles-and-views-as-them.md#part-3-built-view-as-greg-chose-a-2026-10-20).
+
+**Before that: Awaiting Greg.** Letting an admin read another reader's article, or act as them, edits a
 defence: admin.md's "never a title … or a sentence of anybody's reading", and the owner gate in
 `src/routes.ts`. An unattended run does not edit a defence. So it was researched, planned and
 reviewed, and nothing was built.

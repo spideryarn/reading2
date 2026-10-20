@@ -144,6 +144,7 @@ import {
   recordTrack,
 } from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { playCappedChime, useLastMinuteChime, useQuietChime } from "./quiet-chime.js";
 
 /**
@@ -695,7 +696,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const { onText, onTranscript, onEnd, context } = options;
   /* **"Can open a microphone", not "has Web Speech".** The live half is
      optional now; the recording is not. See the header. */
-  const [supported] = useState(() => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
+  /* `false` in a tab viewing as another reader, which hides every dictation
+     button: a transcription is a paid call (plan 261019n § round 2, R2-5). */
+  const [supported] = useState(() => viewAsNonce() === null && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [interim, setInterim] = useState("");
   /* Never called directly: `setError`, below, is the one door, and it reports. */

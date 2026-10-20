@@ -28,6 +28,7 @@ import { jobEngine, send } from "./jobEngine.js";
 import { batchUpload } from "./batchUpload.js";
 import { uploadEngine } from "./uploadEngine.js";
 import { statusOf } from "./lib/api.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /**
@@ -231,7 +232,12 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
   // Bind before child passive effects can auto-post from an add page. At boot
   // a passive parent effect runs after those children and leaves send unfenced.
   useLayoutEffect(() => {
-    if (!readerId) return;
+    /* **Not in a tab viewing as another reader** (plan 261019n § Part 3,
+       Client 3): the engine advances, retries and uploads, every one of them
+       a write, and the hand-over below is a PATCH. Started, it would spend the
+       session asking for refusals. Nothing in that tab is the administrator's
+       to drive, and the subject's own tab drives the subject's jobs. */
+    if (!readerId || viewAsNonce() !== null) return;
     jobEngine.start(readerId);
     /* **The upload engine is bound here too**, and for the same reason rather
        than for convenience: it is the other tab-level singleton that outlives
@@ -270,7 +276,7 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
   }, [readerId]);
 
   useEffect(() => {
-    if (!readerId || !accessToken) return;
+    if (!readerId || !accessToken || viewAsNonce() !== null) return;
     jobEngine.resume();
     /* **And the upload engine, which fails differently.** A job whose
        `/advance` is refused 401 is retried by the poller for ever; a queue POST

@@ -43,6 +43,7 @@ import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 import { lastKnownUser } from "./lib/offline-store.js";
 import type { DictationContext } from "./dictation-upload.js";
 import type { DictationKeeper, KeptTape, RecoveredTape } from "./transcriber.js";
+import { viewAsNonce } from "./lib/view-as.js";
 
 /** A week. Long enough for "I'll deal with it tomorrow", short enough not to be an archive. */
 export const MAX_AGE_MS = 7 * 24 * 60 * 60_000;
@@ -391,6 +392,10 @@ export function keepDictation(box: string): DictationKeeper<DictationContext> {
   return {
     box,
     begin(where) {
+      /* The store is the administrator's own, on this device: a tab viewing
+         as another reader neither adds to it nor takes from it (plan 261019n
+         § round 2, R2-5). Here and in `recover`. */
+      if (viewAsNonce() !== null) return null;
       const user = lastKnownUser();
       if (!user || signedOutUsers.has(user) || !locks() || typeof indexedDB === "undefined") return null;
       const id = crypto.randomUUID();
@@ -398,6 +403,7 @@ export function keepDictation(box: string): DictationKeeper<DictationContext> {
       return keptTape(id, hold(id, false), row, true);
     },
     async recover() {
+      if (viewAsNonce() !== null) return null;
       try {
         const user = lastKnownUser();
         if (!user || signedOutUsers.has(user) || !locks()) return null;

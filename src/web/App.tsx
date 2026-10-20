@@ -26,6 +26,7 @@ import { type AddVisit, addAddress, nextAddVisit } from "./add-visit.js";
 import {
   type AdminPage,
   adminOnly,
+  allowedWhileViewingAs,
   CALLBACK_HREF,
   LIBRARY_HREF,
   loginHref,
@@ -39,6 +40,8 @@ import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
 import { useLastView } from "./last-view.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { NotWhileViewingAs } from "./ViewAsBar.js";
 
 /**
  * **The three routes whose code is not in the reader's initial download.**
@@ -417,6 +420,19 @@ export function App() {
      once is tests/dock-corner-controls.test.tsx, which walks the routes and
      counts — including, since the bug above, the two addresses that reach the
      shelf sideways. */
+  /* **No Feedback at all in a tab viewing as another reader** (plan 261019n
+     § Part 3, Client 3): a report filed there would be filed as the
+     administrator about a page that is not theirs, with the subject's screen
+     in its screenshot. No host means every trigger below draws nothing — the
+     same rule that hides it from a stranger. */
+  if (viewAsNonce() !== null)
+    return (
+      <SignedInReader.Provider value={user.id}>
+        <SignedInShell.Provider value={true}>
+          <SignedIn route={route} user={user} addVisit={addVisit} />
+        </SignedInShell.Provider>
+      </SignedInReader.Provider>
+    );
   return (
     /* Who everything below was drawn for, so a write any of it makes late (an
        unmount, an idle save, `pagehide`, a recording still draining) can name
@@ -519,6 +535,21 @@ function SignedIn({
 
      `key` for the same reason the shelf below carries one — this is the same
      component, reached a different way. */
+  /* **A tab viewing as another reader draws three pages and no others**, and
+     this is the one place that decides it, above every branch for the reason
+     the administrator's check below gives: a check inside a branch has to be
+     remembered by whoever adds the next page. router.ts § `VIEW_AS_ALLOWED`,
+     exhaustive over route kinds; plan 261019n § round 1, F3. Above
+     `drawsShelf` too, so `/admin` is "not available" here rather than the
+     shelf. */
+  if (viewAsNonce() !== null && !allowedWhileViewingAs(route)) {
+    return (
+      <>
+        <HomeLogo />
+        <NotWhileViewingAs />
+      </>
+    );
+  }
   if (drawsShelf(route, user)) return <Library key={user.id} readerId={user.id} />;
 
   /* The shelf is home, so it gets no way-home logo — a link to the page you

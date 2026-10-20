@@ -35,6 +35,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
 - [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
 - [§ `/admin/articles`](#adminarticles-moving-an-article-to-another-account) — moving an article to another account
+- [§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only) — *view as*: the second cross-owner read, and everything that keeps it read-only
 - [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
 - [§ See also](#see-also) — neighbouring docs
 
@@ -47,6 +48,10 @@ anything — [auth.md § Whose data is it](auth.md#whose-data-is-it) is the whol
 so the interesting question is not what it shows but **how narrow the exception is**.
 
 One route. One prefix. One address.
+
+**Since 2026-10-20 there is a second, wider one**, *view as*: the administrator sees one reader's
+whole app, read-only, after a reason, for thirty minutes. It has its own gate rather than this
+page's, and its own section: [§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only).
 
 ## The three refusals, and only one of them is a gate
 
@@ -206,7 +211,10 @@ place.
 
 **Limited account metadata, counts, and dates — and, on `/admin/feedback` only, the support
 report a reader chose to send us. Never a title, a URL, a filename, or a sentence of anybody's
-reading.**
+reading — except through *view as*: one reader at a time, after a reason, read-only, for thirty
+minutes, and recorded**
+([§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only)). The tables themselves
+still show none of it; the button is the only way in.
 
 ### The second clause, added 2026-09-02, and why it is not a widening
 
@@ -1038,6 +1046,50 @@ recorded in the plan with its fix
 
 The voucher claim moves a gift's starter article the same way, when it safely can
 ([billing.md § Gift vouchers](billing.md#gift-vouchers-extra-free-articles-given-by-email)).
+
+## Viewing the app as a reader, read-only
+
+**Since 2026-10-20**, Greg's answer A to question q-kyhvkm:
+
+> A
+>
+> — Greg, 2026-10-20 (reply `spya-kpzvrk`), choosing *"View as": a button on /admin/users opens
+> the app exactly as that reader sees it, strictly read-only, with a coloured bar at the top*
+
+A **View as** button on `/admin/users` (and **View as owner** on `/admin/articles`, for a row that
+is not the administrator's own) asks for a one-line reason and opens a new tab showing the shelf,
+an article with its modes, notes and chats, and the metadata page, as that reader sees them. A bar
+across the top says whose they are, the minutes left, and Stop. This is the second request that
+reads across owners, and it is much wider than the first, so it is built as a gate of its own rather
+than as one more admin route. Plan
+[261019n § Part 3](../plans/261019n-admin-sees-other-users-articles-and-views-as-them.md#part-3-built-view-as-greg-chose-a-2026-10-20);
+research [261019a](../research/261019a-admin-impersonation-best-practice.md).
+
+**What it is not: a login.** The administrator's own Supabase session is untouched and no token is
+minted for the reader, so nothing changes in their sign-in history. The tab sends the
+administrator's own token and a header, `X-Spideryarn-View-As`, carrying a nonce the server issued.
+Either alone is useless.
+
+**The session row is the audit.** `POST /api/admin/view-as` writes a row in `view_as_sessions`:
+who, whom, why, when it started, an absolute expiry thirty minutes later, and when it was stopped.
+Only a hash of the nonce is stored. Nothing deletes a row except the deletion of either account.
+Request log lines on view-as requests carry both ids, never an address.
+
+**Every request is checked four times, every time** (`serveViewingAs` in
+[`src/routes.ts`](../../src/routes.ts)): the caller is an administrator now; the nonce is live and
+was issued to this caller; the reader is still not an administrator; and the route is a GET row
+marked `viewAs: "read"`. Anything else is refused, and a refused panel says *Hidden while viewing
+as another reader* rather than drawing an empty state, which would read as "she has none". The
+allowlist, the backstops under it and what is not covered are in
+[security.md § Viewing the app as a reader](security.md#view-as).
+
+**Administrators cannot be viewed.** That stops a second administrator's view becoming a way to act
+with the first one's reach.
+
+**What it cannot do.** Anything that writes, spends, fetches an outside page, sends email, exports,
+or hands out a private link's key. So a bug that only shows when the reader presses something is
+still reproduced in the administrator's own account. The reader is not emailed each time; the
+privacy page says it can happen ([privacy.md](privacy.md)).
 
 ## What it cannot do, and what is not built
 

@@ -41,6 +41,7 @@ import { settleFirstOpen } from "../first-open-purpose.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
+import { viewAsNonce } from "../lib/view-as.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
 import { ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
@@ -476,6 +477,9 @@ function OwnedArticle({
    */
   const counted = useRef<string | null>(null);
   useEffect(() => {
+    /* Not counted while viewing as another reader: it is a write, and the
+       subject did not open it (plan 261019n § Part 3, Client 3). */
+    if (viewAsNonce() !== null) return;
     if (counted.current === slug) return;
     counted.current = slug;
     void apiFetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" }).catch(

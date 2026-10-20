@@ -16,6 +16,7 @@
 import { useEffect } from "react";
 import type { LibraryEntry } from "../types.js";
 import { PRELOAD_COUNT, preloadArticles } from "./lib/prefetch-article.js";
+import { viewAsNonce } from "./lib/view-as.js";
 
 export function usePreloadRecent(articles: readonly LibraryEntry[] | null): void {
   /* A string, so a re-render with the same five and the same payload-bearing
@@ -34,7 +35,9 @@ export function usePreloadRecent(articles: readonly LibraryEntry[] | null): void
           ]),
         );
   useEffect(() => {
-    if (key === null || savingData()) return;
+    /* No preload while viewing as another reader: what it holds is handed on
+       to a later open, and that tab keeps nothing (plan 261019n § Part 3). */
+    if (key === null || savingData() || viewAsNonce() !== null) return;
     const chosen = JSON.parse(key) as [slug: string, shelfVersion: string][];
     return whenIdle(() =>
       preloadArticles(

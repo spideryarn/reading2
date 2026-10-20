@@ -2,10 +2,11 @@
 id: q-kyhvkm
 report: spya-k06kam
 repeats: spya-vm5enm
-status: open
+status: answered
 asked: 2026-10-19
 title: View another reader's account read-only, or inspect one article?
 refs: qi-tgm93qpt · docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md · docs/research/261019a-admin-impersonation-best-practice.md · docs/user-feedback/261019_2010-view-another-readers-account-as-them.md · SPIDERYARN-READING2-KT · SPIDERYARN-READING2-M7
+acted: spya-kpzvrk
 ---
 You asked to see everything about other readers' articles, and to browse the site as another reader. Nothing is built yet, because it changes a security rule. Two questions.
 
@@ -40,3 +41,11 @@ What "read-only" costs in A: a bug that only shows when you press something (Ret
 Passed over: real "log in as them" (a sign-in link for their account). It is the least code, but it gives full power with no bar you can trust and no record. It would write as them, spend their quota and our money, and change their sign-in history. Both reviewers (GPT Sol and Opus) and the research advise against it.
 
 The reviewers split on question 1. Opus favoured A, trimmed. GPT Sol favoured B, as the simpler first step. Either is safe as now designed.
+
+## Greg's answer, 2026-10-20 (in the Feedback dialog, reply `spya-kpzvrk`, 16:21 UTC)
+
+> A
+
+He answered part 1 only: option A, "View as". Part 2 was not answered, so its recommendation, B,
+was taken by default: the privacy page's sentence now says "including by viewing the app as you,
+read-only". Built from plan 261019n § Part 3.

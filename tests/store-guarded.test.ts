@@ -437,6 +437,9 @@ describe("no Postgres store is selected without a guard", () => {
          the reader's own words. */
       "pgTagStore",
       "pgUploadStore",
+      /* View as, 2026-10-20 (261019n): its parameters are a nonce's hash and
+         the administrator's reason. */
+      "pgViewAsStore",
       "pgVisibilityStore",
       /* Gift vouchers' admin writes, 2026-10-07 (261007j, Sol's F1): a failed
          gift email insert binds the whole email, a private link's key included. */

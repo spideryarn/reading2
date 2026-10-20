@@ -92,6 +92,7 @@ import { slugWithShortId, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { refuseWhileViewingAs, viewingAs } from "./view-as-scope.js";
 import { isAdmin } from "./admin.js";
 import { isMinimalJob, isReadThisFor, processingOf } from "./minimal-paper.js";
 import { NotProcessed } from "./not-processed.js";
@@ -3807,6 +3808,8 @@ export interface ResetQueued {
  * docs/plans/260928a-reset-and-regenerate-article.md.
  */
 export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> {
+  /* Before the reads below, as `enqueue` does — the reason is there. */
+  refuseWhileViewingAs("starting a job");
   if (!(await articleExists(request.slug))) {
     throw Object.assign(new Error("No such article."), { status: 404 });
   }
@@ -3900,6 +3903,11 @@ async function refuseOnAMinimalArticle(
  * find out what happened to it.
  */
 export async function enqueue(request: EnqueueRequest): Promise<Job> {
+  /* **The boundary every job passes through.** A job outlives its request and
+     runs as its owner, so one started while the administrator is viewing as a
+     reader would write and spend in the reader's name after the read-only
+     marker had gone. Plan 261019n § Part 3, GPT Sol's F4. */
+  refuseWhileViewingAs("starting a job");
   // `DEFAULT_INGEST_STEPS`, not `STEP_ORDER`. They were the same list until
   // `tweets` arrived — a step you can ask for by name that must not run on
   // every add, because it costs a model call nobody asked for.
@@ -5028,6 +5036,10 @@ export async function listJobs(): Promise<Job[]> {
    * refused that phrase for this line, and was right to.
    */
   if (!listed.some((job) => job.status === "running")) return listed;
+  /* **Never while the administrator is viewing as a reader**: settling is a
+     write, and a requeue would restart the reader's work. The list as it
+     stands. Plan 261019n § Part 3. */
+  if (viewingAs()) return listed;
 
   const settled = await store.settleExpired(undefined, owner, REQUEUE_BUDGET);
   /* **Not quite "nothing settled means the answer did not change"**, which is

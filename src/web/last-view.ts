@@ -83,6 +83,7 @@ import { bandCoversProse } from "./layout.js";
 import { storageReader } from "./lib/storage-reader.js";
 import { usableWidth } from "./reader/measure.js";
 import { peekAskPurpose } from "./ask-purpose.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { firstOpenHeld, GUIDE_FIRST_OPEN, holdFirstOpen, releaseWhenDecided } from "./first-open-purpose.js";
 
 /**
@@ -799,6 +800,12 @@ export function firstOpenHref(
  * place on A's way out.
  */
 export function useLastView(slug: string | null, view: ArticleView, readerId: string | null): void {
+  /* **Nothing remembered or put back in a tab viewing as another reader**
+     (plan 261019n § Part 3, Client 3): no saved place to restore, and no first
+     open to claim, which would offer the subject's purpose prompt to the
+     administrator. As if no article were open. Constant for the page's life,
+     so the hooks below run the same every render. */
+  if (viewAsNonce() !== null) slug = null;
   /* One decision per slug/view/reader arrival, including StrictMode replay. A
      view change can claim a first article open after metadata, but only a new
      slug or a new reader restores a saved view. */

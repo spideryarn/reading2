@@ -61,6 +61,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { rowCache, rowsOnScreen } from "./on-screen.js";
 import {
@@ -210,6 +211,11 @@ export function useReadingTime(
   words: ReadonlyMap<BlockId, number>,
   enabled: boolean,
 ): ReadingTime {
+  /* **Off while viewing as another reader** (plan 261019n § Part 3, Client
+     3): the administrator's seconds are not the subject's, and every flush,
+     the `pagehide` one included, is a write. Off is the hook's own "switch is
+     off" path, so the marks simply are not drawn. Constant for the page. */
+  if (viewAsNonce() !== null) enabled = false;
   const [levels, setLevels] = useState<ReadonlyMap<BlockId, ReadLevel>>(NO_LEVELS);
   const [reach, setReach] = useState<ReadonlyMap<BlockId, ReadReach>>(NO_REACH);
   /* Keyed to the slug it answers for, so a render between a slug change and

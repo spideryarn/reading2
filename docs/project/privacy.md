@@ -78,7 +78,11 @@ Asked, on the day, because none of them could be read off the code:
    administrator's view across all owners ([admin.md](admin.md)), debugging a reader's broken
    article means looking at it, and a reader discovering that for themselves is far worse than
    being told. What the page rules out instead is the part that would actually offend: selling it,
-   publishing it, training on it.
+   publishing it, training on it. **Since 2026-10-20 it also says how**: *"including by viewing the
+   app as you, read-only"*, for the administrator's read-only *view as*
+   ([admin.md § Viewing the app as a reader](admin.md#viewing-the-app-as-a-reader-read-only)). The
+   wording was the recommended option of question q-kyhvkm, taken by default when Greg answered
+   only its first part.
 4. **Facts**: the database is Supabase `eu-west-2` (London); Vercel's functions are pinned to
    `lhr1` (`vercel.json`). Stripe was named before payments were live — Greg, *"let's include it
    anyway, because hopefully it will be soon"* — with the page saying out loud that it was off.

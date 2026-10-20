@@ -41,6 +41,8 @@ import { describePlan, type Gift, type ReaderPlan } from "../billing-plan.js";
 import { GiftList, HowYourPlanWorks, PlanInfo } from "./PlanHelp.js";
 import { useBilling } from "./useBilling.js";
 import { useNow } from "./useNow.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { HiddenWhileViewingAs } from "./ViewAsBar.js";
 
 /** How long after a claim the *has been added* line is shown. */
 export const GIFT_NOTICE_DAYS = 7;
@@ -76,6 +78,13 @@ function articles(n: number): string {
 
 /** The box wired to the reader's plan — the only `useBilling()` on the shelf. */
 export function FreeAllowance() {
+  /* The plan is refused while viewing as another reader (useBilling.ts), and a
+     box that simply was not there would read as "they are not on Free". Said
+     instead. Constant for the page, so the two branches never swap. */
+  return viewAsNonce() === null ? <FreeAllowanceLive /> : <HiddenWhileViewingAs what="Their plan" />;
+}
+
+function FreeAllowanceLive() {
   const { summary } = useBilling();
   const now = useNow();
   /* Nothing at all until the plan arrives, and nothing if it never does: a

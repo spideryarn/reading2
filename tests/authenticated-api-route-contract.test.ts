@@ -417,6 +417,22 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET", "POST"],
     witnesses: ["/api/admin/articles/w1/transfer"],
   },
+  /* View as, 261019n § Part 3: start, the live session, Stop. */
+  {
+    match: { kind: "literal", path: "/api/admin/view-as" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/view-as"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/view-as/current" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/view-as/current"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/view-as/end" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/view-as/end"],
+  },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
     methods: ["GET"],
@@ -1142,8 +1158,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    reviewer's major/minor comment sort (plan 261011f); 120 with every article
    and one article's transfer (plan 261011n); 121 with Sources › Not cited
    (plan 261011ac); 122 with a cited work's web note (plan 261018o); 123 with
-   your-words.md on its own (plan 261020w). */
-const EXPECTED_MATCHER_COUNT = 123;
+   your-words.md on its own (plan 261020w); 126 with view as's start, current
+   and end (plan 261019n). */
+const EXPECTED_MATCHER_COUNT = 126;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1161,8 +1178,9 @@ const EXPECTED_MATCHER_COUNT = 123;
    261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
    with every article, and a transfer's preview and POST (plan 261011n); 150
    with Not cited's GET and POST (plan 261011ac); 151 with a cited work's web
-   note (plan 261018o); 152 with your-words.md (plan 261020w). */
-const EXPECTED_GUARD_COUNT = 152;
+   note (plan 261018o); 152 with your-words.md (plan 261020w); 155 with view
+   as's start, current and end (plan 261019n). */
+const EXPECTED_GUARD_COUNT = 155;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1733,7 +1751,16 @@ function readTableEntry(element: unknown, constants: Map<string, AstNode>): Pars
   if (kind !== "exact" && kind !== "pattern") {
     refuse(element, `an ${ROUTE_TABLE} entry whose \`kind\` is not "exact" or "pattern"`);
   }
-  const expected = ENTRY_KEYS[kind];
+  /* `viewAs` is the one optional key (plan 261019n § Part 3): the view-as
+     allowlist, a string literal `"read"` on a GET row and nothing else. Which
+     rows carry it is pinned in tests/view-as-gate.test.ts. */
+  const viewAs = byKey.get("viewAs");
+  if (viewAs !== undefined) {
+    if (stringValue(viewAs) !== "read" || stringValue(byKey.get("method")) !== "GET") {
+      refuse(element, `an ${ROUTE_TABLE} entry whose \`viewAs\` is not "read" on a GET row`);
+    }
+  }
+  const expected = viewAs === undefined ? ENTRY_KEYS[kind] : [...ENTRY_KEYS[kind], "viewAs"];
   if (sorted([...byKey.keys()]).join(",") !== sorted(expected).join(",")) {
     refuse(element, `an ${ROUTE_TABLE} \`${kind}\` entry whose keys are not ${expected.join(", ")}`);
   }
@@ -2331,6 +2358,9 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/articles",
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$/",
         "POST regex /^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$/",
+        "POST literal /api/admin/view-as",
+        "GET literal /api/admin/view-as/current",
+        "POST literal /api/admin/view-as/end",
         "GET literal /api/admin/feedback",
         // an admin's own earlier reports, 261007d — beside the list across owners
         "GET literal /api/admin/feedback/earlier",

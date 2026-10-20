@@ -16,6 +16,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { errorFields, log } from "./log.js";
+import { refuseWhileViewingAs } from "./view-as-scope.js";
 
 interface DeferredTask {
   readonly label: string;
@@ -65,6 +66,10 @@ export function withAfterResponseTasks<T>(fn: () => Promise<T>): Promise<T> {
  * now and await it; in either case a rejection is logged and swallowed.
  */
 export async function afterResponse(label: string, run: () => Promise<unknown>): Promise<void> {
+  /* Deferred work would run after the view-as handler has returned — outside
+     the read-only marker, in nobody's name in particular — so none is queued
+     while viewing as. GPT Sol's F4 on plan 261019n § Part 3. */
+  refuseWhileViewingAs("work queued for after the response");
   const box = scope.getStore();
   if (box) {
     box.tasks.push({ label, run });

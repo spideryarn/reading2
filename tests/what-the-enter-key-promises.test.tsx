@@ -80,6 +80,8 @@ const PROMISES: Record<string, string> = {
   "AdminAuthorGifts.tsx › Their name": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",
+  /* Enter starts the view and opens its tab — plan 261019n § Part 3. */
+  "ViewAsStart.tsx › Why you are viewing as this reader": "go",
   /* Enter adds the tag typed or highlighted and the box stays for the next —
      plan 261003d. */
   "TagEditor.tsx › Add a tag": "done",

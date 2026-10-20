@@ -413,6 +413,47 @@ export function adminOnly(route: Route): boolean {
 }
 
 /**
+ * **Which pages a tab viewing as another reader may draw** — the shelf, an
+ * article in any of its modes, and its metadata page (a `read` route's
+ * `view`), and nothing else. docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § round 1, F3: the other pages make writes that do not all come through
+ * `apiFetch` (a consent form, a password change, a live session, an upload's
+ * own transfer), so the client's "no write leaves" rule could not reach them.
+ * App.tsx § `SignedIn` reads this once, above every branch, and draws
+ * `NotWhileViewingAs` for a `false`.
+ *
+ * **Exhaustive, like `ADMIN_ONLY`**: a new route kind does not compile until
+ * somebody has answered whether it is safe here. `false` is the safe answer.
+ */
+const VIEW_AS_ALLOWED: Record<Route["kind"], boolean> = {
+  library: true,
+  read: true,
+  "public-library": false,
+  add: false,
+  "add-upload": false,
+  design: false,
+  profile: false,
+  login: false,
+  admin: false,
+  privacy: false,
+  features: false,
+  "public-sharing": false,
+  pricing: false,
+  contact: false,
+  changelog: false,
+  help: false,
+  opensource: false,
+  callback: false,
+  "oauth-consent": false,
+  "not-found": false,
+};
+
+/** May a view-as tab draw this page? See `VIEW_AS_ALLOWED` above. */
+export function allowedWhileViewingAs(route: Route): boolean {
+  return VIEW_AS_ALLOWED[route.kind];
+}
+
+/**
  * The path segment for each view. `article` has none — the reading view is the
  * article's own address, not a page beside it.
  *

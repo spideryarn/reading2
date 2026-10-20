@@ -615,6 +615,11 @@ const SHARED_WITH_READER = [
      follows it in for `StreamStalled`. Plan 260924a § Stage 2c. */
   "src/web/lib/describe-failure.ts",
   "src/web/lib/api.ts",
+  /* Arrived 2026-10-20 with *View as* (plan 261019n § Part 3). Eager by
+     necessity: `apiFetch` and main.tsx ask it on every request and at boot
+     whether this tab is viewing as another reader. `/admin` reaches it too,
+     for `isViewAsNonce` in ViewAsStart.tsx. It imports nothing at all. */
+  "src/web/lib/view-as.ts",
   /* Arrived 2026-10-03 the same way: `lib/api.ts` counts every write it sends
      (the article preload's staleness check, plan 261003d), and the count is
      a forty-line module of its own so that api.ts and the preload do not

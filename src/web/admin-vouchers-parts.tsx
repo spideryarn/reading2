@@ -24,24 +24,11 @@ import { ADMIN_ARTICLES_HREF } from "./router.js";
 import { useJobs } from "./useJobs.js";
 import { useShelf } from "./useShelf.js";
 
-export const INPUT =
-  "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25";
-export const BUTTON =
-  "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50";
-/** A sentence or two, or a page of notes, so it gets lines rather than a single box. */
-export const TEXTAREA =
-  "tw:min-h-16 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:py-1.5 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25";
-
-export function Refusal({ message }: { message: string }) {
-  return (
-    <p
-      role="alert"
-      className="tw:mb-4 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-3 tw:text-sm tw:text-foreground"
-    >
-      {message}
-    </p>
-  );
-}
+/* The shared classes and `Refusal` live in a leaf of their own since
+   2026-10-20 (admin-controls.tsx says why); re-exported so this file's
+   importers are unchanged. */
+import { BUTTON, INPUT } from "./admin-controls.js";
+export { BUTTON, INPUT, Refusal, TEXTAREA } from "./admin-controls.js";
 
 /** The administrator's own shelf, as the pickers need it. */
 export interface StarterShelf {

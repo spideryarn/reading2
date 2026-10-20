@@ -272,6 +272,24 @@ export function setMonitoringUser(user: { id: string; email: string }): void {
 }
 
 /**
+ * **This request is the administrator viewing the app as another reader.**
+ *
+ * The user stays the administrator (`setMonitoringUser`, from the gate's own
+ * `VerifiedUser`); the reader is a tag carrying their id and never their
+ * address, so an issue from a view-as request says both who looked and at
+ * whose app. docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § Part 3.
+ */
+export function setMonitoringViewAs(subjectId: string): void {
+  try {
+    if (!started) return;
+    getIsolationScope().setTag("view_as_subject", subjectId);
+  } catch {
+    // Rule 2.
+  }
+}
+
+/**
  * Get the buffered events out before the process stops existing.
  *
  * **Without this, error tracking on Vercel looks exactly like it is working and
