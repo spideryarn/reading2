@@ -52,7 +52,8 @@ more than one place, the buttons above it (**All**, **Chats** and one for each o
 it.
 
 <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer
-still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.
+still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question,
+even while its answer is still arriving: asking again stops that answer first.
 The bin beside the pencil deletes that question, its answer and everything after it: press it, then
 press it again to confirm. The first question has no bin; to delete it, delete the conversation.
 When a conversation is longer than the panel, the arrows under it step to the previous or next

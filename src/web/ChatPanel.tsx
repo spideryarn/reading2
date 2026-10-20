@@ -1660,13 +1660,65 @@ export function Conversation({
   /** A Live session is running in this conversation — the test `leave` uses. */
   const speaking = live !== undefined && live.phase !== "idle" && live.phase !== "failed";
   /**
-   * Which question the reader is rewriting, if any.
+   * Which question the reader is rewriting, if any, and the rewrite so far.
    *
    * State here rather than inside each `Turn`, so that opening a second editor
    * closes the first. Two open at once is not a mode anybody wants and it makes
    * the "this will discard N turns" count below ambiguous about which N.
+   *
+   * **The text and the queued ask live here too, not in the editor**, because
+   * the editor can be remounted under the reader. A question asked in this tab
+   * carries an id this tab invented until the answer's `begin` frame swaps in
+   * the server's (`withServerIds`, chat/model.ts), and `Turn` is keyed by id.
+   * Rewriting the question whose answer is arriving — the case report
+   * spya-yur0eq is about — is exactly when that swap lands mid-edit. So the
+   * editor finds its row again by position and original words (`rewriting`
+   * below), and nothing it held is lost. GPT Sol's plan review F1.
    */
-  const [editing, setEditing] = useState<string | null>(null);
+  const [rewrite, setRewrite] = useState<Rewrite | null>(null);
+  const rewriting = rewriteRow(rewrite, thread.messages);
+  /* **A queued rewrite goes once the answer it stopped has settled.** Not when
+     the answer ended in an error: that is a turn that failed (before `begin`,
+     its rows were never the server's), so asking against it would be refused.
+     The editor stays open with its text, and Ask again is the reader's again. */
+  useEffect(() => {
+    if (!rewrite?.queued || busy) return;
+    if (rewriting === null) setRewrite(null);
+    else if (last?.status === "error") setRewrite({ ...rewrite, queued: false });
+    else {
+      const next = rewrite.text.trim();
+      setRewrite(null);
+      /* The box stays editable while Stop settles. Recheck here as well as at
+         the press: the reader may since have restored the original words (or
+         cleared them), which is no longer an edit and must not discard turns. */
+      if (next !== "" && next !== rewrite.original.trim()) onEdit(rewriting, next);
+    }
+  }, [rewrite, rewriting, busy, last?.status, onEdit]);
+  /**
+   * Ask the rewrite: now, or — while an answer is arriving — once that answer
+   * is stopped. Stopped with the Composer's own Stop, and the edit then goes
+   * through the ordinary path: two paths that each work, in the one order they
+   * are known to (report spya-yur0eq;
+   * docs/plans/261020i-edit-your-question-while-chat-is-answering.md).
+   */
+  const askRewrite = (r: Rewrite, id: string): void => {
+    const next = r.text.trim();
+    /* An edit to the same words is not an edit: re-running would throw away
+       the answers below to arrive at the same question. Checked before the
+       stop, so an unchanged Enter never stops a useful answer (Sol F2). */
+    if (next === "" || next === r.original.trim()) {
+      setRewrite(null);
+      return;
+    }
+    if (!busy) {
+      setRewrite(null);
+      onEdit(id, next);
+      return;
+    }
+    if (r.queued || !last) return;
+    setRewrite({ ...r, queued: true });
+    onStop(last.id);
+  };
   /** Whether the reader has scrolled up, which is what shows the jump button. */
   const [away, setAway] = useState(false);
   /**
@@ -2121,19 +2173,24 @@ export function Conversation({
                because a button that exists and always says no is worse than one
                that was never there. */
             onRetry={i === thread.messages.length - 1 ? onRetry : undefined}
-            /* And nothing may be edited while an answer is arriving: the edit
-               would discard the row being written into. The server settles the
-               stream first and would cope, but offering it mid-answer invites
-               the reader to do something they would then watch half-happen. */
-            onEdit={onEdit}
-            /* The pencil goes away while an answer is arriving; an editor
-               already OPEN does not. Withdrawing `onEdit` wholesale unmounted a
-               half-typed rewrite the moment the reader asked something else —
-               and then remounted it, by itself, with the original text back in
-               it, because `editing` still named the row. Found in review. */
-            canEdit={!busy}
-            editing={editing === m.id}
-            onEditing={(on) => setEditing(on ? m.id : null)}
+            /* **The pencil stays while an answer is arriving** (since
+               2026-10-20, report spya-yur0eq); it is the ask that waits — see
+               `askRewrite`. */
+            onRewrite={() =>
+              setRewrite({ id: m.id, index: i, original: m.text, text: m.text, queued: false })
+            }
+            editor={
+              rewrite && rewriting === m.id
+                ? {
+                    text: rewrite.text,
+                    queued: rewrite.queued,
+                    canAsk: !busy,
+                    onText: (text) => setRewrite((r) => (r ? { ...r, text } : r)),
+                    onAsk: () => askRewrite(rewrite, m.id),
+                    onCancel: () => setRewrite(null),
+                  }
+                : undefined
+            }
             /* How many turns an edit here would throw away. Counted from the
                rendered list rather than passed down, so it cannot drift from
                what is on screen. */
@@ -2434,11 +2491,9 @@ export function Turn({
   blocks,
   cross,
   onRetry,
-  onEdit,
   onHintOpened,
-  canEdit,
-  editing,
-  onEditing,
+  onRewrite,
+  editor,
   discards,
   onDeleteFrom,
   holdDeleteFrom = false,
@@ -2465,17 +2520,16 @@ export function Turn({
   cross?: CrossArticles | undefined;
   /** Present only on the last message. See the call site. */
   onRetry?: ((messageId: string) => void) | undefined;
-  onEdit(messageId: string, question: string): void;
-  /** Whether the pencil is offered. False while an answer is arriving. */
-  canEdit: boolean;
-  editing: boolean;
-  onEditing(on: boolean): void;
+  /** The pencil: open this question's editor. */
+  onRewrite(): void;
+  /** This question's editor, when it is open. Its state is the transcript's. */
+  editor?: RewriteEditor | undefined;
   /** Turns an edit here would discard. */
   discards: number;
   /**
    * Delete this question and everything after it. Absent on the first
-   * question and wherever the caller offers no delete; withheld with the
-   * pencil while an answer is arriving.
+   * question and wherever the caller offers no delete; withheld while an
+   * answer is arriving.
    */
   onDeleteFrom?: ((messageId: string) => void) | undefined;
   /** Reserve the bin's place in the held action row while it cannot be pressed. */
@@ -2491,15 +2545,13 @@ export function Turn({
    * the pencil they opened it from is the least surprising place, and it is
    * where they were. Found by a GPT-5.6 review, 2026-08-26.
    *
-   * It does nothing whenever the pencil is not there to receive it, which is
-   * any time an answer is arriving: after a submitted edit, and also after a
-   * *cancelled* one if the reader started another answer while the box was
-   * open. `canEdit` withdraws the pencil in both cases and the caret falls back
-   * to the body, as it did before. Restoring focus to something that is about
-   * to be withdrawn would be worse.
+   * The pencil stays while an answer is arriving (since 2026-10-20), so this
+   * holds after a submitted edit too: the caret lands on the pencil of the
+   * question just rewritten.
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const remove = useRef<HTMLButtonElement>(null);
+  const editing = editor !== undefined;
   const wasEditing = useRef(editing);
   const commands = useChatCommands() ?? undefined;
   useEffect(() => {
@@ -2543,30 +2595,7 @@ export function Turn({
   };
 
   if (message.role === "user") {
-    if (editing) {
-      return (
-        <EditQuestion
-          text={message.text}
-          discards={discards}
-          onCancel={() => onEditing(false)}
-          /* The pencil is withdrawn while an answer is arriving and an editor
-             already open is deliberately left alone — closing it would destroy
-             a half-typed rewrite. But left alone it could still be *submitted*,
-             which discards the row being streamed into and contradicts the rule
-             the pencil is enforcing. So the editor stays, and its Ask-again is
-             what waits. Found by a GPT-5.6 review, 2026-08-26. */
-          canAsk={canEdit}
-          onDone={(next) => {
-            onEditing(false);
-            // An edit to the same words is not an edit. Re-running would throw
-            // away the answers below to arrive at the same question.
-            if (next.trim() !== "" && next.trim() !== message.text.trim()) {
-              onEdit(message.id, next.trim());
-            }
-          }}
-        />
-      );
-    }
+    if (editor) return <EditQuestion {...editor} discards={discards} />;
     return (
       <div className="chat-turn you" data-turn="user">
         {message.text}
@@ -2578,26 +2607,7 @@ export function Turn({
             edited
           </span>
         )}
-        {/* **The row keeps its height while an answer arrives**, with nothing in
-            it to press. It used to be withdrawn whole, so every question in the
-            transcript grew a row the moment an answer finished, and the answer
-            being read moved down by one (seen in the browser check of plan
-            261005f). The pencil itself is still absent, which is what the focus
-            fallback above relies on. */}
-        {!canEdit && (
-          <div className="chat-actions held" aria-hidden="true">
-            <span className="chat-icon">
-              <Pencil size={12} />
-            </span>
-            {holdDeleteFrom && (
-              <span className="chat-icon">
-                <Trash2 size={12} />
-              </span>
-            )}
-          </div>
-        )}
-        {canEdit && (
-          <div className="chat-actions">
+        <div className="chat-actions">
             <button
               ref={pencil}
               type="button"
@@ -2605,7 +2615,7 @@ export function Turn({
               data-tip="Rewrite this question"
               data-tip-describes="off"
               aria-label="Rewrite this question"
-              onClick={() => onEditing(true)}
+              onClick={onRewrite}
             >
               <Pencil size={12} />
             </button>
@@ -2628,8 +2638,15 @@ export function Turn({
                 }}
               />
             )}
+            {/* **The bin keeps its place while an answer arrives**, with nothing
+                in it to press: withdrawn, the row would change width under the
+                reader mid-answer (seen in the browser check of plan 261005f). */}
+            {!onDeleteFrom && holdDeleteFrom && (
+              <span className="chat-icon held" aria-hidden="true">
+                <Trash2 size={12} />
+              </span>
+            )}
           </div>
-        )}
       </div>
     );
   }
@@ -3070,6 +3087,57 @@ function CopyAnswer({ text }: { text: string }) {
   );
 }
 
+/** A question being rewritten: ChatTranscript's state, see `rewrite` there. */
+interface Rewrite {
+  /** The row's id when the editor opened; it may since have been renamed. */
+  id: string;
+  index: number;
+  /** The question as it stood, which is also what finds a renamed row. */
+  original: string;
+  text: string;
+  /** Asked while an answer was arriving: that answer is being stopped. */
+  queued: boolean;
+}
+
+/**
+ * The id of the row a rewrite belongs to now, or null when it is gone.
+ *
+ * Its own id while that is still there. Otherwise the `begin` frame has
+ * renamed it, which keeps its place and its words, so a user row at the same
+ * index with the same words is it. Anything else — a delete took it, the list
+ * changed under it — is gone, and the editor closes rather than reopening on
+ * some other question.
+ */
+function rewriteRow(rewrite: Rewrite | null, messages: readonly ChatMessage[]): string | null {
+  if (!rewrite) return null;
+  if (messages.some((m) => m.id === rewrite.id)) return rewrite.id;
+  const at = messages[rewrite.index];
+  return at?.role === "user" && at.text === rewrite.original ? at.id : null;
+}
+
+/** What `EditQuestion` draws and calls; the state behind it is the transcript's. */
+interface RewriteEditor {
+  text: string;
+  /**
+   * **Asked while an answer was arriving: stop it, then ask.** The edit cannot
+   * go while that answer is being written, so the press stops it and the
+   * rewrite waits here, open and saying so, until it has settled; then it goes
+   * by itself (`askRewrite` in ChatTranscript). Report spya-yur0eq. Cancel
+   * takes the wish with it, so no rewrite is asked behind the reader's back.
+   *
+   * Until 2026-10-20 the press was refused instead, with a sentence: a refusal
+   * that said nothing was the earlier bug (spya-f3b6ab;
+   * docs/postmortems/261002g-a-refusal-with-no-voice.md), and the sentence
+   * shown while queued is still what keeps the wait from being silent.
+   */
+  queued: boolean;
+  /** False while an answer is arriving. */
+  canAsk: boolean;
+  onText(text: string): void;
+  onAsk(): void;
+  onCancel(): void;
+}
+
 /**
  * Rewriting a question, in place, with the cost of it stated.
  *
@@ -3085,36 +3153,14 @@ function CopyAnswer({ text }: { text: string }) {
  * on the window and would scroll the page under the reader's caret.
  */
 function EditQuestion({
-  text,
-  discards,
+  text: value,
+  queued,
   canAsk,
-  onDone,
+  discards,
+  onText,
+  onAsk: ask,
   onCancel,
-}: {
-  text: string;
-  discards: number;
-  /** False while an answer is arriving — see the call site. */
-  canAsk: boolean;
-  onDone(next: string): void;
-  onCancel(): void;
-}) {
-  const [value, setValue] = useState(text);
-  /**
-   * **A press that is refused says so.** While an answer is arriving the edit
-   * cannot go (see the call site), and Enter used to do nothing at all and the
-   * tick merely greyed out — a reader who pressed Enter saw no answer and no
-   * reason. Investigating spya-f3b6ab; the class is in
-   * docs/postmortems/261002g-a-refusal-with-no-voice.md. Cleared when asking
-   * becomes possible again, so the sentence never outlives its cause.
-   */
-  const [held, setHeld] = useState(false);
-  useEffect(() => {
-    if (canAsk) setHeld(false);
-  }, [canAsk]);
-  const ask = () => {
-    if (canAsk) onDone(value);
-    else setHeld(true);
-  };
+}: RewriteEditor & { discards: number }) {
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = box.current;
@@ -3134,7 +3180,7 @@ function EditQuestion({
            for the same reason. */
         enterKeyHint="send"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => onText(e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
           /* Not the Escape that dismisses an input method's candidates, which
@@ -3147,9 +3193,9 @@ function EditQuestion({
           if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
-      {held && !canAsk && (
+      {queued && (
         <p className="chat-discard-warning chat-edit-held" role="status">
-          An answer is still arriving. Ask again once it has finished — your rewrite is kept.
+          Stopping the answer, then asking again…
         </p>
       )}
       {discards > 0 && (
@@ -3161,11 +3207,8 @@ function EditQuestion({
         <button
           type="button"
           className="chat-icon"
-          data-tip={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
+          data-tip={canAsk ? "Ask again (Enter)" : "Stop the answer and ask again (Enter)"}
           aria-label="Ask again"
-          /* `aria-disabled`, not `disabled`, so a press still reaches `ask` and
-             can say why it was refused — the composer's Send does the same. */
-          aria-disabled={!canAsk || undefined}
           onClick={ask}
         >
           <Check size={12} />

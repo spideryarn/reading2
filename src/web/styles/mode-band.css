@@ -496,15 +496,10 @@ svg.band-waiting-ghost { flex: none; }
   color: var(--page);
   background: var(--destructive);
 }
-/* Matches Send's unavailable rule below, and it was missing here — so the one
-   icon button that is ever disabled (Ask again, while an answer arrives) kept
-   its pointer cursor and still lit up under the mouse. It looked and felt
-   exactly like a button that works, and did nothing. Found the long way round:
-   a browser pass reported it could not visually confirm the disabled state,
-   which was the right observation and the wrong conclusion — there was nothing
-   to see. 2026-08-26. */
-/* `aria-disabled` too: Ask again uses it rather than `disabled`, so a refused
-   press can still say why (EditQuestion in ChatPanel.tsx). */
+/* Matches Send's unavailable rule below. Cover both a native disabled control
+   and one that uses `aria-disabled` so its press can still explain a refusal.
+   Ask again no longer uses either: since 2026-10-20 it stops an arriving answer
+   and queues the rewrite (EditQuestion in ChatPanel.tsx). */
 .chat-icon:disabled,
 .chat-icon[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 

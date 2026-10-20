@@ -69,7 +69,7 @@ import {
   runTool,
   toolsFor,
 } from "../src/chat-tools.js";
-import { converse, recentHistory } from "../src/converse.js";
+import { buildConverseMessages, converse, recentHistory } from "../src/converse.js";
 import {
   MAX_NOTE_ROWS,
   MAX_THREAD_ROWS,
@@ -681,7 +681,8 @@ describe("threadTranscript — one conversation, bounded", () => {
     expect(body!.indexOf("question 6\n")).toBeLessThan(body!.indexOf("question 7\n"));
     const said = ours(out.content);
     expect(said).toContain(`${MAX_TRANSCRIPT_EXCHANGES + 6} finished exchanges`);
-    expect(said).toContain(`the last ${MAX_TRANSCRIPT_EXCHANGES}`);
+    expect(said).toContain(`exchanges 7 to ${MAX_TRANSCRIPT_EXCHANGES + 6}`);
+    expect(said).toContain(`before: 7 })`);
   });
 
   it("clips each turn, keeps pairs whole, and stays inside the character budget", () => {
@@ -701,7 +702,7 @@ describe("threadTranscript — one conversation, bounded", () => {
     expect(body!.match(/ answer: /g)).toHaveLength(out.shown);
     expect(body).toContain(`A${MAX_TRANSCRIPT_EXCHANGES - 1} `);
     for (const line of body!.split("\n")) expect(line.length).toBeLessThan(TRANSCRIPT_TURN_CHARS + 120);
-    expect(ours(out.content)).toMatch(/not all of them|the last \d+/);
+    expect(ours(out.content)).toMatch(/not all of them/);
   });
 
   it("budgets the escaped transcript including its headings and fence", () => {
@@ -719,7 +720,9 @@ describe("threadTranscript — one conversation, bounded", () => {
     expect(out.total).toBe(MAX_TRANSCRIPT_EXCHANGES);
     expect(out.shown).toBeGreaterThan(0);
     expect(out.shown).toBeLessThan(out.total);
-    expect(ours(out.content)).toContain(`Showing the last ${out.shown}`);
+    expect(ours(out.content)).toContain(
+      `Showing exchanges ${out.total - out.shown + 1} to ${out.total}, oldest first. These are not all of them`,
+    );
   });
 
   it("answers an unknown id, a Candidates id and the current thread's id with a sentence (PR-4)", () => {
@@ -757,6 +760,149 @@ describe("threadTranscript — one conversation, bounded", () => {
       undefined,
     );
     expect(out.content.match(/<<<END UNTRUSTED /g)).toHaveLength(1);
+  });
+});
+
+/* spya-sfpcmm (plan 261020k): an Explore model asked to pick up from a Recall
+   conversation could not read all of it — every answer cut to 700 characters,
+   and nothing before the newest few exchanges reachable. */
+describe("threadTranscript — the whole conversation can be read", () => {
+  it("shows a long answer whole", () => {
+    const long = `${"Fixation ".repeat(330)}END-OF-ANSWER`; // ~3,000 characters
+    const out = threadTranscript(
+      [thread("spya-t00001", { messages: [msg("user", "q"), msg("assistant", long)] })],
+      "spya-t00001",
+      undefined,
+    );
+    const [body] = fenced(out.content);
+    expect(body).toContain("END-OF-ANSWER");
+    expect(body).not.toContain("[clipped from");
+  });
+
+  it("numbers the exchanges, and a long conversation is read whole across calls with `before`", () => {
+    const total = 30;
+    const messages = Array.from({ length: total }, (_, i) => [
+      msg("user", `QUESTION-${i + 1} ${"q".repeat(400)}`),
+      msg("assistant", `ANSWER-${i + 1} ${"a".repeat(2_000)}`),
+    ]).flat();
+    const threads = [thread("spya-t00001", { messages })];
+
+    const seen: number[] = [];
+    let before: number | undefined;
+    for (let call = 0; call < total; call++) {
+      const out = threadTranscript(threads, "spya-t00001", undefined, before);
+      if (!out.found) throw new Error("expected the thread to be found");
+      expect(out.total).toBe(total);
+      expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+      const [body] = fenced(out.content);
+      const numbers = [...body!.matchAll(/QUESTION-(\d+) /g)].map((m) => Number(m[1]));
+      expect(numbers.length).toBe(out.shown);
+      expect(body!.match(/ANSWER-\d+ /g)).toHaveLength(out.shown);
+      /* Oldest first within a call, each exchange labelled with its number. */
+      expect(numbers).toEqual([...numbers].sort((a, b) => a - b));
+      for (const n of numbers) expect(body).toMatch(new RegExp(`^#${n} .* reader: QUESTION-${n} `, "m"));
+      seen.unshift(...numbers);
+      const first = numbers[0]!;
+      if (first === 1) {
+        expect(ours(out.content)).not.toMatch(/before:/);
+        break;
+      }
+      /* Not the whole of it, and the model is told exactly how to get the rest. */
+      expect(ours(out.content)).toContain(`reader_notes({ thread: "spya-t00001", before: ${first} })`);
+      before = first;
+    }
+    expect(seen).toEqual(Array.from({ length: total }, (_, i) => i + 1));
+  });
+
+  it("answers a `before` it cannot use with a sentence, and treats one just past the end as the newest", () => {
+    const threads = [
+      thread("spya-t00001", {
+        messages: [msg("user", "Q-ONE"), msg("assistant", "A-ONE"), msg("user", "Q-TWO"), msg("assistant", "A-TWO")],
+      }),
+    ];
+    const none = threadTranscript(threads, "spya-t00001", undefined, 1);
+    if (!none.found) throw new Error("expected the thread to be found");
+    expect(none.shown).toBe(0);
+    expect(none.total).toBe(2);
+    expect(none.content).not.toContain("Q-ONE");
+    expect(none.content).toMatch(/nothing before exchange 1/);
+
+    const newest = threadTranscript(threads, "spya-t00001", undefined, 3);
+    expect(newest.content).toContain("Q-ONE");
+    expect(newest.content).toContain("A-TWO");
+    expect(ours(newest.content)).toContain("All 2 are below");
+
+    /* A wrong cursor is said to be wrong, never answered with the newest page. */
+    for (const [bad, said] of [
+      [99, "There is no exchange 99"],
+      [1.5, "whole number"],
+      [Number.NaN, "whole number"],
+    ] as const) {
+      const out = threadTranscript(threads, "spya-t00001", undefined, bad);
+      if (!out.found) throw new Error("expected the thread to be found");
+      expect(out.shown).toBe(0);
+      expect(out.content).not.toContain("Q-");
+      expect(out.content).toContain(said);
+    }
+  });
+
+  it("says which newer exchanges a page asked for by hand leaves out", () => {
+    const messages = Array.from({ length: 5 }, (_, i) => [msg("user", `Q-${i + 1}`), msg("assistant", `A-${i + 1}`)]).flat();
+    const out = threadTranscript([thread("spya-t00001", { messages })], "spya-t00001", undefined, 3);
+    const said = ours(out.content);
+    expect(said).toContain("Showing exchanges 1 to 2, oldest first: the start of the conversation.");
+    expect(said).toContain("Exchanges 3 to 5 are newer and not in this answer.");
+    expect(said).not.toContain("All 5");
+  });
+
+  it("keeps every boundary heading exact, including a page whose budget drops its oldest rows", () => {
+    const short = Array.from({ length: 5 }, (_, i) => [
+      msg("user", `Q-${i + 1}`),
+      msg("assistant", `A-${i + 1}`),
+    ]).flat();
+    const threads = [thread("spya-t00001", { messages: short })];
+    const cases = [
+      [undefined, "All 5 are below"],
+      [1, "nothing before exchange 1"],
+      [2, "Showing exchange 1, oldest first: the start of the conversation. Exchanges 2 to 5"],
+      [5, "Showing exchanges 1 to 4, oldest first: the start of the conversation. Exchange 5"],
+      [6, "All 5 are below"],
+      [7, "There is no exchange 7"],
+    ] as const;
+    for (const [before, heading] of cases) {
+      const out = threadTranscript(threads, "spya-t00001", undefined, before);
+      expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+      expect(ours(out.content)).toContain(heading);
+    }
+
+    const long = Array.from({ length: 8 }, (_, i) => [
+      msg("user", `LONG-Q-${i + 1} ${"q".repeat(5_000)}`),
+      msg("assistant", `LONG-A-${i + 1} ${"a".repeat(5_000)}`),
+    ]).flat();
+    const out = threadTranscript([thread("spya-t00001", { messages: long })], "spya-t00001", undefined);
+    if (!out.found) throw new Error("expected the thread to be found");
+    const [body] = fenced(out.content);
+    const numbers = [...body!.matchAll(/LONG-Q-(\d+) /g)].map((match) => Number(match[1]));
+    const first = numbers[0]!;
+    expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+    expect(numbers).toEqual(Array.from({ length: out.shown }, (_, i) => first + i));
+    expect(ours(out.content)).toContain(`Showing exchanges ${first} to 8, oldest first.`);
+    expect(ours(out.content)).toContain(`before: ${first} })`);
+    expect(ours(out.content)).not.toMatch(/All 8|the start of the conversation/);
+  });
+
+  it("can always show one maximally escaped pair, so the zero-row paging branch stays defensive", () => {
+    const hostile = "<".repeat(TRANSCRIPT_TURN_CHARS + 1);
+    const out = threadTranscript(
+      [thread("spya-t00001", { messages: [msg("user", hostile), msg("assistant", hostile)] })],
+      "spya-t00001",
+      undefined,
+    );
+    if (!out.found) throw new Error("expected the thread to be found");
+    expect(out.shown).toBe(1);
+    expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+    expect(ours(out.content)).toContain("It is below, oldest first.");
+    expect(ours(out.content)).not.toContain("too long to show here");
   });
 });
 
@@ -840,6 +986,92 @@ describe("runTool — reader_notes", () => {
     expect(out.label + out.detail).not.toContain("SECRET-TITLE");
     expect(out.label + out.detail).not.toContain("spya-t00001");
   });
+
+  it("forwards `before` to the conversation, as a number or the string of one (plan 261020k)", async () => {
+    store.threads = async () => [
+      thread("spya-t00001", {
+        messages: [msg("user", "Q-ONE"), msg("assistant", "A-ONE"), msg("user", "Q-TWO"), msg("assistant", "A-TWO")],
+      }),
+    ];
+    for (const before of [2, "2"]) {
+      const out = await runTool("reader_notes", { thread: "spya-t00001", before }, ctx());
+      expect(out.content).toContain("Q-ONE");
+      expect(out.content).not.toContain("Q-TWO");
+      expect(out.content).toContain("Exchange 2 is newer and not in this answer.");
+    }
+    const bad = await runTool("reader_notes", { thread: "spya-t00001", before: "two" }, ctx());
+    expect(bad.content).not.toContain("Q-");
+    expect(bad.content).toContain("Nothing was read.");
+  });
+
+  it("parses cursor spellings deliberately and never turns a wrong type into the newest page", async () => {
+    store.threads = async () => [
+      thread("spya-t00001", {
+        messages: Array.from({ length: 12 }, (_, i) => [
+          msg("user", `CURSOR-Q-${i + 1}`),
+          msg("assistant", `CURSOR-A-${i + 1}`),
+        ]).flat(),
+      }),
+    ];
+
+    for (const [before, last] of [
+      [10, 9],
+      ["10", 9],
+      ["1e1", 9],
+      [" 3 ", 2],
+    ] as const) {
+      const out = await runTool("reader_notes", { thread: "spya-t00001", before }, ctx());
+      expect(out.content).toContain(`CURSOR-Q-${last}`);
+      expect(out.content).not.toContain(`CURSOR-Q-${last + 1}`);
+      expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+    }
+
+    for (const before of [true, {}, [], null]) {
+      const out = await runTool("reader_notes", { thread: "spya-t00001", before }, ctx());
+      expect(out.content).toContain("whole number");
+      expect(out.content).toContain("Nothing was read.");
+      expect(out.content).not.toContain("CURSOR-Q-");
+      expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+    }
+
+    for (const before of [-1, -0]) {
+      const out = await runTool("reader_notes", { thread: "spya-t00001", before }, ctx());
+      expect(out.content).toContain("nothing before exchange 1");
+      expect(out.content).not.toContain("CURSOR-Q-");
+      expect(out.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+    }
+
+    const huge = await runTool("reader_notes", { thread: "spya-t00001", before: 1e100 }, ctx());
+    expect(huge.content).toContain("There is no exchange 1e+100");
+    expect(huge.content).not.toContain("CURSOR-Q-");
+    expect(huge.content.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+  });
+
+  it("refuses `before` without a thread, and reads nothing", async () => {
+    for (const before of [3, null, false, {}, [], "1e1", " 3 ", -1, 1e100, -0]) {
+      const out = await runTool("reader_notes", { before }, ctx());
+      expect(out.content).toContain("needs that conversation's id");
+      expect(out.content).not.toContain("SECRET");
+    }
+    expect(store.calls).toEqual([]);
+  });
+
+  it("offers `before` as an integer in the tool's schema", () => {
+    const params = READER_NOTES_TOOL.function.parameters as { properties: Record<string, { type: string }> };
+    expect(params.properties.before?.type).toBe("integer");
+    expect(READER_NOTES_TOOL.function.description).toContain("`before`");
+  });
+
+  it.each(["chat", "explore"] as const)(
+    "tells %s how to stop honestly when paging outlasts the tool rounds",
+    (kind) => {
+      const built = buildConverseMessages({ meta, blocks: BLOCKS, history: [], question: "Continue it", kind });
+      const system = String(built[0]?.content ?? "").replace(/\s+/g, " ");
+      expect(system).toContain("follow those earlier pages while reader_notes is available");
+      expect(system).toContain("If you could not reach exchange 1, tell them you have not read the start of it.");
+      expect(system).not.toContain("keep calling until you reach exchange 1");
+    },
+  );
 
   it("refuses the current thread's id with a sentence, not a throw", async () => {
     const out = await runTool("reader_notes", { thread: "spya-t00009" }, ctx());

@@ -295,6 +295,7 @@ import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
+import { Ownership } from "./Ownership.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
@@ -492,6 +493,7 @@ const READ_AGAIN_AFTER_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000];
 export function Metadata({
   slug,
   article,
+  readerId,
   onRenamed,
   onVisibility,
   onPrivateLink,
@@ -499,6 +501,8 @@ export function Metadata({
 }: {
   slug: string;
   article: Article;
+  /** The account for which the owned article read answered. Omitted only by focused tests. */
+  readerId?: string | null;
   /**
    * The reader renamed the article from the heading below.
    *
@@ -1335,6 +1339,10 @@ export function Metadata({
           onPrivateLink={onPrivateLink}
           slug={slug}
           title={meta.title}
+          /* A second session subscriber can hear an account change before the
+             owner branch above has been replaced. Never put B's address beside
+             an ownership result fetched for A. */
+          ownerEmail={readerId != null && user?.id === readerId ? (user.email ?? null) : null}
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
              false for ever if it fails — so a failed metadata check removed the
              whole section rather than showing its "we could not check" state.
@@ -1533,6 +1541,7 @@ export function Metadata({
 function SharingSection({
   slug,
   title,
+  ownerEmail,
   offer,
   sharing,
   checking,
@@ -1541,6 +1550,7 @@ function SharingSection({
 }: {
   slug: string;
   title: string;
+  ownerEmail: string | null;
   /** Straight through to the card — see `Metadata`'s prop of the same name. */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
   onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
@@ -1557,7 +1567,7 @@ function SharingSection({
   checking: boolean;
 }) {
   if (!offer) return null;
-  return <SharingCard slug={slug} title={title} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
 }
 
 /**
@@ -1573,6 +1583,7 @@ function SharingSection({
 function SharingCard({
   slug,
   title,
+  ownerEmail,
   sharing,
   checking,
   onVisibility,
@@ -1580,6 +1591,7 @@ function SharingCard({
 }: {
   slug: string;
   title: string;
+  ownerEmail: string | null;
   sharing: ArticleSharing | undefined;
   checking: boolean;
   onVisibility: (slug: string, visibility: Visibility | null) => void;
@@ -1620,6 +1632,11 @@ function SharingCard({
           `${CARD} p-4`, matching the compact control cards elsewhere on the
           page rather than "In one sentence"'s `p-5`. */}
       <div className={`${CARD} tw:p-4`}>
+        {/* Whose it is, first: this page is drawn only for the owner
+            (Ownership.tsx). Greg, spya-cf30ac. */}
+        <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
+          <Ownership whose="yours" email={ownerEmail} />
+        </div>
         <PrivateLink
           slug={slug}
           title={title}
