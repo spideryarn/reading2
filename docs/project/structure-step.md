@@ -1242,7 +1242,8 @@ the model can satisfy rather than something we have to stitch together. That hol
 123,500 words.
 
 **Since `toc/11` (2026-10-02) the answer carries starts, not ranges, and a schema holds it.** Each
-child names only the block it starts at, as the scoped expansion call already did. The root names
+child names only the block it starts at, as the scoped expansion call already did; since `toc/13` it
+names it by its `[i]` number, not its id ([§ The one thing it loses](#the-one-thing-it-loses-and-what-still-throws)). The root names
 nothing, and every range is derived by the shared kernel in
 [`src/start-ranges.ts`](../../src/start-ranges.ts), through
 [`src/structure-starts.ts`](../../src/structure-starts.ts), before `buildTree`. The request carries
