@@ -21,11 +21,30 @@
  * A plain table rather than `DataTable`: there are few vouchers, one order
  * (newest first, the server's), and a row that turns into a form, which a
  * TanStack cell renderer would make harder to read rather than easier.
+ *
+ * **Three tabs since plan 261020ab** — Greg, 2026-10-20 (spya-vyddks): *"This
+ * page is now quite long and messy. Perhaps add tabs at the top to divide
+ * it"*. *Give* holds the one *New gift* form, *Drafts* the author gifts, and
+ * *Given* the voucher table. And one form for both kinds of gift, with a
+ * tick-box for the author's — the same day (spya-vusqvg): *"is one just a
+ * special case of the other (e.g. we could provide a tick box and/or extra
+ * field), to simplify the UI?"*
  */
-import { useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { RefreshCw } from "lucide-react";
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
+import { AUTHOR_GIFT_PARAM } from "../admin-author-gifts.js";
 import {
   type VoucherEmailState,
   RECIPIENT_NAME_MAX,
@@ -37,8 +56,9 @@ import {
 } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import { addressBoxChange, normaliseEmail } from "../email-address.js";
+import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
-import { AuthorGifts } from "./AdminAuthorGifts.js";
+import { AuthorGifts, type GiftPointer, giftIdOrNull, giftsWaiting } from "./AdminAuthorGifts.js";
 import { type AccountUsage, AdminUserLink } from "./AdminUserCard.js";
 import {
   BUTTON,
@@ -68,6 +88,7 @@ import {
   useAdminVouchers,
   type VoucherPatchInput,
 } from "./useAdminVouchers.js";
+import { type EnsureAnswer, type UseAdminAuthorGifts, useAdminAuthorGifts } from "./useAdminAuthorGifts.js";
 import { type UseAdminUsers, useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
@@ -360,14 +381,39 @@ function alreadyLine(already: { readonly count: number; readonly articles: numbe
   return `This address already has ${gifts}. This one adds to ${already.count === 1 ? "it" : "them"}.`;
 }
 
-function CreateForm({ create, canReplay, vouchers, shelf }: {
+/** A draft the ticked form made, or found already made: the *Drafts* tab opens on it. */
+type Drafted = Exclude<EnsureAnswer, { readonly kind: "refused" }>;
+
+/**
+ * **New gift** — a voucher, or ticked, the draft of an author gift (plan
+ * 261020ab, spya-vusqvg). Unticked it is the voucher form it always was.
+ * Ticked, the fields the draft does not take are hidden, not cleared, and it
+ * asks only for the article and the private link's rights: `POST
+ * /api/admin/author-gifts` takes the article alone, and the address, name,
+ * note and articles are filled by the lookup and edited on the draft's card.
+ *
+ * **The two starter rules stay apart** (P1-02 of the plan's review). A voucher
+ * reads the link and never makes one, so its starter must already be linkable
+ * (`starterReady`). Drafting makes a missing link at once (`ensureAuthorGift`),
+ * so any article on the shelf will do once the rights box is ticked. The
+ * chosen article is one value, so it carries across the tick both ways.
+ */
+function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
   create: UseAdminVouchers["create"];
   canReplay: UseAdminVouchers["canReplay"];
-  /** The list below, to say when this address already has gifts. */
+  /** The list under Given, to say when this address already has gifts. */
   vouchers: UseAdminVouchers["vouchers"];
   /** The administrator's own shelf, for the starter; read once for the page. */
   shelf: StarterShelf;
+  /** The page's one author-gift list, so a draft made here is the one Drafts shows (P1-01). */
+  drafts: Pick<UseAdminAuthorGifts, "ensure">;
+  onDrafted: (answer: Drafted) => void;
 }) {
+  /* Greg's tick-box: this gift is for the author of one of my articles. */
+  const [forAuthor, setForAuthor] = useState(false);
+  /* The private link's rights, which drafting makes if there is none — the
+     tick `DraftForm` asked for before this form took its place. */
+  const [rights, setRights] = useState(false);
   const [email, setEmail] = useState("");
   const [articles, setArticles] = useState(String(DEFAULT_ARTICLES));
   const [note, setNote] = useState("");
@@ -401,9 +447,29 @@ function CreateForm({ create, canReplay, vouchers, shelf }: {
   const replay = input !== null && canReplay(input);
   const starterOk = starterReady(starter) || replay;
 
+  async function draftGift() {
+    /* The button is disabled too; this is Enter in a field. */
+    if (starterSlug === "" || !rights || busy) return;
+    setBusy(true);
+    const answer = await drafts.ensure(starterSlug);
+    setBusy(false);
+    if (answer.kind === "refused") {
+      setRefusal(answer.message);
+      return;
+    }
+    setRefusal(null);
+    setStarterSlug("");
+    setRights(false);
+    onDrafted(answer);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setDone(null);
+    if (forAuthor) {
+      await draftGift();
+      return;
+    }
     /* The button is disabled too; this is Enter in a field. */
     if (!starterOk) return;
     if (input === null) {
@@ -435,146 +501,225 @@ function CreateForm({ create, canReplay, vouchers, shelf }: {
   return (
     <form
       onSubmit={(e) => void submit(e)}
+      /* Ticked, the hidden voucher fields must not hold the draft back: a
+         browser will not submit past a required box it cannot show. */
+      noValidate={forAuthor}
       className="tw:mb-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4"
-      aria-label="New gift voucher"
+      aria-label="New gift"
     >
-      <h2 className="tw:m-0 tw:mb-3 tw:text-sm tw:font-medium tw:text-foreground">New voucher</h2>
+      <h2 className="tw:m-0 tw:mb-3 tw:text-sm tw:font-medium tw:text-foreground">New gift</h2>
+      <label className="tw:mb-3 tw:flex tw:items-start tw:gap-2 tw:text-sm tw:text-foreground">
+        <input
+          id="voucher-new-for-author"
+          type="checkbox"
+          checked={forAuthor}
+          disabled={busy}
+          onChange={(e) => {
+            setForAuthor(e.target.checked);
+            setRefusal(null);
+            setDone(null);
+          }}
+        />
+        <span>For the author of one of my articles — look up their address, and send it later</span>
+      </label>
       {refusal && <Refusal message={refusal} />}
       {done && (
         <p role="status" className="tw:m-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">
           {done}
         </p>
       )}
-      <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-3">
-        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          Email address
-          <input
-            id="voucher-new-email"
-            type="email"
-            required
-            enterKeyHint="go"
-            value={email}
-            aria-describedby={already ? "voucher-new-already" : undefined}
-            onChange={(e) => {
-              /* `Name <a@b>` pasted keeps the address and fills an empty name (plan 261011k). */
-              const next = addressBoxChange(e.target.value, recipientName);
-              setEmail(next.email);
-              setRecipientName(next.name);
-            }}
-            className={`${INPUT} tw:w-full`}
-          />
-        </label>
-        <label className="tw:flex tw:w-24 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          Articles
-          <input
-            id="voucher-new-articles"
-            type="number"
-            required
-            enterKeyHint="go"
-            min={1}
-            max={1000}
-            step={1}
-            value={articles}
-            onChange={(e) => setArticles(e.target.value)}
-            className={`${INPUT} tw:w-full`}
-          />
-        </label>
-      </div>
-      {already && (
-        <p id="voucher-new-already" className="tw:m-0 tw:mt-2 tw:text-xs tw:text-muted-foreground">
-          {alreadyLine(already)}
-        </p>
+      {forAuthor && (
+        <DraftFields shelf={shelf} choices={choices} slug={starterSlug} onChoose={setStarterSlug} rights={rights} onRights={setRights} busy={busy} />
       )}
-      {/* Their name, above the note it is drawn above in the email — Greg,
-          2026-10-06 (spya-vc6pnm): *"the gift voucher would say something
-          like, Dear so-and-so. So maybe it needs a name field as well."*
-          Plan 261007f. */}
-      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-end tw:gap-3">
-        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          <span>
-            <span className="tw:text-sm tw:font-medium tw:text-foreground">Their name</span> (optional — their
-            email then opens “{giftEmailGreeting("<name>")}”)
-          </span>
-          <input
-            id="voucher-new-recipient-name"
-            type="text"
-            enterKeyHint="go"
-            autoComplete="off"
-            value={recipientName}
-            onChange={(e) => setRecipientName(e.target.value)}
-            className={`${INPUT} tw:w-full`}
-          />
-        </label>
-      </div>
-      {/* **The note they will read comes first and is the loud one**; the
-          note only the admin sees is last and quiet. Greg, 2026-10-03
-          (spya-prv9yu): *"emphasise the public over the private message"*. */}
-      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-start tw:gap-3">
-        <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          <label className="tw:flex tw:flex-col tw:gap-1">
-            <span>
-              <span className="tw:text-sm tw:font-medium tw:text-foreground">Note to them</span> (optional — it
-              goes in their email, above our words)
-            </span>
-            <textarea
-              id="voucher-new-recipient-note"
-              rows={3}
-              value={recipientNote}
-              onChange={(e) => setRecipientNote(e.target.value)}
-              aria-describedby="voucher-new-recipient-note-hint"
-              className={`${TEXTAREA} tw:w-full`}
+      {/* The voucher's own fields, hidden rather than unmounted while ticked,
+          so unticking finds them as they were — the import box's draft too. */}
+      <div hidden={forAuthor}>
+        <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-3">
+          <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+            Email address
+            <input
+              id="voucher-new-email"
+              type="email"
+              required
+              enterKeyHint="go"
+              value={email}
+              aria-describedby={already ? "voucher-new-already" : undefined}
+              onChange={(e) => {
+                /* `Name <a@b>` pasted keeps the address and fills an empty name (plan 261011k). */
+                const next = addressBoxChange(e.target.value, recipientName);
+                setEmail(next.email);
+                setRecipientName(next.name);
+              }}
+              className={`${INPUT} tw:w-full`}
             />
           </label>
-          {/* Greg, 2026-10-02: the note is unlabelled in the email, so
-              "add a tooltip or something in the interface to remind me to
-              sign my name". */}
-          <p id="voucher-new-recipient-note-hint" className="tw:m-0 tw:text-ink-faint">
-            Sign it yourself, e.g. “— Greg”. The email comes from Spideryarn, so the note isn’t signed
-            otherwise.
-          </p>
+          <label className="tw:flex tw:w-24 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+            Articles
+            <input
+              id="voucher-new-articles"
+              type="number"
+              required
+              enterKeyHint="go"
+              min={1}
+              max={1000}
+              step={1}
+              value={articles}
+              onChange={(e) => setArticles(e.target.value)}
+              className={`${INPUT} tw:w-full`}
+            />
+          </label>
         </div>
-        <EmailSketch
-          articles={wholeNumber(articles)}
-          name={recipientName}
-          note={recipientNote}
-          starterEntry={"entry" in starter ? starter.entry : null}
-        />
-      </div>
-      <StarterPicker
-        choices={choices}
-        slug={starterSlug}
-        onChoose={setStarterSlug}
-        state={starter}
-        statusId={STARTER_STATUS}
-        shelfError={shelf.error}
-        reload={shelf.reload}
-        replay={replay}
-      />
-      {/* The submit is the form's last control and its one filled button —
-          *"Make the 'Create voucher' button more visible"*, the same report.
-          It was a quiet outline pill in the middle of the first row. */}
-      <div className="tw:mt-4 tw:flex tw:flex-wrap tw:items-end tw:gap-3">
-        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          Private note (optional — only you see it)
-          <input
-            id="voucher-new-note"
-            type="text"
-            enterKeyHint="go"
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className={`${INPUT} tw:w-full`}
+        {already && (
+          <p id="voucher-new-already" className="tw:m-0 tw:mt-2 tw:text-xs tw:text-muted-foreground">
+            {alreadyLine(already)}
+          </p>
+        )}
+        {/* Their name, above the note it is drawn above in the email — Greg,
+            2026-10-06 (spya-vc6pnm): *"the gift voucher would say something
+            like, Dear so-and-so. So maybe it needs a name field as well."*
+            Plan 261007f. */}
+        <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-end tw:gap-3">
+          <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+            <span>
+              <span className="tw:text-sm tw:font-medium tw:text-foreground">Their name</span> (optional — their
+              email then opens “{giftEmailGreeting("<name>")}”)
+            </span>
+            <input
+              id="voucher-new-recipient-name"
+              type="text"
+              enterKeyHint="go"
+              autoComplete="off"
+              value={recipientName}
+              onChange={(e) => setRecipientName(e.target.value)}
+              className={`${INPUT} tw:w-full`}
+            />
+          </label>
+        </div>
+        {/* **The note they will read comes first and is the loud one**; the
+            note only the admin sees is last and quiet. Greg, 2026-10-03
+            (spya-prv9yu): *"emphasise the public over the private message"*. */}
+        <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-start tw:gap-3">
+          <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+            <label className="tw:flex tw:flex-col tw:gap-1">
+              <span>
+                <span className="tw:text-sm tw:font-medium tw:text-foreground">Note to them</span> (optional — it
+                goes in their email, above our words)
+              </span>
+              <textarea
+                id="voucher-new-recipient-note"
+                rows={3}
+                value={recipientNote}
+                onChange={(e) => setRecipientNote(e.target.value)}
+                aria-describedby="voucher-new-recipient-note-hint"
+                className={`${TEXTAREA} tw:w-full`}
+              />
+            </label>
+            {/* Greg, 2026-10-02: the note is unlabelled in the email, so
+                "add a tooltip or something in the interface to remind me to
+                sign my name". */}
+            <p id="voucher-new-recipient-note-hint" className="tw:m-0 tw:text-ink-faint">
+              Sign it yourself, e.g. “— Greg”. The email comes from Spideryarn, so the note isn’t signed
+              otherwise.
+            </p>
+          </div>
+          <EmailSketch
+            articles={wholeNumber(articles)}
+            name={recipientName}
+            note={recipientNote}
+            starterEntry={"entry" in starter ? starter.entry : null}
           />
-        </label>
-        <Button
-          type="submit"
-          disabled={busy || !starterOk}
-          aria-describedby={starterOk ? undefined : STARTER_STATUS}
-        >
-          {busy ? "Creating…" : "Create voucher"}
-        </Button>
+        </div>
+        <StarterPicker
+          choices={choices}
+          slug={starterSlug}
+          onChoose={setStarterSlug}
+          state={starter}
+          statusId={STARTER_STATUS}
+          shelfError={shelf.error}
+          reload={shelf.reload}
+          replay={replay}
+        />
+        {/* The submit is the form's last control and its one filled button —
+            *"Make the 'Create voucher' button more visible"*, the same report.
+            It was a quiet outline pill in the middle of the first row. */}
+        <div className="tw:mt-4 tw:flex tw:flex-wrap tw:items-end tw:gap-3">
+          <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+            Private note (optional — only you see it)
+            <input
+              id="voucher-new-note"
+              type="text"
+              enterKeyHint="go"
+              maxLength={500}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className={`${INPUT} tw:w-full`}
+            />
+          </label>
+          <Button
+            type="submit"
+            disabled={busy || !starterOk}
+            aria-describedby={starterOk ? undefined : STARTER_STATUS}
+          >
+            {busy ? "Creating…" : "Create voucher"}
+          </Button>
+        </div>
       </div>
     </form>
+  );
+}
+
+/**
+ * **The ticked form**: the article, the rights tick-box and *Draft a gift*.
+ * What `DraftForm` in AdminAuthorGifts.tsx was until plan 261020ab folded it
+ * in here (D10 of 261010c: an article imported before the add page asked, or a
+ * tab closed before it could). The submit's words differ from *Create voucher*
+ * on purpose: this one emails nobody.
+ */
+function DraftFields({
+  shelf,
+  choices,
+  slug,
+  onChoose,
+  rights,
+  onRights,
+  busy,
+}: {
+  shelf: StarterShelf;
+  choices: readonly LibraryEntry[];
+  slug: string;
+  onChoose: (slug: string) => void;
+  rights: boolean;
+  onRights: (rights: boolean) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-2 tw:text-xs tw:text-muted-foreground">
+      <StarterSelect
+        id="author-gift-new-article"
+        label={<span className="tw:text-sm tw:font-medium tw:text-foreground">Article (your articles, newest first)</span>}
+        noneLabel="Choose one…"
+        choices={choices}
+        slug={slug}
+        onChoose={onChoose}
+        reload={shelf.reload}
+        disabled={busy}
+      />
+      {shelf.error && <p className="tw:m-0 tw:text-danger">Couldn’t read your articles. {shelf.error}</p>}
+      <label className="tw:flex tw:items-start tw:gap-2 tw:text-foreground">
+        <input id="voucher-new-rights" type="checkbox" checked={rights} disabled={busy} onChange={(e) => onRights(e.target.checked)} />
+        <span>{SHARING_RIGHTS_CONFIRM}</span>
+      </label>
+      <p className="tw:m-0">
+        Drafting makes the article's private link if it has none, saves a draft, and runs a web lookup for the author
+        and an address, using up to three searches. Nothing is emailed: the draft appears under Drafts, where you
+        review it and press Send.
+      </p>
+      <div className="tw:mt-2">
+        <Button type="submit" disabled={busy || slug === "" || !rights}>
+          {busy ? "Drafting…" : "Draft a gift"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -663,8 +808,8 @@ function EmailSketch({
  */
 function createdSentence(answer: Extract<CreateAnswer, { kind: "created" }>): string {
   return answer.email === "replayed"
-    ? "That voucher had already been created, so nothing new was sent. Its email is in the table below."
-    : "Voucher created. The email to them is on its way.";
+    ? "That voucher had already been created, so nothing new was sent. Its email is under Given."
+    : "Voucher created. The email to them is on its way. It is under Given.";
 }
 
 /**
@@ -1146,28 +1291,132 @@ function VoucherRow({
 }
 
 /**
- * The voucher form, then *Author gifts* (plan 261010c), sharing one read of
- * the administrator's shelf for their two article pickers.
+ * The *New gift* form, once the administrator's shelf is read for its article
+ * picker. A component of its own because the shelf's hook needs a reader.
  */
-function SignedInForms({
+function SignedInForm({
   readerId,
   create,
   canReplay,
   vouchers,
-  onVoucherMade,
+  drafts,
+  onDrafted,
 }: {
   readerId: string;
   create: UseAdminVouchers["create"];
   canReplay: UseAdminVouchers["canReplay"];
   vouchers: UseAdminVouchers["vouchers"];
-  onVoucherMade: () => void;
+  drafts: Pick<UseAdminAuthorGifts, "ensure">;
+  onDrafted: (answer: Drafted) => void;
 }) {
   const shelf = useStarterShelf(readerId);
   return (
-    <>
-      <CreateForm create={create} canReplay={canReplay} vouchers={vouchers} shelf={shelf} />
-      <AuthorGifts shelf={shelf} onVoucherMade={onVoucherMade} />
-    </>
+    <CreateForm
+      create={create}
+      canReplay={canReplay}
+      vouchers={vouchers}
+      shelf={shelf}
+      drafts={drafts}
+      onDrafted={onDrafted}
+    />
+  );
+}
+
+/* --------------------------------------------------------------- tabs -- */
+
+/**
+ * The three tabs, in order. *Give / Drafts / Given*: short, parallel, and
+ * named for what you do there rather than for the widget (plan 261020ab).
+ */
+const TABS = ["give", "drafts", "given"] as const;
+type Tab = (typeof TABS)[number];
+const TAB_NAMES: Record<Tab, string> = { give: "Give", drafts: "Drafts", given: "Given" };
+const tabId = (tab: Tab) => `vouchers-tab-${tab}`;
+const panelId = (tab: Tab) => `vouchers-panel-${tab}`;
+
+/**
+ * **`?tab=drafts|given`**, absent for Give, so a reload keeps your place
+ * (P1-04 of the plan's review). Replace, not push: a tab is a view of one
+ * page, not somewhere Back should walk through. An unknown value reads as
+ * absent.
+ */
+const tabParam = parseAsStringLiteral(["drafts", "given"] as const).withOptions({ history: "replace" });
+/** `?gift=<id>`, MCP's link to one gift (plan 261011n § D1); cleared by a tab chosen by hand. */
+const giftParam = parseAsString.withOptions({ history: "replace" });
+
+/**
+ * **The row of tabs** — the Feedback dialog's (`FeedbackDialog.tsx`), shared
+ * class and all, so a control that does the same job looks the same
+ * (controls.md): a `role="tablist"` of buttons with a roving `tabIndex`, so
+ * only the chosen tab is in the Tab order, and Left and Right (Home and End
+ * too) moving between them and round the ends. `counts` is drawn after a
+ * name; null draws none.
+ */
+function VoucherTabs({
+  tab,
+  counts,
+  onChoose,
+}: {
+  tab: Tab;
+  counts: Record<Tab, number | null>;
+  onChoose: (tab: Tab) => void;
+}) {
+  const refs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const choose = (next: Tab) => {
+    onChoose(next);
+    refs.current[next]?.focus();
+  };
+  const onKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const at = TABS.indexOf(tab);
+    const to =
+      e.key === "ArrowRight"
+        ? TABS[(at + 1) % TABS.length]
+        : e.key === "ArrowLeft"
+          ? TABS[(at + TABS.length - 1) % TABS.length]
+          : e.key === "Home"
+            ? TABS[0]
+            : e.key === "End"
+              ? TABS[TABS.length - 1]
+              : undefined;
+    if (to === undefined) return;
+    e.preventDefault();
+    choose(to);
+  };
+  return (
+    <div className="fb-tabs tw:mb-5" role="tablist" aria-label="Gift vouchers">
+      {TABS.map((t) => {
+        const count = counts[t];
+        return (
+          <button
+            key={t}
+            ref={(el) => {
+              refs.current[t] = el;
+            }}
+            type="button"
+            role="tab"
+            id={tabId(t)}
+            className="fb-tab"
+            aria-selected={tab === t}
+            aria-controls={panelId(t)}
+            tabIndex={tab === t ? 0 : -1}
+            onClick={() => choose(t)}
+            onKeyDown={onKey}
+          >
+            {TAB_NAMES[t]}
+            {count !== null && <span className="tw:ml-1.5 tw:font-normal tw:tabular-nums tw:text-muted-foreground">{count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One tab's panel. **Always mounted**, hidden when not chosen, so a half-typed form survives a switch and the gift list's lookup poll keeps running. */
+function TabPanel({ tab, chosen, children }: { tab: Tab; chosen: Tab; children: ReactNode }) {
+  return (
+    <div role="tabpanel" id={panelId(tab)} aria-labelledby={tabId(tab)} hidden={tab !== chosen}>
+      {children}
+    </div>
   );
 }
 
@@ -1182,128 +1431,192 @@ export function AdminVouchersPage() {
   /* The accounts the rows link to, and the usage on each link's card: the
      same read /admin/users makes (plan 261019k). */
   const accounts = useAdminUsers();
+  /* **One read of the author gifts for the page** (P1-01 of plan 261020ab's
+     review): the form drafts into it, the Drafts tab draws it, and the tab
+     counts it. Two would each read and poll, and a draft made by one would not
+     reach the other. */
+  const gifts = useAdminAuthorGifts();
+
+  const [tabInAddress, setTabInAddress] = useQueryState("tab", tabParam);
+  const [giftInAddress, setGiftInAddress] = useQueryState(AUTHOR_GIFT_PARAM, giftParam);
+  const giftIdInAddress = giftIdOrNull(giftInAddress);
+  /* `?gift=<id>` with no `?tab=` opens Drafts, where that gift is. */
+  const tab: Tab = tabInAddress ?? (giftIdInAddress === null ? "give" : "drafts");
+  /* The gift the page points at: the address's, then whichever *Draft a gift* made or found. */
+  const [pointer, setPointer] = useState<GiftPointer | null>(() => {
+    return giftIdInAddress === null ? null : { id: giftIdInAddress };
+  });
+  const lastAddressGift = useRef(giftIdInAddress);
+  /* The admin route stays mounted when navigation changes only its query. A
+     later MCP review address must point just as an initial one does. Clearing
+     `?gift=` does not clear a draft made in this mount; adding another valid id
+     creates a fresh pointer, so even the same card scrolls and opens again. */
+  useEffect(() => {
+    if (giftIdInAddress === lastAddressGift.current) return;
+    lastAddressGift.current = giftIdInAddress;
+    if (giftIdInAddress !== null) setPointer({ id: giftIdInAddress });
+  }, [giftIdInAddress]);
+  /* What the last *Draft a gift* came to, said on Drafts, where it takes you. */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /* A tab chosen by hand drops `?gift=`, so a reload never has to choose between them. */
+  const chooseTab = (next: Tab) => {
+    void setTabInAddress(next === "give" ? null : next);
+    void setGiftInAddress(null);
+  };
+
+  const onDrafted = (answer: Drafted) => {
+    setNotice(
+      answer.kind === "created"
+        ? "Drafted. The lookup for its author is running now; this list updates when it finishes."
+        : "That article already has a gift, so nothing new was made. It is highlighted below.",
+    );
+    setPointer({ id: answer.id });
+    chooseTab("drafts");
+  };
+
+  const waiting = giftsWaiting(gifts.gifts);
 
   return (
     <Shell title="Gift vouchers" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
-      {/* Greg, 2026-10-19 (spya-vuw2hy): the two sections read as two kinds of
-          gift. They are one kind and a shortcut to it — plan 261019i. */}
-      <div className="tw:mb-6 tw:flex tw:flex-col tw:gap-2 tw:text-sm tw:text-muted-foreground">
-        <p className="tw:m-0">
-          A <span className="tw:font-medium tw:text-foreground">voucher</span> adds articles to the free
-          allowance of whoever signs in with that address, and counts only while they are on the Free plan.
-          Several to one address add up.
-        </p>
-        <p className="tw:m-0">
-          A voucher can include one of your articles as a{" "}
-          <span className="tw:font-medium tw:text-foreground">starter article</span>. The first gift email links
-          to it, so they have something to read straight away. Receiving or reading it uses none of their
-          allowance. When they sign in, the starter moves to their account, unless something makes that unsafe (it is
-          public, another gift names it, or it has your notes on it); then they go on reading your copy by its
-          link. Later, High-powered AI on one they own, or
-          importing their own copy of one that stayed, uses their allowance as usual.
-        </p>
-        <p className="tw:m-0">
-          An <span className="tw:font-medium tw:text-foreground">author gift</span> is a shortcut for drafting a
-          voucher for the author of one of your articles. That article is its starter. A lookup suggests their
-          address, and the gift waits as a draft until you press Send. Once Send succeeds, it creates an ordinary
-          voucher in the list at the bottom.
-        </p>
-      </div>
+      <VoucherTabs
+        tab={tab}
+        counts={{ give: null, drafts: waiting === 0 ? null : waiting, given: vouchers === null ? null : vouchers.length }}
+        onChoose={chooseTab}
+      />
 
-      {readerId === null ? (
-        <>
+      <TabPanel tab="give" chosen={tab}>
+        {/* Greg, 2026-10-19 (spya-vuw2hy): the two sections read as two kinds of
+            gift. They are one kind and a shortcut to it — plan 261019i. Here,
+            above the form, since it is about giving (plan 261020ab). */}
+        <div className="tw:mb-6 tw:flex tw:flex-col tw:gap-2 tw:text-sm tw:text-muted-foreground">
+          <p className="tw:m-0">
+            A <span className="tw:font-medium tw:text-foreground">voucher</span> adds articles to the free
+            allowance of whoever signs in with that address, and counts only while they are on the Free plan.
+            Several to one address add up.
+          </p>
+          <p className="tw:m-0">
+            A voucher can include one of your articles as a{" "}
+            <span className="tw:font-medium tw:text-foreground">starter article</span>. The first gift email links
+            to it, so they have something to read straight away. Receiving or reading it uses none of their
+            allowance. When they sign in, the starter moves to their account, unless something makes that unsafe (it is
+            public, another gift names it, or it has your notes on it); then they go on reading your copy by its
+            link. Later, High-powered AI on one they own, or
+            importing their own copy of one that stayed, uses their allowance as usual.
+          </p>
+          <p className="tw:m-0">
+            An <span className="tw:font-medium tw:text-foreground">author gift</span> is a shortcut for drafting a
+            voucher for the author of one of your articles: tick the box at the top of the form. That article is its
+            starter. A lookup suggests their address, and the gift waits under Drafts until you press Send. Once Send
+            succeeds, it creates an ordinary voucher, under Given.
+          </p>
+        </div>
+
+        {readerId === null ? (
           <Refusal message="Sign in again to create a voucher." />
-          <AuthorGifts shelf={null} onVoucherMade={reloadAfterEmail} />
-        </>
-      ) : (
-        <SignedInForms
-          readerId={readerId}
-          create={create}
-          canReplay={canReplay}
-          vouchers={loading || error !== null ? null : vouchers}
+        ) : (
+          <SignedInForm
+            readerId={readerId}
+            create={create}
+            canReplay={canReplay}
+            vouchers={loading || error !== null ? null : vouchers}
+            drafts={gifts}
+            onDrafted={onDrafted}
+          />
+        )}
+      </TabPanel>
+
+      <TabPanel tab="drafts" chosen={tab}>
+        <AuthorGifts
+          gifts={gifts}
+          pointer={pointer}
+          notice={notice}
+          active={tab === "drafts"}
           onVoucherMade={reloadAfterEmail}
         />
-      )}
+      </TabPanel>
 
-      {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}
-      {/* Without the accounts a waiting voucher's address looks exactly like
-          one nobody has signed up with, so the page says which it is. */}
-      {accounts.error && (
-        <Refusal
-          message={
-            accounts.users
-              ? `Refreshing the accounts failed. Claimed links show usage from the last successful read; waiting vouchers are not linked until the accounts can be refreshed. ${accounts.error}`
-              : `Could not read the accounts, so vouchers waiting for sign-up are not linked to Users, and the links on claimed ones show no usage. ${accounts.error}`
-          }
-        />
-      )}
+      <TabPanel tab="given" chosen={tab}>
+        {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}
+        {/* Without the accounts a waiting voucher's address looks exactly like
+            one nobody has signed up with, so the page says which it is. */}
+        {accounts.error && (
+          <Refusal
+            message={
+              accounts.users
+                ? `Refreshing the accounts failed. Claimed links show usage from the last successful read; waiting vouchers are not linked until the accounts can be refreshed. ${accounts.error}`
+                : `Could not read the accounts, so vouchers waiting for sign-up are not linked to Users, and the links on claimed ones show no usage. ${accounts.error}`
+            }
+          />
+        )}
 
-      <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
-        <span className="tw:text-xs tw:text-muted-foreground">
-          {vouchers === null ? "" : vouchers.length === 1 ? "1 voucher" : `${vouchers.length} vouchers`}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            void reload();
-            void accounts.reload();
-          }}
-          disabled={loading || accounts.loading}
-          aria-label="Refresh the vouchers"
-          data-tip="Refresh the vouchers and their accounts"
-          data-tip-describes="off"
-          className={BUTTON}
-        >
-          <RefreshCw size={12} />
-          {loading || accounts.loading ? "Loading…" : "Refresh"}
-        </button>
-      </div>
+        <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
+          <span className="tw:text-xs tw:text-muted-foreground">
+            {vouchers === null ? "" : vouchers.length === 1 ? "1 voucher" : `${vouchers.length} vouchers`}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              void reload();
+              void accounts.reload();
+            }}
+            disabled={loading || accounts.loading}
+            aria-label="Refresh the vouchers"
+            data-tip="Refresh the vouchers and their accounts"
+            data-tip-describes="off"
+            className={BUTTON}
+          >
+            <RefreshCw size={12} />
+            {loading || accounts.loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
 
-      {vouchers === null ? null : vouchers.length === 0 ? (
-        <p className="tw:text-sm tw:text-muted-foreground">No vouchers yet.</p>
-      ) : (
-        /* `relative` because the caption and the Actions header are `sr-only`,
-           which is `position: absolute`: with no positioned ancestor they were
-           laid out against the table's full width rather than clipped by this
-           box, and the whole page scrolled sideways by 336px at 390. The same
-           bug and fix as DataTable.tsx § the scroll box. The `min-w-*` on the
-           wordy columns are what make the table scroll in here rather than
-           squeezing an address to two characters a line. Plan 261001m.
+        {vouchers === null ? null : vouchers.length === 0 ? (
+          <p className="tw:text-sm tw:text-muted-foreground">No vouchers yet.</p>
+        ) : (
+          /* `relative` because the caption and the Actions header are `sr-only`,
+             which is `position: absolute`: with no positioned ancestor they were
+             laid out against the table's full width rather than clipped by this
+             box, and the whole page scrolled sideways by 336px at 390. The same
+             bug and fix as DataTable.tsx § the scroll box. The `min-w-*` on the
+             wordy columns are what make the table scroll in here rather than
+             squeezing an address to two characters a line. Plan 261001m.
 
-           The shared box without its shade, so it is measured and takes
-           keyboard focus while the table is wider than it (plan 261006h). */
-        <SidewaysScrollBox label={CAPTION} cue={false}>
-          <table className="tw:w-full tw:border-collapse tw:text-sm">
-            <caption className="tw:sr-only">{CAPTION}</caption>
-            <thead>
-              <tr className="tw:border-b tw:border-border">
-                <th className={`${HEAD} ${PINNED}`}>Email</th>
-                <th className={`${HEAD} tw:text-right`}>Articles</th>
-                <th className={HEAD}>Note to them</th>
-                <th className={HEAD}>Private note</th>
-                <th className={HEAD}>Created</th>
-                <th className={HEAD}>Status</th>
-                <th className={HEAD}>Claimant's free usage</th>
-                <th className={HEAD}>
-                  <span className="tw:sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {vouchers.map((v) => (
-                <VoucherRow
-                  key={v.id}
-                  voucher={v}
-                  update={update}
-                  retry={retry}
-                  now={now}
-                  account={accountForVoucher(v, accounts)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </SidewaysScrollBox>
-      )}
+             The shared box without its shade, so it is measured and takes
+             keyboard focus while the table is wider than it (plan 261006h). */
+          <SidewaysScrollBox label={CAPTION} cue={false}>
+            <table className="tw:w-full tw:border-collapse tw:text-sm">
+              <caption className="tw:sr-only">{CAPTION}</caption>
+              <thead>
+                <tr className="tw:border-b tw:border-border">
+                  <th className={`${HEAD} ${PINNED}`}>Email</th>
+                  <th className={`${HEAD} tw:text-right`}>Articles</th>
+                  <th className={HEAD}>Note to them</th>
+                  <th className={HEAD}>Private note</th>
+                  <th className={HEAD}>Created</th>
+                  <th className={HEAD}>Status</th>
+                  <th className={HEAD}>Claimant's free usage</th>
+                  <th className={HEAD}>
+                    <span className="tw:sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {vouchers.map((v) => (
+                  <VoucherRow
+                    key={v.id}
+                    voucher={v}
+                    update={update}
+                    retry={retry}
+                    now={now}
+                    account={accountForVoucher(v, accounts)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </SidewaysScrollBox>
+        )}
+      </TabPanel>
     </Shell>
   );
 }

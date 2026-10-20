@@ -899,9 +899,26 @@ restores it.
 **The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
 [`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
 from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
-loader is a compile error). It opens with three short paragraphs saying what a voucher, a starter
+loader is a compile error). **It has three tabs** since
+[261020ab](../plans/261020ab-admin-vouchers-tabs-one-gift-form-and-finished-gifts-folded.md)
+(Greg, 2026-10-20, `spya-vyddks`: *"This page is now quite long and messy"*): **Give** (the
+default), **Drafts** (the author gifts, counted while any wait on you: `draft` or `sending`) and
+**Given** (the voucher table, counted). The tab is `?tab=drafts|given` through nuqs, replacing
+rather than pushing, and an unknown value reads as Give; `?gift=<id>` without a tab opens Drafts,
+and a tab chosen by hand drops `?gift=`. All three panels stay mounted, the hidden ones `hidden`,
+so a half-typed form survives a switch and the lookup poll keeps going. The row is the Feedback
+dialog's (`.fb-tabs`, roving `tabIndex`, arrow keys).
+
+Give opens with three short paragraphs saying what a voucher, a starter
 article and an author gift each are: one kind of gift and a shortcut to it, not two separate gifts
-([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). A create
+([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). Then
+**one *New gift* form** (Greg, `spya-vusqvg`: *"we could provide a tick box"*). Unticked it is the
+voucher form below; ticked — *For the author of one of my articles* — the voucher's fields are
+hidden (not cleared) and it asks only for the article and the private link's rights, posts
+`POST /api/admin/author-gifts`, and opens Drafts on the new or existing gift. The two starter rules
+stay apart: a voucher's starter must already be linkable, while drafting makes a missing link, so
+any article on the shelf will do once the rights are ticked. The chosen article carries across the
+tick. Unticked, the create
 form — address, articles (20 by default), private note, and a
 note to them that goes in their email, with a sketch of that email beside it showing where the note
 lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
@@ -954,9 +971,16 @@ a Retry where the server allows one. How they are kept to once each is
 
 ### Author gifts — a draft voucher for an article's author
 
-Since 2026-10-10 the page has a second section above the voucher table, **Author gifts**: a gift
+Since 2026-10-10 the page has a second section, **Author gifts** — since 261020ab the *Drafts*
+tab, drafted from Give's form with its box ticked: a gift
 voucher drafted for the author of one of the administrator's own articles, saved and **never sent
-until the administrator presses Send**. Greg's request and the marketing reason are
+until the administrator presses Send**. The ones still waiting come first, as full cards; **a
+finished gift — sent or discarded — is one line, shut**, below them: its title, its status, *Show*
+and, on a discarded one, *Restore*. What a Send or a Discard just said stays on that line. It is
+open while *Show* says so, or while the address or a draft just made points at it (Greg,
+2026-10-20, `spya-vcnmrd`, of a discarded gift still drawn in full: *"At the very least collapse
+it"*). Deleting a finished gift was weighed and not built: it would take *Restore* and the lookups'
+record with it, for one line saved. Greg's request and the marketing reason are
 [marketing-author-gifts.md](marketing-author-gifts.md); the plan, its two reviews and every
 decision are [261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
 
