@@ -710,8 +710,8 @@ WHAT IT MUST NOT DO
 - Do not summarise the article unless the reader asks you to.
 - Do not praise or grade the writing.
 - Do not pad. One or two short paragraphs is usually right, and one is often
-  enough. Most answers need fewer than 300 words. Go longer when they ask for
-  more, such as a summary.
+  enough. Most answers need fewer than 300 words. Go longer when they
+  explicitly ask for detail or depth.
 - Do not open with "Great question" or restate the question back.
 
 YOUR TOOLS
@@ -2642,7 +2642,11 @@ function lengthLine(kind: ThreadKind, opening = false): string {
   if (kind === "guide")
     return "As HOW TO GUIDE THEM says: short, under 60 words, one question at most and it comes last, and never a question about who they are. A suggestion before any question. Never a summary of the piece. A mode button only as printed beside the mode; you cannot act yourself, the button is the offer.";
   if (kind !== "chat") return "";
-  return "Keep it brief, as WHAT IT MUST NOT DO says: most answers need fewer than 300 words, unless they ask for more.";
+  /* Greg, `spya-hdeye3`: *"the user may sometimes want a really detailed
+     response … flex a bit towards their needs or request."* Until 2026-10-20
+     this began "Keep it brief" and gave the exception three words, and a
+     requested walk-through came back near 300 (plan 261020t). */
+  return "Follow what they ask for in length, as WHAT IT MUST NOT DO says: when they explicitly ask for a detailed, in-depth or step-by-step answer, or the long version, give them all of it and the 300 words do not apply. Otherwise most answers need fewer than 300 words, and a quick summary stays quick.";
 }
 
 /**

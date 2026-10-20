@@ -9,6 +9,10 @@
  * the final user message, below the `cache_control` breakpoint.
  * docs/plans/260930g-briefer-chat-and-explain-answers.md.
  *
+ * Since 2026-10-20 the line leads with the exception: an explicit request for
+ * detail lifts the budget, and a quick summary stays quick (Greg, `spya-hdeye3`;
+ * docs/plans/261020t-chat-length-flexes-when-the-reader-asks-for-detail.md).
+ *
  * Chat only: Learn has its own prompt and its own LENGTH section.
  */
 import { describe, expect, it } from "vitest";
@@ -45,9 +49,9 @@ const finalUser = (m: Built) => String(m.at(-1)?.content ?? "");
 const system = (m: Built) => String(m[0]?.content ?? "");
 
 const LINE =
-  "Keep it brief, as WHAT IT MUST NOT DO says: most answers need fewer than 300 words, unless they ask for more.";
+  "Follow what they ask for in length, as WHAT IT MUST NOT DO says: when they explicitly ask for a detailed, in-depth or step-by-step answer, or the long version, give them all of it and the 300 words do not apply. Otherwise most answers need fewer than 300 words, and a quick summary stays quick.";
 const SYSTEM_RULE =
-  "Most answers need fewer than 300 words. Go longer when they ask for more, such as a summary.";
+  "Most answers need fewer than 300 words. Go longer when they explicitly ask for detail or depth.";
 
 describe("the length reminder", () => {
   it("is in the final user message of a chat turn, before the question", () => {
