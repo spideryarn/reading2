@@ -152,10 +152,46 @@ reservation. Three paths do skip it, and each is closed at the route instead:
 3. **Jobs already past fetch at the deploy.** Grandfathered at one slot, said out loud: at most a few
    jobs in the minutes around a deploy, on a tiny readership.
 
-And one belt to go with the braces, **proposed for Sol to weigh**: stage 2, before transcription,
-asks the same store operation with the stored page count (idempotent when the row already carries
-it). That turns any path nobody has listed into a charge, or a refusal, rather than a free long
-import — at the cost of one more short transaction per PDF.
+And one path that does *not* skip stage 1 but has no reservation to reprice (Sol's R2-F1, a P0):
+
+4. **A re-run that fetches again** — Rebuild / refresh (`{ slug, force: ["fetch"] }`,
+   `src/web/ShelfEntry.tsx`), a reset. Re-runs are free, so they carry no reservation. Without a rule,
+   *import a one-page URL for one slot, make the address serve a 400-page PDF, press Rebuild* is an
+   eight-slot import for one. **So `priceFetchedPdf` with no reservation, for anybody but the
+   administrator, compares the new count against what the article has already been**: the larger
+   of the largest `slots` among its charged `'ingest'` rows and `slotsForPages` of **the raw source
+   being replaced** — its manifest's `pages`, or, for a manifest written before this lands, its
+   bytes counted with `countPdfPages` (outside the lock, tens of milliseconds); a previous source that
+   was a web page counts 1. More slots than that and the re-run is refused in stage 1 (*This PDF is
+   now 400 pages, which counts as 8 articles; it was added as 1. Add it as a new article to read the
+   longer version.*), before anything paid. Equal or fewer: it runs free, as today. So an honest
+   Rebuild of an existing 200-page PDF article runs (its old source was 200 pages), and a web page
+   turned into a long PDF does not. A re-run that finds no previous source falls back to the rows
+   alone, and with no rows, to 1 — the safe direction.
+   *(A first draft allowed any article without a page count five slots, the old cap. Every new
+   web-page row has no page count either, so that draft let a web page be rebuilt into a 250-page
+   PDF for free.)*
+
+**What existing documents keep (grandfathered, said out loud — Sol's R2-F2).** Every row written
+before this lands has `slots = 1` and no `pages`. So: a minimal paper added before it costs one slot
+for *Read this* whatever its length (≤ 250 pages, the cap it was added under); a long article added
+before it costs one slot for High-powered AI; a refresh of one may go back to the length it already
+was, per rule 4. The
+alternative — counting the stored PDF lazily at the *Read this* or High-powered press — is a Storage
+read and a pdf.js open in a request handler, for a handful of documents on a tiny readership. A
+one-off backfill of `pages` for existing PDF rows is possible later; it writes to production, so it
+would be Greg's call.
+
+**A belt, as an assertion rather than a second charge** (R2-F4; my first draft proposed a
+repricing call in stage 2, and Sol showed it covered none of the paths it claimed to). Stage 1 also
+writes `pages` into the raw manifest it already stores. **Stage 2, before transcription, asks one
+read-only question** for a PDF whose manifest carries `pages`, in a job that is not the
+administrator's: is the document priced? — the job's unsettled reservation carries
+`slots >= slotsForPages(pages)` (for a *Read this*, from the minimal row). A job with no reservation
+is not asked: its raw is either the one already paid for (a `force: ["extract"]` re-run) or one that
+rule 4 has just checked. No, and the step fails closed with a sentence saying
+something went wrong, logged at `error`. A manifest without `pages` (written before this lands) is
+not asked, which is the grandfathering above.
 
 ## How the quota changes
 
@@ -178,17 +214,22 @@ What then follows, each of which is a reading of an existing rule rather than a 
   repriced, a second import in the same account sees all of it. Before the reprice it counts 200.
 - **The wall is the ingest wall.** The reprice admits when
   `used_without_this_row + 200 × slots <= budget + 100` — `admitsIngest` generalised to a cost, the
-  same half-article overdraft, once. With six slots left: 300 pages (6) admits, 301 pages (7) is
+  same half-article overdraft, at the instant each admission commits. (Later changes can still put an
+  account further over, as today: unsharing an eight-slot article adds 800 points, and new
+  admissions are then refused. R2-F6.) With six slots left: 300 pages (6) admits, 301 pages (7) is
   refused. A new predicate in [`src/billing/points.ts`](../../src/billing/points.ts),
   `admitsIngestOf(used, budget, slots)` (with `admitsIngest` its `slots = 1` case), so nothing outside
   that module compares points. For a *Read this* row the credit is subtracted as now.
 - **The repricing is one claim-fenced store operation, keyed on the job**, not on a reservation id.
   The fetch step does not hold the reservation id: it lives on `EnqueueRequest.ingestEventId` and is
   deliberately kept off `Job` and `StepContext` (`src/jobs.ts`, `src/pipeline.ts`). So
-  `priceFetchedPdf(jobId, attempt, pages)` reads the job's owner, then, in the house lock order —
-  `lockBillingAccount`, then the job `for update` under `liveAttempt` — resolves
-  `jobs.ingest_event_id`, takes the row `for update`, and:
-  - no reservation (the administrator, a re-run): returns `unpriced`, nothing written;
+  `priceFetchedPdf(jobId, attempt, pages)` reads the job's owner **in an unlocked read** (locking the
+  job to find the owner, then asking for the billing row, would reverse the order — R2-F5), then, in
+  the house lock order — `lockBillingAccount`, then the job `for update` under `liveAttempt` —
+  resolves `jobs.ingest_event_id`, takes the row `for update`, and:
+  - the administrator: returns `unpriced`, nothing written;
+  - no reservation (a re-run): rule 4 above — `unpriced` when the article's paid slots cover it,
+    otherwise `{ refusedRerun, slots, paidSlots, pages }`;
   - a minimal row: records `pages`, returns `minimal`;
   - an unsettled, unreleased `'ingest'` row of the same owner: computes usage **minus this row's
     current weight**, checks the new weight, sets `slots` and `pages`, returns
@@ -210,7 +251,11 @@ What then follows, each of which is a reading of an existing rule rather than a 
   no surface divides points, as now.
 - **`usageSql` is not the only query that counts ledger rows.** `articlesToShare`
   (`src/store/pg-billing.ts`, the conditional sharing offer) assumes each article it names frees 100
-  points; a long article frees `100 × slots`. The admin aggregation (`src/store/pg-admin.ts`) and the
+  points; a long article frees `100 × slots`. And it stops as soon as one ordinary slot would fit,
+  so for a refused eight-slot PDF it would name an article whose sharing still leaves the PDF
+  refused (R2-F3). It takes **the requested cost** (slots, less a *Read this* credit), orders
+  candidates by the points sharing them frees, and stops only when the same predicate that refused
+  the request would admit it. The admin aggregation (`src/store/pg-admin.ts`) and the
   columns that derive costs from it (`src/web/admin-columns.tsx`) count rows too. Each is audited
   and carries both the count and the sum where it needs both meanings.
 
@@ -271,14 +316,22 @@ move past what loads.
    the admin aggregation. Tests first, red then green: Greg's two-slots-left pair at 50 pages (100
    pages admits, 101 refused); twenty concurrent reprices on one account; the stale claimant; a public
    long article at half; delete freezes the price of all its slots; a retry; *Read this* on a long
-   minimal paper; High-powered on a long article; the admin.
+   minimal paper and on a legacy one (`pages` null, one slot); High-powered on a long article and on
+   a legacy one; a re-run refused above what the article already was and allowed at or below, a
+   legacy 200-page article's Rebuild allowed, a web page rebuilt into a long PDF refused;
+   `articlesToShare` needing several articles before a five-slot PDF fits;
+   the admin. **Barrier tests against a real database** (R2-F5), each proving no deadlock and the
+   final job and reservation state: reprice against terminal and non-terminal Stop, expiry requeue
+   and terminal expiry, successful and failed settlement, a visibility change, a voucher revocation.
 3. **Stage 1 calls it, and the reader is told.** `refuseAnOverlongPdf` → count, cap, then
-   `priceFetchedPdf` (through the `StepContext` callback) before `writeRaw` / promotion. The
-   persisted warning, the refusal sentence in `src/messages.ts`, the limits line. `MAX_PAGES = 400`
-   (or what stage 1 found loads). A route matrix, not only helper tests: a pasted PDF, a redirect and
-   a paper-source PDF, an upload with a misleading filename, HTML, Word and Europe PMC JATS staying at
-   one slot, the 50/51/100/101/350/351/400/401 boundaries, and the refusal landing before any paid
-   step starts.
+   `priceFetchedPdf` (through the `StepContext` callback) before `writeRaw` / promotion; `pages`
+   into the raw manifest; stage 2's read-only assertion. The persisted warning, the two refusal
+   sentences in `src/messages.ts`, the limits line. `MAX_PAGES = 400` (or what stage 1 found loads).
+   A route matrix, not only helper tests: a pasted PDF, a redirect and a paper-source PDF, an upload
+   with a misleading filename, HTML, Word and Europe PMC JATS staying at one slot, the
+   50/51/100/101/350/351/400/401 boundaries, a Rebuild of a one-page URL that now serves a long PDF,
+   an upload refused at the reprice that stays `claimed` and succeeds on Retry once the allowance
+   grows, and the refusal landing before any paid step starts.
 4. **Docs.** billing.md gains *§ A long document costs a slot per 50 pages*; ingest-queue.md,
    `/help` (it states the limits), `stated-limits.test.ts`'s numbers, the security-map line for
    billing.
@@ -303,4 +356,14 @@ move past what loads.
   fetch at deploy are grandfathered, said out loud (F4); High-powered is asked, not inferred (F5);
   counts and slot sums kept apart, and `articlesToShare` and the admin queries audited (F6, F7); the
   warning is persisted (F8); measurement comes before the cap moves (F9); a route test matrix (F10).
-- Plan review 2 (GPT Sol, after Greg's answers, on the race): pending.
+- Plan review 2 (GPT Sol, after Greg's answers, on the race):
+  [261020b-…-plan-review-2-sol.md](261020b-longer-documents-up-to-400-pages-plan-review-2-sol.md).
+  Verdict *do not approve*. It found no interleaving that lets a repriced import run underweight,
+  and no lock-order inversion. Six findings, all taken: a re-run that fetches a longer PDF had no
+  reservation and so no charge — a P0, now rule 4 (R2-F1); existing documents have no page count,
+  now grandfathered by name (R2-F2); the sharing offer answers the one-slot question (R2-F3); the
+  stage-2 belt became a read-only assertion (R2-F4); barrier tests and the unlocked owner read
+  (R2-F5); the overdraft wording (R2-F6). It confirmed four suspicions: a retry does skip a
+  completed fetch, so carrying the weight is needed; an upload refused before promotion stays
+  `claimed` and can be retried; `jobs.ingest_event_id` is unique; the fetch step's detail persists
+  and is shown on the card.
