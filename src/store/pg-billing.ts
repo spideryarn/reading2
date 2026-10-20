@@ -296,7 +296,7 @@ export interface Usage {
   readonly minimalCharged: number;
   /**
    * **High-powered AI upgrades** inside the current period whose article is not
-   * currently public — one more article's worth each, {@link PRIVATE_INGEST_COST}.
+   * currently public — each row's slots at {@link PRIVATE_INGEST_COST}.
    *
    * Counted apart from the ingests above because every sentence that says
    * *added* is about ingests: folded into `chargedFullPrice`, one high-powered
@@ -1506,6 +1506,8 @@ export type HighPowerSwitch =
   | { readonly kind: "on"; readonly highPowerSince: Date; readonly charged: boolean }
   /** Not this owner's article, or no such article. The route's 404. */
   | { readonly kind: "not-found" }
+  /** The article exists, but Fetch has not established its final slot count. The route's 409. */
+  | { readonly kind: "pending" }
   /**
    * Too little allowance left for the upgrade to fit whole. Nothing written.
    * `publicNow` is the price's reason, for the sentence (`highPowerNoRoom`).
@@ -1518,15 +1520,62 @@ export type HighPowerSwitch =
   | Stale;
 
 /**
+ * Lock this article's running, paid import and read the weight Fetch settled
+ * on. The caller already holds billing and the article; this is deliberately
+ * job then reservation, the same nested order as `priceFetchedPdf`.
+ */
+async function activeImportPrice(
+  tx: BillingTx,
+  ownerId: OwnerId,
+  slug: string,
+): Promise<{ readonly ready: boolean; readonly slots: number | null }> {
+  const [activeJob] = await tx
+    .select({ steps: jobRows.steps, ingestEventId: jobRows.ingestEventId })
+    .from(jobRows)
+    .where(
+      and(
+        eq(jobRows.ownerId, ownerId),
+        eq(jobRows.slug, slug),
+        eq(jobRows.status, "running"),
+        sql`${jobRows.ingestEventId} is not null`,
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (!activeJob?.ingestEventId) return { ready: true, slots: null };
+
+  const [reservation] = await tx
+    .select({
+      kind: ingestEvents.kind,
+      slots: ingestEvents.slots,
+      succeededAt: ingestEvents.succeededAt,
+      releasedAt: ingestEvents.releasedAt,
+    })
+    .from(ingestEvents)
+    .where(eq(ingestEvents.id, activeJob.ingestEventId))
+    .for("update")
+    .limit(1);
+  if (!reservation || reservation.succeededAt !== null || reservation.releasedAt !== null) {
+    return { ready: true, slots: null };
+  }
+
+  const fetch = activeJob.steps.find((step) => step.name === "fetch");
+  return {
+    ready: fetch?.status === "done" || fetch?.status === "skipped",
+    slots: reservation.kind === "ingest" ? reservation.slots : null,
+  };
+}
+
+/**
  * **Switch one article to High-powered AI, charging for it once** —
  * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
  *
  * Greg, 2026-09-30: *"it should double the processing cost per-article"*. So the
  * switch writes one more charged `ingest_events` row for the article, of `kind`
- * `'high_power'`, priced exactly like an ingest of it — 200 points while the
- * article is private, 100 while it is public, recomputed live and frozen on delete
- * by the same rules and the same trigger. With the ingest, a private article
- * costs two articles and a public one costs one.
+ * `'high_power'`, with the ingest's slot count and price — 200 points per slot
+ * while the article is private, 100 while it is public, recomputed live and
+ * frozen on delete by the same rules and the same trigger. With the ingest, any
+ * private article costs twice its ingest and a public one does too.
  *
  * **Once per article, for ever.** Switching off refunds nothing — the Opus calls
  * were spent — and switching on again charges nothing: the row is looked for
@@ -1544,13 +1593,17 @@ export type HighPowerSwitch =
  *
  * ## One transaction, in the house lock order
  *
- * `billing_accounts` first (`lockBillingAccount`), then the article `for update`
- * — the order `pg-visibility.ts` and admission take, so an unshare cannot land
- * between the price read and the charge, and two switch-ons serialise here: the
- * second finds the first's row and charges nothing. Admitting, charging and
- * setting `high_power_since` commit together or not at all. Nothing that opens
- * its own transaction or touches the network runs inside it; a `stale` answer
- * goes back to the caller, which resyncs from Stripe after this has committed.
+ * `billing_accounts` first (`lockBillingAccount`), then the article `for
+ * update`, then an active import's job and reservation. Article before job is
+ * settlement's order (pg-session.ts); job before reservation is PDF
+ * repricing's; and together they make High-powered-at-add wait for a
+ * concurrent reprice or settlement rather than reading the reservation as a
+ * one-slot article. The article is after billing, as in `pg-visibility.ts`, so
+ * an unshare cannot land between the price read and the charge. Two switch-ons serialise here: the second finds the first's row and
+ * charges nothing. Admitting, charging and setting `high_power_since` commit
+ * together or not at all. Nothing that opens its own transaction or touches
+ * the network runs inside it; a `stale` answer goes back to the caller, which
+ * resyncs from Stripe after this has committed.
  *
  * The administrator never comes here — `chargeAndSwitchOnHighPower` in
  * src/billing/admission.ts sends them to the uncharged store method, as ingests
@@ -1577,6 +1630,7 @@ export async function switchOnHighPower(
   return await db.transaction(
     async (tx): Promise<HighPowerSwitch> => {
       const row = await lockBillingAccount(tx, ownerId);
+
       const [article] = await tx
         .select({
           id: articleRows.id,
@@ -1589,6 +1643,20 @@ export async function switchOnHighPower(
         .for("update")
         .limit(1);
       if (!article) return { kind: "not-found" };
+
+      /* **High-powered while adding can arrive before publication.** The
+         article draft already exists then, but its ingest row is deliberately
+         still unsettled and therefore invisible to `chargedSlotsOf`. Lock the
+         running job and its reservation — **after the article**, because
+         settlement takes article, then job, then reservation (`lockArticleFor`
+         in pg-session.ts), and the reverse here would deadlock with it — and
+         carry the reservation's final weight into this charge. A fetch still
+         running has not established whether the source is a long PDF: answer
+         the same transient 409 the add-page controller already retries.
+         Waiting inside this transaction would deadlock, because pricing needs
+         the billing lock held here. Missing fetch state also fails closed; once
+         the import settles, its charged row is the durable answer. */
+      const active = await activeImportPrice(tx, ownerId, slug);
 
       /* One post-lock database instant decides both which Stripe period is live
          and where the charge lands. A JavaScript clock read here paired with
@@ -1614,6 +1682,12 @@ export async function switchOnHighPower(
         .where(and(eq(ingestEvents.kind, "high_power"), eq(ingestEvents.articleId, article.id)))
         .limit(1);
 
+      /* A repeat switch is free and does not need the current import's price.
+         A first switch must wait until fetch has either priced a PDF or proved
+         that it is not one. `pending` is intentionally retried by
+         HighPowerIntent for as long as this job is alive. */
+      if (!already && !active.ready) return { kind: "pending" };
+
       if (!already) {
         const publicNow = article.visibility === "public";
         const cost = publicNow ? PUBLIC_INGEST_COST : PRIVATE_INGEST_COST;
@@ -1622,7 +1696,7 @@ export async function switchOnHighPower(
            charged ingest rows, since a re-add before 2026-10-07 could leave
            several. None — added before billing, before `article_id`, or by the
            administrator — is one slot, as before. */
-        const slots = await articleSlots(tx, article.id);
+        const slots = Math.max(await articleSlots(tx, article.id), active.slots ?? 1);
         const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
         if (!admitsHighPower(wallUsed(usage), budgetFor(entitlement.limit), cost, slots)) {
           return { kind: "no-room", publicNow, entitlement };

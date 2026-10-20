@@ -562,6 +562,11 @@ export async function chargeAndSwitchOnHighPower(
       return { highPowerSince: answer.highPowerSince.toISOString() };
     case "not-found":
       throw httpError(404, `No article artefacts for "${slug}".`);
+    case "pending":
+      throw httpError(
+        409,
+        "This article is still being fetched, so its High-powered AI charge is not ready yet.",
+      );
     case "no-room":
       logger.info(
         { ownerId, slug, publicNow: answer.publicNow },

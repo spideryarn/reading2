@@ -125,8 +125,8 @@ export type ReaderPlan =
       /** The wall's own answer, not a comparison of the two numbers above. */
       readonly atLimit: boolean;
       /**
-       * **Articles switched to High-powered AI**, counted against this allowance —
-       * one more article's worth each, half while the article is public.
+       * **Articles switched to High-powered AI**, counted against this allowance
+       * again at each article's slot count, half while the article is public.
        *
        * Not in `used`, which is articles *added*: folded in, one high-powered
        * article read as two added, and a public one as two public. The wall
@@ -610,10 +610,10 @@ function minimalClause(minimal: number): string {
 function highPowerClause(highPower: number): string {
   if (highPower === 0) return "";
   return highPower === 1
-    ? "High-powered AI is counted for one article, which counts as one more article " +
-        "(half of one while it is public). "
-    : `High-powered AI is counted for ${highPower} articles, each of which counts as one more ` +
-        "article (half of one while it is public). ";
+    ? "High-powered AI is switched on for one article. It counts against the allowance again " +
+        "at that article's slot count (half as much while it is public). "
+    : `High-powered AI is switched on for ${highPower} articles. Each counts against the ` +
+        "allowance again at that article's slot count (half as much while it is public). ";
 }
 
 function articleCount(used: number): string {

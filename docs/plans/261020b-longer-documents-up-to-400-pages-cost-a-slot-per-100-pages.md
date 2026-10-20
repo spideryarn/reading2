@@ -265,8 +265,9 @@ What then follows, each of which is a reading of an existing rule rather than a 
 
 ## What the reader sees
 
-- **Before choosing a file**, the limits line: *PDF … up to 50 MB. PDFs up to 400 pages; every 50
-  pages counts as one article.* (`uploadLimits`, `src/uploads.ts`.)
+- **Before choosing a file**, the limits line: *PDF … up to 50 MB. PDFs up to 250 pages; every 50
+  pages counts as one article.* (`uploadLimits`, `src/uploads.ts`; 400 once the cap can move — §
+  Stage 1, measured.)
 - **During the import**, once stage 1 has counted: the job card says, for a document over 50 pages,
   *This PDF is 150 pages, so it uses 3 of your articles (one for every 50 pages).* It does not stop
   or ask; the import carries on. This is the warning Greg asked for. **It is persisted** — in the
@@ -407,3 +408,11 @@ step; `npm run labels` after an ingest waits behind a `matter` job nothing drive
   revision's raw columns, so the source being replaced is readable). R2-F4 still open as R3-F1, P2:
   the manifest's `pages` had no durable column, so the assertion would have skipped every PDF.
   Taken: `article_revisions.raw_pages`. Discovery on the plan is closed.
+- Code review (GPT Sol, write-capable, on `48d4d424e` and `31f3c0979`,
+  [261020b-…-code-review-sol.md](261020b-longer-documents-up-to-400-pages-code-review-sol.md)):
+  *approve with changes*. A P0, fixed: High-powered AI switched on while adding went through before
+  Fetch had priced the import, so it was charged one slot. It now waits for the price, which shows
+  as a 409 the add page retries. Its fix locked the job before the article, the reverse of
+  settlement's order, which would deadlock. I moved it after the article, and a barrier test goes
+  red (40P01) under the old order. The other fixes: High-powered wording now says the article's
+  slots are charged again, and `NOWAIT` probes prove the nested lock order.

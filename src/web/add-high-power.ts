@@ -15,7 +15,9 @@
  *  - **The page knows the slug before the row exists.** A job reports
  *    `running` before its claim opens the draft that creates the article row,
  *    so a `404` while the job is still queued or running means *not yet* and
- *    is retried; once the job has ended it is a real answer.
+ *    is retried; once the job has ended it is a real answer. A `409` means the
+ *    row exists but Fetch has not established its slot count, and is retried
+ *    without that cap for as long as the job is alive.
  *  - **The main modes should not overtake it, and the page no longer holds
  *    them.** Since plan 261004h the server queues them at the import's
  *    publication; what keeps them behind the switch is that each step reads
@@ -67,7 +69,7 @@ export class HighPowerIntent {
   private inFlight: Promise<void> | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private notYet = 0;
-  /** A terminal pre-claim 404 is waiting for Retry to make the job live again. */
+  /** A terminal pre-claim 404 or pre-price 409 is waiting for Retry to make the job live again. */
   private retryOnNextAlive = false;
   private disposed = false;
   private readonly listeners = new Set<() => void>();
@@ -181,9 +183,11 @@ export class HighPowerIntent {
         this.inFlight = null;
         const message = e instanceof Error ? e.message : "The request failed.";
         const status = statusOf(e);
-        if (on && status === 404 && this.jobAlive && !this.disposed && this.notYet < MAX_NOT_YET) {
-          this.notYet += 1;
-          /* The claim has not opened the draft yet. */
+        const beforeArticle = status === 404 && this.notYet < MAX_NOT_YET;
+        const beforePrice = status === 409;
+        if (on && this.jobAlive && !this.disposed && (beforeArticle || beforePrice)) {
+          if (beforeArticle) this.notYet += 1;
+          /* The claim has not opened the draft yet, or Fetch has not priced it. */
           this.set({ kind: "waiting" });
           this.retry = setTimeout(() => {
             this.retry = null;
@@ -191,10 +195,12 @@ export class HighPowerIntent {
           }, this.retryMs);
           return;
         }
-        /* A failed attempt that ended before the article row existed should be
-           tried again when JobCard's Retry produces the replacement job. Do not
-           do that for the five-minute cap while a job is still live. */
-        this.retryOnNextAlive = on && status === 404 && !this.jobAlive && !this.disposed;
+        /* An attempt that ended before the article row or its final price was
+           ready should be tried again when JobCard's Retry produces the
+           replacement job. Do not do that for the five-minute 404 cap while a
+           job is still live. */
+        this.retryOnNextAlive =
+          on && (status === 404 || status === 409) && !this.jobAlive && !this.disposed;
         if (status === null || before.kind === "unknown") {
           this.set({ kind: "unknown", message });
           return;

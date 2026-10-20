@@ -18,7 +18,7 @@
  *   > — Greg, 2026-10-01
  *
  *   (docs/project/billing.md § *A minimal paper costs a hundredth*);
- * - High-powered AI costs one more article's worth, half while public.
+ * - High-powered AI costs the article's slot count again, half while public.
  *
  * Fractions do not go anywhere near money, so the arithmetic is done in
  * **points, 200 to an article**: a private ingest costs 200, a currently-public

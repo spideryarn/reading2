@@ -7707,12 +7707,12 @@ export const ingestEvents = spideryarn.table(
      * authors and abstract read, at a hundredth of an ingest whatever its
      * visibility (`supersededBy` below).
      *
-     * An upgrade is one more article's worth, priced exactly like an ingest of
-     * the same article (200 points private, 100 public, live; frozen on delete),
+     * An upgrade costs the article's slots again, priced exactly like the ingest
+     * of the same article (200 points private, 100 public, live; frozen on delete),
      * so the article costs double — Greg, 2026-09-30: *"it should double the
      * processing cost per-article"*. It is inserted already settled, in the
      * transaction that switches the article on, and never refunded
-     * (`chargeHighPower`, src/store/pg-billing.ts).
+     * (`switchOnHighPower`, src/store/pg-billing.ts).
      *
      * **The wall adds both kinds; every sentence that says "added" counts only
      * ingests.** `Usage` in pg-billing.ts splits them, which is what stops one

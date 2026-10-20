@@ -21,7 +21,8 @@ Easy to miss:
   your allowance; making it private again uses that half back up. An older charged article still
   counts in full, while one from before billing began already costs nothing.
 - **High-powered AI**, a stronger model for one article — a tick box while it is being added, or a
-  switch on its Metadata page — counts as one more article (half if the article is shared).
+  switch on its Metadata page — counts that article against the allowance again, at the same
+  number of slots (half as much if the article is shared).
   Switching it off does not refund it, and switching it back on costs nothing more.
 - **A long PDF counts by its length.** Every {{pages-per-article}} pages, or part of them, counts as
   one article, so a 120-page PDF counts as three. PDFs can be up to {{max-pdf-pages}} pages. While

@@ -255,6 +255,12 @@ describe("the shape every message keeps", () => {
       expect(sentence, sentence).not.toMatch(/\b[45]\d\d\b/);
     }
   });
+
+  it("does not describe every High-powered AI charge as one slot", () => {
+    const refusal = highPowerNoRoom({});
+    expect(refusal.message).toContain("at the same number of slots");
+    expect(refusal.message).not.toContain("one more article");
+  });
 });
 
 describe("the kind survives being stored as a bare sentence", () => {

@@ -6745,8 +6745,9 @@ export function highPowerNoRoom(quota: {
   return {
     kind: "blocked",
     message:
-      "Switching on High-powered AI counts as one more article against your allowance — half " +
-      "of one if the article is shared publicly — and there is not that much left. Trying " +
+      "Switching on High-powered AI counts the article against your allowance again, at the " +
+      "same number of slots — half as much if it is shared publicly — and there is not that " +
+      "much left. Trying " +
       `again will not help ${more}. Nothing has changed, and reading is never limited. ` +
       "[pay-high-power]",
   };

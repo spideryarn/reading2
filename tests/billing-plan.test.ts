@@ -222,7 +222,8 @@ describe("the other plan states", () => {
     const free = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 1, highPower: 1, minimal: 0, atLimit: false, remaining: 2 });
     expect(free).toContain("1 article added, on an allowance of 3");
     expect(free).toContain("One of them is public");
-    expect(free).toContain("High-powered AI is counted for one article, which counts as one more article");
+    expect(free).toContain("High-powered AI is switched on for one article");
+    expect(free).toContain("at that article's slot count");
     expect(free).not.toMatch(/\b1 of 3\b/);
     expect(free).not.toContain("2 of them are public");
 
@@ -241,7 +242,8 @@ describe("the other plan states", () => {
       trial: false,
     });
     expect(paid).toContain("2 articles this month, on an allowance of 20");
-    expect(paid).toContain("High-powered AI is counted for 2 articles, each of which counts as one more article");
+    expect(paid).toContain("High-powered AI is switched on for 2 articles");
+    expect(paid).toContain("at that article's slot count");
     expect(paid).not.toContain("2 of 20");
     /* The "none of them is public, so each counts in full" sentence is about
        ingests that were cheap when added; it is not what an upgrade explains. */
@@ -265,6 +267,22 @@ describe("the other plan states", () => {
     expect(singularPaid).not.toContain("1 articles");
   });
 
+  it("says a long PDF's slot count is charged again for High-powered AI", () => {
+    const words = rendered({
+      kind: "free",
+      limit: 8,
+      used: 1,
+      usedSlots: 5,
+      sharedHalfPrice: 0,
+      highPower: 1,
+      minimal: 0,
+      atLimit: true,
+      remaining: 0,
+    });
+    expect(words).toContain("at that article's slot count");
+    expect(words).not.toContain("counts as one more article");
+  });
+
   it("does not claim an upgrade this period belongs to an article ingested this period", () => {
     const paid = rendered({
       kind: "paid",
@@ -281,12 +299,12 @@ describe("the other plan states", () => {
       trial: false,
     });
     expect(paid).toContain("0 articles this month");
-    expect(paid).toContain("High-powered AI is counted for one article");
+    expect(paid).toContain("High-powered AI is switched on for one article");
     expect(paid).not.toContain("One of them");
 
     const free = rendered({ kind: "free", limit: 3, used: 0, sharedHalfPrice: 0, highPower: 1, minimal: 0, atLimit: false, remaining: 2 });
     expect(free).toContain("0 articles added");
-    expect(free).toContain("High-powered AI is counted for one article");
+    expect(free).toContain("High-powered AI is switched on for one article");
     expect(free).not.toContain("One of them");
   });
 

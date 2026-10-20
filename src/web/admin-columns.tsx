@@ -333,7 +333,7 @@ function Ingests({ user }: { user: AdminUser }) {
         (user.ingestsShared === 0 ? "none of them public now" : `${user.ingestsShared} of them public`) +
         (user.highPower === 0
           ? ""
-          : `, and ${user.highPower} switched to High-powered AI, which counts as one more article each`) +
+          : `, and ${user.highPower} switched to High-powered AI, which counts each article's slots again`) +
         papers +
         `. An article is 200 points, half that while public, so that is ${spent} points against ` +
         `an allowance of ${user.ingestLimit} articles, which is ${budget}.`

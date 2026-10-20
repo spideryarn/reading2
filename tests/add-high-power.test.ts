@@ -80,6 +80,19 @@ describe("HighPowerIntent", () => {
     expect(intent.get()).toEqual({ kind: "refused", message: "gone", on: false, attempted: true });
   });
 
+  it("keeps retrying a priced-later 409 for as long as the import is alive", async () => {
+    const { put, calls } = scripted(
+      ...Array.from({ length: MAX_NOT_YET + 1 }, () => refusal(409, "Fetch is still pricing it")),
+      SINCE,
+    );
+    const intent = new HighPowerIntent(put, 1);
+    intent.observe("a-long-pdf", true, false);
+    intent.want(true);
+    await vi.runAllTimersAsync();
+    expect(calls).toHaveLength(MAX_NOT_YET + 2);
+    expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: false });
+  });
+
   it("takes a 404 as final once the job has ended", async () => {
     const { put } = scripted(refusal(404, "No article artefacts"));
     const intent = new HighPowerIntent(put, 10);

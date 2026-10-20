@@ -125,14 +125,15 @@ async function reserved(): Promise<string> {
 async function givenRunningJob(
   slug: string,
   ingestEventId: string | null,
+  steps: readonly { readonly name: string; readonly label: string; readonly status: string }[] = [],
 ): Promise<{ readonly id: string; readonly attempt: string }> {
   const id = mintId();
   const attempt = mintAttempt();
   await pool.query(
     `insert into spideryarn.jobs
        (id, owner_id, slug, steps, status, work_key, ingest_event_id, attempt_id, lease_expires_at)
-     values ($1, $2, $3, '[]'::jsonb, 'running', $4, $5, $6, now() + interval '10 minutes')`,
-    [id, OWNER, `${SLUG}${slug}`, `work-${id}`, ingestEventId, attempt],
+     values ($1, $2, $3, $4::jsonb, 'running', $5, $6, $7, now() + interval '10 minutes')`,
+    [id, OWNER, `${SLUG}${slug}`, JSON.stringify(steps), `work-${id}`, ingestEventId, attempt],
   );
   return { id, attempt };
 }
@@ -387,6 +388,50 @@ describe("the paths that skip stage 1 carry the weight", () => {
     const answer = await runAsOwner(OWNER, () => switchOnHighPower(OWNER, `${SLUG}hp-two`, NO_TIERS));
     expect(answer.kind).toBe("no-room");
   });
+
+  it("High-powered AI cannot switch on before an in-flight import has been priced", async () => {
+    await givenArticle("hp-before-price");
+    const reservation = await reserved();
+    await givenRunningJob("hp-before-price", reservation, [
+      { name: "fetch", label: "Fetching the article", status: "running" },
+    ]);
+
+    const answer = await runAsOwner(OWNER, () =>
+      switchOnHighPower(OWNER, `${SLUG}hp-before-price`, NO_TIERS),
+    );
+    expect(answer.kind).toBe("pending");
+    expect(
+      await pool.query(
+        "select 1 from spideryarn.ingest_events where owner_id = $1 and kind = 'high_power'",
+        [OWNER],
+      ),
+    ).toHaveProperty("rowCount", 0);
+  });
+
+  it("High-powered AI uses a priced but unsettled import's weight", async () => {
+    await givenArticle("hp-priced-in-flight", "public");
+    const reservation = await reserved();
+    const job = await givenRunningJob("hp-priced-in-flight", reservation, [
+      { name: "fetch", label: "Fetching the article", status: "running" },
+    ]);
+    await price(job, 100); // two slots; public High-powered costs one slot and fits exactly
+    await pool.query(
+      `update spideryarn.jobs
+          set steps = '[{"name":"fetch","label":"Fetching the article","status":"done"}]'::jsonb
+        where id = $1`,
+      [job.id],
+    );
+
+    const answer = await runAsOwner(OWNER, () =>
+      switchOnHighPower(OWNER, `${SLUG}hp-priced-in-flight`, NO_TIERS),
+    );
+    expect(answer.kind).toBe("on");
+    const { rows } = await pool.query<{ slots: number }>(
+      "select slots from spideryarn.ingest_events where owner_id = $1 and kind = 'high_power'",
+      [OWNER],
+    );
+    expect(rows.map((r) => r.slots)).toEqual([2]);
+  });
 });
 
 /* ------------------------------------------------------- sharing offer -- */
@@ -482,6 +527,159 @@ async function raced<A, B>(
 
 const HOLD_JOB = "select 1 from spideryarn.jobs where id = $1 for update";
 const HOLD_BILLING = "select 1 from spideryarn.billing_accounts where owner_id = $1 for update";
+
+/**
+ * Does another transaction already hold this row? `NOWAIT` makes the answer a
+ * measurement rather than a timing guess: PostgreSQL's 55P03 is specifically
+ * the requested lock being unavailable. Each failed statement gets its own
+ * transaction because the error aborts it.
+ */
+async function rowIsLocked(query: string, params: unknown[]): Promise<boolean> {
+  const probe = await pool.connect();
+  try {
+    await probe.query("begin isolation level read committed");
+    try {
+      await probe.query(query, params);
+      await probe.query("rollback");
+      return false;
+    } catch (error) {
+      await probe.query("rollback");
+      if ((error as { code?: string }).code === "55P03") return true;
+      throw error;
+    }
+  } finally {
+    probe.release();
+  }
+}
+
+async function becomesLocked(query: string, params: unknown[]): Promise<boolean> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (await rowIsLocked(query, params)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return false;
+}
+
+describe("High-powered AI against settlement takes the article before the job", () => {
+  /**
+   * Settlement locks article → job → reservation (`lockArticleFor` in
+   * pg-session.ts). A High-powered switch on an article whose import is still
+   * running reads that import's price, so it locks billing → article → job →
+   * reservation. Taken job-first, the two would deadlock: the switch holding
+   * the job and waiting for the article, settlement holding the article and
+   * waiting for the job. This plays settlement's half by hand and asserts both
+   * finish, with no 40P01 on either side.
+   */
+  it("finishes alongside a transaction that holds the article and then takes the job", async () => {
+    const articleId = await givenArticle("hp-vs-settle");
+    const reservation = await reserved();
+    const job = await givenRunningJob("hp-vs-settle", reservation, [
+      { name: "fetch", label: "Fetching the article", status: "running" },
+    ]);
+    await price(job, 50);
+    await pool.query(
+      `update spideryarn.jobs
+          set steps = '[{"name":"fetch","label":"Fetching the article","status":"done"}]'::jsonb
+        where id = $1`,
+      [job.id],
+    );
+
+    const settlement = await pool.connect();
+    let open = false;
+    let settled: unknown = "not run";
+    let switched: Promise<Settled<unknown>> | undefined;
+    try {
+      await settlement.query("begin isolation level read committed");
+      open = true;
+      await settlement.query("select 1 from spideryarn.articles where id = $1 for update", [articleId]);
+      switched = settle(runAsOwner(OWNER, () => switchOnHighPower(OWNER, `${SLUG}hp-vs-settle`, NO_TIERS)));
+      /* Long enough for the switch to take whatever it takes before the article. */
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      try {
+        await settlement.query("select 1 from spideryarn.jobs where id = $1 for update", [job.id]);
+        await settlement.query("commit");
+        open = false;
+        settled = "ok";
+      } catch (error) {
+        settled = (error as { code?: string }).code ?? error;
+      }
+    } finally {
+      if (open) await settlement.query("rollback").catch(() => {});
+      settlement.release();
+    }
+    const answer = await switched;
+    expect(settled, "settlement's half was chosen as a deadlock victim").toBe("ok");
+    /* Drizzle wraps the driver's error, so the SQLSTATE (40P01 for a deadlock)
+       is on its `cause`. */
+    const failure = answer && "err" in answer ? (answer.err as { cause?: { code?: string } }) : null;
+    expect(failure === null ? "ok" : (failure.cause?.code ?? String(failure)), "the switch was a deadlock victim").toBe(
+      "ok",
+    );
+    expect(answer).toMatchObject({ ok: { kind: "on" } });
+  });
+});
+
+describe("the reprice takes its nested locks in the declared order", () => {
+  it("holds billing while it waits for the job", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("order-billing-job", reservation);
+    const holder = await pool.connect();
+    let open = false;
+    let repriced: Promise<Settled<unknown>> | undefined;
+    let billingLocked = false;
+    try {
+      await holder.query("begin isolation level read committed");
+      open = true;
+      await holder.query(HOLD_JOB, [job.id]);
+      repriced = settle(price(job, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      billingLocked = await becomesLocked(
+        "select 1 from spideryarn.billing_accounts where owner_id = $1 for update nowait",
+        [OWNER],
+      );
+      await holder.query("commit");
+      open = false;
+    } finally {
+      if (open) await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+    const answer = await repriced;
+    expect(billingLocked, "reprice reached the job without first holding billing").toBe(true);
+    expect(answer).toMatchObject({ ok: { kind: "priced", slots: 2 } });
+  });
+
+  it("holds the job while it waits for the reservation", async () => {
+    const reservation = await reserved();
+    /* Make repricing a no-op once it has read the row. Without the explicit
+       reservation `FOR UPDATE`, there is no later UPDATE that would happen to
+       block on our holder and make this test pass by accident. */
+    await pool.query("update spideryarn.ingest_events set pages = 50 where id = $1", [reservation]);
+    const job = await givenRunningJob("order-job-reservation", reservation);
+    const holder = await pool.connect();
+    let open = false;
+    let repriced: Promise<Settled<unknown>> | undefined;
+    let jobLocked = false;
+    try {
+      await holder.query("begin isolation level read committed");
+      open = true;
+      await holder.query("select 1 from spideryarn.ingest_events where id = $1 for update", [reservation]);
+      repriced = settle(price(job, 50));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      jobLocked = await becomesLocked(
+        "select 1 from spideryarn.jobs where id = $1 for update nowait",
+        [job.id],
+      );
+      await holder.query("commit");
+      open = false;
+    } finally {
+      if (open) await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+    const answer = await repriced;
+    expect(jobLocked, "reprice reached the reservation without first holding the job").toBe(true);
+    expect(answer).toMatchObject({ ok: { kind: "priced", slots: 1 } });
+  });
+});
 
 /**
  * After a reprice raced an ending: the job ended, and the reservation is

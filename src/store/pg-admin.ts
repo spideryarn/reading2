@@ -166,7 +166,7 @@ export interface IngestTally {
   /**
    * **High-powered AI upgrades**, over the same two windows, and how many of
    * each are public now. Counted apart from the ingests above because they are
-   * not articles added — one more article's worth each, on the ledger as
+   * not articles added — each article's slots again, on the ledger as
    * `kind = 'high_power'`. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
    */
   highPowerLifetime: number;
