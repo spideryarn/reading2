@@ -2881,10 +2881,10 @@ export function Reader({
    */
   const marginCiteActions = useMemo<MarginCiteSenders | null>(
     () =>
-      owner
+      isOwner
         ? { onAsk: askWork, onCheck: checkCitedWorkInChat, onOpen: openCitedWorkFromCard, onJump: jumpTo }
         : null,
-    [owner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
+    [isOwner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
   );
   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(

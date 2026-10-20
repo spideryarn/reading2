@@ -9,8 +9,9 @@
  * question notes (SPIDERYARN-READING2-84): *"They should ideally have tooltips
  * to explain themselves."*
  *
- * The shut lines and questions carry a key (`data-marg-tip`); the reading
- * view's one delegated card (BlockLinkCard.tsx) draws `MARG_TIPS[key]`.
+ * Most shut lines carry a key (`data-marg-tip`); the reading view's one
+ * delegated card (BlockLinkCard.tsx) draws `MARG_TIPS[key]`. A question has a
+ * `Tooltip` of its own, and a Cites line reuses the prose's `CiteCard`.
  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
 import { act, createElement, type ComponentProps } from "react";

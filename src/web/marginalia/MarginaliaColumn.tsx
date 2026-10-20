@@ -79,8 +79,8 @@ import { citePassageKey } from "../rows.js";
  * records the same origin as one from the prose. A context rather than a prop
  * through `MarginNotesSlot`, because Reader's `marginNotes` memo, and
  * `memo(TableView)` with it, must not hear about them; Reader memoises the
- * value (GPT Sol F5 on plan 261020g). Null draws the card with no buttons.
- * The column draws citations for the owner only, so it is only ever theirs.
+ * value (GPT Sol F5 on plan 261020g). The column draws citations for the owner
+ * only, so the null default is not reached by a real citation line.
  */
 export type MarginCiteSenders = {
   onAsk(work: CitedWork): void;
@@ -427,7 +427,10 @@ function ShutNote({
       aria-expanded={open}
       aria-controls={panel}
       onPointerDown={press.onPointerDown}
+      onPointerEnter={press.onPointerEnter}
+      onPointerLeave={press.onPointerLeave}
       onPointerCancel={press.onPointerCancel}
+      onKeyDown={press.onKeyDown}
       onClick={() => {
         press.onClick?.();
         setOpen((was) => !was);
@@ -461,7 +464,8 @@ type ShutCard = { label: string; content(close: () => void): ReactNode };
  *   neither hover nor focus can reopen it, and `Tooltip` tells us to close.
  * - **Not for a finger** (F1): `mouseOnly` stops a tap's synthesised hover, but
  *   a tap can focus the button before its click. A touch or pen press refuses
- *   the open it causes; the press opens the line, as it did before.
+ *   the open it causes; the press opens the line, as it did before. A real
+ *   mouse entering or leaving later clears that refusal on a hybrid device.
  * - **A press inside closes it**, through `content`'s `close`.
  *
  * Cloned onto the button itself (`Tooltip` puts its props on its child), not
@@ -469,7 +473,10 @@ type ShutCard = { label: string; content(close: () => void): ReactNode };
  */
 type PressHandlers = {
   onPointerDown?: (e: ReactPointerEvent) => void;
+  onPointerEnter?: (e: ReactPointerEvent) => void;
+  onPointerLeave?: (e: ReactPointerEvent) => void;
   onPointerCancel?: () => void;
+  onKeyDown?: () => void;
   onClick?: () => void;
 };
 
@@ -501,7 +508,18 @@ function LineCard({
         onPointerDown: (e) => {
           touch.current = e.pointerType === "touch" || e.pointerType === "pen";
         },
+        /* A focus-only touch has no click to clear the flag. A real mouse on a
+           hybrid device must restore hover without needing a mouse press. */
+        onPointerEnter: (e) => {
+          if (e.pointerType === "mouse") touch.current = false;
+        },
+        onPointerLeave: (e) => {
+          if (e.pointerType === "mouse") touch.current = false;
+        },
         onPointerCancel: () => {
+          touch.current = false;
+        },
+        onKeyDown: () => {
           touch.current = false;
         },
         onClick: () => {
@@ -645,7 +663,8 @@ function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
  * (spya-gdbsq2): *"I feel like we have more information than that for a
  * citation if I hover over it in the text. So let's try and reuse that same
  * tooltip."* `CiteCard`, one per work as on a prose mark naming two, with the
- * prose's buttons: each closes the card first, as the prose's do (Sol F3).
+ * prose's buttons: *Open in Sources* and a numbered jump close before their
+ * sender runs (Sol F3); `CiteCard` closes its other actions itself.
  * `here` is the block the line sits beside, the work's first citing paragraph.
  * Its height is capped and it scrolls, so the buttons stay reachable (F6,
  * marginalia.css § .marg-cite-card). Plan 261020g.

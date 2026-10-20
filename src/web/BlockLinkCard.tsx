@@ -222,9 +222,10 @@ function referenceFor(el: Element, clientY: number | undefined) {
  * (spya-gdbsq2): the margin's cards *"should be the best we can make them"*.
  * A shut line ends in an ellipsis, and its card says what the kind is; this is
  * what *this* item says, so a cut-off FAQ question can be read without opening
- * it. Only when it is actually cut, read when the card opens and again when the
- * line opens (`data-open`, observed below, Sol F4): words the line shows in
- * full would be the card repeating it. In the line's own face (fonts.md).
+ * it. Only when it is actually cut, read when the card opens, when the line
+ * opens (`data-open`, observed below), and when the label changes width (Sol
+ * F4): words the line shows in full would be the card repeating it. In the
+ * line's own face (fonts.md).
  * Text only, from `textContent`. Plan 261020g.
  */
 function cutWords(el: Element): { text: string; voice: Voice } | null {
@@ -428,6 +429,24 @@ function BlockLinkCard({
   useEffect(() => {
     controls.refresh();
   }, [controls, index, resolveXref, readingTimeFor]);
+
+  /* A width change can make a shut line start or stop ellipsising while its
+     card stays open. Watch the label itself: opening a band can resize it
+     without resizing the window. The window is the fallback in engines with
+     no ResizeObserver (Sol F4). */
+  useEffect(() => {
+    if (!open?.matches(MARG_NOTE)) return;
+    const label = open.querySelector(".marg-shut-label");
+    if (!(label instanceof HTMLElement)) return;
+    const refresh = () => controls.refresh();
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(refresh);
+    resize?.observe(label);
+    if (!resize) window.addEventListener("resize", refresh);
+    return () => {
+      resize?.disconnect();
+      if (!resize) window.removeEventListener("resize", refresh);
+    };
+  }, [controls, open]);
 
   /* **A card a press opened goes on the next scroll** (touch.md, the rule the
      spine and the glossary keep): no finger is resting on the line, so it would

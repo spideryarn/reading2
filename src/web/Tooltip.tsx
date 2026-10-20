@@ -339,7 +339,7 @@ export function Tooltip({
        takes the first Escape and the card the second — one press, one surface
        (tests/one-escape-closes-one-surface.test.tsx, plan 261010s). */
     useDismiss(context, { enabled }),
-    useRole(context, { role: interactive ? "dialog" : "tooltip" }),
+    useRole(context, { enabled, role: interactive ? "dialog" : "tooltip" }),
   ]);
   const { getReferenceProps, getFloatingProps } = interactions;
 
@@ -398,8 +398,16 @@ export function Tooltip({
    * `aria-describedby` beside a card since the day the cards landed and has been
    * losing the card's ever since.
    */
-  const { "aria-describedby": ownDescribedBy, ...childProps } = children.props as {
+  const {
+    "aria-describedby": ownDescribedBy,
+    "aria-controls": ownControls,
+    "aria-expanded": ownExpanded,
+    ...childProps
+  } = children.props as {
     "aria-describedby"?: string | undefined;
+    "aria-controls"?: string | undefined;
+    "aria-expanded"?: boolean | "true" | "false" | undefined;
+    [key: string]: unknown;
   };
   const ownPointerDown = (childProps as { onPointerDown?: (event: ReactPointerEvent) => void })
     .onPointerDown;
@@ -441,12 +449,32 @@ export function Tooltip({
   });
   const describedBy =
     [merged["aria-describedby"], ownDescribedBy].filter(Boolean).join(" ") || undefined;
+  /* A control can own a disclosure and open an interactive card too (the
+     Marginalia Cites line). Both controlled ids survive, and its one expanded
+     state is true while either surface is open. Without this, the child's
+     disclosure attributes overwrite the dialog relationship from `useRole`. */
+  const controls = [...new Set(
+    [merged["aria-controls"], ownControls]
+      .flatMap((value) => typeof value === "string" ? value.split(/\s+/) : [])
+      .filter(Boolean),
+  )].join(" ") || undefined;
+  const expandedValues = [merged["aria-expanded"], ownExpanded];
+  const expanded = expandedValues.some((value) => value === true || value === "true")
+    ? true
+    : expandedValues.some((value) => value === false || value === "false")
+      ? false
+      : undefined;
 
   return (
     <>
       {/* `ref` last: it must win over any `ref` already in children.props,
           which the merged one already includes. */}
-      {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
+      {cloneElement(children, {
+        ...merged,
+        "aria-describedby": describedBy,
+        "aria-controls": controls,
+        "aria-expanded": expanded,
+      })}
       {isMounted && (
         <FloatingPortal>
           <FocusReach on={interactive !== undefined} context={context}>
@@ -619,11 +647,12 @@ export function ControlTip({
   what: string;
   /**
    * What this control produced **for the article in front of the reader** —
-   * the Sketch chip's caption, and so far only that (`DiagramPanel.tsx`). It
-   * sits between the two fixed paragraphs because that is where it belongs in
-   * the reading: what the picture is, then what it turned out to be here, then
-   * what it costs. Set apart in the styling, because unlike everything else in
-   * this card it is not the same words for every reader.
+   * the Sketch chip's caption (`DiagramPanel.tsx`), or a Marginalia line's full
+   * words when its visible line is cut (`BlockLinkCard.tsx`). It sits between
+   * the two fixed paragraphs because that is where it belongs in the reading:
+   * what the control is, what it produced here, then how. Set apart in the
+   * styling, because unlike everything else in this card it is not the same
+   * words for every reader.
    */
   drawn?: string | undefined;
   /** Whose words `drawn` is, when not ours — a Marginalia line's own (fonts.md, plan 261020g). */

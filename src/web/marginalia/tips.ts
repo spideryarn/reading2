@@ -9,12 +9,12 @@
  * is what they could not — which mode made it, who wrote the words (AI, the
  * author, the reader), and why it sits beside this passage.
  *
- * The shut lines and questions carry only their key, as `data-marg-tip`, and
- * the reading view's one delegated card draws them (BlockLinkCard.tsx § MARG_NOTE)
- * — except a *Cites* line, whose card has been the prose's own `CiteCard`
- * since 2026-10-20 (plan 261020g), so it has no row here
- * — a column of dozens of notes costs one Floating UI instance, not dozens. The
- * idea stamp, the path and the arc have cards of their own and read their
+ * Most shut lines carry only their key, as `data-marg-tip`, and the reading
+ * view's one delegated card draws them (BlockLinkCard.tsx § MARG_NOTE) — a
+ * column of dozens of notes costs one Floating UI instance, not dozens. A
+ * question has a `Tooltip` of its own; a *Cites* line has reused the prose's
+ * own `CiteCard` since 2026-10-20 (plan 261020g), so the latter has no row here.
+ * The idea stamp, the path and the arc have cards of their own and read their
  * origin line from here. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
 

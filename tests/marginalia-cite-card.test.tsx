@@ -18,9 +18,15 @@ import { MarginCiteActions, MarginNotesSlot, type MarginCiteSenders } from "../s
 import type { MarginaliaNote } from "../src/web/marginalia/notes.js";
 
 class FakeResizeObserver {
-  observe() {}
+  static instances: FakeResizeObserver[] = [];
+  target: Element | null = null;
+  constructor(private callback: ResizeObserverCallback) {
+    FakeResizeObserver.instances.push(this);
+  }
+  observe(target: Element) { this.target = target; }
   unobserve() {}
   disconnect() {}
+  notify() { this.callback([], this as unknown as ResizeObserver); }
 }
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -30,6 +36,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  FakeResizeObserver.instances = [];
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.useFakeTimers();
   host = document.createElement("div");
@@ -102,6 +109,8 @@ describe("a Cites line in the margin", () => {
     await settle();
     const card = dialog();
     expect(card, "hover opened no card").not.toBeNull();
+    expect(card?.querySelector(".tooltip.prose-card")).not.toBeNull();
+    expect(card?.querySelector(".marg-cite-card")).not.toBeNull();
     const text = card?.textContent ?? "";
     expect(text).toContain("Elements of Episodic Memory");
     expect(text).toContain("Tulving");
@@ -145,12 +154,62 @@ describe("a Cites line in the margin", () => {
     expect(dialog(), "a jump leaves no card over the passage it left").toBeNull();
   });
 
+  it("keeps the disclosure and dialog relationships on the same button", async () => {
+    paint([{ kind: "citation", items: [TULVING] }]);
+    const line = citesLine();
+    const panel = line.getAttribute("aria-controls");
+    expect(panel).toBeTruthy();
+    await act(async () => line.focus());
+    await settle();
+    const card = dialog();
+    expect(card).not.toBeNull();
+    expect(line.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(line.getAttribute("aria-expanded")).toBe("true");
+    expect(line.getAttribute("aria-controls")?.split(/\s+/)).toEqual(
+      expect.arrayContaining([panel!, card!.id]),
+    );
+  });
+
+  it.each(["Enter", " "])("%s opens the line and closes its focused card", async (key) => {
+    paint([{ kind: "citation", items: [TULVING] }]);
+    const line = citesLine();
+    const panel = line.getAttribute("aria-controls");
+    await act(async () => line.focus());
+    await settle();
+    expect(dialog()).not.toBeNull();
+    await act(async () => {
+      line.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key }));
+      line.click();
+      line.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key }));
+    });
+    await settle();
+    expect(line.getAttribute("aria-expanded")).toBe("true");
+    expect(line.hasAttribute("aria-haspopup")).toBe(false);
+    expect(line.getAttribute("aria-controls")).toBe(panel);
+    expect(dialog()).toBeNull();
+  });
+
+  it("Escape closes the focused card without opening the line", async () => {
+    paint([{ kind: "citation", items: [TULVING] }]);
+    const line = citesLine();
+    await act(async () => line.focus());
+    await settle();
+    expect(dialog()).not.toBeNull();
+    await act(async () => line.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" })));
+    await settle();
+    expect(dialog()).toBeNull();
+    expect(line.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("shuts its card when the line is pressed open, and keeps it shut while the line is open", async () => {
     paint([{ kind: "citation", items: [TULVING] }]);
     await act(async () => citesLine().focus());
     await settle();
     expect(dialog()).not.toBeNull();
-    await act(async () => citesLine().click());
+    await act(async () => {
+      citesLine().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }));
+      citesLine().click();
+    });
     await settle();
     expect(citesLine().getAttribute("aria-expanded")).toBe("true");
     expect(dialog(), "the card sits over the opened line").toBeNull();
@@ -184,6 +243,23 @@ describe("a Cites line in the margin", () => {
     });
     await settle();
     expect(dialog()).toBeNull();
+  });
+
+  it("allows a mouse hover after a finger focused without clicking", async () => {
+    paint([{ kind: "citation", items: [TULVING] }]);
+    const line = citesLine();
+    await act(async () => {
+      line.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+      line.focus();
+    });
+    await settle();
+    expect(dialog()).toBeNull();
+    await act(async () => {
+      line.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+      line.dispatchEvent(new MouseEvent("mouseenter"));
+    });
+    await settle();
+    expect(dialog(), "the old touch press still refuses a real mouse").not.toBeNull();
   });
 
   it("draws one card section per work beside the block", async () => {
@@ -242,6 +318,24 @@ describe("a cut-off shut line's card", () => {
     await act(async () => trigger().click());
     expect(trigger().hasAttribute("data-open")).toBe(true);
     expect(document.querySelector(".tip-soon-drawn"), "the card still repeats the wrapped line").toBeNull();
+  });
+
+  it("re-reads whether the line is cut when its width changes", async () => {
+    let by = 40;
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("marg-shut-label") ? 200 + by : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("marg-shut-label") ? 200 : 0;
+    });
+    paint([faq]);
+    await hover();
+    expect(card()?.querySelector(".tip-soon-drawn")?.textContent).toBe(question.question);
+    const resize = FakeResizeObserver.instances.find((watch) => watch.target?.classList.contains("marg-shut-label"));
+    expect(resize, "nothing watches the line whose clipping the card reports").toBeTruthy();
+    by = 0;
+    await act(async () => resize?.notify());
+    expect(card()?.querySelector(".tip-soon-drawn"), "the card kept words that now fit").toBeNull();
   });
 
   it("does not repeat words the line already shows in full (the control)", async () => {

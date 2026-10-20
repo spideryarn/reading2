@@ -294,13 +294,14 @@ to the passage that backs it, many to an article and unranked, in the prose. A *
 >
 > — Greg, 2026-10-01 (spya-atv4nx)
 
-**Every note, and the head's path and arc, has a house card**: what it is, then which mode made it,
-who wrote the words (AI, the author, the reader) and why it sits beside this passage. The words are
-one table, `src/web/marginalia/tips.ts`; **a new kind of note needs a row there**, and the `Record`
-over the keys makes a missing row a type error. The shut lines carry their key as `data-marg-tip` and
-the reading view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button
-with a card of its own, because it has nothing to press and the delegated card answers neither a
-keyboard nor a finger.
+**Every note, and the head's path and arc, has a card that explains it.** Most use the house card:
+what the note is, then which mode made it, who wrote the words (AI, the author, the reader) and why
+it sits beside this passage. Those words are one table, `src/web/marginalia/tips.ts`; **a new kind
+without a richer card to reuse needs a row there**, and the `Record` over the house-card keys makes
+a missing row a type error. Most shut lines carry their key as `data-marg-tip` and the reading
+view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button with a card
+of its own, because it has nothing to press and the delegated card answers neither a keyboard nor a
+finger. The *Cites* exception is below.
 
 > The Marginalia mode tooltip for a citation is pretty unhelpful. It's just a kind of generic
 > message. I feel like we have more information than that for a citation if I hover over it in the
