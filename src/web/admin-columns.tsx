@@ -393,7 +393,7 @@ function ReadingTime({ user }: { user: AdminUser }) {
  * and what kind of failure — `failureKindLabel` says why a kind and not a
  * severity. **Never the address or the error sentence** — those name what they
  * were reading, and the script in the last line is where a developer reads
- * them. Drawn in the destructive colour when any shown was ours to fix.
+ * them. Drawn in --danger when any shown was ours to fix.
  *
  * They are **attempts**: a Retry is a second record, and deleting the article
  * takes its records with it (Sol, finding 6), so the card says so.
@@ -423,7 +423,7 @@ function ImportFailures({ user, now }: { user: AdminUser; now: number }) {
     (earlier > 0 ? `\n…and ${earlier} earlier` : "") +
     `\n\n${since} Details: npx tsx scripts/import-records.ts`;
   return (
-    <span className={ours ? "tw:text-destructive" : undefined} data-tip={tip}>
+    <span className={ours ? "tw:text-danger" : undefined} data-tip={tip}>
       {user.importFailures}
       <span className="tw:sr-only"> ({tip})</span>
     </span>
