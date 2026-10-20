@@ -62,11 +62,8 @@ function paint(): void {
         onJump: () => {},
         recovering: false,
         blocks: new Map<string, string>(),
-        onEdit: () => {},
         onDeleteFrom: undefined,
-        canEdit: false,
-        editing: false,
-        onEditing: () => {},
+        onRewrite: () => {},
         discards: 0,
       }),
     );

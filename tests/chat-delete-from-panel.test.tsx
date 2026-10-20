@@ -139,12 +139,14 @@ describe("the bin beside a question", () => {
 
   it("is not there while an answer is arriving", () => {
     /* `settled()` withdraws the callback at the real call sites as soon as the
-       send starts. The held row must still reserve the two controls which were
-       there before it, or every earlier question changes width mid-answer. */
+       send starts. The pencil stays (spya-yur0eq), and the bin's place is held
+       beside it, or every earlier question changes width mid-answer. */
     paint(thread([...turn(1), ...turn(2, { status: "pending", text: "" })]), false);
     expect(bins()).toHaveLength(0);
-    expect(host.querySelectorAll(".chat-turn.you")[1]?.querySelectorAll(".chat-actions.held .chat-icon"))
-      .toHaveLength(2);
+    const row = host.querySelectorAll(".chat-turn.you")[1]?.querySelector(".chat-actions");
+    expect(row?.querySelectorAll(".chat-icon")).toHaveLength(2);
+    expect(row?.querySelectorAll(".chat-icon.held")).toHaveLength(1);
+    expect(row?.querySelector('button[data-tip="Rewrite this question"]')).not.toBeNull();
   });
 
   it("is not there when the caller offers none", () => {
