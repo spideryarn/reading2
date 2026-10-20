@@ -34,6 +34,7 @@ import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { BUTTON, INPUT, Refusal } from "./admin-vouchers-parts.js";
 import { Link } from "./Link.js";
+import { PINNED } from "./lib/DataTable.js";
 import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { exactly } from "./relative-time.js";
@@ -85,6 +86,13 @@ function samePreview(a: TransferPreview, b: TransferPreview): boolean {
   );
 }
 
+/**
+ * **An article of yours, or a public one, that no import ever published**
+ * (spya-zt7u0h): a failed or unfinished import. It was *Untitled*; its link
+ * opens the job's card for its owner, which says why.
+ */
+export const NOT_PUBLISHED_YET = "Not published: its import failed or has not finished";
+
 function ArticleCell({ article }: { article: AdminArticle }) {
   if (article.title === null && article.slug === null) {
     return (
@@ -93,15 +101,18 @@ function ArticleCell({ article }: { article: AdminArticle }) {
       </span>
     );
   }
-  const title = article.title ?? "Untitled";
+  /* Our words, not the author's, so not in the author's face (fonts.md). */
+  const unpublished = article.title === null && article.published === false;
+  const title = unpublished ? NOT_PUBLISHED_YET : (article.title ?? "Untitled");
+  const voice = unpublished ? "tw:text-muted-foreground" : voiceClass("author");
   return (
     <span>
       {article.slug ? (
-        <Link href={readHref(article.slug)} className={voiceClass("author")}>
+        <Link href={readHref(article.slug)} className={voice}>
           {title}
         </Link>
       ) : (
-        <span className={voiceClass("author")}>{title}</span>
+        <span className={voice}>{title}</span>
       )}{" "}
       <code className="tw:text-xs tw:text-muted-foreground">{handleOf(article)}</code>
     </span>
@@ -347,7 +358,10 @@ export function AdminArticlesPage() {
             <caption className="tw:sr-only">{CAPTION}</caption>
             <thead>
               <tr className="tw:border-b tw:border-border">
-                <th className={HEAD}>Article</th>
+                {/* The column that says what a row is, held while the rest
+                    scroll (plan 261019o). Its floor is lower on a phone, where
+                    a held column is one you cannot scroll past. */}
+                <th className={`${HEAD} ${PINNED}`}>Article</th>
                 <th className={HEAD}>Owner</th>
                 <th className={HEAD}>Added</th>
                 <th className={HEAD}>Visibility</th>
@@ -360,7 +374,7 @@ export function AdminArticlesPage() {
             <tbody>
               {rows.map((a) => (
                 <tr key={a.id} className="tw:border-b tw:border-border">
-                  <td className={`${CELL} tw:min-w-56`}>
+                  <td className={`${CELL} ${PINNED} tw:min-w-40 tw:sm:min-w-56`}>
                     <ArticleCell article={a} />
                   </td>
                   <td className={`${CELL} tw:min-w-48`}>

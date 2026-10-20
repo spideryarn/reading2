@@ -209,6 +209,41 @@ const FLUID_CELL = "tw:w-full tw:max-w-0 tw:min-w-56";
 /** Everything a non-fluid cell gets: its own width, on one line, quieter than the title. */
 const FIXED_CELL = "tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground";
 
+/** `PINNED` without its background, for a cell that has to choose its own. */
+const PINNED_AT_LEFT = "tw:sticky tw:left-0 tw:z-10 tw:shadow-[1px_0_0_var(--border)]";
+
+/**
+ * A first column held at the left while its table scrolls sideways — the
+ * column that says what a row *is*. Opaque in the page's own colour — the
+ * tables sit on the page, not on a card — so a cell passing under it does not
+ * show through, in either theme. The shadow is the column's right-hand rule: a
+ * collapsed border does not travel with a sticky cell.
+ *
+ * `SidewaysScrollBox`'s shades sit above this `z-10`. Only ever on the first
+ * column: `left: 0` on any later one would draw it over the first. Shared by
+ * `DataTable`'s `pinFirst` and the hand-drawn admin tables, which have no row
+ * tint to carry. docs/plans/261019o-admin-tables-freeze-the-first-column.md.
+ */
+export const PINNED = `${PINNED_AT_LEFT} tw:bg-background`;
+
+/**
+ * The marked row's tint (`?user=`): the orange mixed into the page, opaque.
+ * Opaque so that a pinned cell can wear it without a scrolled cell showing
+ * through, and worn by the row as well as the cell so the two are one colour
+ * by construction — an alpha tint over the page and an opaque mix are not
+ * (tailwind.css § `--color-highlight-wash`). The runtime variables, not
+ * Tailwind's `--color-*` names: `@theme inline` does not emit those.
+ */
+const MARKED_BG = "tw:bg-[color-mix(in_oklab,var(--spideryarn-orange)_10%,var(--background))]";
+
+/**
+ * Below `sm`, a held column is a column you cannot scroll past, so its floor
+ * comes down from the fluid column's 224px to 160px — the cap the costs labels
+ * already use (AdminCostsPage.tsx § `LABEL_WIDTH`) — leaving a phone room for
+ * the columns that scroll.
+ */
+const PINNED_FLUID_FLOOR = "tw:max-sm:min-w-40";
+
 /**
  * **Column hiding is controlled state: pass both halves or neither.** With
  * neither, hiding is switched off outright (`enableHiding: false`), so a page
@@ -606,6 +641,7 @@ export function DataTable<T>({
   caption,
   sidewaysCue = false,
   markedRowId = null,
+  pinFirst = false,
 }: {
   table: Table<T>;
   rows: Row<T>[];
@@ -624,7 +660,15 @@ export function DataTable<T>({
    * page finds it to scroll to. `row.id` is the table's own `rowId`.
    */
   markedRowId?: string | null;
+  /**
+   * Hold the first visible column at the left while the table scrolls
+   * sideways (`PINNED`). A prop rather than a column's `meta`, because only the
+   * first column can be held at `left: 0`, so this is right by construction.
+   * Off unless asked for: the admin tables ask, the shelf does not (plan 261019o).
+   */
+  pinFirst?: boolean;
 }) {
+  const pinnedId = pinFirst ? (table.getVisibleLeafColumns()[0]?.id ?? null) : null;
   const drawn = (
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>
@@ -632,7 +676,12 @@ export function DataTable<T>({
           {table.getHeaderGroups().map((group) => (
             <tr key={group.id} className="tw:border-b tw:border-border">
               {group.headers.map((header) => (
-                <HeaderCell key={header.id} table={table} header={header} />
+                <HeaderCell
+                  key={header.id}
+                  table={table}
+                  header={header}
+                  pinned={header.column.id === pinnedId}
+                />
               ))}
             </tr>
           ))}
@@ -644,17 +693,25 @@ export function DataTable<T>({
               data-row-id={row.id}
               aria-current={row.id === markedRowId ? "true" : undefined}
               className={`tw:group tw:border-b tw:border-border/60 tw:last:border-0 ${
-                row.id === markedRowId ? "tw:bg-highlight/10" : "tw:hover:bg-card"
+                row.id === markedRowId ? MARKED_BG : "tw:hover:bg-card"
               }`}
             >
               {row.getVisibleCells().map((cell) => {
                 const meta = cell.column.columnDef.meta;
+                /* A held cell is opaque, so the row's own tint has to be
+                   repeated on it or the hover and the mark stop at it. */
+                const pin =
+                  cell.column.id !== pinnedId
+                    ? ""
+                    : `${row.id === markedRowId ? `${PINNED_AT_LEFT} ${MARKED_BG}` : `${PINNED} tw:group-hover:bg-card`} ${
+                        meta?.fluid ? PINNED_FLUID_FLOOR : ""
+                      }`;
                 return (
                   <td
                     key={cell.id}
                     className={`${CELL_X} tw:py-2 ${
                       meta?.fluid ? FLUID_CELL : FIXED_CELL
-                    } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""}`}
+                    } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""} ${pin}`}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
@@ -695,7 +752,15 @@ export function DataTable<T>({
  * carries the two rules from `DataTable`'s doc comment: `aria-sort` on the
  * sorted column and no other, and `w-full` on the one fluid column.
  */
-function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, unknown> }) {
+function HeaderCell<T>({
+  table,
+  header,
+  pinned,
+}: {
+  table: Table<T>;
+  header: Header<T, unknown>;
+  pinned: boolean;
+}) {
   const meta = header.column.columnDef.meta;
   const sorted = header.column.getIsSorted();
   const head = flexRender(header.column.columnDef.header, header.getContext());
@@ -778,7 +843,9 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
          cells alone is half a constraint. */
       className={`tw:whitespace-nowrap ${CELL_X} tw:py-2 tw:text-xs tw:font-medium ${
         meta?.fluid ? "tw:w-full tw:min-w-56" : "tw:w-0"
-      } ${meta?.numeric ? "tw:text-right" : "tw:text-left"}`}
+      } ${meta?.numeric ? "tw:text-right" : "tw:text-left"} ${
+        pinned ? `${PINNED} ${meta?.fluid ? PINNED_FLUID_FLOOR : ""}` : ""
+      }`}
     >
       {sortable ? (
         <button

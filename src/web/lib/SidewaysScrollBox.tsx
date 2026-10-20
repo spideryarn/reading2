@@ -16,9 +16,9 @@
  *   scrolling box scrolls away with the table, so the shades sit on a wrapper
  *   that does not scroll. The wrapper takes the caller's margin; the inner box
  *   keeps the border and the rounding, exactly as the plain box had them.
- * - **A tint, not a fade to the page colour.** The label column of the costs
+ * - **A tint, not a fade to the page colour.** The first column of the admin
  *   tables is pinned at the left and opaque in the page's own colour
- *   (AdminCostsPage.tsx § `PINNED`), so a fade to that colour would be
+ *   (lib/DataTable.tsx § `PINNED`), so a fade to that colour would be
  *   invisible over its padding and would rub out its first letters. A thin
  *   wash of the text colour shows over any cell and hides nothing, in either
  *   theme. That is also why a CSS-only scroll shadow
@@ -33,7 +33,9 @@
  *
  * `z-20` puts the shades above a pinned cell's `z-10`, and `isolate` keeps
  * both numbers inside this box: without it the shade would be in the page's
- * stacking order, above whatever else there happened to be under 20.
+ * stacking order, above whatever else there happened to be under 20. The
+ * scrolling box is `isolate` too, so a pinned cell's `z-10` stays inside it
+ * when there are no shades and so no wrapper (plan 261019o).
  *
  * The shades are decoration: `aria-hidden`, and `pointer-events-none`, so a
  * tap or a drag on one reaches the cell under it.
@@ -122,7 +124,7 @@ const SHADE =
   "tw:pointer-events-none tw:absolute tw:inset-y-px tw:z-20 tw:w-6 tw:from-foreground/15 tw:dark:from-foreground/30 tw:to-transparent";
 
 /** The scrolling box itself. `relative` is for the `sr-only` labels inside: lib/DataTable.tsx § `DataTable`. */
-const SCROLL_BOX = "tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
+const SCROLL_BOX = "tw:relative tw:isolate tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border";
 
 export function SidewaysScrollBox({
   label,
