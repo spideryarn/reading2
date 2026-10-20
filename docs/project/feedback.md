@@ -506,7 +506,8 @@ is up to 46rem wide rather than 34rem, and on a window at least 760px tall at le
 
 **In a thread, Send reply is green and Defer for now red** (`spya-zjsqe6`): `--positive` and
 `--danger`, on the text and border only, since a wash behind took Light under 4.5:1. Bring back and
-the addendum box's send stay neutral. `tests/feedback-dialog-styles.test.ts` holds the cascade.
+the addendum box's send stayed neutral until 2026-10-20 (below). `tests/feedback-dialog-styles.test.ts`
+holds the cascade.
 
 **The pager again at the foot, and Send told apart from Close** (`spya-bvzavw`, Greg, 2026-10-17:
 *"add Next/Previous buttons at the bottom of the box as well (since often that's where I am when I
@@ -516,8 +517,16 @@ Earlier's footer reads *Close · ‹ Previous · Next ›*: the same pager as th
 (`ThreadPager`, drawn twice, each copy saying its own end sentence), outside the scroller, so the
 bottom-right moves you on rather than shutting the dialog. Opening a thread, by any route, scrolls
 the panel to its top. Write's *Send* is `--positive` green like *Send reply*; *Cancel* and *Close*
-stay grey. The app's convention of the way out to the left of the action is kept
+stayed grey until 2026-10-20. The app's convention of the way out to the left of the action is kept
 ([261017c](../plans/261017c-feedback-needs-a-decision-pager-at-the-foot-and-send-vs-close.md)).
+
+**Green to send, red to back out, throughout the dialog** (`spya-as0et6`, Greg, 2026-10-19:
+*"color the buttons red and green, and for close as well"*). One shared pair, `.tone-positive`
+and `.tone-negative` in [`button-tone.css`](../../src/web/styles/button-tone.css), replaces the
+Feedback-only rules: Send, Send addendum and Send reply green; Cancel (Write's and the addendum's),
+Close and Defer for now red. The pager, Bring back, *Add to this report* and the header's ✕ stay
+neutral. Red is a direction, not a warning: the addendum's Cancel still discards its own draft
+([261020f](../plans/261020f-feedback-buttons-coloured-positive-and-negative.md)).
 
 
 ### Adding to an earlier report, since 2026-10-10
