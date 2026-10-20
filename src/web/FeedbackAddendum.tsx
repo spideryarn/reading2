@@ -252,7 +252,12 @@ export function AddendumBox({
       className="fb-addendum-box"
       problems={[stage.kind === "failed" ? stage.message : null]}
     >
-      <button type="button" className="fb-copy" disabled={sending} onClick={() => addenda.cancel(report)}>
+      <button
+        type="button"
+        className="fb-copy tone-negative"
+        disabled={sending}
+        onClick={() => addenda.cancel(report)}
+      >
         Cancel
       </button>
     </FeedbackSendBox>

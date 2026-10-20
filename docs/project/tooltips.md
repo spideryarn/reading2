@@ -279,12 +279,13 @@ app's**, and the gutter's controls moved to `TipCard`, each saying `data-tip-des
 that reason; the shared hover intent moved into `useDelegatedCard.tsx`
 ([261017g](../plans/261017g-native-title-tooltips-become-rich-cards-everywhere-and-a-test-keeps-it-that-way.md)).
 
-**And Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in `data-marg-tip`,
-and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note is, which mode
-made it and who wrote it. It keeps `aria-describedby`, because the card says what the line's own
-words do not. A note with nothing to press — a part's question — is not on this branch: the
-delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of its
-own ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
+**And most of Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in
+`data-marg-tip`, and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note
+is, which mode made it and who wrote it. It keeps `aria-describedby`, because the card says what the
+line's own words do not. A note with nothing to press — a part's question — is not on this branch:
+the delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of
+its own. Since 2026-10-20 a *Cites* line is the other exception: it reuses the prose's interactive
+`CiteCard` ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
 
 ## `ControlTip`, which is what most of them are now
 
@@ -799,13 +800,14 @@ button that came and went with the mode would be a second rule to learn. Bringin
 had stepped aside on a phone is component state, so Back does not put it away again
 (`showBand`'s rule). Plan [261010e](../plans/261010e-every-annotation-card-opens-its-mode.md).
 
-This is the single home for which marks have a card. As of 2026-10-10:
+This is the single home for which marks have a card. As of 2026-10-20:
 
 | Mark on the prose | Drawn | Card | Way into its mode |
 |---|---|---|---|
 | Glossary term, `mark.term` | every mode | `TermCard` | *Open in Glossary*: `?term=`, the gate lowered if it hides the entry, the row landed (`termFocus`, owner and visitor) |
 | Quote, `mark.hit[data-quote]` | every mode | `QuoteCard` | *Open in Quotes*: `?quote=`, the bar lowered if needed; Quotes scrolls a selected row in |
 | Citation, `mark.cite` | every mode, owner only | `CiteCard` | *Open in Sources*: Bibliography, `openBibliographyWork`'s one-shot focus (no `?cite=`, no selection) |
+| Not on the prose: Marginalia's *Cites* line (since 2026-10-20) | with the column, owner only | `CiteCard`, the same | the same ([marginalia.md](marginalia.md#every-note-says-where-it-came-from)) |
 | Cross-reference, `mark.xref` | every mode | `BlockLinkCard` | none needed — it is a link to another passage, not a mode's |
 | Highlight, comment, Referee placement, `mark.cmt` | every mode | **none** | a press opens the comment's dialog (`?note=`) |
 | Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |

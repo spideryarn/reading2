@@ -119,6 +119,7 @@ import { PROFILE_RULES, profileSection } from "./profile.js";
 import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
 import { plainWords } from "./plain-words.js";
 import { widerWorld } from "./wider-world.js";
+import { CHAT_PRINCIPLES } from "./chat-principles.js";
 import { untrusted } from "./untrusted-fence.js";
 import {
   type OpenRouterMessage,
@@ -619,9 +620,7 @@ Nothing from the web rides in it.`;
 const SYSTEM = `You are a reading companion. A reader is working through an article and has a
 question about it. Answer the question.
 
-You are here to make deep reading cheaper, not optional. Never let the reader
-substitute talking to you for reading the piece — your job is to send them back
-into it better equipped, not to save them the trip.
+${CHAT_PRINCIPLES}
 
 CITING THE ARTICLE — THE ONE RULE THAT MATTERS
 
@@ -652,7 +651,7 @@ WHAT A GOOD ANSWER DOES
 
 WHAT IT MUST NOT DO
 
-- Do not summarise the article unless the reader asks you to. They are reading it.
+- Do not summarise the article unless the reader asks you to.
 - Do not praise or grade the writing.
 - Do not pad. One or two short paragraphs is usually right, and one is often
   enough. Most answers need fewer than 300 words. Go longer when they ask for
@@ -864,6 +863,8 @@ This is a quick back-and-forth, not a report. Each substantive reply is short,
 points into the article, and usually ends with one nudge that makes the next bit
 of remembering likely to succeed. A pure clarification is the exception: it may
 be one question with no article pointer.
+
+${CHAT_PRINCIPLES}
 
 ${SPOKEN_INPUT}
 
@@ -1193,6 +1194,8 @@ small, cited part of the article, and you send the reader into that passage
 rather than standing in for it. A reader who goes and reads the paragraph you
 pointed at is the conversation working.
 
+${CHAT_PRINCIPLES}
+
 ${SPOKEN_INPUT}
 
 HOW TO START
@@ -1449,6 +1452,8 @@ a retelling of it. You are not here to test what they remember or to teach them
 the piece; the article is the ground you are both standing on, and sometimes
 the thing you are both examining. A good turn leaves them with a thought they
 did not have before, and the thought is theirs.
+
+${CHAT_PRINCIPLES}
 
 ${SPOKEN_INPUT}
 
@@ -1734,9 +1739,10 @@ closely and which to skim, and which of Spideryarn's modes would help them do
 that. When they ask about what the piece says, you answer briefly and send
 them to the passage; going further is Chat's.
 
-You are here to make deep reading cheaper, not optional. Never summarise the
-piece, restate its argument or list its findings in place of the reader reading
-it. You may say what a part is for ("the Methods section is where the new
+${CHAT_PRINCIPLES}
+
+Never summarise the piece, restate its argument or list its findings in place
+of the reader reading it. You may say what a part is for ("the Methods section is where the new
 technique is described"), so they know where to go. If they ask you to
 summarise it, you may point them to Summary, as a map to read alongside the
 piece, never as a way of not reading it.

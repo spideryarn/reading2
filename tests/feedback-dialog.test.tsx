@@ -216,6 +216,22 @@ function ok(status: number): () => Promise<Response> {
   return async () => new Response(JSON.stringify({ id: "x" }), { status });
 }
 
+/**
+ * A Feedback action gets exactly one tone and no Tailwind utility alongside
+ * it. The latter is a cascade rule, not taste: utilities are in the higher
+ * layer and would beat button-tone.css regardless of specificity.
+ */
+function expectTone(button: HTMLButtonElement, tone: "tone-positive" | "tone-negative"): void {
+  expect(
+    [...button.classList].filter((name) => name.startsWith("tone-")),
+    button.textContent ?? tone,
+  ).toEqual([tone]);
+  expect(
+    [...button.classList].filter((name) => name.startsWith("tw:")),
+    `${button.textContent ?? tone}: Tailwind utilities outrank button-tone.css`,
+  ).toEqual([]);
+}
+
 function show(open: boolean) {
   act(() => {
     root.render(
@@ -1177,21 +1193,28 @@ describe("the feedback dialog", () => {
    * put the spinner and "Sending" under the `opacity: 0.45` every disabled Send
    * gets, which is also our leading iPad suspect for a button that paints
    * nothing (plan 260912c). The busy rule must outweigh the dimming one.
+   *
+   * Both are `.tone-positive` since plan 261020f, which owns the dimming and
+   * the working exception; feedback-dialog-styles.test.ts holds the rules.
    */
   it("draws a working Send, and a working Send reply, at full opacity", () => {
     /* This file's shared cleanup unmounts its normal fixture, so this CSS-only
        assertion still mounts one and remains independently runnable with `-t`. */
     mount();
+    expectTone(host.querySelector<HTMLButtonElement>("button.fb-send")!, "tone-positive");
     const css = readerCssNoComments();
     for (const [dimmed, working] of [
-      [".fb-send:disabled", ".fb-send[data-working]:disabled"],
-      [".fb-reply-send:disabled", ".fb-reply-send[data-working]:disabled"],
+      [".tone-positive:disabled", ".tone-positive[data-working]:disabled"],
+      [".tone-negative:disabled", ".tone-negative[data-working]:disabled"],
     ] as const) {
-      expect(css).toMatch(new RegExp(`${dimmed.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*opacity:\\s*0\\.45`));
-      const escaped = working.replace(/[.[\]]/g, "\\$&");
-      const found = [...css.matchAll(new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`, "g"))];
-      expect(found, `one rule for ${working}`).toHaveLength(1);
-      expect(found[0]?.[1]).toMatch(/opacity:\s*1\s*;/);
+      const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+      const bodyOf = (selector: string) =>
+        rules.filter((r) => r[1]!.split(",").map((s) => s.trim()).includes(selector)).map((r) => r[2]!);
+      expect(bodyOf(dimmed).join(";")).toMatch(/opacity:\s*0\.45/);
+      expect(bodyOf(working), `one rule for ${working}`).toHaveLength(1);
+      expect(bodyOf(working)[0]).toMatch(/opacity:\s*1\s*;/);
+      /* Later than the dimming, at higher weight: the busy rule wins. */
+      expect(css.indexOf(working)).toBeGreaterThan(css.indexOf(dimmed));
     }
   });
 });
@@ -2290,12 +2313,16 @@ describe("the Earlier tab", () => {
         ]);
         /* Shut until pressed. */
         expect(panelOf("Earlier").querySelector(".fb-addendum-box")).toBeNull();
-        /* Opened, its Send stays neutral: the green is a thread's (plan 261011h). */
+        /* Opened: green to send, red to cancel (spya-as0et6, plan 261020f); the
+           button that opened it commits nothing, so stays neutral. */
+        expect(button(item(214), "Add to this report").className).not.toMatch(/tone-/);
         click(button(item(214), "Add to this report"));
-        const addBox = item(214).querySelector(".fb-addendum-box");
+        const addBox = item(214).querySelector<HTMLElement>(".fb-addendum-box");
         expect(addBox).not.toBeNull();
         expect(addBox?.classList.contains("fb-reply-thread")).toBe(false);
         expect(addBox?.querySelector(".fb-defer")).toBeNull();
+        expectTone(button(addBox!, "Send addendum"), "tone-positive");
+        expectTone(button(addBox!, "Cancel"), "tone-negative");
       });
 
       it("draws each report's addenda under its words, oldest first, timed, as text with its lines, on any status", async () => {
@@ -3082,6 +3109,19 @@ describe("the Earlier tab", () => {
           }
         });
 
+        /* spya-as0et6 (plan 261020f): green to send, red to leave; the pager
+           moves you, so neither. The header's ✕ is the app's one shared cross. */
+        it("colours the footers' buttons by what they do", async () => {
+          await openThread();
+          expectTone(button(foot(), "Close"), "tone-negative");
+          expect([...button(foot(), "‹ Previous").classList].filter((c) => c.startsWith("tone-"))).toEqual([]);
+          expect([...button(foot(), "Next ›").classList].filter((c) => c.startsWith("tone-"))).toEqual([]);
+          click(tab("Write"));
+          expectTone(button(foot(), "Cancel"), "tone-negative");
+          expectTone(button(foot(), "Send"), "tone-positive");
+          expect(host.querySelector(".fb-close")?.className).not.toMatch(/tone-/);
+        });
+
         /* F4: the footer's pager and the thread are drawn on the same condition,
            including while a reopened dialog's read is still out. */
         it("shows the footer's pager exactly when the thread itself shows", async () => {
@@ -3579,6 +3619,12 @@ describe("the Earlier tab", () => {
         expect(posts).toHaveLength(1);
         /* In flight: drawn at full strength, not dimmed (plan 261019c). */
         expect(thread().querySelector(".fb-reply-send")?.hasAttribute("data-working")).toBe(true);
+        /* Defer is unavailable because the reply owns the thread, rather than
+           working itself: disabled, no working exception, therefore dimmed. */
+        const deferButton = button(thread(), "Defer for now");
+        expectTone(deferButton, "tone-negative");
+        expect(deferButton.disabled).toBe(true);
+        expect(deferButton.hasAttribute("data-working")).toBe(false);
         await act(async () => gate.release?.());
         await settle();
         expect(thread().querySelector(".fb-question-answer")).not.toBeNull();
@@ -3587,9 +3633,12 @@ describe("the Earlier tab", () => {
       /* Decision 3 (spya-t6nmxt): "not now", reversible, a timestamp. */
       it("defers a thread, and brings it back, with exactly the question and whether", async () => {
         await openThread();
-        /* Green to send and red to defer, by these classes (spya-zjsqe6, plan 261011h). */
+        /* Green to send and red to defer (spya-zjsqe6, plan 261011h; one shared
+           pair since 261020f). */
         expect(button(thread(), "Send reply").closest(".fb-reply")?.classList.contains("fb-reply-thread")).toBe(true);
+        expectTone(button(thread(), "Send reply"), "tone-positive");
         expect(button(thread(), "Defer for now").classList.contains("fb-defer")).toBe(true);
+        expectTone(button(thread(), "Defer for now"), "tone-negative");
         answer = deferral();
         click(button(thread(), "Defer for now"));
         await settle();
@@ -3604,6 +3653,7 @@ describe("the Earlier tab", () => {
         expect(hasButton(thread(), "Defer for now")).toBe(false);
         /* Bring back undoes a deferral, so it is not drawn as one. */
         expect(button(thread(), "Bring back").classList.contains("fb-defer")).toBe(false);
+        expect(button(thread(), "Bring back").className).not.toMatch(/tone-/);
         click(button(thread(), "‹ All threads"));
         expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
@@ -3670,6 +3720,12 @@ describe("the Earlier tab", () => {
           );
         };
         click(button(thread(), "Defer for now"));
+        const deferButton = button(thread(), "Defer for now");
+        expectTone(deferButton, "tone-negative");
+        expect(deferButton.disabled).toBe(true);
+        expect(deferButton.hasAttribute("data-working")).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").hasAttribute("data-working")).toBe(false);
         act(() => {
           replyBoxes()[0]?.dispatchEvent(
             new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),

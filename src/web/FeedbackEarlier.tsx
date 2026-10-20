@@ -1402,8 +1402,11 @@ function ReplyBox({
           and it tells agents not to chase it (plan 261008i, decision 3). */}
       <button
         type="button"
-        className={deferred ? "fb-copy" : "fb-copy fb-defer"}
+        /* Red to put off; Bring back undoes a deferral, so neutral
+           (button-tone.css, plans 261011h and 261020f). */
+        className={deferred ? "fb-copy" : "fb-copy fb-defer tone-negative"}
         disabled={sending || deferring}
+        data-working={deferring ? "" : undefined}
         onClick={() => void replies.defer(question.id, !deferred)}
       >
         {deferring ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}

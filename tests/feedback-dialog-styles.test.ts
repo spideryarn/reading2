@@ -1,14 +1,17 @@
 /**
- * The Feedback dialog's two asks of 2026-10-11, in the stylesheet (plan 261011h).
+ * The Feedback dialog's asks, in the stylesheet.
  *
- * - **Bigger still on a large window** (`spya-tfp3zw`): a 1280px step, wider,
- *   and taller on a window tall enough, above the 1024px step 261008i made.
- * - **Green to send, red to defer** in a Needs-a-decision thread
- *   (`spya-zjsqe6`): from the measured tokens, and weighty enough to beat
- *   `.fb-copy`, which comes later in the file at one class.
+ * - **Bigger still on a large window** (`spya-tfp3zw`, plan 261011h): a 1280px
+ *   step, wider, and taller on a window tall enough, above the 1024px step
+ *   261008i made.
+ * - **Green to send, red to back out** (`spya-zjsqe6`, plan 261011h, then
+ *   `spya-as0et6`, plan 261020f): one shared pair, `.tone-positive` and
+ *   `.tone-negative` in button-tone.css, weighty enough to beat every family
+ *   rule that can paint a Feedback button.
  *
  * The classes reaching the right buttons is `feedback-dialog.test.tsx`'s job.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   enclosing,
@@ -61,13 +64,16 @@ function specificity(selector: string): number {
   return (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length;
 }
 
-/** Paint declarations on the shared shape or either semantic hook, in any sheet. */
+/** The Feedback dialog's button hooks, and the two shared tones. */
+const BUTTON_HOOK = /\.(?:fb-(?:copy|reply-thread|reply-send|defer|send|cancel)|tone-(?:positive|negative))\b/;
+
+/** Paint declarations on any of them, in any sheet: `selector | property: value`. */
 function buttonPaint(css: string): string[] {
   const out: string[] = [];
   for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selectors = rule[1]!.split(",").map((selector) => selector.trim());
     for (const selector of selectors) {
-      if (!/\.fb-(?:copy|reply-thread|reply-send|defer)\b/.test(selector)) continue;
+      if (!BUTTON_HOOK.test(selector)) continue;
       for (const declaration of rule[2]!.matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)/g)) {
         const property = declaration[1]!;
         if (!/^(?:color|border(?:-color)?|background(?:-color)?)$/.test(property)) continue;
@@ -92,103 +98,111 @@ describe("the Feedback dialog on a large window", () => {
   });
 });
 
-describe("a Needs-a-decision thread's Send reply and Defer for now", () => {
-  const SEND = ".fb-reply-thread .fb-copy.fb-reply-send";
-  const DEFER = ".fb-reply-thread .fb-copy.fb-defer";
+/* spya-as0et6 (Greg, 2026-10-19): "color the buttons red and green, and for
+   close as well, just so it's easier to see what's … effectively a cancel and
+   what's a submit". */
+describe("green to send, red to back out: button-tone.css", () => {
+  const TONES = [
+    [".tone-positive", "var(--positive)"],
+    [".tone-negative", "var(--danger)"],
+  ] as const;
+  /** Every state a rival rule paints, as the tone selector that answers it. */
+  const STATES = ["", ":hover", '[aria-disabled="true"]:hover'] as const;
 
-  it("draws Send reply in --positive and Defer for now in --danger, hover included", () => {
-    for (const sel of [SEND, `${SEND}:hover`]) {
-      expectUnconditional(sel, "color", "var(--positive)");
-    }
-    for (const sel of [DEFER, `${DEFER}:hover`]) {
-      expectUnconditional(sel, "color", "var(--danger)");
-    }
-  });
-
-  it("keeps the coloured border on hover, and puts no wash behind the words", () => {
-    for (const sel of [SEND, `${SEND}:hover`, DEFER, `${DEFER}:hover`]) {
-      expectUnconditional(sel, "border-color", "currentColor");
-      /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
-      expect(declared(CSS, sel, "background"), sel).toEqual([]);
-    }
-  });
-
-  it("outweighs every generic rest, hover and unavailable selector that can match these buttons", () => {
-    for (const semantic of [SEND, DEFER]) {
-      expect(specificity(semantic)).toBeGreaterThan(specificity(".fb-copy"));
-      expect(specificity(semantic)).toBeGreaterThan(specificity(".fb-reply-send:disabled"));
-      expect(specificity(semantic)).toBeGreaterThan(specificity('.fb-copy[aria-disabled="true"]'));
-      expect(specificity(`${semantic}:hover`)).toBeGreaterThan(specificity(".fb-copy:hover"));
-      expect(specificity(`${semantic}:hover`)).toBeGreaterThan(
-        specificity('.fb-copy[aria-disabled="true"]:hover'),
-      );
+  it("draws the text and the border in the tone, in every state, with no wash behind", () => {
+    for (const [tone, colour] of TONES) {
+      for (const state of STATES) {
+        expectUnconditional(`${tone}${state}`, "color", colour);
+        expectUnconditional(`${tone}${state}`, "border-color", "currentColor");
+        /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
+        expect(declared(CSS, `${tone}${state}`, "background"), tone).toEqual([]);
+      }
     }
   });
 
-  it("accounts for every paint rule that can name the shared or semantic button hooks", () => {
+  it("dims a toned button that cannot be pressed, and not one that is working", () => {
+    for (const [tone] of TONES) {
+      expect(declared(CSS, `${tone}:disabled`, "opacity")).toEqual(["0.45"]);
+      expect(declared(CSS, `${tone}[data-working]:disabled`, "opacity")).toEqual(["1"]);
+    }
+  });
+
+  it("is the last sheet styles.css imports, so a family rule of equal weight loses", () => {
+    const imports = [...readFileSync("src/web/styles.css", "utf8").matchAll(/^@import\s+"([^"]+)"/gm)].map(
+      (m) => m[1],
+    );
+    expect(imports.at(-1)).toBe("./styles/button-tone.css");
+  });
+
+  it("matches or outweighs every other paint rule on a Feedback button, state for state", () => {
+    const rivals = buttonPaint(CSS)
+      .map((line) => line.split(" | ")[0]!)
+      .filter((selector) => !/\.tone-/.test(selector));
+    expect(rivals.length).toBeGreaterThan(0);
+    for (const rival of rivals) {
+      const state = !rival.includes(":hover")
+        ? STATES[0]
+        : rival.includes("[aria-disabled")
+          ? STATES[2]
+          : STATES[1];
+      for (const [tone] of TONES) {
+        expect(specificity(`${tone}${state}`), `${tone}${state} vs ${rival}`).toBeGreaterThanOrEqual(
+          specificity(rival),
+        );
+      }
+    }
+  });
+
+  it("accounts for every paint rule that can name a Feedback button hook or a tone", () => {
     expect(buttonPaint(CSS)).toEqual([
-      `${SEND} | border-color: currentColor`,
-      `${SEND}:hover | border-color: currentColor`,
-      `${DEFER} | border-color: currentColor`,
-      `${DEFER}:hover | border-color: currentColor`,
-      `${SEND} | color: var(--positive)`,
-      `${SEND}:hover | color: var(--positive)`,
-      `${DEFER} | color: var(--danger)`,
-      `${DEFER}:hover | color: var(--danger)`,
       ".fb-copy | border: 1px solid var(--rule-strong)",
       ".fb-copy | background: none",
       ".fb-copy | color: var(--ink)",
       ".fb-copy:hover | color: var(--highlight-text)",
       ".fb-copy:hover | border-color: var(--rule-strong)",
       '.fb-copy[aria-disabled="true"]:hover | color: var(--ink)',
+      ".fb-cancel | border: 1px solid var(--rule-strong)",
+      ".fb-cancel | background: none",
+      ".fb-send | border: 1px solid var(--rule-strong)",
+      ".fb-send | background: none",
+      ".tone-positive | color: var(--positive)",
+      ".tone-positive | border-color: currentColor",
+      ".tone-positive:hover | color: var(--positive)",
+      ".tone-positive:hover | border-color: currentColor",
+      '.tone-positive[aria-disabled="true"]:hover | color: var(--positive)',
+      '.tone-positive[aria-disabled="true"]:hover | border-color: currentColor',
+      ".tone-negative | color: var(--danger)",
+      ".tone-negative | border-color: currentColor",
+      ".tone-negative:hover | color: var(--danger)",
+      ".tone-negative:hover | border-color: currentColor",
+      '.tone-negative[aria-disabled="true"]:hover | color: var(--danger)',
+      '.tone-negative[aria-disabled="true"]:hover | border-color: currentColor',
     ]);
   });
 
-  it("has one stylesheet owner for all four semantic hooks", () => {
-    for (const hook of ["fb-reply-thread", "fb-copy", "fb-reply-send", "fb-defer"]) {
+  it("has one stylesheet owner for each hook, and none paints the thread's", () => {
+    for (const [hook, owner] of [
+      ["fb-copy", "src/web/styles/feedback.css"],
+      ["fb-send", "src/web/styles/feedback.css"],
+      ["fb-cancel", "src/web/styles/feedback.css"],
+      ["fb-reply-send", null],
+      ["fb-defer", null],
+      ["tone-positive", "src/web/styles/button-tone.css"],
+      ["tone-negative", "src/web/styles/button-tone.css"],
+    ] as const) {
       expect(
         readerSheets()
           .filter(({ css }) => new RegExp(`\\.${hook}\\b`).test(stripComments(css)))
           .map(({ path }) => path),
         hook,
-      ).toEqual(["src/web/styles/feedback.css"]);
+      ).toEqual(owner === null ? [] : [owner]);
     }
-  });
-
-  it("leaves the shared send box and a bare .fb-defer uncoloured", () => {
-    expect(declared(CSS, ".fb-reply-send", "color")).toEqual([]);
-    expect(declared(CSS, ".fb-defer", "color")).toEqual([]);
   });
 });
 
-/* spya-bvzavw (Greg, 2026-10-17): "In the bottom right of Feedback/Write, the
-   "Send" button submits. But in the bottom-right of Needs-Input, the Close
-   button effectively cancels. How can we signal the difference?" Plan 261017c § 3. */
-describe("Write's Send, told apart from Close", () => {
-  it("draws Send in --positive, as Send reply is, hover included, and Cancel and Close in neither", () => {
-    expectUnconditional(".fb-send", "color", "var(--positive)");
-    expectUnconditional(".fb-send", "border-color", "currentColor");
-    expectUnconditional(".fb-send:not(:disabled):hover", "color", "var(--positive)");
-    expectUnconditional(".fb-send:not(:disabled):hover", "border-color", "currentColor");
-    expect(declared(CSS, ".fb-cancel", "color")).toEqual(["var(--ink-soft)"]);
-    expect(declared(CSS, ".fb-cancel", "border-color")).toEqual([]);
-    expect(declared(CSS, ".fb-send:disabled", "color")).toEqual([]);
-    expect(declared(CSS, ".fb-send:disabled", "border-color")).toEqual([]);
-  });
-
+describe("Earlier's footer pager", () => {
   it("keeps the pager's 40px touch targets apart when its flex row wraps", () => {
     const coarse = mediaBlock(CSS, "(any-pointer: coarse)", ".fb-thread-nav");
     expect(declared(coarse, ".fb-thread-nav", "row-gap")).toEqual(["max(0.4rem, 18px)"]);
-  });
-
-  it("has no other stylesheet owner for the two footer button hooks", () => {
-    for (const hook of ["fb-send", "fb-cancel"]) {
-      expect(
-        readerSheets()
-          .filter(({ css }) => new RegExp(`\\.${hook}\\b`).test(stripComments(css)))
-          .map(({ path }) => path),
-        hook,
-      ).toEqual(["src/web/styles/feedback.css"]);
-    }
   });
 });

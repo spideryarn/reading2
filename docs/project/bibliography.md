@@ -339,7 +339,9 @@ checked that it rests on these words of the page:* the quotes, a link to the pag
 search that found nothing says, on that row, *We searched the web for this work's own page and found
 none we could be sure of.* A failed press stores nothing and leaves its safe failure sentence on the
 row for this session; a row with no identifier says nothing new. The band's (i) adds a sentence
-about web notes once one is on screen. Marginalia's *Cites* line does not draw web notes in v1.
+about web notes once one is on screen. Marginalia's opened *Cites* line does not draw web notes in
+v1; its hover card does, since it is the prose's `CiteCard` (2026-10-20,
+[261020g](../plans/261020g-marginalia-tooltips-reuse-the-prose-citation-card-and-say-the-item.md)).
 
 **Kept in `citation_web_notes`**, one row per `(article, entry)`, overwritten by a later press
 ([database.md](database.md)); it is reader state, so it goes with deletion, transfer, export and
@@ -1222,7 +1224,7 @@ registry gives for the DOI (Crossref's `link`, a resolver redirect), so that a p
 and arXiv can count as the work's own on evidence code holds; and loosening R1 to pages titled as
 the work but carrying no identifier, labelled as possibly someone else's — which goes to Greg with
 the yield once measured, since it reopens the *only the work's own page* promise he chose.
-Drawing it in Marginalia's *Cites* line.
+Drawing it in Marginalia's opened *Cites* line (its hover card already does).
 
 **Not deferred, but next door:** the article's hyperlinks that are not works have their own list,
 [Sources › Links](sources.md#links), whose row says *In Bibliography* when its address is a work's

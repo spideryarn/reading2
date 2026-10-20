@@ -9,8 +9,9 @@
  * question notes (SPIDERYARN-READING2-84): *"They should ideally have tooltips
  * to explain themselves."*
  *
- * The shut lines and questions carry a key (`data-marg-tip`); the reading
- * view's one delegated card (BlockLinkCard.tsx) draws `MARG_TIPS[key]`.
+ * Most shut lines carry a key (`data-marg-tip`); the reading view's one
+ * delegated card (BlockLinkCard.tsx) draws `MARG_TIPS[key]`. A question has a
+ * `Tooltip` of its own, and a Cites line reuses the prose's `CiteCard`.
  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
 import { act, createElement, type ComponentProps } from "react";
@@ -64,7 +65,6 @@ const comment = { id: "c1", body: "My thought", answer: null } as unknown as Mar
 const EACH: readonly [MarginaliaNote, MargTipKey][] = [
   [{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }, "faq"],
   [{ kind: "reception", items: [claim] }, "reception"],
-  [{ kind: "citation", items: [work] }, "citation"],
   [{ kind: "comment", items: [{ as: "comment", comment }] }, "comment-own"],
 ];
 
@@ -216,12 +216,6 @@ describe("the cards' words", () => {
   it.each(Object.entries(MARG_TIPS))("%s: a card that says to press says what to press", (_key, tip) => {
     expect(tip.what).not.toMatch(/press it\b/i);
     if (/\bpress\b/i.test(tip.what)) expect(tip.what).toMatch(/Press this line/);
-  });
-
-  it("promises of a cited work only what the open line shows", () => {
-    /* The by-line and the article's reference entry, never the model's reason
-       (plan 261003j) — MarginaliaColumn.tsx § CitationNote. */
-    expect(`${MARG_TIPS.citation.what} ${MARG_TIPS.citation.how}`).not.toMatch(/why it is cited|reason it is cited/i);
   });
 
   it("explains an assumed Timeline year instead of promising dates are never guessed", () => {

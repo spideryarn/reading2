@@ -486,3 +486,16 @@ p.marg-shut {
 @media (prefers-reduced-motion: no-preference) {
   .marg-narrow { transition: opacity 400ms ease-out; }
 }
+
+/* **A *Cites* line's card** — the prose's own `CiteCard`, styled by
+   prose-hover-card.css, inside the shared tooltip (MarginaliaColumn.tsx §
+   LineCard, plan 261020g). Only its height is ours, and it is
+   `.skim-term-card`'s rule for the same reason: a work with an entry, a note,
+   a verdict and twenty jumps, or several works, ends in its buttons, so the
+   card scrolls rather than running off a short window (GPT Sol F6). On this
+   wrapper and not on `.tooltip`, whose arrow `overflow` would clip. */
+.marg-cite-card {
+  max-height: max(6rem, calc(50dvh - 4rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

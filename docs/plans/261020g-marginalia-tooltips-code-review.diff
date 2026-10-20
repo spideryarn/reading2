@@ -1,0 +1,815 @@
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index acd5fb232..4d73a9715 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -317,7 +317,7 @@
+   "summary": "Notes in a column right of the text, each level with the passage it is about.",
+   "keywords": "margin notes annotations sidenotes right column questions assumes introduces side notes annotations margin notes margin margins sidenotes side notes marginal notes marginalia",
+   "experimental": false,
+-  "body": "## In short\n\nGood readers write in the margins. Marginalia puts notes in a column to the right of the text, each\nbeside the paragraph it is about: a question for each part, a mark where an idea turns up, and\n*so*, *but* or *vs* where the argument turns. It may also add a few short explanations, reminders\nor tensions between passages. It is a switch rather than a mode you change to, so it can stay open\nbeside whatever else you are doing.\n\n(Picture: The Marginalia column beside an essay: at the top, the part being read and where its argument has got to; lower down, an introduces note beside the passage where the idea first occurs, and a shut FAQ line. Caption: Marginalia: where you are at the top, an idea’s note beside the passage that first puts it, and a FAQ question shut until you press it.)\n\n## How it works\n\nNotes in a column right of the text, each level with the passage it is about.\n\nIt marks where the argument turns, with so, but or vs beside those paragraphs, and may add a few short notes where something is confusing or another passage matters, and a few saying where a quotation, allusion or name comes from, which are from the AI's memory and marked unchecked. One model call makes all of them, the first time the article's owner opens the column. The other notes are read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.\n\n## When to use it\n\nWhile you read, as a quiet companion. Unlike the other modes it is a switch rather than a choice:\nthe **Marginalia** button sits at the right-hand end of the modes in the bottom bar, and its column\ncan stay open beside any other mode’s panel. It is sparse on purpose — one question per part, and a\nmark where an idea occurs. In a narrow window it tells you so, and if another mode’s panel is open,\npressing **Marginalia** again swaps the notes in for it.\n\n## Reading it\n\n- **A question with a thin line beside it** is the question that part of the article answers; read\n  on to find the answer. There is one for each part, beside its first paragraph.\n- **“assumes …”** marks an idea the piece takes for granted; **“introduces …”** one it puts forward\n  and argues for. Each sits beside the first passage where the idea occurs; point at it or tap it to\n  read the idea in full. These appear only once [Ideas](/help/mode-ideas) has been made.\n- **Other modes’ lines**, shut by default: saved FAQ questions, dated Timeline events, Sources’\n  claims and cited works can appear beside their passages, as can your comments. A line shows one\n  item or a count; press it to open it.\n- **Note, Recall or Tension** is a short AI-written note. Recall and Tension link to the other\n  passage they refer to; press the link to go there and check its words.\n- **Origin** says where a quotation, an allusion or a name in the passage comes from, when the\n  article does not say. It is written from the AI's memory, not from the article, and nothing has\n  checked it, so it is marked *AI memory, unchecked*: treat it as a lead.\n- **Cites**, opened, can also show a short note on what the cited work says, written by AI from the\n  work's abstract and checked against it.\n- The top of the column shows where you are, and where the argument has got to."
++  "body": "## In short\n\nGood readers write in the margins. Marginalia puts notes in a column to the right of the text, each\nbeside the paragraph it is about: a question for each part, a mark where an idea turns up, and\n*so*, *but* or *vs* where the argument turns. It may also add a few short explanations, reminders\nor tensions between passages. It is a switch rather than a mode you change to, so it can stay open\nbeside whatever else you are doing.\n\n(Picture: The Marginalia column beside an essay: at the top, the part being read and where its argument has got to; lower down, an introduces note beside the passage where the idea first occurs, and a shut FAQ line. Caption: Marginalia: where you are at the top, an idea’s note beside the passage that first puts it, and a FAQ question shut until you press it.)\n\n## How it works\n\nNotes in a column right of the text, each level with the passage it is about.\n\nIt marks where the argument turns, with so, but or vs beside those paragraphs, and may add a few short notes where something is confusing or another passage matters, and a few saying where a quotation, allusion or name comes from, which are from the AI's memory and marked unchecked. One model call makes all of them, the first time the article's owner opens the column. The other notes are read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.\n\n## When to use it\n\nWhile you read, as a quiet companion. Unlike the other modes it is a switch rather than a choice:\nthe **Marginalia** button sits at the right-hand end of the modes in the bottom bar, and its column\ncan stay open beside any other mode’s panel. It is sparse on purpose — one question per part, and a\nmark where an idea occurs. In a narrow window it tells you so, and if another mode’s panel is open,\npressing **Marginalia** again swaps the notes in for it.\n\n## Reading it\n\n- **A question with a thin line beside it** is the question that part of the article answers; read\n  on to find the answer. There is one for each part, beside its first paragraph.\n- **“assumes …”** marks an idea the piece takes for granted; **“introduces …”** one it puts forward\n  and argues for. Each sits beside the first passage where the idea occurs; point at it or tap it to\n  read the idea in full. These appear only once [Ideas](/help/mode-ideas) has been made.\n- **Other modes’ lines**, shut by default: saved FAQ questions, dated Timeline events, Sources’\n  claims and cited works can appear beside their passages, as can your comments. A line shows one\n  item or a count; press it to open it.\n- **Note, Recall or Tension** is a short AI-written note. Recall and Tension link to the other\n  passage they refer to; press the link to go there and check its words.\n- **Origin** says where a quotation, an allusion or a name in the passage comes from, when the\n  article does not say. It is written from the AI's memory, not from the article, and nothing has\n  checked it, so it is marked *AI memory, unchecked*: treat it as a lead.\n- **Cites**: point at the line to see the same card a citation in the text shows, with who wrote\n  the work, its entry in the references and every passage that cites it. Opened, it can also show a\n  short note on what the cited work says, written by AI from the work's abstract and checked\n  against it.\n- Point at a line that is cut short to read the whole of it.\n- The top of the column shows where you are, and where the argument has got to."
+  },
+  {
+   "anchor": "shelf",
+diff --git a/src/web/BlockLinkCard.tsx b/src/web/BlockLinkCard.tsx
+index 5b7093c0c..84c8c3688 100644
+--- a/src/web/BlockLinkCard.tsx
++++ b/src/web/BlockLinkCard.tsx
+@@ -76,6 +76,7 @@ import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
+ import type { Section } from "./position.js";
+ import { SAFE_ID, spentWords } from "./reading-time.js";
+ import { ControlTip } from "./Tooltip.js";
++import { isVoice, type Voice } from "./voice.js";
+ import { useDelegatedCard } from "./useDelegatedCard.js";
+ import type { ReadingTimeFor } from "./useReadingTime.js";
+ import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
+@@ -216,6 +217,24 @@ function referenceFor(el: Element, clientY: number | undefined) {
+   };
+ }
+ 
++/**
++ * **A shut line's own words, when the line is cut off** — Greg, 2026-10-19
++ * (spya-gdbsq2): the margin's cards *"should be the best we can make them"*.
++ * A shut line ends in an ellipsis, and its card says what the kind is; this is
++ * what *this* item says, so a cut-off FAQ question can be read without opening
++ * it. Only when it is actually cut, read when the card opens and again when the
++ * line opens (`data-open`, observed below, Sol F4): words the line shows in
++ * full would be the card repeating it. In the line's own face (fonts.md).
++ * Text only, from `textContent`. Plan 261020g.
++ */
++function cutWords(el: Element): { text: string; voice: Voice } | null {
++  const label = el.querySelector(".marg-shut-label");
++  if (!(label instanceof HTMLElement) || label.scrollWidth <= label.clientWidth) return null;
++  const text = el.querySelector(".marg-shut-line")?.textContent?.trim() ?? "";
++  const voice = el.getAttribute("data-marg-voice");
++  return text === "" ? null : { text, voice: isVoice(voice) ? voice : "ui" };
++}
++
+ /** What the card draws for one link, or null when it would have nothing to say. */
+ function contentFor(
+   el: Element,
+@@ -234,7 +253,8 @@ function contentFor(
+     const key = el.getAttribute("data-marg-tip");
+     if (!isMargTipKey(key)) return null;
+     const tip = MARG_TIPS[key];
+-    return <ControlTip head={tip.head} what={tip.what} how={tip.how} />;
++    const words = cutWords(el);
++    return <ControlTip head={tip.head} what={tip.what} drawn={words?.text} drawnVoice={words?.voice} how={tip.how} />;
+   }
+   /* A cross-reference's target comes from the resolver and only from there —
+      never `data-block-link`, `data-block-missing` or `data-block-preview` off
+@@ -395,6 +415,8 @@ function BlockLinkCard({
+        hook skips an `aria-hidden` trigger itself; said here so the reason is
+        beside the card it is about.) */
+     cardClass: (el) => (el.matches(CONTROL_SHAPED) ? "tip-soon" : "tip-cite"),
++    /* A Marginalia line opening: it wraps, so it is no longer cut (`cutWords`). */
++    observeAttributes: ["data-open"],
+   });
+ 
+   /* A new article/index can change the words under an anchor even if React
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index fdd4809f5..72f782eaa 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -2257,7 +2257,7 @@ function clip(text: string, max: number): string {
+  * numbered jump beside the count (`CitedAtJumps`, plan 261009e), so the card on
+  * a reference entry leads back to where the work is cited.
+  */
+-function CiteCard({
++export function CiteCard({
+   work,
+   showInSpideryarn,
+   onAsk,
+diff --git a/src/web/Tooltip.tsx b/src/web/Tooltip.tsx
+index f992098a3..19c8a5062 100644
+--- a/src/web/Tooltip.tsx
++++ b/src/web/Tooltip.tsx
+@@ -64,6 +64,7 @@ import {
+ } from "@floating-ui/react";
+ 
+ import { DELAY } from "./tooltip-delay.js";
++import { type Voice, withVoice } from "./voice.js";
+ 
+ /* Re-exported: the tests that time a Tooltip import it from here. */
+ export { DELAY };
+@@ -608,6 +609,7 @@ export function ControlTip({
+   state,
+   what,
+   drawn,
++  drawnVoice,
+   how,
+   press,
+   tap,
+@@ -624,6 +626,8 @@ export function ControlTip({
+    * this card it is not the same words for every reader.
+    */
+   drawn?: string | undefined;
++  /** Whose words `drawn` is, when not ours — a Marginalia line's own (fonts.md, plan 261020g). */
++  drawnVoice?: Voice | undefined;
+   how: string;
+   /**
+    * **What pressing this control does, or where it goes** — the one line in the
+@@ -664,7 +668,7 @@ export function ControlTip({
+       <div className="tip-soon-head">{head}</div>
+       {state && <p>{state}</p>}
+       <p className="tip-soon-what">{what}</p>
+-      {drawn && <p className="tip-soon-drawn">{drawn}</p>}
++      {drawn && <p className={drawnVoice ? withVoice("tip-soon-drawn", drawnVoice) : "tip-soon-drawn"}>{drawn}</p>}
+       <p className="tip-soon-how">{how}</p>
+       {press && <p className="tip-soon-press">{press}</p>}
+       {tap && <p className="tip-soon-tap">{tap}</p>}
+diff --git a/src/web/help/pages/modes/marginalia.md b/src/web/help/pages/modes/marginalia.md
+index c125feffa..615501714 100644
+--- a/src/web/help/pages/modes/marginalia.md
++++ b/src/web/help/pages/modes/marginalia.md
+@@ -36,6 +36,9 @@ pressing **Marginalia** again swaps the notes in for it.
+ - **Origin** says where a quotation, an allusion or a name in the passage comes from, when the
+   article does not say. It is written from the AI's memory, not from the article, and nothing has
+   checked it, so it is marked *AI memory, unchecked*: treat it as a lead.
+-- **Cites**, opened, can also show a short note on what the cited work says, written by AI from the
+-  work's abstract and checked against it.
++- **Cites**: point at the line to see the same card a citation in the text shows, with who wrote
++  the work, its entry in the references and every passage that cites it. Opened, it can also show a
++  short note on what the cited work says, written by AI from the work's abstract and checked
++  against it.
++- Point at a line that is cut short to read the whole of it.
+ - The top of the column shows where you are, and where the argument has got to.
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 7a4965744..1d4a7b74a 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -15,12 +15,17 @@
+  */
+ import {
+   Component,
++  createContext,
+   type ErrorInfo,
+   Fragment,
++  type PointerEvent as ReactPointerEvent,
++  type ReactElement,
+   type ReactNode,
++  useContext,
+   useEffect,
+   useId,
+   useLayoutEffect,
++  useRef,
+   useState,
+ } from "react";
+ import { ChevronRight, X } from "lucide-react";
+@@ -65,6 +70,25 @@ import type { JumpAim } from "../flash.js";
+ import { type Voice, voiceClass, withVoice } from "../voice.js";
+ import { ownLabel, plainWords } from "../lib/own-label.js";
+ import { Excerpt } from "../Excerpt.js";
++import { CiteCard } from "../ProseHoverCard.js";
++import { citePassageKey } from "../rows.js";
++
++/**
++ * **What a *Cites* line's card can do**: the same senders the prose's citation
++ * card is handed (Reader.tsx § ProseHoverCard), so a press from the margin
++ * records the same origin as one from the prose. A context rather than a prop
++ * through `MarginNotesSlot`, because Reader's `marginNotes` memo, and
++ * `memo(TableView)` with it, must not hear about them; Reader memoises the
++ * value (GPT Sol F5 on plan 261020g). Null draws the card with no buttons.
++ * The column draws citations for the owner only, so it is only ever theirs.
++ */
++export type MarginCiteSenders = {
++  onAsk(work: CitedWork): void;
++  onCheck(work: CitedWork, blockId: BlockId): void;
++  onOpen(id: string): void;
++  onJump(id: BlockId, aim?: JumpAim): void;
++};
++export const MarginCiteActions = createContext<MarginCiteSenders | null>(null);
+ 
+ /** The gap the collision pass keeps between two notes, in px. */
+ export const NOTE_GAP_PX = 8;
+@@ -301,7 +325,7 @@ function MarginNotes({
+           case "reception":
+             return <ReceptionNote key="reception" items={note.items} />;
+           case "citation":
+-            return <CitationNote key="citation" items={note.items} />;
++            return <CitationNote key="citation" blockId={blockId} items={note.items} />;
+           case "comment":
+             return <CommentNote key="comment" items={note.items} viewer={viewer} onOpenAsked={onOpenAsked} />;
+           default: {
+@@ -340,8 +364,10 @@ function ShutNote({
+       article's own phrase. */
+   stampVoice?: Voice | undefined;
+   /** What this kind of line is and where it came from, on hover — every mark
+-      explains itself. A key into tips.ts; the delegated card draws it. */
+-  tip: MargTipKey;
++      explains itself. A key into tips.ts, which the delegated card draws; or,
++      where the prose already has a richer card for the same kind of item, that
++      card, in a `Tooltip` of the line's own (plan 261020g). */
++  tip: MargTipKey | ShutCard;
+   line: string;
+   /** Whose words `line` is: the one item's, or ours for a count (fonts.md). */
+   lineVoice: Voice;
+@@ -357,6 +383,8 @@ function ShutNote({
+ }) {
+   const [open, setOpen] = useState(false);
+   const panel = useId();
++  const card = typeof tip === "string" ? null : tip;
++  const tipKey = typeof tip === "string" ? tip : undefined;
+   const label = (
+     <span className="marg-shut-label">
+       <span className={stampVoice ? withVoice("marg-stamp", stampVoice) : "marg-stamp"}>{stamp}</span>{" "}
+@@ -369,7 +397,9 @@ function ShutNote({
+         <button
+           type="button"
+           className="marg-shut-button"
+-          data-marg-tip={tip}
++          data-marg-tip={tipKey}
++          data-marg-voice={lineVoice}
++          data-open={open ? "" : undefined}
+           onClick={() => setOpen((was) => !was)}
+         >
+           <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+@@ -380,24 +410,36 @@ function ShutNote({
+   }
+   if (children === null) {
+     return (
+-      <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
++      <p className="marg-shut" data-kind={kind} data-marg-tip={tipKey} data-marg-voice={lineVoice}>
+         {label}
+       </p>
+     );
+   }
++  /* `data-open` on the button as well as its box: the delegated card watches
++     its trigger, and re-reads whether the line is still cut (plan 261020g, F4). */
++  const button = (press: PressHandlers = {}): ReactElement<Record<string, unknown>> => (
++    <button
++      type="button"
++      className="marg-shut-button"
++      data-marg-tip={tipKey}
++      data-marg-voice={lineVoice}
++      data-open={open ? "" : undefined}
++      aria-expanded={open}
++      aria-controls={panel}
++      onPointerDown={press.onPointerDown}
++      onPointerCancel={press.onPointerCancel}
++      onClick={() => {
++        press.onClick?.();
++        setOpen((was) => !was);
++      }}
++    >
++      <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
++      {label}
++    </button>
++  );
+   return (
+     <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
+-      <button
+-        type="button"
+-        className="marg-shut-button"
+-        data-marg-tip={tip}
+-        aria-expanded={open}
+-        aria-controls={panel}
+-        onClick={() => setOpen((was) => !was)}
+-      >
+-        <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+-        {label}
+-      </button>
++      {card ? <LineCard card={card} lineOpen={open} button={button} /> : button()}
+       <div id={panel} className="marg-open" hidden={!open}>
+         {open ? children : null}
+       </div>
+@@ -405,6 +447,72 @@ function ShutNote({
+   );
+ }
+ 
++/** A shut line's own card: what it says, given a way to close itself, and its dialog's name. */
++type ShutCard = { label: string; content(close: () => void): ReactNode };
++
++/**
++ * **A shut line with a card of its own**, interactive, because the card it
++ * reuses has buttons — the shape Skim's term chips use for the prose's
++ * `TermCard` (SkimPanel.tsx § TermChip). Controlled, for three reasons GPT Sol
++ * gave on plan 261020g:
++ *
++ * - **Shut while the line is open** (F2): the open half already shows most of
++ *   what the card says, and a card on top would hide it. `enabled` is off, so
++ *   neither hover nor focus can reopen it, and `Tooltip` tells us to close.
++ * - **Not for a finger** (F1): `mouseOnly` stops a tap's synthesised hover, but
++ *   a tap can focus the button before its click. A touch or pen press refuses
++ *   the open it causes; the press opens the line, as it did before.
++ * - **A press inside closes it**, through `content`'s `close`.
++ *
++ * Cloned onto the button itself (`Tooltip` puts its props on its child), not
++ * the box round it.
++ */
++type PressHandlers = {
++  onPointerDown?: (e: ReactPointerEvent) => void;
++  onPointerCancel?: () => void;
++  onClick?: () => void;
++};
++
++function LineCard({
++  card,
++  lineOpen,
++  button,
++}: {
++  card: ShutCard;
++  lineOpen: boolean;
++  /** The line's button, with these handlers on it as well as its own press. */
++  button(press: PressHandlers): ReactElement<Record<string, unknown>>;
++}) {
++  const [shown, setShown] = useState(false);
++  const touch = useRef(false);
++  const close = () => setShown(false);
++  return (
++    <Tooltip
++      placement="bottom"
++      keepSide
++      className="prose-card marg-cite-tip"
++      interactive={{ label: card.label }}
++      enabled={!lineOpen}
++      open={shown}
++      onOpenChange={(next) => setShown(next && !touch.current)}
++      content={<div className="marg-cite-card">{card.content(close)}</div>}
++    >
++      {button({
++        onPointerDown: (e) => {
++          touch.current = e.pointerType === "touch" || e.pointerType === "pen";
++        },
++        onPointerCancel: () => {
++          touch.current = false;
++        },
++        onClick: () => {
++          touch.current = false;
++          setShown(false);
++        },
++      })}
++    </Tooltip>
++  );
++}
++
+ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+ 
+ function FaqNote({
+@@ -532,13 +640,54 @@ function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
+   );
+ }
+ 
+-function CitationNote({ items }: { items: readonly CitedWork[] }) {
++/**
++ * **A *Cites* line's card is the prose's own** — Greg, 2026-10-19
++ * (spya-gdbsq2): *"I feel like we have more information than that for a
++ * citation if I hover over it in the text. So let's try and reuse that same
++ * tooltip."* `CiteCard`, one per work as on a prose mark naming two, with the
++ * prose's buttons: each closes the card first, as the prose's do (Sol F3).
++ * `here` is the block the line sits beside, the work's first citing paragraph.
++ * Its height is capped and it scrolls, so the buttons stay reachable (F6,
++ * marginalia.css § .marg-cite-card). Plan 261020g.
++ */
++function citeCard(blockId: BlockId, items: readonly CitedWork[], acts: MarginCiteSenders | null): ShutCard {
++  return {
++    label: items.length === 1 ? (items[0]?.title ?? "Cited work") : `${items.length} cited works`,
++    content: (close) =>
++      items.map((work) => (
++        <CiteCard
++          key={work.id}
++          work={work}
++          showInSpideryarn={acts !== null}
++          onAsk={acts ? (w) => acts.onAsk(w) : null}
++          onCheck={acts ? (w, id) => acts.onCheck(w, id) : null}
++          onOpen={
++            acts
++              ? () => {
++                  close();
++                  acts.onOpen(work.id);
++                }
++              : null
++          }
++          here={blockId}
++          onJump={(id) => {
++            close();
++            acts?.onJump(id, citePassageKey(work.id));
++          }}
++          onClose={close}
++        />
++      )),
++  };
++}
++
++function CitationNote({ blockId, items }: { blockId: BlockId; items: readonly CitedWork[] }) {
+   const only = items.length === 1 ? items[0] : undefined;
++  const acts = useContext(MarginCiteActions);
+   return (
+     <ShutNote
+       kind="citation"
+       stamp="Cites"
+-      tip="citation"
++      tip={citeCard(blockId, items, acts)}
+       line={only ? only.title : plural(items.length, "work", "works")}
+       lineVoice="ui"
+     >
+diff --git a/src/web/marginalia/tips.ts b/src/web/marginalia/tips.ts
+index 5b7c2a2da..19c269535 100644
+--- a/src/web/marginalia/tips.ts
++++ b/src/web/marginalia/tips.ts
+@@ -11,6 +11,8 @@
+  *
+  * The shut lines and questions carry only their key, as `data-marg-tip`, and
+  * the reading view's one delegated card draws them (BlockLinkCard.tsx § MARG_NOTE)
++ * — except a *Cites* line, whose card has been the prose's own `CiteCard`
++ * since 2026-10-20 (plan 261020g), so it has no row here
+  * — a column of dozens of notes costs one Floating UI instance, not dozens. The
+  * idea stamp, the path and the arc have cards of their own and read their
+  * origin line from here. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
+@@ -26,7 +28,6 @@ export type MargTipKey =
+   | "faq"
+   | "timeline"
+   | "reception"
+-  | "citation"
+   | "comment-own"
+   | "comment-owner";
+ 
+@@ -61,16 +62,6 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
+     what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
+     how: "From Sources' Claims. AI searched the web and judged how the page bears on the claim. The quote is the page's own words; where the page had no usable title, AI wrote the headline, in the AI's typeface.",
+   },
+-  citation: {
+-    head: "Cites",
+-    /* "Press this line", not "Press it" (Greg, spya-xf6m2u: *"I don't see
+-       anything to press"*): the line is the button. And only what opens — the
+-       by-line, the reference entry and, where there is one, the checked note
+-       from the work's abstract (261017h, 261018i); never the model's reason
+-       (261003j). */
+-    what: "A work the article cites, at the first place it does. Press this line to open it and see who wrote it, its entry in the reference list, and, where we found its abstract, a short note on what the work says.",
+-    how: "From Sources' Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words. The note on what the work says was written by AI from the work's abstract alone, and checked against it.",
+-  },
+   "comment-own": {
+     head: "Yours",
+     what: "What you left on this passage, each saying which it is: a Comment (no AI), a Comment + AI (you also asked the AI), or a Question (you asked the AI with ? or Chat about this).",
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index e1a395bb1..4890a1d3b 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -40,6 +40,8 @@ import {
+ import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
+ import {
+   MarginaliaHead,
++  MarginCiteActions,
++  type MarginCiteSenders,
+   MarginNotesSlot,
+   type MarginFeed,
+   NO_OWNER_FEED,
+@@ -2870,6 +2872,20 @@ export function Reader({
+     () => ({ summaries: chatSummaries, onAsk: askWork, onOpen: openClaimChat }),
+     [chatSummaries, askWork, openClaimChat],
+   );
++  /**
++   * **What a *Cites* line's card in the margin can do** — the prose card's own
++   * senders (below, `ProseHoverCard`), so a press there records the same
++   * origin. Memoised, because every *Cites* line reads it and Reader re-renders
++   * on every scroll (GPT Sol F5 on plan 261020g). Null for a visitor, whose
++   * column draws no citations anyway. MarginaliaColumn.tsx § MarginCiteSenders.
++   */
++  const marginCiteActions = useMemo<MarginCiteSenders | null>(
++    () =>
++      owner
++        ? { onAsk: askWork, onCheck: checkCitedWorkInChat, onOpen: openCitedWorkFromCard, onJump: jumpTo }
++        : null,
++    [owner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
++  );
+   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
+   const ideaChats = useMemo(
+     () => ({ summaries: chatSummaries, onAsk: askIdea, onOpen: openClaimChat }),
+@@ -4472,6 +4488,7 @@ export function Reader({
+               which was the first sign it was not carrying its space. */}
+         </div>
+       )}
++      <MarginCiteActions.Provider value={marginCiteActions}>
+       <TableView
+         article={article}
+         /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
+@@ -4554,6 +4571,7 @@ export function Reader({
+         onSelect={selectProse}
+         onOpenComment={openCommentDialog}
+       />
++      </MarginCiteActions.Provider>
+       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
+           never hears of it on an iPad; this is the button it gets instead, and
+           it calls the same `selectProse`, saying it was a finger — which is
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 198dfc497..f4c73b063 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -486,3 +486,16 @@ p.marg-shut {
+ @media (prefers-reduced-motion: no-preference) {
+   .marg-narrow { transition: opacity 400ms ease-out; }
+ }
++
++/* **A *Cites* line's card** — the prose's own `CiteCard`, styled by
++   prose-hover-card.css, inside the shared tooltip (MarginaliaColumn.tsx §
++   LineCard, plan 261020g). Only its height is ours, and it is
++   `.skim-term-card`'s rule for the same reason: a work with an entry, a note,
++   a verdict and twenty jumps, or several works, ends in its buttons, so the
++   card scrolls rather than running off a short window (GPT Sol F6). On this
++   wrapper and not on `.tooltip`, whose arrow `overflow` would clip. */
++.marg-cite-card {
++  max-height: max(6rem, calc(50dvh - 4rem));
++  overflow-y: auto;
++  overscroll-behavior: contain;
++}
+diff --git a/src/web/voice.ts b/src/web/voice.ts
+index 7a00e6800..bb1178d65 100644
+--- a/src/web/voice.ts
++++ b/src/web/voice.ts
+@@ -47,6 +47,11 @@ export function voiceClass(voice: Voice): string {
+   }
+ }
+ 
++/** Whether an attribute's value names a voice — a `data-marg-voice` read back off the page. */
++export function isVoice(value: string | null): value is Voice {
++  return value === "author" || value === "ai" || value === "reader" || value === "ui";
++}
++
+ /** `voiceClass`, joined onto the element's own classes. */
+ export function withVoice(className: string, voice: Voice): string {
+   return `${className} ${voiceClass(voice)}`;
+diff --git a/tests/marginalia-cite-card.test.tsx b/tests/marginalia-cite-card.test.tsx
+new file mode 100644
+index 000000000..aeeadff3c
+--- /dev/null
++++ b/tests/marginalia-cite-card.test.tsx
+@@ -0,0 +1,254 @@
++// @vitest-environment jsdom
++/**
++ * **A *Cites* line in the margin shows the prose's own citation card**, and a
++ * cut-off shut line's card says the item's own words.
++ *
++ * Greg, 2026-10-19 (spya-gdbsq2): *"The Marginalia mode tooltip for a citation
++ * is pretty unhelpful. It's just a kind of generic message. I feel like we have
++ * more information than that for a citation if I hover over it in the text. So
++ * let's try and reuse that same tooltip."*
++ * docs/plans/261020g-marginalia-tooltips-reuse-the-prose-citation-card-and-say-the-item.md.
++ */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Block, BlockId, CitedWork, FaqQuestion } from "../src/types.js";
++import { type BlockLinkIndex, BlockLinkProvider } from "../src/web/BlockLinkCard.js";
++import { MarginCiteActions, MarginNotesSlot, type MarginCiteSenders } from "../src/web/marginalia/MarginaliaColumn.js";
++import type { MarginaliaNote } from "../src/web/marginalia/notes.js";
++
++class FakeResizeObserver {
++  observe() {}
++  unobserve() {}
++  disconnect() {}
++}
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++const HERE = "spya-aaaaaa" as BlockId;
++const THERE = "spya-bbbbbb" as BlockId;
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
++  vi.useFakeTimers();
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++  vi.useRealTimers();
++  vi.unstubAllGlobals();
++  vi.restoreAllMocks();
++});
++
++const TULVING: CitedWork = {
++  id: "spya-a2b3c4",
++  key: "work:Elements",
++  title: "Elements of Episodic Memory",
++  authors: "Tulving",
++  year: "1983",
++  why: "The piece takes its account of retrieval cues from it.",
++  mentions: [{ blockId: HERE, quote: "(Tulving 1983)", start: 4 }],
++  citedAt: [HERE, THERE],
++  firstCited: HERE,
++  citedInBody: true,
++  url: "https://doi.org/10.1000/xyz",
++  linkFrom: "doi",
++  entry: "Tulving, E. (1983). Elements of Episodic Memory. Oxford.",
++} as CitedWork;
++
++const INDEX = new Map(
++  [HERE, THERE].map((id) => [id, { text: "A paragraph (Tulving 1983).", section: undefined, block: { id, html: "<p>A paragraph.</p>", text: "A paragraph." } as unknown as Block }]),
++) as BlockLinkIndex;
++
++function senders(): MarginCiteSenders & { [k: string]: ReturnType<typeof vi.fn> } {
++  return { onAsk: vi.fn(), onCheck: vi.fn(), onOpen: vi.fn(), onJump: vi.fn() };
++}
++
++function paint(notes: MarginaliaNote[], acts: MarginCiteSenders | null = senders()): void {
++  act(() =>
++    root.render(
++      <BlockLinkProvider index={INDEX}>
++        <MarginCiteActions.Provider value={acts}>
++          <MarginNotesSlot blockId={HERE} notes={notes} viewer="owner" />
++        </MarginCiteActions.Provider>
++      </BlockLinkProvider>,
++    ),
++  );
++}
++
++const citesLine = () => host.querySelector<HTMLButtonElement>('.marg-shut[data-kind="citation"] .marg-shut-button')!;
++const dialog = () => document.querySelector<HTMLElement>('.tooltip-anchor[role="dialog"]');
++const button = (name: string) =>
++  [...(dialog()?.querySelectorAll("button, a") ?? [])].find((b) => b.textContent?.includes(name)) as
++    | HTMLElement
++    | undefined;
++
++async function settle(): Promise<void> {
++  for (const _ of [0, 1, 2]) await act(async () => { vi.advanceTimersByTime(500); });
++}
++
++describe("a Cites line in the margin", () => {
++  it("has no house card, but the prose's citation card on hover", async () => {
++    paint([{ kind: "citation", items: [TULVING] }]);
++    expect(citesLine().hasAttribute("data-marg-tip"), "the delegated house card would open too").toBe(false);
++    await act(async () => {
++      citesLine().dispatchEvent(new MouseEvent("mouseenter"));
++    });
++    await settle();
++    const card = dialog();
++    expect(card, "hover opened no card").not.toBeNull();
++    const text = card?.textContent ?? "";
++    expect(text).toContain("Elements of Episodic Memory");
++    expect(text).toContain("Tulving");
++    expect(text).toContain("Oxford");
++    expect(text).toContain("cited in 2 paragraphs");
++    expect(text).not.toContain("A work the article cites, at the first place it does");
++  });
++
++  it("opens from keyboard focus, and its buttons are the reader's own senders", async () => {
++    const acts = senders();
++    paint([{ kind: "citation", items: [TULVING] }], acts);
++    await act(async () => citesLine().focus());
++    await settle();
++    expect(dialog(), "focus opened no card").not.toBeNull();
++
++    await act(async () => button("Open in Sources")?.click());
++    expect(acts.onOpen).toHaveBeenCalledWith(TULVING.id);
++    await settle();
++    expect(dialog(), "a press on the card closes it").toBeNull();
++
++    await act(async () => citesLine().blur());
++    await act(async () => citesLine().focus());
++    await settle();
++    await act(async () => dialog()?.querySelector<HTMLElement>(`[aria-label="Ask about this work in chat"]`)?.click());
++    expect(acts.onAsk).toHaveBeenCalledWith(TULVING);
++
++    await act(async () => citesLine().blur());
++    await act(async () => citesLine().focus());
++    await settle();
++    await act(async () => button("Does it say that?")?.click());
++    expect(acts.onCheck).toHaveBeenCalledWith(TULVING, HERE);
++
++    await act(async () => citesLine().blur());
++    await act(async () => citesLine().focus());
++    await settle();
++    const jump = dialog()?.querySelector<HTMLElement>(`[data-block-link="${THERE}"]`);
++    expect(jump, "no jump to the other citing paragraph").toBeTruthy();
++    await act(async () => jump?.click());
++    expect(acts.onJump).toHaveBeenCalledWith(THERE, `cite:${TULVING.id}`);
++    await settle();
++    expect(dialog(), "a jump leaves no card over the passage it left").toBeNull();
++  });
++
++  it("shuts its card when the line is pressed open, and keeps it shut while the line is open", async () => {
++    paint([{ kind: "citation", items: [TULVING] }]);
++    await act(async () => citesLine().focus());
++    await settle();
++    expect(dialog()).not.toBeNull();
++    await act(async () => citesLine().click());
++    await settle();
++    expect(citesLine().getAttribute("aria-expanded")).toBe("true");
++    expect(dialog(), "the card sits over the opened line").toBeNull();
++    await act(async () => {
++      citesLine().dispatchEvent(new MouseEvent("mouseenter"));
++    });
++    await settle();
++    expect(dialog()).toBeNull();
++  });
++
++  it("does not open for a finger, which opens the line instead", async () => {
++    paint([{ kind: "citation", items: [TULVING] }]);
++    await act(async () => {
++      citesLine().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
++      citesLine().focus();
++      citesLine().dispatchEvent(new MouseEvent("mouseenter"));
++      citesLine().click();
++    });
++    await settle();
++    expect(citesLine().getAttribute("aria-expanded")).toBe("true");
++    expect(dialog()).toBeNull();
++  });
++
++  /* Sol F1: `mouseOnly` stops a tap's hover, not its focus, which can come
++     before the click — or with no click at all, if the press goes nowhere. */
++  it("does not open from the focus a finger's press gives, click or no click", async () => {
++    paint([{ kind: "citation", items: [TULVING] }]);
++    await act(async () => {
++      citesLine().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
++      citesLine().focus();
++    });
++    await settle();
++    expect(dialog()).toBeNull();
++  });
++
++  it("draws one card section per work beside the block", async () => {
++    const { entry: _entry, ...rest } = TULVING;
++    const other: CitedWork = { ...rest, id: "spya-c3d4e5", title: "Another Work" };
++    paint([{ kind: "citation", items: [TULVING, other] }]);
++    await act(async () => citesLine().focus());
++    await settle();
++    const text = dialog()?.textContent ?? "";
++    expect(text).toContain("Elements of Episodic Memory");
++    expect(text).toContain("Another Work");
++  });
++});
++
++describe("a cut-off shut line's card", () => {
++  const question = { id: "q1", question: "Why does the ethologist ask four questions rather than one?" } as FaqQuestion;
++  const faq: MarginaliaNote = { kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] };
++  const trigger = () => host.querySelector<HTMLElement>(".marg-note [data-marg-tip]")!;
++  const card = () => document.querySelector<HTMLElement>(".tooltip-anchor");
++  const cut = (by: number) => {
++    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
++      return this.classList.contains("marg-shut-label") ? 200 + by : 0;
++    });
++    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
++      return this.classList.contains("marg-shut-label") ? 200 : 0;
++    });
++  };
++  async function hover(): Promise<void> {
++    trigger().dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
++    await act(async () => { vi.advanceTimersByTime(500); });
++  }
++
++  it("says the item's words, in the item's face, when the line is cut", async () => {
++    cut(40);
++    paint([faq]);
++    await hover();
++    const words = card()?.querySelector(".tip-soon-drawn");
++    expect(words?.textContent).toBe(question.question);
++    expect(words?.classList.contains("voice-ai")).toBe(true);
++  });
++
++  /* GPT Sol F4 on the plan: the card's content is read when it opens, so a
++     line opened under an open card must re-read it, or the card repeats the
++     words the line now shows wrapped. */
++  it("drops the words when the line opens under the card and wraps", async () => {
++    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
++      const wraps = this.closest(".marg-shut")?.hasAttribute("data-open") ?? false;
++      return this.classList.contains("marg-shut-label") && !wraps ? 240 : 0;
++    });
++    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
++      return this.classList.contains("marg-shut-label") ? 200 : 0;
++    });
++    paint([faq]);
++    await hover();
++    expect(card()?.querySelector(".tip-soon-drawn")?.textContent).toBe(question.question);
++    await act(async () => trigger().click());
++    expect(trigger().hasAttribute("data-open")).toBe(true);
++    expect(document.querySelector(".tip-soon-drawn"), "the card still repeats the wrapped line").toBeNull();
++  });
++
++  it("does not repeat words the line already shows in full (the control)", async () => {
++    cut(0);
++    paint([faq]);
++    await hover();
++    expect(card()?.textContent).toContain("FAQ");
++    expect(card()?.querySelector(".tip-soon-drawn")).toBeNull();
++  });
++});
+diff --git a/tests/marginalia-note-cards.test.tsx b/tests/marginalia-note-cards.test.tsx
+index 70c86f533..f26dc2637 100644
+--- a/tests/marginalia-note-cards.test.tsx
++++ b/tests/marginalia-note-cards.test.tsx
+@@ -64,7 +64,6 @@ const comment = { id: "c1", body: "My thought", answer: null } as unknown as Mar
+ const EACH: readonly [MarginaliaNote, MargTipKey][] = [
+   [{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }, "faq"],
+   [{ kind: "reception", items: [claim] }, "reception"],
+-  [{ kind: "citation", items: [work] }, "citation"],
+   [{ kind: "comment", items: [{ as: "comment", comment }] }, "comment-own"],
+ ];
+ 
+@@ -218,12 +217,6 @@ describe("the cards' words", () => {
+     if (/\bpress\b/i.test(tip.what)) expect(tip.what).toMatch(/Press this line/);
+   });
+ 
+-  it("promises of a cited work only what the open line shows", () => {
+-    /* The by-line and the article's reference entry, never the model's reason
+-       (plan 261003j) — MarginaliaColumn.tsx § CitationNote. */
+-    expect(`${MARG_TIPS.citation.what} ${MARG_TIPS.citation.how}`).not.toMatch(/why it is cited|reason it is cited/i);
+-  });
+-
+   it("explains an assumed Timeline year instead of promising dates are never guessed", () => {
+     const event: TimelineEvent = {
+       id: "e", label: "The launch", order: 1, modality: "happened", occurrences: [],

@@ -32,7 +32,7 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, Quiz, QuizQuestion, QuizResponse } from "../src/types.js";
+import type { Article, Bibliography, Quiz, QuizQuestion, QuizResponse } from "../src/types.js";
 
 /** Render counts by `useRenderCount` label — the TableView memo's witness. */
 const renders = vi.hoisted(() => new Map<string, number>());
@@ -255,6 +255,31 @@ function quizOf(batchId: string, questions: QuizQuestion[]): Quiz {
 const QUIZ_A = quizOf("batch-a", [Q1, Q2, Q3, Q4]);
 const PREMISES = [Q3.premise, Q4.premise] as string[];
 
+/* One ready work gives the open Marginalia column a `MarginCiteActions`
+   consumer. Without one, a changing Provider value can bypass `memo(TableView)`
+   in production while this render-count test still passes. Plan 261020g, F5. */
+const BIBLIOGRAPHY: Bibliography = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  citations: [{
+    id: "spya-fefefe",
+    key: "work:a cited work||",
+    title: "A cited work",
+    why: "The piece uses it.",
+    mentions: [],
+    citedAt: [B],
+    firstCited: B,
+    citedInBody: true,
+    url: "https://example.test/a-cited-work",
+    linkFrom: "article",
+  }],
+  capped: false,
+  generatedAt: "2026-10-20T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
 /* ------------------------------------------------------------ fake server -- */
 
 const trace: { url: string; method: string }[] = [];
@@ -279,6 +304,8 @@ function reply(url: string, method: string): Response | Promise<Response> {
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
   if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  if (url.startsWith("/api/bibliography/"))
+    return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
 }
@@ -579,6 +606,10 @@ describe("memo(TableView) and the quiz lines", () => {
       reader?.style.getPropertyValue("--marg-w"),
       "the render-budget case gave Marginalia no room, so its memo returned null",
     ).not.toBe("0px");
+    expect(
+      host.querySelector('.marg-shut[data-kind="citation"]'),
+      "the render-budget case had no citation context consumer",
+    ).not.toBeNull();
 
     /* The next quiz read is held open, so the band's mount reload can be let
        go on cue — the only change in the last step is then the batch. */

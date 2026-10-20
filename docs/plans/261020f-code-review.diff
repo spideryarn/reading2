@@ -1,0 +1,2944 @@
+diff --git a/docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md b/docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md
+new file mode 100644
+index 000000000..2dac6630a
+--- /dev/null
++++ b/docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md
+@@ -0,0 +1,317 @@
++# 261020a — The add page asks why higher up, offers About you, says when it is ready, and shows how far the import has got
++
++Two of Greg's suggestions from the Feedback dialog, batched because both are about the add page.
++Overseer queue item `qi-hrh4vwex`. Reports `spya-kan788` (SPIDERYARN-READING2-KJ, with addendum
++`spya-jk0cgg`) and `spya-skq3fg` (KK).
++
++## What Greg asked for
++
++`spya-kan788`, Greg, 2026-10-19:
++
++> When adding a new article, put the "Why are you reading this?" box nearer the top of the add page.
++>
++> And if they haven't filled out a user profile yet at all, perhaps also add a box for that too, so
++> they can potentially fill out both. Make it clear which is which and how they're different.
++>
++> And when the import process has finished, make that crystal clear, e.g. a button appearing at both
++> bottom and top.
++
++Addendum `spya-jk0cgg`, 2026-10-19:
++
++> And make the "Why are you reading this?" box bigger/auto-expanding.
++
++`spya-skq3fg`, Greg, 2026-10-19:
++
++> When loading a big/slow article, can we provide a loading bar with some kind of estimation of how
++> long it will take (especially that extraction step)?
++
++## Prior work, and what is there now
++
++- [261001s](261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)
++  made the purpose box say whether it saved, and the reading view ask once when it was never
++  touched. [261004l] made it autosave. Nothing has moved it or touched the profile on this page.
++- **The add page, top to bottom** (`AddPage` in `src/web/AddPage.tsx`): heading and source; the
++  upload bar while a file is going up; the disclosure sentence; refusals; the job card (`JobCard`,
++  `src/web/AddArticle.tsx`), with one row per step, a running clock on the running step and, for
++  `sketch` alone, a measured *usually*; *keep a tab open*; the automatic-modes tick box;
++  High-powered AI; the author gift (admins); sharing; **and only then** *Why are you reading
++  this?*, a two-row textarea; then, once the import is in and the reader is engaged with the box,
++  *Ready.* and **Open the article**; then *Back to the shelf*. On a phone the purpose box is two or
++  three screens down.
++- **When the import finishes and the box was never touched, the page opens the article by
++  itself.** It waits (phase `ready`) only when the box is focused, holds unsaved words, or a sharing
++  or author-gift question is open. So "make it crystal clear when it has finished" is about that
++  waiting state: today it is one line and one small button at the very bottom.
++- **About you** (`reader_profiles.profile`) is edited on `/profile`, in the profile popover, and
++  offered by the guide in chat on first open. The server resolves it for the first automatic modes
++  **at publication**, as it does the purpose (plan 261004h), so words saved during the import reach
++  them.
++- **Progress: the docs forbid a determinate bar, on purpose.**
++  [ingest-queue.md § The app says out loud that it needs a tab open](../project/ingest-queue.md#the-app-says-out-loud-that-it-needs-a-tab-open):
++  *"No determinate progress bar, ever … response size and provider latency are both unknown, so a
++  percentage would be a number we invented."* `StepRow`'s comment says the same. `src/job-state.ts`
++  gives a *usually* sentence only to a step with enough measured runs (one: `sketch`). PDF
++  `extract` reports `N/M chunks` through `ctx.report`, but `report` does not write the row by
++  itself, and PDF extract and assets make no other write while running, so the reader never sees
++  their counts. (A step that also calls `ctx.preview`, `simple`, carries its latest detail along
++  with each preview write.)
++
++## Part A — the boxes and the finish (build)
++
++### A1. The boxes move to the top
++
++`PurposeBox` moves from the bottom of the page to directly under the header and the upload bar,
++above the disclosure sentence and the job card. Same condition for showing (`showPurpose`), same
++session, same autosave. Nothing else moves.
++
++**Not above the upload bar**: that is what a reader who just pressed Add on a 40 MB file came to
++watch, and it carries the Stop. One bar's height is not "far down".
++
++### A2. Bigger, and as tall as its words
++
++Floor of four rows (from two), grows with what is typed, never scrolls inside itself:
++`useFitTextarea` (`src/web/useFitTextarea.ts`, already used by Quiz and Feedback's reply box) and
++`overflow: hidden; resize: none` on this box only.
++
++### A3. About you, when the reader has none
++
++Under the purpose box, **only when the reader's stored profile is empty** — decided once, from the
++first successful read of `GET /api/reader`, and latched for the life of the page so the box does not
++vanish under the reader's hands as their first words save. A failed read shows nothing (we cannot
++tell they have none).
++
++- Bound to `useProfile()` (`src/web/useProfile.ts`), the hook `/profile` uses: ordered writes,
++  the `keepalive` write on unmount and `pagehide`. A plain textarea like `PurposeBox`, **not
++  `ProfileBox`**, for `PurposeBox`'s reason: no microphone on a page that may open the article by
++  itself — but with `ProfileBox`'s other pieces, which live in the component and not the hook:
++  `useIdleCommit` (save after a pause), save on blur, `SaveStatus`, the counter, the leave warning,
++  and **no `maxLength`**, which would silently cut the end off a long paste (Sol, finding 3).
++- **Which is which**, said in the labels and one hint line each:
++  - *Why are you reading this one?* — "For this article only." (existing hint, shortened)
++  - *About you* — "For every article: your background, what you already know, what you are working
++    on. Saved to your profile; edit it any time on Profile."
++  The two boxes sit in one bordered group headed by nothing more, so the difference is in the
++  labels rather than in a paragraph above them.
++- **It holds the page as the purpose box does, and only if it was drawn.** The completion effect
++  leaves by itself only when nothing is focused or unsaved; it now also asks the About-you box
++  (focused, or `dirty`/`saving`/`error`/in flight) — **only when the box was shown**. A failed read
++  is `error` too, and holding on it would wait for ever behind a box nobody saw; a completion before
++  the read has answered opens, since there was no box to be in (Sol, finding 2). The decision is
++  taken once per completion, so a later save cannot turn a waiting page back into one that leaves.
++- **Open the article waits for both saves** (Sol, finding 5); a refused About-you save lets go of
++  the press, stays on screen with its words, and offers *Open without saving*, which abandons both
++  drafts. The unmount write is the net for a reader who leaves some other way.
++- No key of its own: `App` already remounts the page per reader (`key={user.id}`), and the hook's
++  writes are bound to the reader it was made for.
++
++### A4. Ready, at the top and the bottom
++
++When the page is waiting (`ready`, and `repeat`), the same block — a sentence and **Open the
++article** (with *Open without saving* when it applies) — is drawn **twice**: once at the top, under
++the header and above the boxes, in a highlighted panel that says *Your article is ready*; and once
++where it is now, at the bottom. One component, `ReadyBar`, two placements, the same handlers, so
++the two cannot disagree. The top one is the "crystal clear" half.
++
++## Part B — how far the import has got
++
++### The measurement
++
++Read-only, against production, 2026-10-20, by the method in
++[ingest-queue.md § What the card says](../project/ingest-queue.md#what-the-card-says-and-why-it-says-the-time)
++(done steps only, `finishedAt − startedAt`; whole import `created_at → finished_at`). The `jobs`
++table only goes back to 2026-09-28 and holds **11 imports** (8 done, 3 failed), none resumed across
++a lease window.
++
++| | n | seconds |
++|---|---|---|
++| fetch | 9 | median 1.3, max 3.5 |
++| extract, URL | 6 | 3.1, 3.9, 4.8, 12.7, 62.2, 122.4 |
++| extract, upload (PDF) | 2 | 91, 216 (an 8 MB third failed at 204) |
++| blocks | 8 | median 1.9, max 4.9 |
++| structure | 8 | mostly < 1; 12 and 74 when the model call runs |
++| whole import, URL | 6 | median ≈ 19, range 7–232 |
++| whole import, upload | 2 | 112, 267 |
++
++**URL extraction is bimodal and unrelated to length** (a 4.6k-word page took 122 s, a 13.7k-word
++one 62 s, an 11.9k-word one 13 s): the slow ones look like a fallback extractor, which is not known
++in advance. Upload extraction probably rises with size, on two points. The spread is 40× between
++median and max. **A "time left" figure from this would be wrong by minutes, or by a factor of
++thirty, either way** — the number we invented that the docs warn about.
++
++Two more facts: `runStep` resets `startedAt` on every lease window, so a resumed step's duration
++is its last window only; and PDF `extract` already counts its chunks (`23/69 chunks, pages 40–41`
++through `ctx.report`), but `report` does not write the row and that step makes no other write while
++running. The poll reads Postgres (`listJobs` → `store.list`), so the count never reaches the
++reader, in production or in dev. The best progress signal we have is being thrown away.
++
++### B1. A real fraction, saved and drawn (build)
++
++- **`JobStep.progress?: { done, total, unit }`**, a counted fraction, set through a second,
++  optional argument: `ctx.report(detail, { done, total, unit })`. Only callers that are counting
++  real units pass it: PDF `extract` (`unit: "chunk"`) and `assets` (`"image"`). In the job's
++  `steps` JSON, so no column.
++- **Only a counted report saves, at most once every five seconds** (`REPORT_SAVE_EVERY_MS`). It
++  goes through the preview's write chain — `stepPreviews` becomes `stepNotes` — so it is
++  serialised, its failures are logged at debug and swallowed, and **`settle` waits for it before the
++  step's own commit**: `noteProgress` replaces the whole `steps` array, so a late write would
++  otherwise put a finished step back to `running` (Sol, finding 1; the same race the preview's
++  `settle` was written for). A report without a count stays in memory, as before — saving every
++  report would be a write-volume change across twenty modes nobody asked for (Sol, finding 7). Cost:
++  about 44 writes for the slowest measured PDF extract, at most ~148 in a whole lease window.
++- **Gone however the step ends**: `settle` deletes it on success and failure, `runStep` deletes it
++  when a step starts (a requeued one), and `settledSteps` in `src/store/pg-jobs.ts` drops it, and a
++  running step's `detail`, on all six store settlements — pause, requeue, expiry and the three Stops
++  (Sol, finding 4). A done step's detail is its product's and is kept.
++- **The card draws it**: under a running step that has `progress`, a thin `<progress value max>`
++  (the upload bar's shape, `Sending` in AddPage.tsx) and *23 of 69 sections of the file done* or
++  *8 of 12 images done*. "Done", not "read": both counts include a unit that failed (Sol, finding
++  6). A step without counted progress keeps exactly what it has now.
++- **No time-left figure, and no whole-import bar.** A whole-import bar would weight steps whose
++  durations we have just shown we cannot predict; the doc's rule against an invented percentage
++  stands, and is reworded to say what is now allowed: a fraction of units the step has counted.
++
++### B2. A time-left estimate (deferred, its own queue entry)
++
++When there are enough imports to measure — the bar `src/job-state.ts` sets is about a dozen
++successful runs per step and kind — repeat the measurement above, and if upload `extract` turns out
++to track bytes or pages, say *usually N–M minutes for a file this size* under that step. The URL
++side needs the fallback extractor's path to be told apart first. Queued as its own entry; this plan
++does not build it.
++
++## The simpler options passed over
++
++- **Moving only the purpose box, without an About-you box.** Greg asked for both.
++- **A single button at the top only.** Greg asked for top and bottom; on a phone the reader may be
++  at either end.
++- **Parsing `N/M` out of the existing `detail` string** instead of a `progress` field. No new field,
++  but a reworded sentence would silently stop drawing the bar — the stable-code-not-prose lesson in
++  ingest-queue.md.
++- **A rough time-left range now, from eleven imports.** Rejected above; B2.
++
++## Stages
++
++1. Part A, with tests (`tests/add-page-purpose.test.tsx` and a new file for the About-you box and
++   the two Ready bars), and the browser check in a Sonnet subagent.
++2. Part B1: the throttled save and `progress` (a test in the jobs suite that a reported count
++   reaches the store, and one that it is gone after the step ends), the bar on `StepRow`, and the
++   ingest-queue.md reword.
++3. Part C, below: two more reports the Overseer folded in after stages 1–2 landed.
++
++## Part C — a tick you cannot miss, and a microphone on both boxes
++
++Two more of Greg's reports, 2026-10-19, handed to this work by the Overseer:
++
++`spya-a40t70`:
++
++> … move the Why are you reading this? nearer the top. And maybe we need two copies of the button to
++> open the article at the top and at the bottom when it does eventually, when it is eventually ready
++> to open. And it should be really visible somehow that something has changed and that it is now
++> ready to open, that it has finished. So whether there was a loading spinner before that's gone, or
++> a loading spinner that becomes a big green check mark or something, so it's really clear when
++> things have finished importing.
++
++`spya-wc4vku`:
++
++> In the sort of page that shows after they add something while it's importing, make sure there's a
++> dictation button next to the Why are you reading this? input box. And indeed, we really want a
++> dictate button next to pretty much all of our input boxes that are going to have more than a few
++> words of text typed into them. Let's make a minimal tweak to our docs and/or design system to make
++> this more likely going forwards.
++
++The first is stages 1–2 bar one thing:
++
++### C1. A big green tick
++
++The top `ReadyBar` leads with a large green `CircleCheck` (lucide, the icon set we use;
++[icons.md](../project/icons.md)) beside *Your article is ready.* — the "big green check mark" — so
++the change from a page of spinners is visible from across the room. The bottom bar stays plain.
++The colour is `--positive` (styles/tokens.css), the contrast-tested go-ahead green in both themes,
++through a class (`.add-ready-tick`, profile.css) since Tailwind has no `positive` key and a missing
++key emits nothing. **Built.**
++
++### C2. A microphone on both add-page boxes — not built here; handed back to the sweep
++
++**Decided after the Part C plan review**
++([261020a-part-c-plan-review-sol.md](261020a-part-c-plan-review-sol.md), *revise before build*):
++this page is the hardest place in the app to put a microphone, and doing it safely is a job of its
++own rather than a tail on this one. The four P1s are the spec for whoever takes it: the boxes
++unmount on more transitions than completion (a public-copy or failure answer, and a source change),
++and unmounting aborts a recording, so public-copy navigation must also wait; the Open guards need
++separate per-box refs for same-tick checks *and* parent state to render the combined disabled state,
++and must cover both bars, ⌘+Enter, *Open without saving* and the waiting effect (then disable both
++microphones once Open is waiting); the
++live guesses reach `onChange`, so About you's autosave and the purpose session's timer *and* its
++seed-triggered commit must pause during a dictation; and the keeper key must be
++`add:purpose:${wanted}` (not `source`, which is empty for every upload) and `add:about-you`. Plus
++P2s: article context once a slug exists, and a lifecycle test stage. The P3 documentation work must
++also update dictation.md's box count and keeper inventory, as well as taking Greg through the exact
++controls.md rule wording before editing it. `spya-wc4vku` is left unresolved for the Overseer's
++sweep, which offered to pick it up, together with C3 and the app-wide sweep. The text below is the
++pre-review proposal retained for history, not the implementation spec; the corrections above
++supersede it.
++
++Both `PurposeBox` and `AboutYouBox` get the dictation button in their label row and the strip
++under the box, through `useDictationField` exactly as `FeedbackSendBox` uses it
++([dictation.md § Adding it to a box](../project/dictation.md#adding-it-to-a-box)): `readOnly` on
++the box while the words come back, `context: { kind: "profile" }` (there may be no article yet;
++the reader's own words prime the transcript), `keep` keyed on the box and the source, and a new
++`DictationSurface`, `"add"`, so a failure says where it happened.
++
++**The reason the add page never had one is the page leaving by itself**: a microphone running
++when the import finishes would be unmounted and its words aborted
++(the comment on `PurposeBox`). So **a box whose dictation is busy holds the page** at the finish,
++as focus does: the box reports `busy` (armed or transcribing) upward through a ref the completion
++effect reads, beside `focusedRef`. Pressing the microphone button moves the focus out of the
++textarea, so focus alone does not cover it. And **Open the article is disabled while either box
++is dictating** (the house rule: a guard and a disabled button, dictation.md), so a press cannot
++unmount a live recording. No double press on Stop: these boxes do not send.
++
++The transcript's words arrive through `onChange`, so the purpose session and the profile hook see
++them exactly as typing; the commit at the end of a dictation is the box's existing commit (purpose:
++`purpose.commit`; About you: `profile.commit`).
++
++### C3. The rule, written down
++
++One rule in [controls.md](../project/controls.md), beside *Controls that do the same job look the
++same*: **a box that takes more than a few words of the reader's prose gets the microphone**, with a
++pointer to dictation.md § Adding it to a box, and the reason (Greg's words above). Not a lint: a
++mechanical check cannot tell a prose box from a search field.
++
++### Deferred
++
++**Sweeping the rest of the app's prose boxes** for a missing microphone is its own queue entry: the
++list of boxes, each a small change but each with its own send/leave/unmount behaviour to check, is
++a separate job from this page.
++
++## Review
++
++**Part C plan review, GPT Sol, 2026-10-20** —
++[261020a-part-c-plan-review-sol.md](261020a-part-c-plan-review-sol.md). *Revise before build*:
++eight findings. C1's colour (finding 8) taken and built; C2 and C3 handed back rather than built,
++§ C2 says why.
++
++**Plan review, GPT Sol (gpt-5.6-sol, high, read-only), 2026-10-20** —
++[261020a-add-page-plan-review-sol.md](261020a-add-page-plan-review-sol.md). *Revise before build*,
++nine findings, all accepted and folded into the sections above: (1) a late report write could undo
++the step's commit — the write goes through the preview's chain and `settle` waits; tested with the
++delayed-snapshot case; (2) the About-you hold needed a defined state machine — hold only a drawn box;
++(3) the plain textarea lacked `ProfileBox`'s idle save, warning and paste safety — added, no
++`maxLength`; (4) progress and running detail survived the store's six other exits — `settledSteps`;
++(5) Open did not wait for the About-you save — it does; (6) "parts read" was false for counts that
++include failures — unit-named "done"; (7) saving every report was a wider change than asked — only
++counted ones; (8) the "never reaches the poll" claim was too absolute — narrowed here and in the
++three comments that made it; (9) fetch n was 9, not 8.
++
++Mutation checks, each watched red and restored: the About-you hold removed (the waits test);
++the drawn-box condition removed (the failed-read test); Open not waiting for About you (the refusal
++test); the report throttle removed (the burst test); `settledSteps` keeping progress and detail
++(all six parity doors).
++
++**Code review, GPT Sol (gpt-5.6-sol, high, workspace-write), 2026-10-20** —
++[261020a-add-page-code-review-sol.md](261020a-add-page-code-review-sol.md). Four findings, each
++fixed by the reviewer with a regression watched red: (1) a second Open after a refused About-you
++save left before the retry answered — every unsaved state now waits; (2) *Open without saving* was
++offered while the other box's PATCH was still on the wire — it waits for both requests to settle;
++(3) an untouched repeat paste still had its action only at the bottom — both waiting phases share
++the two `ReadyBar`s; (4) a failed progress write was logged as a failed preview. Its sandbox could
++not reach Postgres; the four suites were run outside it afterwards: 385 passed, typecheck clean.
+diff --git a/docs/plans/261020a-add-page-code-review-prompt.md b/docs/plans/261020a-add-page-code-review-prompt.md
+new file mode 100644
+index 000000000..430cb7900
+--- /dev/null
++++ b/docs/plans/261020a-add-page-code-review-prompt.md
+@@ -0,0 +1,13 @@
++Code review of plan 261020a, built. You may edit files in this worktree to fix what you find (workspace-write), within the scope of this change; report anything wider instead of fixing it. Do not run git commands that change history or the index (no commit, reset, checkout, stash, restore, rebase). Do not touch the production database, .env files, or infra/.
++
++The plan, with your own plan review folded in: docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md (its § Review lists how each of your nine plan findings was handled). Your plan review: docs/plans/261020a-add-page-plan-review-sol.md. The scoped diff against HEAD (generated with `git diff HEAD`, not kept) (src/web/AddPage.tsx, src/web/AddArticle.tsx, src/web/JobProgress.tsx, src/web/styles/profile.css, src/jobs.ts, src/pipeline.ts, src/store/pg-jobs.ts, src/types.ts, tests/add-page-purpose.test.tsx, tests/job-card-progress.test.tsx, tests/jobs-walk.test.ts, tests/store-jobs-parity.test.ts, docs/project/ingest-queue.md, docs/project/reader-profile.md).
++
++Check especially:
++1. AddPage: the About-you hold, the Open-waits effect and its dependency list, `openWithoutSaving` abandoning the profile, the leave warning, any way a reader's words in either box are lost or the page waits forever or leaves while they type; the repeat-paste path; StrictMode; the purpose box's existing behaviours unchanged apart from position and size.
++2. jobs.ts `stepNotes`: the throttle, `settled` guard, ordering with `settle()` before the commit on success and failure, StaleAttemptError swallowed, `delete step.progress` at start.
++3. pg-jobs.ts `settledSteps`: dropping `detail` on running steps in both branches — anything else that relies on a running step's detail surviving a settlement (e.g. the interrupted error sentence path, tests, the UI)?
++4. Whether the tests would catch regressions (each was watched red under mutation, per the plan).
++
++Gates you can run: `npm run typecheck`; `npx vitest run tests/add-page-purpose.test.tsx tests/job-card-progress.test.tsx tests/jobs-walk.test.ts tests/store-jobs-parity.test.ts` (the last two need the local Postgres, which is up). Do not run the full `npm test`.
++
++Write your findings first, numbered and ranked by severity with file:line evidence, then what you changed for each, to the output file.
+diff --git a/docs/plans/261020a-add-page-code-review-sol.md b/docs/plans/261020a-add-page-code-review-sol.md
+new file mode 100644
+index 000000000..fe88b21c5
+--- /dev/null
++++ b/docs/plans/261020a-add-page-code-review-sol.md
+@@ -0,0 +1,84 @@
++# Code review — 261020a
++
++Verdict: **fixed before commit**. I found four in-scope issues, including two ways the new
++About-you save coordination could make the Open controls say more than they had earned. The fixes
++are in this worktree.
++
++## Findings
++
++1. **P1 — Retrying a refused About-you save could open the article before the retry answered.**
++   `profile.commit()` changes the hook's internal request state synchronously but React does not
++   replace the render snapshot synchronously. The built handler tested only `dirty`, `saving`, and
++   `inFlight` in that old snapshot, so an old `error` meant “not waiting”: a second press started
++   the PATCH and immediately called `leave`. The corrected decision includes every unsaved state at
++   [`src/web/AddPage.tsx:1479`](../../src/web/AddPage.tsx#L1479), and the regression holds the retry
++   unanswered at [`tests/add-page-purpose.test.tsx:1723`](../../tests/add-page-purpose.test.tsx#L1723).
++
++2. **P1 — One refused save exposed “Open without saving” while the other box's PATCH was still in
++   flight.** The built waiting effect stopped on either refusal without first draining the other
++   request, and the button was keyed only to refusal. `abandon()` prevents a future/unmount write;
++   it cannot recall a PATCH already sent. Pressing the button could therefore save one of the two
++   drafts behind a control that promised not to save either. The relevant coordination is at
++   [`src/web/AddPage.tsx:1495`](../../src/web/AddPage.tsx#L1495) and the button gate at
++   [`src/web/AddPage.tsx:1594`](../../src/web/AddPage.tsx#L1594); the mixed-outcome regression is at
++   [`tests/add-page-purpose.test.tsx:1745`](../../tests/add-page-purpose.test.tsx#L1745).
++
++3. **P2 — An untouched repeat paste still showed the completion action only once, at the bottom.**
++   The new shared `ReadyBar` was rendered twice only for `phase.kind === "ready"`; the existing
++   `repeat` branch kept its single old block. That contradicted plan A4's explicit “`ready`, and
++   `repeat`” scope and left the long-page repeat path without the top action. Both waiting phases
++   now share the same two bars at [`src/web/AddPage.tsx:1582`](../../src/web/AddPage.tsx#L1582),
++   rendered at [`src/web/AddPage.tsx:1630`](../../src/web/AddPage.tsx#L1630) and
++   [`src/web/AddPage.tsx:1964`](../../src/web/AddPage.tsx#L1964). StrictMode coverage is at
++   [`tests/add-page-purpose.test.tsx:1439`](../../tests/add-page-purpose.test.tsx#L1439).
++
++4. **P3 — A failed counted-progress write was logged as a failed “preview” write.** The refactor
++   made previews and progress reports share one queue but left the old diagnostic text, so the only
++   debug evidence for a progress-write failure named the wrong feature. It now says “step note not
++   written” at [`src/jobs.ts:1290`](../../src/jobs.ts#L1290); the settlement test's names/comments
++   now likewise call both `preview` and `progress` transient at
++   [`tests/store-jobs-parity.test.ts:1900`](../../tests/store-jobs-parity.test.ts#L1900).
++
++## What I changed
++
++1. Treated an offered About-you box's `error` as pending when Open retries it, and derived the
++   first successful empty-profile answer in the same render as well as latching it. This closes the
++   passive-effect race where the answer existed but the latch's state update had not rendered.
++2. Kept the Open transition waiting until every already-sent purpose/profile request settles, and
++   hid “Open without saving” while either request is in flight. Once both settle, a refusal still
++   leaves both drafts visible and offers the escape; that escape abandons both drafts.
++3. Replaced the separate repeat block with the same `ReadyBar` used by an ordinary ready import, at
++   both page positions and with the existing repeat-specific sentence and once-guarded handler.
++4. Corrected the shared transient-write diagnostic and the stale settlement-test wording. I also
++   changed the new type-only `SaveState` import to an `import type` after the scoped lint identified
++   it.
++
++## Reviewed without another finding
++
++- `stepNotes` writes only counted reports, saves the first and then at most once per five seconds,
++  serializes reports with previews, ignores reports after `settle()` starts, and swallows transient
++  write failures including `StaleAttemptError`. Both the success path and catch path await
++  `settle()` before the authoritative commit/settlement; a new run deletes old `progress`.
++- `settledSteps` removes `preview` and `progress` on every settlement arm, and removes `detail` only
++  from a step that was running. Its interrupted branch supplies `step.error`, which is what the UI
++  renders; completed product detail remains untouched. I found no consumer that needs a running
++  report's detail after pause, requeue, expiry, or Stop.
++- The focused tests cover the new visible bar, write throttling, late-snapshot ordering, success and
++  failure cleanup, and all six external settlement doors. The two AddPage gaps above were not
++  covered until the regressions added in this review; each was watched red before the fix.
++
++## Verification
++
++- `npx vitest run tests/add-page-purpose.test.tsx` — **107 passed**.
++- `npx vitest run tests/job-card-progress.test.tsx` — **18 passed**.
++- The requested four-file Vitest command could not collect tests because this sandbox was refused
++  access to local Postgres: `connect EPERM 127.0.0.1:54362`. Therefore
++  `tests/jobs-walk.test.ts` and `tests/store-jobs-parity.test.ts` are **not claimed as run** here.
++- `npm run typecheck` itself could not create tsx's IPC socket (`listen EPERM
++  /tmp/tsx-1000/93.pipe`). Running the same script without the tsx CLI IPC layer,
++  `node --import tsx scripts/typecheck.ts`, passed all four projects and reported all **3,848**
++  source files covered.
++- `npm run lint:hook-deps` — passed, 4,529 files checked.
++- Scoped Biome lint — no warnings after the type-only import fix; only the repository's existing
++  advisory complexity notices in `AddPage`, `runStep`, `walkClaim`, and `enqueue`.
++- `git diff --check` — passed.
+diff --git a/docs/plans/261020a-add-page-plan-review-prompt.md b/docs/plans/261020a-add-page-plan-review-prompt.md
+new file mode 100644
+index 000000000..6bb551926
+--- /dev/null
++++ b/docs/plans/261020a-add-page-plan-review-prompt.md
+@@ -0,0 +1,7 @@
++Review the plan docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md before it is built. Read-only: do not edit any files. The measurement behind Part B is in docs/plans/261020a-import-durations-measurement.md.
++
++Read the code it changes: src/web/AddPage.tsx (AddPage, PurposeBox, the completion effect that decides whether to leave by itself, openTheArticle), src/web/useProfile.ts, src/web/useAutosavedText.ts, src/web/useFitTextarea.ts, src/web/AddArticle.tsx (JobCard, StepRow), src/jobs.ts (stepPreviews, runStep and its ctx.report, note), src/pipeline.ts around the PDF extract onProgress (~line 3295) and assets (~4142), src/store/pg-jobs.ts, src/job-state.ts, docs/project/ingest-queue.md § What the card says and § The app says out loud that it needs a tab open.
++
++Look hard for: (1) ways the About-you box loses words or blocks the page — auto-open while typing, reader change, the unmount leave write, a failed GET /api/reader; whether gating on "empty profile" is decided correctly; (2) whether persisting ctx.report every 5 s through note() is safe — lease fences / StaleAttemptError, races with the step's own commit (could a late note overwrite the step's done transition or resurrect detail/progress after the step ended?), write volume, tests that assume detail is never persisted; (3) whether the progress field is honest and correctly cleared; (4) anything simpler. Also check my claim that ctx.report detail never reaches the poll today.
++
++Write your findings, numbered and ranked by severity with file:line evidence, to the output file.
+diff --git a/docs/plans/261020a-add-page-plan-review-sol.md b/docs/plans/261020a-add-page-plan-review-sol.md
+new file mode 100644
+index 000000000..7d88cef93
+--- /dev/null
++++ b/docs/plans/261020a-add-page-plan-review-sol.md
+@@ -0,0 +1,23 @@
++# Plan review — 261020a
++
++Verdict: **revise before build**. Part B currently repeats a race the existing preview machinery was explicitly written to prevent, and Part A does not yet define the profile-load/save state machine tightly enough to guarantee that the page neither leaves under the reader nor waits forever.
++
++1. **P1 — A queued `ctx.report` write can overwrite the step's completed transition; the plan's claim that the transition overwrites it is backwards.** The proposed writer is asynchronous and `noteProgress` replaces the whole `steps` array (`docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md:141-146`; `src/store/pg-jobs.ts:1985-1997`). The fence is only job id, attempt, running status and live lease (`src/store/job-fence.ts:83-97`). A non-final step's transactional commit deliberately keeps that same claim live (`src/store/pg-jobs.ts:2317-2345`), so a report write already on the wire can land *after* the commit and restore its snapshot of `status: "running"`, `detail` and `progress`. This is precisely the preview race documented in `src/jobs.ts:1235-1252` and reproduced by the delayed, cloned snapshot in `tests/jobs-walk.test.ts:1084-1133`. Use one per-step serialized transient-writer queue (preferably shared by report and preview), and await its drain on both success and failure before deleting transient fields and committing the settlement. The tests proposed at plan lines 180-182 are insufficient: add the same delayed-snapshot regression for report/progress, proving a non-final step cannot be put back to running after its commit. Swallowing a `StaleAttemptError` inside this mid-step display writer remains appropriate; the actual step commit is the authoritative fence.
++
++2. **P1 — “`state` not clean” does not define a safe completion gate: `loading`, a failed initial GET, and a completed save require different decisions.** `SaveState` has six states, and both `clean` and `saved` mean that the draft matches the server (`src/web/useAutosavedText.ts:51-79`). A failed `GET /api/reader` calls `fail`, producing `error` while the plan also hides the box (`src/web/useProfile.ts:108-119`; plan:77-80). Treating every non-`clean` state as a hold therefore either (a) lets completion auto-open while the GET is still pending, before learning that the profile is empty, or (b) turns a failed GET into an invisible permanent hold. Making the completion effect reactive to later profile changes creates the opposite bug: after focus/typing put the page in `ready`, a successful blur save can make the state safe and auto-open even though the plan promises that blur is not a decision to leave (plan:92-95). Specify a monotonic decision: if completion beats the GET, wait for that first GET outcome; a failed or non-empty result releases the *initial* automatic decision; an empty result enables the offer and evaluates focus/dirty/in-flight once; once interaction chooses `ready`, it never returns to automatic opening. Gate save errors only when an empty-profile offer was actually shown. Add tests for completion-before-GET, GET failure after completion, and save-success-after-focus/blur.
++
++3. **P1 — A “plain textarea” does not inherit the profile box's no-word-loss contract, and the plan attributes behavior to the wrong layer.** `useProfile()` supplies loading, ordered writes and the unmount/pagehide fallback, but it does not supply the idle timer, blur handler, save status, character counter or unload warning (`src/web/useProfile.ts:99-121`). Those live in `ProfileBox`: `useIdleCommit` at `src/web/ProfileBox.tsx:58-112`, the warning at `src/web/ProfileBox.tsx:114-131` and its wiring at `src/web/ProfileBox.tsx:225-240`. More importantly, that component deliberately omits `maxLength`, because the browser would silently discard the suffix of a paste; it shows the count and lets the server refuse the save while retaining every word (`src/web/ProfileBox.tsx:15-28`). Plan lines 82-85 must explicitly require those non-dictation pieces and explicitly forbid `maxLength`, rather than saying they come from the hook. Test an over-limit paste remains intact and reports the refusal, an idle draft saves, and a dirty/error/in-flight draft installs the unload guard.
++
++4. **P1 — “Deleted, with `detail`, when the step finishes” covers only `runStep`; progress and running detail can survive pause, requeue, expiry and Stop.** The store has six other settlement doors, and their common `settledSteps` transformation currently removes only `preview` (`src/store/pg-jobs.ts:990-1055`; the six-door parity test is `tests/store-jobs-parity.test.ts:1900-1953`). A requeued attempt also clears only `preview` when it starts (`src/jobs.ts:1479-1488`). Thus a paused PDF can be shown as pending with the old fraction/detail, and the next attempt can begin with the previous attempt's progress. Define `progress` and a running report's `detail` as transient across all those doors, remove them when a running step is settled, and clear them on start. Do not indiscriminately erase `detail`: successful steps intentionally replace the running report with `product.detail` before commit (`src/jobs.ts:1575-1597`), and the parity suite deliberately preserves a done step's detail (`tests/store-jobs-parity.test.ts:1956-1969`). Extend the six-door preview table to progress/running detail and add a next-attempt-start assertion.
++
++5. **P2 — “Open the article” does not actually wait for the About-you save, so a failed ordinary PATCH is hidden by navigation and reduced to a best-effort unmount write.** The plan says the button commits both values but that “the unmount write covers the rest” (`docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md:92-95`). `commit()` is fire-and-forget (`src/web/useAutosavedText.ts:82-105,184-267`). The unmount path does preserve ordering behind an in-flight write, but it cannot show a refusal once the component is gone and ultimately calls a best-effort `leave` (`src/web/useAutosavedText.ts:177-182,240-258,281-304`). Make the explicit Open action wait until both purpose and profile are settled, surface a profile refusal in the still-visible page, and let **Open without saving** abandon the profile draft as well as the purpose draft. Keep the unmount write as the safety net for involuntary navigation, not as the success path for the button.
++
++6. **P2 — The proposed universal text “parts read” is not true for the assets fraction.** `collectAssets` sets the denominator to the capped `fetchable` image list (`src/collect-assets.ts:954-961`) and increments `done` in `finally`, including fetch, validation, budget and storage failures (`src/collect-assets.ts:1248-1262`). PDF progress likewise counts completed checks, including an exhausted failed check (`src/pdf-read.ts:3615-3645`). The fraction is honest as work attempted/completed, but not as content successfully read. Carry a unit/label with the structured progress or render by step: for example, “23 of 69 chunks checked” and “8 of 12 images checked.” Keep the bar's accessible label equally literal.
++
++7. **P2 — Persisting every `ctx.report` is a much wider write-volume change than the import progress requested, and the plan has not measured it.** `ctx.report` feeds roughly twenty model-backed modes, not just PDF extraction and assets (`src/pipeline.ts:3709,4006,4277-6040`), while `noteProgress` rewrites the full steps JSON and returns the full job row (`src/store/pg-jobs.ts:1985-1997`). At five seconds, the measured 216-second PDF is about 44 extra row writes and the runner's roughly 740-second maximum window permits about 148; each also makes subsequent polls non-identical. The simpler scoped change is to persist only reports carrying the new structured `progress` value, which delivers the two requested bars. If live detail for every mode is an intentional second feature, state that scope, count its production write/poll cost, and keep it as a separate decision rather than calling the cost only “one extra row write per five seconds” (plan:141-146).
++
++8. **P2 — The absolute claim that report detail “never” reaches the poll is false, although it is true for PDF extraction and assets today.** `ctx.report` mutates the same in-memory `step.detail` object (`src/jobs.ts:1353-1365`), and a later preview call persists the whole `job.steps` array (`src/jobs.ts:1271-1278`). The `simple` step supplies both callbacks (`src/pipeline.ts:5144-5152`), so its preview write can incidentally carry the latest report detail into Postgres. PDF extract and assets do not call preview, so their counts really do stay in the worker and never reach the poll (`src/pipeline.ts:3291-3296,4139-4143`). Narrow plan lines 54-56 and 133-137 to “report does not persist by itself; these two steps have no other write while running.” I found no test assertion that requires detail never to persist, but the rationale/comments in `src/web/AddArticle.tsx:560-570`, `tests/job-card-progress.test.tsx:178-186` and `docs/project/ingest-queue.md:1685-1689` must be updated because they currently make the same absolute claim.
++
++9. **P3 — The measurement's fetch sample count is off by one.** The raw table contains nine completed fetch steps: the eight completed imports plus the upload whose extract later failed (`docs/plans/261020a-import-durations-measurement.md:37-48`). Under the stated “done steps only” method, fetch is therefore `n=9`, not `n=8` (`docs/plans/261020a-import-durations-measurement.md:50-54`; plan:117-125). Its median 1.3 s and max 3.5 s do not change, so this does not alter the decision against a time estimate, but the sample definition/count should be corrected before the measurement is cited.
++
++Two relevant checks did not produce additional findings. Reader changes are already fenced twice: `App` remounts `AddPage` with `key={user.id}` (`src/web/App.tsx:559-585`), while profile writes and the unmount write are bound to the reader for whom the hook was created (`src/web/useProfile.ts:44-48,85-107`). Preserve those mechanisms; an additional key around only the visible box would not reset a hook owned by its parent. Also, the lease fence itself is correct; the race in finding 1 exists specifically because a successful non-final commit intentionally keeps that valid claim.
+diff --git a/docs/plans/261020a-import-durations-measurement.md b/docs/plans/261020a-import-durations-measurement.md
+new file mode 100644
+index 000000000..7806eeb8a
+--- /dev/null
++++ b/docs/plans/261020a-import-durations-measurement.md
+@@ -0,0 +1,82 @@
++# Import step durations in production (measured 2026-10-20)
++
++## Which database
++PRODUCTION. Not the Supabase MCP: `mcp__supabase__execute_sql` and `get_project_url` hit the LOCAL stack
++(http://127.0.0.1:54361, 114 jobs) and were used only to establish that. Production was read with a node script
++(`pull.cjs`, `pull2.cjs` in this scratchpad), `.env.prod` DATABASE_URL (app role, transaction pooler :6543,
++committed CA), every query inside `begin read only` ... `rollback`. Check printed `transaction_read_only = on`,
++server address a remote IPv6 (not local), 129 rows in spideryarn.jobs. Nothing written, no SET issued.
++Greg's standing permission: database.md § Connecting to the remote (2026-10-19).
++
++## Sample is tiny
++`jobs` in production only reaches back to 2026-09-28 (129 jobs in all, 11 of them imports, i.e. with a `fetch`
++step). So "last 60 days" = 3 weeks, n = 11: 6 URL done, 2 upload done, 3 failed (1 upload extract error,
++1 upload fetch error, 1 URL fetch error). Percentiles below are indicative only; with n=6 "p90" is the max.
++
++## SQL (exact)
++```sql
++-- pull.cjs: import jobs, steps JSON analysed in node (finishedAt - startedAt of steps with status 'done')
++select j.id, j.url is not null as has_url, j.upload_id is not null as has_upload, j.status, j.created_at, j.finished_at,
++ j.steps, j.draft_revision_id, u.bytes as upload_bytes, u.claimed_bytes,
++ (select count(*) from spideryarn.revision_blocks b where b.revision_id=j.draft_revision_id) as nblocks,   -- 0: draft_revision_id is null after publish
++ (select coalesce(sum(b.words),0) from spideryarn.revision_blocks b where b.revision_id=j.draft_revision_id) as nwords
++from spideryarn.jobs j left join spideryarn.uploads u on u.id=j.upload_id
++where j.created_at > now() - interval '60 days' and j.steps @> '[{"name":"fetch"}]'::jsonb;
++
++-- pull2.cjs
++select min(created_at) mn, max(created_at) mx, count(*) n,
++  count(*) filter (where steps @> '[{"name":"fetch"}]'::jsonb) imports from spideryarn.jobs;
++select left(j.id,8) id, j.requeues, j.status, u.bytes upload_bytes,
++ (select count(*) from spideryarn.revision_blocks b where b.revision_id=a.current_revision_id) nblocks,
++ (select coalesce(sum(b.words),0) from spideryarn.revision_blocks b where b.revision_id=a.current_revision_id) nwords
++from spideryarn.jobs j left join spideryarn.uploads u on u.id=j.upload_id
++left join spideryarn.articles a on a.slug=j.slug and a.owner_id=j.owner_id
++where j.steps @> '[{"name":"fetch"}]'::jsonb and j.created_at > now() - interval '60 days' order by j.created_at;
++```
++
++## Per-job raw (seconds, done steps only; words = finished article's words)
++| job | kind | upload bytes | words | fetch | extract | blocks | structure | assets | create->finish |
++|---|---|---|---|---|---|---|---|---|---|
++| kup | url | | 422 | 0.7 | 3.9 | 1.7 | 0.1 | 0.4 | 7.3 |
++| dzj | url | | 1,125 | 2.6 | 4.8 | 0.2 | 11.8 | 0.1 | 20.1 |
++| nkr | url | | 5,214 | 1.1 | 3.1 | 1.8 | 0.1 | 0.8 | 7.7 |
++| pxk | url | | 11,861 | 1.7 | 12.7 | 2.7 | 0.5 | 0.1 | 18.6 |
++| rzr | url | | 13,657 | 1.0 | 62.2 | 2.1 | 0.4 | 0.1 | 67.4 |
++| mm8 | url | | 4,645 | 1.3 | 122.4 | 0.7 | 73.8 | 32.0 | 231.8 |
++| m0j | upload | 1.2 MB | 17,379 | 1.3 | 90.7 | 3.8 | 0.4 | 13.5 | 111.6 |
++| s9g | upload | 14.7 MB | 44,991 | 3.5 | 216.2 | 4.9 | 0.8 | 38.5 | 267.0 |
++| k0y | upload (error) | 8.0 MB | - | 2.0 | ERROR after 203.6 | | | | 205.9 |
++
++## Per step (done only)
++| step | scope | n | min | median | p90~max | max |
++|---|---|---|---|---|---|---|
++| fetch | all | 9 (corrected from 8 by the plan review: the upload whose extract failed had a done fetch) | 0.7 | 1.3 | 3.5 | 3.5 |
++| extract | url | 6 | 3.1 | 8.8 | 122 | 122.4 |
++| extract | upload | 2 | 90.7 | 153 | 216 | 216.2 |
++| blocks | all | 8 | 0.2 | 1.9 | 4.9 | 4.9 |
++| structure | url | 6 | 0.1 | 0.45 | 73.8 | 73.8 |
++| structure | upload | 2 | 0.4 | 0.6 | 0.8 | 0.8 |
++| assets | all | 8 | 0.1 | 0.6 | 38.5 | 38.5 |
++
++Whole import wall clock (create->finish), done jobs: URL n=6 min 7.3, median 19.4, max 231.8; upload n=2: 111.6 and 267.0.
++(first startedAt -> last finishedAt is within ~1s of create->finish: queue wait is negligible in this sample.)
++
++## Predictability
++- Extract on uploads: bytes 1.2 MB -> 91 s, 14.7 MB -> 216 s, 8.0 MB -> still failed at 203.6 s. Monotone-ish with
++  size (and pages) but n=2 done + 1 failure: no usable fit; an 8 MB file burning >200 s then erroring sits between
++  the two. Words: 17k -> 91 s, 45k -> 216 s (~5 s/1000 words, same two points). Plausibly linear in pages, but cannot
++  be called from this data. Size known at start: `uploads.bytes` (page count not stored on the job).
++- Extract on URLs: bimodal and NOT a function of length. 3-5 s for 422/5,214/1,125 words, 12.7 s for 11.9k words,
++  62 s for 13.7k, 122 s for only 4.6k words. Slow ones look like a fallback extractor (second of the "two" extractors in
++  content-extraction.md), which is not knowable from the size of the page.
++- Structure: mostly under 1 s (headings-first imports publish before the model call, which the job step then
++  skips quickly); when it does the model call it is 12 s (1.1k words) to 74 s (4.6k words). Too few points.
++- No size/time table by bucket is meaningful at n<=9.
++
++## Requeue question (code, src/jobs.ts runStep ~1481, comment ~1483)
++Each attempt does `step.status="running"; step.startedAt=new Date()`; a requeue resets a running step to `pending`
++keeping other fields. So startedAt IS RESET on every window and finishedAt is the final window's end:
++finishedAt - startedAt = only the LAST window of a resumed step, not its whole time. All 11 imports have
++`requeues = 0`, so no resumed step is in this sample, but any resumed one would under-report. For whole-import time use
++job createdAt -> finishedAt. The per-step clock must be kept elsewhere (revision_step_runs has started_at/finished_at
++per run, untested here) if resumed steps need counting.
+diff --git a/docs/plans/261020a-part-c-code-review-prompt.md b/docs/plans/261020a-part-c-code-review-prompt.md
+new file mode 100644
+index 000000000..1f5711953
+--- /dev/null
++++ b/docs/plans/261020a-part-c-code-review-prompt.md
+@@ -0,0 +1 @@
++Code review of Part C1 of plan docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md (§ C1, the big green tick; § C2 explains why the microphone was handed back rather than built). Read the uncommitted change with `git diff HEAD` (src/web/AddPage.tsx ReadyBar and its import, src/web/styles/profile.css, tests/add-page-purpose.test.tsx, the plan doc). You may fix what you find in those files (workspace-write); do not run git commands that change history or the index. Check: the icon follows docs/project/icons.md (size/stroke conventions, aria-hidden, currentColor), the colour token resolves in both themes (styles/tokens.css --positive; dark mode, dim mode), the status line still reads well to a screen reader, layout at phone width, and whether the plan's § C2 account of your Part C plan review (docs/plans/261020a-part-c-plan-review-sol.md) is accurate. Gate: `npx vitest run tests/add-page-purpose.test.tsx`. Write findings first, ranked, with file:line, then what you changed, to the output file.
+diff --git a/docs/plans/261020a-part-c-code-review-sol.md b/docs/plans/261020a-part-c-code-review-sol.md
+new file mode 100644
+index 000000000..d8c16b7a2
+--- /dev/null
++++ b/docs/plans/261020a-part-c-code-review-sol.md
+@@ -0,0 +1,41 @@
++Verdict: **pass after fixes**. No findings remain in the reviewed C1 implementation.
++
++## Findings
++
++1. **P2 — C2 inaccurately reduced the reviewed Open guard to parent state “not a ref.”**
++   `docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md:239`
++   The Part C plan review requires both separate per-box refs for same-tick guards and parent state
++   for the rendered combined disabled state. The account also omitted source transitions,
++   withholding public-copy navigation, disabling both microphones after Open starts waiting, and
++   the P3 updates to dictation.md's box count and keeper inventory. As written, a later builder
++   could follow C2 and reproduce the race the review identified. **Fixed in this review.**
++
++2. **P3 — The C1 test proved only that an SVG existed, not the icon and status contracts under
++   review.** `tests/add-page-purpose.test.tsx:1681` A regression that exposed an unlabelled graphic,
++   changed the deliberate 28px fit, or stopped inheriting `currentColor` would still pass. **Fixed
++   in this review.**
++
++## What I changed
++
++- Corrected C2 to preserve the plan review's actual guard architecture and all of its deferred
++  transition/documentation requirements. Marked the older proposal below it as historical and
++  superseded, rather than an implementation spec.
++- Strengthened the ready-bar test to pin the exact live-status sentence, `aria-hidden="true"`, the
++  28px dimensions, `stroke="currentColor"`, and the rule that only the top bar gets the tick.
++- Left the C1 component and CSS unchanged. They already follow `docs/project/icons.md`:
++  `CircleCheck` is a Lucide icon; 28px is an allowed fit-specific size; there is no stroke-weight
++  override, so the app's `LucideProvider` supplies 1.75; the decorative icon is explicitly hidden;
++  and `.add-ready-tick` supplies colour through `currentColor`.
++- Confirmed `--positive` is defined separately for dark and light in `styles/tokens.css`. Reading
++  comfort's dim modes apply one page-wide black overlay rather than replacing tokens, so the class
++  still resolves in dim, dimmer and dimmest modes. The palette and token-resolution tests pass.
++- The status remains one plain announcement, “Your article is ready.”, with the icon excluded from
++  the accessibility tree. At phone width the fixed 28px icon cannot shrink, the text remains the
++  flexible item, the ready card stays within the page's 24px gutters, and the action row already
++  uses `flex-wrap`; no narrow-width overflow was introduced.
++
++## Checks
++
++- `npx vitest run tests/add-page-purpose.test.tsx` — **passed**, 107 tests.
++- `npx vitest run tests/appearance-palette.test.ts tests/css-tokens.test.ts` — **passed**, 223 tests.
++- `git diff HEAD --check -- <reviewed files>` — **passed**.
+diff --git a/docs/plans/261020a-part-c-plan-review-prompt.md b/docs/plans/261020a-part-c-plan-review-prompt.md
+new file mode 100644
+index 000000000..1872e993c
+--- /dev/null
++++ b/docs/plans/261020a-part-c-plan-review-prompt.md
+@@ -0,0 +1,7 @@
++Review Part C of the plan docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md (§ Part C) before it is built. Read-only: do not edit any files. Parts A and B are built and committed (HEAD); your earlier reviews are 261020a-add-page-plan-review-sol.md and 261020a-add-page-code-review-sol.md.
++
++Read: src/web/AddPage.tsx (PurposeBox, AboutYouBox, ReadyBar, the completion effect, openTheArticle and the waiting effect, focusedRef/aboutYouFocusedRef), src/web/useDictationField.ts, src/web/useDictation.ts, src/web/DictationStrip.tsx, src/web/FeedbackSendBox.tsx (the model), src/web/ProfileBox.tsx, src/web/dictation-keep.ts, src/web/dictation-report.ts, docs/project/dictation.md § Adding it to a box and § A closed tab does not lose a dictation, docs/project/controls.md, docs/project/icons.md, and the colour tokens (docs/project/colour-scales.md).
++
++Look hard for: ways a dictation's words are lost on this page (the page leaving by itself at completion, Open pressed mid-recording, the reader-change remount, the purpose session's own unseeded states and its save timer receiving dictated text, a transcript arriving after the article opened, `keep` keys colliding across sources or readers); whether `busy` must also hold the waiting effect / Open without saving; focus behaviour (the mic button steals focus — does the existing blur commit fire mid-dictation and is that harmful?); whether `{kind:"profile"}` is the right context; whether a new DictationSurface value needs anything else (Sentry tags, tests enumerating it); and anything simpler.
++
++Write your findings, numbered and ranked by severity with file:line evidence, to the output file.
+diff --git a/docs/plans/261020a-part-c-plan-review-sol.md b/docs/plans/261020a-part-c-plan-review-sol.md
+new file mode 100644
+index 000000000..be4859e12
+--- /dev/null
++++ b/docs/plans/261020a-part-c-plan-review-sol.md
+@@ -0,0 +1,21 @@
++Verdict: **revise before build**.
++
++The requested output file remains empty because this run’s filesystem permissions make `docs/plans/` read-only. No files were changed.
++
++1. **P1 — Completion is not the only transition that can unmount a live microphone.** The boxes appear while the queue request is pending ([AddPage.tsx:579](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:579)), but disappear when that request returns a public-copy choice or failure ([AddPage.tsx:1550](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:1550), [AddPage.tsx:1642](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:1642)). Unmount aborts the recording/transcription ([useDictation.ts:2094](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/useDictation.ts:2094)); recovery is best-effort and can be unavailable ([dictation-keep.ts:27](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/dictation-keep.ts:27)). Keep both boxes mounted while either is busy across public-copy, refusal and source transitions, and withhold public-copy navigation until dictation ends.
++
++2. **P1 — A busy ref alone cannot implement the promised Open-button guard.** Child hook state does not rerender `ReadyBar`, so its buttons could remain visibly enabled. Two fields also cannot safely share one last-writer-wins boolean. Use separate purpose/About-you refs for same-tick guards plus parent state for rendering their OR. Guard and disable both copies of **Open the article**, the purpose Cmd/Ctrl+Enter path ([AddPage.tsx:1659](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:1659)), and **Open without saving** ([AddPage.tsx:1520](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:1520)). The waiting effect must also refuse to leave while busy ([AddPage.tsx:1494](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:1494)). Disable both microphones once Open is waiting, preventing “Open, then start dictating before the PATCH answers.”
++
++3. **P1 — Dictation can currently save Chromium’s rough live guesses before the authoritative transcript.** Live confirmed phrases go through ordinary `onChange` before being replaced by the final transcript ([useDictationField.ts:377](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/useDictationField.ts:377)). `ProfileBox` pauses autosave for precisely this reason ([ProfileBox.tsx:225](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/ProfileBox.tsx:225)), whereas `AboutYouBox` currently hard-codes `paused: false` ([AddPage.tsx:2133](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:2133)). Purpose has its own timer ([add-purpose.ts:478](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/add-purpose.ts:478)), and an unseeded session immediately commits its current text when the read lands ([add-purpose.ts:448](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/add-purpose.ts:448)). Pause About-you autosave and add a purpose-session dictation pause covering both its timer and seed-triggered commit; unpause and commit only after `onEnd`.
++
++4. **P1 — The keeper key is dangerously underspecified.** The plan says “box and source,” but `source` is empty for every upload; `wanted` is the normalized URL or upload id ([AddPage.tsx:654](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:654), [AddPage.tsx:704](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/AddPage.tsx:704)). Using `source` would collide all upload-purpose recordings. Specify names such as `add:purpose:${wanted}` and source-independent `add:about-you`; About you is one global field and should not require revisiting the same article to recover it. Do not include the reader id: recovery is already reader-partitioned ([dictation-keep.ts:390](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/dictation-keep.ts:390)).
++
++5. **P2 — `{kind:"profile"}` is correct for About you, but unnecessarily weak for Purpose once a slug exists.** The article recipe adds purpose, glossary, title, author and proper nouns; profile supplies only site/profile terms ([vocabulary-sources.ts:383](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/vocabulary-sources.ts:383)). Use article context with `job?.slug ?? completion?.slug`, falling back to profile before a slug exists. Context is snapshotted when recording starts, so a later slug change is safe ([useDictation.ts:805](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/useDictation.ts:805)).
++
++6. **P2 — Part C needs an explicit lifecycle test stage.** Cover completion during opening/listening/transcribing; public-copy and failure answers while busy; both Ready bars; shortcut and Open-without-saving guards; Open followed by a microphone press; unseeded purpose read landing during dictation; two uploads, URLs and readers; source changes producing `[mic-moved]`; and recovery retry using the ordinary commit path. `DictationSurface` needs only the union addition—reporting is generic ([dictation-report.ts:49](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/dictation-report.ts:49), [dictation-report.ts:83](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/dictation-report.ts:83))—but pin `dictation_surface: "add"` in one test.
++
++7. **P3 — C3 leaves dictation documentation stale and requires the rule-doc approval process.** Two new boxes invalidate “eleven boxes today” ([dictation.md:29](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/docs/project/dictation.md:29)), and its keeper inventory needs both names ([dictation.md:758](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/docs/project/dictation.md:758)). Update those alongside `controls.md`. Because the `controls.md` addition is a rule for future work, show its exact before/after and obtain approval before editing ([edit-important-docs.md:36](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/docs/reusable/edit-important-docs.md:36)).
++
++8. **P3 — The success colour is already decided.** Use `--positive`/`tw:text-positive`, not a possible highlight-colour fallback; it is the contrast-tested go-ahead green in both themes ([tokens.css:204](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/styles/tokens.css:204), [tokens.css:427](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/styles/tokens.css:427)). Let `CircleCheck` inherit `currentColor`, following the icon rule ([icons.md:109](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/docs/project/icons.md:109)).
++
++The microphone-induced blur itself is harmless: it commits only the pre-dictation draft, after which the field explicitly restores focus and caret ([useDictationField.ts:435](/var/tmp/spideryarn-worktrees/fbkan788-add-page-and-progress/src/web/useDictationField.ts:435)). Reader remounting is also correctly fenced by the reader-bound transcriber, unmount abort and reader-partitioned keeper.
+\ No newline at end of file
+diff --git a/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md b/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md
+new file mode 100644
+index 000000000..4fad4ab8f
+--- /dev/null
++++ b/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md
+@@ -0,0 +1,81 @@
++# Feedback's buttons coloured by what they do: green to send, red to back out
++
++Report `spya-as0et6` (#621, `SPIDERYARN-READING2-KE`), a suggestion from Greg (an admin;
++`feedback-reporter.ts` exit 0), queue item `qi-d9zvk6y2`.
++
++> In the send addendum interface within feedback, you know, color the buttons red and green, and
++> for close as well, just so it's easier to see what's, you know, going to effectively a cancel and
++> what's a submit. We've done that elsewhere. Let's try and do that throughout the feedback dialogue
++> and perhaps elsewhere as well. And maybe, you know, update our design system and/or docs so that
++> going forwards, we make it more visible which buttons are kind of positive versus negative.
++>
++> — Greg, 2026-10-19 (`spya-as0et6`)
++
++## Where we are
++
++"Elsewhere" is the Needs-a-decision thread: *Send reply* green (`--positive`), *Defer for now* red
++(`--danger`), Greg 2026-10-11 (plan 261011h). Plan 261017c then made Write's *Send* green and
++**deliberately kept Cancel and Close grey**; 261011h **deliberately kept the addendum box neutral**.
++Greg has now overruled both: the addendum's two buttons, and Close, take the colours too.
++
++Both colours are tokens already, measured at 4.5:1 as text on `--page`, `--panel` and
++`--surface-raised` in both themes (`tests/appearance-palette.test.ts`). The existing green/red is
++written as four feedback-only selectors in `feedback.css`, specificity-bumped to beat `.fb-copy`'s
++hover. Nothing outside Feedback can reuse them.
++
++## What we'll do
++
++1. **One shared piece: `.tone-positive` and `.tone-negative`**, in a new
++   `src/web/styles/button-tone.css`, imported **last** in `styles.css`. Each sets `color`
++   (`--positive` / `--danger`) and `border-color: currentColor`, and no background — a wash of the
++   same hue takes light theme under 4.5:1 (261011h, GPT Sol). **Order alone is not enough** (Sol,
++   plan review): its selectors are written to match or beat every paint rule that can reach a toned
++   button — rest, `:hover`, and `[aria-disabled="true"]:hover` — and the feedback-only colour rules
++   that would compete (`.fb-send`'s green, the four `.fb-reply-thread …` rules) are deleted rather
++   than left to lose. **A toned button that cannot be pressed dims** (`:disabled`, opacity 0.45), as
++   `.fb-send` does today, unless it is `data-working` — so a red Cancel goes faint while its addendum
++   sends, and Defer stays strong while it is deferring (it gains `data-working` then). Shape and size
++   stay the family's own. **What the colour means, narrowly:** the pair that ends a form — the
++   button that sends what you wrote, and the one that leaves without sending. It is not "red means
++   destructive": Cancel and Close keep the Write draft. `--destructive` stays the fill for an act
++   that loses something. The words carry the meaning; colour is the shortcut (colour-scales.md).
++2. **The Feedback dialog uses it everywhere a send sits beside a back-out:**
++
++   | where | positive (green) | negative (red) | neutral, and why |
++   |---|---|---|---|
++   | Write's footer | Send | Cancel | |
++   | Earlier's footer | | Close | ‹ Previous · Next › — they move, not commit |
++   | an addendum box | Send addendum | Cancel | |
++   | a thread's reply box | Send reply | Defer for now | Bring back — it undoes a deferral |
++
++   The send box (`FeedbackSendBox`) puts `tone-positive` on its send button itself, so both its
++   callers are green by construction. The four `.fb-reply-thread …` rules go. Left neutral: the
++   header's close cross — the one `.close-x` every dialog shares, and colouring it here alone would
++   break "controls that do the same job look the same"; the footer's Close beneath it is the red
++   one, and Greg is asked whether he wants the cross red too — *Add to this report*
++   (opens a box, commits nothing), *Remove* on a screenshot, Copy / Try again in a failure.
++3. **`/design` § Controls across modes gets a Family** showing the pair live, with the rule.
++4. **Tests**: `feedback-dialog-styles.test.ts` keeps its shape — an inventory of every paint
++   rule naming a feedback button hook or a tone class, and a specificity check that each tone
++   selector matches-and-follows or outweighs each competing state — rewritten around the shared
++   classes, plus the disabled/working opacity rules; and `feedback-dialog.test.tsx` checks each
++   button in the table carries its class, Bring back and the pager none.
++5. **The rule in docs**: `controls.md` is a rule doc, so its new row and sentence are **proposed to
++   Greg in a question**, not committed (the brief: *"propose that wording in a question rather than
++   commit it"*). The CSS file's header and `/design` carry the rule meanwhile. Sol (plan review 4)
++   would rather it landed now; the house rule on rule docs wins.
++
++## Passed over
++
++- **Editing only `feedback.css`** (four more feedback-only selectors) — smaller, but Greg asked for a
++  design-system rule, and a rule with no shared piece behind it gets redrawn by hand each time.
++- **shadcn `Button` variants** (`variant="positive"`) — most of Feedback's buttons are not shadcn's,
++  and the variant would only reach the minority that are.
++- **Red for every back-out across the app, now.** "Perhaps elsewhere as well": deferred to its own
++  queue entry with the survey of the other pairs, because it touches many modes' tests and the
++  question of whether a red Cancel beside a red *Delete* still reads right is Greg's.
++
++## Deferred
++
++- The rest of the app's send/back-out pairs → a queue entry (the survey is in the feedback note).
++- `controls.md` wording → `docs/user-feedback/questions/`.
+diff --git a/docs/plans/261020f-plan-review-prompt.md b/docs/plans/261020f-plan-review-prompt.md
+new file mode 100644
+index 000000000..3534c3633
+--- /dev/null
++++ b/docs/plans/261020f-plan-review-prompt.md
+@@ -0,0 +1,5 @@
++Review the plan docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md (read-only review; do not edit files).
++
++Context: Greg (admin) asked to colour the Feedback dialog's buttons green for submit and red for cancel/close, throughout the dialog, and to make it a design-system rule. Relevant code: src/web/styles/feedback.css (search fb-reply-thread, .fb-cancel, .fb-send, .fb-copy), src/web/styles.css (import order, all in @layer app), src/web/FeedbackSendBox.tsx, FeedbackAddendum.tsx, FeedbackEarlier.tsx (ReplyBox around line 1395, ThreadFootPager), FeedbackDialog.tsx (footer ~1554), styles/tokens.css (--positive, --danger), tests/feedback-dialog-styles.test.ts, tests/appearance-palette.test.ts, docs/project/controls.md, docs/project/colour-scales.md.
++
++Check especially: (1) does a shared .tone-positive/.tone-negative pair imported last in styles.css actually win the cascade against every existing rule on those buttons (.fb-copy, .fb-copy:hover, .fb-copy[aria-disabled], .fb-cancel, .fb-send:hover, disabled, data-working, narrow-window.css, any coarse-pointer media rule), in both themes; (2) contrast or accessibility problems (red/green colour-blind, red Cancel reading as destructive); (3) anything the plan misses in the dialog; (4) whether the test plan would actually fail on a regression. Write findings, most severe first, each with file:line evidence, and a verdict line at the end: APPROVE, APPROVE WITH CHANGES, or REWORK.
+diff --git a/docs/plans/261020f-plan-review-sol.md b/docs/plans/261020f-plan-review-sol.md
+new file mode 100644
+index 000000000..920e1c504
+--- /dev/null
++++ b/docs/plans/261020f-plan-review-sol.md
+@@ -0,0 +1,11 @@
++1. **High — “imported last” does not establish the promised cascade, and the proposed tests would miss that.** `.tone-positive:hover` has the same specificity as `.fb-copy:hover`, so order works there, but it loses to `.fb-copy[aria-disabled="true"]:hover` and `.fb-send:not(:disabled):hover`. The latter could make a negative-toned `.fb-send` turn green on hover if its existing paint rules remain. The plan explicitly removes only the four reply-thread rules, leaving the fate of `.fb-send` paint ambiguous. Current buttons may happen to look right, but the shared design-system contract is not true. The test plan checks declarations and import order rather than the computed winner; a higher-specificity selector can regress the result while those checks remain green. Preserve/adapt the existing specificity and paint-rule inventory tests, or add browser computed-style coverage for rest, hover, disabled, `aria-disabled`, and `data-working` in both themes. Evidence: [plan:28](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:28>), [plan:44](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:44>), [feedback.css:729](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/styles/feedback.css:729>), [feedback.css:733](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/styles/feedback.css:733>), [feedback.css:783](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/styles/feedback.css:783>), [current specificity test:116](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/tests/feedback-dialog-styles.test.ts:116>).
++
++2. **Medium — the plan omits a literal Close button from “throughout the dialog.”** The header cross is a button with `aria-label="Close"`, and its feedback-specific colour is currently grey/orange. Applying `tone-negative` to this particular `.fb-close` would not require changing the shared `.close-x` component, so the stated reason for excluding it does not follow. Either include it or record explicit confirmation that “Close” means only the footer text button. Evidence: [plan:35](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:35>), [plan:46](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:46>), [FeedbackDialog.tsx:1252](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/FeedbackDialog.tsx:1252>), [feedback.css:499](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/styles/feedback.css:499>).
++
++3. **Medium — “disabled dimming stays the family’s own” is false for the negative `.fb-copy` buttons.** Addendum Cancel and Defer use native `disabled`, but `.fb-copy` only dims `[aria-disabled="true"]`; the global disabled rule changes only the cursor. Consequently, Cancel remains full-strength red while Addendum is sending, and Defer remains full-strength when unavailable because Reply is sending. The plan needs to decide and test these states; if a working Defer should remain strong while an unavailable Defer dims, it will also need a working-state distinction. Evidence: [plan:33](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:33>), [FeedbackAddendum.tsx:255](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/FeedbackAddendum.tsx:255>), [FeedbackEarlier.tsx:1403](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/FeedbackEarlier.tsx:1403>), [feedback.css:730](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/styles/feedback.css:730>), [tailwind.css:379](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/tailwind.css:379>).
++
++4. **Medium — the required design-system rule is deferred rather than delivered, and its semantics need narrowing.** `/design` plus a stylesheet comment demonstrates a component, but the authoritative controls document would still omit the rule. The plan should include the approved `controls.md` wording before completion, not leave it as a later feedback question. That wording should say this is a labelled send/back-out shortcut, not a general “red means negative/destructive” rule: Cancel and Close preserve the Write draft, while existing docs describe `--danger` as error text and `--destructive` as the destructive fill. Evidence: [plan:48](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:48>), [plan:53](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md:53>), [controls.md:24](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/project/controls.md:24>), [FeedbackDialog.tsx:643](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/src/web/FeedbackDialog.tsx:643>), [design-css-overview.md:100](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/project/design-css-overview.md:100>).
++
++The red/green pair is not itself an accessibility blocker: both tokens meet the planned 4.5:1 contrast checks in both themes, and visible action labels mean colour is supplementary rather than the sole carrier. Red–green colour-blind users may lose the shortcut, but not the meaning. Evidence: [appearance-palette.test.ts:87](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/tests/appearance-palette.test.ts:87>), [colour-scales.md:413](</var/tmp/spideryarn-worktrees/fbas0et6-feedback-button-colours/docs/project/colour-scales.md:413>).
++
++**Verdict: REWORK**
+\ No newline at end of file
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index 58f99ad5c..cc9102c1d 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -1684,8 +1684,8 @@ The trap that measurement fell into three times in one day is in [261007g-ingest
+ a guess, so past it the reader is told the step *has been running for a while* — not that it is
+ longer than usual, which would be a statistical claim from no statistics.
+ 
+-**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and never persists it,
+-so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
++**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and persists it only
++beside a counted `progress` (below), so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
+ correctly suppresses the re-render — the elapsed time would freeze at whatever it read when the step
+ began. Both surfaces use `useNow(1000)` while busy and `null` — off — otherwise. It
+ said *a day* and called it a timer that never fires; it fired, once a day, per card.
+@@ -1800,10 +1800,21 @@ as the reader's import; it matches `job.upload.id` now, which is the thing it me
+ 
+ Once per shelf, only while something is importing, and on the add page under its card. Until there is
+ a real background runner this is simply true, and calling the thing a queue without saying it
+-over-promises. **No determinate progress bar**, ever, for the same reason: response size and provider
+-latency are both unknown, so a percentage would be a number we invented —
++over-promises. **No bar of time, and no percentage**, for the same reason: response size and provider
++latency are both unknown, so a time left or a percentage would be a number we invented —
+ [silent-success.md](../reusable/silent-success.md) with a decimal point.
+ 
++**A bar of a count is allowed, since 2026-10-20.** Greg asked for *"a loading bar with some kind of
++estimation of how long it will take (especially that extraction step)"* (`spya-skq3fg`). A step that
++counts real units passes them as `ctx.report(detail, { done, total, unit })`: PDF `extract` its
++chunks, `assets` its images. That `progress` is saved to the row at most every five seconds
++(`REPORT_SAVE_EVERY_MS`, `stepNotes` in [`src/jobs.ts`](../../src/jobs.ts)), dropped when the step
++ends however it ends (`settledSteps` in [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), and
++drawn under the running step as a `<progress>` and *23 of 69 sections of the file done*. A report
++with no count stays in memory, as every report did before. The estimate of time Greg asked for was
++measured and declined for now: eleven imports, and URL extraction ranging 3–122 s with no relation
++to length — [plan 261020a § Part B](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md#part-b-how-far-the-import-has-got).
++
+ The sentences themselves live in `src/job-state.ts` rather than `src/messages.ts`, and carry no
+ bracketed codes, because none of them is a failure — [copy.md](copy.md).
+ 
+diff --git a/docs/project/reader-profile.md b/docs/project/reader-profile.md
+index 67efcd90f..727368e2f 100644
+--- a/docs/project/reader-profile.md
++++ b/docs/project/reader-profile.md
+@@ -40,9 +40,18 @@ wiring.
+ 
+ | Box | Scope | Stored | Edited at |
+ |---|---|---|---|
+-| **About you** | you, always | `reader_profiles.profile` | `/profile` |
++| **About you** | you, always | `reader_profiles.profile` | `/profile`; also offered on the add page to a reader who has none |
+ | **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Skim's band |
+ 
++**On the add page since 2026-10-20 both boxes sit at the top**, the purpose box four rows and
++growing with its words, and *About you* under it for a reader whose stored profile is empty —
++decided from the first read and kept, so it does not vanish as their first words save. Each label
++carries its scope (*This article*, *Every article*). About you holds the page as the purpose does: a
++reader in it, or with words unsaved, is not navigated away at the finish, and *Open the article*
++waits for both saves. Greg (`spya-kan788`): *"if they haven't filled out a user profile yet at all,
++perhaps also add a box for that too … Make it clear which is which and how they're different."*
++[Plan 261020a](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md).
++
+ The purpose is asked for in two more places since 2026-09-30, both writing through
+ [`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved
+ as it is typed (below), and Skim's *What do you want from this piece?* over a ready
+diff --git a/docs/user-feedback/261019_1939-add-page-asks-why-at-the-top-says-ready-at-both-ends-and-counts-pdf-progress.md b/docs/user-feedback/261019_1939-add-page-asks-why-at-the-top-says-ready-at-both-ends-and-counts-pdf-progress.md
+new file mode 100644
+index 000000000..67bad98c7
+--- /dev/null
++++ b/docs/user-feedback/261019_1939-add-page-asks-why-at-the-top-says-ready-at-both-ends-and-counts-pdf-progress.md
+@@ -0,0 +1,73 @@
++---
++reports: spya-kan788, spya-skq3fg, spya-a40t70
++addenda: spya-jk0cgg
++ending: shipped
++comment: "Why are you reading this?" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.
++---
++# The add page asks why at the top, says Ready at both ends, and counts a PDF's progress
++
++Three admin reports from Greg (`feedback-reporter.ts` exit 0 on each, re-read before this note),
++2026-10-19, all from the add page, and one addendum. Overseer queue item `qi-hrh4vwex`; the third
++report was folded in by the Overseer mid-run. Plan
++[261020a](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md).
++
++`spya-kan788` (#624, `SPIDERYARN-READING2-KJ`), 19:39 UTC:
++
++> When adding a new article, put the "Why are you reading this?" box nearer the top of the add page.
++>
++> And if they haven't filled out a user profile yet at all, perhaps also add a box for that too, so
++> they can potentially fill out both. Make it clear which is which and how they're different.
++>
++> And when the import process has finished, make that crystal clear, e.g. a button appearing at both
++> bottom and top.
++
++Addendum `spya-jk0cgg`, 19:40 UTC:
++
++> And make the "Why are you reading this?" box bigger/auto-expanding.
++
++`spya-skq3fg` (#625, `SPIDERYARN-READING2-KK`), 19:41 UTC:
++
++> When loading a big/slow article, can we provide a loading bar with some kind of estimation of how
++> long it will take (especially that extraction step)?
++
++`spya-a40t70` (#659), 21:54 UTC:
++
++> … move the Why are you reading this? nearer the top. And maybe we need two copies of the button to
++> open the article at the top and at the bottom when it does eventually, when it is eventually ready
++> to open. And it should be really visible somehow that something has changed and that it is now
++> ready to open, that it has finished. So whether there was a loading spinner before that's gone, or
++> a loading spinner that becomes a big green check mark or something, so it's really clear when
++> things have finished importing.
++
++**Ending: Shipped**, on `dev`, with one deferred half queued.
++
++What changed:
++
++- **"Why are you reading this?" is straight under the heading**, four rows tall and growing with
++  what is typed, tagged *This article*.
++- **About you**, tagged *Every article*, appears under it for a reader whose profile is empty. It
++  saves like the box on Profile. While a reader is in it, or has unsaved words, the page does not
++  open the article by itself, and *Open the article* waits for the save.
++- **When the page is waiting at the finish**, a highlighted *Your article is ready.* with a big
++  green tick and *Open the article* appears at the top, and the same button stays at the bottom.
++  When neither box was touched, the page still opens the article by itself, as before.
++- **A progress bar where there is something real to count.** PDF extraction counts the sections it
++  reads, and image collection counts its images. That count used to stay inside the worker, so the
++  reader never saw it. It is now saved every few seconds and drawn as a bar under the step: *23 of
++  69 sections of the file done*.
++
++**Deferred, and queued as `qi-8w8yv8vk`: the "how long it will take" half of `spya-skq3fg`.** Production holds 11
++imports so far. URL extraction took anywhere from 3 to 122 seconds, with no relation to the
++article's length, so any time-left figure would be a guess presented as a measurement. The
++measurement is in
++[261020a-import-durations-measurement.md](../plans/261020a-import-durations-measurement.md). The
++queue entry says to measure again once there are enough imports, and to add a *usually N–M minutes*
++line where the data supports one.
++
++**Not this note: `spya-wc4vku`** (a microphone beside the purpose box, and the rule for every prose
++box). It was handed back to the Overseer's sweep unbuilt. GPT Sol's review of the plan found four
++ways a dictation would lose words on this page. The spec for that work is the plan's § C2.
++
++Reviews: GPT Sol on the plan (nine findings, all taken), on the code (four, fixed by the
++reviewer), and on Part C's plan and code. Browser-checked at 1000 px and 390 px on the local
++stack, including a live PDF upload showing the bar.
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index d5476db7f..512095db3 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -10,6 +10,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-a0ep9m": "shipped",
+   "spya-a0wpv4": "shipped",
+   "spya-a353as": "shipped",
++  "spya-a40t70": "shipped",
+   "spya-a4rfbk": "shipped",
+   "spya-a4xsg3": "shipped",
+   "spya-a52jsr": "shipped",
+@@ -245,6 +246,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-ka23h9": "shipped",
+   "spya-ka3cau": "shipped",
+   "spya-ka7ysy": "shipped",
++  "spya-kan788": "shipped",
+   "spya-kbzzk8": "declined",
+   "spya-kcdabx": "shipped",
+   "spya-kd5dk5": "shipped",
+@@ -437,6 +439,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-sgf8g6": "shipped",
+   "spya-sgfxuv": "shipped",
+   "spya-skpxw2": "awaiting",
++  "spya-skq3fg": "shipped",
+   "spya-skqwg8": "shipped",
+   "spya-skxhcz": "shipped",
+   "spya-sm0hyk": "shipped",
+@@ -641,6 +644,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+ 
+ /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
+ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
++  "spya-a40t70": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
+   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
+   "spya-a63vmt": "Shipped. In Chat, type @ to bring in one of your own articles, archived and public included; citations of it open it at the passage. Other people's articles are not included.",
+   "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).",
+@@ -694,6 +698,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-jvsv3q": "Shipped: a Chat icon under a finished mark opens a new chat with the question, the mark and your answer quoted, ready for you to type. Queued: the question remembering that chat and reopening it.",
+   "spya-k06kam": "Planned, not built, because it changes a security rule. Two options: view the app as a reader, read-only, with a bar and Stop; or inspect one article on an admin page. Question q-kyhvkm is waiting for you.",
+   "spya-k49y3q": "Shipped on phones: the column is gone, and a tap brings the icons up in a bar above the paragraph. Still queued for you to decide: whether the iPad should get the same.",
++  "spya-kan788": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
+   "spya-kbzzk8": "No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.",
+   "spya-krvuc9": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
+   "spya-kwcn4x": "On a tall screen our button was docked at the far edge, up to 600px from your words. It now sits just past the iPad's own menu. Please try it on your iPad once deployed.",
+@@ -737,6 +742,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-s8pf4r": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",
+   "spya-sbj3yk": "Both sentences now say what happened, and arXiv papers find their DOI, so Attention gets its Cited by list. Since 11 October a piece with no DOI is also looked up at OpenAlex by title and authors, strictly checked.",
+   "spya-skpxw2": "Part built: type @ in Chat to bring in one of your articles, so an uploaded file can be brought in once it is an article. Attachments that belong to an article are still a question for you.",
++  "spya-skq3fg": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
+   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",
+   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
+   "spya-sy4rn0": "Search's toggle is now just words and meaning. A meaning search shows a quick answer in about a second and swaps in the thorough one by itself once you stop typing; old quick links still open it.",
+diff --git a/src/jobs.ts b/src/jobs.ts
+index 5550877ea..5ad64204d 100644
+--- a/src/jobs.ts
++++ b/src/jobs.ts
+@@ -134,6 +134,7 @@ import {
+   type PaidPurchase,
+   type StepName,
+   type StepPreview,
++  type StepProgress,
+ } from "./types.js";
+ import { articlePower, type ModelPower } from "./models.js";
+ import { highPowerStore } from "./store/index.js";
+@@ -1228,14 +1229,32 @@ function stillForced(step: JobStep): boolean {
+ type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
+ 
+ /**
+- * **A running step's preview: put on the job row, and taken off before the
+- * step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
++ * **How often a step's counted progress may reach the job row**: at the first
++ * report that carries one, then no more than once per this many milliseconds.
++ * Two steps count (PDF extract, assets), so this is at most one row write per
++ * five seconds per such step: ~44 for the slowest measured PDF extract (216 s),
++ * ~148 for a step that ran a whole 740 s window. A count that arrives inside
++ * the interval waits for the next one that does not, or for the step's end,
++ * whose own write replaces it. Plan 261020a § B1, and GPT Sol's plan review,
++ * finding 7, on why reports without a count are not saved.
++ */
++export const REPORT_SAVE_EVERY_MS = 5_000;
++
++/**
++ * **A running step's preview and its report: put on the job row, and taken
++ * off before the step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
+  * src/pipeline.ts). `runStep`'s, lifted out so the rule is in one place.
+  *
+  * `show` sets it on the step and writes the row through `note`, once per call,
+- * chained so two calls land in the order they were made. `settle` waits for
+- * whatever write is still on its way and then deletes the preview from the
+- * step in memory, so the write that settles the step carries none.
++ * chained so two calls land in the order they were made. `report` sets
++ * `detail`, and `progress` when the step is counting; only a counted report
++ * writes, through the same chain, and only when `REPORT_SAVE_EVERY_MS` has
++ * passed since the last one it wrote. Until plan 261020a no report wrote, and
++ * PDF extract and assets make no other write while running, so their counts
++ * never reached a reader's poll. `settle` waits for
++ * whatever write is still on its way and then deletes the preview and the
++ * progress from the step in memory, so the write that settles the step carries
++ * neither. (`detail` is the step's to set again: success writes the product's.)
+  *
+  * **Why `settle` waits.** `noteProgress` replaces the whole `steps` array and
+  * is fenced on the claim, not on this step. A preview write that reached
+@@ -1254,17 +1273,24 @@ type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
+  * **The preview is never logged**: it is the model's words about the article
+  * (docs/project/logging.md). The line below carries the error's class only.
+  */
+-function stepPreviews(
++function stepNotes(
+   job: Job,
+   step: JobStep,
+   note: () => Promise<unknown>,
+   jlog: Log,
+-): { show(preview: StepPreview): void; settle(): Promise<void> } {
++  now: () => number = Date.now,
++): {
++  show(preview: StepPreview): void;
++  report(detail: string, progress?: StepProgress): void;
++  settle(): Promise<void>;
++} {
+   let written: Promise<void> = Promise.resolve();
++  let reportedAt: number | null = null;
++  let settled = false;
+   const notWritten = (err: unknown): void => {
+     jlog.debug(
+       { step: step.name, error: err instanceof Error ? err.name : typeof err },
+-      `step preview not written: ${step.name} — ${job.slug}`,
++      `step note not written: ${step.name} — ${job.slug}`,
+     );
+   };
+   return {
+@@ -1272,9 +1298,23 @@ function stepPreviews(
+       step.preview = preview;
+       written = written.then(() => note()).then(() => undefined, notWritten);
+     },
++    report(detail, progress) {
++      /* After `settle` the step is the commit's: a report from work the step
++         left running must not write it back to `running`. */
++      if (settled) return;
++      step.detail = detail;
++      if (!progress) return;
++      step.progress = progress;
++      const at = now();
++      if (reportedAt !== null && at - reportedAt < REPORT_SAVE_EVERY_MS) return;
++      reportedAt = at;
++      written = written.then(() => note()).then(() => undefined, notWritten);
++    },
+     async settle() {
++      settled = true;
+       await written;
+       delete step.preview;
++      delete step.progress;
+     },
+   };
+ }
+@@ -1350,18 +1390,17 @@ async function runStep(
+      nothing downstream read either one. Both went with the filesystem store;
+      a step is told where its artefacts go by the `ArtifactStore` it is handed
+      and by nothing else. */
+-  const shown = stepPreviews(job, step, note, jlog);
++  const shown = stepNotes(job, step, note, jlog);
+   const ctx: StepContext = {
+     slug: job.slug,
+     ...(job.url ? { url: job.url } : {}),
+     ...(job.upload ? { upload: job.upload } : {}),
+-    // In memory only. Persisting at this rate would be two writes a second
+-    // per running job, to record something nobody reads afterwards.
+-    report: (detail: string) => {
+-      step.detail = detail;
+-    },
++    /* In memory, unless it carries a count: then saved at most every
++       `REPORT_SAVE_EVERY_MS` (`stepNotes`, plan 261020a). Saving every report
++       would be two writes a second per running job. */
++    report: shown.report,
+     /* Persisted, unlike `report`: once per call, which for `simple` is once
+-       per step. See `stepPreviews`. */
++       per step. See `stepNotes`. */
+     preview: shown.show,
+     signal: controller.signal,
+     /* The same instant the abort timer above is set for, passed rather than
+@@ -1484,6 +1523,7 @@ async function runStep(
+      (src/store/pg-jobs.ts § `settledSteps`), so the last attempt's preview
+      would otherwise be shown under this one. */
+   delete step.preview;
++  delete step.progress;
+   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
+   const starting = await note();
+ 
+@@ -1573,7 +1613,7 @@ async function runStep(
+       },
+     });
+     /* **The preview comes off before the step settles**, and only once its own
+-       write has landed (`stepPreviews`). What it showed is in `product` now
++       write has landed (`stepNotes`). What it showed is in `product` now
+        and is stored by the commit below; the job row keeps nothing of it. */
+     await shown.settle();
+     step.detail = product.detail;
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 0505cfa96..ee43e0cf2 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -279,6 +279,7 @@ import {
+   type PaidPurchase,
+   type StepName,
+   type StepPreview,
++  type StepProgress,
+   type StoredReadingDifficulty,
+ } from "./types.js";
+ import { getDb } from "./db/client.js";
+@@ -724,8 +725,14 @@ export interface StepContext {
+    * filesystem store used to give.
+    * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G.
+    */
+-  /** Say something short about how this step is going. Shown live; not persisted. */
+-  report(detail: string): void;
++  /**
++   * Say something short about how this step is going, and, for a step that
++   * is counting real units (chunks, images), how many of them are done. A
++   * report with `progress` reaches the job row, at most every
++   * `REPORT_SAVE_EVERY_MS` (src/jobs.ts § `stepNotes`), so a poll sees it; one
++   * without stays in memory, as every report did until plan 261020a.
++   */
++  report(detail: string, progress?: StepProgress): void;
+   /**
+    * **Show part of what this step is making, before it is over.** Unlike
+    * `report` it is written to the job row, once per call, so the reader's poll
+@@ -3292,7 +3299,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+            several chunks finish at once and callbacks racing each other would
+            make the progress line jump backwards. src/jobs.ts § describe. */
+         onProgress: (done, total, pages) =>
+-          ctx.report(`${done}/${total} chunks, page${pages.length > 1 ? "s" : ""} ${pages.join("–")}`),
++          ctx.report(`${done}/${total} chunks, page${pages.length > 1 ? "s" : ""} ${pages.join("–")}`, {
++            done,
++            total,
++            unit: "chunk",
++          }),
+       });
+       plog.info(
+         {
+@@ -4139,7 +4150,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+       const run = await collectAssets({
+         blocks: file.blocks,
+         signal: ctx.signal,
+-        onProgress: (done, total) => ctx.report(`${done}/${total} images`),
++        onProgress: (done, total) => ctx.report(`${done}/${total} images`, { done, total, unit: "image" }),
+       });
+       const figures = await recoverPdfFigures(ctx, store, file.blocks, { locate: openRouterFigureLocator });
+       /* No URLs and no hostnames. A log of the images in somebody's article is
+diff --git a/src/store/pg-jobs.ts b/src/store/pg-jobs.ts
+index 8643ea060..a67a3b932 100644
+--- a/src/store/pg-jobs.ts
++++ b/src/store/pg-jobs.ts
+@@ -1022,7 +1022,11 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
+  * rule that every transition is a single conditional statement. `jobs.steps` on
+  * the right-hand side of a `SET` is the row as it was before the update.
+  *
+- * A preview belongs only to a running step. Remove it on every arm, including
++ * A preview, and a counted `progress`, belong only to a running step, and so
++ * does a running step's `detail`, which is what it said about itself mid-way
++ * (plan 261020a): a step put back to pending, or failed by the sweep, keeps
++ * neither its count nor its "23/69 chunks". A done step's detail is its
++ * product's and is kept. Remove the preview and the progress on every arm, including
+  * non-running steps: Stop on a queued job can see a pending preview left by a
+  * pause from before this removal was added. Asking a live claimant to stop does
+  * not use this transformation, so its preview stays until the claimant settles.
+@@ -1034,8 +1038,8 @@ function settledSteps(cancelled: SQL) {
+         (case
+           when step.value->>'status' <> 'running' then step.value
+           when ${cancelled}
+-            then (step.value - 'startedAt') || '{"status":"pending"}'::jsonb
+-          else step.value || jsonb_build_object(
++            then (step.value - 'startedAt' - 'detail') || '{"status":"pending"}'::jsonb
++          else (step.value - 'detail') || jsonb_build_object(
+                  'status', 'error',
+                  'error', ${INTERRUPTED.message}::text,
+                  /* ISO 8601 with milliseconds and a literal Z. JobStep's
+@@ -1046,7 +1050,7 @@ function settledSteps(cancelled: SQL) {
+                  'finishedAt', to_char(
+                    clock_timestamp() at time zone 'utc',
+                    'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+-        end) - 'preview'
++        end) - 'preview' - 'progress'
+         order by step.ordinality
+       ),
+       '[]'::jsonb
+diff --git a/src/types.ts b/src/types.ts
+index 82d25f780..cdc308217 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -3823,8 +3823,20 @@ export interface JobStep {
+   /** Present tense, naming the actual thing — "Fetching the page", never "Loading". */
+   label: string;
+   status: StepStatus;
+-  /** A short line about how it went, or how it is going. Not persisted while running. */
++  /**
++   * A short line about how it went, or how it is going. While the step runs
++   * it is in memory, and reaches the row only beside a `progress` (src/jobs.ts
++   * § `stepNotes`) or a preview; a store settlement of a running step drops it.
++   */
+   detail?: string;
++  /**
++   * **How many of the units it is counting the step has finished**, while it
++   * runs: PDF `extract`'s chunks, `assets`' images. Only a step that counts
++   * real units sets it, so a fraction drawn from it is counted, not estimated.
++   * Saved at most every `REPORT_SAVE_EVERY_MS`, and gone when the step ends,
++   * however it ends (`stepNotes`, `settledSteps`). Plan 261020a § B1.
++   */
++  progress?: StepProgress;
+   error?: string;
+   startedAt?: string;
+   finishedAt?: string;
+@@ -3848,6 +3860,18 @@ export interface JobStep {
+   preview?: StepPreview;
+ }
+ 
++/**
++ * A counted fraction: `done` of `total` units, and what a unit is, so the card
++ * can name it. "Done" means finished with, not succeeded: PDF extract counts a
++ * chunk whose check failed, and assets an image it could not fetch (GPT Sol's
++ * plan review of 261020a, finding 6).
++ */
++export interface StepProgress {
++  done: number;
++  total: number;
++  unit: "chunk" | "image";
++}
++
+ /**
+  * What a running step may show early. A union on `kind`, so a later step adds
+  * its own arm and a reader of the row has to say which one it wants.
+diff --git a/src/web/AddArticle.tsx b/src/web/AddArticle.tsx
+index 73b7e5c20..c25806e2f 100644
+--- a/src/web/AddArticle.tsx
++++ b/src/web/AddArticle.tsx
+@@ -55,7 +55,7 @@ import { TipNote, Tooltip } from "./Tooltip.js";
+ import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
+ import { useCopy } from "./useCopy.js";
+ import { useNow } from "./useNow.js";
+-import type { Job, JobStep } from "../types.js";
++import type { Job, JobStep, StepProgress } from "../types.js";
+ import type { UseJobs } from "./useJobs.js";
+ 
+ /**
+@@ -560,9 +560,9 @@ export function JobCard({
+   /**
+    * **The clock has to tick by itself, and that is not obvious.**
+    *
+-   * `ctx.report` writes a step's `detail` in memory and never persists it
+-   * ("Persisting at this rate would be two writes a second per running job",
+-   * src/jobs.ts), so a job in the middle of a six-minute `structure` sends
++   * `ctx.report` writes a step's `detail` in memory, and persists it only
++   * beside a counted `progress`, at most every five seconds (src/jobs.ts §
++   * `stepNotes`), so a job in the middle of a six-minute `structure` sends
+    * back a byte-identical record on every poll — and `sameJobs` in
+    * jobEngine.ts deliberately suppresses an identical snapshot. Without a tick
+    * of its own the elapsed time would freeze at whatever it read when the step
+@@ -894,9 +894,11 @@ function SourceLine({ job, now }: { job: Job; now: number }) {
+  * needed. A middot rather than the em dash the finished rows use, because
+  * three things separated by one em dash read as a sentence with an aside.
+  *
+- * **No progress bar, and no percentage.** Neither response size nor provider
+- * latency is knowable before the fact, so a bar would be a number we invented,
+- * shown in the one shape a reader is entitled to trust.
++ * **No percentage, and no bar but a counted one.** Neither response size nor
++ * provider latency is knowable before the fact, so a bar of *time* would be a
++ * number we invented, shown in the one shape a reader is entitled to trust.
++ * A step that counts its units (`step.progress`) gets a bar of *those*, which
++ * is a count: plan 261020a § B1, where the measurement says why time is not.
+  */
+ function StepRow({
+   step,
+@@ -934,6 +936,22 @@ function StepRow({
+           </span>
+         )}
+       </span>
++      {/* **A counted fraction, where the step is counting.** Greg, 2026-10-19
++          (spya-skq3fg): *"a loading bar … especially that extraction step"*.
++          Only from `step.progress`, which a step sets only when it counts real
++          units (PDF chunks, images), so the bar is a count, not a guess at
++          time. Plan 261020a § B1. */}
++      {step.status === "running" && step.progress && step.progress.total > 0 && (
++        <span className="tw:mt-1 tw:flex tw:items-center tw:gap-2 tw:pl-[21px] tw:text-ink-faint">
++          <progress
++            className="tw:h-1 tw:min-w-0 tw:flex-1"
++            value={Math.min(step.progress.done, step.progress.total)}
++            max={step.progress.total}
++            aria-label={`${step.label}: ${progressWords(step.progress)}`}
++          />
++          <span className="tw:whitespace-nowrap tw:tabular-nums">{progressWords(step.progress)}</span>
++        </span>
++      )}
+       {/* Under the row, in the same indent the error message uses, because it
+           is a whole sentence and the row above it is a list of fragments. Only
+           for the two steps `data/_ai-calls.jsonl` has actually timed — a
+@@ -956,6 +974,25 @@ function StepRow({
+   );
+ }
+ 
++/**
++ * The count in words, naming its unit. "Done" rather than "read": a chunk
++ * whose check failed, or an image that would not fetch, is counted too (GPT
++ * Sol's plan review of 261020a, finding 6).
++ */
++export function progressWords(progress: StepProgress): string {
++  const { done, total, unit } = progress;
++  switch (unit) {
++    case "chunk":
++      return `${done} of ${total} sections of the file done`;
++    case "image":
++      return `${done} of ${total} images done`;
++    default: {
++      const never: never = unit;
++      return never;
++    }
++  }
++}
++
+ function StepIcon({ status }: { status: JobStep["status"] }) {
+   // `size` and `strokeWidth` match every other icon on the page; see
+   // docs/project/icons.md on why one stroke weight is a rule rather than taste.
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index bc7133b62..5cb56e195 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -80,16 +80,20 @@ import { useUpload } from "./useUpload.js";
+ import { apiFetch, readJson } from "./lib/api.js";
+ import { AUTO_MODES_LABEL, autoModesDetail } from "./auto-modes.js";
+ import { useAutoModesSetting } from "./auto-modes-setting.js";
+-import { MAX_PURPOSE_CHARS } from "../types.js";
++import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "../types.js";
+ import { leavePurpose, savePurpose } from "./purpose.js";
+ import {
+   type AddPurposeIo,
+   AddPurposeSession,
+   type AddPurposeSnapshot,
+ } from "./add-purpose.js";
+-import { SaveStatus, useUnsavedWarning } from "./ProfileBox.js";
++import { AUTOSAVE_IDLE_MS, SaveStatus, useIdleCommit, useUnsavedWarning } from "./ProfileBox.js";
++import { useFitTextarea } from "./useFitTextarea.js";
++import { type UseProfile, useProfile } from "./useProfile.js";
++import type { SaveState } from "./useAutosavedText.js";
+ import { markAskPurpose } from "./ask-purpose.js";
+ import { Button } from "@/components/ui/button";
++import { CircleCheck } from "lucide-react";
+ import { withVoice } from "./voice.js";
+ import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
+ import { AddHighPower } from "./AddHighPower.js";
+@@ -822,6 +826,36 @@ export function AddPage({
+    * on it. Plan 261001s § Stage 3, GPT Sol's plan review item 2.
+    */
+   const purposeTouchedRef = useRef(false);
++  /**
++   * **About you, for a reader who has none** (spya-kan788). The save is the
++   * one `/profile` uses. Whether to offer the box is decided once, from the
++   * first successful read, and kept: a box that vanished as the reader's first
++   * words saved would be a box taken out from under them. A read that failed
++   * offers nothing, since it cannot say they have none.
++   */
++  const profile = useProfile();
++  const [askAboutYou, setAskAboutYou] = useState<boolean | null>(null);
++  /* Use the first successful answer in this render as well as latching it for
++     later ones. The completion effect runs in the same passive-effect flush as
++     the latch: reading only `askAboutYou` there could open over an empty-profile
++     answer that had already arrived but whose state update had not rendered. */
++  const askAboutYouNow =
++    askAboutYou ?? (profile.saved === null ? null : profile.saved.trim() === "");
++  useEffect(() => {
++    if (askAboutYou === null && profile.saved !== null) setAskAboutYou(profile.saved.trim() === "");
++  }, [askAboutYou, profile.saved]);
++  /* Read at completion, like `focusedRef`, to ask whether the box keeps the
++     page (`aboutYouHolds`). The save's state as of the last render. */
++  const aboutYouFocusedRef = useRef(false);
++  const profileNowRef = useRef(profile);
++  profileNowRef.current = profile;
++  const askAboutYouRef = useRef(false);
++  askAboutYouRef.current = askAboutYouNow === true;
++  /* Its words are unsaved: what keeps *Open the article* waiting, and what
++     the leave warning asks about. Only for a box that was drawn. */
++  const aboutYouPending = askAboutYouNow === true && aboutYouUnsaved(profile.state, profile.inFlight);
++  const aboutYouRefused = askAboutYouNow === true && profile.state.kind === "error";
++  useUnsavedWarning(aboutYouPending);
+   const [phase, setPhase] = useState<Phase>({ kind: "running" });
+   /**
+    * **The once-guard on the terminal decision**, holding the completion's key.
+@@ -1396,7 +1430,9 @@ export function AddPage({
+       /* The request can be slow enough for the reader to enter a purpose.
+          Keep their draft and the save controls instead of hiding a refused save. */
+       setPhase(
+-        purposeTouchedRef.current || purposeRef.current?.session.get().unsaved
++        purposeTouchedRef.current ||
++          purposeRef.current?.session.get().unsaved ||
++          aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current)
+           ? { kind: "ready", completion: finished, opening: false }
+           : { kind: "repeat", completion: finished },
+       );
+@@ -1408,6 +1444,7 @@ export function AddPage({
+     if (
+       !focusedRef.current &&
+       !purposeRef.current?.session.get().unsaved &&
++      !aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current) &&
+       !sharingUnsettled
+     ) {
+       /* **And ask once, when it opens**, if the reader never so much as
+@@ -1437,9 +1474,16 @@ export function AddPage({
+    */
+   const openTheArticle = (): void => {
+     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
++    /* About you too, and the press waits for both (GPT Sol's plan review,
++       finding 5): the write on the way out is the net for a reader who leaves
++       some other way, not the success path of this button. */
++    profile.commit();
+     purpose.commit();
+     const now = purpose.get();
+-    if (!now.unsaved) {
++    const about = profileNowRef.current;
++    const aboutWaiting =
++      askAboutYouRef.current && aboutYouUnsaved(about.state, about.inFlight);
++    if (!now.unsaved && !aboutWaiting) {
+       leave(phase.completion);
+       return;
+     }
+@@ -1453,14 +1497,20 @@ export function AddPage({
+     if (phase.kind !== "ready" || !phase.opening || !mayOpen(phase.completion)) return;
+     const now = purposeRef.current?.session.get();
+     if (!now) return;
+-    if (!now.unsaved) {
+-      leave(phase.completion);
++    /* One refusal does not cancel the other request. Wait for every request
++       already sent before offering to abandon both drafts: an in-flight PATCH
++       cannot be taken back, so "Open without saving" would otherwise promise
++       something the page can no longer do. */
++    if (now.inFlight || (askAboutYouRef.current && profile.inFlight)) return;
++    /* A refusal lets go: the reason is in the status line, the words are in
++       the box, and *Open without saving* appears beside the button. Either
++       box's refusal. */
++    if (cannotSave(now) || aboutYouRefused) {
++      setPhase({ kind: "ready", completion: phase.completion, opening: false });
+       return;
+     }
+-    /* A refusal lets go: the reason is in the status line, the words are in
+-       the box, and *Open without saving* appears beside the button. */
+-    if (cannotSave(now)) setPhase({ kind: "ready", completion: phase.completion, opening: false });
+-  }, [phase, purposeNow]);
++    if (!now.unsaved && !aboutYouPending) leave(phase.completion);
++  }, [phase, purposeNow, aboutYouPending, aboutYouRefused, profile.inFlight]);
+ 
+   /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
+   const openTheRepeat = (): void => {
+@@ -1468,10 +1518,11 @@ export function AddPage({
+     leave(phase.completion);
+   };
+ 
+-  /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
++  /** **Open without saving**: give both drafts up, so retiring does not send them, and open. */
+   const openWithoutSaving = (): void => {
+     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
+     purpose.abandon();
++    if (askAboutYouRef.current) profile.abandon();
+     leave(phase.completion);
+   };
+ 
+@@ -1526,6 +1577,32 @@ export function AddPage({
+         : { text: "your file", voice: "ui" as const }
+       : { text: ok ? source : url, voice: "reader" as const };
+ 
++  /* The same block at both ends of the page while it waits (`ReadyBar`),
++     including an untouched repeat paste: it too has finished and waits for a
++     press, even though there was no new import to save. */
++  const readyCompletion =
++    phase.kind === "ready" || phase.kind === "repeat" ? phase.completion : null;
++  const readyBar = (top: boolean) =>
++    readyCompletion && (
++      <ReadyBar
++        top={top}
++        sentence={
++          readyCompletion.repeat
++            ? REPEAT_PASTE_ON_THE_SHELF
++            : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."
++        }
++        opening={phase.kind === "ready" && phase.opening}
++        offerWithoutSaving={
++          phase.kind === "ready" &&
++          (cannotSave(purposeNow) || aboutYouRefused) &&
++          !purposeNow.inFlight &&
++          !(askAboutYouNow === true && profile.inFlight)
++        }
++        onOpen={phase.kind === "ready" ? openTheArticle : openTheRepeat}
++        onOpenWithoutSaving={openWithoutSaving}
++      />
++    );
++
+   return (
+     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
+       <header className="tw:mb-6">
+@@ -1549,12 +1626,52 @@ export function AddPage({
+         </p>
+       </header>
+ 
++      {/* **Ready, at the top as well as the bottom** (spya-kan788): the
++          reader is in a box up here by the time it finishes. */}
++      {readyBar(true)}
++
+       {/* **The transfer, while it is this tab's to show.** Everything below
+           this is about a job, and until the bytes have landed there is no job —
+           which is the whole difference the background upload made to this page.
+           Above the disclosure sentence rather than below it, because it is what
+           the reader came here to watch. */}
+       {mine && <Sending transfer={mine} />}
++      {/* **The boxes near the top** (spya-kan788: *"put the 'Why are you
++          reading this?' box nearer the top of the add page"*). Under the upload
++          bar, which is what a reader who just pressed Add came to watch, and
++          above everything about the job. */}
++      {showPurpose && (
++        <div data-add-boxes className="tw:mb-4 tw:flex tw:flex-col tw:gap-4">
++          <PurposeBox
++            now={purposeNow}
++            stopped={jobStopped}
++            onChange={(value) => {
++              /* Straight into the session, which is what a completion landing
++                 before the next render will read. */
++              purposeTouchedRef.current = true;
++              purpose.setText(value, true);
++            }}
++            onFocusChange={(focused) => {
++              focusedRef.current = focused;
++              if (focused) purposeTouchedRef.current = true;
++              /* A blur saves. While waiting at the end it still does not open. */
++              else purpose.commit();
++            }}
++            /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
++               article* once it is in. */
++            onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
++          />
++          {askAboutYouNow === true && (
++            <AboutYouBox
++              profile={profile}
++              onFocusChange={(focused) => {
++                aboutYouFocusedRef.current = focused;
++              }}
++            />
++          )}
++        </div>
++      )}
++
+       {/* **Queueing gets a line and no button.** One small request, and it
+           cannot be undone — see `cancel` in uploadEngine.ts. Saying so beats
+           both a Stop that declines and a bar that has silently stopped moving. */}
+@@ -1845,61 +1962,10 @@ export function AddPage({
+         />
+       )}
+ 
+-      {showPurpose && (
+-        <PurposeBox
+-          now={purposeNow}
+-          stopped={jobStopped}
+-          onChange={(value) => {
+-            /* Straight into the session, which is what a completion landing
+-               before the next render will read. */
+-            purposeTouchedRef.current = true;
+-            purpose.setText(value, true);
+-          }}
+-          onFocusChange={(focused) => {
+-            focusedRef.current = focused;
+-            if (focused) purposeTouchedRef.current = true;
+-            /* A blur saves. While waiting at the end it still does not open. */
+-            else purpose.commit();
+-          }}
+-          /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
+-             article* once it is in. */
+-          onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
+-        />
+-      )}
+-
+-      {phase.kind === "ready" && (
+-        <div className="tw:mt-3">
+-          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
+-            {phase.completion.repeat
+-              ? REPEAT_PASTE_ON_THE_SHELF
+-              : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."}
+-          </p>
+-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+-            <Button type="button" size="sm" disabled={phase.opening} onClick={openTheArticle}>
+-              {phase.opening ? "Saving…" : "Open the article"}
+-            </Button>
+-            {/* Only when the words cannot be saved from here: a refusal, or
+-                the read of the stored purpose gave up. */}
+-            {cannotSave(purposeNow) && (
+-              <Button type="button" variant="ghost" size="sm" onClick={openWithoutSaving}>
+-                Open without saving
+-              </Button>
+-            )}
+-          </div>
+-        </div>
+-      )}
++      {readyBar(false)}
+ 
+       {choosing && <PublicChoice found={publicAnswer} onOwnCopy={chooseOwnCopy} />}
+ 
+-      {phase.kind === "repeat" && (
+-        <div data-add-repeat className="tw:mt-3">
+-          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
+-          <Button type="button" size="sm" onClick={openTheRepeat}>
+-            Open the article
+-          </Button>
+-        </div>
+-      )}
+-
+       {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
+ 
+       <p className="tw:mt-6 tw:mb-0 tw:text-sm">
+@@ -1976,17 +2042,24 @@ function PurposeBox({
+   onFocusChange: (focused: boolean) => void;
+   onShortcut: () => void;
+ }) {
++  const box = useRef<HTMLTextAreaElement>(null);
++  /* **Bigger, and as tall as its words.** Greg, 2026-10-19 (spya-jk0cgg):
++     *"make the 'Why are you reading this?' box bigger/auto-expanding."* Four
++     rows is the floor; useFitTextarea.ts grows it. */
++  useFitTextarea(box, now.text);
+   return (
+-    <div className="prof-box tw:mt-4">
++    <div className="prof-box">
+       <div className="prof-box-head">
+         <label className="prof-box-label" htmlFor="add-purpose">
+           Why are you reading this?
+         </label>
++        <span className="prof-box-scope">This article</span>
+       </div>
+       <textarea
+         id="add-purpose"
+-        className="prof-box-input"
+-        rows={2}
++        ref={box}
++        className="prof-box-input is-fit"
++        rows={4}
+         maxLength={MAX_PURPOSE_CHARS}
+         placeholder="e.g. I want to know how they handled missing data"
+         value={now.text}
+@@ -2019,6 +2092,159 @@ function PurposeBox({
+   );
+ }
+ 
++/**
++ * Whether the About-you box holds anything the server may not have, or the
++ * reader is in it: either one keeps the page from opening the article by
++ * itself, as the purpose box does.
++ */
++function aboutYouHolds(shown: boolean, state: SaveState, inFlight: boolean, focused: boolean): boolean {
++  /* Only a box the reader could see. A read that failed is `error` too, and
++     holding on it would wait for ever behind a box that was never drawn (GPT
++     Sol's plan review, finding 2). */
++  if (!shown) return false;
++  return focused || aboutYouUnsaved(state, inFlight);
++}
++
++/** Words in the About-you box the server may not have. */
++function aboutYouUnsaved(state: SaveState, inFlight: boolean): boolean {
++  return inFlight || state.kind === "dirty" || state.kind === "saving" || state.kind === "error";
++}
++
++/**
++ * **About you**, offered on the add page to a reader who has never written
++ * one. Greg, 2026-10-19 (spya-kan788): *"if they haven't filled out a user
++ * profile yet at all, perhaps also add a box for that too, so they can
++ * potentially fill out both. Make it clear which is which and how they're
++ * different."* The difference is said in the scope beside each label and in
++ * the first words of each hint.
++ *
++ * `useProfile`'s save, the one `/profile` uses, including the write on the way
++ * out. A plain textarea rather than `ProfileBox`, for `PurposeBox`'s reason:
++ * no microphone on a page that may open the article by itself.
++ */
++function AboutYouBox({
++  profile,
++  onFocusChange,
++}: {
++  profile: UseProfile;
++  onFocusChange: (focused: boolean) => void;
++}) {
++  const box = useRef<HTMLTextAreaElement>(null);
++  useFitTextarea(box, profile.draft);
++  useIdleCommit({
++    text: profile.draft,
++    dirty: profile.state.kind === "dirty",
++    inFlight: profile.inFlight,
++    paused: false,
++    ms: AUTOSAVE_IDLE_MS,
++    commit: profile.commit,
++  });
++  return (
++    <div className="prof-box">
++      <div className="prof-box-head">
++        <label className="prof-box-label" htmlFor="add-about-you">
++          About you
++        </label>
++        <span className="prof-box-scope">Every article</span>
++      </div>
++      <textarea
++        id="add-about-you"
++        ref={box}
++        className="prof-box-input is-fit"
++        rows={3}
++        /* No `maxLength`: the browser would silently drop the end of a long
++           paste. Counted past instead, and the server refuses it with the
++           words still here (ProfileBox.tsx; GPT Sol's plan review, finding 3). */
++        placeholder="e.g. I'm a nurse, new to statistics, reading up for a research project"
++        value={profile.draft}
++        onChange={(e) => profile.setDraft(e.target.value)}
++        onFocus={() => onFocusChange(true)}
++        onBlur={() => {
++          onFocusChange(false);
++          profile.commit();
++        }}
++        onKeyDown={(e) => {
++          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
++            e.preventDefault();
++            profile.commit();
++          }
++        }}
++      />
++      <div className="prof-box-foot">
++        <p className="prof-box-hint">
++          For every article you read here, not just this one: your background, what you already
++          know, what you are working on. Optional. Saved to your profile, which you can change any
++          time on the Profile page.
++        </p>
++        <span className={`prof-count${profile.draft.length > MAX_PROFILE_CHARS ? " over" : ""}`}>
++          {profile.draft.length} / {MAX_PROFILE_CHARS}
++        </span>
++      </div>
++      <SaveStatus save={profile.state} />
++    </div>
++  );
++}
++
++/**
++ * **The import is in, said where the reader is looking.** Greg, 2026-10-19
++ * (spya-kan788): *"when the import process has finished, make that crystal
++ * clear, e.g. a button appearing at both bottom and top."* One component drawn
++ * at both ends of the page, with the same handlers, so the two cannot
++ * disagree. `top` is the highlighted one.
++ */
++function ReadyBar({
++  top,
++  sentence,
++  opening,
++  offerWithoutSaving,
++  onOpen,
++  onOpenWithoutSaving,
++}: {
++  top: boolean;
++  sentence: string;
++  opening: boolean;
++  offerWithoutSaving: boolean;
++  onOpen: () => void;
++  onOpenWithoutSaving: () => void;
++}) {
++  return (
++    <div
++      data-add-ready={top ? "top" : "bottom"}
++      className={
++        top
++          ? "tw:mb-4 tw:rounded-md tw:border tw:border-highlight-text/40 tw:bg-highlight-text/10 tw:p-4"
++          : "tw:mt-3"
++      }
++    >
++      {/* **A big green tick.** Greg, 2026-10-19 (spya-a40t70): *"a loading
++          spinner that becomes a big green check mark or something, so it's
++          really clear when things have finished importing."* */}
++      {top && (
++        <p
++          role="status"
++          className="tw:mt-0 tw:mb-1 tw:flex tw:items-center tw:gap-2 tw:text-base tw:font-semibold tw:text-foreground"
++        >
++          <CircleCheck size={28} className="add-ready-tick" aria-hidden="true" />
++          Your article is ready.
++        </p>
++      )}
++      <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{sentence}</p>
++      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
++        <Button type="button" size="sm" disabled={opening} onClick={onOpen}>
++          {opening ? "Saving…" : "Open the article"}
++        </Button>
++        {/* Only when the words cannot be saved from here: a refusal, or the
++            read of the stored purpose gave up. */}
++        {offerWithoutSaving && (
++          <Button type="button" variant="ghost" size="sm" onClick={onOpenWithoutSaving}>
++            Open without saving
++          </Button>
++        )}
++      </div>
++    </div>
++  );
++}
++
+ /**
+  * Where the words stand before the article's stored purpose has been read.
+  * After that the line is `ProfileBox`'s own.
+diff --git a/src/web/DesignPage.tsx b/src/web/DesignPage.tsx
+index 30ecc3e03..423316a9d 100644
+--- a/src/web/DesignPage.tsx
++++ b/src/web/DesignPage.tsx
+@@ -1639,6 +1639,31 @@ function ControlsAcrossModes() {
+         </p>
+       </figure>
+ 
++      <Family
++        name="Send and back out"
++        real=".tone-positive, .tone-negative, button-tone.css"
++        rule={
++          <>
++            the pair that ends a form: the button that sends what you wrote is{" "}
++            <code className="design-token">--positive</code> green, the one that leaves or puts off
++            without sending is <code className="design-token">--danger</code> red — text and border
++            only, no wash, hover the same, dimmed when it cannot be pressed unless it is working.
++            Red here is not destructive: Cancel keeps the draft. Navigation (Previous, Next) and
++            undoing (Bring back) stay neutral. The words carry the meaning; the colour is a
++            shortcut.
++          </>
++        }
++        finger={<>the family's own size; the colour adds nothing to the target.</>}
++        usedBy="the Feedback dialog: Send and Cancel on Write, Close on Earlier, Send addendum and Cancel, Send reply and Defer for now"
++      >
++        <button type="button" className="fb-cancel tone-negative">
++          Cancel
++        </button>
++        <button type="button" className="fb-send tone-positive">
++          Send
++        </button>
++      </Family>
++
+       <Family
+         name="The hit area"
+         real=".tap-target, tap-target.css"
+diff --git a/src/web/FeedbackAddendum.tsx b/src/web/FeedbackAddendum.tsx
+index 70e8f0c60..2f26f3937 100644
+--- a/src/web/FeedbackAddendum.tsx
++++ b/src/web/FeedbackAddendum.tsx
+@@ -252,7 +252,12 @@ export function AddendumBox({
+       className="fb-addendum-box"
+       problems={[stage.kind === "failed" ? stage.message : null]}
+     >
+-      <button type="button" className="fb-copy" disabled={sending} onClick={() => addenda.cancel(report)}>
++      <button
++        type="button"
++        className="fb-copy tone-negative"
++        disabled={sending}
++        onClick={() => addenda.cancel(report)}
++      >
+         Cancel
+       </button>
+     </FeedbackSendBox>
+diff --git a/src/web/FeedbackDialog.tsx b/src/web/FeedbackDialog.tsx
+index fc1d2a692..17b3f5856 100644
+--- a/src/web/FeedbackDialog.tsx
++++ b/src/web/FeedbackDialog.tsx
+@@ -1552,7 +1552,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
+         </div>
+ 
+         <div className="fb-actions" hidden={view !== "earlier"}>
+-          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
++          <button type="button" className="fb-cancel tone-negative tap-target" onClick={onClose}>
+             Close
+           </button>
+           {/* With a thread showing, Previous and Next again, where the reader
+@@ -1569,12 +1569,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
+         </div>
+ 
+         <div className="fb-actions" hidden={view !== "write"}>
+-          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
++          <button type="button" className="fb-cancel tone-negative tap-target" onClick={onClose}>
+             Cancel
+           </button>
+           <button
+             type="submit"
+-            className="fb-send tap-target"
++            className="fb-send tone-positive tap-target"
+             /* **Live while the microphone is involved**: pressing it then stops
+                the microphone and sends once the words land (`send`). Plan
+                261010f; it used to be disabled here while still reading Send. */
+diff --git a/src/web/FeedbackEarlier.tsx b/src/web/FeedbackEarlier.tsx
+index e71ce10e3..e993a4294 100644
+--- a/src/web/FeedbackEarlier.tsx
++++ b/src/web/FeedbackEarlier.tsx
+@@ -1402,8 +1402,11 @@ function ReplyBox({
+           and it tells agents not to chase it (plan 261008i, decision 3). */}
+       <button
+         type="button"
+-        className={deferred ? "fb-copy" : "fb-copy fb-defer"}
++        /* Red to put off; Bring back undoes a deferral, so neutral
++           (button-tone.css, plans 261011h and 261020f). */
++        className={deferred ? "fb-copy" : "fb-copy fb-defer tone-negative"}
+         disabled={sending || deferring}
++        data-working={deferring ? "" : undefined}
+         onClick={() => void replies.defer(question.id, !deferred)}
+       >
+         {deferring ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
+diff --git a/src/web/FeedbackSendBox.tsx b/src/web/FeedbackSendBox.tsx
+index 16d5cbce3..b7a32921d 100644
+--- a/src/web/FeedbackSendBox.tsx
++++ b/src/web/FeedbackSendBox.tsx
+@@ -158,7 +158,8 @@ export function FeedbackSendBox({
+         )}
+         <button
+           type="button"
+-          className="fb-copy fb-reply-send"
++          /* Green: it sends what you wrote (button-tone.css, plan 261020f). */
++          className="fb-copy fb-reply-send tone-positive"
+           disabled={sending || held || dictate.busy || over || value.trim() === ""}
+           /* Working, so drawn at full strength rather than dimmed (plan 261019c). */
+           data-working={sending ? "" : undefined}
+diff --git a/src/web/JobProgress.tsx b/src/web/JobProgress.tsx
+index 09e85834b..df29ec9e8 100644
+--- a/src/web/JobProgress.tsx
++++ b/src/web/JobProgress.tsx
+@@ -252,8 +252,9 @@ export function JobProgress({
+    * A second while a job is on screen, a minute otherwise.
+    *
+    * The band has to tick by itself for the same reason the card does: a step's
+-   * `detail` is written in memory and never persisted (src/jobs.ts §
+-   * `report`), so a job halfway through a long step sends back an identical
++   * `detail` is written in memory and persisted only beside a counted
++   * `progress` (src/jobs.ts § `stepNotes`), so a job halfway through a long
++   * step sends back an identical
+    * record on every poll and `sameJobs` correctly suppresses the re-render.
+    * Without this the elapsed time would freeze at whatever it read when the
+    * step began. `useNow` stops while the tab is hidden and catches up on
+diff --git a/src/web/styles.css b/src/web/styles.css
+index bd72c8e77..548eb88a3 100644
+--- a/src/web/styles.css
++++ b/src/web/styles.css
+@@ -73,3 +73,5 @@
+ @import "./styles/voices.css";
+ @import "./styles/logo-animations.css";
+ @import "./styles/reading-comfort.css";
++/* Last: green to send, red to back out, over any family's own paint (plan 261020f). */
++@import "./styles/button-tone.css";
+diff --git a/src/web/styles/button-tone.css b/src/web/styles/button-tone.css
+new file mode 100644
+index 000000000..e5411136b
+--- /dev/null
++++ b/src/web/styles/button-tone.css
+@@ -0,0 +1,49 @@
++/* button-tone.css — **green to send, red to leave without sending.** The pair
++   of buttons that ends a form: the one that sends what you wrote is
++   `.tone-positive`, the one that backs out is `.tone-negative`. Greg,
++   2026-10-19 (`spya-as0et6`): "color the buttons red and green, and for close
++   as well, just so it's easier to see what's … effectively a cancel and what's
++   a submit … update our design system". Plan 261020f; first drawn as the
++   Feedback thread's Send reply and Defer for now (261011h).
++
++   **What red means here is narrow**: leave, or put off, without sending. Not
++   "destructive" — Feedback's Cancel and Close keep the draft. An act that
++   loses something is the `--destructive` fill (shadcn's destructive Button).
++   The words carry the meaning and the colour is a shortcut, as
++   colour-scales.md asks of a red/green pair.
++
++   **Colour only**: the text and the border take it, at rest and on hover.
++   Shape, size and padding stay the family's own. **No wash behind**: a tint
++   of the same hue takes the light theme under the 4.5:1 that
++   tests/appearance-palette.test.ts holds both tokens to (GPT Sol, 261011h).
++
++   **Imported last in styles.css, and the selectors cover every state that
++   could repaint a toned button** — rest, hover, and `.fb-copy`'s unavailable
++   hover — so each matches-and-follows or outweighs it.
++   tests/feedback-dialog-styles.test.ts holds the inventory. */
++
++.tone-positive,
++.tone-positive:hover,
++.tone-positive[aria-disabled="true"]:hover {
++  color: var(--positive);
++  border-color: currentColor;
++}
++.tone-negative,
++.tone-negative:hover,
++.tone-negative[aria-disabled="true"]:hover {
++  color: var(--danger);
++  border-color: currentColor;
++}
++/* **Coloured and unpressable reads as pressable**, so it dims — unless it is
++   working (a spinner and a word that change), which is not "cannot be
++   pressed" (plan 261019c). */
++.tone-positive:disabled,
++.tone-negative:disabled {
++  opacity: 0.45;
++  cursor: default;
++}
++.tone-positive[data-working]:disabled,
++.tone-negative[data-working]:disabled {
++  opacity: 1;
++  cursor: progress;
++}
+diff --git a/src/web/styles/feedback.css b/src/web/styles/feedback.css
+index 66cfd4c24..39e40771d 100644
+--- a/src/web/styles/feedback.css
++++ b/src/web/styles/feedback.css
+@@ -389,27 +389,11 @@ a.fb-earlier-page:focus-visible {
+   align-items: center;
+   gap: 0.5rem;
+ }
+-.fb-reply-send:disabled { opacity: 0.45; cursor: default; }
+-/* Sending: disabled, but working, so not dimmed — as `.fb-send` below. */
+-.fb-reply-send[data-working]:disabled { opacity: 1; cursor: progress; }
+-/* **Green to send, red to put off**, in a Needs-a-decision thread only — Greg,
+-   2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
+-   shortcut, as colour-scales.md asks of a red/green pair. The addendum box
+-   shares the send box and stays neutral; so does Bring back, which undoes a
+-   deferral and should not look like one. Plan 261011h. The thread wrapper plus
+-   the shared-shape class make each rule outweigh the later `.fb-copy` rest,
+-   hover and `aria-disabled` rules; the last is not used here today, but must
+-   not silently neutralise the colour if these controls adopt it.
+-   **No wash behind**: a tint of the same colour takes the light theme under
+-   the 4.5:1 the two tokens are measured at (GPT Sol, plan review 1). */
+-.fb-reply-thread .fb-copy.fb-reply-send,
+-.fb-reply-thread .fb-copy.fb-reply-send:hover,
+-.fb-reply-thread .fb-copy.fb-defer,
+-.fb-reply-thread .fb-copy.fb-defer:hover { border-color: currentColor; }
+-.fb-reply-thread .fb-copy.fb-reply-send,
+-.fb-reply-thread .fb-copy.fb-reply-send:hover { color: var(--positive); }
+-.fb-reply-thread .fb-copy.fb-defer,
+-.fb-reply-thread .fb-copy.fb-defer:hover { color: var(--danger); }
++/* **Green to send, red to put off or back out**: `.tone-positive` and
++   `.tone-negative`, styles/button-tone.css, which also dims either when it
++   cannot be pressed. Send reply and Send addendum are green by construction
++   (FeedbackSendBox.tsx); Defer for now and Cancel red; Bring back neutral,
++   because it undoes a deferral (261011h, 261020f). */
+ /* **As tall as its words, never a scroller of its own** (useFitTextarea.ts):
+    the panel is the one scroller, which is what lets iOS keep the caret in
+    view with the keyboard up (spya-za2tse). */
+@@ -766,21 +750,13 @@ details.fb-threads-group > summary { cursor: pointer; }
+   font-size: 0.8rem;
+   cursor: pointer;
+ }
+-/* **Send is green, Cancel and Close grey** (spya-bvzavw, plan 261017c): the
+-   bottom-right sends on Write but on Earlier was Close, which shuts. Green is
+-   `--positive`, as *Send reply* is in a thread (261011h), because both send
+-   what you wrote to us; the words still say which is which. The border takes
+-   the green too and keeps it on hover, as Send reply's does. */
+-.fb-cancel { color: var(--ink-soft); }
+-.fb-send { color: var(--positive); border-color: currentColor; }
+-.fb-send:disabled { opacity: 0.45; cursor: default; }
+-/* **Working is not "cannot be pressed".** Sending, Adding the picture: the
+-   button is disabled, but its spinner and word are the only sign anything is
+-   happening, and those states were coded at 0.45 when Greg saw neither on an
+-   iPad (spya-an90k0) — where a disabled button at `opacity < 1` is also our
+-   leading suspect for one that paints nothing (plan 260912c). Plan 261019c. */
+-.fb-send[data-working]:disabled { opacity: 1; cursor: progress; }
+-.fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
++/* **Send is green; Cancel and Close are red** — styles/button-tone.css, which
++   paints them and dims an unpressable one. Send went green first (spya-bvzavw,
++   plan 261017c), because the bottom-right sent on Write but shut on Earlier;
++   Cancel and Close stayed grey until Greg asked for them red too (spya-as0et6,
++   plan 261020f). **Working is not "cannot be pressed"**: Sending and Adding
++   the picture carry `data-working` and stay at full strength (spya-an90k0,
++   plan 261019c). */
+ /* The thread pager again, in Earlier's footer beside Close, kept to the right. */
+ .fb-foot-pager { justify-content: flex-end; }
+ 
+diff --git a/src/web/styles/profile.css b/src/web/styles/profile.css
+index b6b8dea3a..5f16fe9c7 100644
+--- a/src/web/styles/profile.css
++++ b/src/web/styles/profile.css
+@@ -54,6 +54,20 @@
+   border-color: var(--highlight-text);
+ }
+ .prof-box-input:disabled { opacity: 0.5; }
++/* **As tall as its words** (useFitTextarea.ts): the add page's two boxes,
++   where Greg asked for the purpose box "bigger/auto-expanding" (spya-jk0cgg). */
++.prof-box-input.is-fit { overflow: hidden; resize: none; }
++/* Which of the two boxes this is, when both are on one page: the add page
++   asks why for *this article* and, for a reader with no profile, about them
++   for *every article* (spya-kan788). */
++/* The add page's "Your article is ready." tick: the go-ahead green
++   (styles/tokens.css § --positive), for spya-a40t70's "big green check mark". */
++.add-ready-tick { color: var(--positive); flex: none; }
++.prof-box-scope {
++  color: var(--ink-faint);
++  font-family: var(--font-ui);
++  font-size: 0.75rem;
++}
+ 
+ .prof-box-foot {
+   display: flex;
+diff --git a/tests/add-page-purpose.test.tsx b/tests/add-page-purpose.test.tsx
+index bfefa57d7..cba4931c2 100644
+--- a/tests/add-page-purpose.test.tsx
++++ b/tests/add-page-purpose.test.tsx
+@@ -151,11 +151,25 @@ const readPurpose = (slug: string, offline = false): Response =>
+   );
+ /** What `GET /api/reader` says the reader's setting is. Replaced per test. */
+ let readerAutoModes = true;
++/** The reader's About you, as `GET /api/reader` reads it; `null` is none (spya-kan788). */
++let readerProfile: string | null = null;
++/** How a PATCH of About you answers. Replaced per test; the default stores it. */
++let profileAnswer: (body: { profile: string | null }) => Promise<Response> = async (body) => {
++  readerProfile = body.profile;
++  return new Response(JSON.stringify({ profile: readerProfile }), { status: 200 });
++};
++/** Whether `GET /api/reader` fails. */
++let readerReadFails = false;
+ vi.mock("../src/web/lib/api.js", async (importActual) => {
+   const actual = await importActual<typeof import("../src/web/lib/api.js")>();
+   return {
+     ...actual,
+     apiFetch: async (input: string, init: RequestInit = {}) => {
++      if (input === "/api/reader" && init.method === "PATCH" && String(init.body).includes('"profile"')) {
++        const body = JSON.parse(String(init.body)) as { profile: string | null };
++        events.push(`profile:${JSON.stringify(body)}`);
++        return profileAnswer(body);
++      }
+       if (input === "/api/reader" && init.method === "PATCH") {
+         const body = JSON.parse(String(init.body)) as { autoModes: boolean };
+         events.push(`reader:${JSON.stringify(body)}`);
+@@ -163,7 +177,8 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
+         return new Response(JSON.stringify({ autoModes: readerAutoModes }), { status: 200 });
+       }
+       if (input === "/api/reader") {
+-        return new Response(JSON.stringify({ autoModes: readerAutoModes }), { status: 200 });
++        if (readerReadFails) return new Response(JSON.stringify({ error: "down" }), { status: 503 });
++        return new Response(JSON.stringify({ autoModes: readerAutoModes, profile: readerProfile }), { status: 200 });
+       }
+       if (input.startsWith("/api/reader?slug=") && (init.method ?? "GET") === "GET") {
+         const slug = decodeURIComponent(input.slice("/api/reader?slug=".length));
+@@ -185,6 +200,10 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
+     },
+     /* The `keepalive` write `pagehide` sends. Recorded, not applied. */
+     leavingFetch: (input: string, init: RequestInit = {}) => {
++      if (input === "/api/reader") {
++        events.push(`leave-profile:${String(init.body)}`);
++        return Promise.resolve();
++      }
+       events.push(`leave:${decodeURIComponent(input.slice("/api/library/".length))}:${String(init.body)}`);
+       return Promise.resolve();
+     },
+@@ -373,6 +392,12 @@ beforeEach(() => {
+   purposes.clear();
+   notYet.clear();
+   readerAutoModes = true;
++  readerProfile = null;
++  readerReadFails = false;
++  profileAnswer = async (body) => {
++    readerProfile = body.profile;
++    return new Response(JSON.stringify({ profile: readerProfile }), { status: 200 });
++  };
+   events.length = 0;
+   reads.length = 0;
+   navigations.length = 0;
+@@ -1417,6 +1442,10 @@ describe("a repeat paste of an article already on the shelf", () => {
+     render(URL_SOURCE);
+     await settle();
+     expect(navigations).toEqual([]);
++    expect(
++      [...host.querySelectorAll("[data-add-ready]")].map((bar) => bar.getAttribute("data-add-ready")),
++      "a repeat did not make completion equally visible at both ends of the page",
++    ).toEqual(["top", "bottom"]);
+     const open = button(OPEN)!;
+     act(() => { open.click(); open.click(); });
+     await settle();
+@@ -1592,3 +1621,172 @@ describe("an address somebody else has made public", () => {
+     expect(host.querySelector("[data-add-public]")).not.toBeNull();
+   });
+ });
++
++/**
++ * **Both boxes near the top, About you for a reader with none, and Ready at
++ * both ends** — Greg, 2026-10-19 (spya-kan788, spya-jk0cgg); plan 261020a § Part A.
++ */
++describe("the boxes at the top, About you, and Ready twice", () => {
++  const aboutBox = () => host.querySelector<HTMLTextAreaElement>("#add-about-you");
++  function typeAbout(value: string): void {
++    const el = aboutBox();
++    if (!el) throw new Error("no About you box");
++    act(() => {
++      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
++      el.dispatchEvent(new Event("input", { bubbles: true }));
++    });
++  }
++  const profiles = () => events.filter((e) => e.startsWith("profile:") || e.startsWith("leave-profile:"));
++
++  it("draws the purpose box straight under the heading, and four rows tall", async () => {
++    await JOB.start();
++    const boxes = host.querySelector("[data-add-boxes]");
++    expect(boxes).not.toBeNull();
++    expect(host.querySelector("header")?.nextElementSibling).toBe(boxes);
++    expect(box().id).toBe("add-purpose");
++    expect(box().rows).toBe(4);
++  });
++
++  it("offers About you, marked as for every article, to a reader with no profile", async () => {
++    await JOB.start();
++    expect(aboutBox()).not.toBeNull();
++    const boxes = host.querySelector("[data-add-boxes]");
++    expect(boxes?.textContent).toContain("This article");
++    expect(boxes?.textContent).toContain("Every article");
++  });
++
++  it("does not offer it to a reader who already has one", async () => {
++    readerProfile = "A statistician.";
++    await JOB.start();
++    expect(aboutBox()).toBeNull();
++  });
++
++  it("saves About you after a pause, and keeps the box once it has saved", async () => {
++    await JOB.start();
++    typeAbout("A nurse, new to statistics.");
++    await pause(2_000);
++    await settle();
++    expect(profiles()).toEqual([`profile:${JSON.stringify({ profile: "A nurse, new to statistics." })}`]);
++    expect(aboutBox(), "the box vanished once the reader had a profile").not.toBeNull();
++  });
++
++  it("waits, with Ready at the top and the bottom, when About you is unsaved at the finish", async () => {
++    await JOB.start();
++    act(() => aboutBox()?.focus());
++    typeAbout("A nurse");
++    await JOB.finish();
++    expect(navigations).toEqual([]);
++    const bars = [...host.querySelectorAll("[data-add-ready]")].map((b) => b.getAttribute("data-add-ready"));
++    expect(bars).toEqual(["top", "bottom"]);
++    const status = host.querySelector('[data-add-ready="top"] [role="status"]');
++    expect(status?.textContent?.trim()).toBe("Your article is ready.");
++    /* The big green tick (spya-a40t70), at the top only. Its words, rather
++       than an unlabelled graphic, are what a screen reader announces. */
++    const tick = status?.querySelector("svg.add-ready-tick");
++    expect(tick).not.toBeNull();
++    expect(tick?.getAttribute("aria-hidden")).toBe("true");
++    expect(tick?.getAttribute("width")).toBe("28");
++    expect(tick?.getAttribute("height")).toBe("28");
++    expect(tick?.getAttribute("stroke")).toBe("currentColor");
++    expect(host.querySelector('[data-add-ready="bottom"] svg.add-ready-tick')).toBeNull();
++    const topOpen = [...host.querySelectorAll<HTMLButtonElement>('[data-add-ready="top"] button')].find(
++      (b) => b.textContent?.trim() === OPEN,
++    );
++    if (!topOpen) throw new Error("no Open at the top");
++    act(() => topOpen.click());
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(profiles()[0]).toBe(`profile:${JSON.stringify({ profile: "A nurse" })}`);
++    expect(runs()).toEqual(NO_RUNS);
++  });
++
++  it("opens by itself when the profile could not be read, rather than waiting behind a box never drawn", async () => {
++    readerReadFails = true;
++    await JOB.start();
++    expect(aboutBox()).toBeNull();
++    await JOB.finish();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++  });
++
++  it("waits for About you's save on Open, and a refusal keeps the page with Open without saving", async () => {
++    await JOB.start();
++    act(() => aboutBox()?.focus());
++    typeAbout("A nurse");
++    await JOB.finish();
++    const held = heldResponse();
++    profileAnswer = () => held.promise;
++    act(() => aboutBox()?.blur());
++    press(OPEN);
++    await settle();
++    expect(navigations, "opened before About you had saved").toEqual([]);
++    held.answer(new Response(JSON.stringify({ error: "Too long." }), { status: 400 }));
++    await settle();
++    expect(navigations, "a refused About you was hidden by leaving").toEqual([]);
++    expect(aboutBox()?.value).toBe("A nurse");
++    press(OPEN_UNSAVED);
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    unmount();
++    expect(events.filter((e) => e.startsWith("leave-profile:")), "the abandoned draft was sent anyway").toEqual([]);
++  });
++
++  it("waits for a retried About-you save after its first refusal", async () => {
++    await JOB.start();
++    act(() => aboutBox()?.focus());
++    typeAbout("A nurse");
++    await JOB.finish();
++    profileAnswer = async () => new Response(JSON.stringify({ error: "Try again." }), { status: 503 });
++    press(OPEN);
++    await settle();
++    expect(navigations).toEqual([]);
++    expect(button(OPEN_UNSAVED)).toBeTruthy();
++
++    const retry = heldResponse();
++    profileAnswer = () => retry.promise;
++    press(OPEN);
++    await settle();
++    expect(navigations, "the page left while the retried About-you save was still in flight").toEqual([]);
++    expect(button("Saving…")?.disabled).toBe(true);
++    retry.answer(new Response(JSON.stringify({ profile: "A nurse" }), { status: 200 }));
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++  });
++
++  it("does not offer to abandon both drafts while either save is still in flight", async () => {
++    await JOB.start();
++    type("the evidence");
++    typeAbout("A nurse");
++    await JOB.finish();
++    patchAnswer = async () => new Response(JSON.stringify({ error: "The shelf is unavailable." }), { status: 503 });
++    const profileSave = heldResponse();
++    profileAnswer = () => profileSave.promise;
++    press(OPEN);
++    await settle();
++    expect(navigations).toEqual([]);
++    expect(
++      button(OPEN_UNSAVED),
++      "Open without saving cannot abandon an About-you PATCH that has already left",
++    ).toBeUndefined();
++
++    profileSave.answer(new Response(JSON.stringify({ profile: "A nurse" }), { status: 200 }));
++    await settle();
++    expect(button(OPEN_UNSAVED), "the escape did not appear after both requests had settled").toBeTruthy();
++  });
++
++  it("keeps the whole of an over-long paste, and asks before leaving with it", async () => {
++    await JOB.start();
++    const long = "x".repeat(1_600);
++    typeAbout(long);
++    expect(aboutBox()?.value.length, "the browser cut the paste").toBe(1_600);
++    expect(host.querySelector(".prof-count.over")).not.toBeNull();
++    expect(leaving()).toBe(true);
++  });
++
++  it("still opens by itself when neither box was touched", async () => {
++    await JOB.start();
++    await JOB.finish();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(host.querySelector("[data-add-ready]")).toBeNull();
++    expect(profiles()).toEqual([]);
++  });
++});
+diff --git a/tests/feedback-dialog-styles.test.ts b/tests/feedback-dialog-styles.test.ts
+index bfb4e1556..1af216ead 100644
+--- a/tests/feedback-dialog-styles.test.ts
++++ b/tests/feedback-dialog-styles.test.ts
+@@ -1,14 +1,17 @@
+ /**
+- * The Feedback dialog's two asks of 2026-10-11, in the stylesheet (plan 261011h).
++ * The Feedback dialog's asks, in the stylesheet.
+  *
+- * - **Bigger still on a large window** (`spya-tfp3zw`): a 1280px step, wider,
+- *   and taller on a window tall enough, above the 1024px step 261008i made.
+- * - **Green to send, red to defer** in a Needs-a-decision thread
+- *   (`spya-zjsqe6`): from the measured tokens, and weighty enough to beat
+- *   `.fb-copy`, which comes later in the file at one class.
++ * - **Bigger still on a large window** (`spya-tfp3zw`, plan 261011h): a 1280px
++ *   step, wider, and taller on a window tall enough, above the 1024px step
++ *   261008i made.
++ * - **Green to send, red to back out** (`spya-zjsqe6`, plan 261011h, then
++ *   `spya-as0et6`, plan 261020f): one shared pair, `.tone-positive` and
++ *   `.tone-negative` in button-tone.css, weighty enough to beat every family
++ *   rule that can paint a Feedback button.
+  *
+  * The classes reaching the right buttons is `feedback-dialog.test.tsx`'s job.
+  */
++import { readFileSync } from "node:fs";
+ import { describe, expect, it } from "vitest";
+ import {
+   enclosing,
+@@ -61,13 +64,16 @@ function specificity(selector: string): number {
+   return (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length;
+ }
+ 
+-/** Paint declarations on the shared shape or either semantic hook, in any sheet. */
++/** The Feedback dialog's button hooks, and the two shared tones. */
++const BUTTON_HOOK = /\.(?:fb-(?:copy|reply-thread|reply-send|defer|send|cancel)|tone-(?:positive|negative))\b/;
++
++/** Paint declarations on any of them, in any sheet: `selector | property: value`. */
+ function buttonPaint(css: string): string[] {
+   const out: string[] = [];
+   for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+     const selectors = rule[1]!.split(",").map((selector) => selector.trim());
+     for (const selector of selectors) {
+-      if (!/\.fb-(?:copy|reply-thread|reply-send|defer)\b/.test(selector)) continue;
++      if (!BUTTON_HOOK.test(selector)) continue;
+       for (const declaration of rule[2]!.matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)/g)) {
+         const property = declaration[1]!;
+         if (!/^(?:color|border(?:-color)?|background(?:-color)?)$/.test(property)) continue;
+@@ -92,103 +98,111 @@ describe("the Feedback dialog on a large window", () => {
+   });
+ });
+ 
+-describe("a Needs-a-decision thread's Send reply and Defer for now", () => {
+-  const SEND = ".fb-reply-thread .fb-copy.fb-reply-send";
+-  const DEFER = ".fb-reply-thread .fb-copy.fb-defer";
+-
+-  it("draws Send reply in --positive and Defer for now in --danger, hover included", () => {
+-    for (const sel of [SEND, `${SEND}:hover`]) {
+-      expectUnconditional(sel, "color", "var(--positive)");
+-    }
+-    for (const sel of [DEFER, `${DEFER}:hover`]) {
+-      expectUnconditional(sel, "color", "var(--danger)");
++/* spya-as0et6 (Greg, 2026-10-19): "color the buttons red and green, and for
++   close as well, just so it's easier to see what's … effectively a cancel and
++   what's a submit". */
++describe("green to send, red to back out: button-tone.css", () => {
++  const TONES = [
++    [".tone-positive", "var(--positive)"],
++    [".tone-negative", "var(--danger)"],
++  ] as const;
++  /** Every state a rival rule paints, as the tone selector that answers it. */
++  const STATES = ["", ":hover", '[aria-disabled="true"]:hover'] as const;
++
++  it("draws the text and the border in the tone, in every state, with no wash behind", () => {
++    for (const [tone, colour] of TONES) {
++      for (const state of STATES) {
++        expectUnconditional(`${tone}${state}`, "color", colour);
++        expectUnconditional(`${tone}${state}`, "border-color", "currentColor");
++        /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
++        expect(declared(CSS, `${tone}${state}`, "background"), tone).toEqual([]);
++      }
+     }
+   });
+ 
+-  it("keeps the coloured border on hover, and puts no wash behind the words", () => {
+-    for (const sel of [SEND, `${SEND}:hover`, DEFER, `${DEFER}:hover`]) {
+-      expectUnconditional(sel, "border-color", "currentColor");
+-      /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
+-      expect(declared(CSS, sel, "background"), sel).toEqual([]);
++  it("dims a toned button that cannot be pressed, and not one that is working", () => {
++    for (const [tone] of TONES) {
++      expect(declared(CSS, `${tone}:disabled`, "opacity")).toEqual(["0.45"]);
++      expect(declared(CSS, `${tone}[data-working]:disabled`, "opacity")).toEqual(["1"]);
+     }
+   });
+ 
+-  it("outweighs every generic rest, hover and unavailable selector that can match these buttons", () => {
+-    for (const semantic of [SEND, DEFER]) {
+-      expect(specificity(semantic)).toBeGreaterThan(specificity(".fb-copy"));
+-      expect(specificity(semantic)).toBeGreaterThan(specificity(".fb-reply-send:disabled"));
+-      expect(specificity(semantic)).toBeGreaterThan(specificity('.fb-copy[aria-disabled="true"]'));
+-      expect(specificity(`${semantic}:hover`)).toBeGreaterThan(specificity(".fb-copy:hover"));
+-      expect(specificity(`${semantic}:hover`)).toBeGreaterThan(
+-        specificity('.fb-copy[aria-disabled="true"]:hover'),
+-      );
++  it("is the last sheet styles.css imports, so a family rule of equal weight loses", () => {
++    const imports = [...readFileSync("src/web/styles.css", "utf8").matchAll(/^@import\s+"([^"]+)"/gm)].map(
++      (m) => m[1],
++    );
++    expect(imports.at(-1)).toBe("./styles/button-tone.css");
++  });
++
++  it("matches or outweighs every other paint rule on a Feedback button, state for state", () => {
++    const rivals = buttonPaint(CSS)
++      .map((line) => line.split(" | ")[0]!)
++      .filter((selector) => !/\.tone-/.test(selector));
++    expect(rivals.length).toBeGreaterThan(0);
++    for (const rival of rivals) {
++      const state = !rival.includes(":hover")
++        ? STATES[0]
++        : rival.includes("[aria-disabled")
++          ? STATES[2]
++          : STATES[1];
++      for (const [tone] of TONES) {
++        expect(specificity(`${tone}${state}`), `${tone}${state} vs ${rival}`).toBeGreaterThanOrEqual(
++          specificity(rival),
++        );
++      }
+     }
+   });
+ 
+-  it("accounts for every paint rule that can name the shared or semantic button hooks", () => {
++  it("accounts for every paint rule that can name a Feedback button hook or a tone", () => {
+     expect(buttonPaint(CSS)).toEqual([
+-      `${SEND} | border-color: currentColor`,
+-      `${SEND}:hover | border-color: currentColor`,
+-      `${DEFER} | border-color: currentColor`,
+-      `${DEFER}:hover | border-color: currentColor`,
+-      `${SEND} | color: var(--positive)`,
+-      `${SEND}:hover | color: var(--positive)`,
+-      `${DEFER} | color: var(--danger)`,
+-      `${DEFER}:hover | color: var(--danger)`,
+       ".fb-copy | border: 1px solid var(--rule-strong)",
+       ".fb-copy | background: none",
+       ".fb-copy | color: var(--ink)",
+       ".fb-copy:hover | color: var(--highlight-text)",
+       ".fb-copy:hover | border-color: var(--rule-strong)",
+       '.fb-copy[aria-disabled="true"]:hover | color: var(--ink)',
++      ".fb-cancel | border: 1px solid var(--rule-strong)",
++      ".fb-cancel | background: none",
++      ".fb-send | border: 1px solid var(--rule-strong)",
++      ".fb-send | background: none",
++      ".tone-positive | color: var(--positive)",
++      ".tone-positive | border-color: currentColor",
++      ".tone-positive:hover | color: var(--positive)",
++      ".tone-positive:hover | border-color: currentColor",
++      '.tone-positive[aria-disabled="true"]:hover | color: var(--positive)',
++      '.tone-positive[aria-disabled="true"]:hover | border-color: currentColor',
++      ".tone-negative | color: var(--danger)",
++      ".tone-negative | border-color: currentColor",
++      ".tone-negative:hover | color: var(--danger)",
++      ".tone-negative:hover | border-color: currentColor",
++      '.tone-negative[aria-disabled="true"]:hover | color: var(--danger)',
++      '.tone-negative[aria-disabled="true"]:hover | border-color: currentColor',
+     ]);
+   });
+ 
+-  it("has one stylesheet owner for all four semantic hooks", () => {
+-    for (const hook of ["fb-reply-thread", "fb-copy", "fb-reply-send", "fb-defer"]) {
++  it("has one stylesheet owner for each hook, and none paints the thread's", () => {
++    for (const [hook, owner] of [
++      ["fb-copy", "src/web/styles/feedback.css"],
++      ["fb-send", "src/web/styles/feedback.css"],
++      ["fb-cancel", "src/web/styles/feedback.css"],
++      ["fb-reply-send", null],
++      ["fb-defer", null],
++      ["tone-positive", "src/web/styles/button-tone.css"],
++      ["tone-negative", "src/web/styles/button-tone.css"],
++    ] as const) {
+       expect(
+         readerSheets()
+           .filter(({ css }) => new RegExp(`\\.${hook}\\b`).test(stripComments(css)))
+           .map(({ path }) => path),
+         hook,
+-      ).toEqual(["src/web/styles/feedback.css"]);
++      ).toEqual(owner === null ? [] : [owner]);
+     }
+   });
+-
+-  it("leaves the shared send box and a bare .fb-defer uncoloured", () => {
+-    expect(declared(CSS, ".fb-reply-send", "color")).toEqual([]);
+-    expect(declared(CSS, ".fb-defer", "color")).toEqual([]);
+-  });
+ });
+ 
+-/* spya-bvzavw (Greg, 2026-10-17): "In the bottom right of Feedback/Write, the
+-   "Send" button submits. But in the bottom-right of Needs-Input, the Close
+-   button effectively cancels. How can we signal the difference?" Plan 261017c § 3. */
+-describe("Write's Send, told apart from Close", () => {
+-  it("draws Send in --positive, as Send reply is, hover included, and Cancel and Close in neither", () => {
+-    expectUnconditional(".fb-send", "color", "var(--positive)");
+-    expectUnconditional(".fb-send", "border-color", "currentColor");
+-    expectUnconditional(".fb-send:not(:disabled):hover", "color", "var(--positive)");
+-    expectUnconditional(".fb-send:not(:disabled):hover", "border-color", "currentColor");
+-    expect(declared(CSS, ".fb-cancel", "color")).toEqual(["var(--ink-soft)"]);
+-    expect(declared(CSS, ".fb-cancel", "border-color")).toEqual([]);
+-    expect(declared(CSS, ".fb-send:disabled", "color")).toEqual([]);
+-    expect(declared(CSS, ".fb-send:disabled", "border-color")).toEqual([]);
+-  });
+-
++describe("Earlier's footer pager", () => {
+   it("keeps the pager's 40px touch targets apart when its flex row wraps", () => {
+     const coarse = mediaBlock(CSS, "(any-pointer: coarse)", ".fb-thread-nav");
+     expect(declared(coarse, ".fb-thread-nav", "row-gap")).toEqual(["max(0.4rem, 18px)"]);
+   });
+-
+-  it("has no other stylesheet owner for the two footer button hooks", () => {
+-    for (const hook of ["fb-send", "fb-cancel"]) {
+-      expect(
+-        readerSheets()
+-          .filter(({ css }) => new RegExp(`\\.${hook}\\b`).test(stripComments(css)))
+-          .map(({ path }) => path),
+-        hook,
+-      ).toEqual(["src/web/styles/feedback.css"]);
+-    }
+-  });
+ });
+diff --git a/tests/feedback-dialog.test.tsx b/tests/feedback-dialog.test.tsx
+index 77a90ea78..f0d2eef29 100644
+--- a/tests/feedback-dialog.test.tsx
++++ b/tests/feedback-dialog.test.tsx
+@@ -1177,21 +1177,28 @@ describe("the feedback dialog", () => {
+    * put the spinner and "Sending" under the `opacity: 0.45` every disabled Send
+    * gets, which is also our leading iPad suspect for a button that paints
+    * nothing (plan 260912c). The busy rule must outweigh the dimming one.
++   *
++   * Both are `.tone-positive` since plan 261020f, which owns the dimming and
++   * the working exception; feedback-dialog-styles.test.ts holds the rules.
+    */
+   it("draws a working Send, and a working Send reply, at full opacity", () => {
+     /* This file's shared cleanup unmounts its normal fixture, so this CSS-only
+        assertion still mounts one and remains independently runnable with `-t`. */
+     mount();
++    expect(host.querySelector("button.fb-send")?.classList.contains("tone-positive")).toBe(true);
+     const css = readerCssNoComments();
+     for (const [dimmed, working] of [
+-      [".fb-send:disabled", ".fb-send[data-working]:disabled"],
+-      [".fb-reply-send:disabled", ".fb-reply-send[data-working]:disabled"],
++      [".tone-positive:disabled", ".tone-positive[data-working]:disabled"],
++      [".tone-negative:disabled", ".tone-negative[data-working]:disabled"],
+     ] as const) {
+-      expect(css).toMatch(new RegExp(`${dimmed.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*opacity:\\s*0\\.45`));
+-      const escaped = working.replace(/[.[\]]/g, "\\$&");
+-      const found = [...css.matchAll(new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`, "g"))];
+-      expect(found, `one rule for ${working}`).toHaveLength(1);
+-      expect(found[0]?.[1]).toMatch(/opacity:\s*1\s*;/);
++      const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
++      const bodyOf = (selector: string) =>
++        rules.filter((r) => r[1]!.split(",").map((s) => s.trim()).includes(selector)).map((r) => r[2]!);
++      expect(bodyOf(dimmed).join(";")).toMatch(/opacity:\s*0\.45/);
++      expect(bodyOf(working), `one rule for ${working}`).toHaveLength(1);
++      expect(bodyOf(working)[0]).toMatch(/opacity:\s*1\s*;/);
++      /* Later than the dimming, at higher weight: the busy rule wins. */
++      expect(css.indexOf(working)).toBeGreaterThan(css.indexOf(dimmed));
+     }
+   });
+ });
+@@ -2290,12 +2297,16 @@ describe("the Earlier tab", () => {
+         ]);
+         /* Shut until pressed. */
+         expect(panelOf("Earlier").querySelector(".fb-addendum-box")).toBeNull();
+-        /* Opened, its Send stays neutral: the green is a thread's (plan 261011h). */
++        /* Opened: green to send, red to cancel (spya-as0et6, plan 261020f); the
++           button that opened it commits nothing, so stays neutral. */
++        expect(button(item(214), "Add to this report").className).not.toMatch(/tone-/);
+         click(button(item(214), "Add to this report"));
+-        const addBox = item(214).querySelector(".fb-addendum-box");
++        const addBox = item(214).querySelector<HTMLElement>(".fb-addendum-box");
+         expect(addBox).not.toBeNull();
+         expect(addBox?.classList.contains("fb-reply-thread")).toBe(false);
+         expect(addBox?.querySelector(".fb-defer")).toBeNull();
++        expect(button(addBox!, "Send addendum").classList.contains("tone-positive")).toBe(true);
++        expect(button(addBox!, "Cancel").classList.contains("tone-negative")).toBe(true);
+       });
+ 
+       it("draws each report's addenda under its words, oldest first, timed, as text with its lines, on any status", async () => {
+@@ -3082,6 +3093,20 @@ describe("the Earlier tab", () => {
+           }
+         });
+ 
++        /* spya-as0et6 (plan 261020f): green to send, red to leave; the pager
++           moves you, so neither. The header's ✕ is the app's one shared cross. */
++        it("colours the footers' buttons by what they do", async () => {
++          await openThread();
++          const tones = (name: string) => [...button(foot(), name).classList].filter((c) => c.startsWith("tone-"));
++          expect(tones("Close")).toEqual(["tone-negative"]);
++          expect(tones("‹ Previous")).toEqual([]);
++          expect(tones("Next ›")).toEqual([]);
++          click(tab("Write"));
++          expect(tones("Cancel")).toEqual(["tone-negative"]);
++          expect(tones("Send")).toEqual(["tone-positive"]);
++          expect(host.querySelector(".fb-close")?.className).not.toMatch(/tone-/);
++        });
++
+         /* F4: the footer's pager and the thread are drawn on the same condition,
+            including while a reopened dialog's read is still out. */
+         it("shows the footer's pager exactly when the thread itself shows", async () => {
+@@ -3587,9 +3612,12 @@ describe("the Earlier tab", () => {
+       /* Decision 3 (spya-t6nmxt): "not now", reversible, a timestamp. */
+       it("defers a thread, and brings it back, with exactly the question and whether", async () => {
+         await openThread();
+-        /* Green to send and red to defer, by these classes (spya-zjsqe6, plan 261011h). */
++        /* Green to send and red to defer (spya-zjsqe6, plan 261011h; one shared
++           pair since 261020f). */
+         expect(button(thread(), "Send reply").closest(".fb-reply")?.classList.contains("fb-reply-thread")).toBe(true);
++        expect(button(thread(), "Send reply").classList.contains("tone-positive")).toBe(true);
+         expect(button(thread(), "Defer for now").classList.contains("fb-defer")).toBe(true);
++        expect(button(thread(), "Defer for now").classList.contains("tone-negative")).toBe(true);
+         answer = deferral();
+         click(button(thread(), "Defer for now"));
+         await settle();
+@@ -3604,6 +3632,7 @@ describe("the Earlier tab", () => {
+         expect(hasButton(thread(), "Defer for now")).toBe(false);
+         /* Bring back undoes a deferral, so it is not drawn as one. */
+         expect(button(thread(), "Bring back").classList.contains("fb-defer")).toBe(false);
++        expect(button(thread(), "Bring back").className).not.toMatch(/tone-/);
+         click(button(thread(), "‹ All threads"));
+         expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
+         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
+diff --git a/tests/job-card-progress.test.tsx b/tests/job-card-progress.test.tsx
+index cbeed9324..d6fdeed27 100644
+--- a/tests/job-card-progress.test.tsx
++++ b/tests/job-card-progress.test.tsx
+@@ -178,7 +178,8 @@ it("says how long the running step has been going, beside what it is doing", ()
+ /**
+  * **The card has to keep its own time**, and nothing in this file used to check
+  * that past the first paint. `report` writes a step's `detail` in memory and
+- * never persists it (src/jobs.ts), so a job halfway through a long step sends
++ * persists it only beside a counted `progress` (src/jobs.ts § `stepNotes`, plan
++ * 261020a), so a job halfway through a long uncounted step sends
+  * back a byte-identical record on every poll and `sameJobs` correctly
+  * suppresses the re-render. Without `useNow`'s interval the duration would
+  * freeze at whatever it read when the step began — which is the exact lie this
+@@ -412,3 +413,32 @@ it("does not mention tabs when nothing is importing", () => {
+   );
+   expect(host.textContent).not.toContain(KEEP_A_TAB_OPEN);
+ });
++
++/**
++ * **A bar, only where the step is counting** — Greg, 2026-10-19
++ * (spya-skq3fg); plan 261020a § B1. A count, never a guess at time.
++ */
++it("draws a counted bar under a running step that has progress, naming its unit", () => {
++  card(
++    job({
++      steps: [
++        { name: "fetch", label: "Fetching the page", status: "done", detail: "42 KB" },
++        running({
++          name: "extract",
++          label: "Reading the PDF",
++          detail: "23/69 chunks, pages 40–41",
++          progress: { done: 23, total: 69, unit: "chunk" },
++        }),
++      ],
++    }),
++  );
++  const bar = row("Reading the PDF")?.querySelector("progress");
++  expect(bar?.value).toBe(23);
++  expect(bar?.max).toBe(69);
++  expect(row("Reading the PDF")?.textContent).toContain("23 of 69 sections of the file done");
++});
++
++it("draws no bar for a step that is not counting", () => {
++  card(job());
++  expect(row("Building the structure")?.querySelector("progress")).toBeNull();
++});
+diff --git a/tests/job-preview-settlement-sql.test.ts b/tests/job-preview-settlement-sql.test.ts
+index 5de1381bb..a77f9b13c 100644
+--- a/tests/job-preview-settlement-sql.test.ts
++++ b/tests/job-preview-settlement-sql.test.ts
+@@ -60,8 +60,9 @@ describe("a lifecycle settlement removes every step's preview", () => {
+     for (const expression of steps) {
+       const { sql } = dialect.sqlToQuery(expression);
+       /* The subtraction must surround the entire CASE, including its unchanged
+-         arm: queued cancellation can see a pending preview from an old pause. */
+-      expect(sql).toMatch(/end\s*\)\s*-\s*'preview'\s+order by step\.ordinality/i);
++         arm: queued cancellation can see a pending preview from an old pause.
++         The counted progress beside it goes the same way (plan 261020a § B1). */
++      expect(sql).toMatch(/end\s*\)\s*-\s*'preview'\s*-\s*'progress'\s+order by step\.ordinality/i);
+       if (door === "stop") {
+         /* Asking a live claimant to stop must still leave its preview alone. */
+         expect(sql).toMatch(/else "spideryarn"\."jobs"\."steps" end$/);
+diff --git a/tests/jobs-walk.test.ts b/tests/jobs-walk.test.ts
+index 7f2f44c42..921f9b3ea 100644
+--- a/tests/jobs-walk.test.ts
++++ b/tests/jobs-walk.test.ts
+@@ -1157,6 +1157,141 @@ describe("one claim walks the whole job", () => {
+     });
+   });
+ 
++  /**
++   * **A step's report reaches the row while it runs, throttled, and its
++   * counted progress is gone once it ends** (plan 261020a § B1, Greg's
++   * spya-skq3fg). Until then `ctx.report` was in memory only, so PDF extract's
++   * chunk count never reached a reader's poll.
++   */
++  describe("a step's report", () => {
++    const stored = async (id: string) => (await pgJobStore.get(id, OWNER))?.steps ?? [];
++
++    async function untilProgressStored(id: string): Promise<JobStep | undefined> {
++      for (let i = 0; i < 100; i += 1) {
++        const [first] = await stored(id);
++        if (first?.progress) return first;
++        await new Promise((go) => setTimeout(go, 20));
++      }
++      return (await stored(id))[0];
++    }
++
++    it("is on the stored row while the step runs, and its progress is gone once it succeeds", async () => {
++      const seen: { during?: JobStep | undefined; after?: JobStep | undefined } = {};
++      const names: StepName[] = ["fetch", "extract"];
++      const { job, parts } = await fixture("test-walk-report-success", names, {
++        fetch: async (ctx) => {
++          ctx.report("3/12 chunks, page 4", { done: 3, total: 12, unit: "chunk" });
++          seen.during = await untilProgressStored(job.id);
++        },
++        extract: async () => {
++          seen.after = (await stored(job.id))[0];
++        },
++      });
++
++      const advanced = await advanceAsOwner(job.id, parts);
++
++      expect(seen.during?.status).toBe("running");
++      expect(seen.during?.detail).toBe("3/12 chunks, page 4");
++      expect(seen.during?.progress).toEqual({ done: 3, total: 12, unit: "chunk" });
++      expect(seen.after?.status).toBe("done");
++      expect(seen.after?.progress, "a finished step still says it is part-way").toBeUndefined();
++      expect(advanced?.job.status).toBe("done");
++      expect((await stored(job.id)).map((s) => s.progress)).toEqual([undefined, undefined]);
++    });
++
++    it("is gone from the row once the step fails", async () => {
++      let during: JobStep | undefined;
++      const { job, parts } = await fixture("test-walk-report-failure", ["fetch"], {
++        fetch: async (ctx) => {
++          ctx.report("1/4 images", { done: 1, total: 4, unit: "image" });
++          during = await untilProgressStored(job.id);
++          throw new Error("the second half fell over");
++        },
++      });
++
++      const advanced = await advanceAsOwner(job.id, parts);
++
++      expect(during?.progress, "it has to have been stored for its absence to mean anything").toEqual({
++        done: 1,
++        total: 4,
++        unit: "image",
++      });
++      expect(advanced?.job.steps[0]?.status).toBe("error");
++      expect((await stored(job.id))[0]?.progress).toBeUndefined();
++    });
++
++    it("does not write the row for a report without a count", async () => {
++      const { job, parts } = await fixture("test-walk-report-uncounted", ["fetch"], {
++        fetch: (ctx) => {
++          ctx.report("thinking about the glossary");
++        },
++      });
++      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
++      const detailsWritten: (string | undefined)[] = [];
++      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
++        if (steps[0]?.status === "running") detailsWritten.push(steps[0].detail);
++        return await realNote(id, attempt, steps, title);
++      });
++
++      await advanceAsOwner(job.id, parts);
++
++      expect(detailsWritten, "only the step-starting write, before the report").toEqual([undefined]);
++    });
++
++    it("writes the row once for a burst of reports, not once per report", async () => {
++      const names: StepName[] = ["fetch"];
++      const { job, parts } = await fixture("test-walk-report-throttle", names, {
++        fetch: (ctx) => {
++          for (let done = 1; done <= 20; done += 1) ctx.report(`${done}/20 chunks`, { done, total: 20, unit: "chunk" });
++        },
++      });
++      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
++      let reported = 0;
++      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
++        if (steps.some((s) => s.progress)) reported += 1;
++        return await realNote(id, attempt, steps, title);
++      });
++
++      const advanced = await advanceAsOwner(job.id, parts);
++
++      expect(reported, "twenty reports in a burst are one write").toBe(1);
++      expect(advanced?.job.status).toBe("done");
++    });
++
++    it("waits for a write still in flight before settling, so a late one cannot put the step back", async () => {
++      const names: StepName[] = ["fetch", "extract"];
++      const seen: { midWalk?: JobStep[] } = {};
++      let late: Promise<unknown> = Promise.resolve();
++      const { job, parts } = await fixture("test-walk-report-late", names, {
++        fetch: (ctx) => {
++          ctx.report("5/5 chunks", { done: 5, total: 5, unit: "chunk" });
++        },
++        extract: async () => {
++          await new Promise((go) => setTimeout(go, 500));
++          await late.catch(() => undefined);
++          seen.midWalk = await stored(job.id);
++        },
++      });
++      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
++      let delayed = 0;
++      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
++        if (!steps.some((s) => s.progress)) return await realNote(id, attempt, steps, title);
++        delayed += 1;
++        const asAsked = structuredClone(steps);
++        const landing = new Promise((go) => setTimeout(go, 200)).then(() => realNote(id, attempt, asAsked, title));
++        late = landing;
++        return await landing;
++      });
++
++      const advanced = await advanceAsOwner(job.id, parts);
++
++      expect(delayed, "the report's write has to have been the delayed one").toBe(1);
++      expect(seen.midWalk?.[0]?.status, "the late write put the settled step back to running").toBe("done");
++      expect(seen.midWalk?.[0]?.progress).toBeUndefined();
++      expect(advanced?.job.status).toBe("done");
++    });
++  });
++
+   /**
+    * **The ways a claim was put down wrongly, or not put down at all** — the
+    * seventh sweep's tier 0 for the queue
+diff --git a/tests/store-jobs-parity.test.ts b/tests/store-jobs-parity.test.ts
+index 365030961..996cfd98e 100644
+--- a/tests/store-jobs-parity.test.ts
++++ b/tests/store-jobs-parity.test.ts
+@@ -1898,20 +1898,23 @@ for (const adapter of ADAPTERS) {
+     });
+ 
+     it.each(["pause", "requeue", "expiry", "expired-stop", "swept-stop", "queued-stop"] as const)(
+-      "removes the stored preview when a step settles through %s",
++      "removes stored transient fields when a step settles through %s",
+       async (door) => {
+         const preview: StepPreview = {
+           kind: "simple-brief",
+           paragraphs: [{ text: "A checked Brief before Fuller finishes.", ids: ["spya-k3m9qt" as BlockId] }],
+         };
++        /* And the counted progress, plan 261020a: as transient as the preview. */
++        const progress = { done: 3, total: 12, unit: "chunk" } as const;
+         const job = aJob();
+-        if (door === "queued-stop") job.steps[0]!.preview = preview;
++        if (door === "queued-stop") Object.assign(job.steps[0]!, { preview, progress });
+         await store.enqueueOrGet(job, { workKey: "k-preview", reservesName: false });
+         const attempt = mintAttempt();
+         if (door !== "queued-stop") {
+           expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+           await store.noteProgress(job.id, attempt, [{
+-            ...job.steps[0]!, status: "running", startedAt: new Date().toISOString(), preview,
++            ...job.steps[0]!, status: "running", startedAt: new Date().toISOString(), preview, progress,
++            detail: "3/12 chunks, page 4",
+           }]);
+         }
+         expect((await store.get(job.id, OWNER))?.steps[0]?.preview).toEqual(preview);
+@@ -1950,11 +1953,15 @@ for (const adapter of ADAPTERS) {
+         expect(after?.status).toBe(endings[door].status);
+         expect(after?.steps[0]?.status).not.toBe("running");
+         expect(after?.steps[0]?.preview, "a settled step retained the uncommitted Brief").toBeUndefined();
++        expect(after?.steps[0]?.progress, "a settled step still says it is part-way").toBeUndefined();
++        if (door !== "queued-stop") {
++          expect(after?.steps[0]?.detail, "a settled step kept what it said mid-way").toBeUndefined();
++        }
+       },
+     );
+ 
+     /**
+-     * **Every field except the transient preview is left alone on non-running steps.**
++     * **Every field except transient preview/progress is left alone on non-running steps.**
+      *
+      * The settlement rewrites the `steps` array whole — one `jsonb_agg` over
+      * every element in Postgres, a loop over every step on the filesystem — so
+diff --git a/tests/what-the-enter-key-promises.test.tsx b/tests/what-the-enter-key-promises.test.tsx
+index dbfe22508..5d6f54859 100644
+--- a/tests/what-the-enter-key-promises.test.tsx
++++ b/tests/what-the-enter-key-promises.test.tsx
+@@ -147,6 +147,9 @@ const PROMISES: Record<string, string> = {
+   /* Why you are reading, asked on the add page and in Skim (plan 260930e).
+      Multi-line; ⌘/Ctrl+Enter is the add page's save, never plain Enter. */
+   "AddPage.tsx › add-purpose": "newline",
++  /* About you, offered on the add page to a reader with no profile (plan
++     261020a). Same box as Profile's: ⌘/Ctrl+Enter saves, never plain Enter. */
++  "AddPage.tsx › add-about-you": "newline",
+   "SkimPurpose.tsx › skim-purpose-input": "newline",
+   "QuizPanel.tsx › Your answer": "newline",
+ };

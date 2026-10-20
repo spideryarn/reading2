@@ -2257,7 +2257,7 @@ function clip(text: string, max: number): string {
  * numbered jump beside the count (`CitedAtJumps`, plan 261009e), so the card on
  * a reference entry leads back to where the work is cited.
  */
-function CiteCard({
+export function CiteCard({
   work,
   showInSpideryarn,
   onAsk,
