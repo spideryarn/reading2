@@ -332,6 +332,10 @@ describe("rewriting a question while an answer is arriving", () => {
     expect(posted(), "no edit until the answer has stopped").toHaveLength(1);
     expect(editorText()).toBe("What I meant to say");
     expect(said()).toMatch(/Stopping/);
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    expect(stops(), "a second Ask press does not send a second Stop").toHaveLength(1);
+    expect(posted(), "a second Ask press still does not send the edit early").toHaveLength(1);
   });
 
   it("then asks the rewrite once the stopped answer has settled, against that answer as the tail", async () => {
@@ -350,6 +354,21 @@ describe("rewriting a question while an answer is arriving", () => {
       expectedTailId: "spya-a3a3a3",
     });
     expect(host.querySelector("textarea.chat-edit-box"), "the editor closed").toBeNull();
+    expect(
+      (document.activeElement as HTMLElement | null)?.getAttribute("data-tip"),
+      "focus returned to its pencil",
+    ).toBe("Rewrite this question");
+  });
+
+  it("does not ask an unchanged rewrite typed while the answer is stopping", async () => {
+    await answering();
+    const editor = await openAndType(0, "What I meant to say");
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    await act(async () => type(editor, "  What I first said "));
+    await finishStopped();
+    expect(posted(), "the now-unchanged rewrite was not sent").toHaveLength(1);
+    expect(host.querySelector("textarea.chat-edit-box"), "closed, as an unchanged edit always has").toBeNull();
   });
 
   /* GPT Sol's plan review F1: the question just asked carries an id this tab
@@ -380,6 +399,9 @@ describe("rewriting a question while an answer is arriving", () => {
     await settle();
     expect(stops()).toEqual([{ messageId: "spya-a3a3a3", attempt: "an-attempt" }]);
     expect(editorText(), "the editor and its text outlived the rename").toBe("And another thing, properly");
+    expect(document.activeElement, "the remounted editor kept the caret").toBe(
+      host.querySelector("textarea.chat-edit-box"),
+    );
     expect(said()).toMatch(/Stopping/);
     await finishStopped();
     expect(posted()).toHaveLength(2);

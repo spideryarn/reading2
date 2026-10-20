@@ -1686,8 +1686,12 @@ export function Conversation({
     if (rewriting === null) setRewrite(null);
     else if (last?.status === "error") setRewrite({ ...rewrite, queued: false });
     else {
+      const next = rewrite.text.trim();
       setRewrite(null);
-      onEdit(rewriting, rewrite.text.trim());
+      /* The box stays editable while Stop settles. Recheck here as well as at
+         the press: the reader may since have restored the original words (or
+         cleared them), which is no longer an edit and must not discard turns. */
+      if (next !== "" && next !== rewrite.original.trim()) onEdit(rewriting, next);
     }
   }, [rewrite, rewriting, busy, last?.status, onEdit]);
   /**
