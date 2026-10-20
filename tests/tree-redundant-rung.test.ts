@@ -60,6 +60,7 @@ const report = (): BuildReport => ({
   rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
+  unresolvedStarts: [],
   droppedQuestions: [],
 });
 

@@ -899,7 +899,7 @@ async function runWaves(
   };
   const send = senderFor(arm.call.model);
   const calls: CallStats[] = [];
-  const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
   /* "The arm's own start" for every call's offset below — captured once, here,
      rather than at the top of runModelArm's dispatch, because this function
      IS the arm for a `waves` spec. See CallStats.startedOffsetMs. */
@@ -1020,7 +1020,7 @@ async function runRevise(
       wave: 2,
     });
     calls.push(revised.stats);
-    const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+    const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
     return { tree: parseWholeDocumentResponse(revised.raw, blocks, slug, built), calls, built };
   } catch (err) {
     // The bill travels with the failure — see ArmFailure.
@@ -1063,7 +1063,7 @@ export async function runModelArm(
         armStartedAt: Date.now(),
         wave: 1,
       });
-      const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+      const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
       try {
         return {
           tree: parseWholeDocumentResponse(

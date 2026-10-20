@@ -1430,6 +1430,7 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: result.unresolvedStarts,
     droppedQuestions: [],
   };
   if (!result.ok) {
@@ -1531,6 +1532,7 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
      put anything in it. */
   report.repairs.push(...planned.repairs);
   report.droppedChildren.push(...planned.droppedChildren);
+  report.unresolvedStarts.push(...planned.unresolvedStarts);
   report.droppedHeadings.push(...planned.droppedHeadings);
   /* An expansion writes depth-2 and deeper nodes, where `questionFor` keeps
      none — so this is normally empty. It is carried anyway, because a count

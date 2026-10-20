@@ -119,12 +119,14 @@ const emptyReport = (): BuildReport => ({
   rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
+  unresolvedStarts: [],
   droppedQuestions: [],
 });
 
 const countReport = (r: BuildReport): Record<keyof BuildReport, number> => ({
   repairs: r.repairs.length,
   droppedChildren: r.droppedChildren.length,
+  unresolvedStarts: r.unresolvedStarts.length,
   rangelessChildren: r.rangelessChildren.length,
   droppedHeadings: r.droppedHeadings.length,
   collapsedRungs: r.collapsedRungs.length,

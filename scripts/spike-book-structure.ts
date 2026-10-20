@@ -92,7 +92,7 @@ async function main(): Promise<void> {
     "utf-8",
   );
 
-  const report: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  const report: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
   const { root } = parseWholeDocumentAnswer(raw, body, report);
   const tree = buildTree(root, {}, body, "spike", report);
   console.log(

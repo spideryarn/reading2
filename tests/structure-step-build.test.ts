@@ -558,6 +558,7 @@ describe("the Socratic question", () => {
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: [],
     droppedQuestions: [],
   };
   const tree = buildTree(deep, NAV, BLOCKS, "test", report);
@@ -682,6 +683,7 @@ describe("a question lost to a collapsed rung", () => {
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
+    unresolvedStarts: [],
     droppedQuestions: [],
   };
 

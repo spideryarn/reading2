@@ -285,9 +285,15 @@ means *"can open a microphone"* rather than *"has Web Speech"*.
 ships its audio to a server, so a captive portal or a VPN blip makes it fail — and that used to stop
 the recording **mid-sentence** and tell the reader to check their internet connection, about a path
 that had usually worked perfectly. It now takes the live words with it and nothing else: `s.live`
-goes false, `onend` does not restart it, late results are ignored, and if it died before
-`audiostart` ever fired the hook takes over the timer and arms the tape itself — which is the
-Firefox path verbatim, because it is now Firefox's situation. The gate is *"is our track still
+goes false, `onend` does not restart it, and late results are ignored — which is Firefox's
+situation, reached from a different direction. The timer, the tape and `listening` do not hang off
+the recogniser at all: since
+[261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md) they
+start on the line where `start()` takes the track, on every browser, rather than at `audiostart`,
+which on Chrome is 1.1 seconds after the track is already delivering audio and lost that second of
+every dictation. A recogniser that dies before `audiostart` therefore finds the tape already
+running; the give-up path still calls the idempotent `armTape`, so no ordering can leave a session
+without one. The gate is *"is our track still
 live"* rather than a list of error codes to trust, since a track that has really gone fires its own
 `ended` listener. [260905c](../plans/260905c-dictation-filler-words-and-mic-offline.md).
 
@@ -371,8 +377,9 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   into Dictate, and the second press missed —
   [261011y](../plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md). **The hold
   is not withdrawn by a new `doneKey` or by the phase returning to `opening`** (Chromium's
-  recogniser does that after a pause, inside one session): the reader pressed Stop, so Stop
-  happens; only the wish to send is tied to the key. Nor by a change of microphone, which restarts
+  recogniser did that after a pause, inside one session, until
+  [261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md);
+  now only a new session starts in `opening`): the reader pressed Stop, so Stop happens; only the wish to send is tied to the key. Nor by a change of microphone, which restarts
   the capture without a press: it is still the dictation the reader pressed Stop on.
 - **The button has to be where the first press left it.** Nothing that positions it may change
   size at Stop. Since the hold, the second press arrives before Stop, so this matters less than it
@@ -967,7 +974,7 @@ chosen microphone, and whether it is the one that opened), `mic_live`, `browser_
 Search Sentry for `DictationFailure`.
 
 **Not covered: a permission prompt nobody answers.** `getUserMedia` may then never settle, the strip
-says "Opening the microphone…" for ever, and no sentence is shown, so nothing is reported.
+says "Wait — opening the microphone…" for ever, and no sentence is shown, so nothing is reported.
 
 ## Where the pieces are
 

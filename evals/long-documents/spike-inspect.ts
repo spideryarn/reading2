@@ -27,7 +27,7 @@ const plan = JSON.parse(readFileSync(path.join(OUT, "plan.json"), "utf8")).plans
 plan.forEach((s, i) => {
   const raw = readFileSync(path.join(OUT, `slice-${i}-answer.json`), "utf8");
   const answer = JSON.parse(raw) as { root: { title: string; children: { start: string; title: string; sourceHeading?: string; children?: { start: string; title: string }[] }[] } };
-  const report: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  const report: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
   parseWholeDocumentAnswer(raw, blocks.slice(s.lo, s.hi + 1), report);
   console.log(`\nSLICE ${i} (${s.lo}-${s.hi}) root "${answer.root.title}" dropped ${JSON.stringify(report.droppedChildren)}`);
   for (const c of answer.root.children) {
