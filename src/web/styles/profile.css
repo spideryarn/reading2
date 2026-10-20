@@ -60,6 +60,9 @@
 /* Which of the two boxes this is, when both are on one page: the add page
    asks why for *this article* and, for a reader with no profile, about them
    for *every article* (spya-kan788). */
+/* The add page's "Your article is ready." tick: the go-ahead green
+   (styles/tokens.css § --positive), for spya-a40t70's "big green check mark". */
+.add-ready-tick { color: var(--positive); flex: none; }
 .prof-box-scope {
   color: var(--ink-faint);
   font-family: var(--font-ui);

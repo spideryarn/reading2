@@ -1811,7 +1811,7 @@ ends however it ends (`settledSteps` in [`src/store/pg-jobs.ts`](../../src/store
 drawn under the running step as a `<progress>` and *23 of 69 sections of the file done*. A report
 with no count stays in memory, as every report did before. The estimate of time Greg asked for was
 measured and declined for now: eleven imports, and URL extraction ranging 3–122 s with no relation
-to length — [plan 261020a § Part B](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md#part-b--how-far-the-import-has-got).
+to length — [plan 261020a § Part B](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md#part-b-how-far-the-import-has-got).
 
 The sentences themselves live in `src/job-state.ts` rather than `src/messages.ts`, and carry no
 bracketed codes, because none of them is a failure — [copy.md](copy.md).

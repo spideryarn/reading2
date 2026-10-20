@@ -1678,7 +1678,17 @@ describe("the boxes at the top, About you, and Ready twice", () => {
     expect(navigations).toEqual([]);
     const bars = [...host.querySelectorAll("[data-add-ready]")].map((b) => b.getAttribute("data-add-ready"));
     expect(bars).toEqual(["top", "bottom"]);
-    expect(host.querySelector('[data-add-ready="top"]')?.textContent).toContain("Your article is ready.");
+    const status = host.querySelector('[data-add-ready="top"] [role="status"]');
+    expect(status?.textContent?.trim()).toBe("Your article is ready.");
+    /* The big green tick (spya-a40t70), at the top only. Its words, rather
+       than an unlabelled graphic, are what a screen reader announces. */
+    const tick = status?.querySelector("svg.add-ready-tick");
+    expect(tick).not.toBeNull();
+    expect(tick?.getAttribute("aria-hidden")).toBe("true");
+    expect(tick?.getAttribute("width")).toBe("28");
+    expect(tick?.getAttribute("height")).toBe("28");
+    expect(tick?.getAttribute("stroke")).toBe("currentColor");
+    expect(host.querySelector('[data-add-ready="bottom"] svg.add-ready-tick')).toBeNull();
     const topOpen = [...host.querySelectorAll<HTMLButtonElement>('[data-add-ready="top"] button')].find(
       (b) => b.textContent?.trim() === OPEN,
     );

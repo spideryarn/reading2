@@ -195,8 +195,100 @@ does not build it.
 2. Part B1: the throttled save and `progress` (a test in the jobs suite that a reported count
    reaches the store, and one that it is gone after the step ends), the bar on `StepRow`, and the
    ingest-queue.md reword.
+3. Part C, below: two more reports the Overseer folded in after stages 1–2 landed.
+
+## Part C — a tick you cannot miss, and a microphone on both boxes
+
+Two more of Greg's reports, 2026-10-19, handed to this work by the Overseer:
+
+`spya-a40t70`:
+
+> … move the Why are you reading this? nearer the top. And maybe we need two copies of the button to
+> open the article at the top and at the bottom when it does eventually, when it is eventually ready
+> to open. And it should be really visible somehow that something has changed and that it is now
+> ready to open, that it has finished. So whether there was a loading spinner before that's gone, or
+> a loading spinner that becomes a big green check mark or something, so it's really clear when
+> things have finished importing.
+
+`spya-wc4vku`:
+
+> In the sort of page that shows after they add something while it's importing, make sure there's a
+> dictation button next to the Why are you reading this? input box. And indeed, we really want a
+> dictate button next to pretty much all of our input boxes that are going to have more than a few
+> words of text typed into them. Let's make a minimal tweak to our docs and/or design system to make
+> this more likely going forwards.
+
+The first is stages 1–2 bar one thing:
+
+### C1. A big green tick
+
+The top `ReadyBar` leads with a large green `CircleCheck` (lucide, the icon set we use;
+[icons.md](../project/icons.md)) beside *Your article is ready.* — the "big green check mark" — so
+the change from a page of spinners is visible from across the room. The bottom bar stays plain.
+The colour is `--positive` (styles/tokens.css), the contrast-tested go-ahead green in both themes,
+through a class (`.add-ready-tick`, profile.css) since Tailwind has no `positive` key and a missing
+key emits nothing. **Built.**
+
+### C2. A microphone on both add-page boxes — not built here; handed back to the sweep
+
+**Decided after the Part C plan review**
+([261020a-part-c-plan-review-sol.md](261020a-part-c-plan-review-sol.md), *revise before build*):
+this page is the hardest place in the app to put a microphone, and doing it safely is a job of its
+own rather than a tail on this one. The four P1s are the spec for whoever takes it: the boxes
+unmount on more transitions than completion (a public-copy or failure answer, and a source change),
+and unmounting aborts a recording, so public-copy navigation must also wait; the Open guards need
+separate per-box refs for same-tick checks *and* parent state to render the combined disabled state,
+and must cover both bars, ⌘+Enter, *Open without saving* and the waiting effect (then disable both
+microphones once Open is waiting); the
+live guesses reach `onChange`, so About you's autosave and the purpose session's timer *and* its
+seed-triggered commit must pause during a dictation; and the keeper key must be
+`add:purpose:${wanted}` (not `source`, which is empty for every upload) and `add:about-you`. Plus
+P2s: article context once a slug exists, and a lifecycle test stage. The P3 documentation work must
+also update dictation.md's box count and keeper inventory, as well as taking Greg through the exact
+controls.md rule wording before editing it. `spya-wc4vku` is left unresolved for the Overseer's
+sweep, which offered to pick it up, together with C3 and the app-wide sweep. The text below is the
+pre-review proposal retained for history, not the implementation spec; the corrections above
+supersede it.
+
+Both `PurposeBox` and `AboutYouBox` get the dictation button in their label row and the strip
+under the box, through `useDictationField` exactly as `FeedbackSendBox` uses it
+([dictation.md § Adding it to a box](../project/dictation.md#adding-it-to-a-box)): `readOnly` on
+the box while the words come back, `context: { kind: "profile" }` (there may be no article yet;
+the reader's own words prime the transcript), `keep` keyed on the box and the source, and a new
+`DictationSurface`, `"add"`, so a failure says where it happened.
+
+**The reason the add page never had one is the page leaving by itself**: a microphone running
+when the import finishes would be unmounted and its words aborted
+(the comment on `PurposeBox`). So **a box whose dictation is busy holds the page** at the finish,
+as focus does: the box reports `busy` (armed or transcribing) upward through a ref the completion
+effect reads, beside `focusedRef`. Pressing the microphone button moves the focus out of the
+textarea, so focus alone does not cover it. And **Open the article is disabled while either box
+is dictating** (the house rule: a guard and a disabled button, dictation.md), so a press cannot
+unmount a live recording. No double press on Stop: these boxes do not send.
+
+The transcript's words arrive through `onChange`, so the purpose session and the profile hook see
+them exactly as typing; the commit at the end of a dictation is the box's existing commit (purpose:
+`purpose.commit`; About you: `profile.commit`).
+
+### C3. The rule, written down
+
+One rule in [controls.md](../project/controls.md), beside *Controls that do the same job look the
+same*: **a box that takes more than a few words of the reader's prose gets the microphone**, with a
+pointer to dictation.md § Adding it to a box, and the reason (Greg's words above). Not a lint: a
+mechanical check cannot tell a prose box from a search field.
+
+### Deferred
+
+**Sweeping the rest of the app's prose boxes** for a missing microphone is its own queue entry: the
+list of boxes, each a small change but each with its own send/leave/unmount behaviour to check, is
+a separate job from this page.
 
 ## Review
+
+**Part C plan review, GPT Sol, 2026-10-20** —
+[261020a-part-c-plan-review-sol.md](261020a-part-c-plan-review-sol.md). *Revise before build*:
+eight findings. C1's colour (finding 8) taken and built; C2 and C3 handed back rather than built,
+§ C2 says why.
 
 **Plan review, GPT Sol (gpt-5.6-sol, high, read-only), 2026-10-20** —
 [261020a-add-page-plan-review-sol.md](261020a-add-page-plan-review-sol.md). *Revise before build*,

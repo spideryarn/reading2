@@ -93,6 +93,7 @@ import { type UseProfile, useProfile } from "./useProfile.js";
 import type { SaveState } from "./useAutosavedText.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
+import { CircleCheck } from "lucide-react";
 import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
@@ -2215,8 +2216,15 @@ function ReadyBar({
           : "tw:mt-3"
       }
     >
+      {/* **A big green tick.** Greg, 2026-10-19 (spya-a40t70): *"a loading
+          spinner that becomes a big green check mark or something, so it's
+          really clear when things have finished importing."* */}
       {top && (
-        <p role="status" className="tw:mt-0 tw:mb-1 tw:text-base tw:font-semibold tw:text-foreground">
+        <p
+          role="status"
+          className="tw:mt-0 tw:mb-1 tw:flex tw:items-center tw:gap-2 tw:text-base tw:font-semibold tw:text-foreground"
+        >
+          <CircleCheck size={28} className="add-ready-tick" aria-hidden="true" />
           Your article is ready.
         </p>
       )}

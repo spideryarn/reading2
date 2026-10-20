@@ -60,8 +60,9 @@ describe("a lifecycle settlement removes every step's preview", () => {
     for (const expression of steps) {
       const { sql } = dialect.sqlToQuery(expression);
       /* The subtraction must surround the entire CASE, including its unchanged
-         arm: queued cancellation can see a pending preview from an old pause. */
-      expect(sql).toMatch(/end\s*\)\s*-\s*'preview'\s+order by step\.ordinality/i);
+         arm: queued cancellation can see a pending preview from an old pause.
+         The counted progress beside it goes the same way (plan 261020a § B1). */
+      expect(sql).toMatch(/end\s*\)\s*-\s*'preview'\s*-\s*'progress'\s+order by step\.ordinality/i);
       if (door === "stop") {
         /* Asking a live claimant to stop must still leave its preview alone. */
         expect(sql).toMatch(/else "spideryarn"\."jobs"\."steps" end$/);
