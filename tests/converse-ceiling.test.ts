@@ -90,9 +90,28 @@ async function explainCeiling(power: "standard" | "high", model?: string) {
   return sent.map((b) => ({ model: b.model, ceiling: b.max_tokens }));
 }
 
+/* **Chat is on Opus whatever the article's setting** — `ALWAYS_HIGH_POWER`,
+   Greg's "Default to Opus 5.5 for Chats" (2026-10-19,
+   docs/plans/261020q-chat-defaults-to-opus.md). Candidates is its own job and
+   still follows the article. */
+describe("the model a chat turn sends", () => {
+  it("is the high-power model on a standard-power article", async () => {
+    const [request] = await chatCeiling({ power: "standard" });
+    expect(request?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
+    expect(request?.ceiling).toBe(CHAT_HIGH_POWER_ANSWER_TOKENS);
+  });
+
+  it("is still the article's model for Candidates", async () => {
+    const [request] = await chatCeiling({ power: "standard", kind: "candidates" });
+    expect(request?.model).toBe(modelFor("referee-candidates", "standard"));
+    expect(isHighPowerModel(request?.model ?? "")).toBe(false);
+  });
+});
+
 describe("chat's ceiling", () => {
   it("is 4,000 on the standard model", async () => {
-    const [request] = await chatCeiling({ power: "standard" });
+    /* Reached now only by naming the model: chat is on Opus for every article. */
+    const [request] = await chatCeiling({ power: "standard", model: modelFor("chat", "standard") });
     expect(isHighPowerModel(request?.model ?? "")).toBe(false);
     expect(request?.ceiling).toBe(4_000);
   });

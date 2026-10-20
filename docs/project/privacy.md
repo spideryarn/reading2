@@ -561,8 +561,8 @@ outcome's kind, counts and timings, never the sentence or the words.
 ## A question asked in Help
 
 **Added 2026-10-07**, with [help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)
-and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's *Ask
-about Spideryarn* box goes to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026; OpenAI's, through
+and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's box, once they press *Ask* (typing in it only searches
+the Help, in the browser; plan [261020x](../plans/261020x-one-box-on-help-for-search-and-ask.md)), goes to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026; OpenAI's, through
 OpenRouter, job `help-chat`), with every Help page and nothing of the reader's besides — no
 article, no profile. **A new flow of the
 reader's own words to a model already on the page**, so the `gpt-6-luna` clause in the models

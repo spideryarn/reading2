@@ -14,6 +14,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
 - [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
 - [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
+  - [§ A page that leaves by itself](#a-page-that-leaves-by-itself) — the add page, which holds every exit while a box is busy
 - [§ The hook does not know which server](#the-hook-does-not-know-which-server-it-is-talking-to) — the `transcribe` seam the fleet dashboard reuses
 - [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
 - [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
@@ -27,16 +28,20 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on eleven boxes today — both profile boxes, the chat composer, the comment follow-up, the
+box. It is on thirteen boxes today — both profile boxes, the add page's two (*Why are you reading
+this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
 ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
 the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
-*Ask about Spideryarn* box on every Help page
+box at the top of every Help page
 ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
-twelfth is three lines.
+fourteenth is three lines. **A box for more than a few words of the reader's prose gets one by
+default** (Greg, 2026-10-19, `spya-wc4vku`), and
+[`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
+fails on a new `<textarea>` without one unless its component is listed there with the reason.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -358,7 +363,7 @@ the stop button, then it should automatically send that message after it's finis
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's
 `sendingAfter` and `doubleStop` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
 Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
-quiz answer (Answer) and Help's Ask box (Ask). The annotate box saves (Save, never Ask AI), so its
+quiz answer (Answer) and Help's signed-in box (Ask). The annotate box saves (Save, never Ask AI), so its
 button and strip take `done="save"`; the command bar presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
@@ -558,6 +563,20 @@ dictation can finish with no phone keyboard on screen, as the reported iPhone ru
 be no Enter to press
 ([261005f](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md)). Anything a
 dictated box offers next has to be something a finger can press.
+
+### A page that leaves by itself
+
+**The add page is the one place a box's page goes away without a press**: when the import
+finishes and nobody is in either box, it opens the article — and unmounting aborts a dictation.
+So its two boxes tell the page when they are `busy` (a layout effect, into one ref per box and
+their OR as state), and the page holds every exit while either is: the completion waits at
+*ready*, both Ready bars' *Open the article*, ⌘+Enter, *Open without saving* and the public
+copy's link are refused and disabled, the boxes stay mounted over a public-copy or failed answer,
+and once *Open* is on its way neither microphone can start. Neither box saves by itself while
+dictating: About you's idle save is paused, and the purpose session holds both its timer and a
+stored purpose read meanwhile (`AddPurposeSession.setPaused`). Plan
+[261020r](../plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md); the
+same-box-across-sources case is the existing `[mic-moved]`.
 
 ## The hook does not know which server it is talking to
 
@@ -762,7 +781,9 @@ passed over, and GPT Sol's review.
   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
   `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
   `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
-  `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
+  `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
+  `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,
+  which is empty for every upload) and `add:about-you`. **The name is the partition, so it
   names everything the words are about**: a per-article box keeping under a name without the slug
   offered one article's recording back on the next, and Try again put it there (Greg, 2026-10-09,
   `spya-vzj8fc`; [261009g](../plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)

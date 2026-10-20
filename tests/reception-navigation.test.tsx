@@ -160,7 +160,9 @@ it("lifts a cold legacy link, and Reception then stays selected", async () => {
   await until(() => params().get("sources") === "reception");
   expect(params().has("reception")).toBe(false);
   expect(titles()).toEqual(["A reply"]);
-  expect(host.querySelector(".rcp-title-only h3")?.textContent).toBe("Names this piece by its title only");
+  expect(host.querySelector(".rcp-title-only h3")?.firstChild?.textContent).toBe(
+    "Mentions its title only — may be another piece",
+  );
 });
 
 it("explicit Reception wins over the legacy order", () => {
@@ -206,10 +208,13 @@ it.each(["?mode=debate&debate=claims", "?mode=debate&debateby=claim"])(
   },
 );
 
-it("a Claims-only key thread leaves Reception intact and unselected", () => {
+it("a Claims-only key thread leaves Reception intact and opens nothing", () => {
   boot("?mode=debate&debatethread=key");
   expect(titles()).toEqual(["A reply"]);
   expect(host.querySelector(".rcp-threads")).toBeNull();
+  /* Reception's sections are its own rows' (plan 261020n, F4): none here. */
+  expect(host.querySelector(".rcp-sections-ai")).toBeNull();
+  expect(host.querySelector<HTMLDetailsElement>("details.rcp-every")?.open).toBe(true);
 });
 
 it("the public DTO keeps relevance judgments, and a normal segment press keeps filters", async () => {

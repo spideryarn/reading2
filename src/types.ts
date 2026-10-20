@@ -3397,11 +3397,12 @@ export interface ToolRun {
   /** Milliseconds. Absent while running. */
   ms?: number;
   /**
-   * **Words the guide offers to save for the reader**, drawn under its answer
-   * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
-   * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
-   * press is the write. The guide's runs only. Plan
-   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+   * **Words a conversation offers to save for the reader**, drawn under its
+   * answer as a card with a button they press (`offer_to_save` in
+   * src/chat-tools.ts, src/web/GuideSaveOffer.tsx). Nothing is saved by the
+   * tool: the reader's press is ordinarily the write. The guide may offer both
+   * fields and has two narrow save-at-once routes; Chat and Explore may offer
+   * About you only and are always press-only. Plans 261009q and 261020o.
    */
   offer?: SaveOffer;
   /**
@@ -3432,7 +3433,7 @@ export interface SaveOffer {
   field: "purpose" | "profile";
   text: string;
   /**
-   * What the field held when the guide made the offer (`null`: empty). The
+   * What the field held when the conversation made the offer (`null`: empty). The
    * tool makes no offer when that turn could not read it: without a basis the
    * card could not distinguish an empty field from one it was about to
    * overwrite. The card saves only while the field still holds this, so a
@@ -4587,9 +4588,11 @@ export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | Bibliogra
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
 
 /**
- * An angle the reader asked to see the debate from: their own words, trimmed
- * and non-empty, at most `MAX_LENS_CHARS`. No block and no quote. Two chats
- * may share one lens; they are then two lines in Reception's *Your angles*.
+ * A question asked in Sources › Investigate, typed or suggested (plan 261020n), or an
+ * angle from Reception's box before that plan moved it, or the command bar's
+ * suggested lens: the words, trimmed and non-empty, at most `MAX_LENS_CHARS`.
+ * No block and no quote. Two chats may share one lens; they are then two
+ * lines in Investigate's *Your questions*.
  */
 export type LensOrigin = { mode: "reception"; lens: string };
 
@@ -8292,7 +8295,7 @@ export type SourcesClaimListFound = SourcesClaimListResponse;
 /** The most claims one press may search: pass B's shape, one call over a few claims. */
 export const MAX_CHECK_TARGETS = 4;
 
-/** A typed claim's ceiling, the angle box's: refused when over, never cut. */
+/** A typed claim's ceiling, Investigate's question box's too: refused when over, never cut. */
 export const MAX_OWN_CLAIM_CHARS = MAX_PURPOSE_CHARS;
 
 /**

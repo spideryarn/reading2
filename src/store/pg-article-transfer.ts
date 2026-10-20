@@ -105,6 +105,7 @@ import {
 import { isUuid } from "../ids.js";
 import { log } from "../log.js";
 import { publicSourceUrl } from "../urls.js";
+import { spendByArticle } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 
@@ -643,22 +644,7 @@ export async function transferBetween(input: TransferInput): Promise<TransferAns
  * from the Auth service.
  */
 export async function listArticlesAcrossOwners(adminId: string): Promise<Omit<AdminArticle, "ownerEmail">[]> {
-  const rows = await getDb()
-    .select({
-      id: articles.id,
-      shortId: articles.shortId,
-      ownerId: articles.ownerId,
-      createdAt: articles.createdAt,
-      visibility: articles.visibility,
-      processing: articles.processing,
-      slug: articles.slug,
-      titleOverride: articles.titleOverride,
-      title: articleRevisions.title,
-      currentRevisionId: articles.currentRevisionId,
-    })
-    .from(articles)
-    .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .orderBy(desc(articles.createdAt), articles.id);
+  const [rows, spend] = await Promise.all([listRows(), spendByArticle()]);
   return rows.map((r) => {
     const mine = r.ownerId === adminId;
     const visibility = r.visibility === "public" ? "public" : "private";
@@ -676,8 +662,30 @@ export async function listArticlesAcrossOwners(adminId: string): Promise<Omit<Ad
       title: shown ? ((mine ? r.titleOverride : null) ?? r.title ?? null) : null,
       slug: shown ? r.slug : null,
       published: shown ? r.currentRevisionId !== null : null,
+      /* Spend and call counts, tied only to the opaque id for a private row;
+         /admin/costs already shows the same across owners. */
+      cost: spend.get(r.id) ?? { nanos: 0, calls: 0, unpricedCalls: 0 },
     };
   });
+}
+
+function listRows() {
+  return getDb()
+    .select({
+      id: articles.id,
+      shortId: articles.shortId,
+      ownerId: articles.ownerId,
+      createdAt: articles.createdAt,
+      visibility: articles.visibility,
+      processing: articles.processing,
+      slug: articles.slug,
+      titleOverride: articles.titleOverride,
+      title: articleRevisions.title,
+      currentRevisionId: articles.currentRevisionId,
+    })
+    .from(articles)
+    .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .orderBy(desc(articles.createdAt), articles.id);
 }
 
 /* ------------------------------------------------------------------ body -- */

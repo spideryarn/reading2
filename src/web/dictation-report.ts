@@ -48,6 +48,7 @@ const NOT_FAILURES = new Set([
 
 /** Every box with a microphone, by name: a closed set, so it can be a tag. */
 export type DictationSurface =
+  | "add"
   | "annotate"
   | "chat"
   | "command-bar"

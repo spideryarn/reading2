@@ -1,5 +1,8 @@
 /**
- * **The guide's offer to save, drawn under its answer** — ordinarily saved on
+ * **The guide's offer to save, drawn under its answer** — and since plan
+ * docs/plans/261020o-chat-offers-to-save-a-broad-instruction-to-about-you.md
+ * Chat's and Explore's too, About you only and always pressed
+ * (`pressOnly`); the name stayed the guide's. Ordinarily saved on
  * the reader's press, or at once for a checked word-for-word offer — plan
  * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
  *
@@ -142,10 +145,34 @@ export function offersIn(tools: readonly ToolRun[] | undefined): SaveOffer[] {
   return [...last.values()];
 }
 
-/** Every card an answer carries, drawn once the answer has settled. */
-export function GuideSaveOffers({ slug, message }: { slug: string; message: ChatMessage }) {
+/**
+ * An offer as a card drawn by `pressOnly` shows it: About you only, and never
+ * saved without the press, whatever a stored run says (plan 261020o).
+ */
+export function pressOnlyOffer(offer: SaveOffer): SaveOffer | null {
+  if (offer.field !== "profile") return null;
+  return { field: offer.field, text: offer.text, basis: offer.basis };
+}
+
+/**
+ * Every card an answer carries, drawn once the answer has settled.
+ *
+ * `pressOnly` is Chat's and Explore's (plan 261020o): their offers are About
+ * you only and wait for the press. The server never marks one `now` there
+ * (`offerToSave`), and this does not take a stored run's word for it either.
+ */
+export function GuideSaveOffers({
+  slug,
+  message,
+  pressOnly = false,
+}: {
+  slug: string;
+  message: ChatMessage;
+  pressOnly?: boolean;
+}) {
   if (message.role !== "assistant" || message.status === "pending") return null;
-  const offers = offersIn(message.tools);
+  const all = offersIn(message.tools);
+  const offers = pressOnly ? all.flatMap((o) => pressOnlyOffer(o) ?? []) : all;
   if (offers.length === 0) return null;
   return (
     <>
@@ -273,7 +300,7 @@ export function GuideSaveOffer({ slug, offer, answer }: { slug: string; offer: S
 
   const shows = state.kind === "busy" ? state.was : state.kind;
   return (
-    <section className="guide-offer" aria-label={`The guide's offer: ${words.heading}`}>
+    <section className="guide-offer" aria-label={`Offer to save: ${words.heading}`}>
       <p className="guide-offer-heading">{words.heading}</p>
       <p className="guide-offer-text voice-ai">{offer.text}</p>
       {shows === "saved" ? (

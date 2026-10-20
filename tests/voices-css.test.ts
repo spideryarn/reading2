@@ -202,6 +202,8 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".rcp-ai",
     ".rcp-title-ai",
     ".rcp-thread-gist",
+    /* Reception's sections, since plan 261020n: a theme's name and gist. */
+    ".rcp-section-gist",
   ],
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
@@ -417,6 +419,7 @@ describe("voices.css", () => {
       ".cnd-why",
       ".chat-live-line.companion .chat-live-words",
       ".rcp-thread:not(.rcp-thread-key) .rcp-thread-name",
+      ".rcp-section-theme .rcp-section-name",
       ".prm-list .prm-promise",
       ".prm-why:not(.prm-why-withheld)",
     ]) {
@@ -429,6 +432,8 @@ describe("voices.css", () => {
     expect(innerBranches(ai)).not.toContain(".cnd-name");
     expect(innerBranches(ai)).not.toContain(".cnd-affil");
     expect(innerBranches(ai)).not.toContain(".rcp-thread-name");
+    /* *Key sources* and *Every page* are ours: only a theme's name is the model's. */
+    expect(innerBranches(ai)).not.toContain(".rcp-section-name");
     /* Hidden, untrusted source text is not obviously the author's (Sol, P2). */
     expect(author).not.toContain(".ref-scan-text");
     expect(ai).not.toContain(".ref-scan-text");

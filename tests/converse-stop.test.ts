@@ -135,8 +135,9 @@ describe("a stop ends in `done`, never in a throw", () => {
         citations: [],
         searches: 0,
         model: expect.any(String),
-        // What the request asked for, stopped or not: nothing, at standard power (plan 261008c § 2).
-        effort: "default",
+        // What the request asked for, stopped or not: chat is on Opus and
+        // sends high effort even on a standard-power article (plan 261020q).
+        effort: "high",
         unknownIds: [],
         // Empty rather than absent: `converse` always says what its tools did,
         // and on a stop before the first byte the honest answer is "nothing".

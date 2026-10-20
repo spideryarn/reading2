@@ -88,6 +88,9 @@ const PROMISES: Record<string, string> = {
   /* Enter opens the selected mode — it goes somewhere. Not `search`: the search
      is the typing, and the list narrows as you type rather than on Enter. */
   "CommandBar.tsx › Type a command": "go",
+  /* Sources › Investigate's question box: Enter opens Chat with the question
+     sent, so it goes somewhere. */
+  "InvestigatePanel.tsx › gloss-ask-input": "go",
   /* Fields of the criterion form, whose submit button runs it. Not steps in a
      wizard, so `next` would be a lie about where the key goes. */
   "ReceptionAndClaimsPanel.tsx › gloss-ask-input": "go",
@@ -104,9 +107,11 @@ const PROMISES: Record<string, string> = {
   "GuideNextSteps.tsx › Words to search this article for": "search",
   /* Enter goes to the first matching section (plan 261001s). */
   "PageContents.tsx › Search this page's sections": "search",
-  /* Enter goes to the best match by setting the address (plan 261002b). */
-  "HelpAsk.tsx › Ask a question about Spideryarn": "send",
-  "HelpPage.tsx › Search Help": "search",
+  /* Help's one box (plan 261020x). Signed out it is one line, and Enter goes
+     to the best match by setting the address (plan 261002b); signed in, the
+     textarea, whose Enter asks, as the composers' sends. */
+  "HelpAsk.tsx › Search Help": "search",
+  "HelpAsk.tsx › Search Help or ask a question about Spideryarn": "send",
   "SearchPanel.tsx › srch-input": "search",
   /* The sign-in form: the first field moves to the second, the second signs in.
      `next` really moves — SignInControls.tsx says why it has to. */
@@ -280,7 +285,7 @@ describe("what the Enter key promises", () => {
       "CandidatesPanel.tsx › cnd-box",
       "ChatPanel.tsx › chat-edit-box",
       "ChatPanel.tsx › chat-input",
-      "HelpAsk.tsx › Ask a question about Spideryarn",
+      "HelpAsk.tsx › Search Help or ask a question about Spideryarn",
     ]);
 
     for (const box of sending) {

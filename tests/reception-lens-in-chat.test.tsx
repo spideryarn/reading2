@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 /**
- * **Looking at the debate from an angle starts a chat that remembers the
- * angle, and Debate lists it as the way back — with no reload.**
- * Plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A.
+ * **A question asked in Sources › Investigate starts a chat that remembers the
+ * question, and Investigate lists it as the way back — with no reload.**
+ * Plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A,
+ * where this was Reception's angle box; Sources › Investigate since plan
+ * docs/plans/261020n-sources-reception-layout-and-a-sources-chat-sub-mode.md
+ * (Stage 2), which also asks here that arriving on Investigate sends nothing, that one
+ * press is one chat request, and that a claim and a work go through their own
+ * sub-modes' senders.
  *
  * The whole app, for the reason tests/sources-claim-check-in-chat.test.tsx
  * gives: the angle crosses the panel, Debate's band, `Reader`, the
@@ -18,22 +23,32 @@
  * What is claimed, in order:
  *
  * 1. Enter in the box lands in Chat, in a **fresh** conversation, and **sends
- *    the fenced angle and the fixed question once**: Chat's box is left empty
+ *    the fenced question and the search line once**: Chat's box is left empty
  *    and without the caret, and nothing else is posted anywhere;
  * 2. that one request's origin is **exactly** `{ mode, lens }`: no block, no
  *    quote, no anchor;
- * 3. Back returns to Debate, and *Your angles* has the line, never reloaded;
- * 4. the line opens that conversation **beside Debate** (`?thread=`, the mode
+ * 3. Back returns to Investigate, and *Your questions* has the line, never reloaded;
+ * 4. the line opens that conversation **beside Sources** (`?thread=`, the mode
  *    unchanged);
- * 5. Chat's list shows the conversation with Debate's icon, named as an angle.
+ * 5. Chat's list shows the conversation with Sources' icon, named as a
+ *    question in Sources › Investigate.
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, ChatThread, Reception, ThreadOrigin, ThreadSummary } from "../src/types.js";
+import type {
+  Article,
+  Bibliography,
+  ChatThread,
+  CitedWork,
+  Reception,
+  SourcesClaimList,
+  ThreadOrigin,
+  ThreadSummary,
+} from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
-import { askReceptionThroughLens } from "../src/web/chat-handoff.js";
+import { askAboutCitedWork, askInSources, askToCheckClaim } from "../src/web/chat-handoff.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const who = vi.hoisted(() => {
@@ -198,6 +213,45 @@ const RECEPTION: Reception = {
   },
 } as Reception;
 
+const CLAIM_QUOTE = "memories survive metamorphosis";
+const CLAIM_LIST: SourcesClaimList = {
+  version: "debate-claims/1",
+  generator: "a-model",
+  slug: SLUG,
+  sourceHash: "hash",
+  claims: [{ id: "c1", blockId: LAST_BLOCK, quote: CLAIM_QUOTE, statement: "Moths remember." }],
+  dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0 },
+  generatedAt: "2026-10-03T12:00:00.000Z",
+  elapsedMs: 1,
+} as SourcesClaimList;
+
+const WORK = {
+  id: "spya-wrk222",
+  key: "work:moths",
+  title: "Moths and memory",
+  authors: "Blackiston",
+  year: "2008",
+  why: "The study it leans on.",
+  relevance: 0.9,
+  mentions: [],
+  citedAt: [],
+  firstCited: LAST_BLOCK,
+  citedInBody: false,
+  url: "https://doi.org/10.1371/journal.pone.0001736",
+  linkFrom: "doi",
+} as unknown as CitedWork;
+
+const BIBLIOGRAPHY = {
+  version: "bibliography/1",
+  generator: "a-model",
+  slug: SLUG,
+  sourceHash: "hash",
+  citations: [WORK],
+  capped: false,
+  generatedAt: "2026-10-03T12:00:00.000Z",
+  elapsedMs: 1,
+} as unknown as Bibliography;
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece with angles", byline: "Somebody" },
   blocks: BLOCKS,
@@ -315,6 +369,8 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince: null });
   if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
+  if (url === `/api/sources-claims/${SLUG}`) return json({ claimList: CLAIM_LIST, stale: false, outdated: false });
+  if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
   if (url === `/api/chat/${SLUG}` && method === "POST") {
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
   }
@@ -327,6 +383,7 @@ function reply(url: string, method: string, body: unknown): Response {
 }
 
 const { App } = await import("../src/web/App.js");
+const { SOURCES_INVESTIGATE_SUGGESTED } = await import("../src/web/InvestigatePanel.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
 
@@ -408,8 +465,11 @@ async function until(check: () => boolean, what = "the page to settle"): Promise
 const chatPosts = () => trace.filter((r) => r.method === "POST" && r.url.startsWith(`/api/chat/${SLUG}`));
 const posts = () => trace.filter((r) => r.method === "POST");
 
-const lensBox = () => host.querySelector<HTMLInputElement>(".mode-band form.rcp-lens-row input");
-const angles = () => [...host.querySelectorAll<HTMLButtonElement>(".mode-band .rcp-angles button.rcp-angle")];
+const lensBox = () => host.querySelector<HTMLInputElement>(".mode-band form.investigate-box-row input");
+const angles = () => [...host.querySelectorAll<HTMLButtonElement>(".mode-band .investigate-yours button.investigate-yours-line")];
+const investigateRows = (section: string) => [
+  ...host.querySelectorAll<HTMLButtonElement>(`.mode-band .investigate-section${section} button.investigate-q`),
+];
 const composer = (): HTMLTextAreaElement | null =>
   host.querySelector<HTMLTextAreaElement>(".mode-band textarea.chat-input");
 const dialog = (): HTMLElement | null => document.querySelector<HTMLElement>(".chat-dialog");
@@ -426,29 +486,29 @@ async function typeLensAndEnter(words: string): Promise<void> {
   });
 }
 
-describe("looking at the debate from an angle", () => {
+describe("asking a question in Sources › Investigate", () => {
   /* Until 2026-10-06 this test held the opposite: nothing listed until Send,
      and the unsent lens restored on coming back to Chat. Enter is the Send
      now, so there is no unsent lens to restore; what is left to hold is that
      the one press is one request however often Chat is left and reopened.
      The unsent-draft machinery itself is tests/conversation-band-origin.test.tsx's. */
-  it("sends the angle once on Enter, lists it in Debate, and does not send or refill it on returning to Chat", async () => {
+  it("sends the question once on Enter, lists it in Investigate, and does not send or refill it on returning to Chat", async () => {
     who.set(OWNER);
-    await open("?mode=sources&sources=reception");
-    await until(() => lensBox() !== null, "the box in Debate");
+    await open("?mode=sources&sources=investigate");
+    await until(() => lensBox() !== null, "the box in Investigate");
     nextAnswer = "One reply takes that angle.";
     await typeLensAndEnter(LENS);
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
     /* Zero here is the old behaviour (waiting for Send); two is a double send. */
     expect(chatPosts(), "Enter alone sent it, once").toHaveLength(1);
     const sent = chatPosts()[0]?.body as { question: string; origin: ThreadOrigin } | undefined;
-    expect(sent?.question).toBe(askReceptionThroughLens(LENS));
+    expect(sent?.question).toBe(askInSources(LENS));
     expect(sent?.origin).toEqual({ mode: "reception", lens: LENS });
     expect(composer()?.value, "and left nothing in the box").toBe("");
     expect(server, "the conversation is on the server").toHaveLength(2);
 
     await act(async () => history.back());
-    await until(() => param("mode") === "sources" && angles().length === 1, "Debate again, with the angle listed");
+    await until(() => param("mode") === "sources" && angles().length === 1, "Ask again, with the question listed");
 
     history.pushState(null, "", `/read/${SLUG}?mode=chat`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
@@ -474,8 +534,8 @@ describe("looking at the debate from an angle", () => {
      Chat's box, whatever is in it, is never a Send of its own. */
   it("does not send a second time on a held Enter repeating into Chat's box, and a fresh Enter still sends", async () => {
     who.set(OWNER);
-    await open("?mode=sources&sources=reception");
-    await until(() => lensBox() !== null, "the box in Debate");
+    await open("?mode=sources&sources=investigate");
+    await until(() => lensBox() !== null, "the box in Investigate");
     await typeLensAndEnter(LENS);
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
     expect(chatPosts(), "Enter sent the angle").toHaveLength(1);
@@ -509,17 +569,19 @@ describe("looking at the debate from an angle", () => {
       composer()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     });
     await settle();
-    expect(chatPosts(), "a press of its own sends").toHaveLength(2);
-    expect((chatPosts()[1]?.body as { question: string }).question).toBe("And who disagrees?");
-    expect((chatPosts()[1]?.body as { threadId: string }).threadId, "to the same conversation").toBe(
-      (chatPosts()[0]?.body as { threadId: string }).threadId,
-    );
+    const sentTurns = chatPosts();
+    expect(sentTurns, "a press of its own sends").toHaveLength(2);
+    const first = sentTurns[0]?.body as { threadId: string } | undefined;
+    const second = sentTurns[1]?.body as { question: string; threadId: string } | undefined;
+    expect(second?.question).toBe("And who disagrees?");
+    expect(first?.threadId, "the first turn named its conversation").toBeTruthy();
+    expect(second?.threadId, "to the same conversation").toBe(first?.threadId);
   });
 
-  it("starts a fresh chat that records the angle, and Debate lists the way back to it", async () => {
+  it("starts a fresh chat that records the question, and Investigate lists the way back to it", async () => {
     who.set(OWNER);
-    await open(`?mode=sources&sources=reception&thread=${STORED.id}`);
-    await until(() => lensBox() !== null, "the box in Debate");
+    await open(`?mode=sources&sources=investigate&thread=${STORED.id}`);
+    await until(() => lensBox() !== null, "the box in Investigate");
     expect(angles(), "no chat was started from an angle yet").toHaveLength(0);
     const postsAtLoad = posts().length;
 
@@ -532,7 +594,7 @@ describe("looking at the debate from an angle", () => {
     );
     const fresh = param("thread") as string;
     expect(fresh).not.toBeNull();
-    const seed = askReceptionThroughLens(LENS);
+    const seed = askInSources(LENS);
     expect(seed).toContain(`"""\n${LENS}\n"""`);
     expect(composer()?.value, "nothing is left in Chat's box").toBe("");
     expect(document.activeElement, "and the caret is not put there: there is nothing to type").not.toBe(composer());
@@ -549,15 +611,15 @@ describe("looking at the debate from an angle", () => {
     expect(sent.anchor).toBeUndefined();
     await until(() => (host.textContent ?? "").includes("Two replies take that angle."), "the answer");
 
-    /* 3. Back to Debate: the line under the box, with no reload. */
+    /* 3. Back to Investigate: the line under *Your questions*, with no reload. */
     await act(async () => history.back());
     await until(() => param("mode") === "sources" && angles().length === 1, "the angle's line");
-    expect(angles()[0]?.querySelector(".rcp-angle-words")?.textContent).toBe(LENS);
+    expect(angles()[0]?.querySelector(".investigate-yours-words")?.textContent).toBe(LENS);
     expect(lensBox()?.value, "the box is empty again").toBe("");
 
-    /* 4. The line opens the conversation beside Debate. */
+    /* 4. The line opens the conversation beside Sources. */
     await act(async () => angles()[0]?.click());
-    await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Debate");
+    await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Sources");
     expect(param("mode"), "still in Sources").toBe("sources");
     await until(() => (dialog()?.textContent ?? "").includes("Two replies take that angle."), "its transcript");
 
@@ -571,7 +633,84 @@ describe("looking at the debate from an angle", () => {
     const fromClaimCheck = rows.filter((r) => r.querySelector(".chat-thread-source") !== null);
     expect(fromClaimCheck, "one row is marked as started elsewhere").toHaveLength(1);
     expect(fromClaimCheck[0]?.querySelector(".chat-thread-source")?.getAttribute("aria-label")).toBe(
-      "Started from an angle in Sources › Reception",
+      "Started from a question in Sources › Investigate",
     );
+  });
+
+  /* GPT Sol's F9 on plan 261020n: several new one-press places send a paid
+     chat turn, so arriving buys nothing, and each press buys exactly one. */
+  it("sends nothing on arrival, with every row drawn", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(
+      () => investigateRows(".investigate-claims").length === 1 && investigateRows(".investigate-works").length === 1,
+      "Investigate, with a claim and a work",
+    );
+    expect(investigateRows("").length).toBe(SOURCES_INVESTIGATE_SUGGESTED.length + 2);
+    expect(chatPosts(), "no chat question on arrival").toEqual([]);
+    expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"), "and no job").toEqual([]);
+  });
+
+  it("sends a suggested question once, stored as its own lens", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(() => investigateRows("").length > 0, "Investigate's questions");
+    const question = SOURCES_INVESTIGATE_SUGGESTED[0] as string;
+    await act(async () => investigateRows("")[0]?.click());
+    await until(() => param("mode") === "chat" && chatPosts().length > 0, "Chat");
+    expect(chatPosts()).toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { question: string; origin: ThreadOrigin };
+    expect(sent.question).toBe(askInSources(question));
+    expect(sent.origin).toEqual({ mode: "reception", lens: question });
+  });
+
+  it("sends one chat turn when a suggested question is double-clicked, under StrictMode", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(() => investigateRows("").length > 0, "Investigate's questions");
+    const row = investigateRows("")[0] as HTMLButtonElement;
+    /* Both clicks in one `act` model the browser delivering the two click
+       events before the navigation has replaced this panel. `open` wraps the
+       app in StrictMode, so this also keeps the handoff effect's replay in the
+       assertion. */
+    await act(async () => {
+      row.click();
+      row.click();
+    });
+    await until(() => param("mode") === "chat" && chatPosts().length > 0, "Chat");
+    expect(chatPosts(), "one double click is one paid turn").toHaveLength(1);
+    expect(server, "and one fresh conversation").toHaveLength(2);
+  });
+
+  it("asks about a claim through Claims' own question and origin", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(() => investigateRows(".investigate-claims").length === 1, "the claim's row");
+    await act(async () => investigateRows(".investigate-claims")[0]?.click());
+    await until(() => param("mode") === "chat" && chatPosts().length > 0, "Chat");
+    expect(chatPosts()).toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { question: string; origin: ThreadOrigin };
+    expect(sent.question).toBe(askToCheckClaim(CLAIM_QUOTE));
+    expect(sent.origin).toEqual({ mode: "sources-claims", blockId: LAST_BLOCK, quote: CLAIM_QUOTE });
+
+    /* Back on Investigate, the claim shows its chat's mark in the button's place. */
+    await act(async () => history.back());
+    await until(
+      () => param("mode") === "sources" && host.querySelector(".mode-band .investigate-claims .origin-chat") !== null,
+      "the claim's mark",
+    );
+    expect(investigateRows(".investigate-claims")).toHaveLength(0);
+  });
+
+  it("asks about a work through Bibliography's own question and origin", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(() => investigateRows(".investigate-works").length === 1, "the work's row");
+    await act(async () => investigateRows(".investigate-works")[0]?.click());
+    await until(() => param("mode") === "chat" && chatPosts().length > 0, "Chat");
+    expect(chatPosts()).toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { question: string; origin: ThreadOrigin };
+    expect(sent.question).toBe(askAboutCitedWork(WORK, []));
+    expect(sent.origin).toEqual({ mode: "bibliography", itemId: WORK.id, quote: WORK.title });
   });
 });

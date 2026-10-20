@@ -432,6 +432,26 @@ describe("the per-owner spend aggregate", () => {
     ).toEqual([]);
   });
 
+  /* `/admin/articles`' column (plan 261020s): every article at once, by
+     `article_id` alone — `/admin/costs`' rule, not `belongsTo`'s. So the
+     slug-fallback row (e106, $0.003) is out, and so are Bob's rows under the
+     slug, the 2020 predecessor and the other slug. Held against `totalRows()`
+     over the id-keyed rows and a hand figure. Runs before the live-session test
+     below adds a row to the article. */
+  it("totals every article in bulk by its id, not by a recorded slug", async () => {
+    const { spendByArticle } = await import("../src/store/ai-calls-spend-pg.js");
+    const article = await theArticle();
+    const keyed = AFTER_ARTICLE.filter((r) => r.articleSlug === ARTICLE && r.ownerId === ALICE);
+    const js = totalRows(keyed);
+    const bulk = (await spendByArticle()).get(article.id);
+    expect(bulk).toEqual({
+      nanos: js.credits + js.upstream + js.computed,
+      calls: keyed.length,
+      unpricedCalls: js.unpriced,
+    });
+    expect(bulk).toEqual({ nanos: 49_000_000, calls: 4, unpricedCalls: 1 });
+  });
+
   it("counts only connected live sessions on the article that left no usage row", async () => {
     const article = await theArticle();
     const { getDb } = await import("../src/db/client.js");

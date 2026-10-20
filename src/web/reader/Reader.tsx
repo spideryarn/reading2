@@ -34,6 +34,7 @@ import {
   type ClaimOrigin,
   type GlossaryEntry,
   type Idea,
+  MAX_LENS_CHARS,
   sameOrigin,
   type ThreadOrigin,
 } from "../../types.js";
@@ -102,6 +103,7 @@ import {
   askAboutTerm,
   itemOrigin,
   askReceptionThroughLens,
+  askInSources,
   askToCheckClaim,
 } from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
@@ -1079,31 +1081,44 @@ export function Reader({
     (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), "send", origin),
     [handToChat],
   );
-  /* **A fourth, the same day: Debate's *Look at the debate from an angle*.**
-     The reader's words travel twice too, in the question and as the lens the
-     thread stores, which is what Debate's *Your angles* lists it by. A lens is
+  /* **A fourth, the same day: Debate's *Look at the debate from an angle***,
+     Sources › Investigate's questions since plan 261020n. The words travel twice too,
+     in the question and as the lens the thread stores. A lens is
      Debate's second origin shape and has no block or quote, so this takes the
      words and builds the origin here: a claim's handler cannot be handed one
      (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
      Trimmed here as the route trims it, so what is stored equals what is sent
      and a resent first question is the same origin.
 
-     **Two callers, and only one of them sends.** Debate's box is the reader's
-     own typed words and a button named *Ask in chat*: the press sends. The
-     command bar's suggested row is worded by a model from the reader's
-     private profile, and the privacy page says its question is sent only when
-     the reader presses Send in Chat, so that one still waits in the box
-     (docs/plans/261006j-ask-in-chat-sends-the-question.md, D5). */
+     **Two callers, two questions, one origin.** The command bar's suggested
+     row is an angle worded by a model from the reader's private profile, and
+     the privacy page says its question is sent only when the reader presses
+     Send in Chat, so it waits in the box
+     (docs/plans/261006j-ask-in-chat-sends-the-question.md, D5) and asks
+     through the angle (`askReceptionThroughLens`). Sources › Investigate's box and its
+     suggested questions are questions, a press on words the reader can read
+     in full: they send, asked as they are (`askInSources`, plan 261020n
+     Stage 2). Both store the words as the lens, which is what Investigate's *Your
+     questions* lists them by. */
   const lensInChat = useCallback(
-    (lens: string, then: "send" | "wait") => {
+    (lens: string, ask: (words: string) => string, then: "send" | "wait") => {
       const words = lens.trim();
       if (words === "") return;
-      handToChat(askReceptionThroughLens(words), then, { mode: "reception", lens: words });
+      /* The origin's cap is the route's; the box's `maxLength` already keeps
+         to it, and a suggested question is far under it. Cut rather than
+         refused, so a press can never fail on its origin alone. */
+      handToChat(ask(words), then, { mode: "reception", lens: words.slice(0, MAX_LENS_CHARS).trimEnd() });
     },
     [handToChat],
   );
-  const receptionThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
-  const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
+  const askSourcesQuestion = useCallback(
+    (question: string) => lensInChat(question, askInSources, "send"),
+    [lensInChat],
+  );
+  const suggestedLensInChat = useCallback(
+    (lens: string) => lensInChat(lens, askReceptionThroughLens, "wait"),
+    [lensInChat],
+  );
   /* **The command bar's *Ask the guide: “…”* row** (plan 261007j F6): the
      reader's own typed sentence, sent to this article's one guide — opened if
      it exists, begun if not (`ChatHandoffToGuide`). It sends, because the row
@@ -1837,13 +1852,15 @@ export function Reader({
           setBandAway(false);
           void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
-        /* A lens's origin lands on Reception, a claim's on Claims (both
-           `debate` until plan 261009w's Stage 3). */
+        /* A lens's origin lands on Investigate, a claim's on Claims (both `debate`
+           until plan 261009w's Stage 3). */
         case "reception":
           setBandAway(false);
-          /* An angle is not in the article: the angles box is Reception's. */
+          /* A question is not in the article: *Your questions* is Investigate's (it
+             was Reception's angle box until plan 261020n, and an angle chat
+             made then lands here too, where it is now listed). */
           void setSourcesWay(
-            { mode: "sources", sources: "reception", thread: null },
+            { mode: "sources", sources: "investigate", thread: null },
             { history: "push" },
           );
           return;
@@ -2852,13 +2869,23 @@ export function Reader({
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
+    () => ({ summaries: chatSummaries, onCheck: checkClaim, onOpen: openClaimChat }),
+    [chatSummaries, checkClaim, openClaimChat],
+  );
+  /* And Sources › Investigate's (InvestigatePanel.tsx § `SourcesInvestigateChats`, plan 261020n):
+     its own question sender, and Claims' and Bibliography's senders, so a
+     claim or a work asked about there records the same origin and finds the
+     same mark as one asked about in its own sub-mode. The raw summaries, for
+     `entryChats`' reason below. */
+  const investigateChats = useMemo(
     () => ({
       summaries: chatSummaries,
+      onQuestion: askSourcesQuestion,
       onCheck: checkClaim,
-      onLens: receptionThroughLensInChat,
+      onAskWork: askWork,
       onOpen: openClaimChat,
     }),
-    [chatSummaries, checkClaim, receptionThroughLensInChat, openClaimChat],
+    [chatSummaries, askSourcesQuestion, checkClaim, askWork, openClaimChat],
   );
   /* The same three things for Glossary's entries and Bibliography's rows
      (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
@@ -3879,6 +3906,7 @@ export function Reader({
             articleTitle={article.meta.title}
             workChats={workChats}
             claimChats={claimChats}
+            investigateChats={investigateChats}
             citeFocus={citeFocus}
             onCiteFocusTaken={citeFocusTaken}
             claimFocus={claimFocus}

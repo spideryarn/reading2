@@ -32,7 +32,8 @@
  * heading that says so. The decoy is on screen and flagged, and so is the
  * genuine reply. Simply moving the default to `named` would have made the
  * decoy the first row of Reception, looking like reception (GPT Sol's F5).
- * The chip on each row still says which of the three it is.
+ * Since plan 261020n the repeated chip is gone: the closed row flags only the
+ * title-only exception, and the open row says which evidence it carries.
  *
  * `?name=` is retired: a link carrying it shows every row.
  */

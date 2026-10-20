@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type AddPurposeIo,
   AddPurposeSession,
+  ADD_PURPOSE_IDLE_MS,
   PURPOSE_READ_DEADLINE_MS,
   PURPOSE_READ_MAX_TRIES,
   PURPOSE_READ_FINAL_TRIES,
@@ -597,6 +598,181 @@ describe("on the way out", () => {
     const clean = await seeded(s);
     clean.leaveNow();
     expect(s.calls.filter((c) => c.startsWith("leave:"))).toEqual([]);
+  });
+});
+
+/**
+ * **Paused while a dictation runs** — plan 261020r § Stage 2. Chromium's live
+ * guesses arrive as ordinary keystrokes, so nothing saves by itself until the
+ * dictation ends, and a stored purpose read meanwhile is held, not adopted.
+ */
+describe("paused while dictating", () => {
+  /** A read the test answers when it chooses. */
+  function heldRead(s: ReturnType<typeof server>) {
+    let answer: (a: PurposeAnswer) => void = () => {};
+    s.world.read = () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      });
+    return (purpose: string | null) => answer({ fresh: true, purpose, purposeFailed: false });
+  }
+
+  it("a dirty box does not save after the pause while paused, and does once unpaused and still", async () => {
+    const s = server();
+    const session = await seeded(s);
+    session.setPaused(true);
+    session.setText("the rough live guess", true);
+    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS * 5);
+    expect(s.saves(), "the live guesses were saved by the idle timer").toEqual([]);
+    expect(session.get().state.kind).toBe("dirty");
+
+    session.setPaused(false);
+    await tick();
+    expect(s.saves(), "unpausing saved at once rather than after the pause").toEqual([]);
+    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS);
+    expect(s.saves()).toEqual([`save:${SLUG}:the rough live guess`]);
+  });
+
+  it("an idle timer already armed when the pause starts does not fire", async () => {
+    const s = server();
+    const session = await seeded(s);
+    session.setText("typed, then the microphone", true);
+    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS / 2);
+    session.setPaused(true);
+    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS * 3);
+    expect(s.saves(), "the timer armed before the pause still fired").toEqual([]);
+  });
+
+  it("holds a read that answers while paused: a blank box does not take the stored text, and nothing is read again", async () => {
+    const s = server({ stored: "why I came" });
+    const answer = heldRead(s);
+    const session = new AddPurposeSession(SLUG, s.io);
+    session.setPaused(true);
+    session.observe(true);
+    await tick();
+    expect(s.reads()).toHaveLength(1);
+    answer("why I came");
+    await tick();
+    expect(session.get().text, "a stored purpose moved into the box under a live dictation").toBe("");
+    expect(session.get().state.kind).toBe("loading");
+    expect(session.get().seeded).toBe(false);
+    expect(s.saves()).toEqual([]);
+
+    /* Neither the page's observe nor completion starts a second read. */
+    s.world.read = null;
+    session.observe(true);
+    session.observe(false);
+    session.observe(true);
+    session.completed();
+    await vi.advanceTimersByTimeAsync(PURPOSE_READ_RETRY_MS * 5);
+    expect(s.reads(), "read again over a held answer").toHaveLength(1);
+    expect(s.saves()).toEqual([]);
+
+    session.setPaused(false);
+    await tick();
+    expect(session.get().text).toBe("why I came");
+    expect(session.get().state.kind).toBe("clean");
+    expect(session.carried(), "the adopted text became the reader's").toBe("");
+    expect(s.saves()).toEqual([]);
+  });
+
+  it("a typed box keeps its words over a held read, and commits them on unpause", async () => {
+    const s = server({ stored: "why I came" });
+    const answer = heldRead(s);
+    const session = new AddPurposeSession(SLUG, s.io);
+    session.setText("the methods", true);
+    session.setPaused(true);
+    session.observe(true);
+    await tick();
+    answer("why I came");
+    await tick();
+    session.setText("the methods and the live guess", true);
+    await vi.advanceTimersByTimeAsync(ADD_PURPOSE_IDLE_MS * 3);
+    expect(session.get().text).toBe("the methods and the live guess");
+    expect(s.saves()).toEqual([]);
+
+    session.setText("the methods and the transcript", true);
+    session.setPaused(false);
+    await tick();
+    expect(s.saves()).toEqual([`save:${SLUG}:the methods and the transcript`]);
+    expect(s.stored()).toBe("the methods and the transcript");
+  });
+
+  it("retired while paused over a held read: compares with the stored text, and never clears it", async () => {
+    /* Blank box: nothing to send, and certainly not a clear. */
+    const blank = server({ stored: "why I came" });
+    const answerBlank = heldRead(blank);
+    const a = new AddPurposeSession(SLUG, blank.io);
+    a.setPaused(true);
+    a.observe(true);
+    await tick();
+    answerBlank("why I came");
+    await tick();
+    await a.retire();
+    expect(blank.saves(), "a retired blank box cleared a stored purpose").toEqual([]);
+    expect(blank.stored()).toBe("why I came");
+
+    /* The same words as stored: nothing to send. */
+    const same = server({ stored: "why I came" });
+    const answerSame = heldRead(same);
+    const b = new AddPurposeSession(SLUG, same.io);
+    b.setText("why I came", true);
+    b.setPaused(true);
+    b.observe(true);
+    await tick();
+    answerSame("why I came");
+    await tick();
+    await b.retire();
+    expect(same.saves()).toEqual([]);
+
+    /* Different words: the retired session still owes them to its article. */
+    const typed = server({ stored: "why I came" });
+    const answerTyped = heldRead(typed);
+    const c = new AddPurposeSession(SLUG, typed.io);
+    c.setText("the transcript", true);
+    c.setPaused(true);
+    c.observe(true);
+    await tick();
+    answerTyped("why I came");
+    await tick();
+    await c.retire();
+    expect(typed.saves(), "words over a held read were lost at retire").toEqual([`save:${SLUG}:the transcript`]);
+  });
+
+  it("leaveNow while paused over a held read sends typed words, and nothing for a blank box", async () => {
+    const s = server({ stored: "why I came" });
+    const answer = heldRead(s);
+    const typed = new AddPurposeSession(SLUG, s.io);
+    typed.setText("the transcript", true);
+    typed.setPaused(true);
+    typed.observe(true);
+    await tick();
+    answer("why I came");
+    await tick();
+    typed.leaveNow();
+    expect(s.calls.filter((c) => c.startsWith("leave:"))).toEqual([`leave:${SLUG}:the transcript`]);
+
+    const t = server({ stored: "why I came" });
+    const answerBlank = heldRead(t);
+    const blank = new AddPurposeSession(SLUG, t.io);
+    blank.setPaused(true);
+    blank.observe(true);
+    await tick();
+    answerBlank("why I came");
+    await tick();
+    blank.leaveNow();
+    expect(t.calls.filter((c) => c.startsWith("leave:"))).toEqual([]);
+  });
+
+  it("an explicit commit while paused still saves once seeded", async () => {
+    const s = server();
+    const session = await seeded(s);
+    session.setPaused(true);
+    session.setText("the transcript", true);
+    session.commit();
+    await tick();
+    expect(s.saves()).toEqual([`save:${SLUG}:the transcript`]);
+    expect(session.get().state.kind).toBe("saved");
   });
 });
 

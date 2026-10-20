@@ -35,7 +35,7 @@ export interface ThreadSource {
   quote?: string;
   /**
    * Whose words `quote` is, for its face (docs/project/fonts.md), when they
-   * are not the article's: an angle typed into Debate's box is the reader's.
+   * are not the article's: a question asked in Sources › Investigate is the reader's.
    * Absent means the author's.
    */
   voice?: "reader";
@@ -61,8 +61,13 @@ export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, 
 const SOURCES_IN = `${MODE_LABEL.sources} ›`;
 /** What the tooltip says for a chat started from one of Claims' claims. */
 export const SOURCE_SOURCES_CLAIM = `Started from a claim in ${SOURCES_IN} ${SOURCES_SUB_MODES.claims.label}`;
-/** And for one started from an angle the reader typed into Reception's box (plan 261005k, A). */
-export const SOURCE_RECEPTION_LENS = `Started from an angle in ${SOURCES_IN} ${SOURCES_SUB_MODES.reception.label}`;
+/**
+ * And for one started from a question in Sources › Investigate: the box, or a
+ * suggested question (plan 261020n). The stored word is still `reception`
+ * with a lens, Reception's angle box's until that plan moved it to Investigate, so an
+ * older angle chat says this too, and is listed there.
+ */
+export const SOURCE_RECEPTION_LENS = `Started from a question in ${SOURCES_IN} ${SOURCES_SUB_MODES.investigate.label}`;
 
 /** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
@@ -200,8 +205,8 @@ export function narrowed<T extends SourcedThread>(threads: readonly T[], from: C
  *
  * `mode` is the mode the press opens, whose icon the line wears
  * (docs/project/icons.md). `quote` is the item's name as the chat stored it,
- * in `threadSource`'s voice; a lens has none, since an angle is the reader's
- * own words and not an item in the article, and reads *your angle*.
+ * in `threadSource`'s voice; a lens has none, since a question is the
+ * reader's own and not an item in the article, and reads *your question*.
  */
 export interface OriginBackWords {
   mode: Mode;
@@ -209,7 +214,7 @@ export interface OriginBackWords {
   view?: SourcesView;
   /**
    * The word on the button the press lands on: the mode's (*Glossary*), or
-   * for Sources its sub-mode's (*Bibliography*, *Reception*, *Claims*),
+   * for Sources its sub-mode's (*Bibliography*, *Claims*, *Investigate*),
    * the more exact of the two, under the mode's icon.
    */
   modeLabel: string;
@@ -219,9 +224,12 @@ export interface OriginBackWords {
   text: string;
 }
 
+/** What the way back calls a lens, which has no name of its own. ChatPanel.tsx § `OriginBack` draws it. */
+export const LENS_BACK = "your question";
+
 export function originBack(origin: ThreadOrigin): OriginBackWords {
   const quote = isLensOrigin(origin) ? null : origin.quote;
-  const what = quote === null ? "your angle" : `“${quote}”`;
+  const what = quote === null ? LENS_BACK : `“${quote}”`;
   switch (origin.mode) {
     case "glossary":
     case "ideas": {
@@ -231,7 +239,8 @@ export function originBack(origin: ThreadOrigin): OriginBackWords {
     case "bibliography":
     case "reception":
     case "sources-claims": {
-      const view = origin.mode === "bibliography" ? "bibliography" : origin.mode === "reception" ? "reception" : "claims";
+      /* A lens lands on Investigate, where *Your questions* lists it (plan 261020n). */
+      const view = origin.mode === "bibliography" ? "bibliography" : origin.mode === "reception" ? "investigate" : "claims";
       const modeLabel = SOURCES_SUB_MODES[view].label;
       return { mode: "sources", view, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
     }

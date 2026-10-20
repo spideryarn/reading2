@@ -14,7 +14,8 @@ import {
   threadsWithin,
 } from "../src/web/reception-threads.js";
 import { receptionThreadParam } from "../src/web/params.js";
-import type { ReceptionSynthesis } from "../src/types.js";
+import type { Reception, ReceptionSynthesis } from "../src/types.js";
+import { receptionSelection, receptionThreads, sourcesCounts } from "../src/web/sources-counts.js";
 
 const made: ReceptionSynthesis = {
   kind: "made",
@@ -96,5 +97,67 @@ describe("?debatethread=", () => {
     expect(receptionThreadParam.parse("spya-k3m9qt")).toBe("spya-k3m9qt");
     expect(receptionThreadParam.parse("nonsense")).toBeNull();
     expect(receptionThreadParam.parse("")).toBeNull();
+  });
+});
+
+/* Plan 261020n: in Reception a thread is a section, not a filter. The chip,
+   each section's count and the (i) come out of `receptionSelection` and
+   `sourcesCounts` together (sources-counts.ts), so they cannot disagree. */
+describe("Reception's sections and its chip", () => {
+  const row = (id: string, url: string) => ({ id, url, relation: "disputes", lean: "neither" });
+  const direct = [row("spya-r00001", "https://a.example/1"), row("spya-r00002", "https://b.example/2")];
+  const claims = [
+    row("spya-r00003", "https://c.example/3"),
+    row("spya-r00004", "https://d.example/4"),
+    row("spya-r00005", "https://e.example/5"),
+  ];
+  const reception = {
+    direct: { rows: direct },
+    claims: { rows: claims },
+    synthesis: {
+      kind: "made",
+      themes: [
+        { id: "spya-thm002", label: "Both", gist: "G", rowIds: ["spya-r00001", "spya-r00002"] },
+        { id: "spya-thm003", label: "Claims only", gist: "G", rowIds: ["spya-r00003", "spya-r00004"] },
+      ],
+      key: [{ rowId: "spya-r00002", role: "origin", why: "W" }],
+    },
+  } as unknown as Reception;
+
+  it("holds every stored row, and a section for each thread with a stored row here", () => {
+    const selection = receptionSelection(reception, receptionThreads(reception));
+    expect(selection.rows.map((r) => r.id)).toEqual(["spya-r00001", "spya-r00002"]);
+    expect(selection.sections.map((s) => [s.thread.id, s.rows.map((r) => r.id)])).toEqual([
+      [KEY_THREAD, ["spya-r00002"]],
+      ["spya-thm002", ["spya-r00001", "spya-r00002"]],
+    ]);
+  });
+
+  it("counts every stored row on the chip, whatever thread the address names", () => {
+    for (const thread of [null, KEY_THREAD, "spya-thm002", "spya-gone00"]) {
+      const counts = sourcesCounts({
+        works: null,
+        links: [],
+        reception,
+        listed: null,
+        checked: 0,
+        relevance: null,
+        thread,
+      });
+      expect(counts.reception, String(thread)).toBe(2);
+    }
+    /* The positive control: the same address still narrows Claims' count. */
+    const narrowed = sourcesCounts({
+      works: null,
+      links: [],
+      reception,
+      listed: null,
+      checked: 0,
+      relevance: null,
+      thread: "spya-thm003",
+    });
+    expect(narrowed.claims).toEqual({ n: 2, unit: "source" });
+    const unnarrowed = { works: null, links: [], reception, listed: null, checked: 0, relevance: null, thread: KEY_THREAD };
+    expect(sourcesCounts(unnarrowed).claims).toEqual({ n: 3, unit: "source" });
   });
 });

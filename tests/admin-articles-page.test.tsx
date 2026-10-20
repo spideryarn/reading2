@@ -53,6 +53,8 @@ const ARTICLES = [
     title: null,
     slug: null,
     published: null,
+    /* $0.42, one call of three unpriced: a floor. */
+    cost: { nanos: 420_000_000, calls: 3, unpricedCalls: 1 },
   },
   {
     id: MINE,
@@ -66,6 +68,8 @@ const ARTICLES = [
     title: "The Bitter Lesson",
     slug: "the-bitter-lesson",
     published: true,
+    /* Nothing spent on it. */
+    cost: { nanos: 0, calls: 0, unpricedCalls: 0 },
   },
 ];
 
@@ -199,6 +203,52 @@ describe("/admin/articles", () => {
     const row = rowFor("spya-drhjjm");
     expect(row?.textContent).not.toContain("Untitled");
     expect(row?.textContent).toContain(NOT_PUBLISHED_YET);
+  });
+
+  /* spya-vjyev3: "Also show Total Cost per article". */
+  it("shows each article's total cost, a floor marked + and nothing spent as a dash", async () => {
+    await mount();
+    const head = [...host.querySelectorAll("thead th")].map((th) => th.textContent?.trim());
+    const at = head.indexOf("Total cost");
+    expect(at).toBeGreaterThan(0);
+    const cell = (text: string) => rowFor(text)?.querySelectorAll("td")[at]?.querySelector('[aria-hidden="true"]')?.textContent?.trim();
+    expect(cell("alice@example.test")).toBe("$0.42+");
+    expect(cell("The Bitter Lesson")).toBe("—");
+    expect(host.querySelector('th[aria-label^="Total cost."]')?.getAttribute("aria-label")).toContain("a floor");
+  });
+
+  it("draws an article whose every call was unpriced as a dash, not $0", async () => {
+    const unpriced = { ...ARTICLES[0]!, id: "a1a1a1a1-0b11-4c5e-8a01-261011000008", shortId: "spya-unprcd",
+      cost: { nanos: 0, calls: 2, unpricedCalls: 2 } };
+    await mount([unpriced]);
+    const at = [...host.querySelectorAll("thead th")].findIndex((th) => th.textContent?.trim() === "Total cost");
+    const cell = rowFor("spya-unprcd")?.querySelectorAll("td")[at];
+    expect(cell?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe("—");
+    expect(cell?.querySelector(".tw\\:sr-only")?.textContent).toBe("No recorded amount over 2 calls, 2 reported no cost");
+    expect(cell?.getAttribute("data-tip")).toBe("No recorded amount over 2 calls, 2 reported no cost");
+  });
+
+  it("orders the rows by total cost on request, newest first by default and as the tiebreak", async () => {
+    const at = (id: string, createdAt: string, nanos: number) => ({
+      ...ARTICLES[0]!, id: `a1a1a1a1-0b11-4c5e-8a01-2610110000${id}`, shortId: `spya-${id}aaaa`, createdAt,
+      cost: { nanos, calls: 1, unpricedCalls: 0 },
+    });
+    /* Newest first, as the server sends them. */
+    const cheap = at("11", "2026-10-12T10:00:00Z", 10_000_000);
+    const tieNew = at("12", "2026-10-11T10:00:00Z", 420_000_000);
+    await mount([cheap, tieNew, ...ARTICLES]);
+    const order = () => [...host.querySelectorAll("tbody tr")].map((tr) => tr.querySelector("code")?.textContent);
+    expect(order()).toEqual(["spya-11aaaa", "spya-12aaaa", "spya-k3m9qt", MINE]);
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Order the articles"]');
+    if (!select) throw new Error("no order select");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(select, "cost");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+    /* $0.42 twice: the newer first. */
+    expect(order()).toEqual(["spya-12aaaa", "spya-k3m9qt", "spya-11aaaa", MINE]);
+    expect(host.querySelector("caption")?.textContent).toBe("Every article, highest total cost first");
   });
 
   it("filters by owner address or id", () => {

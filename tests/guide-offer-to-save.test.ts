@@ -3,7 +3,8 @@
  * card they press, and saves nothing itself** — plan
  * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
  *
- * The tool is the guide's alone (`toolsFor`), absent from Live (whose tool
+ * The tool is the guide's, and since plan 261020o Chat's and Explore's for
+ * About you only and press only (`toolsFor`); absent from Live (whose tool
  * route takes names from the browser and has nowhere to put a button), and
  * what it returns is an offer on the run plus a sentence telling the model
  * nothing was saved. Any store read or fetch from it would be a bug, so both
@@ -27,7 +28,8 @@ vi.mock("../src/store/index.js", async () => {
   };
 });
 
-import { ALREADY_ON_SCREEN, GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
+import { ALREADY_ON_SCREEN, CHAT_TOOLS, GUIDE_TOOLS, OFFER_PROFILE_TOOL, runTool, toolsFor } from "../src/chat-tools.js";
+import { pressOnlyOffer } from "../src/web/GuideSaveOffer.js";
 import { LIVE_SERVER_TOOLS, liveTools } from "../src/live.js";
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, type Meta, type ThreadKind } from "../src/types.js";
 
@@ -55,11 +57,26 @@ afterEach(() => {
 });
 
 describe("who is offered it", () => {
-  it("is the guide's, and no other kind's", () => {
+  it("is the guide's, Chat's and Explore's, and no other kind's", () => {
     expect(names(toolsFor("guide"))).toContain("offer_to_save");
-    for (const kind of ["chat", "learn", "explore", "candidates"] as const) {
+    for (const kind of ["chat", "explore"] as const) expect(names(toolsFor(kind))).toContain("offer_to_save");
+    for (const kind of ["learn", "candidates"] as const) {
       expect(names(toolsFor(kind))).not.toContain("offer_to_save");
     }
+    /* What Live flattens for a chat stays without it. */
+    expect(names(CHAT_TOOLS)).not.toContain("offer_to_save");
+  });
+
+  /* Plan 261020o: Chat and Explore are offered About you only. */
+  it("offers Chat and Explore About you alone, in a definition that promises no save without a press", () => {
+    for (const kind of ["chat", "explore"] as const) {
+      const tool = toolsFor(kind).find((t) => t.function.name === "offer_to_save");
+      expect(tool).toBe(OFFER_PROFILE_TOOL);
+    }
+    const params = OFFER_PROFILE_TOOL.function.parameters as unknown as { properties: { field: { enum: string[] } } };
+    expect(params.properties.field.enum).toEqual(["about_you"]);
+    expect(OFFER_PROFILE_TOOL.function.description).not.toMatch(/at once/i);
+    expect(OFFER_PROFILE_TOOL.function.description).toMatch(/conflicts.*replace only the conflicting part/i);
   });
 
   it("is not offered to a spoken guide, and the live tool route would refuse it", () => {
@@ -70,10 +87,67 @@ describe("who is offered it", () => {
     expect(names(GUIDE_TOOLS)).not.toContain("offer_to_save");
   });
 
-  it("is refused to a chat that names it anyway", async () => {
-    const out = await runTool("offer_to_save", { field: "reason", text: "for journal club" }, ctx("chat"));
+  it("is refused to a kind that is not offered it", async () => {
+    for (const kind of ["learn", "candidates", undefined] as const) {
+      const out = await runTool("offer_to_save", { field: "about_you", text: "A nurse." }, ctx(kind));
+      expect(out.detail, String(kind)).toBe("no such tool");
+      expect(out.offer).toBeUndefined();
+    }
+  });
+
+  it("is refused to a spoken chat", async () => {
+    const out = await runTool("offer_to_save", { field: "about_you", text: "A nurse." }, { ...ctx("chat"), spoken: true });
     expect(out.detail).toBe("no such tool");
-    expect(out.offer).toBeUndefined();
+  });
+});
+
+/* Plan 261020o: Chat and Explore offer About you, and only ever for a press. */
+describe("in Chat and Explore", () => {
+  for (const kind of ["chat", "explore"] as const) {
+    it(`${kind}: offers About you over what it held`, async () => {
+      const out = await runTool(
+        "offer_to_save",
+        { field: "about_you", text: "A nurse. Prefers brief answers." },
+        { ...ctx(kind), saved: { profile: "A nurse." } },
+      );
+      expect(out.offer).toEqual({ field: "profile", text: "A nurse. Prefers brief answers.", basis: "A nurse." });
+      expect(out.content).toMatch(/nothing is saved unless they press/i);
+      expect(out.settles).toBe(true);
+    });
+
+    it(`${kind}: refuses the reason, even named anyway`, async () => {
+      const out = await runTool("offer_to_save", { field: "reason", text: "For journal club." }, ctx(kind));
+      expect(out.offer).toBeUndefined();
+      expect(out.content).toMatch(/only "about_you"/);
+    });
+
+    it(`${kind}: never marks an offer to save at once, even the reader's words exactly`, async () => {
+      const out = await runTool(
+        "offer_to_save",
+        { field: "about_you", text: "I prefer brief answers." },
+        { ...ctx(kind), saved: { profile: null }, typed: "I prefer brief answers." },
+      );
+      expect(out.offer).toEqual({ field: "profile", text: "I prefer brief answers.", basis: null });
+    });
+
+    it(`${kind}: refuses an offer when About you could not be read`, async () => {
+      const out = await runTool(
+        "offer_to_save",
+        { field: "about_you", text: "I prefer brief answers." },
+        { ...ctx(kind), saved: undefined },
+      );
+      expect(out.offer).toBeUndefined();
+      expect(out.content).toMatch(/what is saved now could not be read/i);
+    });
+  }
+
+  it("the card drops a stored run's now, and any reason, on these kinds", () => {
+    expect(pressOnlyOffer({ field: "profile", text: "A nurse.", basis: null, now: true, route: "exact" })).toEqual({
+      field: "profile",
+      text: "A nurse.",
+      basis: null,
+    });
+    expect(pressOnlyOffer({ field: "purpose", text: "For journal club.", basis: null })).toBeNull();
   });
 });
 

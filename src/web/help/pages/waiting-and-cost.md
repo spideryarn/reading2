@@ -27,6 +27,8 @@ new.
 
 **None of this uses up your allowance** — opening, generating, chatting and re-running are included.
 For a difficult piece, **High-powered AI** uses a stronger model (Claude Opus) for work done after
-you switch it on. Tick it while the article is being added to use it for the work still to come; or
-switch it on later from the article’s Metadata page and use **Run it again** there to redo a mode
-with it. That switch is the one thing besides adding that counts — see [Plans](/help/plans).
+you switch it on. Chat and Summary’s plain-words version already use Opus for every article, so the
+switch does not change them. Tick it while the article is being added to use it for the other work
+still to come; or switch it on later from the article’s Metadata page and use **Run it again** there
+to redo a mode with it. That switch is the one thing besides adding that counts — see
+[Plans](/help/plans).

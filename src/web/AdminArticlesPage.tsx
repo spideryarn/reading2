@@ -30,7 +30,9 @@ import {
   type TransferDone,
   type TransferPreview,
 } from "../admin-articles.js";
+import { formatSpendNanos } from "../admin.js";
 import { readableDate } from "../billing-plan.js";
+import { amountWithFloor } from "./admin-costs-view.js";
 import { Shell } from "./AdminPage.js";
 import { BUTTON, INPUT, Refusal } from "./admin-vouchers-parts.js";
 import { Link } from "./Link.js";
@@ -42,7 +44,14 @@ import { ADMIN_HREF, readHref } from "./router.js";
 import { type AccountChoice, useAdminArticles } from "./useAdminArticles.js";
 import { voiceClass } from "./voice.js";
 
-const CAPTION = "Every article, newest first";
+/** The two orders the table offers: as it was, and Greg's "what I care about most" (261006j). */
+type Order = "newest" | "cost";
+const CAPTIONS: Record<Order, string> = {
+  newest: "Every article, newest first",
+  cost: "Every article, highest total cost first",
+};
+const COST_HINT =
+  "Every model call the ledger ties to this article by its id, whoever made it, over its whole life: the same attribution rule as /admin/costs. Marked + when some call reported no cost, so it is a floor.";
 const CELL = "tw:px-3 tw:py-2 tw:align-top tw:first:pl-4 tw:last:pr-4";
 const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-medium tw:text-muted-foreground`;
 
@@ -62,6 +71,28 @@ function handleOf(article: AdminArticle): string {
 
 function ownerLabel(article: AdminArticle): string {
   return article.ownerEmail ?? article.ownerId;
+}
+
+/** `/admin/costs`' own figure: `$0.42`, `+` for a floor, `—` when no call was priced. */
+function costText({ cost }: AdminArticle): string {
+  return amountWithFloor({ recordedNanos: cost.nanos, calls: cost.calls, pricedCalls: cost.calls - cost.unpricedCalls });
+}
+
+function costTip({ cost }: AdminArticle): string {
+  if (cost.calls === 0) return "No model calls recorded";
+  const calls = `${cost.calls} ${cost.calls === 1 ? "call" : "calls"}`;
+  const unpriced = cost.unpricedCalls > 0 ? `, ${cost.unpricedCalls} reported no cost` : "";
+  const amount = cost.calls === cost.unpricedCalls ? "No recorded amount" : formatSpendNanos(cost.nanos);
+  return `${amount} over ${calls}${unpriced}`;
+}
+
+/**
+ * The rows in the order asked for. The list arrives newest first; the cost
+ * order keeps that as its tiebreak (a stable sort). "Highest total cost", not
+ * "most expensive": a total with an unpriced call is a floor (GPT Sol).
+ */
+export function inOrder(rows: readonly AdminArticle[], order: Order): readonly AdminArticle[] {
+  return order === "newest" ? rows : [...rows].sort((a, b) => b.cost.nanos - a.cost.nanos);
 }
 
 /** "questions and notes 3, chats 1" — the kinds with any rows, in READER_STATE's order. */
@@ -275,12 +306,14 @@ export function AdminArticlesPage() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "articles" }));
   const { list, error, loading, reload, preview, transfer, accounts } = useAdminArticles();
   const [filter, setFilter] = useState("");
+  const [order, setOrder] = useState<Order>("newest");
   const [open, setOpen] = useState<AdminArticle | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const caption = CAPTIONS[order];
 
   const rows = useMemo(
-    () => (list?.articles ?? []).filter((a) => matchesFilter(a, filter)),
-    [list, filter],
+    () => inOrder((list?.articles ?? []).filter((a) => matchesFilter(a, filter)), order),
+    [list, filter, order],
   );
 
   return (
@@ -329,6 +362,15 @@ export function AdminArticlesPage() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        <select
+          className={INPUT}
+          value={order}
+          onChange={(e) => setOrder(e.target.value === "cost" ? "cost" : "newest")}
+          aria-label="Order the articles"
+        >
+          <option value="newest">Newest first</option>
+          <option value="cost">Highest total cost first</option>
+        </select>
         <span className="tw:text-xs tw:text-muted-foreground">
           {list === null ? "" : `${rows.length} of ${list.articles.length}`}
         </span>
@@ -353,9 +395,9 @@ export function AdminArticlesPage() {
       ) : (
         /* `relative` for the vouchers table's reason: the sr-only caption and
            header must be clipped by this box, not laid out against the page. */
-        <SidewaysScrollBox label={CAPTION} cue={false}>
+        <SidewaysScrollBox label={caption} cue={false}>
           <table className="tw:w-full tw:border-collapse tw:text-sm">
-            <caption className="tw:sr-only">{CAPTION}</caption>
+            <caption className="tw:sr-only">{caption}</caption>
             <thead>
               <tr className="tw:border-b tw:border-border">
                 {/* The column that says what a row is, held while the rest
@@ -366,6 +408,14 @@ export function AdminArticlesPage() {
                 <th className={HEAD}>Added</th>
                 <th className={HEAD}>Visibility</th>
                 <th className={HEAD}>Read</th>
+                <th
+                  scope="col"
+                  className={`${HEAD} tw:text-right`}
+                  data-tip={COST_HINT}
+                  aria-label={`Total cost. ${COST_HINT}`}
+                >
+                  Total cost
+                </th>
                 <th className={HEAD}>
                   <span className="tw:sr-only">Actions</span>
                 </th>
@@ -387,6 +437,10 @@ export function AdminArticlesPage() {
                   </td>
                   <td className={CELL}>{a.visibility === "public" ? "Public" : "Private"}</td>
                   <td className={CELL}>{a.processing === "minimal" ? "Abstract only" : "In full"}</td>
+                  <td className={`${CELL} tw:whitespace-nowrap tw:text-right tw:tabular-nums`} data-tip={costTip(a)}>
+                    <span aria-hidden="true">{costText(a)}</span>
+                    <span className="tw:sr-only">{costTip(a)}</span>
+                  </td>
                   <td className={CELL}>
                     <button
                       type="button"

@@ -150,7 +150,7 @@ export async function admitHelpChat(
 /* ------------------------------------------------------------ the prompt -- */
 
 /** Bump when `HELP_CHAT_SYSTEM`'s rule or the user message changes: an eval's numbers belong to one version. */
-export const HELP_CHAT_VERSION = "help-chat/2";
+export const HELP_CHAT_VERSION = "help-chat/3";
 
 const PAGES = corpus as readonly HelpCorpusPage[];
 
@@ -175,7 +175,7 @@ function pageText(page: HelpCorpusPage): string {
  * prefix a cache holds is all of it. Nothing per reader or per question may be
  * added here — it would go in the user message.
  */
-export const HELP_CHAT_SYSTEM = `You answer questions about how to use Spideryarn, a reading app. You are the box on Spideryarn's Help pages that says "Ask about Spideryarn". Below are all of the Help pages. They are everything you know about Spideryarn.
+export const HELP_CHAT_SYSTEM = `You answer questions about how to use Spideryarn, a reading app. You are the box on Spideryarn's Help pages where a reader searches the Help or asks a question about it. Below are all of the Help pages. They are everything you know about Spideryarn.
 
 THE HELP PAGES
 

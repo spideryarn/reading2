@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import { ChatConflict, withSpokenTurn, withTurn } from "../src/chat.js";
 import { CHAT_TOOLS, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, webSearchTool } from "../src/converse.js";
+import { PROFILE_RULES } from "../src/profile.js";
 import { readerNotesDigest } from "../src/reader-notes.js";
 import type { Block, ChatMessage, ChatThread, Comment, Meta, ThreadKind } from "../src/types.js";
 import { isSingleThreadKind, isThreadKind, SINGLE_THREAD_KINDS, THREAD_KINDS } from "../src/types.js";
@@ -76,10 +77,15 @@ describe("the kind itself", () => {
     expect(webSearchTool("explore")).toEqual(webSearchTool("chat"));
   });
 
-  /* PR-3 and plan 261011w: the two typed-only tools go to Chat and Explore. */
-  it("is offered the shared tools plus reader_notes and read_cited_work", () => {
+  /* PR-3, plan 261011w and plan 261020o: the three typed-only tools go to Chat and Explore. */
+  it("is offered the shared tools plus reader_notes, read_cited_work and offer_to_save", () => {
     const names = toolsFor("explore").map((t) => t.function.name);
-    expect(names).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
+    expect(names).toEqual([
+      ...CHAT_TOOLS.map((t) => t.function.name),
+      "reader_notes",
+      "read_cited_work",
+      "offer_to_save",
+    ]);
     expect(toolsFor("explore")).toBe(toolsFor("chat"));
   });
 });
@@ -91,6 +97,28 @@ describe("Explore's prompt", () => {
       expect(explore).not.toEqual(systemOf(other));
     }
     expect(explore).toContain("thinking partner");
+  });
+
+  /* Plan 261020o: one shared section, after PROFILE_RULES so its two narrow
+     exceptions win, and no accidental reach into the other conversation kinds. */
+  it("shares Chat's offer rules after the profile rules, and resolves their two exceptions", () => {
+    const heading = "REMEMBERING HOW THEY WANT TO BE ANSWERED";
+    for (const kind of ["chat", "explore"] as const) {
+      const system = systemOf(kind);
+      expect(system.split(heading)).toHaveLength(2);
+      expect(system.indexOf(heading)).toBeGreaterThan(system.indexOf(PROFILE_RULES));
+      expect(system).toMatch(/Only the reader's latest message may lead to an offer/);
+      expect(system).toMatch(/This section adds two exceptions/);
+      expect(system).toMatch(/offer_to_save may carry what they told us because it stays inside Spideryarn/);
+      expect(system).toMatch(/button may address the reader and need not be\s+about the article/);
+      expect(system).toMatch(/any exceptions stated immediately\s+above this section/);
+    }
+    expect(systemOf("explore").indexOf("Two of those rules are different in this conversation")).toBeLessThan(
+      systemOf("explore").indexOf(heading),
+    );
+    for (const kind of ["learn", "candidates", "guide"] as const) {
+      expect(systemOf(kind), kind).not.toContain(heading);
+    }
   });
 
   it("greets the reader as the one who is about to think, below the breakpoint", () => {

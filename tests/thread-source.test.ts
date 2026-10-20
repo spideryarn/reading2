@@ -199,13 +199,15 @@ describe("originBack", () => {
     });
   });
 
-  it("calls an angle the reader's, with no quote: it is not an item in the article", () => {
+  /* Lands on Investigate, where *Your questions* lists every lens chat, since plan
+     261020n moved Reception's angle box there. */
+  it("calls a question the reader's, with no quote, and goes back to Investigate: it is not an item in the article", () => {
     expect(originBack({ mode: "reception", lens: "how it relates to Nagel" })).toEqual({
       mode: "sources",
-      view: "reception",
-      modeLabel: "Reception",
+      view: "investigate",
+      modeLabel: "Investigate",
       quote: null,
-      text: "Back to your angle in Reception",
+      text: "Back to your question in Investigate",
     });
   });
 });
