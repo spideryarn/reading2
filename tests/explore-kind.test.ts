@@ -76,10 +76,15 @@ describe("the kind itself", () => {
     expect(webSearchTool("explore")).toEqual(webSearchTool("chat"));
   });
 
-  /* PR-3 and plan 261011w: the two typed-only tools go to Chat and Explore. */
-  it("is offered the shared tools plus reader_notes and read_cited_work", () => {
+  /* PR-3, plan 261011w and plan 261020o: the three typed-only tools go to Chat and Explore. */
+  it("is offered the shared tools plus reader_notes, read_cited_work and offer_to_save", () => {
     const names = toolsFor("explore").map((t) => t.function.name);
-    expect(names).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
+    expect(names).toEqual([
+      ...CHAT_TOOLS.map((t) => t.function.name),
+      "reader_notes",
+      "read_cited_work",
+      "offer_to_save",
+    ]);
     expect(toolsFor("explore")).toBe(toolsFor("chat"));
   });
 });

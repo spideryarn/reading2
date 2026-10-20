@@ -3989,14 +3989,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          `offer_to_save` records as an offer's basis, so a card pressed after
          the words changed saves nothing (plan 261009q). A shelf that could
          not be read leaves the reason out rather than calling it empty, and
-         the tool then refuses to make an offer for that field. */
+         the tool then refuses to make an offer for that field. Chat and
+         Explore offer About you too, press only, so they get that field
+         alone (plan 261020o). */
       saved:
-        thread.kind === "guide" && profileParts !== null
-          ? {
-              profile: normaliseProfileText(profileParts.profile),
-              ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
-            }
-          : null,
+        profileParts === null
+          ? null
+          : thread.kind === "guide"
+            ? {
+                profile: normaliseProfileText(profileParts.profile),
+                ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
+              }
+            : thread.kind === "chat" || thread.kind === "explore"
+              ? { profile: normaliseProfileText(profileParts.profile) }
+              : null,
       /* The question, when the reader typed it and this is the guide: what an
          offer is checked against before it saves without a press (above). */
       typed: thread.kind === "guide" && typed === true ? asked : null,

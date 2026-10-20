@@ -731,11 +731,38 @@ describe("the guide's offer to save", () => {
     });
   });
 
-  it("draws no card in a chat, whatever its runs say", async () => {
-    const chat = { ...guideWith([REASON]), id: "spya-chtoff", kind: "chat" as const };
-    paint([chat], { threadId: chat.id });
-    await settle();
-    expect(host.querySelector(".guide-offer")).toBeNull();
+  /* Plan 261020o: Chat and Explore offer About you too, always pressed. */
+  describe("in a chat or Explore", () => {
+    const ABOUT: Offer & { now: true; route: "exact" } = {
+      field: "profile",
+      text: "Prefers brief answers.",
+      basis: null,
+      now: true,
+      route: "exact",
+    };
+    const drawAs = async (kind: "chat", offers: Offer[], status?: "pending") => {
+      const t = { ...guideWith(offers, status ? { status } : {}), id: "spya-chtoff", kind };
+      paint([t], { threadId: t.id });
+      await settle();
+    };
+
+    it("draws no reason card, whatever its runs say", async () => {
+      await drawAs("chat", [REASON]);
+      expect(host.querySelector(".guide-offer")).toBeNull();
+    });
+
+    /* Explore's conversation is drawn by the same component in Learn's band
+       (ConversationModes.tsx), not in Chat's list, so this harness paints a
+       chat; `pressOnlyOffer` itself is in tests/guide-offer-to-save.test.ts. */
+    it("draws an About you card that waits for the press, even one a stored run marks now", async () => {
+      await drawAs("chat", [ABOUT], "pending");
+      markAnsweredHere("spya-gdea02");
+      await drawAs("chat", [ABOUT]);
+      expect(host.querySelector(".guide-offer-text")?.textContent).toBe("Prefers brief answers.");
+      expect(patches, "nothing saves without the press").toEqual([]);
+      await press(OFFER_WORDS.profile.save);
+      expect(patches).toEqual([{ profile: "Prefers brief answers." }]);
+    });
   });
 });
 

@@ -372,6 +372,45 @@ describe("a guide turn", () => {
     });
   });
 
+  /* Plan 261020o: a chat's offer of About you records what it held, and
+     waits for the press, whatever words the model chose. */
+  it("gives a chat's About you offer its basis, and never marks it to save at once", async () => {
+    vi.spyOn(readerStore, "readProfile").mockResolvedValue("A nurse.");
+    const call = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+    replies = [
+      new Response(
+        call({
+          model: "test/model",
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "toolu_0",
+                    type: "function",
+                    function: {
+                      name: "offer_to_save",
+                      arguments: JSON.stringify({ field: "about_you", text: "A nurse. I prefer brief answers." }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }) +
+          call({ model: "test/model", choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+          "data: [DONE]\n\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+      finishedBody("It is in the second section."),
+    ];
+    expect(await post({ threadId: "spya-chrtb2", question: "I prefer brief answers. Where is it?", kind: "chat" })).toBe(200);
+    const stored = await asTestOwner(() => chatStore.load(SLUG));
+    const answer = stored.find((t) => t.id === "spya-chrtb2")?.messages.at(-1);
+    expect(answer?.tools?.[0]?.offer).toEqual({ field: "profile", text: "A nurse. I prefer brief answers.", basis: "A nurse." });
+  });
+
   it("refuses visible blocks before any model call", async () => {
     const id = article?.blocks[0]?.id;
     expect(await post({ threadId: "spya-gdrtd2", question: "this bit", kind: "guide", visible: [id] })).toBe(400);

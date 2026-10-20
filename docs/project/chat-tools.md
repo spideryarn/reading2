@@ -61,7 +61,7 @@ contract come from.
 - [§ The "?" says so, and the answer teaches](#the-says-so-and-the-answer-teaches) — the "?" gesture
 - [§ The bug that shaped the literal search](#the-bug-that-shaped-the-literal-search) — (history) why word search is literal
 - [§ What chat is told is on screen](#what-chat-is-told-is-on-screen) — the on-screen blocks the composer sends
-- [§ Command buttons: chat proposes, the reader presses](#command-buttons-chat-proposes-the-reader-presses) — chat-proposed commands
+- [§ Command buttons: chat proposes, the reader presses](#command-buttons-chat-proposes-the-reader-presses) — chat-proposed commands, and [Chat's offer to keep an instruction in About you](#chat-and-explore-offer-to-keep-an-instruction-in-about-you)
 - [§ Not built, and worth building](#not-built-and-worth-building) — backlog
 - [§ What the browser pass found](#what-the-browser-pass-found) — (history) a browser test round
 - [§ The model claimed a search it never ran](#the-model-claimed-a-search-it-never-ran) — (history) a postmortem-style note
@@ -1214,6 +1214,33 @@ screen beside a chat search (the dialog over Search) does not hear of it until i
 ***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
 shown a button, not a token. A token that was drawn as text is copied as text.
 
+### Chat and Explore offer to keep an instruction in About you
+
+> Sometimes in a chat (either within the Guide chat, or in any other chat), the user might give
+> broad instructions (e.g. "try to give brief answers", "I already know about X"), etc.
+>
+> If so, as part of the response, offer to make an appropriate minimal update to the User Profile
+> (where appropriate).
+>
+> — Greg, 2026-10-19, `spya-aqnz99`
+
+**Built 2026-10-20** ([261020o](../plans/261020o-chat-offers-to-save-a-broad-instruction-to-about-you.md)).
+Chat and Explore are offered the guide's `offer_to_save` too, as `OFFER_PROFILE_TOOL` in
+[`src/chat-tools.ts`](../../src/chat-tools.ts): **About you only, and always pressed.** When the
+reader's latest message says how they want to be answered or what they already know or do, and
+About you does not say it yet, the model offers the current About you plus one short sentence, and
+the card under the answer is the guide's ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx),
+drawn `pressOnly`) with the same basis check and Undo. A request about this answer only
+(*"shorter please"*) is not offered. The prompt section is `OFFER_TO_REMEMBER` in
+[`src/converse.ts`](../../src/converse.ts), after `PROFILE_RULES`, whose *never in a tool argument*
+it narrows for this one tool; it asks for the call first, before any prose, because a lone offer
+does not end a turn (`ENDS_THE_TURN`) and prose before it would go round again.
+
+Neither save-at-once route reaches these kinds: `typed` is refused on any kind but the guide
+(src/routes.ts), the tool consults `savesAtOnce` only for the guide, and the card drops any `now`
+on a stored run. Learn, Tutorial and Candidates are not offered it yet, nor Live, which has nowhere
+for the button. The eval is `evals/guide/offers.ts --kind chat|explore`.
+
 ## The guide
 
 > think of it as a chat less about the content and more about the reading experience. So more
@@ -1293,7 +1320,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   card says. Reading the two fields is no tool: every guide turn
   carries both under WHO IS READING THIS, read fresh. Not offered in Live (`GUIDE_TOOLS` is what
   Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
-  you're reading*.
+  you're reading*. Since 2026-10-20 About you also takes how they want to be answered (*"try to
+  give brief answers"*), and Chat and Explore offer About you too, press only
+  ([§ Chat and Explore offer to keep an instruction](#chat-and-explore-offer-to-keep-an-instruction-in-about-you)).
 - **Its next steps**, since 2026-10-09: a second tool of its own, **`offer_next_steps`**, which runs
   nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as

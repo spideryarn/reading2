@@ -771,9 +771,15 @@ describe("toolsFor — who is offered the reader's notes (PR-3)", () => {
     expect(READER_NOTES_TOOL.function.name).toBe("reader_notes");
   });
 
-  /* And `read_cited_work` after it, the other chat-and-explore tool (plan 261011w). */
+  /* And `read_cited_work` after it, the other chat-and-explore tool (plan
+     261011w), then the press-only `offer_to_save` (plan 261020o). */
   it.each(["chat", "explore"] as const)("gives it to %s, after the shared eight", (kind) => {
-    expect(names(kind)).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
+    expect(names(kind)).toEqual([
+      ...CHAT_TOOLS.map((t) => t.function.name),
+      "reader_notes",
+      "read_cited_work",
+      "offer_to_save",
+    ]);
   });
 
   it.each(["learn", "tutorial", "candidates"] as const)("gives %s the shared eight only", (kind) => {
@@ -984,8 +990,9 @@ describe("converse — the request it sends, per thread kind", () => {
   it("offers reader_notes to a chat, and runs it with the thread the turn is in", async () => {
     const { offered, result } = await turn("chat");
     expect(offered).toContain("reader_notes");
-    /* Web search, reader_notes and read_cited_work (plan 261011w). */
-    expect(offered).toHaveLength(CHAT_TOOLS.length + 3);
+    /* Web search, reader_notes and read_cited_work (plan 261011w), and
+       offer_to_save (plan 261020o). */
+    expect(offered).toHaveLength(CHAT_TOOLS.length + 4);
     expect(result).toContain("a note of mine");
     expect(result).toContain("an earlier one");
     // `threadId` reached the tool: the conversation asking is not listed back to itself.

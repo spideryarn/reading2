@@ -2208,8 +2208,10 @@ export function Conversation({
             bring={bring}
           />
           {/* The guide's offers to save their reason or About you, each a
-              card they press (GuideSaveOffer.tsx, plan 261009q). */}
+              card they press (GuideSaveOffer.tsx, plan 261009q); and Chat's
+              and Explore's, About you only and always pressed (plan 261020o). */}
           {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
+          {(kind === "chat" || kind === "explore") && <GuideSaveOffers slug={slug} message={m} pressOnly />}
           </Fragment>
         ))}
         {/* The guide's next steps, under its latest answer only
