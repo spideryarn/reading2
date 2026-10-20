@@ -886,6 +886,14 @@ describe("Author gifts", () => {
       };
       try {
         await mount({ tab: null });
+        /* A fresh pointer must supersede an earlier fold choice. Otherwise
+           drafting this article says it is highlighted, but leaves the
+           finished card's fields shut. */
+        await act(async () => tabNamed("Drafts")?.click());
+        await act(async () => button(card(SENT), "Show")?.click());
+        await act(async () => button(card(SENT), "Hide")?.click());
+        expect(isHidden(card(SENT)?.querySelector("dl"))).toBe(true);
+        await act(async () => tabNamed("Give")?.click());
         await fill();
         await act(async () => form().requestSubmit());
         await settle();
@@ -982,6 +990,43 @@ describe("Author gifts", () => {
       const q = await addressSettles((s) => !s.has("gift"));
       expect(q.has("gift")).toBe(false);
       expect(panelOf("Give")?.hidden).toBe(false);
+    });
+
+    it("opens and points at `?gift=` when it arrives after the page is already mounted", async () => {
+      giftsAnswer = () => [gift()];
+      const scrolled: Element[] = [];
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this);
+      };
+      try {
+        await mount({ tab: null });
+        expect(panelOf("Give")?.hidden).toBe(false);
+        await act(async () => history.pushState(null, "", `/admin/vouchers?gift=${DRAFT}`));
+        await settle();
+        expect(panelOf("Drafts")?.hidden).toBe(false);
+        expect(card(DRAFT)?.className).toContain("tw:ring-2");
+        expect(scrolled).toEqual([card(DRAFT)]);
+      } finally {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    it("waits to scroll to `?gift=` until Drafts is visible", async () => {
+      giftsAnswer = () => [gift()];
+      history.replaceState(null, "", `/admin/vouchers?tab=given&gift=${DRAFT}`);
+      const scrolled: Element[] = [];
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this);
+      };
+      try {
+        await mount({ tab: null });
+        expect(panelOf("Drafts")?.hidden).toBe(true);
+        expect(scrolled).toEqual([]);
+        await act(async () => tabNamed("Drafts")?.click());
+        expect(scrolled).toEqual([card(DRAFT)]);
+      } finally {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
     });
 
     it("counts the gifts waiting on you in Drafts, and the vouchers in Given", async () => {

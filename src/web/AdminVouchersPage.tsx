@@ -1439,13 +1439,23 @@ export function AdminVouchersPage() {
 
   const [tabInAddress, setTabInAddress] = useQueryState("tab", tabParam);
   const [giftInAddress, setGiftInAddress] = useQueryState(AUTHOR_GIFT_PARAM, giftParam);
+  const giftIdInAddress = giftIdOrNull(giftInAddress);
   /* `?gift=<id>` with no `?tab=` opens Drafts, where that gift is. */
-  const tab: Tab = tabInAddress ?? (giftIdOrNull(giftInAddress) === null ? "give" : "drafts");
+  const tab: Tab = tabInAddress ?? (giftIdInAddress === null ? "give" : "drafts");
   /* The gift the page points at: the address's, then whichever *Draft a gift* made or found. */
   const [pointer, setPointer] = useState<GiftPointer | null>(() => {
-    const id = giftIdOrNull(giftInAddress);
-    return id === null ? null : { id };
+    return giftIdInAddress === null ? null : { id: giftIdInAddress };
   });
+  const lastAddressGift = useRef(giftIdInAddress);
+  /* The admin route stays mounted when navigation changes only its query. A
+     later MCP review address must point just as an initial one does. Clearing
+     `?gift=` does not clear a draft made in this mount; adding another valid id
+     creates a fresh pointer, so even the same card scrolls and opens again. */
+  useEffect(() => {
+    if (giftIdInAddress === lastAddressGift.current) return;
+    lastAddressGift.current = giftIdInAddress;
+    if (giftIdInAddress !== null) setPointer({ id: giftIdInAddress });
+  }, [giftIdInAddress]);
   /* What the last *Draft a gift* came to, said on Drafts, where it takes you. */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -1517,7 +1527,13 @@ export function AdminVouchersPage() {
       </TabPanel>
 
       <TabPanel tab="drafts" chosen={tab}>
-        <AuthorGifts gifts={gifts} pointer={pointer} notice={notice} onVoucherMade={reloadAfterEmail} />
+        <AuthorGifts
+          gifts={gifts}
+          pointer={pointer}
+          notice={notice}
+          active={tab === "drafts"}
+          onVoucherMade={reloadAfterEmail}
+        />
       </TabPanel>
 
       <TabPanel tab="given" chosen={tab}>

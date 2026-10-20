@@ -176,3 +176,19 @@ No P0. Taken:
 Not taken: **P2-03** (call the tab *Author gifts*, since it holds finished ones too). The finished ones
 are folded lines below the waiting ones; what the tab is *for* is the drafts, and the shorter name
 reads with *Give* and *Given*.
+
+## What landed
+
+**Stage 1** (`6309d50d5`, built by an Opus subagent): as planned, plus the draft's *created* /
+*already has a gift* messages shown at the top of Drafts (where the page takes you) rather than in the
+form, and `?gift=` read through nuqs so a tab click can clear it. Full `npm test` run once: the only
+two reds were this stage's (`last-view.test.ts` needed `tab` and `gift` listed as non-article params;
+a broken link in this plan), both fixed. Browser check (Sonnet, Playwright, 1280 and 390): tabs, the
+address, arrow keys, the tick-box hiding and restoring the fields, no sideways scroll, no console
+errors.
+
+**GPT Sol's code review** (write-capable, exit 0, answer file present), no P0, three P1s, all fixed by
+it with a regression test each, read and kept: a Hide chosen earlier overrode a fresh highlight; the
+scroll-to-card ran while Drafts was hidden and used up the arrival; a `?gift=` arriving after mount
+(query-only navigation) did not point. Gates after: the eight touched or neighbouring suites 308/308,
+typecheck green.

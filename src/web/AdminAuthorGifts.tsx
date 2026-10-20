@@ -588,13 +588,14 @@ function GiftCard({
   gift,
   hooks,
   now,
-  highlighted,
+  pointer,
   onSent,
 }: {
   gift: AdminAuthorGift;
   hooks: Pick<UseAdminAuthorGifts, "patch" | "send" | "lookUpAgain">;
   now: number;
-  highlighted: boolean;
+  /** A fresh object each time this gift is pointed at, so an old fold choice cannot hide a new arrival. */
+  pointer: GiftPointer | null;
   onSent: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -610,14 +611,16 @@ function GiftCard({
   const [refusal, setRefusal] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   /* **Whether a finished gift is open** (plan 261020ab, P1-03 and P2-02 of its
-     review): what the person chose with Show or Hide, and until they choose,
-     open only when the address or a draft just made pointed at it. A draft or a
-     half-sent gift is always open — it is waiting on Greg. Discard sets it
-     shut, so the card folds at once even when it was the one pointed at. */
-  const [opened, setOpened] = useState<boolean | null>(null);
+     review): what the person chose with Show or Hide in this pointing context.
+     A fresh pointer supersedes an earlier Hide, but Hide still works after the
+     arrival; a draft or half-sent gift is always open. Discard records Hide in
+     the current context, so a highlighted card still folds at once. */
+  const [foldChoice, setFoldChoice] = useState<{ readonly pointer: GiftPointer | null; readonly open: boolean } | null>(null);
   const draft = gift.status === "draft";
   const canSend = gift.status === "draft" || gift.status === "sending";
-  const open = !finished(gift) || (opened ?? highlighted);
+  const highlighted = pointer !== null;
+  const chosenOpen = foldChoice?.pointer === pointer ? foldChoice.open : null;
+  const open = !finished(gift) || (chosenOpen ?? highlighted);
   const running = gift.lookups.some((l) => lookupPending(l, now));
   const title = gift.starter.title;
   const shown = canSend && confirming ? confirming : gift;
@@ -683,7 +686,7 @@ function GiftCard({
               type="button"
               aria-expanded={open}
               aria-controls={bodyId}
-              onClick={() => setOpened(!open)}
+              onClick={() => setFoldChoice({ pointer, open: !open })}
               className={BUTTON}
             >
               {open ? "Hide" : "Show"}
@@ -776,7 +779,7 @@ function GiftCard({
             }}
             onDiscard={() => {
               /* Shut as soon as it is discarded — the point of #663. */
-              setOpened(false);
+              setFoldChoice({ pointer, open: false });
               void attempt(() => hooks.patch(gift.id, { discarded: true }));
             }}
             attempt={(run) => void attempt(run)}
@@ -824,11 +827,14 @@ export function AuthorGifts({
   gifts: list,
   pointer,
   notice,
+  active,
   onVoucherMade,
 }: {
   gifts: UseAdminAuthorGifts;
   pointer: GiftPointer | null;
   notice: string | null;
+  /** Whether the mounted Drafts panel is the visible tab. */
+  active: boolean;
   onVoucherMade: () => void;
 }) {
   const { gifts, error, loading, watching, reload, lookUpAgain, patch, send } = list;
@@ -844,12 +850,15 @@ export function AuthorGifts({
   /* Scroll to the gift pointed at, once it is drawn. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `gifts` is the trigger, not an input — the card may only be drawn by the read after the write, and this has to look again then.
   useEffect(() => {
-    if (pointer === null || scrolled.current === pointer) return;
+    /* `hidden` panels stay mounted. Scrolling one does nothing useful in the
+       browser, and recording it here would consume the arrival before the
+       person opens Drafts. */
+    if (!active || pointer === null || scrolled.current === pointer) return;
     const el = document.getElementById(authorGiftAnchor(pointer.id));
     if (!el) return;
     scrolled.current = pointer;
     el.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  }, [pointer, gifts]);
+  }, [active, pointer, gifts]);
 
   return (
     <section aria-label="Author gifts" className="tw:mb-8">
@@ -890,7 +899,7 @@ export function AuthorGifts({
               gift={g}
               hooks={hooks}
               now={now}
-              highlighted={pointer?.id === g.id}
+              pointer={pointer?.id === g.id ? pointer : null}
               onSent={onVoucherMade}
             />
           ))}
