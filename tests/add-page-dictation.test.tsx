@@ -92,6 +92,7 @@ vi.mock("../src/web/useDictation.js", () => ({
       toggle() {
         if (mic.refuse && !s.armed) return false;
         mic.state.set(name, { armed: !s.armed, transcribing: false });
+        return undefined;
       },
       dismiss() {},
       chooseDevice() {},
