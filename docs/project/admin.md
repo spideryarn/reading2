@@ -28,6 +28,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
 - [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
 - [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
+- [§ Whose article it is](#whose-article-it-is-on-a-visitors-details-page) — the owner's address, for a public article only
 - [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
 - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
   - [Engagement](#engagement-active-days-reading-time-failed-imports) — active days, reading time, failed imports, and the columns that start hidden
@@ -628,6 +629,18 @@ what they did with it, which is the line § *What it deliberately does not show*
 that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by opaque id
 ([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
 administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+
+## Whose article it is, on a visitor's details page
+
+Since 2026-10-20 (`spya-cf30ac`), the administrator reading somebody else's **public** article sees
+a line under *Access* on its details page: whose it is, by address. It is not a new route: the page
+reads `GET /api/admin/articles` and finds the row by slug, and that list carries a slug only for the
+administrator's own and public articles. So a **private-link** article cannot be matched, and the
+line says its owner is not shown. Holding the key lets you read it; it does not tell you whose it
+is, and changing that is a widening of § What it deliberately does not show, put to Greg as
+question `q-agbc89`. Every reader also gets *You own this article* or *You don't own this
+article* there, which needs nothing from these pages
+([261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md)).
 
 ## The plan and ingest columns
 
