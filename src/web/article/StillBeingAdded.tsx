@@ -16,9 +16,12 @@
  *
  * ## What decides
  *
- * A queued or running **import** job for this slug in the reader's own job
- * list (`isImportJob`, src/job-state.ts). The list is the reader's alone, so
- * finding one says nothing to anybody about an article that is not theirs.
+ * The newest **import** job for this slug in the reader's own job list
+ * (`isImportJob`, src/job-state.ts): queued, running, failed or stopped, its
+ * card; done, the article read again. A failed one counts since 2026-10-19,
+ * when an import that had failed before the page opened said *Not shared* to
+ * its own owner (spya-zt7u0h, plan 261019n). The list is the reader's alone,
+ * so finding one says nothing to anybody about an article that is not theirs.
  *
  * - **Not any live job**: a mode job on some other article of theirs can never
  *   match the slug, but a mode job on *this* slug with the article unreadable
@@ -103,23 +106,48 @@ export function OwnerNotShared({
   const queue = useJobs("watches-queue");
 
   /**
-   * The job this page is following, once it has found one. By id from then
-   * on, so a job that fails stays on screen with its reason and its Retry
-   * rather than turning into *Not shared* the moment it stops being live.
+   * The job this page is following, once it has found one. A Retry also keeps
+   * the POST's answer until the polled list has that new id, so the old failed
+   * card cannot stay pressable in the gap.
    */
-  const [followed, setFollowed] = useState<{ slug: string; id: string } | null>(null);
-  const live = queue.jobs.find(
-    (j) => j.slug === slug && (j.status === "queued" || j.status === "running") && isImportJob(j),
-  );
-  const liveId = live?.id ?? null;
+  const [followed, setFollowed] = useState<{ slug: string; id: string; held?: Job } | null>(null);
+  /* **The newest import of this slug, and only that one**: a Retry is a new
+     job under the same slug (src/jobs.ts), so an older job's status says
+     nothing about where the article is now. Status is read off the newest,
+     never searched for across them (GPT Sol's plan review of 261019n, F5). */
+  const held = followed?.slug === slug ? followed.held : undefined;
+  /* The list's copy goes first, so once it contains the held id its changing
+     status wins over the Retry response's snapshot. */
+  const newest = newestImport(held === undefined ? queue.jobs : [...queue.jobs, held], slug);
+  const liveId = newest !== null && (newest.status === "queued" || newest.status === "running") ? newest.id : null;
   useEffect(() => {
-    if (liveId !== null) setFollowed({ slug, id: liveId });
+    if (liveId !== null) {
+      setFollowed((current) =>
+        current?.slug === slug && current.id === liveId ? current : { slug, id: liveId },
+      );
+    }
   }, [slug, liveId]);
+  useEffect(() => {
+    if (held === undefined || !queue.jobs.some((candidate) => candidate.id === held.id)) return;
+    setFollowed((current) =>
+      current?.slug === slug && current.held?.id === held.id
+        ? { slug: current.slug, id: current.id }
+        : current,
+    );
+  }, [slug, held, queue.jobs]);
   const followedId = followed?.slug === slug ? followed.id : null;
-  const completed = settled && retryCompleted
-    ? queue.jobs.find((j) => j.slug === slug && j.status === "done" && isImportJob(j))
-    : null;
-  const job = live ?? queue.jobs.find((j) => j.id === followedId) ?? completed ?? null;
+  /* Live, failed or cancelled: its card. **A failed one this page never saw
+     run is drawn too**, with its reason and Retry, where *Not shared* told
+     the owner of their own article that it was not theirs (spya-zt7u0h).
+     Done: drawn while this page followed it to the end, or once, after a list
+     asked for after the 404, to have the article read again; after that it is
+     *Not shared*, never an older failure behind it. */
+  const job =
+    newest === null
+      ? null
+      : newest.status !== "done" || newest.id === followedId || (settled && retryCompleted)
+        ? newest
+        : null;
   const jobId = job?.id ?? null;
 
   /* `watchTerminal` hears `done` from the list and from `/advance` alike. Any
@@ -141,7 +169,7 @@ export function OwnerNotShared({
              src/jobs.ts). This address will then never be an article; that
              one's will. */
           if (replacement.slug !== slug) navigate(readHref(replacement.slug), { replace: true });
-          else setFollowed({ slug, id: replacement.id });
+          else setFollowed({ slug, id: replacement.id, held: replacement });
         }}
       />
     );
@@ -156,6 +184,31 @@ export function OwnerNotShared({
       <FeedbackTrigger variant="corner" />
     </>
   );
+}
+
+/**
+ * The import job for `slug` created last, or null. The store's order is
+ * `(createdAt, id)`, so the id makes two jobs from one millisecond agree with
+ * it. A malformed date cannot outrank a valid stored one; the browser does not
+ * validate the JSON body before it reaches the engine.
+ */
+function newestImport(jobs: readonly Job[], slug: string): Job | null {
+  let newest: Job | null = null;
+  for (const j of jobs) {
+    if (j.slug !== slug || !isImportJob(j)) continue;
+    if (newest === null || laterThan(j, newest)) newest = j;
+  }
+  return newest;
+}
+
+function laterThan(candidate: Job, current: Job): boolean {
+  const candidateAt = Date.parse(candidate.createdAt);
+  const currentAt = Date.parse(current.createdAt);
+  const candidateValid = Number.isFinite(candidateAt);
+  const currentValid = Number.isFinite(currentAt);
+  if (candidateValid !== currentValid) return candidateValid;
+  if (candidateValid && candidateAt !== currentAt) return candidateAt > currentAt;
+  return candidate.id > current.id;
 }
 
 function StillBeingAdded({

@@ -29,7 +29,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { AdminArticlesPage, matchesFilter } = await import("../src/web/AdminArticlesPage.js");
+const { AdminArticlesPage, matchesFilter, NOT_PUBLISHED_YET } = await import("../src/web/AdminArticlesPage.js");
 const { READER_STATE } = await import("../src/admin-articles.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,6 +52,7 @@ const ARTICLES = [
     processing: "full",
     title: null,
     slug: null,
+    published: null,
   },
   {
     id: MINE,
@@ -64,6 +65,7 @@ const ARTICLES = [
     processing: "full",
     title: "The Bitter Lesson",
     slug: "the-bitter-lesson",
+    published: true,
   },
 ];
 
@@ -83,6 +85,8 @@ let calls: Call[];
 /** Each GET of the preview takes the next of these; the last repeats. */
 let previews: Record<string, unknown>[];
 let postAnswer: { status: number; body: unknown };
+/** What `GET /api/admin/articles` answers. */
+let listed: readonly unknown[] = ARTICLES;
 
 beforeEach(() => {
   calls = [];
@@ -112,7 +116,7 @@ beforeEach(() => {
       return json(200, next);
     }
     if (url.endsWith("/transfer") && method === "POST") return json(postAnswer.status, postAnswer.body);
-    return json(200, { articles: ARTICLES, emailsAvailable: true });
+    return json(200, { articles: listed, emailsAvailable: true });
   }) as typeof fetch;
 });
 
@@ -127,7 +131,8 @@ async function settle() {
   }
 }
 
-async function mount() {
+async function mount(articles: readonly unknown[] = ARTICLES) {
+  listed = articles;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -178,6 +183,24 @@ describe("/admin/articles", () => {
     expect(rowFor("The Bitter Lesson")?.textContent).toContain("(you)");
   });
 
+  /* spya-zt7u0h: an import that never published was a row called *Untitled*,
+     a link to a page that said *Not shared*. */
+  it("names an article of yours whose import never published as that, not Untitled", async () => {
+    const unpublished = {
+      ...ARTICLES[1]!,
+      id: "a1a1a1a1-0b11-4c5e-8a01-261011000006",
+      shortId: "spya-drhjjm",
+      visibility: "private",
+      title: null,
+      slug: "a-failed-import-spya-drhjjm",
+      published: false,
+    };
+    await mount([...ARTICLES, unpublished]);
+    const row = rowFor("spya-drhjjm");
+    expect(row?.textContent).not.toContain("Untitled");
+    expect(row?.textContent).toContain(NOT_PUBLISHED_YET);
+  });
+
   it("filters by owner address or id", () => {
     const [theirs, mine] = ARTICLES as unknown as Parameters<typeof matchesFilter>[0][];
     expect(matchesFilter(theirs!, "ALICE@")).toBe(true);
@@ -186,6 +209,15 @@ describe("/admin/articles", () => {
     expect(matchesFilter(theirs!, "000005")).toBe(false);
     expect(matchesFilter(mine!, "alice")).toBe(false);
     expect(matchesFilter(mine!, "  ")).toBe(true);
+  });
+
+  /* Plan 261019o, spya-zzewu7: "keep the first column frozen (article name)". */
+  it("pins the Article column while the table scrolls sideways", async () => {
+    await mount();
+    const pinned = [...host.querySelectorAll("table tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned).toEqual([[0], [0], [0]]);
   });
 
   it("keeps the exact creation time readable without hovering a date cell", async () => {

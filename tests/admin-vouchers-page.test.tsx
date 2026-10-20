@@ -276,6 +276,17 @@ describe("/admin/vouchers", () => {
     expect(box?.className).toMatch(/\btw:relative\b/);
   });
 
+  /* Plan 261019o: the address says whose voucher a row is, so it stays on
+     screen while the notes and statuses scroll past. */
+  it("pins the Email column while the table scrolls sideways", async () => {
+    await mount();
+    const pinned = [...host.querySelectorAll("table tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned.length).toBeGreaterThan(1);
+    expect(pinned.every((p) => p.length === 1 && p[0] === 0)).toBe(true);
+  });
+
   /* Plan 261006h: the arrow keys scroll whatever has focus. jsdom lays nothing
      out, so the two widths are stand-ins. */
   for (const [what, content, expected] of [

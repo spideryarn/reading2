@@ -450,6 +450,7 @@ export function AdminUsersPage() {
               rows={sorted}
               caption="Everyone with an account"
               markedRowId={pointedUser ? pointedUser.id : null}
+              pinFirst
             />
           </div>
         </>

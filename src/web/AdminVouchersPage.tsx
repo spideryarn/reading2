@@ -53,6 +53,7 @@ import {
 } from "./admin-vouchers-parts.js";
 import { Shell } from "./AdminPage.js";
 import { Button } from "./components/ui/button.js";
+import { PINNED } from "./lib/DataTable.js";
 import { SignedInReader } from "./lib/made-for.js";
 import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -987,7 +988,9 @@ function VoucherRow({
 
   return (
     <tr className={`tw:border-b tw:border-border/60 tw:last:border-0 ${revoked ? "tw:text-muted-foreground" : ""}`}>
-      <td className={`${CELL} tw:min-w-48 tw:break-all`}>
+      {/* Held at the left while the notes and statuses scroll (plan 261019o),
+          and narrower on a phone, where it cannot be scrolled past. */}
+      <td className={`${CELL} ${PINNED} tw:min-w-40 tw:sm:min-w-48 tw:break-all`}>
         {editing && unclaimed ? (
           <input
             ref={firstField}
@@ -1002,7 +1005,7 @@ function VoucherRow({
               setEmail(next.email);
               setRecipientName(next.name);
             }}
-            className={`${INPUT} tw:w-56`}
+            className={`${INPUT} tw:w-36 tw:sm:w-56`}
           />
         ) : account && voucher.claimedBy === null ? (
           <AdminUserLink id={account.id} usage={account.usage} now={now}>
@@ -1022,7 +1025,7 @@ function VoucherRow({
             form={`voucher-${voucher.id}`}
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
-            className={`${INPUT} tw:mt-1 tw:block tw:w-56`}
+            className={`${INPUT} tw:mt-1 tw:block tw:w-36 tw:sm:w-56`}
           />
         ) : (
           voucher.recipientName !== null && (
@@ -1274,7 +1277,7 @@ export function AdminVouchersPage() {
             <caption className="tw:sr-only">{CAPTION}</caption>
             <thead>
               <tr className="tw:border-b tw:border-border">
-                <th className={HEAD}>Email</th>
+                <th className={`${HEAD} ${PINNED}`}>Email</th>
                 <th className={`${HEAD} tw:text-right`}>Articles</th>
                 <th className={HEAD}>Note to them</th>
                 <th className={HEAD}>Private note</th>

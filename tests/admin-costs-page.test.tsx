@@ -289,6 +289,15 @@ describe("the default view", () => {
     expect(host.querySelector("[data-row-count]")?.textContent).toBe("2 rows");
   });
 
+  /* Plan 261019o: the ranking's label column holds, as the pivot's already did. */
+  it("pins the ranking's label column while the table scrolls sideways", async () => {
+    await show();
+    const pinned = [...host.querySelectorAll("[data-ranking] tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned).toEqual([[0], [0], [0]]);
+  });
+
   it("rests on total cost rather than a correlated count or pocket, and reverses from the header", async () => {
     await show("", [
       row({ calls: 20, creditsNanos: 3 * DOLLAR }),
@@ -743,6 +752,22 @@ describe("what a narrow window needs", () => {
     cued(host.querySelector("table[data-pivot]"), "the pivot");
     expect(boxes()).toHaveLength(4);
     for (const box of boxes()) expect(box.matches(CUED)).toBe(true);
+  });
+
+  /* Plan 261019o: every table here holds its first column, and only that one,
+     while it scrolls — the causes table included, which is the widest. */
+  it("pins the first column of every table on the page, and no other", async () => {
+    const pinned = () =>
+      [...host.querySelectorAll("table")].map((table) =>
+        [...table.querySelectorAll("tr")].every((tr) => {
+          const held = [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : []));
+          return held.length === 1 && held[0] === 0;
+        }),
+      );
+    await show("", FAILING);
+    expect(pinned()).toEqual([true, true, true, true]);
+    await show("?by=user&then=task", FAILING);
+    expect(pinned()).toEqual([true, true, true, true]);
   });
 
   it("still sorts from a header, and says so in the address", async () => {

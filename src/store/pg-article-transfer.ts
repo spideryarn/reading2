@@ -654,6 +654,7 @@ export async function listArticlesAcrossOwners(adminId: string): Promise<Omit<Ad
       slug: articles.slug,
       titleOverride: articles.titleOverride,
       title: articleRevisions.title,
+      currentRevisionId: articles.currentRevisionId,
     })
     .from(articles)
     .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
@@ -674,6 +675,7 @@ export async function listArticlesAcrossOwners(adminId: string): Promise<Omit<Ad
       processing: r.processing === "minimal" ? "minimal" : "full",
       title: shown ? ((mine ? r.titleOverride : null) ?? r.title ?? null) : null,
       slug: shown ? r.slug : null,
+      published: shown ? r.currentRevisionId !== null : null,
     };
   });
 }
