@@ -1,0 +1,216 @@
+diff --git a/docs/project/content-extraction.md b/docs/project/content-extraction.md
+index fc26d4b03..d59485e80 100644
+--- a/docs/project/content-extraction.md
++++ b/docs/project/content-extraction.md
+@@ -272,9 +272,12 @@ The differences that matter to a reader:
+ - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
+   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
+   table was a caption over nothing, though the cells were transcribed and scored all
+-  along (report spya-pawfwx). Rows are split on newlines and cells on `|`, which is what
+-  the model writes rather than anything the prompt promises, so a literal `|` in a cell
+-  splits it. The cells are gated by the check like prose (`CHECKED` in
++  along (report spya-pawfwx). Rows are split on newlines, and cells on tabs, which rule 7 of
++  the prompt has asked for since `pdf-v5` (2026-10-20). Before that the prompt named no
++  separator and the renderer split on the `|` the model mostly wrote; in a third of the PDFs
++  with tables the model wrote tabs or runs of spaces, and a row came out as one cell
++  (report spya-xn4597, [261020h](../plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md)).
++  A line with no tab is still split on `|`, for chunks read before `pdf-v5`. The cells are gated by the check like prose (`CHECKED` in
+   [`src/pdf.ts`](../../src/pdf.ts)), unlike footnotes. Forward-only: an article changes
+   on re-extraction, and its table blocks get new ids then —
+   [261001q](../plans/261001q-pdf-tables-and-composite-figures.md).
+diff --git a/src/pdf-read.ts b/src/pdf-read.ts
+index 673504272..57b03cc37 100644
+--- a/src/pdf-read.ts
++++ b/src/pdf-read.ts
+@@ -149,7 +149,7 @@ import { ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js"
+  * constant only invalidates a cache if somebody remembers to bump it, and the
+  * person who forgets is the person who just changed the prompt.
+  */
+-export const PROMPT_VERSION = "pdf-v4";
++export const PROMPT_VERSION = "pdf-v5";
+ 
+ /* `MAX_PAGES` — the cost cap on how long a document may be — is imported from
+    src/uploads.ts, where it lives beside `MAX_UPLOAD_BYTES`, the other half of
+@@ -436,6 +436,15 @@ export function encodedBytes(rawBytes: number): number {
+  * alone would have lost to it (F7). The check learned to read the TeX first
+  * (src/pdf-score.ts § `mathsAsText`), or every maths chunk would have been
+  * paid for twice. docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md.
++ *
++ * **Rule 7 names the cell separator since 2026-10-20 (`pdf-v5`): a tab.** It
++ * named none, and the renderer split on the `|` the model mostly wrote; a third
++ * of the PDFs with tables in production came back with tabs or runs of spaces
++ * instead, drawn one cell per row (report spya-xn4597). A tab rather than `|`
++ * because a PDF prints no tab, so the separator can never be the author's own
++ * character; and the rule says the tabs are structure, or rules 1 and 2 would
++ * forbid them. `tableRows` is the other half of the contract.
++ * docs/plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md.
+  */
+ export const SYSTEM = `You transcribe pages of a PDF into structured records, verbatim.
+ 
+@@ -466,6 +475,12 @@ Rules, in order of importance:
+ 7. For a figure, emit ONE record of type "figure" whose text is the caption exactly as printed
+    (empty string if there is none). For a table, emit a "table" record for the caption AND then
+    record(s) of type "tabledata" carrying the cells as printed, reading across each row in turn.
++   In "tabledata" text, put ONE tab character between cells and a newline between rows; a record
++   may hold one row or several. These tabs and newlines are the table's structure, not copied text.
++   Write an empty cell as nothing between two tabs, including the blank corner above a column of
++   row labels, so that every row lines up with the columns printed above it. A cell whose text
++   wraps onto several lines is one cell, its lines joined by a space. Never separate cells with
++   spaces or "|", and never add rows that are not printed, such as markdown's "---".
+ 8. Emit only the schema's fields and enum values. No HTML, no markdown, no links, no styling. Write
+    mathematical notation as LaTeX and everything else as plain text: inline notation — a symbol, a
+    variable with a subscript, a formula within a sentence — between \\( and \\), and a displayed
+@@ -2177,14 +2192,38 @@ function tableOwners(
+  * is how a header row over the data columns comes out — and a row both opened
+  * and closed by one is markdown's spelling and loses both. A line that is only
+  * separators says nothing and is skipped.
++ *
++ * **Since `pdf-v5` the prompt names the separator: a tab** (rule 7), and a
++ * line with a tab in it is split on tabs, whatever else it holds — a `|` there
++ * is the author's, as in `\(P(A | B)\)`. A tab is the separator because a PDF
++ * prints no tab glyph, so a cell's own text cannot contain one; a bar it can.
++ * Until `pdf-v5` the prompt named none, and "the model writes `a | b`" was a
++ * habit taken for a contract: in production 44 of 421 `tabledata` records, in
++ * 4 of the 9 PDFs with tables, came back tab-separated and were drawn one cell
++ * per row (report spya-xn4597), and 318 came back with runs of spaces, which
++ * nothing after the fact can split. The `|` path stays for every chunk read
++ * before `pdf-v5`; no stored record mixes the two.
++ *
++ * Splitting on tabs keeps an empty first or last cell — the blank corner over a
++ * row-label column is how the header row lines up — so the line is not trimmed
++ * of tabs first, only each cell of spaces. A row of markdown's alignment dashes
++ * (`---|:---:`) is not printed on any page and is skipped, on either path.
++ * docs/postmortems/261020a-a-table-parser-relied-on-a-separator-the-prompt-never-named.md.
+  */
+ function tableRows(text: string): string[][] {
+   const rows: string[][] = [];
+   for (const raw of text.split(/\r?\n/)) {
+-    let line = raw.trim();
+-    if (!line.replace(/\|/g, "").trim()) continue;
+-    if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
+-    rows.push(line.split("|").map((cell) => cell.trim()));
++    let cells: string[];
++    if (raw.includes("\t")) {
++      cells = raw.split("\t").map((cell) => cell.trim());
++    } else {
++      let line = raw.trim();
++      if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
++      cells = line.split("|").map((cell) => cell.trim());
++    }
++    if (cells.every((cell) => cell === "")) continue;
++    if (cells.every((cell) => cell === "" || /^:?-{3,}:?$/.test(cell))) continue;
++    rows.push(cells);
+   }
+   return rows;
+ }
+diff --git a/tests/pdf-tables.test.ts b/tests/pdf-tables.test.ts
+index 3523ea86e..3a1e9e134 100644
+--- a/tests/pdf-tables.test.ts
++++ b/tests/pdf-tables.test.ts
+@@ -4,8 +4,10 @@
+  * `<figure>`, where until 2026-10-01 a table was its caption over nothing.
+  *
+  * The records are the shape the model writes (rule 7 of the prompt): a `table`
+- * record for the caption, then `tabledata` reading across each row, cells split
+- * by `|`, one row per record or several joined by newlines. Table 3 is from the
++ * record for the caption, then `tabledata` reading across each row, one row per
++ * record or several joined by newlines. Cells are split by tabs, which rule 7
++ * has named since `pdf-v5`, and by `|` in a row with no tab, which is how the
++ * model wrote most of them before (report spya-xn4597). Table 3 is from the
+  * paper behind report spya-pawfwx (JCO 2005, page 4). No PDF is committed.
+  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
+  */
+@@ -183,6 +185,81 @@ describe("a PDF's table shows its cells", () => {
+     expect(tables(html)).toEqual([[["a", "b"], ["c", "", "d"]]]);
+   });
+ 
++  /* Report spya-xn4597: on the LSE sentience review two of the four
++     confidence grids came back tab-separated, and each row was drawn as one
++     cell. Production's records, cut to three columns. */
++  it("splits a row on tabs", () => {
++    const html = render([
++      r(24, "table", "Table 2. A summary of the evidence of sentience in cephalopods."),
++      r(24, "tabledata", "Criterion 1\tCriterion 2\tCriterion 3"),
++      r(24, "tabledata", "Octopods (Octopoda)\tVH\tVH\tH"),
++      r(24, "tabledata", "Nautiloids\tH\tL\tL"),
++    ]);
++    expect(tables(html)).toEqual([
++      [
++        ["Criterion 1", "Criterion 2", "Criterion 3"],
++        ["Octopods (Octopoda)", "VH", "VH", "H"],
++        ["Nautiloids", "H", "L", "L"],
++      ],
++    ]);
++  });
++
++  it("keeps an empty first, middle and last cell when cells are split on tabs", () => {
++    /* The blank corner is how a header row lines up over a row-label column:
++       trimming the line of its tabs first would lose it. */
++    const html = render([
++      r(1, "table", "Table 1. T."),
++      r(1, "tabledata", "\tCriterion 1\tCriterion 2\nOctopods\tVH\t\nNautiloids\t\tL"),
++    ]);
++    expect(tables(html)).toEqual([
++      [
++        ["", "Criterion 1", "Criterion 2"],
++        ["Octopods", "VH", ""],
++        ["Nautiloids", "", "L"],
++      ],
++    ]);
++  });
++
++  it("keeps a bar in a tab-separated row as the author's text", () => {
++    const html = render([r(1, "table", "Table 1. T."), r(1, "tabledata", "\\(P(A | B)\\)\t0.5")]);
++    expect(tables(html)).toEqual([[["\\(P(A | B)\\)", "0.5"]]]);
++  });
++
++  it("skips a row of only tabs, and a markdown alignment row on either path", () => {
++    const html = render([
++      r(1, "table", "Table 1. T."),
++      r(1, "tabledata", "a\tb\n\t\n---\t:---:\nc\td"),
++      r(1, "tabledata", "e | f\n---|---\ng | h"),
++    ]);
++    expect(tables(html)).toEqual([[["a", "b"], ["c", "d"], ["e", "f"], ["g", "h"]]]);
++  });
++
++  it("keeps a printed dash as a cell", () => {
++    const html = render([r(1, "table", "Table 1. T."), r(1, "tabledata", "a\t-\t—")]);
++    expect(tables(html)).toEqual([[["a", "-", "—"]]]);
++  });
++
++  it("marks a tab-separated table the model could not read cleanly", () => {
++    const html = render([r(1, "table", "Table 1. T."), r(1, "tabledata", "⟦illegible⟧\t2", { uncertain: true })]);
++    expect(html).toContain('<table class="pdf-uncertain">');
++    expect(tables(html)).toEqual([[["⟦illegible⟧", "2"]]]);
++  });
++
++  it("gives a table the same block text, so the same id, whether its cells were split or not", () => {
++    /* A re-extraction that now splits a row the old renderer drew as one cell
++       changes the table's html, not its text: `extractText` puts a space at
++       each cell boundary and collapses whitespace, and the text is what an id
++       and the fingerprint are carried on. */
++    const before = splitIntoBlocks(
++      `<p>Before.</p><figure><figcaption>Table 2. T.</figcaption><table><tbody><tr><td>Octopods\tVH\tH</td></tr></tbody></table></figure>`,
++    );
++    const after = splitIntoBlocks(
++      render([r(1, "paragraph", "Before."), r(1, "table", "Table 2. T."), r(1, "tabledata", "Octopods\tVH\tH")]),
++    );
++    expect(after.blocks.map((b) => b.text)).toEqual(before.blocks.map((b) => b.text));
++    expect(after.blocks[1]?.html).toContain("<td>Octopods</td><td>VH</td><td>H</td>");
++  });
++
+   it("does not let an empty tabledata record drop or duplicate the rows after it", () => {
+     const html = render([
+       r(1, "table", "Table 1. T."),
+diff --git a/tests/pdf-tex.test.ts b/tests/pdf-tex.test.ts
+index bfe0cf6b3..d388362e8 100644
+--- a/tests/pdf-tex.test.ts
++++ b/tests/pdf-tex.test.ts
+@@ -207,6 +207,6 @@ describe("the prompt asks for TeX in the delimiters stage 1 draws", () => {
+   });
+ 
+   it("is named as a new version, so an article says which prompt read it", () => {
+-    expect(PROMPT_VERSION).toBe("pdf-v4");
++    expect(PROMPT_VERSION).toBe("pdf-v5");
+   });
+ });

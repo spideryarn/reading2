@@ -272,11 +272,16 @@ The differences that matter to a reader:
 - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
   table was a caption over nothing, though the cells were transcribed and scored all
-  along (report spya-pawfwx). Rows are split on newlines and cells on `|`, which is what
-  the model writes rather than anything the prompt promises, so a literal `|` in a cell
-  splits it. The cells are gated by the check like prose (`CHECKED` in
-  [`src/pdf.ts`](../../src/pdf.ts)), unlike footnotes. Forward-only: an article changes
-  on re-extraction, and its table blocks get new ids then —
+  along (report spya-pawfwx). Rows are split on newlines, and cells on tabs, which rule 7 of
+  the prompt has asked for since `pdf-v5` (2026-10-20). Before that the prompt named no
+  separator and the renderer split on the `|` the model mostly wrote; in a third of the PDFs
+  with tables the model wrote tabs or runs of spaces, and a row came out as one cell
+  (report spya-xn4597, [261020h](../plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md)).
+  A line with no tab is still split on `|`, for chunks read before `pdf-v5`. The cells are gated by
+  the check like prose (`CHECKED` in [`src/pdf.ts`](../../src/pdf.ts)), unlike footnotes.
+  Forward-only: an article changes on re-extraction. Splitting the same cells differently preserves
+  a table block's text and id, though the new model reading may change either for the ordinary
+  reasons any re-extraction can —
   [261001q](../plans/261001q-pdf-tables-and-composite-figures.md).
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in

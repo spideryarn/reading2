@@ -149,7 +149,7 @@ import { ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js"
  * constant only invalidates a cache if somebody remembers to bump it, and the
  * person who forgets is the person who just changed the prompt.
  */
-export const PROMPT_VERSION = "pdf-v4";
+export const PROMPT_VERSION = "pdf-v5";
 
 /* `MAX_PAGES` — the cost cap on how long a document may be — is imported from
    src/uploads.ts, where it lives beside `MAX_UPLOAD_BYTES`, the other half of
@@ -436,6 +436,15 @@ export function encodedBytes(rawBytes: number): number {
  * alone would have lost to it (F7). The check learned to read the TeX first
  * (src/pdf-score.ts § `mathsAsText`), or every maths chunk would have been
  * paid for twice. docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md.
+ *
+ * **Rule 7 names the cell separator since 2026-10-20 (`pdf-v5`): a tab.** It
+ * named none, and the renderer split on the `|` the model mostly wrote; a third
+ * of the PDFs with tables in production came back with tabs or runs of spaces
+ * instead, drawn one cell per row (report spya-xn4597). A tab rather than `|`
+ * because a PDF prints no tab, so the separator can never be the author's own
+ * character; and the rule says the tabs are structure, or rules 1 and 2 would
+ * forbid them. `tableRows` is the other half of the contract.
+ * docs/plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md.
  */
 export const SYSTEM = `You transcribe pages of a PDF into structured records, verbatim.
 
@@ -466,6 +475,12 @@ Rules, in order of importance:
 7. For a figure, emit ONE record of type "figure" whose text is the caption exactly as printed
    (empty string if there is none). For a table, emit a "table" record for the caption AND then
    record(s) of type "tabledata" carrying the cells as printed, reading across each row in turn.
+   In "tabledata" text, put ONE tab character between cells and a newline between rows; a record
+   may hold one row or several. These tabs and newlines are the table's structure, not copied text.
+   Write an empty cell as nothing between two tabs, including the blank corner above a column of
+   row labels, so that every row lines up with the columns printed above it. A cell whose text
+   wraps onto several lines is one cell, its lines joined by a space. Never separate cells with
+   spaces or "|", and never add rows that are not printed, such as markdown's "---".
 8. Emit only the schema's fields and enum values. No HTML, no markdown, no links, no styling. Write
    mathematical notation as LaTeX and everything else as plain text: inline notation — a symbol, a
    variable with a subscript, a formula within a sentence — between \\( and \\), and a displayed
@@ -1887,7 +1902,9 @@ export function mendSeamHyphens(
  * place, but `CHECKED` includes it: invented numbers and markup in visible cells
  * gate like prose. `tableOwners` says which table a run of cells belongs to; a
  * run with none is shown in a figure of its own rather than dropped. No prompt
- * change, so no cached chunk goes stale.
+ * change was needed when cells were first shown. Since `pdf-v5`, rule 7 names
+ * tabs as the cell separator; `promptFingerprint` therefore makes a later
+ * re-extraction re-read chunks cached under an older prompt.
  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
@@ -2169,30 +2186,65 @@ function tableOwners(
 }
 
 /**
- * One `tabledata` record as rows of cells: a row per line, a cell per `|`.
+ * One `tabledata` record as rows of cells: a row per line, cells split on tabs
+ * under `pdf-v5` and on `|` for older records.
  *
- * The prompt does not name a separator, and on the eval corpus the model writes
- * `a | b` unprompted, one row per record or several joined by newlines. A row
- * with no `|` is one cell. A leading `|` is kept as an empty first cell — that
- * is how a header row over the data columns comes out — and a row both opened
- * and closed by one is markdown's spelling and loses both. A line that is only
- * separators says nothing and is skipped.
+ * Before `pdf-v5` the prompt did not name a separator, and on the eval corpus
+ * the model wrote `a | b` unprompted, one row per record or several joined by
+ * newlines. A row with no `|` is one cell. A leading `|` is kept as an empty
+ * first cell — that is how a header row over the data columns comes out — and a
+ * row both opened and closed by one is markdown's spelling and loses both. A
+ * line that is only separators says nothing and is skipped.
+ *
+ * **Since `pdf-v5` the prompt names the separator: a tab** (rule 7), and a
+ * line with a tab in it is split on tabs, whatever else it holds — a `|` there
+ * is the author's, as in `\(P(A | B)\)`. A tab is the separator because a PDF
+ * prints no tab glyph, so a cell's own text cannot contain one; a bar it can.
+ * Until `pdf-v5` the prompt named none, and "the model writes `a | b`" was a
+ * habit taken for a contract: in production 44 of 421 `tabledata` records, in
+ * 4 of the 9 PDFs with tables, came back tab-separated and were drawn one cell
+ * per row (report spya-xn4597), and 318 came back with runs of spaces, which
+ * nothing after the fact can split. The `|` path stays for every chunk read
+ * before `pdf-v5`; no stored record mixes tab and bar separators.
+ *
+ * Splitting on tabs keeps an empty first or last cell — the blank corner over a
+ * row-label column is how the header row lines up — so the line is not trimmed
+ * of tabs first, only each cell of spaces. Dash-only cells are kept: `---` can
+ * be a printed missing-data marker, so the parser cannot safely distinguish it
+ * from a markdown alignment row the model invented. Rule 7 forbids the latter.
+ * docs/postmortems/261020a-a-table-parser-relied-on-a-separator-the-prompt-never-named.md.
  */
 function tableRows(text: string): string[][] {
   const rows: string[][] = [];
   for (const raw of text.split(/\r?\n/)) {
-    let line = raw.trim();
-    if (!line.replace(/\|/g, "").trim()) continue;
-    if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
-    rows.push(line.split("|").map((cell) => cell.trim()));
+    let cells: string[];
+    if (raw.includes("\t")) {
+      cells = raw.split("\t").map((cell) => cell.trim());
+    } else {
+      let line = raw.trim();
+      if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
+      cells = line.split("|").map((cell) => cell.trim());
+    }
+    if (cells.every((cell) => cell === "")) continue;
+    rows.push(cells);
   }
   return rows;
 }
 
-/** The cells as a `<table>`, every one escaped; nothing at all for no rows. */
+/**
+ * The cells as a `<table>`, every one escaped; nothing at all for no rows.
+ *
+ * The spaces between cells and rows are text nodes on purpose. The browser's
+ * `textContent` otherwise glues adjacent cells (`a` + `b` → `ab`), while the
+ * old one-cell rendering kept the tab or newline between them. Comments,
+ * cross-references and search marks resolve in that rendered-text space, so a
+ * structural repair must not silently move it.
+ */
 function tableHtml(rows: readonly string[][], uncertain: boolean): string {
   if (rows.length === 0) return "";
-  const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
+  const body = rows
+    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join(" ")}</tr>`)
+    .join(" ");
   return `<table${uncertain ? ' class="pdf-uncertain"' : ""}><tbody>${body}</tbody></table>`;
 }
 
