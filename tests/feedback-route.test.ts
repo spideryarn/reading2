@@ -40,6 +40,7 @@ const HOISTED = vi.hoisted(() => {
 });
 
 import { mintId } from "../src/ids.js";
+import { ADMIN_USER_ID_PROD } from "../src/admin.js";
 import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
@@ -62,6 +63,7 @@ import type {
   NewFeedbackDeferral,
   FeedbackAddendumSubmission,
   NewFeedbackAddendum,
+  QuestionReportsAcrossOwners,
 } from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -105,6 +107,9 @@ let deferralsSet: { input: NewFeedbackDeferral; owner: string }[] = [];
 /** The report ids each `linkedReports` asked about, and what it hands back. */
 let linkedAsked: { ids: readonly string[]; owner: string }[] = [];
 let linkedAnswer: LinkedFeedbackReport[] = [];
+/** The report ids each cross-owner `questionReportsAcrossOwners` asked about, and its answer (261020p). */
+let acrossAsked: (readonly string[])[] = [];
+let acrossAnswer: QuestionReportsAcrossOwners = { found: [], ambiguous: [] };
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -201,6 +206,14 @@ vi.mock("../src/store/index.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/store/index.js")>();
   return {
     ...actual,
+    /* Only the one cross-owner read the questions use (261020p); the rest stays real. */
+    adminStore: {
+      ...actual.adminStore,
+      questionReportsAcrossOwners: async (ids: readonly string[]) => {
+        acrossAsked.push(ids);
+        return acrossAnswer;
+      },
+    },
     feedbackStore: {
       submit: async (input: NewFeedback) => {
         submitted.push(input);
@@ -490,6 +503,8 @@ beforeEach(() => {
   newestAnswer = [];
   linkedAsked = [];
   linkedAnswer = [];
+  acrossAsked = [];
+  acrossAnswer = { found: [], ambiguous: [] };
   deferralsAnswer = [];
   deferralsSet = [];
   hooks.clear();
@@ -1024,6 +1039,94 @@ describe("questions for the admin, and replies to them", () => {
     expect(Object.keys(two[1] ?? {}).sort()).toEqual([
       "answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title",
     ]);
+  });
+
+  /* Plan 261020p (spya-y43ha0): a client that asks `questions=4` gets the
+     report whoever filed it, found across owners and marked whose it is, with
+     the address it was filed under for anyone else's. An id more than one
+     account holds resolves to none. Shape 3 keeps the owner-scoped lookup and
+     the four-key report, so a tab from before the deploy keeps working. */
+  it("sends shape 4 the report whoever filed it, marked whose, and shape 3 only the admin's own", async () => {
+    acrossAnswer = {
+      found: [
+        { id: "spya-wa1t00", ownerId: TEST_OWNER, reporterEmail: TEST_EMAIL, number: 212, firstLine: "Mine", body: "Mine." },
+        {
+          id: "spya-n0tm1n",
+          ownerId: "0000f5e1-0000-4000-8000-00000000beef",
+          reporterEmail: "reader@example.test",
+          number: 650,
+          firstLine: "Please build this",
+          body: "Please build this.",
+        },
+      ],
+      ambiguous: [],
+    };
+    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Mine", body: "Mine." }];
+    const four = ((await get(`${EARLIER}?questions=4`)).body as Sent).questions;
+    expect(acrossAsked).toEqual([["spya-wa1t00", "spya-n0tm1n"]]);
+    /* Shape 4 does not ask the owner-scoped store: own-first could show the admin's report under a reader's id. */
+    expect(linkedAsked).toEqual([]);
+    expect(four.map((one) => one.report)).toEqual([
+      { id: "spya-wa1t00", number: 212, firstLine: "Mine", body: "Mine.", whose: "yours", from: null },
+      null,
+      {
+        id: "spya-n0tm1n",
+        number: 650,
+        firstLine: "Please build this",
+        body: "Please build this.",
+        whose: "reader",
+        from: "reader@example.test",
+      },
+    ]);
+
+    const three = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
+    expect(acrossAsked).toHaveLength(1);
+    expect(three.map((one) => one.report)).toEqual([
+      { id: "spya-wa1t00", number: 212, firstLine: "Mine", body: "Mine." },
+      null,
+      null,
+    ]);
+  });
+
+  it("sends no report for an id more than one account holds, and says so in the log without the id", async () => {
+    acrossAnswer = { found: [], ambiguous: ["spya-n0tm1n"] };
+    let sent: Sent = { questions: [] };
+    const logged = await logLinesWhile(async () => {
+      sent = (await get(`${EARLIER}?questions=4`)).body as Sent;
+    });
+    expect(sent.questions.map((one) => one.report)).toEqual([null, null, null]);
+    const warned = logged.split("\n").filter((line) => line.includes("more than one account holds"));
+    expect(warned).toHaveLength(1);
+    expect(warned.join("\n")).not.toContain("spya-n0tm1n");
+  });
+
+  it("marks a unique report from another administrator as an admin's, not a reader's", async () => {
+    acrossAnswer = {
+      found: [{
+        id: "spya-n0tm1n",
+        ownerId: ADMIN_USER_ID_PROD,
+        reporterEmail: "other-admin@example.test",
+        number: 650,
+        firstLine: "An administrator's report",
+        body: "An administrator's report.",
+      }],
+      ambiguous: [],
+    };
+    const questions = ((await get(`${EARLIER}?questions=4`)).body as Sent).questions;
+    expect(questions.find((one) => one.id === "q-cccccc")?.report).toEqual({
+      id: "spya-n0tm1n",
+      number: 650,
+      firstLine: "An administrator's report",
+      body: "An administrator's report.",
+      whose: "admin",
+      from: "other-admin@example.test",
+    });
+  });
+
+  it("refuses shape 4 to somebody who is not an admin before any cross-owner read", async () => {
+    const reply = await get(`${EARLIER}?questions=4`, acceptSomebodyElse);
+    expect(reply.status).toBe(403);
+    expect(acrossAsked).toEqual([]);
   });
 
   it("sends at most five unacted replies a thread, the newest, and counts the rest (F12)", async () => {

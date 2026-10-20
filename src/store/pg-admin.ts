@@ -103,6 +103,7 @@ import type { AdminStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import {
   listFeedbackAcrossOwners,
+  questionReportsAcrossOwners,
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
   setFeedbackIgnoredAcrossOwners,
@@ -937,6 +938,7 @@ const rawPgAdminStore: AdminStore = {
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
   setFeedbackIgnoredAcrossOwners,
+  questionReportsAcrossOwners,
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */

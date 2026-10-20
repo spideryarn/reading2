@@ -316,10 +316,10 @@ describe("returning to Learn's Quiz from a Chat conversation", () => {
     );
   });
 
-  it("leaves `thread` alone on the way back to Recall, Tutorial or Explore, as before", () => {
+  it("leaves `thread` alone on the way back to Recall or Explore, as before", () => {
     /* Each of those bands overrules a stale thread itself and writes its own
        (ConversationModes.tsx § ConversationBand); only Quiz has no thread. */
-    for (const view of ["recall", "tutorial", "explore"] as const) {
+    for (const view of ["recall", "explore"] as const) {
       expect(returnToSubMode("learn", { learn: view })).toBeNull();
     }
     expect(returnToSubMode("learn", { learn: "quiz" })).toEqual(
@@ -348,12 +348,12 @@ describe("the metadata page's plain Learn link", () => {
   it("keeps the thread when the retained half is not Quiz, and for every other mode's link", () => {
     const recall = new URL(modeLinkHref(SLUG, `mode=chat&thread=${THREAD_ID}`, "learn"), "https://example.com");
     expect(recall.searchParams.get("thread")).toBe(THREAD_ID);
-    const tutorial = new URL(
-      modeLinkHref(SLUG, `mode=chat&learn=tutorial&thread=${THREAD_ID}`, "learn"),
+    const explore = new URL(
+      modeLinkHref(SLUG, `mode=chat&learn=explore&thread=${THREAD_ID}`, "learn"),
       "https://example.com",
     );
-    expect(tutorial.searchParams.get("thread")).toBe(THREAD_ID);
-    expect(tutorial.searchParams.get("learn")).toBe("tutorial");
+    expect(explore.searchParams.get("thread")).toBe(THREAD_ID);
+    expect(explore.searchParams.get("learn")).toBe("explore");
     const chat = new URL(
       modeLinkHref(SLUG, `mode=glossary&learn=quiz&thread=${THREAD_ID}`, "chat"),
       "https://example.com",

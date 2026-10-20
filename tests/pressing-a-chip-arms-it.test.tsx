@@ -10,7 +10,7 @@
  * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
  *  - Referee's six sub-mode chips, one of which arms and five of which must not;
- *  - Learn's Recall | Tutorial | Explore | Quiz toggle;
+ *  - Learn's Recall | Explore | Quiz toggle;
  *  - Summary's Brief | Fuller | Thread control, whose two lengths arm and whose
  *    **Thread** must not: the thread writes itself on arrival
  *    (tests/summary-thread-press.test.tsx), and a press that armed as well
@@ -199,7 +199,7 @@ describe("Referee's sub-mode chips", () => {
 
 /* ---------------------------------------------------- Learn's toggle -- */
 
-function mountLearnToggle(value: "recall" | "tutorial" | "explore" | "quiz"): void {
+function mountLearnToggle(value: "recall" | "explore" | "quiz"): void {
   act(() => {
     root.render(
       createElement(LearnSubModeToggle, { slug: SLUG, value, experimental: true, onChange: () => {} }),
@@ -214,7 +214,7 @@ function toggleButton(label: string): string {
   return `.learn-submode-btn:nth-of-type(${at + 1})`;
 }
 
-describe("Learn's Recall | Tutorial | Explore | Quiz toggle", () => {
+describe("Learn's Recall | Explore | Quiz toggle", () => {
   it("arms the quiz when Quiz is pressed", () => {
     mountLearnToggle("recall");
     expect(armed("quiz")).toBe(false);
@@ -233,25 +233,22 @@ describe("Learn's Recall | Tutorial | Explore | Quiz toggle", () => {
     expect(armed("quiz")).toBe(true);
   });
 
-  it("arms nothing for Recall, Tutorial or Explore, or for merely being in Quiz", () => {
+  it("arms nothing for Recall or Explore, or for merely being in Quiz", () => {
     mountLearnToggle("quiz");
     expect(armed("quiz")).toBe(false);
     mountLearnToggle("recall");
     click(toggleButton("Recall"));
-    expect(armed("quiz")).toBe(false);
-    mountLearnToggle("tutorial");
-    click(toggleButton("Tutorial"));
     expect(armed("quiz")).toBe(false);
     mountLearnToggle("explore");
     click(toggleButton("Explore"));
     expect(armed("quiz")).toBe(false);
   });
 
-  it("draws the four chips in order", () => {
+  it("draws the three chips in order", () => {
     mountLearnToggle("explore");
     const chips = [...host.querySelectorAll<HTMLElement>(".learn-submode-btn")];
-    expect(chips.map((b) => b.textContent?.trim())).toEqual(["Recall", "Tutorial", "Explore", "Quiz"]);
-    expect(chips.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true", "false"]);
+    expect(chips.map((b) => b.textContent?.trim())).toEqual(["Recall", "Explore", "Quiz"]);
+    expect(chips.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true", "false"]);
   });
 });
 

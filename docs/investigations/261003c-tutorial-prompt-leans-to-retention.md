@@ -23,7 +23,7 @@ them (CR-5); they had been left in a scratch directory.
 [prompting-guide.md § Measuring a prompt change](../project/prompting-guide.md#measuring-a-prompt-change).
 
 - **Production's own function**: `converse` with `kind: "tutorial"`, through
-  [`evals/remember-tutorial.ts`](../../evals/learn-tutorial.ts). Sonnet 5, our tools off.
+  [`evals/remember-tutorial.ts`](../../evals/learn-recall-turns.ts) (now `evals/learn-recall-turns.ts`). Sonnet 5, our tools off.
 - **Two articles, six scripted readers, five turns each.** The Noema fixture
   (`data/noema-mythology-of-conscious-ai`): `notRead`, `remembers`, `expert`, and a new `richRecall`.
   The Entropy article Greg was reading (Levin, *Self-Improvising Memory*; 77 blocks, copied
@@ -97,7 +97,7 @@ subsequently fixed two gaps in `quoteCheck`: it dropped ellipsis pieces shorter 
 (even an invented "not"), and it missed a phrase when a closing quotation mark included a comma or
 full stop. Those fixes do not rewrite these historical counts; rerunning the screen would be a new
 measurement. Regression tests are in
-[`tutorial-quote-screen.test.ts`](../../tests/tutorial-quote-screen.test.ts).
+[`tutorial-quote-screen.test.ts`](../../tests/recall-turns-quote-screen.test.ts) (since 2026-10-20, `recall-turns-quote-screen.test.ts`).
 
 **The quotation screen also over-counts.** It treats
 any quoted run of eight characters that occurs in some block as a quotation of the article, so a

@@ -545,8 +545,10 @@ What the report asked and when, what was done, what each option means, and what 
 - **The body is plain text, at most 6,000 characters, shown exactly as written with its line
   breaks.** No markdown is rendered, so no `**`, backticks or links. Write it to
   [ask-me-questions.md](../reusable/ask-me-questions.md): Greg should be able to answer "1A" without
-  opening anything else. When `report` is not one of his own reports, he sees no report beside it,
-  so the body has to stand alone.
+  opening anything else. When `report` is somebody else's, he sees it beside the question, shut and
+  marked as a reader's, with the address it came from (since 2026-10-20,
+  [feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
+  but the body should still say what they asked, and when, in a sentence: he may not open it.
 - **The short version first, then a line that is exactly `Details`, then the rest.**
 
   > just make sure that it explains really plainly, provides a bit more of the context of what

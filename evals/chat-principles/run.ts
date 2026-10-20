@@ -40,7 +40,7 @@ const RESULTS = path.join(import.meta.dirname, "results");
 export interface Case {
   readonly id: string;
   readonly dir: string;
-  readonly kind: Extract<ThreadKind, "chat" | "guide" | "explore" | "learn" | "tutorial">;
+  readonly kind: Extract<ThreadKind, "chat" | "guide" | "explore" | "learn">;
   readonly about: string | null;
   readonly why: string | null;
   /** Earlier turns, reader first. */
@@ -171,14 +171,16 @@ export const CASES: readonly Case[] = [
     aim: "Learn (the reader recalls what they took from it), with a recollection that overstates the piece: is it corrected honestly and kindly, and sent back to the passage, without a lecture?",
   },
   {
+    /* Tutorial's case until Recall took Tutorial in (2026-10-20, plan
+       261020m); the id is kept so older results line up. */
     id: "tutorial-cold",
     dir: AGENTS,
-    kind: "tutorial",
+    kind: "learn",
     about: null,
     why: null,
     history: [],
     question: "I haven't read it yet. Can we start?",
-    aim: "Tutorial (short teaching turns) with a reader who has not read it: is the first step easy to follow cold, and does it leave them something they can do?",
+    aim: "Recall with a reader who has not read it (what Tutorial was for): is the first step easy to follow cold, and does it leave them something they can do?",
   },
 ];
 
@@ -367,7 +369,7 @@ function sourceSha256(): Record<string, string> {
 /** The exact assembled system-prompt bytes each evaluated kind receives. */
 function systemSha256(): Record<Case["kind"], string> {
   const { meta, blocks } = load(SETH);
-  const kinds: readonly Case["kind"][] = ["chat", "guide", "explore", "learn", "tutorial"];
+  const kinds: readonly Case["kind"][] = ["chat", "guide", "explore", "learn"];
   return Object.fromEntries(
     kinds.map((kind) => {
       const system = String(

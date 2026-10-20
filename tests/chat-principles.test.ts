@@ -21,7 +21,6 @@ import { THREAD_KINDS, type Block, type ChatMessage, type Meta, type ThreadKind 
 const COVERAGE: Record<ThreadKind, "carries" | { exempt: string }> = {
   chat: "carries",
   learn: "carries",
-  tutorial: "carries",
   explore: "carries",
   guide: "carries",
   candidates: {

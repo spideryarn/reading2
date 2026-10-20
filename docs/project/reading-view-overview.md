@@ -259,12 +259,13 @@ right instead, beside a band or without one.
 - **[learn-mode.md](learn-mode.md)** — the other direction: the reader says what they took from
   the piece and the model shows them where it comes apart, then nudges them to remember more. One
   adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
-  not to ship the first one, and the one mode that cannot be used to avoid reading.
+  not to ship the first one, and since Recall took Tutorial in (2026-10-20), a reader who has not
+  read it started from zero and sent into each cited passage rather than told the piece instead.
 - **[quiz.md](quiz.md)** — the other half of Learn, where the questions come the other way: a
   dozen short-answer questions cached per article, easy ones first and central ones within that, and
   a marker told outright that the article outranks its own reference answer.
-- **[learning-vision.md](learning-vision.md)** — where Learn is going: Recall, Tutorial and
-  Quiz as three directions of one exchange, Explore as the one about the reader's own thinking, what
+- **[learning-vision.md](learning-vision.md)** — where Learn is going: Recall (which took
+  Tutorial in on 2026-10-20) and Quiz as two directions of one exchange, Explore as the one about the reader's own thinking, what
   they share (brief, block links, hints that make success likely), and the ideas not built yet. Read
   it before adding a fifth.
 

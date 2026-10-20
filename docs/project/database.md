@@ -642,6 +642,12 @@ on 2026-09-30 a session that reached for it lost the lookup. The Overseer's note
 say the bucket can be read with `GET /storage/v1/object/info/sources/sha256/<hash>.<ext>`, a made-up
 hash answering 400 as the control; that has not been re-checked since.
 
+**The Supabase MCP tool (`mcp__supabase__*`) is not production on the box.** It reaches the local
+stack (`get_project_url` answers `http://127.0.0.1:54361`), whose tables look like production's and
+hold plausible rows. On 2026-10-20 a session quoted its counts as production's in a plan and a
+commit message before noticing ([261020m](../plans/261020m-recall-and-tutorial-become-one-recall.md)).
+Check `get_project_url` before trusting it for anything you will call production.
+
 **Reading non-sensitive production data needs no asking.** Greg, 2026-10-07: *"you always have
 permission to read non-sensitive data on production"* — a row's status, counts, timestamps; not
 prose, notes, email bodies or anything a reader wrote. Always inside `begin read only`.

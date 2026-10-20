@@ -1977,13 +1977,13 @@ describe("the Earlier tab", () => {
   /* docs/plans/261007d-…: for an admin the tab says what became of each report,
      numbers them, and carries the note's one-line comment. Reshaped by
      docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
-     the read asks for threads (`questions=3`), an admin's dialog reads Needs a
+     the read asks for threads (`questions=4`, since 261020p), an admin's dialog reads Needs a
      decision as soon as it opens, and Earlier opens there when a thread waits. */
   describe("for an admin", () => {
     const ADMIN_PATH = "/api/admin/feedback/earlier";
-    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010h). */
+    /** The admin route for one filter, as the client asks it: `show` first, then `questions=4` (F3, 261010h, 261020p). */
     const url = (which?: string) =>
-      which === undefined ? `${ADMIN_PATH}?questions=3` : `${ADMIN_PATH}?show=${which}&questions=3`;
+      which === undefined ? `${ADMIN_PATH}?questions=4` : `${ADMIN_PATH}?show=${which}&questions=4`;
     const ALL_URL = url();
     const WAITING_URL = url("waiting");
     const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
@@ -2617,13 +2617,13 @@ describe("the Earlier tab", () => {
     describe("questions an agent has asked", () => {
       const ANSWERS_PATH = "/api/admin/feedback/answers";
       const DEFERRALS_PATH = "/api/admin/feedback/deferrals";
-      /** A question as the server sends it when asked `questions=3` (src/types.ts § AdminFeedbackQuestion). */
+      /** A question as the server sends it when asked `questions=4` (src/types.ts § AdminFeedbackQuestion). */
       const Q1 = {
         id: "q-aaaaaa",
         title: "One switch or two?",
         body: "Background first.\n\nA. One <b>switch</b>.\nB. Two.",
         asked: "2026-10-05",
-        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both." },
+        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both.", whose: "yours", from: null as string | null },
         answers: [] as unknown[],
         olderAnswers: 0,
         actedAnswers: [] as unknown[],
@@ -3341,12 +3341,15 @@ describe("the Earlier tab", () => {
         });
 
         it("reads a server from before 261010h, whose threads have no acted replies", async () => {
-          const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
+          const oldReport = (({ whose: _whose, from: _from, ...report }) => report)(Q1.report);
+          const { actedAnswers: _a, olderActedAnswers: _o, ...currentV2 } = Q1;
+          const v2 = { ...currentV2, report: oldReport };
           const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
           await openWaiting({ ...ADMIN_REPORTS, questions: [v2, v2b] }, { ...WAITING, questions: [v2, v2b] });
           expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
           expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
           click(row("q-aaaaaa"));
+          expect(thread().querySelector('details[data-whose="yours"] summary')?.textContent).toBe("Your report #214");
           expect(thread().querySelector('[data-acted="true"]')).toBeNull();
           expect(thread().querySelector(".fb-earlier-meta")?.textContent).not.toContain("again");
         });
@@ -3356,6 +3359,54 @@ describe("the Earlier tab", () => {
           await openWaiting({ ...ADMIN_REPORTS, questions: [both, Q2] }, { ...WAITING, questions: [both, Q2] });
           expect(panelOf("Earlier").textContent).toContain("[fb-list]");
         });
+      });
+
+      /* **Another reader's report, marked as theirs** (spya-y43ha0, 261020p):
+         Greg, "it should be highlighted clearly as such". In the contents and
+         the thread, before its number, and on its shut text with the address
+         it was filed under. Its words are text, never markup. */
+      it("marks a reader's report as theirs in the contents and the thread, with their address, as text", async () => {
+        const theirs = {
+          ...Q1,
+          report: {
+            id: "spya-r3d4e5",
+            number: 650,
+            firstLine: "Please build this",
+            body: "Please build <b>this</b>.",
+            whose: "reader",
+            from: "reader@example.invalid",
+          },
+        };
+        await openWaiting({ ...ADMIN_REPORTS, questions: [theirs, Q2] }, { ...WAITING, questions: [theirs, Q2] });
+        expect(row("q-aaaaaa").querySelector(".fb-question-whose")?.textContent?.trim()).toBe("a reader's");
+        expect(row("q-aaaaaa").textContent).toContain("#650");
+        expect(row("q-bbbbbb").querySelector(".fb-question-whose")).toBeNull();
+        click(row("q-aaaaaa"));
+        const shut = thread().querySelector<HTMLElement>('details.fb-question-more[data-whose="reader"]');
+        expect(shut?.querySelector("summary")?.textContent).toBe("A reader's report #650 · from reader@example.invalid");
+        expect(shut?.querySelector(".fb-earlier-body")?.textContent).toBe("Please build <b>this</b>.");
+        expect(shut?.querySelector("b")).toBeNull();
+        expect(thread().textContent).not.toContain("Your report");
+      });
+
+      it("says another admin's report is another admin's, and your own is yours", async () => {
+        const other = { ...Q1, report: { ...Q1.report, whose: "admin", from: "colleague@example.invalid" } };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [other, Q2] }, { ...WAITING, questions: [other, Q2] });
+        expect(thread().querySelector(".fb-question-whose")?.textContent?.trim()).toBe("another admin's");
+        expect(thread().querySelector('details[data-whose="admin"] summary')?.textContent).toBe(
+          "Another admin's report #214 · from colleague@example.invalid",
+        );
+      });
+
+      /* A server from before 261020p answers `questions=4` in shape 3: the
+         same keys, and a report without `whose`, which only ever was the
+         admin's own. */
+      it("reads an older server's shape-3 report as your own", async () => {
+        const v3 = { ...Q1, report: (({ whose: _w, from: _f, ...rest }) => rest)(Q1.report) };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [v3, Q2] }, { ...WAITING, questions: [v3, Q2] });
+        expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+        expect(thread().querySelector('details[data-whose="yours"] summary')?.textContent).toBe("Your report #214");
+        expect(thread().querySelector(".fb-question-whose")).toBeNull();
       });
 
       /* F3, the other direction: a server from before 261008i ignores
@@ -4089,6 +4140,12 @@ describe("the Earlier tab", () => {
         ["a date that is not one", { ...WAITING, questions: [{ ...Q1, asked: "last week" }] }],
         ["a linked report without a number", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", firstLine: "x", body: "x" } }] }],
         ["a linked report with no body key", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", number: 214, firstLine: "x" } }] }],
+        /* 261020p: whose it is, and an address exactly when it is not yours. */
+        ["a report whose it does not know", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, whose: "stranger", from: "r@example.invalid" } }] }],
+        ["a reader's report with no address", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, whose: "reader", from: null } }] }],
+        ["your own report with an address", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, from: "greg@example.invalid" } }] }],
+        ["a report with whose and no from", { ...WAITING, questions: [{ ...Q1, report: (({ from: _f, ...rest }) => rest)(Q1.report) }] }],
+        ["a report with a field more", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, environment: "production" } }] }],
         ["a reply that is not text", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: 7, createdAt: "2026-10-06T18:30:00.000Z" }] }] }],
         ["a reply with no time", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: "x", createdAt: "soon" }] }] }],
         ["a reply with a field more", { ...WAITING, questions: [{ ...Q1, answers: [{ ...REPLIED, environment: "production" }] }] }],

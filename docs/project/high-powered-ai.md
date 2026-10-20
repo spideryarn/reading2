@@ -14,8 +14,9 @@ the article is added).
 
 **One switch per article — on `/metadata`, or a tick box while the article is added — that moves most of that article's capable-tier calls from
 Claude Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argument that takes several
-readings — the stronger model writes the structure, gists, quotes, FAQ answers and chat replies.
-Simple's plain-words summaries are the exception: they use Opus for every article. So is
+readings — the stronger model writes the structure, gists, quotes and FAQ answers.
+Simple's plain-words summaries are the exception: they use Opus for every article. So, since
+2026-10-20, is chat ([261020q](../plans/261020q-chat-defaults-to-opus.md)). So is
 *Dig deeper*, whose answers are Opus's on every article.
 Opus 5.5's input and output token prices are twice Sonnet 5.5's (the same as Sonnet 5's); the dated prices and measurement live
 in [the plan](../plans/260930f-high-powered-ai-per-article.md#what-this-is-in-one-paragraph). Greg,
@@ -97,7 +98,7 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
   (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
-  skim, debate, bibliography) and the calls made while you read it (chat; explain — a comment's
+  skim, debate, bibliography) and the calls made while you read it (chat's model-calling tools; explain — a comment's
   first answer and *Try again*, and the glossary's *Look up* box; search; quiz marking; referee;
   Bibliography's stand-alone *Look it up*; live conversation's search tool). A *Dig deeper* press does
   not move with it — the next point.
@@ -108,6 +109,16 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
   does not change it. Sonnet borrowed a paper's name for one thing to name another where Opus did
   not, at about $0.05 a press more: `ALWAYS_HIGH_POWER` in `src/models.ts`,
   [261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
+- **Chat is on Opus for every article**, so the switch does not change its answers: every thread
+  kind that bills as `chat` — chat, Learn, the tutorial, Explore, the guide. Greg, 2026-10-19:
+
+  > Default to Opus 5.5 for Chats
+
+  `ALWAYS_HIGH_POWER` in `src/models.ts`, applied by `defaultModel` in `src/converse.ts`. Two
+  things still follow the switch: Candidates, the editor's referee conversation, which is its own
+  job; and the tools a chat calls that themselves call a model. About twice Sonnet's price for the
+  answer call, paid by us, not from the reader's allowance
+  ([261020q](../plans/261020q-chat-defaults-to-opus.md) § Cost).
 - ***Dig deeper* is always on Opus, and is not charged as the switch is.** The glossary's, a
   comment's and Bibliography's *Dig deeper* send `DIG_DEEPER_MODEL`
   ([`src/dig-deeper.ts`](../../src/dig-deeper.ts)) directly, switch on or off — for Citations that
@@ -136,7 +147,7 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
 | | |
 |---|---|
 | The setting | `articles.high_power_since timestamptz null` — null is off. Written by `PUT /api/article/:slug/high-power` (`{ on: boolean }`), scoped to the caller's **own** article. A reader's switch-on goes through `chargeAndSwitchOnHighPower` ([`src/billing/admission.ts`](../../src/billing/admission.ts)): the charge row and the column commit in one transaction. The administrator's switch goes through the admin-checked, uncharged `highPowerStore.switchOnForAdmin`; every switch-off goes through the off-only `highPowerStore.switchOff`. Each real transition, on or off, also stamps `articles.updated_at` — switching off nulls `high_power_since`, so that is the only record of when; a repeat of the state it is already in moves neither |
-| Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts) reads whether the column is set; `powerFor` then applies the one task exception, Simple. Until 2026-09-30 the column also required an administrator owner, because nothing charged a reader. Now the only writer that sets it for a reader charges in the same transaction |
+| Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts) reads whether the column is set; `powerFor` then applies the task exceptions, `ALWAYS_HIGH_POWER` (Simple, chat, Hidden text's check). Until 2026-09-30 the column also required an administrator owner, because nothing charged a reader. Now the only writer that sets it for a reader charges in the same transaction |
 | Which model | The model's two spellings, the stored name and the wire address, are `HIGH_POWER_MODEL` and `HIGH_POWER_MODEL_OPENROUTER` in [`src/high-power-model.ts`](../../src/high-power-model.ts), a leaf so `src/ai-call.ts` can use `isHighPowerModel` without an import cycle; `src/models.ts` re-exports and explains them. `powerFor(task, articlePower)` selects the effective power where a task has a policy exception; `modelFor(task, power)` / `resolveModel(task, power)` resolve that selection. `power` is a **required** argument all the way down (`StepContext.power`, `streamMessage`'s options, every request-path stream), so a call that forgets to decide does not compile. Chosen over an `AsyncLocalStorage` scope because its failure is silent and it loses context across a streamed response |
 | Freshness | `generationKey` / `sameGenerator`: the stamp comparison and the two citation fingerprints treat Sonnet and Opus as one generation. Checkpoint keys (labels batches, the whole-document call, deepening) stay exact, because there the question is *which model paid for this answer* |
 

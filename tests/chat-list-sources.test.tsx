@@ -38,7 +38,6 @@ function thread(id: string, kind: ThreadKind, over: Partial<ChatThread> = {}): C
 
 const CHAT = thread("spya-chat21", "chat");
 const LEARN = thread("spya-rem021", "learn");
-const TUTORIAL = thread("spya-tut022", "tutorial");
 const EXPLORE = thread("spya-exp022", "explore");
 const CLAIM = thread("spya-clm023", "chat", {
   origin: { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" },
@@ -46,7 +45,7 @@ const CLAIM = thread("spya-clm023", "chat", {
 const PASSAGE = thread("spya-psg024", "chat", {
   anchor: { blockId: "spya-cccccc", quote: "the felt quality", start: 4 },
 });
-const EVERY = [CHAT, LEARN, TUTORIAL, EXPLORE, CLAIM, PASSAGE];
+const EVERY = [CHAT, LEARN, EXPLORE, CLAIM, PASSAGE];
 
 const opened: string[] = [];
 const wentToLearn: [string, string][] = [];
@@ -142,7 +141,7 @@ const press = (el: Element | null | undefined): void => {
 describe("a row's source icon", () => {
   it("wears the source's glyph: Brain for Learn, Sources' book for a claim and Pilcrow for a passage", () => {
     paint(EVERY);
-    for (const t of [LEARN, TUTORIAL, EXPLORE]) {
+    for (const t of [LEARN, EXPLORE]) {
       expect(mark(t)?.querySelector("svg.lucide-brain"), t.id).not.toBeNull();
     }
     expect(mark(CLAIM)?.querySelector("svg.lucide-book-text")).not.toBeNull();
@@ -154,7 +153,6 @@ describe("a row's source icon", () => {
     expect(rows()).toHaveLength(EVERY.length);
     expect(mark(CHAT)).toBeNull();
     expect(mark(LEARN)?.getAttribute("aria-label")).toBe("From Learn › Recall");
-    expect(mark(TUTORIAL)?.getAttribute("aria-label")).toBe("From Learn › Tutorial");
     expect(mark(EXPLORE)?.getAttribute("aria-label")).toBe("From Learn › Explore");
     expect(mark(CLAIM)?.getAttribute("aria-label")).toBe("Started from a claim in Sources › Claims");
     expect(mark(PASSAGE)?.getAttribute("aria-label")).toBe("About a passage");
@@ -210,10 +208,9 @@ describe("pressing a row", () => {
 
   it("goes to Learn, on its sub-mode, for a Learn row, and never opens it here", () => {
     paint(EVERY);
-    for (const t of [LEARN, TUTORIAL, EXPLORE]) press(row(t).querySelector(".chat-thread-open"));
+    for (const t of [LEARN, EXPLORE]) press(row(t).querySelector(".chat-thread-open"));
     expect(wentToLearn).toEqual([
       ["recall", LEARN.id],
-      ["tutorial", TUTORIAL.id],
       ["explore", EXPLORE.id],
     ]);
     expect(opened).toEqual([]);
@@ -231,13 +228,12 @@ describe("a Learn row", () => {
   it("is named for its sub-mode, not for the first sixty characters said in it", () => {
     paint(EVERY);
     expect(row(LEARN).querySelector(".chat-thread-title")?.textContent).toBe("Recall");
-    expect(row(TUTORIAL).querySelector(".chat-thread-title")?.textContent).toBe("Tutorial");
     expect(row(EXPLORE).querySelector(".chat-thread-title")?.textContent).toBe("Explore");
   });
 
   it("has no rename and no delete; a chat's row keeps both", () => {
     paint(EVERY);
-    for (const t of [LEARN, TUTORIAL, EXPLORE]) {
+    for (const t of [LEARN, EXPLORE]) {
       expect(row(t).querySelector('button[data-tip="Rename this conversation"]'), `${t.id} rename`).toBeNull();
       expect(row(t).querySelector('button[data-tip="Delete this conversation"]'), `${t.id} delete`).toBeNull();
     }
@@ -257,14 +253,14 @@ describe("the filter above the list", () => {
   it("is not drawn when every conversation is from one source", () => {
     paint([CHAT]);
     expect(host.querySelector(".chat-from")).toBeNull();
-    paint([LEARN, TUTORIAL]);
+    paint([LEARN, EXPLORE]);
     expect(host.querySelector(".chat-from")).toBeNull();
   });
 
-  it("offers All, Chats, then one choice per other source present, with Learn's three as one", () => {
+  it("offers All, Chats, then one choice per other source present, with Learn's two as one", () => {
     paint(EVERY);
     expect(words()).toEqual(["All", "Chats", "Sources", "Learn", "About a passage"]);
-    paint([CHAT, TUTORIAL, EXPLORE]);
+    paint([CHAT, EXPLORE]);
     expect(words()).toEqual(["All", "Chats", "Learn"]);
     paint([LEARN, CLAIM]);
     expect(words()).toEqual(["All", "Sources", "Learn"]);
@@ -287,7 +283,7 @@ describe("the filter above the list", () => {
 
   it("narrows the rows to the chosen source", () => {
     paint(EVERY, { from: "learn" });
-    expect(rows().map((r) => r.dataset.thread).sort()).toEqual([LEARN.id, TUTORIAL.id, EXPLORE.id].sort());
+    expect(rows().map((r) => r.dataset.thread).sort()).toEqual([LEARN.id, EXPLORE.id].sort());
     expect(choices().find((b) => b.getAttribute("aria-pressed") === "true")?.textContent).toBe("Learn");
     paint(EVERY, { from: "chats" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([CHAT.id]);
@@ -312,7 +308,7 @@ describe("the filter above the list", () => {
 
 describe("an article whose only conversations are Learn's", () => {
   it("shows their rows, with the box and the button to start a chat", () => {
-    paint([LEARN, TUTORIAL]);
+    paint([LEARN, EXPLORE]);
     expect(rows()).toHaveLength(2);
     expect(host.querySelector("textarea.chat-input")).not.toBeNull();
     expect(host.querySelector('button[data-tip="Start a new conversation"]')).not.toBeNull();

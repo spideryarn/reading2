@@ -439,13 +439,14 @@ owner, its relation words and short notes are made when the column is first show
 >
 > — Greg, 2026-10-11 (spya-jm0nfg)
 
-"Main mode" was read as *shown to everybody*, not as a mode of its own: it is still Learn's fourth
+"Main mode" was read as *shown to everybody*, not as a mode of its own: it stayed Learn's fourth
 chip, between Tutorial and Quiz, now with the switch off too, and in the band's (i) and the command
-bar. Learn stays owners-only, so visitors see nothing new, and nothing is generated or paid for
-until the reader sends a message. Tutorial's prompt, which had pointed a reader's own line of
-thought at Chat only because Explore was hidden, now points at Explore
-([learn-mode.md](learn-mode.md)). `visibleLearnViews` stays, returning all four, as the one place a
-new Learn part would be gated.
+bar. (It is the third, between Recall and Quiz, since Tutorial was folded into Recall on
+2026-10-20.) Learn stays owners-only, so visitors see nothing new, and nothing is generated or paid
+for until the reader sends a message. Tutorial's prompt, which had pointed a reader's own line of
+thought at Chat only because Explore was hidden, then pointed at Explore, and Recall's does since it
+took Tutorial in ([learn-mode.md](learn-mode.md)). `visibleLearnViews` stays, returning all of
+Learn's parts, as the one place a new Learn part would be gated.
 [261011p](../plans/261011p-learn-explore-out-of-the-experimental-switch.md).
 
 **Remember left the table on 2026-10-05, without its Explore part.** Greg:

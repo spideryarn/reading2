@@ -2862,17 +2862,23 @@ describe("the admin gate", () => {
       expect((await call("GET", "/api/admin/feedback?from=everyone")).status).toBe(200);
       expect(list).toHaveBeenNthCalledWith(2, ADMIN_FEEDBACK_DEFAULT_LIMIT, null, "everyone");
 
-      for (const bad of ["", "admins", "Readers", "readers,everyone"]) {
+      /* Admins only (`spya-kmqd7n`, 261020p). */
+      expect((await call("GET", "/api/admin/feedback?from=admins")).status).toBe(200);
+      expect(list).toHaveBeenNthCalledWith(3, ADMIN_FEEDBACK_DEFAULT_LIMIT, null, "admins");
+
+      for (const bad of ["", "admin", "Readers", "readers,everyone"]) {
         const r = await call("GET", `/api/admin/feedback?from=${encodeURIComponent(bad)}`);
         expect(r.status, bad).toBe(400);
       }
       /* Malformed values are refused before any cross-owner read. */
-      expect(list).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenCalledTimes(3);
 
-      const refused = await call("GET", "/api/admin/feedback?from=readers", undefined, asSomebodyElse);
-      expect(refused.status).toBe(403);
-      expect(refused.body).not.toHaveProperty("reports");
-      expect(list).toHaveBeenCalledTimes(2);
+      for (const from of ["readers", "admins"]) {
+        const refused = await call("GET", `/api/admin/feedback?from=${from}`, undefined, asSomebodyElse);
+        expect(refused.status, from).toBe(403);
+        expect(refused.body).not.toHaveProperty("reports");
+      }
+      expect(list).toHaveBeenCalledTimes(3);
     } finally {
       list.mockRestore();
     }

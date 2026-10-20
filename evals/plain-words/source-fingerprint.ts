@@ -27,6 +27,7 @@ const SRC = path.join(import.meta.dirname, "..", "..", "src");
 /** Modules under `src/` whose text ends up in more than one generator's prompt. */
 const SHARED_PROMPT_SOURCES: ReadonlySet<string> = new Set([
   "plain-words.ts",
+  "chat-principles.ts",
   "paperwork.ts",
   "article-prompt.ts",
   "profile.ts",
