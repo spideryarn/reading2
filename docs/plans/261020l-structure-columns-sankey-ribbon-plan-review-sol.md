@@ -1,0 +1,25 @@
+# Plan review: Structure columns Sankey ribbon
+
+1. **High — The geometry contract does not identify enough rects, and an unscoped query will silently read the hidden measuring copy.** The proposed three reads cannot put the right end on the bracket: `.struct-of` and `.struct-col` begin after `.struct-inner`’s border and padding. Specify scoped selectors for the visible A row, visible B side, direct `.struct-of`, and direct `.struct-col`. Use `rowRect.right` and `innerRect.left`, subtract the grid’s origin from every coordinate, and reject absent, zero-height, non-finite, reversed, or out-of-grid geometry. The list rect should include visible elision counters.
+
+2. **High — The existing ResizeObserver on the grid is not a complete remeasurement strategy.** A font swap or wrapping change can alter the marked row, B header, or list while the fixed-height grid and stretched sides retain the same size. Observe the actual visible row, header, and list as well as the grid; subscribe through `onFontsChanged`; and remeasure after current-part/current-section and capacity-window changes. Add `onFontsChanged` to the capacity measurement too, or the ribbon may update around a stale row window.
+
+3. **High — The plan needs an explicit no-oscillation rule.** `structureProjection` creates fresh row arrays on render. An effect depending on them that unconditionally stores a new geometry object will render indefinitely. Require an equality guard before `setRibbon`, as the capacity effect already has, or use stable semantic dependencies with endpoint observers. Keep the SVG out of flow and change only border colour, never border dimensions.
+
+4. **Medium — The transparent-border hand-off is reasonable, but its atomic CSS and paint contract is underspecified.** A presence hook such as `data-ribbon` on the grid is the cleanest approach because a transparent 2px border preserves layout. Scope it to the visible direct B side. Draw the replacement edge separately at full `--rule-strong`; partial opacity should affect only the band fill. Remove the path and hook together whenever geometry becomes invalid, and ensure the orange thumb paints above the grey edge.
+
+5. **Medium — The 2rem gutter omits its most concrete product consequence and lacks visual comparison.** It produces a 625px minimum, 721px ideal, and switches at 1181px with the rail or 1169px without. That is one pixel beyond the 1180px 11-inch iPad landscape width, changing that device from columns to the list. Compare matched 1rem, 1.5rem, and 2rem screenshots first; 1.5rem provides 24px of curve while retaining that iPad layout. If 2rem wins, state the iPad loss explicitly.
+
+   Update every live numerical copy: `docs/project/structure.md`, `docs/project/narrow-windows.md` including its iPad sentence, the 609px CSS comment, and all literal expectations and comments in `tests/structure-band-width.test.ts`, including alternate root sizes. Leave historical plans unchanged.
+
+6. **Medium — The colour proposal does not fully protect the “one wash” rule.** `--rule-strong` is the right theme-aware source, but use partial opacity only for the fill. Stop the shape at the outside edges of both columns so it never overlays the orange row wash, and keep the orange thumb above the full-opacity replacement edge. Choose the alpha from matched light/dark screenshots; equal alpha does not imply equal visual weight across themes.
+
+7. **Medium — The tests assign too much proof to jsdom.** Put rect-to-geometry and path construction in a pure helper. In the component test, give hidden measuring rows deliberately conflicting rects, use a triggerable ResizeObserver mock, and assert redraw after endpoint changes, a part-boundary crossing, and a capacity/window change. Also assert clearing between parts and for an undivided part.
+
+   jsdom cannot prove CSS grid placement, wrapping, font metrics, stacking, clipping, theme contrast, the breakpoint, or absence of a ResizeObserver feedback loop. In real Chrome, compare SVG endpoints with live visible rects after fonts settle; then resize, cross a boundary, change head height, wrap B’s header, check both themes and the orange thumb, and exercise the 1,119-section case.
+
+8. **Low — Accessibility requirements should be explicit.** Preserve the textual header and labelled lists as the semantic explanation. The decorative SVG should be `aria-hidden="true"`, `focusable="false"`, and `pointer-events: none`, with no live announcements as it moves. Test that it contributes no duplicate text or focus target.
+
+9. **Low — SVG is justified, but the width change can be separated.** A CSS line or arrow is simpler but does not express “this row becomes all these rows,” so it does not fully meet the Sankey request. The smaller useful scope is to build the measured ribbon at the current or 1.5rem gutter, take the requested after screenshots, and widen only if the curve demonstrably fails to read.
+
+Verdict: Revise before implementation—the SVG direction is sound, but rect scoping, remeasurement and loop prevention, browser proof, and the 11-inch-iPad gutter trade-off need settling first.

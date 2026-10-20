@@ -399,7 +399,9 @@ This is the plumbing it needs, and Chat got it first.
 ```
 reader_notes()                    → the reader's comments, highlights and bookmarks on this
                                     article, then a list of their other conversations about it
-reader_notes({ thread: "<id>" })  → one of those conversations
+reader_notes({ thread: "<id>" })  → one of those conversations, newest exchanges first into the space
+reader_notes({ thread: "<id>", before: n })
+                                  → the exchanges of it numbered below n
 ```
 
 The formatting is [`src/reader-notes.ts`](../../src/reader-notes.ts): pure functions with no store
@@ -434,9 +436,16 @@ reads and what to say when one fails.
 - **A direct read obeys the same rule as the index.** Naming a Candidates thread's id gets the
   sentence an unknown id gets, word for word. The current thread's id gets its own sentence. None
   of them throws.
-- **One conversation is its finished exchanges, as whole pairs.** The newest
-  `MAX_TRANSCRIPT_EXCHANGES` (10) that fit `TRANSCRIPT_CHARS` (8,000) including headings and
-  fence, each turn clipped to `TRANSCRIPT_TURN_CHARS` (700) and carrying its time, shown oldest first.
+- **One conversation is its finished exchanges, as whole pairs, and all of it can be read.** The
+  newest `MAX_TRANSCRIPT_EXCHANGES` (40) that fit `TRANSCRIPT_CHARS` (32,000) including headings
+  and fence, each turn shown whole up to `TRANSCRIPT_TURN_CHARS` (6,000), numbered from 1 for the
+  oldest, carrying its time, shown oldest first. A call that does not reach exchange 1 says so and
+  names the call for the rest, `reader_notes({ thread, before: n })`, which shows the exchanges
+  numbered below `n`. Until 2026-10-20 it was 10 exchanges, 700 characters a turn and 8,000 in all,
+  with no way to the earlier part: 79% of Chat answers on production were longer than 700, and an
+  Explore model asked to pick up from a Recall conversation told the reader it could not read all
+  of it (`spya-sfpcmm`, plan
+  [261020k](../plans/261020k-reading-another-conversation-in-full.md)).
 - **An unfinished turn is never shown as a finished one** (PR-4). A failed answer keeps its partial
   prose in storage, and an interrupted spoken one keeps words nobody heard. So failed, pending and
   interrupted exchanges are left out and counted in a sentence. An answer the reader stopped, or one
@@ -490,6 +499,10 @@ query and fragment, which bounds how much can leave in one request; a short note
 on bulk, and a single note can still leave. The tool's description tells the model never to put
 what it read in a search or a URL, which is advice to a model and not a boundary. The fix is the
 same allowlist as before ([§ Still open](#still-open)), and this is one more thing waiting on it.
+**Since 2026-10-20 there is more to take**: one call shows up to 32,000 characters of a
+conversation rather than 8,000, and `before` reaches its oldest exchanges, which were unreachable
+before ([261020k](../plans/261020k-reading-another-conversation-in-full.md)). The owner boundary
+and the URL caps are unchanged; what an injected model can see, and how far back, is not.
 
 **And since 2026-10-08 part of it is in the prompt without a call.** Every typed Chat turn now
 carries the index of the reader's other conversations, each with a model-written line on what it

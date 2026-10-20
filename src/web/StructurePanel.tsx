@@ -59,6 +59,8 @@ import type { Figure } from "../figures.js";
 import type { BlockId } from "../types.js";
 import { FigureMark } from "./FigureMark.js";
 import { jumpToRow } from "./fold.js";
+import { onFontsChanged } from "./fonts.js";
+import { STRUCT_BRACKET_PX } from "./layout.js";
 import type { MatterRange } from "./matter-view.js";
 import { MATTER_ROW_NOTE, MatterMark } from "./MatterMark.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -70,6 +72,7 @@ import {
   structureProjection,
   windowed,
 } from "./structure.js";
+import { type Ribbon, ribbonFrom, ribbonPath, sameRibbon } from "./structure-ribbon.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { SummaryNode } from "./tree.js";
 import { useTapReveal } from "./useTapReveal.js";
@@ -707,15 +710,78 @@ export function StructurePanel({
     measure();
     const ro = new ResizeObserver(measure);
     if (gridRef.current) ro.observe(gridRef.current);
-    /* Each measured list, not the box around them: a box that is `position:
-       absolute` and out of flow reports a size of its own that has nothing to do
-       with the rows inside it. */
-    for (const child of Array.from(measureRef.current?.children ?? [])) ro.observe(child);
-    return () => ro.disconnect();
+    /* Each measured list, not the `.struct-side` grid items around them: those
+       wrappers stretch to the fixed measuring grid, so their border boxes can
+       stay unchanged while a font swap makes the rows inside them taller. */
+    for (const list of measureRef.current?.querySelectorAll<HTMLElement>("[data-struct-measure]") ?? []) {
+      ro.observe(list);
+    }
+    /* A font swap can leave a list's total border-box height unchanged while
+       changing the individual row heights which `capacityFrom` consumes. */
+    const offFonts = onFontsChanged(measure);
+    return () => {
+      ro.disconnect();
+      offFonts();
+    };
   }, [proj.columnA.rows, proj.columnB.rows]);
 
   const columnA = windowed(proj.columnA.rows, cap.a);
   const columnB = windowed(proj.columnB.rows, cap.b);
+
+  /**
+   * **The ribbon from the marked part to column B** (structure-ribbon.ts;
+   * Greg, spya-vqpeyr). Read off the drawn columns after they are laid out, so
+   * it is wherever the rows actually are, never where arithmetic says they
+   * should be — the lesson of every clipped row in `capacityFrom`'s history.
+   *
+   * It cannot feed back into the capacity effect above: the SVG is out of flow
+   * and `data-ribbon` changes only a border's colour, so nothing it sets moves a
+   * row. Re-read on a new set of rows or a new window (a part crossed, a
+   * resize that changed the capacity), and by its own observer when a column
+   * changes size without either — a web font arriving, or column B's header
+   * wrapping differently.
+   *
+   * `:scope >` for the reason `columns()` in the panel's tests gives: the
+   * measuring copies come first in the grid and carry a marked row of their
+   * own, somewhere else.
+   */
+  const [ribbon, setRibbon] = useState<Ribbon | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the drawn rows are the trigger and not an input — a new window or a part crossed is exactly when the ends move, and the effect reads the DOM those rows produced rather than the rows themselves.
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    const sideA = grid?.querySelector<HTMLElement>(":scope > .struct-side:not(.struct-inner)") ?? null;
+    const sideB = grid?.querySelector<HTMLElement>(":scope > .struct-inner") ?? null;
+    const listA = sideA?.querySelector<HTMLElement>(":scope > .struct-col") ?? null;
+    const row = listA?.querySelector<HTMLElement>(".struct-row[aria-current]") ?? null;
+    const head = sideB?.querySelector<HTMLElement>(":scope > .struct-of") ?? null;
+    const list = sideB?.querySelector<HTMLElement>(":scope > .struct-col") ?? null;
+    const draw = () => {
+      const next = grid
+        ? ribbonFrom(
+            grid.getBoundingClientRect(),
+            row?.getBoundingClientRect() ?? null,
+            head?.getBoundingClientRect() ?? null,
+            list?.getBoundingClientRect() ?? null,
+          )
+        : null;
+      /* The guard is what stops this re-rendering for ever: the rows are
+         fresh arrays on every render, so the effect runs on every render, and
+         an unconditional set would be a new render each time. */
+      setRibbon((prev) => (sameRibbon(prev, next) ? prev : next));
+    };
+    draw();
+    /* Every box whose size can move an end: the marked row, the list above
+       it (a row wrapping higher up moves it down), column B's header and list,
+       and the grid. The sides are not enough on their own — they stretch to the
+       grid row, so a wrap inside one can leave its size alone. */
+    const ro = new ResizeObserver(draw);
+    for (const el of [grid, listA, row, head, list]) if (el) ro.observe(el);
+    const offFonts = onFontsChanged(draw);
+    return () => {
+      ro.disconnect();
+      offFonts();
+    };
+  }, [columnA.rows, columnB.rows, proj.ofPart]);
 
   const nothing = proj.columnA.rows.length === 0;
 
@@ -733,7 +799,28 @@ export function StructurePanel({
            says what is true of it rather than reporting a failure. */
         <p className="struct-empty">This piece has no parts to lay out — it is one run of prose.</p>
       ) : (
-        <div className="struct-grid" ref={gridRef}>
+        <div className="struct-grid" ref={gridRef} {...(ribbon ? { "data-ribbon": "" } : {})}>
+          {/* **The ribbon: the marked part, becoming the whole of column B**,
+              Sankey-style (structure-ribbon.ts). First in the grid so the rows,
+              which are positioned, paint over it. Its 2px edge is column B's
+              bracket, drawn only as tall as column B's content and just left
+              of its rows (structure-ribbon.ts § `RIBBON_EDGE_INSET_PX`); the
+              border it replaces is still there in the box model, transparent,
+              so the band's width arithmetic (layout.ts §
+              `structureColumnsBand`) does not move. Decoration: the header
+              already names the part in words, and the lists keep their labels. */}
+          {ribbon ? (
+            <svg className="struct-ribbon" aria-hidden="true" focusable="false">
+              <path className="struct-ribbon-band" d={ribbonPath(ribbon)} />
+              <rect
+                className="struct-ribbon-edge"
+                x={ribbon.xEdge}
+                y={ribbon.bTop}
+                width={STRUCT_BRACKET_PX}
+                height={ribbon.bBottom - ribbon.bTop}
+              />
+            </svg>
+          ) : null}
           {/* **The measuring copies: the whole of each column, laid out and never
               seen.** `aria-hidden` and out of flow, so they cost the reader
               nothing and the accessibility tree nothing — but they are laid out
@@ -771,12 +858,13 @@ export function StructurePanel({
               <Column column={columnA} label="Parts" figures={figures} onJump={onJump} />
             </div>
             <div className="struct-side struct-inner">
-              {/* **The bracket, and the whole of the connector in v1.** It names
-                  the row on the left that these rows are the inside of, and the
-                  marked row in column A carries the matching edge marker. A drawn
-                  taper between two independently measured columns needs geometry
-                  redrawn on every resize and every boundary crossing; this answers
-                  the same question — *these belong to that* — in CSS. */}
+              {/* **The header names the row on the left that these rows are
+                  the inside of**, in words; the ribbon above says it in shape.
+                  Until 2026-10-20 this header and a bracket were the whole of
+                  the connector, and the taper was deferred as geometry that
+                  would need redrawing on every resize and boundary crossing —
+                  which is what the ribbon's effect now does
+                  (docs/plans/261020l-structure-columns-sankey-ribbon.md). */}
               {proj.ofPart ? (
                 <p className="struct-of" ref={ofRef}>
                   <span className="struct-num">{proj.ofPart.number}</span>
