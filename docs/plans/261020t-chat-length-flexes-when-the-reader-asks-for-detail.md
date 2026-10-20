@@ -103,8 +103,8 @@ differ in anything but the prompt (F7). A follow-up pair shows each side's whole
 4. **Read every after answer** to the asks for more, for padding, repetition, and whether it still
    cites and still points into the piece.
 
-**Blocked on 2026-10-20**: the box's OpenRouter key was at its monthly limit ($500, nothing left),
-so no arm could run. Told the Overseer; the code and the test wait for the measurement.
+**Blocked for a while on 2026-10-20**: the box's OpenRouter key was at its monthly limit ($500,
+nothing left). Told the Overseer; Greg raised it to $600 and the arms ran the same day.
 
 ## Deferred
 
@@ -123,8 +123,56 @@ so no arm could run. Told the Overseer; the code and the test wait for the measu
   `allOrStop`. F7, prove only the prompt changed: article hash, model and effort recorded and
   checked, `chat-principles.ts` fingerprinted. F8, one transient failure stranded an arm: a rerun
   fills in what is missing.
-- Code: (to come — GPT Sol, workspace-write.)
+- **Code, GPT Sol (workspace-write, fixes in place): "pass with fixes"**
+  ([261020t-code-review-sol.md](261020t-code-review-sol.md)). It recomputed every number and
+  unblinded table above from the result files and found them exact, and found no prompt conflict or
+  misfire on the gutter's help turn. Three fixes, all checked: the harness now validates each arm's
+  shape and refuses to pair arms with different effort or shared prompt source (the plan claimed
+  this before the code did); `tests/eval-source-fingerprint.test.ts` pins `chat-principles.ts` in
+  the fingerprint; and `ai-gateway.md` says $600.
 
 ## Result
 
-(To come.)
+**Shipped: the first arm, `after-line`, met every target, so `after-both` was never run.**
+All three arms on `anthropic/claude-opus-5.5`, effort high, the same article text; the before arms
+on the old `converse.ts` bytes (stage 1's), the after arm on stage 2's. Files, pairs, keys and both
+judges' verdicts are in [`evals/results/chat-length/`](../../evals/results/chat-length/).
+
+Words per answer (mean of three articles), none truncated:
+
+| ask | before | before-2 | after-line |
+|---|---|---|---|
+| ordinary | 341 | 330 | 344 |
+| quick | 324 | 309 | 283 |
+| detailed | 519 | 617 | **971** |
+| walkthrough | 631 | 660 | **1,203** |
+| followup | 720 | 665 | **1,136** |
+
+So the old line was holding a reader who asked for depth to about 600 words, and the new one roughly
+doubles that, while ordinary answers do not move and quick summaries get slightly shorter.
+
+**Blind** (a fresh Opus judge for each pairs file, reading only that file; keys balanced, 9 of 15
+on X in both). Unblinded "fit" — which better gives the reader what they asked for:
+
+| ask | new prompt better | old prompt better | tie | control: before-2 / before / tie |
+|---|---|---|---|---|
+| ordinary | 1 | 0 | 2 | 1 / 0 / 2 |
+| quick | 2 | 0 | 1 | 1 / 0 / 2 |
+| detailed | 2 | 0 | 1 | 2 / 0 / 1 |
+| walkthrough | 3 | 0 | 0 | 0 / 0 / 3 |
+| followup | 3 | 0 | 0 | 1 / 1 / 1 |
+| **all** | **11** | **0** | **4** | 5 / 1 / 9 |
+
+The control, the old prompt against itself, went 5–1 with 9 ties (the judge's own X/Y tally was
+3–3; unblinded, `before-2` took five), so one run of a prompt can beat another run of the same
+prompt 5–1 here. The new prompt against the old won every decided pair, 11–0, and 8–0 with one tie
+on the asks for more — outside that spread, and in the direction the word counts say. Padding: the judge flagged both sides of one
+quick pair, and two small tangents in new-prompt long answers (an encyclopedia aside, a closing
+paragraph about the reader's library), against one in an old answer — light, and no repetition. The
+fidelity slips it found are small and on both sides (a garbled outside quotation in one new answer;
+a mislabelled argument and a blurred figure in old ones).
+
+**Read by me**: the detailed answers stay cited and grounded, mark their own inferences and outside
+sources, and end on points the reader can weigh rather than on a summary. **Not fixed, and not
+this change's:** a "quick summary" is still about 280 words with bold labels, against `FORMAT`'s
+"no headings" — the same as before, and the judges preferred the new quick ones on tightness.

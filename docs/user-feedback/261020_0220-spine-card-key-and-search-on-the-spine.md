@@ -1,7 +1,7 @@
 ---
 reports: spya-ah5ws6, spya-u8stc4
 ending: shipped
-comment: On dev. Every spine card ends in a key to what the spine is and the colours on it now. Search marks already paint the spine and follow the threshold. Which other modes should paint it is asked in q-je2p9y (queued as qi-bp4ez3yc).
+comment: On dev. Every spine card ends in a key to what the spine is and the colours on it now. Search marks already paint the spine and follow the threshold. Other modes painting it: none for now (Greg, q-je2p9y).
 ---
 # The spine's card keys its colours, and search on the spine
 

@@ -1,10 +1,11 @@
 ---
 id: q-je2p9y
 report: spya-u8stc4
-status: open
+status: answered
 asked: 2026-10-20
 title: Search marks already show on the spine — where did you not see them, and which other modes should paint it?
 refs: qi-cz29kr96 · qi-bp4ez3yc · SPIDERYARN-READING2-KY · docs/plans/261020e-spine-card-explains-the-spine-and-keys-its-colours.md · docs/user-feedback/261020_0220-spine-card-key-and-search-on-the-spine.md
+acted: spya-q2qu2q
 ---
 Search results already paint the spine and follow the threshold slider, so two questions: where were they missing for you, and which other modes should also paint it?
 
@@ -30,3 +31,8 @@ What does not paint the spine today:
 - Glossary, FAQ and Sources mark nothing on the spine or in the article. Each would be its own small piece of work.
 
 Every option adds coloured marks to a 12px strip. More kinds at once make each harder to read, which is why I recommend only A for now.
+
+Greg replied on 2026-10-20 (spya-q2qu2q):
+> E
+
+None for now: no other mode paints the spine. Part 1 was left unanswered and is not chased.

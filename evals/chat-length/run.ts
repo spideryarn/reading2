@@ -32,8 +32,10 @@
  * asks for a length either way.
  *
  * **A rerun fills in what is missing**: an article whose file is already there
- * is skipped, and `readArm` refuses an arm whose files were run on different
- * source, article text or model, so a top-up cannot mix prompts.
+ * is skipped. `readArm` refuses an arm whose files were run on different source
+ * or model settings; `pairs` also refuses different article text, shared prompt
+ * dependencies or model settings across arms. A top-up therefore cannot silently
+ * mix runs.
  */
 
 import { createHash } from "node:crypto";
@@ -147,7 +149,36 @@ async function generate(arm: string): Promise<void> {
   });
 }
 
-/** Every answer of one arm, refusing one that is incomplete or was run on mixed source, text or model. */
+const stableRecord = (r: Record<string, string>): string =>
+  JSON.stringify(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
+
+const EXPECTED_ASKS = [...ASKS].sort();
+
+function validateArmFile(arm: string, f: ArmFile): void {
+  if (f.arm !== arm) throw new Error(`arm ${arm}: ${f.slug} says it belongs to ${f.arm}`);
+  const term = CASES[f.slug];
+  if (!term) throw new Error(`arm ${arm}: unexpected article ${f.slug}`);
+  const asks = f.answers.map((a) => a.ask).sort();
+  if (JSON.stringify(asks) !== JSON.stringify(EXPECTED_ASKS)) {
+    throw new Error(`arm ${arm}, ${f.slug}: asks ${asks.join(", ")}; expected ${EXPECTED_ASKS.join(", ")}`);
+  }
+  const ordinary = f.answers.find((a) => a.ask === "ordinary");
+  for (const answer of f.answers) {
+    if (answer.slug !== f.slug) throw new Error(`arm ${arm}, ${f.slug}: ${answer.ask} names article ${answer.slug}`);
+    if (answer.asked !== question(answer.ask, term)) {
+      throw new Error(`arm ${arm}, ${f.slug}: ${answer.ask} has the wrong question`);
+    }
+    if (answer.ask === "followup") {
+      if (!ordinary || answer.before?.asked !== ordinary.asked || answer.before.text !== ordinary.text) {
+        throw new Error(`arm ${arm}, ${f.slug}: followup does not carry its own ordinary turn`);
+      }
+    } else if (answer.before) {
+      throw new Error(`arm ${arm}, ${f.slug}: only followup may carry a preceding turn`);
+    }
+  }
+}
+
+/** Every answer of one arm, refusing one that is incomplete or was run on mixed source or model settings. */
 function readArm(arm: string): { answers: Answer[]; files: ArmFile[] } {
   const dir = path.join(OUT, arm);
   const files = fs
@@ -155,10 +186,14 @@ function readArm(arm: string): { answers: Answer[]; files: ArmFile[] } {
     .filter((f) => f.endsWith(".json"))
     .sort()
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as ArmFile);
+  const expectedSlugs = Object.keys(CASES).sort();
+  const slugs = files.map((f) => f.slug).sort();
+  if (JSON.stringify(slugs) !== JSON.stringify(expectedSlugs)) {
+    throw new Error(`arm ${arm}: articles ${slugs.join(", ")}; expected ${expectedSlugs.join(", ")}`);
+  }
+  for (const f of files) validateArmFile(arm, f);
   const answers = files.flatMap((f) => f.answers);
-  const want = Object.keys(CASES).length * ASKS.length;
-  if (answers.length !== want) throw new Error(`arm ${arm}: ${answers.length} answers, expected ${want}`);
-  const sources = new Set(files.map((f) => JSON.stringify(f.sourceSha256)));
+  const sources = new Set(files.map((f) => stableRecord(f.sourceSha256)));
   if (sources.size !== 1) throw new Error(`arm ${arm}: its files were run on different source`);
   const models = new Set(answers.map((a) => `${a.model} ${a.effort}`));
   if (models.size !== 1) throw new Error(`arm ${arm}: more than one model or effort: ${[...models].join(", ")}`);
@@ -200,7 +235,15 @@ function pairs(a: string, b: string): void {
     const g = B.files.find((x) => x.slug === f.slug);
     if (!g || g.blocksSha256 !== f.blocksSha256) throw new Error(`${f.slug}: the article changed between ${a} and ${b}`);
   }
-  if (A.answers[0]?.model !== B.answers[0]?.model) throw new Error(`${a} and ${b} were answered by different models`);
+  const settings = (answer: Answer | undefined) => `${answer?.model ?? ""}\0${answer?.effort ?? ""}`;
+  if (settings(A.answers[0]) !== settings(B.answers[0])) {
+    throw new Error(`${a} and ${b} were answered with different model settings`);
+  }
+  const sharedSources = (f: ArmFile | undefined) =>
+    stableRecord(Object.fromEntries(Object.entries(f?.sourceSha256 ?? {}).filter(([name]) => name !== "converse.ts")));
+  if (sharedSources(A.files[0]) !== sharedSources(B.files[0])) {
+    throw new Error(`${a} and ${b} were run with different shared prompt source`);
+  }
   const byKey = new Map(B.answers.map((x) => [`${x.slug} ${x.ask}`, x]));
   const coin = blindCoin();
   const out = [
