@@ -707,6 +707,32 @@
   ]
  },
  {
+  "id": "submode:sources:investigate",
+  "label": "Investigate",
+  "description": "Questions about this piece and what others say: suggested ones or your own, answered in Chat with a web search",
+  "aliases": [
+   "Sources",
+   "Investigate Sources",
+   "Sources Investigate",
+   "Investigate mode",
+   "inquiry",
+   "research",
+   "ask the web",
+   "what do others say",
+   "sources chat",
+   "dig deeper"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:referee:criteria",
   "label": "Criteria",
   "description": "Your own reviewing criteria, run over the piece",

@@ -374,4 +374,4 @@ The verdict was *revise before build*. All nine findings are taken:
 - [x] Plan reviewed by GPT Sol (revise before build; all nine taken, above)
 - [x] Stage 1 built, tested, browser-checked, code-reviewed by GPT Sol (pass after five fixes; F6, the panel's overall complexity, left as wider), committed
 - [x] Stage 2 built, renamed Investigate, tested, browser-checked (one POST per press, intercepted), code-reviewed by GPT Sol (four found, four fixed), committed
-- [ ] Docs, user-feedback note, queue item done, pushed to dev
+- [x] Docs, user-feedback note, queue item done, pushed to dev
