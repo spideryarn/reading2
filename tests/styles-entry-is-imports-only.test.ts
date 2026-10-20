@@ -238,9 +238,6 @@ const MANIFEST = [
      root size is the baseline for all rem type, and a top-layer dialog needs
      its dimming rule after the dialog's own appearance. Plan 261019g. */
   "reading-comfort.css",
-  /* Last so the shared green-to-send / red-to-back-out tone wins over the
-     shape-owning family sheets at equal specificity. Plan 261020f. */
-  "button-tone.css",
 ];
 
 /**
@@ -324,6 +321,29 @@ describe("the stylesheet entry point is an import manifest", () => {
       "every .css under src/web/styles/ must be named by MANIFEST exactly once — an " +
         "unimported sheet is dead, and an import with no file behind it fails the build",
     ).toEqual(present);
+  });
+});
+
+/**
+ * **tailwind.css's own local imports: exactly two, each in its own layer.**
+ *
+ * `styles.css` into `app`, and `button-tone.css` into `tone`, the one layer
+ * declared after `utilities` (plan 261020z). A rule in `tone` beats every `tw:`
+ * utility on whatever it matches, so a third sheet slipped in there, or `tone`
+ * moved before `utilities`, would change the whole app's cascade from one line.
+ */
+describe("tailwind.css layers the reading view under the utilities, and the tone over them", () => {
+  const tailwind = readFileSync("src/web/tailwind.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("declares the layers in the order the cascade needs", () => {
+    expect(tailwind.match(/^@layer [^{;]+;/gm)).toEqual(["@layer theme, base, app, utilities, tone;"]);
+  });
+
+  it("imports exactly styles.css into app and button-tone.css into tone", () => {
+    expect(tailwind.match(/^@import "\.[^"]*"[^;]*;/gm)).toEqual([
+      '@import "./styles.css" layer(app);',
+      '@import "./button-tone.css" layer(tone);',
+    ]);
   });
 });
 
