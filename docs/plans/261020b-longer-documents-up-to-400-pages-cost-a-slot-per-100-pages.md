@@ -184,7 +184,10 @@ would be Greg's call.
 
 **A belt, as an assertion rather than a second charge** (R2-F4; my first draft proposed a
 repricing call in stage 2, and Sol showed it covered none of the paths it claimed to). Stage 1 also
-writes `pages` into the raw manifest it already stores. **Stage 2, before transcription, asks one
+writes `pages` into the raw manifest it already stores — **durably, as a new
+`article_revisions.raw_pages` column** carried with the other raw-source fields, because `raw.json`
+is not stored as JSON: `readRaw` rebuilds it from revision columns, and the existing `pages` column
+there is stage 2's metadata (Sol, R3-F1). **Stage 2, before transcription, asks one
 read-only question** for a PDF whose manifest carries `pages`, in a job that is not the
 administrator's: is the document priced? — the job's unsettled reservation carries
 `slots >= slotsForPages(pages)` (for a *Read this*, from the minimal row). A job with no reservation
@@ -310,7 +313,8 @@ move past what loads.
    loads and `qi-sbytr395` becomes a blocker. About $10–15 of model calls. Written up under
    `docs/investigations/`. Runs beside stage 2, which touches none of its files.
 2. **The ledger.** Migration (additive): `ingest_events.slots smallint not null default 1 check
-   (slots between 1 and 8)` and `ingest_events.pages integer check (pages > 0)`. `usageSql` gains slot
+   (slots between 1 and 8)`, `ingest_events.pages integer check (pages > 0)` and
+   `article_revisions.raw_pages integer check (raw_pages > 0)`. `usageSql` gains slot
    sums beside its counts; `admitsIngestOf`; `slotsForPages`; the claim-fenced `priceFetchedPdf`;
    the retry weight; `reserveUpgrade`'s weight; `switchOnHighPower`'s weight; `articlesToShare` and
    the admin aggregation. Tests first, red then green: Greg's two-slots-left pair at 50 pages (100
@@ -367,3 +371,10 @@ move past what loads.
   completed fetch, so carrying the weight is needed; an upload refused before promotion stays
   `claimed` and can be retried; `jobs.ingest_event_id` is unique; the fetch step's detail persists
   and is shown on the card.
+- Narrow check of those fixes (GPT Sol, read-only, on `595b3f3fe`,
+  [261020b-…-plan-review-3-sol.md](261020b-longer-documents-up-to-400-pages-plan-review-3-sol.md)):
+  *approve with changes*. R2-F1,
+  F2 and F3 closed (a reset forces `extract`, not `fetch`; a new job's draft copies the published
+  revision's raw columns, so the source being replaced is readable). R2-F4 still open as R3-F1, P2:
+  the manifest's `pages` had no durable column, so the assertion would have skipped every PDF.
+  Taken: `article_revisions.raw_pages`. Discovery on the plan is closed.
