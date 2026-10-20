@@ -522,6 +522,60 @@ describe("High-powered AI waits for, or charges, a queued import's weight", () =
     expect(await upgradeSlots()).toEqual([]);
   });
 
+  /* Sol's C3-F1, P0. A 5-slot import stopped after fetch: its reservation is
+     released, nothing was charged, and the article never published. A switch
+     then must not charge one slot for ever — it waits, and the Retry that
+     reserves the old 5 is what it charges. */
+  it("a released, never-published long import answers pending, and its Retry charges the 5", async () => {
+    await givenPaid();
+    await givenArticle("hp-released");
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.ingest_events (owner_id, slots, pages, released_at)
+       values ($1, 5, 250, now()) returning id`,
+      [OWNER],
+    );
+    const dead = mintId();
+    await pool.query(
+      `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, ingest_event_id)
+       values ($1, $2, $3, '[{"name":"fetch","label":"Fetching the article","status":"done"}]'::jsonb,
+               'cancelled', $4, $5)`,
+      [dead, OWNER, `${SLUG}hp-released`, `work-${dead}`, rows[0]!.id],
+    );
+    expect((await switchOn("hp-released")).kind).toBe("pending");
+    expect(await upgradeSlots()).toEqual([]);
+
+    /* Retry: a fresh 5-slot reservation, fetch skipped because it is done. */
+    const { rows: fresh } = await pool.query<{ id: string }>(
+      "insert into spideryarn.ingest_events (owner_id, slots) values ($1, 5) returning id",
+      [OWNER],
+    );
+    const retry = mintId();
+    await pool.query(
+      `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, ingest_event_id)
+       values ($1, $2, $3, '[{"name":"fetch","label":"Fetching the article","status":"skipped"}]'::jsonb,
+               'queued', $4, $5)`,
+      [retry, OWNER, `${SLUG}hp-released`, `work-${retry}`, fresh[0]!.id],
+    );
+    expect((await switchOn("hp-released")).kind).toBe("on");
+    expect(await upgradeSlots()).toEqual([5]);
+  });
+
+  it("a published article with no charged ingest keeps its one-slot fallback", async () => {
+    /* Added before billing, before `article_id`, or by the administrator. */
+    await givenPaid();
+    const articleId = await givenArticle("hp-published-legacy");
+    const { rows } = await pool.query<{ id: string }>(
+      "insert into spideryarn.article_revisions (article_id, status) values ($1, 'published') returning id",
+      [articleId],
+    );
+    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [
+      articleId,
+      rows[0]!.id,
+    ]);
+    expect((await switchOn("hp-published-legacy")).kind).toBe("on");
+    expect(await upgradeSlots()).toEqual([1]);
+  });
+
   it("a retry's fresh job carrying the old weight charges that weight once its fetch is skipped", async () => {
     await givenPaid();
     await givenQueued("hp-retry", 3, "skipped");

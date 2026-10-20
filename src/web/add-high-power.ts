@@ -175,7 +175,12 @@ export class HighPowerIntent {
     this.retryOnNextAlive = false;
     this.clearRetry();
     this.kick();
-    return this.inFlight ?? Promise.resolve();
+    return this.drain();
+  }
+
+  /** Until no request is in flight — including a resend made after completion (C3-F2). */
+  private async drain(): Promise<void> {
+    while (this.inFlight) await this.inFlight;
   }
 
   /** A new address, or the page gone: stop retrying. A request in flight still settles. */
@@ -195,6 +200,9 @@ export class HighPowerIntent {
 
   private send(slug: string, on: boolean): void {
     const before = this.state;
+    /* Whether the import had completed when this went out (C3-F2): a not-yet
+       answer to a question asked before completion is resent once after it. */
+    const sentSettled = this.settled;
     this.set({ kind: "saving", on });
     this.inFlight = this.put(slug, on).then(
       (body) => {
@@ -213,6 +221,16 @@ export class HighPowerIntent {
         const status = statusOf(e);
         const beforeArticle = status === 404 && this.notYet < MAX_NOT_YET;
         const beforePrice = status === 409;
+        if (on && !sentSettled && this.settled && !this.disposed && (status === 404 || status === 409)) {
+          /* **Asked before the import completed, answered after it** (Sol's
+             C3-F2): the row and its price exist now, and a completed import
+             never comes alive again for `retryOnNextAlive` to resend it. Once
+             more; that answer, sent after completion, is final. */
+          this.retryOnNextAlive = false;
+          this.set({ kind: "waiting" });
+          this.send(slug, true);
+          return;
+        }
         if (on && this.jobAlive && !this.disposed && (beforeArticle || beforePrice)) {
           if (beforeArticle) this.notYet += 1;
           /* The claim has not opened the draft yet, or Fetch has not priced it. */

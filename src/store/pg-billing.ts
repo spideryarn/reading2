@@ -1656,6 +1656,7 @@ export async function switchOnHighPower(
           slug: articleRows.slug,
           visibility: articleRows.visibility,
           highPowerSince: articleRows.highPowerSince,
+          currentRevisionId: articleRows.currentRevisionId,
         })
         .from(articleRows)
         .where(ownedSlug(slug, ownerId))
@@ -1707,6 +1708,20 @@ export async function switchOnHighPower(
          HighPowerIntent for as long as this job is alive. */
       if (!already && !active.ready) return { kind: "pending" };
 
+      /* **An import that died before it published is not a legacy article**
+         (Sol's C3-F1). A long PDF stopped after fetch has its reservation
+         released and nothing charged, so the fallback below would read it as
+         one slot — and the Retry that reserves its five would then run on Opus
+         for one. With no charged ingest, nothing in flight and no published
+         revision, the price is not known yet: wait, as the add page does for a
+         dead job, and the Retry's live reservation is what gets charged. A
+         published article with no charged row — added before billing, before
+         `article_id`, or by the administrator — keeps its one-slot fallback. */
+      const charged = already ? null : await chargedSlotsOf(tx, article.id);
+      if (!already && charged === null && active.slots === null && article.currentRevisionId === null) {
+        return { kind: "pending" };
+      }
+
       if (!already) {
         const publicNow = article.visibility === "public";
         const cost = publicNow ? PUBLIC_INGEST_COST : PRIVATE_INGEST_COST;
@@ -1715,7 +1730,7 @@ export async function switchOnHighPower(
            charged ingest rows, since a re-add before 2026-10-07 could leave
            several. None — added before billing, before `article_id`, or by the
            administrator — is one slot, as before. */
-        const slots = Math.max(await articleSlots(tx, article.id), active.slots ?? 1);
+        const slots = Math.max(charged ?? 1, active.slots ?? 1);
         const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
         if (!admitsHighPower(wallUsed(usage), budgetFor(entitlement.limit), cost, slots)) {
           return { kind: "no-room", publicNow, entitlement };
@@ -1983,11 +1998,6 @@ async function chargedSlotsOf(tx: HasExecute, articleId: string): Promise<number
     throw new Error(`article ${articleId}'s charged slots came back as ${String(value)}`);
   }
   return slots;
-}
-
-/** `chargedSlotsOf`, with no charged row reading as one slot. */
-async function articleSlots(tx: HasExecute, articleId: string): Promise<number> {
-  return (await chargedSlotsOf(tx, articleId)) ?? 1;
 }
 
 /**

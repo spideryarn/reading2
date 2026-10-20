@@ -331,6 +331,45 @@ describe("HighPowerIntent", () => {
       });
     });
 
+    /* Sol's C3-F2. A request sent while the import ran, answered 409 or 404
+       only after the import completed, asked a question completion has since
+       answered: send once more. That second answer is final. */
+    for (const status of [409, 404]) {
+      it(`resends once when a ${status} sent before completion comes back after it`, async () => {
+        let rejectFirst: (reason: Error) => void = () => {};
+        const answers: Array<string | Error> = [SINCE];
+        const calls: Array<[string, boolean]> = [];
+        const put: PutHighPower = (slug, on) => {
+          calls.push([slug, on]);
+          if (calls.length === 1) return new Promise((_resolve, reject) => { rejectFirst = reject; });
+          const next = answers.shift();
+          return next instanceof Error ? Promise.reject(next) : Promise.resolve({ highPowerSince: next ?? null });
+        };
+        const intent = new HighPowerIntent(put, 10);
+        intent.observe("a-long-pdf", true, false);
+        intent.want(true);
+        const settled = intent.settle("a-long-pdf");
+        rejectFirst(refusal(status, "not yet"));
+        await settled;
+        await vi.runAllTimersAsync();
+        expect(calls).toEqual([
+          ["a-long-pdf", true],
+          ["a-long-pdf", true],
+        ]);
+        expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: false });
+      });
+    }
+
+    it("takes a 409 from a request sent after completion as final", async () => {
+      const { put, calls } = scripted(refusal(409, "still pricing"));
+      const intent = new HighPowerIntent(put, 10);
+      intent.want(true);
+      await intent.settle("a-long-pdf");
+      await vi.runAllTimersAsync();
+      expect(calls).toHaveLength(1);
+      expect(intent.get()).toEqual({ kind: "refused", message: "still pricing", on: false, attempted: true });
+    });
+
     it("waits for a request already in flight", async () => {
       let answer: (v: { highPowerSince: string | null }) => void = () => {};
       const put: PutHighPower = () =>
