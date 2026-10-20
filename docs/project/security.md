@@ -1272,15 +1272,18 @@ is what it is for and who chose it; plan
 The party it guards against is not a stranger. It is **our own code doing something on the
 reader's account while the administrator only meant to look**: a GET that sweeps rows, a panel
 that spends on a model, a job that requeues itself later, a tab that files her shelf in the
-administrator's offline cache. Read-only is enforced on the server, and the browser is made passive
-as well, so neither half is trusted to cover for the other.
+administrator's offline cache. Read-only is enforced on the server, and ordinary application
+persistence in the browser is made passive as well, so neither half is trusted to cover for the
+other. The administrator's shared Supabase authentication key is the declared browser exception;
+it can be refreshed in real `localStorage` so refresh-token rotation does not fork between tabs.
 
 ### The gate
 
 `serveApi` sends a request carrying `X-Spideryarn-View-As` to `serveViewingAs`
 ([`src/routes.ts`](../../src/routes.ts)) instead of `serveAuthenticatedApi`, except for the three
 control routes under `/api/admin/view-as`, which run as the administrator behind the ordinary admin
-gate. A request without the header takes exactly the path it always did. `serveViewingAs` refuses
+gate. Their dispatch skips the ordinary account-arrival and signup-email epilogue when the header
+is present. A request without the header takes exactly the path it always did. `serveViewingAs` refuses
 unless, on this request:
 
 1. the verified caller is an administrator (403 `[view-as-not-admin]`);
@@ -1312,6 +1315,7 @@ as they read what is there instead. **Not on it**: every `/api/admin/` row; `/ap
 `/api/article/:slug/share-link` (a credential); both exports; `/api/billing/usage` (it claims
 vouchers as the *caller* and can send email); the old alias routes. The source, assets, plates,
 upload status and referee scan read Supabase Storage, which is an outbound read but not a write.
+The referee scan neither reads nor fills its process cache while the marker is set.
 `tests/view-as-gate.test.ts` pins the list row by row, so adding a route never adds it here.
 
 ### The backstops, for when the list is wrong
@@ -1328,11 +1332,15 @@ Each is a throw while the marker is set, with a test in which an allowlisted han
 the marker is set, every query is sent over the extended protocol (one statement, never several),
 each ordinary query runs alone in its own `begin transaction read only … commit`, and a store's own
 transaction has its `begin` made read-only and followed at once by `select 1`, after which Postgres
-will not switch it to read-write. A write of any kind (`nextval`, a writable CTE, a volatile
-function) is refused by the database, not by a check of ours. On any failure the client is rolled
-back and released, and destroyed if the rollback fails; drizzle-orm 0.45 sends `begin` outside the
-`try` that releases its client, so the wrapper releases that one itself. A query-text check was
-proposed and dropped: GPT Sol showed it was a tripwire, not a boundary.
+will not switch it to read-write. Persistent writes to non-temporary tables and sequences —
+including `nextval`, writable CTEs and functions that attempt those writes — are refused by
+Postgres. The wrapper additionally refuses two-phase transactions and the known SQL forms for
+notifications, session settings, session advisory locks and external `COPY`, because a normal
+read-only transaction does not forbid those. Transaction-control recognition treats PostgreSQL
+comments as whitespace, including nested block comments. On any failure the client is rolled back
+and released, and destroyed if the rollback or transaction cleanup fails; drizzle-orm 0.45 sends
+`begin` outside the `try` that releases its client, so the wrapper releases that one itself. This is
+not a claim that SQL text can enumerate every side effect an extension function could have.
 
 ### What is not covered
 
@@ -1340,13 +1348,17 @@ proposed and dropped: GPT Sol showed it was a tripwire, not a boundary.
   be talked out of its grants. It needs a new role and a new secret, so it is proposed, not built
   (GPT Sol, round 2, R2-2).
 - **Writes to an existing temporary table** are allowed in a read-only transaction. Nothing of ours
-  makes one, and one would vanish with the connection.
+  makes one, and one would vanish with the connection. PostgreSQL's read-only mode is likewise not
+  a general side-effect sandbox: the wrapper refuses the known session, notification, advisory-lock
+  and external-copy forms, but a privileged or extension function could have another external
+  effect. No allowlisted handler calls one.
 - **No generic outbound-fetch backstop**: the server's own `fetch` also reads Storage and Supabase's
   signing keys. Outside fetches are kept off by the allowlist alone.
-- **The marker is lost by work that a queue drains in another request's context**
+- **Detached work is forbidden.** The marker follows an async resource created inside its callback,
+  even if a timer fires after the request returns; work handed to a shared queue can instead be
+  drained in the queue's context and lose it
   ([`src/owner.ts`](../../src/owner.ts) § `runAsOwner` explains the hazard). Nothing on the list
-  enqueues, and `afterResponse` and job enqueue refuse while it is set; the hazard is the same one
-  every owner-scoped job already lives with.
+  detaches or enqueues work, and `afterResponse` and job enqueue refuse while it is set.
 
 ### The browser half
 
@@ -1362,8 +1374,13 @@ nothing in the offline cache, and refuses any non-GET before it is sent, except 
 shelf, an article and its metadata page are drawn; every other page says it is not available, so
 the account, sign-out, password and OAuth pages, which call Supabase directly, cannot be reached.
 Background senders (job engine, reading time, preloads, hover cards, billing, topic pills,
-dictation) do not start. At expiry, on Stop, or on any 410 the tab closes or navigates away, so
-the reader's content is never left under an *ended* bar.
+dictation) do not start. The subject's pages do not mount until `/current` has supplied an id and
+expiry; a missing address is shown as the id rather than losing that expiry. At expiry, on Stop, on
+an ended response, or when either account ceases to be eligible, the subject page is hidden at
+once and the tab closes or navigates away. A `pageshow` guard sends a Back-restored bfcache copy
+away again. Auth broadcasts do not maintain the administrator's offline-cache records in this tab.
+A sign-out or switch to another authenticated account ends the view, so already-rendered subject
+data cannot remain under the next account's session.
 
 ## Known gaps
 

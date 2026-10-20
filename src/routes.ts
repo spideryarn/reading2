@@ -10562,6 +10562,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const nonce = viewAsNonceOf(req);
       const live = nonce === undefined ? null : await pgViewAsStore.live(nonce, user.id);
       if (!live) throw viewAsEnded();
+      /* The subject can become an administrator after this session started.
+         `/current` is the minute-by-minute authority too, not merely the
+         subject-data gate, so make that revocation terminal for the tab. */
+      if (isAdmin(live.subjectId)) throw viewAsEnded();
       const account = await accountEmail(live.subjectId);
       send(res, 200, {
         subjectId: live.subjectId,
@@ -14471,7 +14475,13 @@ export async function serveAuthenticatedApi(
          response. Here, in the half only a `VerifiedUser` reaches; a request
          whose route threw does not arrive, and its next one does.
          src/arrivals.ts, src/after-response.ts, docs/plans/260930i. */
-      await afterResponse("recording an account arrival", () => noteArrival(user.id, user.email));
+      /* The three view-as control routes deliberately run outside the subject
+         marker so they can start/read/end the session row. They must not pick
+         up this ordinary-request epilogue: it can write reader_arrivals and
+         send signup mail as the administrator from the view-as tab. */
+      if (req.headers[VIEW_AS_HEADER] === undefined) {
+        await afterResponse("recording an account arrival", () => noteArrival(user.id, user.email));
+      }
       return;
     }
 

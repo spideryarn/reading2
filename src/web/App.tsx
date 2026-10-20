@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { SignedInShell } from "./BackLink.js";
@@ -40,8 +40,9 @@ import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
 import { useLastView } from "./last-view.js";
-import { viewAsNonce } from "./lib/view-as.js";
+import { onViewAsEnd, viewAsEnded, viewAsNonce } from "./lib/view-as.js";
 import { NotWhileViewingAs } from "./ViewAsBar.js";
+import { useViewAsState } from "./view-as-session.js";
 
 /**
  * **The three routes whose code is not in the reader's initial download.**
@@ -507,6 +508,8 @@ function SignedIn({
   /** `App`'s add visit: who an `/add/` address is running for, or that it has been stopped. */
   addVisit: AddVisit | null;
 }) {
+  const viewAsSession = useViewAsState();
+  const viewAsHasEnded = useSyncExternalStore(onViewAsEnd, viewAsEnded, viewAsEnded);
   /* **The administrator's pages, refused before the branch chain rather than
      inside it — and this is a courtesy, not a gate.**
 
@@ -542,6 +545,13 @@ function SignedIn({
      exhaustive over route kinds; plan 261019n § round 1, F3. Above
      `drawsShelf` too, so `/admin` is "not available" here rather than the
      shelf. */
+  if (viewAsNonce() !== null && (viewAsHasEnded || viewAsSession.kind !== "live")) {
+    return (
+      <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans tw:text-sm">
+        <p>{viewAsHasEnded ? "This view has ended." : "Checking whose account this is…"}</p>
+      </main>
+    );
+  }
   if (viewAsNonce() !== null && !allowedWhileViewingAs(route)) {
     return (
       <>

@@ -21,7 +21,7 @@ import { endViewAsTab, viewAsNonce } from "./lib/view-as.js";
 /** The reader being viewed. */
 export interface ViewAsSubject {
   readonly subjectId: string;
-  readonly subjectEmail: string;
+  readonly subjectEmail: string | null;
   /** Epoch milliseconds, from the server's ISO `expiresAt`. */
   readonly expiresAt: number;
 }
@@ -32,7 +32,7 @@ export type ViewAsState =
   /** The first `/current` is out. */
   | { readonly kind: "loading" }
   | { readonly kind: "live"; readonly subject: ViewAsSubject }
-  /** `/current` failed before ever answering. The view goes on behind the bar. */
+  /** `/current` failed before ever answering. Subject pages stay gated behind the bar. */
   | { readonly kind: "failed"; readonly message: string };
 
 /** How often the bar asks again. The plan's "every minute". */
@@ -71,7 +71,7 @@ function subjectFrom(body: unknown): ViewAsSubject | null {
   if (typeof body !== "object" || body === null) return null;
   const { subjectId, subjectEmail, expiresAt } = body as Record<string, unknown>;
   if (typeof subjectId !== "string" || subjectId === "") return null;
-  if (typeof subjectEmail !== "string") return null;
+  if (subjectEmail !== null && typeof subjectEmail !== "string") return null;
   if (typeof expiresAt !== "string") return null;
   const at = Date.parse(expiresAt);
   if (!Number.isFinite(at)) return null;
@@ -81,9 +81,9 @@ function subjectFrom(body: unknown): ViewAsSubject | null {
 /**
  * **Ask the server once.** A 410 `[view-as-ended]` never comes back here as an
  * answer: `apiFetch` has already ended the tab on hearing it (lib/api.ts §
- * `watchForViewAsEnd`). Any other failure leaves a live subject on screen —
- * the next minute asks again — and before the first answer says what went
- * wrong in the bar.
+ * `watchForViewAsEnd`). Any other failure leaves an already-authorised subject
+ * on screen until the next minute asks again. Before the first answer, App
+ * keeps subject pages unmounted and the bar says what went wrong.
  */
 async function readViewAsCurrent(): Promise<void> {
   if (viewAsNonce() === null) return;

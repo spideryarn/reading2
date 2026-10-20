@@ -41,7 +41,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 const control = vi.hoisted(() => ({
   /** Ids the replaced Auth service knows, with their addresses. */
   accounts: new Map<string, string>(),
+  noteArrival: vi.fn(async () => {}),
 }));
+
+vi.mock("../src/arrivals.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/arrivals.js")>();
+  return { ...real, noteArrival: control.noteArrival };
+});
 
 vi.mock("../src/store/admin-accounts.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/store/admin-accounts.js")>();
@@ -294,6 +300,10 @@ describe("the four refusals, each before anything runs", () => {
     const reply = await drive("GET", "/api/library", { nonce });
     expect(reply.status).toBe(403);
     expect(reply.body?.error).toContain("[view-as-subject-admin]");
+
+    const current = await drive("GET", "/api/admin/view-as/current", { nonce });
+    expect(current.status).toBe(410);
+    expect(current.body?.error).toContain("[view-as-ended]");
   });
 
   it("refuses every route not on the list with the one sentence, and runs none of them", async () => {
@@ -421,6 +431,16 @@ describe("the control routes", () => {
     const reply = await drive("POST", "/api/admin/view-as", { owner: BOB, body: { subject: ALICE, reason: "x" } });
     expect(reply.status).toBe(403);
     expect(reply.body?.error).toContain("[admin-only]");
+  });
+
+  it("does not record an administrator arrival from the view-as tab", async () => {
+    const nonce = await startOnAlice();
+    control.noteArrival.mockClear();
+
+    expect((await drive("GET", "/api/admin/view-as/current", { nonce })).status).toBe(200);
+    expect((await drive("POST", "/api/admin/view-as/end", { nonce })).status).toBe(204);
+
+    expect(control.noteArrival).not.toHaveBeenCalled();
   });
 });
 
@@ -733,6 +753,75 @@ describe("the database is read-only while viewing as, by Postgres's own refusal"
     expect(setFailed).not.toBeNull();
     expect(inside).not.toBeNull();
     expect(await taggedRows()).toBe(before);
+  });
+
+  it.each(["/* outer /* nested */ comment */ ", "-- comment\r", "-- comment\n"])(
+    "a comment-prefixed commit cannot desynchronise the wrapper and open autocommit: %j",
+    async (prefix) => {
+      const before = await taggedRows();
+      const inside = await throughAViewAsRow(() =>
+        getDb().transaction(async (tx) => {
+          await tx.execute(sql.raw(`${prefix}COMMIT`));
+          await tx.execute(
+            sql`insert into spideryarn.view_as_sessions (nonce_hash, actor_id, subject_id, reason, expires_at)
+                values (${randomBytes(16).toString("hex")}, ${ADMIN}, ${ALICE}, ${TAG}, now())`,
+          );
+        }),
+      );
+      expect(inside).not.toBeNull();
+      expect(await taggedRows()).toBe(before);
+    },
+  );
+
+  it.each(["commit", "rollback"])("%s and chain pins the replacement transaction read-only too", async (end) => {
+    const before = await taggedRows();
+    let setFailed: unknown = null;
+    const inside = await throughAViewAsRow(() =>
+      getDb().transaction(async (tx) => {
+        await tx.execute(sql.raw(`${end} and chain`));
+        await tx.execute(sql`set transaction read write`).catch((err: unknown) => {
+          setFailed = err;
+        });
+        await tx.execute(
+          sql`insert into spideryarn.view_as_sessions (nonce_hash, actor_id, subject_id, reason, expires_at)
+              values (${randomBytes(16).toString("hex")}, ${ADMIN}, ${ALICE}, ${TAG}, now())`,
+        );
+      }),
+    );
+    expect(setFailed).not.toBeNull();
+    expect(inside).not.toBeNull();
+    expect(await taggedRows()).toBe(before);
+  });
+
+  it("prepare transaction is refused before it can detach or cancel the guarded transaction", async () => {
+    const before = await taggedRows();
+    const gid = `view-as-${randomUUID()}`;
+    const inside = await throughAViewAsRow(() =>
+      getDb().transaction(async (tx) => {
+        await tx.execute(sql.raw(`/* two-phase */ prepare transaction '${gid}'`)).catch(() => undefined);
+        await tx.execute(
+          sql`insert into spideryarn.view_as_sessions (nonce_hash, actor_id, subject_id, reason, expires_at)
+              values (${randomBytes(16).toString("hex")}, ${ADMIN}, ${ALICE}, ${TAG}, now())`,
+        );
+      }),
+    );
+    await pool.query(`rollback prepared '${gid}'`).catch(() => undefined);
+    expect(inside).not.toBeNull();
+    expect(await taggedRows()).toBe(before);
+  });
+
+  it("refuses known read-only transaction side effects explicitly", async () => {
+    for (const text of [
+      "notify view_as_probe, 'x'",
+      "select pg_notify('view_as_probe', 'x')",
+      "select pg_catalog.pg_notify /* a comment is whitespace */ ('view_as_probe', 'x')",
+      "select pg_try_advisory_lock(42)",
+      "set application_name = 'view-as-probe'",
+      "copy (select 1) to program 'false'",
+    ]) {
+      const inside = await throughAViewAsRow(() => getDb().execute(sql.raw(text)));
+      expect(causedBy(inside, RefusedWhileViewingAs), text).toBe(true);
+    }
   });
 
   it("a savepoint inside it is read-only too, and an isolation level is kept", async () => {

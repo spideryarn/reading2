@@ -67,7 +67,8 @@ function TheBar() {
   const who =
     session.kind === "live" ? (
       <span className="tw:min-w-0 tw:truncate">
-        Viewing as <strong className="tw:font-semibold">{session.subject.subjectEmail}</strong>
+        Viewing as{" "}
+        <strong className="tw:font-semibold">{session.subject.subjectEmail ?? session.subject.subjectId}</strong>
       </span>
     ) : (
       <span className="tw:min-w-0 tw:truncate">Viewing as another reader</span>

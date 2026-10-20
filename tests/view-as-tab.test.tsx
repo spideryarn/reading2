@@ -16,7 +16,7 @@
  * The mark is put on the window before anything is imported, as index.html's
  * script does before any module runs.
  */
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -145,7 +145,13 @@ async function mount(node: ReturnType<typeof createElement>) {
 
 async function show(path: string) {
   history.replaceState(null, "", path);
-  await mount(createElement(NuqsAdapter, null, createElement(App, null)));
+  await mount(
+    createElement(
+      NuqsAdapter,
+      null,
+      createElement(Fragment, null, createElement(App, null), createElement(ViewAsBar, null)),
+    ),
+  );
 }
 
 async function bar() {
@@ -247,6 +253,17 @@ describe("the bar", () => {
     expect(asked?.headers.get("X-Spideryarn-View-As")).toBe(NONCE);
   });
 
+  it("keeps the server expiry when Auth cannot supply the subject's email", async () => {
+    current = {
+      status: 200,
+      body: { subjectId: SUBJECT, subjectEmail: null, expiresAt: new Date(Date.now() + 100).toISOString() },
+    };
+    await bar();
+    expect(theBar()?.textContent).toContain(SUBJECT);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 120)));
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it("counts the last minute as one, and never below zero", () => {
     expect(minutesLeft(1_000 + 30_000, 1_000)).toBe(1);
     expect(minutesLeft(1_000, 5_000)).toBe(0);
@@ -290,5 +307,16 @@ describe("the bar", () => {
     };
     await bar();
     expect(close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the subject page waits for the session check", () => {
+  it("does not ask for or draw the subject's shelf while the first /current hangs", async () => {
+    current = "hang";
+    session.user = ADMIN;
+    await show("/");
+
+    expect(calls.some((call) => call.url.startsWith("/api/library"))).toBe(false);
+    expect(host.textContent).toContain("Checking whose account this is");
   });
 });

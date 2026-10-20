@@ -16,7 +16,11 @@
  *
  * **`run()`, never `enterWith`**, for the reason src/owner.ts gives: with
  * keep-alive, `enterWith` can leak into the next request on the same socket.
- * The marker exists only inside the callback.
+ * The marker follows async resources created inside the callback — including
+ * a detached timer that fires after the callback has returned — and is absent
+ * from unrelated requests. A shared queue can still lose it when work is
+ * drained by an async resource created outside this scope, so an allowlisted
+ * handler may neither detach work nor hand it to such a queue.
  *
  * **Frozen**, so nothing downstream can retarget a live marker at somebody
  * else between the gate and a backstop.

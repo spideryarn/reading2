@@ -170,8 +170,9 @@
              this page's memory**, so nothing the administrator's own tabs saved
              (reading positions, drafts, a cached shelf key) is read here, and
              nothing written here reaches them. The one exception is Supabase's
-             session, `sb-<project>-auth-token` and its `-code-verifier`, which
-             read and write **through** to the real storage: the tab signs in as
+             session keys already present at boot, `sb-<project>-auth-token`
+             and any matching `-code-verifier`, which read and write **through**
+             to the real storage: the tab signs in as
              the administrator exactly as any tab does, and a token refresh here
              rotates the one refresh token every tab shares instead of forking a
              copy (R2-1);
@@ -195,26 +196,36 @@
         } catch (e) {}
         var real = null;
         try { real = window.localStorage; } catch (e) {}
-        var passes = /^sb-[A-Za-z0-9._-]+-auth-token(-code-verifier)?$/;
+        var authShape = /^sb-[A-Za-z0-9._-]+-auth-token(-code-verifier)?$/;
+        var authKeys = Object.create(null);
+        if (real) {
+          try {
+            for (var i = 0; i < real.length; i += 1) {
+              var existing = real.key(i);
+              if (existing !== null && authShape.test(existing)) authKeys[existing] = true;
+            }
+          } catch (e) {}
+        }
+        var passes = function (key) { return authKeys[key] === true; };
         function memoryStorage(through) {
           var items = Object.create(null);
           var keys = function () { return Object.keys(items); };
           var store = {
             getItem: function (key) {
               key = String(key);
-              if (through && passes.test(key)) {
+              if (through && passes(key)) {
                 try { return through.getItem(key); } catch (e) { return null; }
               }
               return key in items ? items[key] : null;
             },
             setItem: function (key, value) {
               key = String(key);
-              if (through && passes.test(key)) { through.setItem(key, String(value)); return; }
+              if (through && passes(key)) { through.setItem(key, String(value)); return; }
               items[key] = String(value);
             },
             removeItem: function (key) {
               key = String(key);
-              if (through && passes.test(key)) {
+              if (through && passes(key)) {
                 try { through.removeItem(key); } catch (e) {}
                 return;
               }

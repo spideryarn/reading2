@@ -562,3 +562,35 @@ the design above is amended by this list, which wins where they differ.
 - **R2-5 (P2)**: no `sweepDictations` and no dictation in a view-as tab.
 - **R2-6 (P2)**: if Stop's request fails in transport, the nonce and the subject content stay
   behind the bar, which says Stop did not complete and offers Retry.
+
+### What GPT Sol's code review changed (2026-10-20)
+
+Reviewed commit e8180d86d; prompt
+[261019n-view-as-code-review-prompt.md](261019n-view-as-code-review-prompt.md), answer
+[261019n-view-as-code-review-sol.md](261019n-view-as-code-review-sol.md) (exit 0). Sol refused it
+as submitted on eleven P1s and fixed each inside the stage, red-first; I read the diff and re-ran
+typecheck and the ten view-as, route-contract and doc suites against Postgres (749 passed, none
+skipped). In short:
+
+- **The database guard** (C1–C4) now tokenises SQL comments before deciding that a statement ends
+  a transaction, refuses `PREPARE TRANSACTION`, pins a chained transaction with `select 1`, and
+  refuses the known session and external effects that `READ ONLY` does not stop (`NOTIFY`,
+  `set_config`, session advisory locks, SQL `PREPARE`, held cursors, `LOAD`, `COPY`). The stores'
+  `pg_advisory_xact_lock` is still allowed, and nothing in the app names a prepared statement.
+- **The request lifecycle** (C5, C6): the three control routes no longer queue the arrival
+  epilogue, and the referee scan neither reads nor fills its process cache while viewing as.
+- **The tab** (C7–C11): a null email no longer discards the expiry; the reader's pages mount only
+  after `/current` has authorised them; a demoted actor or promoted subject ends the tab; a page
+  restored from bfcache is hidden and sent home; and a Supabase sign-out or account switch ends the
+  view without touching the admin's offline cache.
+- **C12**: only an auth key already present at boot passes through to real localStorage.
+- **Accepted, deliberately** (C14–C16): the admin's own Supabase session can refresh in real
+  localStorage (the R2-1 design, and it carries nothing of the reader's); writes to an existing
+  temporary table and arbitrary extension functions are not covered by SQL inspection, which the
+  SELECT-only role would close; bfcache is defended by hide-and-redirect, not proven absent. Each is
+  stated at that strength in [security.md § view-as](../project/security.md#view-as).
+
+Three postmortems name the classes:
+[261020b](../postmortems/261020b-a-read-only-handler-is-not-a-read-only-request-lifecycle.md),
+[261020c](../postmortems/261020c-a-sql-regex-state-machine-cannot-own-the-server-transaction-state.md),
+[261020d](../postmortems/261020d-authorization-expiry-must-remove-data-already-on-screen.md).

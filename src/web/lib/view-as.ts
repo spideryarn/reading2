@@ -123,10 +123,25 @@ export function endViewAsTab(): void {
 
 let fallback: ReturnType<typeof setTimeout> | undefined;
 
+/* `replace("/")` removes only the newest history entry. If Back restores an
+   older entry for this same Document from bfcache, its frozen nonce and React
+   tree return too. Hide the document as it leaves so a cached snapshot cannot
+   flash subject data, then leave on every persisted restore — including one
+   restored after expiry while its timers were suspended. */
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    if (viewAsNonce() !== null) document.documentElement.style.visibility = "hidden";
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted && viewAsNonce() !== null) tabExit.replace("/");
+  });
+}
+
 /** For tests only: forget that the view ended, its pending fallback, and every listener. */
 export function resetViewAsEndForTests(): void {
   clearTimeout(fallback);
   fallback = undefined;
   ended = false;
   listeners.clear();
+  if (typeof document !== "undefined") document.documentElement.style.removeProperty("visibility");
 }

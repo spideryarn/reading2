@@ -12,9 +12,9 @@
  * - the fragment gone from the address;
  * - `localStorage` an empty store in memory — a key the administrator's own
  *   tabs saved is **not** readable through it, and a key written through it
- *   does not reach the real one — except Supabase's session keys, which read
- *   and write through, so a token refresh here is the same session every tab
- *   shares;
+ *   does not reach the real one — except the Supabase session keys already
+ *   present at boot, which read and write through, so a token refresh here is
+ *   the same session every tab shares;
  * - `sessionStorage` empty and in memory;
  * - the nonce on a frozen, non-configurable mark that lib/view-as.ts reads;
  * - `data-view-as` on `<html>` for the bar's room;
@@ -137,7 +137,7 @@ describe("index.html's view-as script", () => {
       expect(page.real.getItem("spya.sentinel")).toBe("the administrator's own");
     });
 
-    it("passes Supabase's session keys through to the real storage, both ways", () => {
+    it("passes only the Supabase session key that existed at boot through to real storage", () => {
       const page = fakePage(`#view-as=${NONCE}`);
       page.run();
       const local = page.fakeWindow.localStorage as Storage;
@@ -145,14 +145,16 @@ describe("index.html's view-as script", () => {
       local.setItem(SESSION_KEY, '{"access_token":"REFRESHED"}');
       expect(page.real.getItem(SESSION_KEY)).toBe('{"access_token":"REFRESHED"}');
       local.setItem(VERIFIER_KEY, "v");
-      expect(page.real.getItem(VERIFIER_KEY)).toBe("v");
+      expect(page.real.getItem(VERIFIER_KEY)).toBeNull();
       local.removeItem(VERIFIER_KEY);
       expect(page.real.getItem(VERIFIER_KEY)).toBeNull();
-      /* Near-misses stay in memory. */
+      /* Near-misses and a different project's perfectly shaped key stay in memory. */
       local.setItem("sb-abcdefgh-auth-token-user", "u");
       local.setItem("xsb-abcdefgh-auth-token", "u");
+      local.setItem("sb-some-other-project-auth-token", "subject data");
       expect(page.real.getItem("sb-abcdefgh-auth-token-user")).toBeNull();
       expect(page.real.getItem("xsb-abcdefgh-auth-token")).toBeNull();
+      expect(page.real.getItem("sb-some-other-project-auth-token")).toBeNull();
     });
 
     it("starts sessionStorage empty, in memory, with nothing passed through", () => {

@@ -1506,14 +1506,14 @@ export function leavingFetch(
 const KEEPALIVE_LIMIT = 60 * 1024;
 
 /**
- * **A 410 saying the view has ended ends it in this tab**, whichever request
- * heard it (plan 261019n § round 1, F5): the session expired, was stopped from
- * another tab, or was never this administrator's. Read off a clone, so the
- * caller's own handling of the response is untouched; fire-and-forget, because
- * nothing waits on leaving.
+ * **A terminal view-as refusal ends it in this tab**, whichever request heard
+ * it (plan 261019n § round 1, F5): a 410 ended session, or a 403 saying the
+ * actor/subject is no longer eligible. Read off a clone, so the caller's own
+ * handling of the response is untouched; fire-and-forget, because nothing
+ * waits on leaving.
  */
 function watchForViewAsEnd(res: Response): void {
-  if (res.status !== 410) return;
+  if (res.status !== 410 && res.status !== 403) return;
   let copy: Response;
   try {
     copy = res.clone();
@@ -1523,7 +1523,14 @@ function watchForViewAsEnd(res: Response): void {
   void copy
     .text()
     .then((text) => {
-      if (text.includes(VIEW_AS_ENDED_CODE)) endViewAsTab();
+      if (
+        text.includes(VIEW_AS_ENDED_CODE) ||
+        text.includes("[view-as-not-admin]") ||
+        text.includes("[view-as-subject-admin]") ||
+        text.includes("[admin-only]")
+      ) {
+        endViewAsTab();
+      }
     })
     .catch(() => {});
 }
@@ -1592,6 +1599,8 @@ export async function endViewAs(): Promise<ViewAsStop> {
  * and the screen cannot hold different readers. Registered at import, so it
  * hears the first event.
  */
+let viewAsActor: string | undefined;
+
 onSession((session) => {
   /* **Whose cache to read, kept beside the token and for the same reason.** A
      request needs to know which reader's copies to look in before it knows
@@ -1617,6 +1626,18 @@ onSession((session) => {
       ? { id: signedIn.id, ...(signedIn.email !== undefined && { email: signedIn.email }) }
       : null,
   );
+
+  /* The Supabase auth session is deliberately shared with the administrator's
+     other tabs. Its broadcast must not make this isolated tab maintain the
+     administrator's real IndexedDB cache records. A sign-out or account switch
+     is terminal too: already-rendered subject data must not survive under a
+     different person at the keyboard. */
+  if (viewAsNonce() !== null) {
+    if (id === null) endViewAsTab();
+    else if (viewAsActor === undefined) viewAsActor = id;
+    else if (viewAsActor !== id) endViewAsTab();
+    return;
+  }
 
   if (id) {
     rememberUser(id);

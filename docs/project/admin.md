@@ -1086,10 +1086,12 @@ allowlist, the backstops under it and what is not covered are in
 **Administrators cannot be viewed.** That stops a second administrator's view becoming a way to act
 with the first one's reach.
 
-**What it cannot do.** Anything that writes, spends, fetches an outside page, sends email, exports,
-or hands out a private link's key. So a bug that only shows when the reader presses something is
-still reproduced in the administrator's own account. The reader is not emailed each time; the
-privacy page says it can happen ([privacy.md](privacy.md)).
+**What it cannot do.** Anything in the application that writes, spends, fetches an outside page,
+sends email, exports, or hands out a private link's key. The administrator's Supabase auth key is
+the browser-storage exception: a refresh is shared with their ordinary tabs, never attributed to
+the reader. So a bug that only shows when the reader presses something is still reproduced in the
+administrator's own account. The reader is not emailed each time; the privacy page says it can
+happen ([privacy.md](privacy.md)).
 
 ## What it cannot do, and what is not built
 

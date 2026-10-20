@@ -24,12 +24,18 @@ Object.defineProperty(window, "__spideryarnViewAs", {
 
 const getSession = vi.fn();
 const refreshSession = vi.fn();
+const authState = vi.hoisted(() => ({
+  listener: null as null | ((event: string, session: null) => void),
+}));
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
       getSession,
       refreshSession,
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      onAuthStateChange: (listener: (event: string, session: null) => void) => {
+        authState.listener = listener;
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
     },
   },
   callbackUrl: () => "https://spideryarn.test/auth/callback",
@@ -39,6 +45,8 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 const readCache = vi.fn(async (_url: string, _userId: string | null) => null);
 const writeCache = vi.fn();
 const invalidateCache = vi.fn();
+const rememberUser = vi.fn();
+const forgetUser = vi.fn();
 const reserveTicket = vi.fn(async (url: string, userId: string | null) =>
   userId ? { userId, url, epoch: 0, seq: 1 } : null,
 );
@@ -48,13 +56,13 @@ vi.mock("../src/web/lib/offline-store.js", () => ({
   reserveTicket,
   invalidate: invalidateCache,
   cachedSlugs: vi.fn(async () => new Set()),
-  rememberUser: vi.fn(),
+  rememberUser,
   lastKnownUser: () => "admin-1",
-  forgetUser: vi.fn(),
+  forgetUser,
 }));
 
 const { apiFetch, endViewAs, leavingFetch, statusOf } = await import("../src/web/lib/api.js");
-const { VIEW_AS_READ_ONLY, resetViewAsEndForTests, tabExit, viewAsEnded, viewAsNonce } = await import(
+const { VIEW_AS_READ_ONLY, endViewAsTab, resetViewAsEndForTests, tabExit, viewAsEnded, viewAsNonce } = await import(
   "../src/web/lib/view-as.js"
 );
 
@@ -85,6 +93,8 @@ beforeEach(() => {
   writeCache.mockClear();
   invalidateCache.mockClear();
   reserveTicket.mockClear();
+  rememberUser.mockClear();
+  forgetUser.mockClear();
   close.mockReset();
   replace.mockReset();
   tabExit.close = close;
@@ -102,6 +112,15 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe("the mark", () => {
   it("is read back as the nonce", () => {
     expect(viewAsNonce()).toBe(NONCE);
+  });
+
+  it("does not change the administrator's offline-cache records on an auth broadcast", async () => {
+    authState.listener?.("SIGNED_OUT", null);
+    await settle();
+
+    expect(rememberUser).not.toHaveBeenCalled();
+    expect(forgetUser).not.toHaveBeenCalled();
+    expect(viewAsEnded()).toBe(true);
   });
 });
 
@@ -170,12 +189,50 @@ describe("apiFetch while viewing as", () => {
     expect(replace).toHaveBeenCalledWith("/");
   });
 
+  it("leaves again if Back restores an ended view-as document from bfcache", async () => {
+    vi.useFakeTimers();
+    endViewAsTab();
+    await vi.runAllTimersAsync();
+    expect(replace).toHaveBeenCalledTimes(1);
+
+    const restored = new Event("pageshow") as Event & { persisted: boolean };
+    Object.defineProperty(restored, "persisted", { value: true });
+    window.dispatchEvent(restored);
+
+    expect(replace).toHaveBeenCalledTimes(2);
+  });
+
+  it("hides and leaves if Back restores a still-live view-as document from bfcache", () => {
+    window.dispatchEvent(new Event("pagehide"));
+    expect(document.documentElement.style.visibility).toBe("hidden");
+
+    const restored = new Event("pageshow") as Event & { persisted: boolean };
+    Object.defineProperty(restored, "persisted", { value: true });
+    window.dispatchEvent(restored);
+
+    expect(replace).toHaveBeenCalledWith("/");
+  });
+
   it("does not end the tab on some other 410", async () => {
     stubFetch(json({ error: "That article was deleted." }, 410));
     await apiFetch("/api/article/x");
     await settle();
     expect(viewAsEnded()).toBe(false);
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it("ends the tab when either account loses permission for the view", async () => {
+    for (const code of ["[view-as-not-admin]", "[view-as-subject-admin]", "[admin-only]"]) {
+      resetViewAsEndForTests();
+      close.mockClear();
+      stubFetch(json({ error: `This view is no longer allowed. ${code}` }, 403));
+
+      await apiFetch("/api/library");
+      await settle();
+
+      expect(viewAsEnded(), code).toBe(true);
+      expect(close, code).toHaveBeenCalledTimes(1);
+    }
   });
 });
 
