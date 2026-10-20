@@ -4194,6 +4194,33 @@ export const BANNER_TRAINING_LINK = "privacy policy";
 
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
+/**
+ * **Whose article this is**, the first line of the details page's *Access &
+ * sharing* (the owner's) and *Access* (a visitor's). Greg, 2026-10-19
+ * (`spya-cf30ac`): *"It doesn't seem obvious who owns an article"*.
+ * docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md.
+ */
+export const OWNERSHIP_YOURS = "You own this article.";
+export const OWNERSHIP_NOT_YOURS = "You don't own this article.";
+/** Then the account's address, then a full stop. */
+export const OWNERSHIP_SIGNED_IN_AS = "Signed in as";
+/** The administrator's line on a visitor's page: then the owner's address. */
+export const OWNERSHIP_ADMIN_OWNER = "Admin: it belongs to";
+export const OWNERSHIP_ADMIN_CHECKING = "Admin: looking up its owner…";
+/** The address could not be read from the sign-in service; the rest of the row could. */
+export const OWNERSHIP_ADMIN_NO_EMAIL = "Admin: the owner's address could not be read just now.";
+/** Not in the admin list under this address (renamed since, or the list is stale). */
+export const OWNERSHIP_ADMIN_NOT_LISTED = "Admin: it is not in the articles list under this address.";
+/**
+ * **A private-link article's owner is not shown, even to the administrator**
+ * — admin.md § What it deliberately does not show: the key lets you read it,
+ * not learn whose it is. Plan 261020j, question q-agbc89.
+ */
+export const OWNERSHIP_ADMIN_LINK =
+  "Admin: the owner of an article shared by private link is not shown, not even to an admin.";
+/** Then the reason from `describeFetchFailure`. */
+export const OWNERSHIP_ADMIN_FAILED = "Admin: could not look up its owner.";
+
 /** The switch, off. */
 export const SHARING_OFF = "Only you can read this.";
 

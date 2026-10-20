@@ -295,6 +295,7 @@ import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
+import { Ownership } from "./Ownership.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
@@ -1600,6 +1601,7 @@ function SharingCard({
      reads it to the switch whose *"Only you can read this"* depends on it.
      `null` until that control has read it, and whenever it cannot say. */
   const [linkOn, setLinkOn] = useState<boolean | null>(null);
+  const { user } = useSession();
   const reportLink = useCallback((on: boolean | null) => {
     setLinkOn(on);
     onPrivateLink?.(slug, on);
@@ -1620,6 +1622,11 @@ function SharingCard({
           `${CARD} p-4`, matching the compact control cards elsewhere on the
           page rather than "In one sentence"'s `p-5`. */}
       <div className={`${CARD} tw:p-4`}>
+        {/* Whose it is, first: this page is drawn only for the owner
+            (Ownership.tsx). Greg, spya-cf30ac. */}
+        <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
+          <Ownership whose="yours" email={user?.email ?? null} />
+        </div>
         <PrivateLink
           slug={slug}
           title={title}

@@ -278,6 +278,7 @@ export function ArticlePage({
           searches={access.searches}
           crossrefs={access.crossrefs}
           signedIn={signedIn}
+          readerId={readerId}
           sessionUnconfirmed={access.sessionUnconfirmed}
           sharedBy={access.sharedBy}
           view={view}
@@ -738,6 +739,7 @@ function VisitorArticle({
   searches,
   crossrefs,
   signedIn,
+  readerId,
   sessionUnconfirmed,
   sharedBy,
   view,
@@ -757,6 +759,12 @@ function VisitorArticle({
   crossrefs: readonly Crossref[] | null;
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /**
+   * **The identity access was resolved for**, for the details page's
+   * administrator line only (Ownership.tsx, plan 261020j): its request is
+   * keyed on this id rather than on a session read afresh below.
+   */
+  readerId: string | null;
   /**
    * **Only for what the chrome says**, and it goes to both views rather
    * than to the reading view alone: the other is one click away and carries
@@ -778,6 +786,7 @@ function VisitorArticle({
         article={article}
         available={available}
         signedIn={signedIn}
+        readerId={readerId}
         sessionUnconfirmed={sessionUnconfirmed}
         sharedBy={sharedBy}
       />

@@ -36,6 +36,8 @@ import { hostOf } from "../urls.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
+import { AdminOwnerLine, Ownership } from "./Ownership.js";
+import { useSession } from "./useSession.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { markedModes, NOUN } from "./visitor.js";
 import { useExperimental } from "./useExperimental.js";
@@ -134,6 +136,7 @@ export function PublicMetadataPage({
   article,
   available,
   signedIn,
+  readerId = null,
   sessionUnconfirmed,
   sharedBy,
 }: {
@@ -142,6 +145,12 @@ export function PublicMetadataPage({
   available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /**
+   * Who access was resolved for, for the *Access* section only: the account
+   * address beside "You don't own this article", and the administrator's line
+   * (Ownership.tsx). Optional for tests that mount this page alone.
+   */
+  readerId?: string | null;
   /** For the notice below only — reader-capability.ts § sessionUnconfirmed. */
   sessionUnconfirmed: boolean;
   /** For the notice below only — reader-capability.ts § sharedBy. */
@@ -149,6 +158,7 @@ export function PublicMetadataPage({
 }) {
   const { meta } = article;
   const stats = articleStats(article);
+  const { user } = useSession();
   useDocumentTitle(pageTitle({ kind: "read", title: meta.title, view: "metadata" }));
 
   /* **Where and when it was published, for a visitor too.** Greg, 2026-10-04:
@@ -210,6 +220,20 @@ export function PublicMetadataPage({
           sharedBy={sharedBy}
           copyFrom={webSource(meta)}
         />
+
+        {/* **Whose it is**, Greg's spya-cf30ac: said only to a reader whose
+            session the server confirmed, since that is the one case where
+            "not yours" is known rather than guessed (Ownership.tsx). */}
+        {signedIn && !sessionUnconfirmed && (
+          <section data-access className="tw:mt-8">
+            <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
+            {/* The session's address only when it is the account access was
+                resolved for, so a sign-in changing under the page cannot put
+                one account's address beside the other's answer. */}
+            <Ownership whose="not-yours" email={user && user.id === readerId ? (user.email ?? null) : null} />
+            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} sharedBy={sharedBy} />
+          </section>
+        )}
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>
