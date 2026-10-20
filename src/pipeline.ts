@@ -279,6 +279,7 @@ import {
   type PaidPurchase,
   type StepName,
   type StepPreview,
+  type StepProgress,
   type StoredReadingDifficulty,
 } from "./types.js";
 import { getDb } from "./db/client.js";
@@ -724,8 +725,14 @@ export interface StepContext {
    * filesystem store used to give.
    * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G.
    */
-  /** Say something short about how this step is going. Shown live; not persisted. */
-  report(detail: string): void;
+  /**
+   * Say something short about how this step is going, and, for a step that
+   * is counting real units (chunks, images), how many of them are done. A
+   * report with `progress` reaches the job row, at most every
+   * `REPORT_SAVE_EVERY_MS` (src/jobs.ts § `stepNotes`), so a poll sees it; one
+   * without stays in memory, as every report did until plan 261020a.
+   */
+  report(detail: string, progress?: StepProgress): void;
   /**
    * **Show part of what this step is making, before it is over.** Unlike
    * `report` it is written to the job row, once per call, so the reader's poll
@@ -3292,7 +3299,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            several chunks finish at once and callbacks racing each other would
            make the progress line jump backwards. src/jobs.ts § describe. */
         onProgress: (done, total, pages) =>
-          ctx.report(`${done}/${total} chunks, page${pages.length > 1 ? "s" : ""} ${pages.join("–")}`),
+          ctx.report(`${done}/${total} chunks, page${pages.length > 1 ? "s" : ""} ${pages.join("–")}`, {
+            done,
+            total,
+            unit: "chunk",
+          }),
       });
       plog.info(
         {
@@ -4139,7 +4150,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const run = await collectAssets({
         blocks: file.blocks,
         signal: ctx.signal,
-        onProgress: (done, total) => ctx.report(`${done}/${total} images`),
+        onProgress: (done, total) => ctx.report(`${done}/${total} images`, { done, total, unit: "image" }),
       });
       const figures = await recoverPdfFigures(ctx, store, file.blocks, { locate: openRouterFigureLocator });
       /* No URLs and no hostnames. A log of the images in somebody's article is

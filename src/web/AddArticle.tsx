@@ -55,7 +55,7 @@ import { TipNote, Tooltip } from "./Tooltip.js";
 import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
 import { useCopy } from "./useCopy.js";
 import { useNow } from "./useNow.js";
-import type { Job, JobStep } from "../types.js";
+import type { Job, JobStep, StepProgress } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
 
 /**
@@ -560,9 +560,9 @@ export function JobCard({
   /**
    * **The clock has to tick by itself, and that is not obvious.**
    *
-   * `ctx.report` writes a step's `detail` in memory and never persists it
-   * ("Persisting at this rate would be two writes a second per running job",
-   * src/jobs.ts), so a job in the middle of a six-minute `structure` sends
+   * `ctx.report` writes a step's `detail` in memory, and persists it only
+   * beside a counted `progress`, at most every five seconds (src/jobs.ts §
+   * `stepNotes`), so a job in the middle of a six-minute `structure` sends
    * back a byte-identical record on every poll — and `sameJobs` in
    * jobEngine.ts deliberately suppresses an identical snapshot. Without a tick
    * of its own the elapsed time would freeze at whatever it read when the step
@@ -894,9 +894,11 @@ function SourceLine({ job, now }: { job: Job; now: number }) {
  * needed. A middot rather than the em dash the finished rows use, because
  * three things separated by one em dash read as a sentence with an aside.
  *
- * **No progress bar, and no percentage.** Neither response size nor provider
- * latency is knowable before the fact, so a bar would be a number we invented,
- * shown in the one shape a reader is entitled to trust.
+ * **No percentage, and no bar but a counted one.** Neither response size nor
+ * provider latency is knowable before the fact, so a bar of *time* would be a
+ * number we invented, shown in the one shape a reader is entitled to trust.
+ * A step that counts its units (`step.progress`) gets a bar of *those*, which
+ * is a count: plan 261020a § B1, where the measurement says why time is not.
  */
 function StepRow({
   step,
@@ -934,6 +936,22 @@ function StepRow({
           </span>
         )}
       </span>
+      {/* **A counted fraction, where the step is counting.** Greg, 2026-10-19
+          (spya-skq3fg): *"a loading bar … especially that extraction step"*.
+          Only from `step.progress`, which a step sets only when it counts real
+          units (PDF chunks, images), so the bar is a count, not a guess at
+          time. Plan 261020a § B1. */}
+      {step.status === "running" && step.progress && step.progress.total > 0 && (
+        <span className="tw:mt-1 tw:flex tw:items-center tw:gap-2 tw:pl-[21px] tw:text-ink-faint">
+          <progress
+            className="tw:h-1 tw:min-w-0 tw:flex-1"
+            value={Math.min(step.progress.done, step.progress.total)}
+            max={step.progress.total}
+            aria-label={`${step.label}: ${progressWords(step.progress)}`}
+          />
+          <span className="tw:whitespace-nowrap tw:tabular-nums">{progressWords(step.progress)}</span>
+        </span>
+      )}
       {/* Under the row, in the same indent the error message uses, because it
           is a whole sentence and the row above it is a list of fragments. Only
           for the two steps `data/_ai-calls.jsonl` has actually timed — a
@@ -954,6 +972,25 @@ function StepRow({
       )}
     </li>
   );
+}
+
+/**
+ * The count in words, naming its unit. "Done" rather than "read": a chunk
+ * whose check failed, or an image that would not fetch, is counted too (GPT
+ * Sol's plan review of 261020a, finding 6).
+ */
+export function progressWords(progress: StepProgress): string {
+  const { done, total, unit } = progress;
+  switch (unit) {
+    case "chunk":
+      return `${done} of ${total} sections of the file done`;
+    case "image":
+      return `${done} of ${total} images done`;
+    default: {
+      const never: never = unit;
+      return never;
+    }
+  }
 }
 
 function StepIcon({ status }: { status: JobStep["status"] }) {

@@ -54,6 +54,20 @@
   border-color: var(--highlight-text);
 }
 .prof-box-input:disabled { opacity: 0.5; }
+/* **As tall as its words** (useFitTextarea.ts): the add page's two boxes,
+   where Greg asked for the purpose box "bigger/auto-expanding" (spya-jk0cgg). */
+.prof-box-input.is-fit { overflow: hidden; resize: none; }
+/* Which of the two boxes this is, when both are on one page: the add page
+   asks why for *this article* and, for a reader with no profile, about them
+   for *every article* (spya-kan788). */
+/* The add page's "Your article is ready." tick: the go-ahead green
+   (styles/tokens.css § --positive), for spya-a40t70's "big green check mark". */
+.add-ready-tick { color: var(--positive); flex: none; }
+.prof-box-scope {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+}
 
 .prof-box-foot {
   display: flex;
