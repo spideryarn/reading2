@@ -217,16 +217,28 @@ times running, and every mode built on it
 slices still refuse), src/start-ranges.ts § `UnresolvedStarts`:
 
 - **a first child's start is not asked** — it is pinned to its parent's start whatever it says;
-- **a spliced line number is read as that line**, if exactly one split of the digits names a block
-  whose id the rest agrees with, and that block falls between the child's neighbours;
 - **anything else refuses a first answer**, so the in-step re-ask below runs; and **on the last
   answer** — the re-ask, a first answer with no time left for one, or a replayed checkpoint — the
   child is dropped into its predecessor, as long as its sibling set keeps two children and the
   answer loses no more than one start in ten.
 
-Both outcomes are counted, `startsRecovered` and `startsDropped` on the step's log line, because a
-prompt that drifted into writing line numbers would otherwise look healthy: every answer would build.
+A drop is counted, `startsDropped` on the step's log line, because a prompt that drifted into naming
+blocks that do not exist would otherwise look healthy: every last answer would build.
 [261019l](../plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md).
+
+**Since `toc/13` (2026-10-20) a start is the block's number, not its id.** The model writes the
+`[582]` that `renderBlocks` prints before the block, the schema types it as an integer, and
+`startAsId` (src/structure-starts.ts) maps it to the id before the kernel runs. An id is still
+accepted, from an answer stored earlier. Copying ids was the fault itself, not only the splice. Held
+to the id's own regex pattern, the model stopped splicing but wrote a real neighbour's id instead,
+which is a silent wrong boundary. On the reader's article:
+
+- Part VI started at its heading in 3 of 10 answers under `toc/12`;
+- in 9 of 20 under the pattern;
+- in 20 of 20 asked for the number.
+
+261019l's line-number decoder went with the id string it decoded.
+[261020aa](../plans/261020aa-structure-answers-the-block-number-not-its-id.md).
 
 **A child with no range at all stopped being a live-answer case in `toc/11`.** The earlier ranged
 answer could omit `range`; the builder derived one — pinned if first, the previous child's end + 1

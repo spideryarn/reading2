@@ -1,0 +1,1518 @@
+{
+  "version": "toc/13",
+  "generator": "claude-sonnet-5-5",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0014",
+        "n0037",
+        "n0057",
+        "n0082",
+        "n0108"
+      ],
+      "range": [
+        "spya-tvk8zz",
+        "spya-rkyy37"
+      ],
+      "title": "After Work, We'll Have Each Other",
+      "gist": "A world without work would be a relational one, and history suggests that is narrower and more clannish than we assume.",
+      "question": "Relational society — why might a world where relationships replace work be worse than we expect? (a historical argument)",
+      "sourceHeading": "After Work, We’ll Have Each Other"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012",
+        "n0013"
+      ],
+      "range": [
+        "spya-tvk8zz",
+        "spya-y97uqa"
+      ],
+      "title": "What Will People Do All Day",
+      "gist": "If AI takes over labor, people expect relationships to be what is left, a return to a pre-industrial way of life.",
+      "question": "Relational sector — what happens to meaning and identity if connections become all that is left?"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-tvk8zz",
+        "spya-tvk8zz"
+      ],
+      "title": ""
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-s00ms9",
+        "spya-s00ms9"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-h7tya2",
+        "spya-h7tya2"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-eq7rkm",
+        "spya-eq7rkm"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-skmyu6",
+        "spya-skmyu6"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-k44gdt",
+        "spya-k44gdt"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-ssae5k",
+        "spya-ssae5k"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-b3re57",
+        "spya-b3re57"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-zy53n3",
+        "spya-zy53n3"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-vq3bvr",
+        "spya-vq3bvr"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-y97uqa",
+        "spya-y97uqa"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0015",
+        "n0021",
+        "n0028",
+        "n0032"
+      ],
+      "range": [
+        "spya-y827zc",
+        "spya-y0d85v"
+      ],
+      "title": "Power and sex among apes",
+      "gist": "Eighteenth-century aristocrats, free of work, spent their lives on gossip and rank, though their starting point was harsher than ours.",
+      "question": "Aristocrats — what do they show about how people live when nobody has to work? (a case study)",
+      "sourceHeading": "Power and sex among apes"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0014",
+      "children": [
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019",
+        "n0020"
+      ],
+      "range": [
+        "spya-y827zc",
+        "spya-w7jf25"
+      ],
+      "title": "Aristocrats as a Test Case",
+      "gist": "Aristocrats were rich and got resources through connections, not labor, so court life is the closest thing to a purely relational world we can study."
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-y827zc",
+        "spya-y827zc"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-ca6ub9",
+        "spya-ca6ub9"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-xcg5en",
+        "spya-xcg5en"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-c4s3en",
+        "spya-c4s3en"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-w7jf25",
+        "spya-w7jf25"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 2,
+      "parent": "n0014",
+      "children": [
+        "n0022",
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027"
+      ],
+      "range": [
+        "spya-r62wzn",
+        "spya-wue7zn"
+      ],
+      "title": "Saint-Simon at Versailles",
+      "gist": "Saint-Simon's memoirs show a brilliant court whose real activity was petty intrigue over rank, and even the famed salons ran mostly on political gossip."
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-r62wzn",
+        "spya-r62wzn"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-gs52t3",
+        "spya-gs52t3"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-x4w0zk",
+        "spya-x4w0zk"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-as4b6e",
+        "spya-as4b6e"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-bm2xyv",
+        "spya-bm2xyv"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-wue7zn",
+        "spya-wue7zn"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0014",
+      "children": [
+        "n0029",
+        "n0030",
+        "n0031"
+      ],
+      "range": [
+        "spya-k0yet6",
+        "spya-de69sf"
+      ],
+      "title": "Catherine and Court Gossip",
+      "gist": "Catherine the Great's St. Petersburg shows the same pattern, since advancement there too depended entirely on personal politics, and aristocratic dignity rested on honor, not work."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-k0yet6",
+        "spya-k0yet6"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-f90g2h",
+        "spya-f90g2h"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-de69sf",
+        "spya-de69sf"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 2,
+      "parent": "n0014",
+      "children": [
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036"
+      ],
+      "range": [
+        "spya-cz0cgg",
+        "spya-y0d85v"
+      ],
+      "title": "Chimpanzees and Civilizing",
+      "gist": "Aristocrats resemble chimpanzees in tracking rank, but Elias shows Versailles came from feudal institutions, so our saner starting point may let us do better."
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-cz0cgg",
+        "spya-cz0cgg"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-k26ath",
+        "spya-k26ath"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-zvpebu",
+        "spya-zvpebu"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-y0d85v",
+        "spya-y0d85v"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0038",
+        "n0043",
+        "n0047",
+        "n0052"
+      ],
+      "range": [
+        "spya-uum3xk",
+        "spya-ujwh6h"
+      ],
+      "title": "Ladies who lunch",
+      "gist": "Upper-class women in a 1984 study fill their time with fundraising volunteer work that mainly protects their class position, producing a pleasant but small life.",
+      "question": "Ostrander's study — what does upper-class volunteering reveal about a life built on relationships? (an ethnography)",
+      "sourceHeading": "Ladies who lunch"
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [
+        "n0039",
+        "n0040",
+        "n0041",
+        "n0042"
+      ],
+      "range": [
+        "spya-uum3xk",
+        "spya-udyc09"
+      ],
+      "title": "Ostrander's Midwestern Study",
+      "gist": "Ostrander's study of women who never expected to work is the best modern case of a relational society, asking what matters to them."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-uum3xk",
+        "spya-uum3xk"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-m2tuja",
+        "spya-m2tuja"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-pjnh37",
+        "spya-pjnh37"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-udyc09",
+        "spya-udyc09"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [
+        "n0044",
+        "n0045",
+        "n0046"
+      ],
+      "range": [
+        "spya-a94czy",
+        "spya-tcr77a"
+      ],
+      "title": "Volunteering as Duty",
+      "gist": "These women do board work that is mostly fundraising, trained through the Junior League, and justify their position by giving back."
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-a94czy",
+        "spya-a94czy"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-xn6rzj",
+        "spya-xn6rzj"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-tcr77a",
+        "spya-tcr77a"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-mdncme",
+        "spya-f6f8d4"
+      ],
+      "title": "Busy Work That Keeps Them Above",
+      "gist": "The women admit volunteering rarely achieves results, yet it separates them from lower classes and keeps their congenial social network in order."
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0047",
+      "children": [],
+      "range": [
+        "spya-mdncme",
+        "spya-mdncme"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0047",
+      "children": [],
+      "range": [
+        "spya-mc24jb",
+        "spya-mc24jb"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0047",
+      "children": [],
+      "range": [
+        "spya-r7r7ap",
+        "spya-r7r7ap"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0047",
+      "children": [],
+      "range": [
+        "spya-f6f8d4",
+        "spya-f6f8d4"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056"
+      ],
+      "range": [
+        "spya-j3vvp7",
+        "spya-ujwh6h"
+      ],
+      "title": "A Small Life",
+      "gist": "Like Versailles, their world rests on family and defending one's place, producing a narrow, exclusive but pleasant life."
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-j3vvp7",
+        "spya-j3vvp7"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-jv6yrp",
+        "spya-jv6yrp"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-embbun",
+        "spya-embbun"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-ujwh6h",
+        "spya-ujwh6h"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0058",
+        "n0066",
+        "n0073",
+        "n0076"
+      ],
+      "range": [
+        "spya-y02mr5",
+        "spya-buapzt"
+      ],
+      "title": "The working classes",
+      "gist": "Gans's Boston West Enders, a working-class group centered on peers, show warmth but also conformity and weak organizing, with norms shifting as conditions improve.",
+      "question": "Urban Villagers — how did a community centered on peers rather than jobs fare? (an ethnography)",
+      "sourceHeading": "The working classes"
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 2,
+      "parent": "n0057",
+      "children": [
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065"
+      ],
+      "range": [
+        "spya-y02mr5",
+        "spya-z9g0je"
+      ],
+      "title": "The Urban Villagers",
+      "gist": "Gans studied Italian Americans in Boston's West End, who worked just enough to live and spent their time with a peer group gossiping."
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-y02mr5",
+        "spya-y02mr5"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-ftk9a7",
+        "spya-ftk9a7"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-yzuczw",
+        "spya-yzuczw"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-wv0tft",
+        "spya-wv0tft"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-urfe43",
+        "spya-urfe43"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-ghqg2t",
+        "spya-ghqg2t"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-z9g0je",
+        "spya-z9g0je"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 2,
+      "parent": "n0057",
+      "children": [
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072"
+      ],
+      "range": [
+        "spya-j337dx",
+        "spya-stduxr"
+      ],
+      "title": "Shared Traits of Relational Groups",
+      "gist": "West Enders, like aristocrats, took no status from work, were exclusive, and policed deviance, with dignity coming from loyalty to the group."
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-j337dx",
+        "spya-j337dx"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-xnesxg",
+        "spya-xnesxg"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-tyj2mt",
+        "spya-tyj2mt"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-weazcy",
+        "spya-weazcy"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-vyxdgv",
+        "spya-vyxdgv"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-stduxr",
+        "spya-stduxr"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 2,
+      "parent": "n0057",
+      "children": [
+        "n0074",
+        "n0075"
+      ],
+      "range": [
+        "spya-dma27v",
+        "spya-ft9x9b"
+      ],
+      "title": "Why They Couldn't Organize",
+      "gist": "Their egalitarian peer group distrusted leaders and formal rules, so they lacked institutions and failed to stop the destruction of their neighborhood."
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-dma27v",
+        "spya-dma27v"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-ft9x9b",
+        "spya-ft9x9b"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0057",
+      "children": [
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081"
+      ],
+      "range": [
+        "spya-sd6cmd",
+        "spya-buapzt"
+      ],
+      "title": "Amoral Familism and Change",
+      "gist": "Gans reads Banfield's amoral familism as a rational response to poverty that fades as conditions improve, showing material conditions change what we want."
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-sd6cmd",
+        "spya-sd6cmd"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-x5hb7k",
+        "spya-x5hb7k"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-b3pf45",
+        "spya-b3pf45"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-t4xpae",
+        "spya-t4xpae"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-buapzt",
+        "spya-buapzt"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0083",
+        "n0088",
+        "n0096",
+        "n0100",
+        "n0103"
+      ],
+      "range": [
+        "spya-s2680p",
+        "spya-dhj4jr"
+      ],
+      "title": "Friendship was invented in 18th-century Scotland",
+      "gist": "Work gives us respect for impersonal skills instead of who we know, and that freedom is what makes real friendship possible.",
+      "question": "Work and dignity — why does work matter for meaning more than we admit? (a historical argument)",
+      "sourceHeading": "Friendship was invented in 18th-century Scotland"
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087"
+      ],
+      "range": [
+        "spya-s2680p",
+        "spya-zd83ts"
+      ],
+      "title": "Reputation and Real Needs",
+      "gist": "Relational living ties dignity to group reputation, so what people truly need is a framework for respect, which work offers apart from who we know."
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-s2680p",
+        "spya-s2680p"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-a8mx0b",
+        "spya-a8mx0b"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-qsfkqr",
+        "spya-qsfkqr"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-zd83ts",
+        "spya-zd83ts"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092",
+        "n0093",
+        "n0094",
+        "n0095"
+      ],
+      "range": [
+        "spya-t9qyhk",
+        "spya-a5pt8y"
+      ],
+      "title": "What Americans Get From Work",
+      "gist": "Surveys, Strauss's study of workers returning after lockdown, and the Federal Writers' Project show people value work for competence, company and respect."
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-t9qyhk",
+        "spya-t9qyhk"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-sw09bu",
+        "spya-sw09bu"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-nm9v43",
+        "spya-nm9v43"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-zjn6v8",
+        "spya-zjn6v8"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-nh2e8p",
+        "spya-nh2e8p"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-v3gz3q",
+        "spya-v3gz3q"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-a5pt8y",
+        "spya-a5pt8y"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0097",
+        "n0098",
+        "n0099"
+      ],
+      "range": [
+        "spya-vrn5m8",
+        "spya-ms0vr5"
+      ],
+      "title": "Terkel's Working",
+      "gist": "Terkel's Chicago interviews show workers hating disrespect and treasured peer respect, skill and usefulness, impersonal things to be proud of."
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-vrn5m8",
+        "spya-vrn5m8"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-n00hd0",
+        "spya-n00hd0"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-ms0vr5",
+        "spya-ms0vr5"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0101",
+        "n0102"
+      ],
+      "range": [
+        "spya-hdbtc0",
+        "spya-y0xcuz"
+      ],
+      "title": "Relational Societies Get Clannish",
+      "gist": "Relational societies tie dignity to group membership and so exclude others, while the modern labor market loosened those ties and freed relationships."
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0100",
+      "children": [],
+      "range": [
+        "spya-hdbtc0",
+        "spya-hdbtc0"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0100",
+      "children": [],
+      "range": [
+        "spya-y0xcuz",
+        "spya-y0xcuz"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107"
+      ],
+      "range": [
+        "spya-tmepex",
+        "spya-dhj4jr"
+      ],
+      "title": "The Scottish Enlightenment's Insight",
+      "gist": "Smith, Hume and Ferguson argued commercial society made friendship possible by removing necessity, and without work the old ties may reassert themselves."
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-tmepex",
+        "spya-tmepex"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-hb8vvc",
+        "spya-hb8vvc"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-d6v2bb",
+        "spya-d6v2bb"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-dhj4jr",
+        "spya-dhj4jr"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0109",
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120",
+        "n0121"
+      ],
+      "range": [
+        "spya-j88mrj",
+        "spya-rkyy37"
+      ],
+      "title": "Notes and Further Reading",
+      "gist": "Footnotes, sources and a further reading link."
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-j88mrj",
+        "spya-j88mrj"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-r6y44z",
+        "spya-r6y44z"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-bb4mgt",
+        "spya-bb4mgt"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-h0nyqj",
+        "spya-h0nyqj"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-djb2zp",
+        "spya-djb2zp"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-b4rfqh",
+        "spya-b4rfqh"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-hfxxpp",
+        "spya-hfxxpp"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-exke0m",
+        "spya-exke0m"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-en0z8f",
+        "spya-en0z8f"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-v6ct9m",
+        "spya-v6ct9m"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-taz7j0",
+        "spya-taz7j0"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-u4ztzw",
+        "spya-u4ztzw"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-rkyy37",
+        "spya-rkyy37"
+      ],
+      "title": ""
+    }
+  }
+}

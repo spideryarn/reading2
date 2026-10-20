@@ -100,7 +100,7 @@ const BLOCKS: Block[] = [
   { id: "spya-rsk003", tag: "p", kind: "text", text: "More prose entirely.", words: 3, html: "<p>More prose entirely.</p>", gistable: true },
 ];
 
-/* A schema-valid `toc/11` answer: starts only, with all three promised levels. */
+/* A schema-valid `toc/13` answer: numbered starts, with all three promised levels. */
 const SOUND = JSON.stringify({
   root: {
     title: "The whole piece",
@@ -111,12 +111,12 @@ const SOUND = JSON.stringify({
         title: "The part",
         gist: "The part covers the whole piece.",
         question: "The part — what does it say?",
-        start: BLOCKS[0]!.id,
+        start: 0,
         children: [
           {
             title: "The section",
             gist: "The section covers the whole piece in detail.",
-            start: BLOCKS[0]!.id,
+            start: 0,
           },
         ],
       },
@@ -137,36 +137,40 @@ const INVENTED = JSON.stringify({
     gist: "A gist.",
     question: "The whole piece — what does it say?",
     children: [
-      { title: "Opening", gist: "A gist.", question: "Opening — what?", start: BLOCKS[0]!.id },
+      { title: "Opening", gist: "A gist.", question: "Opening — what?", start: 0 },
       {
         title: "Part",
         gist: "A gist.",
         question: "Part — what?",
-        start: "spya-zzz999",
-        children: [{ title: "Section", gist: "A section gist.", start: "spya-zzz999" }],
+        start: 99,
+        children: [{ title: "Section", gist: "A section gist.", start: 99 }],
       },
     ],
   },
 });
 
 /** Three parts, the middle one's start given as `start`. */
-const threeParts = (start: string) =>
+const threeParts = (start: unknown) =>
   JSON.stringify({
     root: {
       title: "The whole piece",
       gist: "A gist.",
       question: "The whole piece — what does it say?",
       children: [
-        { title: "Opening", gist: "The heading.", question: "Opening — what?", start: BLOCKS[0]!.id },
+        { title: "Opening", gist: "The heading.", question: "Opening — what?", start: 0 },
         { title: "Turnips", gist: "The turnips.", question: "Turnips — why?", start },
-        { title: "The rest", gist: "The rest.", question: "The rest — what?", start: BLOCKS[2]!.id },
+        { title: "The rest", gist: "The rest.", question: "The rest — what?", start: 2 },
       ],
     },
   });
-/** The prompt's line number spliced into the id: `[1] spya-rsk002` written as `spya-1rsk`. */
+/**
+ * The prompt's line number spliced into the id: `[1] spya-rsk002` written as `spya-1rsk`. Since
+ * `toc/13` the answer gives the number, not the id; an answer that has one anyway is read like any
+ * other start that names no block.
+ */
 const SPLICED = threeParts("spya-1rsk");
 /** A middle start that names nothing: refused by a first answer, dropped by the last. */
-const DROPPABLE = threeParts("spya-zzz999");
+const DROPPABLE = threeParts(99);
 /**
  * The first reading refuses at root child 2. The last-answer reading drops that child, then reaches
  * a distinct nested refusal under child 3. This makes which error escaped observable.
@@ -177,44 +181,21 @@ const DIFFERENT_FALLBACK_ERROR = JSON.stringify({
     gist: "A gist.",
     question: "The whole piece — what does it say?",
     children: [
-      { title: "Opening", gist: "The heading.", question: "Opening — what?", start: BLOCKS[0]!.id },
-      { title: "First refusal", gist: "Not kept.", question: "Why?", start: "spya-first0" },
+      { title: "Opening", gist: "The heading.", question: "Opening — what?", start: 0 },
+      { title: "First refusal", gist: "Not kept.", question: "Why?", start: 99 },
       {
         title: "The rest",
         gist: "The rest.",
         question: "The rest — what?",
-        start: BLOCKS[2]!.id,
+        start: 2,
         children: [
-          { title: "Nested opening", gist: "Nested.", start: BLOCKS[2]!.id },
-          { title: "Fallback refusal", gist: "Not kept.", start: "spya-second" },
+          { title: "Nested opening", gist: "Nested.", start: 2 },
+          { title: "Fallback refusal", gist: "Not kept.", start: 98 },
         ],
       },
     ],
   },
 });
-/** A recovered root boundary followed by a fatal nested boundary, for failure telemetry. */
-const RECOVERED_THEN_FATAL = JSON.stringify({
-  root: {
-    title: "The whole piece",
-    gist: "A gist.",
-    question: "The whole piece — what does it say?",
-    children: [
-      { title: "Opening", gist: "The heading.", question: "Opening — what?", start: BLOCKS[0]!.id },
-      { title: "Turnips", gist: "The turnips.", question: "Turnips — why?", start: "spya-1rsk" },
-      {
-        title: "The rest",
-        gist: "The rest.",
-        question: "The rest — what?",
-        start: BLOCKS[2]!.id,
-        children: [
-          { title: "Nested opening", gist: "Nested.", start: BLOCKS[2]!.id },
-          { title: "Fatal", gist: "Not kept.", start: "spya-fatal0" },
-        ],
-      },
-    ],
-  },
-});
-
 function memoryCheckpoints(): CheckpointStore & { entries: Map<string, unknown> } {
   const entries = new Map<string, unknown>();
   return {
@@ -367,20 +348,12 @@ describe("a start that names no block", () => {
     return tree.nodes[tree.rootId]!.children.map((child) => tree.nodes[child]!.title);
   };
 
-  it("is read as the line number it splices in, on the first answer, with no second call", async () => {
-    answers = [{ text: SPLICED }];
-    const checkpoints = memoryCheckpoints();
-    const result = await run({ checkpoints });
-    expect(wholeDocumentCalls).toBe(1);
-    expect(titles(result)).toEqual(["Opening", "Turnips", "The rest"]);
-    expect(result.startsRecovered).toBe(1);
+  it("is not read as the line number it splices in: it buys the re-ask like any other", async () => {
+    answers = [{ text: SPLICED }, { text: SOUND }];
+    const result = await run();
+    expect(wholeDocumentCalls).toBe(2);
     expect(result.startsDropped).toBe(0);
-
-    wholeDocumentCalls = 0;
-    const again = await run({ checkpoints });
-    expect(wholeDocumentCalls, "the checkpoint gate rejected a recoverable answer").toBe(0);
-    expect(again.wholeDocumentResumed).toBe(true);
-    expect(again.startsRecovered).toBe(1);
+    expect(result.droppedChildren).toBe(0);
   });
 
   it("buys the re-ask, and the re-ask may drop it rather than fail the step", async () => {
@@ -413,23 +386,21 @@ describe("a start that names no block", () => {
   it("fails the step on the first refusal when even the last-answer reading refuses", async () => {
     answers = [{ text: DIFFERENT_FALLBACK_ERROR, ms: 100_000 }, { text: SOUND }];
     await expect(run({ deadlineAt: Date.now() + 100_000 + 140_000 })).rejects.toThrow(
-      /^Node range not in blocks\.json — at root > child 2: start not a block id \(a 11-character string, withheld\)$/,
+      /^Node range not in blocks\.json — at root > child 2: start not a block id \(a number\)$/,
     );
     expect(wholeDocumentCalls).toBe(1);
   });
 
-  it("reports a prior recovery without claiming that zero boundaries were mended", async () => {
-    answers = [{ text: RECOVERED_THEN_FATAL, ms: 100_000 }, { text: SOUND }];
+  it("reports a prior drop when the last answer then fails somewhere else", async () => {
+    answers = [{ text: BROKEN }, { text: DIFFERENT_FALLBACK_ERROR }];
+    let message = "";
     try {
-      await run({ deadlineAt: Date.now() + 100_000 + 140_000 });
-      throw new Error("the fatal nested start built a tree");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toContain(
-        "It had also read 1 start(s) that named no block: root > child 2 (line-number).",
-      );
-      expect((error as Error).message).not.toContain("mended 0 boundary");
+      await run();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
     }
-    expect(wholeDocumentCalls).toBe(1);
+    expect(message).toMatch(/It had also read 1 start\(s\) that named no block: root > child 2 \(dropped\)\./);
+    expect(message).not.toMatch(/mended 0 boundary/);
+    expect(wholeDocumentCalls).toBe(2);
   });
 });

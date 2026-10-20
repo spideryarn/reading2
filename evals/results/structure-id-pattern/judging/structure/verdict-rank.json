@@ -1,0 +1,82 @@
+{
+  "mode": "structure",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "ranking": [["Z"], ["Y"], ["W", "X"]],
+      "separations": [
+        "Z over Y: Z preserves the statistical primer, cross-field evidence, public perceptions, academic response and broader methodological changes as distinct structural turns.",
+        "Y over W/X: Y covers both the technical vocabulary and empirical evidence accurately, without W's unsupported misconduct framing or X's under-described statistical material."
+      ],
+      "criterionNotes": "The candidates differ most in section boundaries and nesting: Z best reflects the article's many major divisions, while W, X and Y compress them into broader containers. Y has the strongest gists among those compressed versions."
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "ranking": [["W"], ["Y"], ["Z"], ["X"]],
+      "separations": [
+        "W over Y: W follows every numbered section cleanly and gives more precise technical gists without creating an empty-opening references section.",
+        "Y over Z: Y keeps the summary, disclosures and references structurally distinct, whereas Z folds all back matter into the scientific summary.",
+        "Z over X: Z at least accounts for the closing material, while X drops the contributions, funding, disclosures and references entirely."
+      ],
+      "criterionNotes": "All four handle the scientific body well; completeness and the treatment of back matter decide the ranking. W also has the most consistently specific sampled gists."
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "ranking": [["X"], ["W", "Z"], ["Y"]],
+      "separations": [
+        "X over W/Z: X combines faithful major boundaries with the clearest and most complete account of the four arguments against computational functionalism.",
+        "W/Z over Y: W and Z preserve the title and author material as its own section, while Y awkwardly begins the substantive opening section at the byline."
+      ],
+      "criterionNotes": "The substantive section boundaries are nearly identical, so gist specificity and clean coverage of the front matter matter most. Y's merged opening is the only notable structural regression."
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "ranking": [["W"], ["X"], ["Y"], ["Z"]],
+      "separations": [
+        "W over X: W gives the most specific and complete account of the examples, irreducibility, induction failures and practical responses while retaining every major authorial turn.",
+        "X over Y: X better preserves the role of pockets of predictability and the persistence of deep bugs in AI-built and trained systems.",
+        "Y over Z: Y keeps the cellular-automaton, diagnosis, proof, ruliological-surprise and mathematical-counterexample sections distinct, whereas Z compresses several real turns and loses the acknowledgements."
+      ],
+      "criterionNotes": "The chief difference is structural completeness: W, X and Y follow the article's headings, while Z over-compresses them. Among the fuller trees, W's gists are the most precise."
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "ranking": [["X"], ["Z"], ["Y"], ["W"]],
+      "separations": [
+        "X over Z: X retains the important argumentative turns while replacing several unwieldy author headings with sharper landmarks and grouping closely related material coherently.",
+        "Z over Y: Z preserves distinct sections for the classical model, mixed selectivity, anesthesia, the hybrid framework, comparisons and conclusion, which Y repeatedly merges.",
+        "Y over W: Y keeps the abstract separate and gives anesthesia and consciousness their own structural turn, while W folds them into neighboring sections."
+      ],
+      "criterionNotes": "Nesting and titles create the largest differences: X balances the paper's real divisions with concise navigation, Z is structurally complete but often too verbose, and Y and W increasingly flatten the argument."
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "ranking": [["W", "X"], ["Z"], ["Y"]],
+      "separations": [
+        "W/X over Z: W and X most fully connect the historical case studies to the article's warning about clannish dependence and the possible loss of liberal individualism.",
+        "Z over Y: Z retains the concluding argument that work supplies impersonal respect and loosens family ties, while Y reduces that turn mainly to friendship."
+      ],
+      "criterionNotes": "All four follow the same six real divisions, so gist completeness is decisive. W and X best preserve both the evidence within each case study and the final political argument."
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "ranking": [["Z"], ["Y"], ["X"], ["W"]],
+      "separations": [
+        "Z over Y: Z states the mechanical comparison accurately—strength comparable to steel and greater toughness—where Y implies that silk exceeds both steel and Kevlar across several properties.",
+        "Y over X: Y gives more complete and specific accounts of silk uses, artificial production and human applications.",
+        "X over W: X supplies a complete usable structure, while W produced no usable output."
+      ],
+      "criterionNotes": "X, Y and Z share essentially the same boundaries and nesting, so gist accuracy and specificity separate them. W necessarily ranks last because it contains no structure."
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "ranking": [["Z"], ["X", "Y"], ["W"]],
+      "separations": [
+        "Z over X/Y: Z identifies the cargo-cult analogy and the subsequent explanation of scientific integrity as separate argumentative turns, giving the speech its clearest progression.",
+        "X/Y over W: X and Y preserve a distinct section on honesty toward the public and selective publication, while W folds that substantial turn into a broader self-deception section."
+      ],
+      "criterionNotes": "The main distinction is boundary placement in an essay without headings: Z best detects the transitions from analogy to principle to public duty to experimental practice. X and Y are equally strong in titles and gists, while W is somewhat too coarse."
+    }
+  ]
+}

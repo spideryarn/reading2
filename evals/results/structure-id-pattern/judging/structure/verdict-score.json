@@ -1,0 +1,360 @@
+{
+  "mode": "structure",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Five broad parts match the article's arc, but 'Public awareness and perceptions' is folded into Responses rather than standing as its own turn.",
+            "c2": "Coarse top level with deeper nodes for the author's subsections (e.g. Replication efforts, psychology evidence); plausible but top tier is broad.",
+            "c3": "Mostly sharp ('Origins and evidence', 'Responses and reforms'); 'Definition and key concepts' and 'Causes' are generic.",
+            "c4": "Accurate and covers both definitions and statistical terms in section 1; Responses gist is a list rather than a claim.",
+            "c5": "Whole article covered, See also and bibliography in their own node, no duplication."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Same five-part split as the article's main arc; public awareness absorbed into Responses.",
+            "c2": "Broad top level with sub-nodes such as the triangulation/complex-systems group; partly reflects the article's subsections.",
+            "c3": "'What replication means' labels a section that is half statistical-testing definitions, so the landmark misleads.",
+            "c4": "Section 1 gist omits the long statistical-terms passage (p-values, power); other gists accurate.",
+            "c5": "Complete; references separated cleanly."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Main divisions right (definitions, origins/evidence, causes, responses); public awareness merged into Responses.",
+            "c2": "Deeper nodes for statistical terms and other-disciplines evidence show some real sub-structure under a coarse top.",
+            "c3": "'Definitions and statistical terms' accurately names both halves; 'Origins and evidence of the crisis' is a little long.",
+            "c4": "Accurate (e.g. medicine/cancer/nutrition/economics low replication rates); Responses gist mostly a list.",
+            "c5": "Complete; See also and references separate."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Top level mirrors the article's real sections: meaning, statistical terms, origins, evidence across fields, causes, public awareness, response in academia, broader changes.",
+            "c2": "Nine top-level sections with author's subsections beneath (e.g. triangulation under Broader changes); sensible depth.",
+            "c3": "Short, specific landmarks ('Statistical terms explained', 'Evidence across fields', 'Public awareness and perceptions').",
+            "c4": "Specific and checked: public-awareness gist matches the German survey (75% unaware, 18% distrust, 65% quality control).",
+            "c5": "Complete and clean, references in their own node."
+          }
+        }
+      }
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Follows the paper's numbered sections 1-8 exactly, front matter and back matter separated.",
+            "c2": "Subsections (2.2 Tracking Information, 6.3 limitations, 4.x) appear as deeper nodes, matching the paper.",
+            "c3": "Author's headings kept, with numbers ('1. Introduction'); clear but the numbering adds clutter.",
+            "c4": "Specific and accurate: intro gist matches the two limitations (data now abated, analysis remains); section 2 gist names MI vs transfer entropy.",
+            "c5": "Contributions, funding and references grouped in one back-matter node; nothing lost."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Sections match the paper's numbered sections 1-8.",
+            "c2": "Deeper nodes follow subsections (e.g. data types under section 2).",
+            "c3": "Author's numbered headings; clear, slightly cluttered.",
+            "c4": "Accurate but a bit more generic (intro: 'held back by limited data and analysis tools').",
+            "c5": "No back-matter node: author contributions, funding and references are silently folded into '8. Summary'."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Matches the paper's sections 1-8 with front and back matter separated.",
+            "c2": "Deeper nodes follow subsections (6.2 interpreting PID, 2.2 tracking).",
+            "c3": "Author's numbered headings; clear.",
+            "c4": "Accurate; section 2 gist omits mutual information/transfer entropy, section 3 gist is terse.",
+            "c5": "'References' is its own section holding only the lone heading block (opens on an empty string)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Sections 1-7 match the paper; Summary merged with the back matter.",
+            "c2": "Subsections nested beneath (6.2, section 2 dimensions).",
+            "c3": "Author's headings without numbering, short and scannable.",
+            "c4": "Accurate and specific (PID in Action names cultures, macaques, rich clubs, recurrent links, correlated inputs).",
+            "c5": "'Summary and Back Matter' is a mild catch-all joining the conclusion to funding and references."
+          }
+        }
+      }
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Credits split off, unheaded opening given its own section, then the author's five headings.",
+            "c2": "Deeper nodes inside sections (Lemoine passage, 'Let's summarize' recap within Consciousness & Computation).",
+            "c3": "Author's headings plus a sharp 'Why Conscious AI Matters'.",
+            "c4": "Accurate and specific: four arguments, conscious-seeming AI as nearer harm, Cartesian soul vs felt aliveness.",
+            "c5": "Complete, no duplication."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Same faithful split as the author's headings plus the unheaded opening.",
+            "c2": "Sub-nodes for Lemoine, moral-standing opening of What (Not) To Do.",
+            "c3": "Author's headings; clear.",
+            "c4": "Computation gist names all four arguments; What (Not) To Do gist garbled ('ethical risks that we may be unable to resist feeling').",
+            "c5": "Complete."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Byline, credits and author bio are folded into the opening argument section 'Why Conscious AI Matters'.",
+            "c2": "Sub-nodes match (opening history of artificial humans, soul passage).",
+            "c3": "Author's headings; clear.",
+            "c4": "Accurate (e.g. brain organoids as a bigger worry than chatbots matches the 'other emerging technologies' passage).",
+            "c5": "Nothing dropped, though front matter is mixed into the first section."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Credits separate, then the opening and the author's five headed sections.",
+            "c2": "Sub-nodes match (Lemoine, 'Let's summarize' recap).",
+            "c3": "Clear author headings plus a sharp opening title.",
+            "c4": "Specific: computation gist lists all four arguments; soul gist cites Greek and Hindu breath ideas.",
+            "c5": "Complete."
+          }
+        }
+      }
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Each of the author's eleven headings plus Thanks is a section.",
+            "c2": "Sub-nodes inside headed sections (8k-1 glitches, n=42/151/32 specification escapes, rule-122 rind argument).",
+            "c3": "Author's headings kept; 'Did I Test Enough Cases? The Failure of Ruliological Induction' is long.",
+            "c4": "Very specific and correct: inputs 14, 24, 32 for CA bugs; all-1s binary inputs; proofs no cheaper than running.",
+            "c5": "Complete including Thanks."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Follows every author heading.",
+            "c2": "Sub-nodes for stabilization-time fluctuations and symbolic proof setup.",
+            "c3": "Author's headings; one long.",
+            "c4": "Accurate but more generic ('fail only at surprisingly large input sizes'; Surprises gist names no examples).",
+            "c5": "Complete."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Follows every author heading.",
+            "c2": "Sub-nodes for opening framing and specification types.",
+            "c3": "Author's headings; one long.",
+            "c4": "Mostly right; Turing gist calls input 7 'surprisingly large', CA gist vague ('fail only after a long wait'); Bugs in Practice gist good.",
+            "c5": "Complete."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 3, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Three headed sections (CA example, Can one tell, Formal proofs) merged under 'Telling If a Bug Will Occur', and Surprises merged with Mathematical bugs.",
+            "c2": "Author's top-level sections pushed down a level, so the depth no longer matches the essay's flat run of headings.",
+            "c3": "Short and clear, but 'Telling If a Bug Will Occur' does not describe the CA example or formal proofs it contains.",
+            "c4": "Accurate but compressed; the merged gist covers CA, visual simplicity and proofs in one breath.",
+            "c5": "No Thanks section; acknowledgements silently ride in 'Bugs in Practice'."
+          }
+        }
+      }
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 3, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Anesthesia section placed under 'Analog Computation with Waves'; Introduction, classical model and mixed selectivity merged; Conclusion folded into 'Hybrid Framework and Its Place'.",
+            "c2": "Sub-nodes follow the paper's subsections (mixed selectivity under Spatial Computing, oscillations organize information).",
+            "c3": "Clear titles; 'A Hybrid Framework and Its Place' is vague.",
+            "c4": "Mostly accurate, but the analog-computation gist bolts anesthesia evidence onto analog computing.",
+            "c5": "Covered, but the last argument section is a catch-all of hybrid framework, comparison and conclusion."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Follows the paper's headings; merges classical model with mixed selectivity and hybrid framework with comparison, both defensible.",
+            "c2": "Sub-nodes match subsections (mixed selectivity, traveling-wave frequencies).",
+            "c3": "Short, specific titles ('Altered Cortical Waves and Unconsciousness', 'Spatial Computing').",
+            "c4": "Specific and correct (anesthetics with different targets converge on slow misaligned waves; ~20 watts).",
+            "c5": "Complete, front and back matter separate."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Introduction, classical model and mixed selectivity merged; anesthesia paired with hybrid framework as 'Waves and Consciousness'; comparison with conclusion; groupings defensible.",
+            "c2": "Sub-nodes for subspace coding and theta waves match the paper.",
+            "c3": "Mostly clear; 'Comparison and Conclusion' is generic.",
+            "c4": "Accurate (addition and interference, synapses store while waves select).",
+            "c5": "Complete."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 3, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Every one of the paper's headed sections is its own section, in order.",
+            "c2": "Subsections (ephaptic coupling under oscillations) nested beneath; matches the paper's depth.",
+            "c3": "Several verbatim long headings, e.g. '20th century neuroscience: The classical model of neural information processing' (10 words).",
+            "c4": "Specific and accurate (comparison gist names workspace, IIT, higher-order and executive theories).",
+            "c5": "Complete."
+          }
+        }
+      }
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Opening, then the author's four headed sections, then notes.",
+            "c2": "Sub-nodes follow the essay's turns (Saint-Simon, West End parallels, organizing failure).",
+            "c3": "Author's headings kept; 'Power and sex among apes' is witty rather than informative; 'A Relational Future' clear.",
+            "c4": "Specific: Elias caveat on aristocrats, volunteering about status, work loosening clan ties threatens liberal individualism.",
+            "c5": "Complete, notes separate."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Same faithful split.",
+            "c2": "Sub-nodes for aristocrats' relational world and West End organizing.",
+            "c3": "Author's headings; opening title taken from the first line.",
+            "c4": "Accurate, captures the closing stakes (return to clannish dependence vs liberal individualism).",
+            "c5": "Complete."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Same faithful split.",
+            "c2": "Sub-nodes for Catherine the Great and West End organizing.",
+            "c3": "Author's headings; opening title from first line.",
+            "c4": "Thinner: final-section gist omits the argument that losing work threatens freer friendship; opening gist drops 'I am afraid they're right'.",
+            "c5": "Complete."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Same faithful split.",
+            "c2": "Sub-nodes for case-study framing and West End daily life.",
+            "c3": "Author's headings; opening title from first line.",
+            "c4": "Working-classes gist ties the failure to organize to exclusion and policing, where the text blames distrust of leaders and formal rules; final gist omits the stakes.",
+            "c5": "Complete."
+          }
+        }
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 1, "c2": 1, "c3": 1, "c4": 1, "c5": 1 },
+          "evidence": { "c1": "no output", "c2": "no output", "c3": "no output", "c4": "no output", "c5": "no output" }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Follows the Wikipedia headings: lead, Properties, Uses, Silk types, Synthesis, Artificial synthesis, Research, Human uses.",
+            "c2": "Sub-nodes for Human uses' Medicine and Science and technology, Uses' evolution.",
+            "c3": "Lead titled 'Spider silk', the article's own name, which is no landmark.",
+            "c4": "Mostly right; Human uses gist ('small, special items') omits medicine and optics; Silk types gist generic.",
+            "c5": "Complete, references and links together."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Same faithful split by the article's headings.",
+            "c2": "Sub-nodes for Medicine, Science and technology, Adhesive.",
+            "c3": "Lead again titled just 'Spider silk'.",
+            "c4": "Specific: humidity/temperature, bacteria/yeast/goats/silkworms, 1709 weaving, medicine, optics, fusion.",
+            "c5": "Complete."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Same faithful split by the article's headings.",
+            "c2": "Sub-nodes for Medicine, Adhesive, References.",
+            "c3": "'Introduction to spider silk' distinguishes the lead; others are the article's headings.",
+            "c4": "Accurate and specific (duct shape, acidity and stress; strength comparable to steel, far greater toughness).",
+            "c5": "Complete."
+          }
+        }
+      }
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "The 'not fool the layman' turn, which Feynman marks as a separate addition, is folded into 'Not Fooling Yourself'.",
+            "c2": "Sub-nodes for Wesson Oil, the first principle, Feynman's own investigations.",
+            "c3": "Mostly clear; 'Poor Science Examples' and 'Title and Byline' plain.",
+            "c4": "Accurate; 'Cargo Cult Science Defined' gist says only 'essential honesty' without the report-everything content.",
+            "c5": "Complete."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Boundaries at each turn: pseudoscience, cargo cult + what it lacks, not fooling yourself, honesty to public, poor science, wish.",
+            "c2": "Sub-nodes for Wesson Oil and the investigations anecdotes.",
+            "c3": "Sharp ('What Cargo Cult Science Lacks', 'Honesty Toward the Public').",
+            "c4": "Specific: reporting everything that could cast doubt, publishing whichever way results come out.",
+            "c5": "Complete."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Same turn-by-turn boundaries as the talk.",
+            "c2": "Sub-nodes for Wesson Oil and the investigations.",
+            "c3": "Specific ('Believing Things That Don't Work', 'Poor Experiments and Neglected Good Ones').",
+            "c4": "Accurate and specific (Millikan, Young's rat maze, 'or you are merely being used').",
+            "c5": "Complete."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Splits the analogy from 'Now it behooves me… what they're missing', a real turn; honesty to public separate.",
+            "c2": "Sub-nodes for Wesson Oil, cosmology radio example, investigations.",
+            "c3": "'Why Pseudoscience Is Everywhere' promises an explanation the section does not give.",
+            "c4": "Integrity gist omits Millikan's electron-charge history; closing gist vague ('a joking tip about speaking').",
+            "c5": "Complete."
+          }
+        }
+      }
+    }
+  ]
+}

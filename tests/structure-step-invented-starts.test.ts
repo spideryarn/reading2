@@ -1,7 +1,8 @@
 /**
- * A whole-document start that is not a block id is recovered, or on the last answer dropped,
- * rather than refusing the whole tree —
- * docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md.
+ * A whole-document start that is not a block id is, on the last answer, dropped rather than
+ * refusing the whole tree —
+ * docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md, less
+ * its line-number decoder (docs/plans/261020aa-structure-answers-the-block-number-not-its-id.md).
  *
  * The shapes are the ones production and four re-runs of its request produced for a 648-block PDF:
  * the prompt line `[582] spya-xcf0dz <h1>: …` came back as `spya-582xcf0dz`, `spya-582xcf` and
@@ -10,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 import { ExpansionRefused, normaliseExpansion } from "../src/structure-cascade.js";
 import type { BuildReport } from "../src/structure.js";
-import { splicedLineNumber, type UnresolvedStarts } from "../src/start-ranges.js";
+import type { UnresolvedStarts } from "../src/start-ranges.js";
 import { droppedStartBudget, modelNodeFromStarts, type StartsOnlyNode } from "../src/structure-starts.js";
 import type { Block } from "../src/types.js";
 
@@ -64,66 +65,27 @@ const fiveAfter = (second: string): StartsOnlyNode[] => [
   { title: "Five", start: id(26) },
 ];
 
-describe("a spliced line number resolves to the line it was copied from", () => {
+/* 261019l read these as the line the model copied from. Since `toc/13` the answer gives the
+   number itself, so the decoder went, and a stored or hand-made answer that still carries one
+   is treated like any other start that names no block. */
+describe("a spliced line number is a start that names no block", () => {
   it.each([
     ["the line number and the whole id", `spya-12${SUFFIXES[12]}`],
     ["the line number and a prefix of the id", `spya-12${SUFFIXES[12]!.slice(0, 3)}`],
     ["the line number alone", "spya-12"],
-  ])("%s, even on a first answer", (_, start) => {
-    const { ranges, report, outcomes } = build(
-      [
-        { title: "Opening", start: id(0) },
-        { title: "Gaps", start },
-        { title: "After", start: id(18) },
-      ],
-      "recover",
-    );
+  ])("%s refuses a first answer and drops its child on the last", (_, start) => {
+    const children: StartsOnlyNode[] = [
+      { title: "Opening", start: id(0) },
+      { title: "Gaps", start },
+      { title: "After", start: id(18) },
+    ];
+    expect(() => build(children, "recover")).toThrow(/Node range not in blocks\.json/);
+    const { ranges, outcomes } = build(children, "recover-or-drop");
     expect(ranges).toEqual([
-      ["Opening", id(0), id(11)],
-      ["Gaps", id(12), id(17)],
+      ["Opening", id(0), id(17)],
       ["After", id(18), id(29)],
     ]);
-    expect(outcomes).toEqual(["root > child 2: line-number"]);
-    expect(report.droppedChildren).toEqual([]);
-  });
-
-  it("not when the rest is not that line's id", () => {
-    expect(splicedLineNumber(`spya-12${SUFFIXES[13]!.slice(0, 4)}`, blocks, 1, 17)).toBeUndefined();
-  });
-
-  it("not when the line falls outside the window between its neighbours", () => {
-    expect(splicedLineNumber("spya-12", blocks, 13, 17)).toBeUndefined();
-    expect(splicedLineNumber("spya-12", blocks, 1, 11)).toBeUndefined();
-    expect(splicedLineNumber("spya-12", blocks, 12, 12)).toBe(12);
-  });
-
-  it("not when two splits of the digits both match, even if only one is in the window", () => {
-    /* Block 1's id begins "2kam", so `spya-12kam` reads as line 12 + "kam" or as line 1 + "2kam".
-       Choosing by the window would pick line 1 when the model meant line 12. ⟨Sol r2, finding 1⟩ */
-    const tricky = blocks.map((b, i) => (i === 1 ? block(1, "text", "Block 1", `2${SUFFIXES[12]!.slice(0, 3)}zz`) : b));
-    const start = `spya-12${SUFFIXES[12]!.slice(0, 3)}`;
-    expect(splicedLineNumber(start, tricky, 1, 11)).toBeUndefined();
-    expect(splicedLineNumber(start, tricky, 1, 29)).toBeUndefined();
-  });
-
-  it("not a number with a leading zero, read as a shorter line", () => {
-    expect(splicedLineNumber("spya-012", blocks, 0, 29)).toBeUndefined();
-  });
-
-  it("stops before an overflowing digit prefix is used as an array index", () => {
-    const guarded = new Proxy(blocks, {
-      get(target, property, receiver) {
-        if (
-          typeof property === "string" &&
-          /^\d+$/.test(property) &&
-          !Number.isSafeInteger(Number(property))
-        ) {
-          throw new Error(`unsafe array index ${property}`);
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    expect(splicedLineNumber(`spya-${"9".repeat(100)}`, guarded, 0, 29)).toBeUndefined();
+    expect(outcomes).toEqual(["root > child 2: dropped"]);
   });
 });
 

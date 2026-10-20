@@ -48,10 +48,22 @@ type JudgedMode = (typeof JUDGED_MODES)[number];
 /** The two repeats of toc/10 and toc/11, named in the shape tally.ts already understands. */
 export const STRUCTURE_ARMS = ["base-a", "base-b", "toc11-a", "toc11-b"] as const;
 
-export const structureTreeFile = (arm: string, slug: string): string => {
-  const match = /^(base|toc11)-([ab])$/.exec(arm);
-  if (!match) throw new Error(`unknown structure judging arm ${arm}`);
-  const source = match[1] === "base" ? "toc10-frozen" : "incumbent";
+/**
+ * Which run arm the blind `base-*` aliases read, and what the candidate family is
+ * called. Defaults are plan 261001s's (toc/10 against toc/11); plan 261020aa's
+ * toc/12-against-toc/13 panel passes `--structure-base toc12-frozen
+ * --structure-candidate toc13`. The candidate is always the run's `incumbent`.
+ */
+export interface StructurePair {
+  baseArm: string;
+  candidate: string;
+}
+export const DEFAULT_STRUCTURE_PAIR: StructurePair = { baseArm: "toc10-frozen", candidate: "toc11" };
+
+export const structureTreeFile = (arm: string, slug: string, pair: StructurePair = DEFAULT_STRUCTURE_PAIR): string => {
+  const match = /^(base|[a-z0-9]+)-([ab])$/.exec(arm);
+  if (!match || (match[1] !== "base" && match[1] !== pair.candidate)) throw new Error(`unknown structure judging arm ${arm}`);
+  const source = match[1] === "base" ? pair.baseArm : "incumbent";
   const repeat = match[2] === "a" ? 1 : 2;
   return `${source}.${slug}.r${repeat}.json`;
 };
@@ -95,6 +107,7 @@ interface Options {
   structureRun: string | null;
   arms: string[] | null;
   seed: number | null;
+  pair: StructurePair;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -103,6 +116,7 @@ function parseArgs(argv: string[]): Options {
   let structureRun: string | null = null;
   let arms: string[] | null = null;
   let seed: number | null = null;
+  const pair: StructurePair = { ...DEFAULT_STRUCTURE_PAIR };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] as string;
     const next = (): string => {
@@ -115,12 +129,14 @@ function parseArgs(argv: string[]): Options {
     else if (a === "--structure-run") structureRun = next();
     else if (a === "--arms") arms = next().split(",");
     else if (a === "--seed") seed = Number.parseInt(next(), 10);
+    else if (a === "--structure-base") pair.baseArm = next();
+    else if (a === "--structure-candidate") pair.candidate = next();
     else throw new Error(`unknown argument ${a}`);
   }
   if (!results) throw new Error("--results <dir> is required: the directory run.ts wrote");
   if (!(JUDGED_MODES as readonly string[]).includes(mode)) throw new Error(`--mode must be one of ${JUDGED_MODES.join(", ")}`);
   if (mode === "structure" && !structureRun) throw new Error("--mode structure needs --structure-run <evals/results/structure-whole-document/run dir>");
-  return { results, mode: mode as JudgedMode, structureRun, arms, seed };
+  return { results, mode: mode as JudgedMode, structureRun, arms, seed, pair };
 }
 
 async function readJson<T>(file: string): Promise<T> {
@@ -164,7 +180,7 @@ async function render(
       return [head, "", "```json", JSON.stringify(brief, null, 2), "```"].join("\n");
     }
     case "structure": {
-      const file = path.join(opts.structureRun as string, "trees", structureTreeFile(arm, slug));
+      const file = path.join(opts.structureRun as string, "trees", structureTreeFile(arm, slug, opts.pair));
       if (!existsSync(file)) return missing;
       /* blind.ts's own heading, renamed to this lineup's. */
       return renderForJudging(
@@ -200,7 +216,9 @@ async function main(opts: Options): Promise<void> {
   await writeFile(seedFile, `${JSON.stringify({ seed }, null, 2)}\n`, "utf-8");
 
   const arms: string[] =
-    opts.arms ?? (opts.mode === "structure" ? [...STRUCTURE_ARMS] : [...DEFAULT_ARMS]);
+    opts.arms ?? (opts.mode === "structure"
+      ? ["base-a", "base-b", `${opts.pair.candidate}-a`, `${opts.pair.candidate}-b`]
+      : [...DEFAULT_ARMS]);
   const slugs =
     opts.mode === "structure"
       ? [...new Set((await readJson<{ results: { slug: string }[] }>(path.join(opts.structureRun as string, "run.json"))).results.map((r) => r.slug))]
