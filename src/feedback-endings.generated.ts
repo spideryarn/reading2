@@ -10,6 +10,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-a0ep9m": "shipped",
   "spya-a0wpv4": "shipped",
   "spya-a353as": "shipped",
+  "spya-a40t70": "shipped",
   "spya-a4rfbk": "shipped",
   "spya-a4xsg3": "shipped",
   "spya-a52jsr": "shipped",
@@ -245,6 +246,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-ka23h9": "shipped",
   "spya-ka3cau": "shipped",
   "spya-ka7ysy": "shipped",
+  "spya-kan788": "shipped",
   "spya-kbzzk8": "declined",
   "spya-kcdabx": "shipped",
   "spya-kd5dk5": "shipped",
@@ -437,6 +439,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-sgf8g6": "shipped",
   "spya-sgfxuv": "shipped",
   "spya-skpxw2": "awaiting",
+  "spya-skq3fg": "shipped",
   "spya-skqwg8": "shipped",
   "spya-skxhcz": "shipped",
   "spya-sm0hyk": "shipped",
@@ -641,6 +644,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+  "spya-a40t70": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
   "spya-a63vmt": "Shipped. In Chat, type @ to bring in one of your own articles, archived and public included; citations of it open it at the passage. Other people's articles are not included.",
   "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).",
@@ -694,6 +698,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-jvsv3q": "Shipped: a Chat icon under a finished mark opens a new chat with the question, the mark and your answer quoted, ready for you to type. Queued: the question remembering that chat and reopening it.",
   "spya-k06kam": "Planned, not built, because it changes a security rule. Two options: view the app as a reader, read-only, with a bar and Stop; or inspect one article on an admin page. Question q-kyhvkm is waiting for you.",
   "spya-k49y3q": "Shipped on phones: the column is gone, and a tap brings the icons up in a bar above the paragraph. Still queued for you to decide: whether the iPad should get the same.",
+  "spya-kan788": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
   "spya-kbzzk8": "No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.",
   "spya-krvuc9": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-kwcn4x": "On a tall screen our button was docked at the far edge, up to 600px from your words. It now sits just past the iPad's own menu. Please try it on your iPad once deployed.",
@@ -737,6 +742,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-s8pf4r": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",
   "spya-sbj3yk": "Both sentences now say what happened, and arXiv papers find their DOI, so Attention gets its Cited by list. Since 11 October a piece with no DOI is also looked up at OpenAlex by title and authors, strictly checked.",
   "spya-skpxw2": "Part built: type @ in Chat to bring in one of your articles, so an uploaded file can be brought in once it is an article. Attachments that belong to an article are still a question for you.",
+  "spya-skq3fg": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",
   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
   "spya-sy4rn0": "Search's toggle is now just words and meaning. A meaning search shows a quick answer in about a second and swaps in the thorough one by itself once you stop typing; old quick links still open it.",

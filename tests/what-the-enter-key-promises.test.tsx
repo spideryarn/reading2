@@ -147,6 +147,9 @@ const PROMISES: Record<string, string> = {
   /* Why you are reading, asked on the add page and in Skim (plan 260930e).
      Multi-line; ⌘/Ctrl+Enter is the add page's save, never plain Enter. */
   "AddPage.tsx › add-purpose": "newline",
+  /* About you, offered on the add page to a reader with no profile (plan
+     261020a). Same box as Profile's: ⌘/Ctrl+Enter saves, never plain Enter. */
+  "AddPage.tsx › add-about-you": "newline",
   "SkimPurpose.tsx › skim-purpose-input": "newline",
   "QuizPanel.tsx › Your answer": "newline",
 };

@@ -1022,7 +1022,11 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
  * rule that every transition is a single conditional statement. `jobs.steps` on
  * the right-hand side of a `SET` is the row as it was before the update.
  *
- * A preview belongs only to a running step. Remove it on every arm, including
+ * A preview, and a counted `progress`, belong only to a running step, and so
+ * does a running step's `detail`, which is what it said about itself mid-way
+ * (plan 261020a): a step put back to pending, or failed by the sweep, keeps
+ * neither its count nor its "23/69 chunks". A done step's detail is its
+ * product's and is kept. Remove the preview and the progress on every arm, including
  * non-running steps: Stop on a queued job can see a pending preview left by a
  * pause from before this removal was added. Asking a live claimant to stop does
  * not use this transformation, so its preview stays until the claimant settles.
@@ -1034,8 +1038,8 @@ function settledSteps(cancelled: SQL) {
         (case
           when step.value->>'status' <> 'running' then step.value
           when ${cancelled}
-            then (step.value - 'startedAt') || '{"status":"pending"}'::jsonb
-          else step.value || jsonb_build_object(
+            then (step.value - 'startedAt' - 'detail') || '{"status":"pending"}'::jsonb
+          else (step.value - 'detail') || jsonb_build_object(
                  'status', 'error',
                  'error', ${INTERRUPTED.message}::text,
                  /* ISO 8601 with milliseconds and a literal Z. JobStep's
@@ -1046,7 +1050,7 @@ function settledSteps(cancelled: SQL) {
                  'finishedAt', to_char(
                    clock_timestamp() at time zone 'utc',
                    'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
-        end) - 'preview'
+        end) - 'preview' - 'progress'
         order by step.ordinality
       ),
       '[]'::jsonb

@@ -80,16 +80,20 @@ import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { AUTO_MODES_LABEL, autoModesDetail } from "./auto-modes.js";
 import { useAutoModesSetting } from "./auto-modes-setting.js";
-import { MAX_PURPOSE_CHARS } from "../types.js";
+import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "../types.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import {
   type AddPurposeIo,
   AddPurposeSession,
   type AddPurposeSnapshot,
 } from "./add-purpose.js";
-import { SaveStatus, useUnsavedWarning } from "./ProfileBox.js";
+import { AUTOSAVE_IDLE_MS, SaveStatus, useIdleCommit, useUnsavedWarning } from "./ProfileBox.js";
+import { useFitTextarea } from "./useFitTextarea.js";
+import { type UseProfile, useProfile } from "./useProfile.js";
+import type { SaveState } from "./useAutosavedText.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
+import { CircleCheck } from "lucide-react";
 import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
@@ -822,6 +826,36 @@ export function AddPage({
    * on it. Plan 261001s § Stage 3, GPT Sol's plan review item 2.
    */
   const purposeTouchedRef = useRef(false);
+  /**
+   * **About you, for a reader who has none** (spya-kan788). The save is the
+   * one `/profile` uses. Whether to offer the box is decided once, from the
+   * first successful read, and kept: a box that vanished as the reader's first
+   * words saved would be a box taken out from under them. A read that failed
+   * offers nothing, since it cannot say they have none.
+   */
+  const profile = useProfile();
+  const [askAboutYou, setAskAboutYou] = useState<boolean | null>(null);
+  /* Use the first successful answer in this render as well as latching it for
+     later ones. The completion effect runs in the same passive-effect flush as
+     the latch: reading only `askAboutYou` there could open over an empty-profile
+     answer that had already arrived but whose state update had not rendered. */
+  const askAboutYouNow =
+    askAboutYou ?? (profile.saved === null ? null : profile.saved.trim() === "");
+  useEffect(() => {
+    if (askAboutYou === null && profile.saved !== null) setAskAboutYou(profile.saved.trim() === "");
+  }, [askAboutYou, profile.saved]);
+  /* Read at completion, like `focusedRef`, to ask whether the box keeps the
+     page (`aboutYouHolds`). The save's state as of the last render. */
+  const aboutYouFocusedRef = useRef(false);
+  const profileNowRef = useRef(profile);
+  profileNowRef.current = profile;
+  const askAboutYouRef = useRef(false);
+  askAboutYouRef.current = askAboutYouNow === true;
+  /* Its words are unsaved: what keeps *Open the article* waiting, and what
+     the leave warning asks about. Only for a box that was drawn. */
+  const aboutYouPending = askAboutYouNow === true && aboutYouUnsaved(profile.state, profile.inFlight);
+  const aboutYouRefused = askAboutYouNow === true && profile.state.kind === "error";
+  useUnsavedWarning(aboutYouPending);
   const [phase, setPhase] = useState<Phase>({ kind: "running" });
   /**
    * **The once-guard on the terminal decision**, holding the completion's key.
@@ -1396,7 +1430,9 @@ export function AddPage({
       /* The request can be slow enough for the reader to enter a purpose.
          Keep their draft and the save controls instead of hiding a refused save. */
       setPhase(
-        purposeTouchedRef.current || purposeRef.current?.session.get().unsaved
+        purposeTouchedRef.current ||
+          purposeRef.current?.session.get().unsaved ||
+          aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current)
           ? { kind: "ready", completion: finished, opening: false }
           : { kind: "repeat", completion: finished },
       );
@@ -1408,6 +1444,7 @@ export function AddPage({
     if (
       !focusedRef.current &&
       !purposeRef.current?.session.get().unsaved &&
+      !aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current) &&
       !sharingUnsettled
     ) {
       /* **And ask once, when it opens**, if the reader never so much as
@@ -1437,9 +1474,16 @@ export function AddPage({
    */
   const openTheArticle = (): void => {
     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
+    /* About you too, and the press waits for both (GPT Sol's plan review,
+       finding 5): the write on the way out is the net for a reader who leaves
+       some other way, not the success path of this button. */
+    profile.commit();
     purpose.commit();
     const now = purpose.get();
-    if (!now.unsaved) {
+    const about = profileNowRef.current;
+    const aboutWaiting =
+      askAboutYouRef.current && aboutYouUnsaved(about.state, about.inFlight);
+    if (!now.unsaved && !aboutWaiting) {
       leave(phase.completion);
       return;
     }
@@ -1453,14 +1497,20 @@ export function AddPage({
     if (phase.kind !== "ready" || !phase.opening || !mayOpen(phase.completion)) return;
     const now = purposeRef.current?.session.get();
     if (!now) return;
-    if (!now.unsaved) {
-      leave(phase.completion);
+    /* One refusal does not cancel the other request. Wait for every request
+       already sent before offering to abandon both drafts: an in-flight PATCH
+       cannot be taken back, so "Open without saving" would otherwise promise
+       something the page can no longer do. */
+    if (now.inFlight || (askAboutYouRef.current && profile.inFlight)) return;
+    /* A refusal lets go: the reason is in the status line, the words are in
+       the box, and *Open without saving* appears beside the button. Either
+       box's refusal. */
+    if (cannotSave(now) || aboutYouRefused) {
+      setPhase({ kind: "ready", completion: phase.completion, opening: false });
       return;
     }
-    /* A refusal lets go: the reason is in the status line, the words are in
-       the box, and *Open without saving* appears beside the button. */
-    if (cannotSave(now)) setPhase({ kind: "ready", completion: phase.completion, opening: false });
-  }, [phase, purposeNow]);
+    if (!now.unsaved && !aboutYouPending) leave(phase.completion);
+  }, [phase, purposeNow, aboutYouPending, aboutYouRefused, profile.inFlight]);
 
   /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
   const openTheRepeat = (): void => {
@@ -1468,10 +1518,11 @@ export function AddPage({
     leave(phase.completion);
   };
 
-  /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
+  /** **Open without saving**: give both drafts up, so retiring does not send them, and open. */
   const openWithoutSaving = (): void => {
     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
     purpose.abandon();
+    if (askAboutYouRef.current) profile.abandon();
     leave(phase.completion);
   };
 
@@ -1526,6 +1577,32 @@ export function AddPage({
         : { text: "your file", voice: "ui" as const }
       : { text: ok ? source : url, voice: "reader" as const };
 
+  /* The same block at both ends of the page while it waits (`ReadyBar`),
+     including an untouched repeat paste: it too has finished and waits for a
+     press, even though there was no new import to save. */
+  const readyCompletion =
+    phase.kind === "ready" || phase.kind === "repeat" ? phase.completion : null;
+  const readyBar = (top: boolean) =>
+    readyCompletion && (
+      <ReadyBar
+        top={top}
+        sentence={
+          readyCompletion.repeat
+            ? REPEAT_PASTE_ON_THE_SHELF
+            : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."
+        }
+        opening={phase.kind === "ready" && phase.opening}
+        offerWithoutSaving={
+          phase.kind === "ready" &&
+          (cannotSave(purposeNow) || aboutYouRefused) &&
+          !purposeNow.inFlight &&
+          !(askAboutYouNow === true && profile.inFlight)
+        }
+        onOpen={phase.kind === "ready" ? openTheArticle : openTheRepeat}
+        onOpenWithoutSaving={openWithoutSaving}
+      />
+    );
+
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-6">
@@ -1549,12 +1626,52 @@ export function AddPage({
         </p>
       </header>
 
+      {/* **Ready, at the top as well as the bottom** (spya-kan788): the
+          reader is in a box up here by the time it finishes. */}
+      {readyBar(true)}
+
       {/* **The transfer, while it is this tab's to show.** Everything below
           this is about a job, and until the bytes have landed there is no job —
           which is the whole difference the background upload made to this page.
           Above the disclosure sentence rather than below it, because it is what
           the reader came here to watch. */}
       {mine && <Sending transfer={mine} />}
+      {/* **The boxes near the top** (spya-kan788: *"put the 'Why are you
+          reading this?' box nearer the top of the add page"*). Under the upload
+          bar, which is what a reader who just pressed Add came to watch, and
+          above everything about the job. */}
+      {showPurpose && (
+        <div data-add-boxes className="tw:mb-4 tw:flex tw:flex-col tw:gap-4">
+          <PurposeBox
+            now={purposeNow}
+            stopped={jobStopped}
+            onChange={(value) => {
+              /* Straight into the session, which is what a completion landing
+                 before the next render will read. */
+              purposeTouchedRef.current = true;
+              purpose.setText(value, true);
+            }}
+            onFocusChange={(focused) => {
+              focusedRef.current = focused;
+              if (focused) purposeTouchedRef.current = true;
+              /* A blur saves. While waiting at the end it still does not open. */
+              else purpose.commit();
+            }}
+            /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
+               article* once it is in. */
+            onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
+          />
+          {askAboutYouNow === true && (
+            <AboutYouBox
+              profile={profile}
+              onFocusChange={(focused) => {
+                aboutYouFocusedRef.current = focused;
+              }}
+            />
+          )}
+        </div>
+      )}
+
       {/* **Queueing gets a line and no button.** One small request, and it
           cannot be undone — see `cancel` in uploadEngine.ts. Saying so beats
           both a Stop that declines and a bar that has silently stopped moving. */}
@@ -1845,60 +1962,9 @@ export function AddPage({
         />
       )}
 
-      {showPurpose && (
-        <PurposeBox
-          now={purposeNow}
-          stopped={jobStopped}
-          onChange={(value) => {
-            /* Straight into the session, which is what a completion landing
-               before the next render will read. */
-            purposeTouchedRef.current = true;
-            purpose.setText(value, true);
-          }}
-          onFocusChange={(focused) => {
-            focusedRef.current = focused;
-            if (focused) purposeTouchedRef.current = true;
-            /* A blur saves. While waiting at the end it still does not open. */
-            else purpose.commit();
-          }}
-          /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
-             article* once it is in. */
-          onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
-        />
-      )}
-
-      {phase.kind === "ready" && (
-        <div className="tw:mt-3">
-          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
-            {phase.completion.repeat
-              ? REPEAT_PASTE_ON_THE_SHELF
-              : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."}
-          </p>
-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <Button type="button" size="sm" disabled={phase.opening} onClick={openTheArticle}>
-              {phase.opening ? "Saving…" : "Open the article"}
-            </Button>
-            {/* Only when the words cannot be saved from here: a refusal, or
-                the read of the stored purpose gave up. */}
-            {cannotSave(purposeNow) && (
-              <Button type="button" variant="ghost" size="sm" onClick={openWithoutSaving}>
-                Open without saving
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      {readyBar(false)}
 
       {choosing && <PublicChoice found={publicAnswer} onOwnCopy={chooseOwnCopy} />}
-
-      {phase.kind === "repeat" && (
-        <div data-add-repeat className="tw:mt-3">
-          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
-          <Button type="button" size="sm" onClick={openTheRepeat}>
-            Open the article
-          </Button>
-        </div>
-      )}
 
       {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
 
@@ -1976,17 +2042,24 @@ function PurposeBox({
   onFocusChange: (focused: boolean) => void;
   onShortcut: () => void;
 }) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  /* **Bigger, and as tall as its words.** Greg, 2026-10-19 (spya-jk0cgg):
+     *"make the 'Why are you reading this?' box bigger/auto-expanding."* Four
+     rows is the floor; useFitTextarea.ts grows it. */
+  useFitTextarea(box, now.text);
   return (
-    <div className="prof-box tw:mt-4">
+    <div className="prof-box">
       <div className="prof-box-head">
         <label className="prof-box-label" htmlFor="add-purpose">
           Why are you reading this?
         </label>
+        <span className="prof-box-scope">This article</span>
       </div>
       <textarea
         id="add-purpose"
-        className="prof-box-input"
-        rows={2}
+        ref={box}
+        className="prof-box-input is-fit"
+        rows={4}
         maxLength={MAX_PURPOSE_CHARS}
         placeholder="e.g. I want to know how they handled missing data"
         value={now.text}
@@ -2015,6 +2088,159 @@ function PurposeBox({
         </span>
       </div>
       <PurposeLine now={now} stopped={stopped} />
+    </div>
+  );
+}
+
+/**
+ * Whether the About-you box holds anything the server may not have, or the
+ * reader is in it: either one keeps the page from opening the article by
+ * itself, as the purpose box does.
+ */
+function aboutYouHolds(shown: boolean, state: SaveState, inFlight: boolean, focused: boolean): boolean {
+  /* Only a box the reader could see. A read that failed is `error` too, and
+     holding on it would wait for ever behind a box that was never drawn (GPT
+     Sol's plan review, finding 2). */
+  if (!shown) return false;
+  return focused || aboutYouUnsaved(state, inFlight);
+}
+
+/** Words in the About-you box the server may not have. */
+function aboutYouUnsaved(state: SaveState, inFlight: boolean): boolean {
+  return inFlight || state.kind === "dirty" || state.kind === "saving" || state.kind === "error";
+}
+
+/**
+ * **About you**, offered on the add page to a reader who has never written
+ * one. Greg, 2026-10-19 (spya-kan788): *"if they haven't filled out a user
+ * profile yet at all, perhaps also add a box for that too, so they can
+ * potentially fill out both. Make it clear which is which and how they're
+ * different."* The difference is said in the scope beside each label and in
+ * the first words of each hint.
+ *
+ * `useProfile`'s save, the one `/profile` uses, including the write on the way
+ * out. A plain textarea rather than `ProfileBox`, for `PurposeBox`'s reason:
+ * no microphone on a page that may open the article by itself.
+ */
+function AboutYouBox({
+  profile,
+  onFocusChange,
+}: {
+  profile: UseProfile;
+  onFocusChange: (focused: boolean) => void;
+}) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  useFitTextarea(box, profile.draft);
+  useIdleCommit({
+    text: profile.draft,
+    dirty: profile.state.kind === "dirty",
+    inFlight: profile.inFlight,
+    paused: false,
+    ms: AUTOSAVE_IDLE_MS,
+    commit: profile.commit,
+  });
+  return (
+    <div className="prof-box">
+      <div className="prof-box-head">
+        <label className="prof-box-label" htmlFor="add-about-you">
+          About you
+        </label>
+        <span className="prof-box-scope">Every article</span>
+      </div>
+      <textarea
+        id="add-about-you"
+        ref={box}
+        className="prof-box-input is-fit"
+        rows={3}
+        /* No `maxLength`: the browser would silently drop the end of a long
+           paste. Counted past instead, and the server refuses it with the
+           words still here (ProfileBox.tsx; GPT Sol's plan review, finding 3). */
+        placeholder="e.g. I'm a nurse, new to statistics, reading up for a research project"
+        value={profile.draft}
+        onChange={(e) => profile.setDraft(e.target.value)}
+        onFocus={() => onFocusChange(true)}
+        onBlur={() => {
+          onFocusChange(false);
+          profile.commit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            profile.commit();
+          }
+        }}
+      />
+      <div className="prof-box-foot">
+        <p className="prof-box-hint">
+          For every article you read here, not just this one: your background, what you already
+          know, what you are working on. Optional. Saved to your profile, which you can change any
+          time on the Profile page.
+        </p>
+        <span className={`prof-count${profile.draft.length > MAX_PROFILE_CHARS ? " over" : ""}`}>
+          {profile.draft.length} / {MAX_PROFILE_CHARS}
+        </span>
+      </div>
+      <SaveStatus save={profile.state} />
+    </div>
+  );
+}
+
+/**
+ * **The import is in, said where the reader is looking.** Greg, 2026-10-19
+ * (spya-kan788): *"when the import process has finished, make that crystal
+ * clear, e.g. a button appearing at both bottom and top."* One component drawn
+ * at both ends of the page, with the same handlers, so the two cannot
+ * disagree. `top` is the highlighted one.
+ */
+function ReadyBar({
+  top,
+  sentence,
+  opening,
+  offerWithoutSaving,
+  onOpen,
+  onOpenWithoutSaving,
+}: {
+  top: boolean;
+  sentence: string;
+  opening: boolean;
+  offerWithoutSaving: boolean;
+  onOpen: () => void;
+  onOpenWithoutSaving: () => void;
+}) {
+  return (
+    <div
+      data-add-ready={top ? "top" : "bottom"}
+      className={
+        top
+          ? "tw:mb-4 tw:rounded-md tw:border tw:border-highlight-text/40 tw:bg-highlight-text/10 tw:p-4"
+          : "tw:mt-3"
+      }
+    >
+      {/* **A big green tick.** Greg, 2026-10-19 (spya-a40t70): *"a loading
+          spinner that becomes a big green check mark or something, so it's
+          really clear when things have finished importing."* */}
+      {top && (
+        <p
+          role="status"
+          className="tw:mt-0 tw:mb-1 tw:flex tw:items-center tw:gap-2 tw:text-base tw:font-semibold tw:text-foreground"
+        >
+          <CircleCheck size={28} className="add-ready-tick" aria-hidden="true" />
+          Your article is ready.
+        </p>
+      )}
+      <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{sentence}</p>
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+        <Button type="button" size="sm" disabled={opening} onClick={onOpen}>
+          {opening ? "Saving…" : "Open the article"}
+        </Button>
+        {/* Only when the words cannot be saved from here: a refusal, or the
+            read of the stored purpose gave up. */}
+        {offerWithoutSaving && (
+          <Button type="button" variant="ghost" size="sm" onClick={onOpenWithoutSaving}>
+            Open without saving
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

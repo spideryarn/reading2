@@ -3823,8 +3823,20 @@ export interface JobStep {
   /** Present tense, naming the actual thing — "Fetching the page", never "Loading". */
   label: string;
   status: StepStatus;
-  /** A short line about how it went, or how it is going. Not persisted while running. */
+  /**
+   * A short line about how it went, or how it is going. While the step runs
+   * it is in memory, and reaches the row only beside a `progress` (src/jobs.ts
+   * § `stepNotes`) or a preview; a store settlement of a running step drops it.
+   */
   detail?: string;
+  /**
+   * **How many of the units it is counting the step has finished**, while it
+   * runs: PDF `extract`'s chunks, `assets`' images. Only a step that counts
+   * real units sets it, so a fraction drawn from it is counted, not estimated.
+   * Saved at most every `REPORT_SAVE_EVERY_MS`, and gone when the step ends,
+   * however it ends (`stepNotes`, `settledSteps`). Plan 261020a § B1.
+   */
+  progress?: StepProgress;
   error?: string;
   startedAt?: string;
   finishedAt?: string;
@@ -3846,6 +3858,18 @@ export interface JobStep {
    * logged. docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2.
    */
   preview?: StepPreview;
+}
+
+/**
+ * A counted fraction: `done` of `total` units, and what a unit is, so the card
+ * can name it. "Done" means finished with, not succeeded: PDF extract counts a
+ * chunk whose check failed, and assets an image it could not fetch (GPT Sol's
+ * plan review of 261020a, finding 6).
+ */
+export interface StepProgress {
+  done: number;
+  total: number;
+  unit: "chunk" | "image";
 }
 
 /**
