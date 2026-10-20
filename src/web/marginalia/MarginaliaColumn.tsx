@@ -15,12 +15,17 @@
  */
 import {
   Component,
+  createContext,
   type ErrorInfo,
   Fragment,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
   type ReactNode,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
+  useRef,
   useState,
 } from "react";
 import { ChevronRight, X } from "lucide-react";
@@ -65,6 +70,25 @@ import type { JumpAim } from "../flash.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 import { ownLabel, plainWords } from "../lib/own-label.js";
 import { Excerpt } from "../Excerpt.js";
+import { CiteCard } from "../ProseHoverCard.js";
+import { citePassageKey } from "../rows.js";
+
+/**
+ * **What a *Cites* line's card can do**: the same senders the prose's citation
+ * card is handed (Reader.tsx § ProseHoverCard), so a press from the margin
+ * records the same origin as one from the prose. A context rather than a prop
+ * through `MarginNotesSlot`, because Reader's `marginNotes` memo, and
+ * `memo(TableView)` with it, must not hear about them; Reader memoises the
+ * value (GPT Sol F5 on plan 261020g). Null draws the card with no buttons.
+ * The column draws citations for the owner only, so it is only ever theirs.
+ */
+export type MarginCiteSenders = {
+  onAsk(work: CitedWork): void;
+  onCheck(work: CitedWork, blockId: BlockId): void;
+  onOpen(id: string): void;
+  onJump(id: BlockId, aim?: JumpAim): void;
+};
+export const MarginCiteActions = createContext<MarginCiteSenders | null>(null);
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
@@ -301,7 +325,7 @@ function MarginNotes({
           case "reception":
             return <ReceptionNote key="reception" items={note.items} />;
           case "citation":
-            return <CitationNote key="citation" items={note.items} />;
+            return <CitationNote key="citation" blockId={blockId} items={note.items} />;
           case "comment":
             return <CommentNote key="comment" items={note.items} viewer={viewer} onOpenAsked={onOpenAsked} />;
           default: {
@@ -340,8 +364,10 @@ function ShutNote({
       article's own phrase. */
   stampVoice?: Voice | undefined;
   /** What this kind of line is and where it came from, on hover — every mark
-      explains itself. A key into tips.ts; the delegated card draws it. */
-  tip: MargTipKey;
+      explains itself. A key into tips.ts, which the delegated card draws; or,
+      where the prose already has a richer card for the same kind of item, that
+      card, in a `Tooltip` of the line's own (plan 261020g). */
+  tip: MargTipKey | ShutCard;
   line: string;
   /** Whose words `line` is: the one item's, or ours for a count (fonts.md). */
   lineVoice: Voice;
@@ -357,6 +383,8 @@ function ShutNote({
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
+  const card = typeof tip === "string" ? null : tip;
+  const tipKey = typeof tip === "string" ? tip : undefined;
   const label = (
     <span className="marg-shut-label">
       <span className={stampVoice ? withVoice("marg-stamp", stampVoice) : "marg-stamp"}>{stamp}</span>{" "}
@@ -369,7 +397,9 @@ function ShutNote({
         <button
           type="button"
           className="marg-shut-button"
-          data-marg-tip={tip}
+          data-marg-tip={tipKey}
+          data-marg-voice={lineVoice}
+          data-open={open ? "" : undefined}
           onClick={() => setOpen((was) => !was)}
         >
           <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
@@ -380,28 +410,106 @@ function ShutNote({
   }
   if (children === null) {
     return (
-      <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
+      <p className="marg-shut" data-kind={kind} data-marg-tip={tipKey} data-marg-voice={lineVoice}>
         {label}
       </p>
     );
   }
+  /* `data-open` on the button as well as its box: the delegated card watches
+     its trigger, and re-reads whether the line is still cut (plan 261020g, F4). */
+  const button = (press: PressHandlers = {}): ReactElement<Record<string, unknown>> => (
+    <button
+      type="button"
+      className="marg-shut-button"
+      data-marg-tip={tipKey}
+      data-marg-voice={lineVoice}
+      data-open={open ? "" : undefined}
+      aria-expanded={open}
+      aria-controls={panel}
+      onPointerDown={press.onPointerDown}
+      onPointerCancel={press.onPointerCancel}
+      onClick={() => {
+        press.onClick?.();
+        setOpen((was) => !was);
+      }}
+    >
+      <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+      {label}
+    </button>
+  );
   return (
     <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
-      <button
-        type="button"
-        className="marg-shut-button"
-        data-marg-tip={tip}
-        aria-expanded={open}
-        aria-controls={panel}
-        onClick={() => setOpen((was) => !was)}
-      >
-        <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
-        {label}
-      </button>
+      {card ? <LineCard card={card} lineOpen={open} button={button} /> : button()}
       <div id={panel} className="marg-open" hidden={!open}>
         {open ? children : null}
       </div>
     </div>
+  );
+}
+
+/** A shut line's own card: what it says, given a way to close itself, and its dialog's name. */
+type ShutCard = { label: string; content(close: () => void): ReactNode };
+
+/**
+ * **A shut line with a card of its own**, interactive, because the card it
+ * reuses has buttons — the shape Skim's term chips use for the prose's
+ * `TermCard` (SkimPanel.tsx § TermChip). Controlled, for three reasons GPT Sol
+ * gave on plan 261020g:
+ *
+ * - **Shut while the line is open** (F2): the open half already shows most of
+ *   what the card says, and a card on top would hide it. `enabled` is off, so
+ *   neither hover nor focus can reopen it, and `Tooltip` tells us to close.
+ * - **Not for a finger** (F1): `mouseOnly` stops a tap's synthesised hover, but
+ *   a tap can focus the button before its click. A touch or pen press refuses
+ *   the open it causes; the press opens the line, as it did before.
+ * - **A press inside closes it**, through `content`'s `close`.
+ *
+ * Cloned onto the button itself (`Tooltip` puts its props on its child), not
+ * the box round it.
+ */
+type PressHandlers = {
+  onPointerDown?: (e: ReactPointerEvent) => void;
+  onPointerCancel?: () => void;
+  onClick?: () => void;
+};
+
+function LineCard({
+  card,
+  lineOpen,
+  button,
+}: {
+  card: ShutCard;
+  lineOpen: boolean;
+  /** The line's button, with these handlers on it as well as its own press. */
+  button(press: PressHandlers): ReactElement<Record<string, unknown>>;
+}) {
+  const [shown, setShown] = useState(false);
+  const touch = useRef(false);
+  const close = () => setShown(false);
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      className="prose-card marg-cite-tip"
+      interactive={{ label: card.label }}
+      enabled={!lineOpen}
+      open={shown}
+      onOpenChange={(next) => setShown(next && !touch.current)}
+      content={<div className="marg-cite-card">{card.content(close)}</div>}
+    >
+      {button({
+        onPointerDown: (e) => {
+          touch.current = e.pointerType === "touch" || e.pointerType === "pen";
+        },
+        onPointerCancel: () => {
+          touch.current = false;
+        },
+        onClick: () => {
+          touch.current = false;
+          setShown(false);
+        },
+      })}
+    </Tooltip>
   );
 }
 
@@ -532,13 +640,54 @@ function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
   );
 }
 
-function CitationNote({ items }: { items: readonly CitedWork[] }) {
+/**
+ * **A *Cites* line's card is the prose's own** — Greg, 2026-10-19
+ * (spya-gdbsq2): *"I feel like we have more information than that for a
+ * citation if I hover over it in the text. So let's try and reuse that same
+ * tooltip."* `CiteCard`, one per work as on a prose mark naming two, with the
+ * prose's buttons: each closes the card first, as the prose's do (Sol F3).
+ * `here` is the block the line sits beside, the work's first citing paragraph.
+ * Its height is capped and it scrolls, so the buttons stay reachable (F6,
+ * marginalia.css § .marg-cite-card). Plan 261020g.
+ */
+function citeCard(blockId: BlockId, items: readonly CitedWork[], acts: MarginCiteSenders | null): ShutCard {
+  return {
+    label: items.length === 1 ? (items[0]?.title ?? "Cited work") : `${items.length} cited works`,
+    content: (close) =>
+      items.map((work) => (
+        <CiteCard
+          key={work.id}
+          work={work}
+          showInSpideryarn={acts !== null}
+          onAsk={acts ? (w) => acts.onAsk(w) : null}
+          onCheck={acts ? (w, id) => acts.onCheck(w, id) : null}
+          onOpen={
+            acts
+              ? () => {
+                  close();
+                  acts.onOpen(work.id);
+                }
+              : null
+          }
+          here={blockId}
+          onJump={(id) => {
+            close();
+            acts?.onJump(id, citePassageKey(work.id));
+          }}
+          onClose={close}
+        />
+      )),
+  };
+}
+
+function CitationNote({ blockId, items }: { blockId: BlockId; items: readonly CitedWork[] }) {
   const only = items.length === 1 ? items[0] : undefined;
+  const acts = useContext(MarginCiteActions);
   return (
     <ShutNote
       kind="citation"
       stamp="Cites"
-      tip="citation"
+      tip={citeCard(blockId, items, acts)}
       line={only ? only.title : plural(items.length, "work", "works")}
       lineVoice="ui"
     >

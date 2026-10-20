@@ -76,6 +76,7 @@ import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
 import type { Section } from "./position.js";
 import { SAFE_ID, spentWords } from "./reading-time.js";
 import { ControlTip } from "./Tooltip.js";
+import { isVoice, type Voice } from "./voice.js";
 import { useDelegatedCard } from "./useDelegatedCard.js";
 import type { ReadingTimeFor } from "./useReadingTime.js";
 import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
@@ -216,6 +217,24 @@ function referenceFor(el: Element, clientY: number | undefined) {
   };
 }
 
+/**
+ * **A shut line's own words, when the line is cut off** — Greg, 2026-10-19
+ * (spya-gdbsq2): the margin's cards *"should be the best we can make them"*.
+ * A shut line ends in an ellipsis, and its card says what the kind is; this is
+ * what *this* item says, so a cut-off FAQ question can be read without opening
+ * it. Only when it is actually cut, read when the card opens and again when the
+ * line opens (`data-open`, observed below, Sol F4): words the line shows in
+ * full would be the card repeating it. In the line's own face (fonts.md).
+ * Text only, from `textContent`. Plan 261020g.
+ */
+function cutWords(el: Element): { text: string; voice: Voice } | null {
+  const label = el.querySelector(".marg-shut-label");
+  if (!(label instanceof HTMLElement) || label.scrollWidth <= label.clientWidth) return null;
+  const text = el.querySelector(".marg-shut-line")?.textContent?.trim() ?? "";
+  const voice = el.getAttribute("data-marg-voice");
+  return text === "" ? null : { text, voice: isVoice(voice) ? voice : "ui" };
+}
+
 /** What the card draws for one link, or null when it would have nothing to say. */
 function contentFor(
   el: Element,
@@ -234,7 +253,8 @@ function contentFor(
     const key = el.getAttribute("data-marg-tip");
     if (!isMargTipKey(key)) return null;
     const tip = MARG_TIPS[key];
-    return <ControlTip head={tip.head} what={tip.what} how={tip.how} />;
+    const words = cutWords(el);
+    return <ControlTip head={tip.head} what={tip.what} drawn={words?.text} drawnVoice={words?.voice} how={tip.how} />;
   }
   /* A cross-reference's target comes from the resolver and only from there —
      never `data-block-link`, `data-block-missing` or `data-block-preview` off
@@ -395,6 +415,8 @@ function BlockLinkCard({
        hook skips an `aria-hidden` trigger itself; said here so the reason is
        beside the card it is about.) */
     cardClass: (el) => (el.matches(CONTROL_SHAPED) ? "tip-soon" : "tip-cite"),
+    /* A Marginalia line opening: it wraps, so it is no longer cut (`cutWords`). */
+    observeAttributes: ["data-open"],
   });
 
   /* A new article/index can change the words under an anchor even if React

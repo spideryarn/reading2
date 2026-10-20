@@ -300,7 +300,27 @@ one table, `src/web/marginalia/tips.ts`; **a new kind of note needs a row there*
 over the keys makes a missing row a type error. The shut lines carry their key as `data-marg-tip` and
 the reading view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button
 with a card of its own, because it has nothing to press and the delegated card answers neither a
-keyboard nor a finger. **And each note's words are in their writer's face** ([fonts.md](fonts.md)):
+keyboard nor a finger.
+
+> The Marginalia mode tooltip for a citation is pretty unhelpful. It's just a kind of generic
+> message. I feel like we have more information than that for a citation if I hover over it in the
+> text. So let's try and reuse that same tooltip. And the same goes for other stuff in the Marginalia
+> mode - their tooltips should be the best we can make them, and ideally reuse what tooltip
+> machinery we already have for that kind of marginalia-annotation.
+>
+> — Greg, 2026-10-19 (spya-gdbsq2)
+
+**Where the prose has a richer card for the same kind of item, the margin uses it.** Since
+2026-10-20 that is the *Cites* line: its card is the prose's `CiteCard`, one per work, with its
+buttons, in an interactive `Tooltip` of the line's own (`LineCard` in `MarginaliaColumn.tsx`; the
+senders come through `MarginCiteActions`). It is shut while the line is open, and a finger's press
+opens the line, not the card. No other kind has a card in the prose to reuse
+([tooltips.md § Every card on a mode's mark](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode)),
+so the rest keep the house card, which **says the item's own words when its line is cut off**
+(`cutWords` in `BlockLinkCard.tsx`), in their writer's face. Plan
+[261020g](../plans/261020g-marginalia-tooltips-reuse-the-prose-citation-card-and-say-the-item.md),
+which also names what was left: a count line's card listing its items, and a press on *Cites*
+opening the card in place of the panel. **And each note's words are in their writer's face** ([fonts.md](fonts.md)):
 the shut line takes the voice of the one item it shows, a count is ours. Tested in
 `tests/marginalia-note-cards.test.tsx`;
 [261002g](../plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md).

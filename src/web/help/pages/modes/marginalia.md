@@ -36,6 +36,9 @@ pressing **Marginalia** again swaps the notes in for it.
 - **Origin** says where a quotation, an allusion or a name in the passage comes from, when the
   article does not say. It is written from the AI's memory, not from the article, and nothing has
   checked it, so it is marked *AI memory, unchecked*: treat it as a lead.
-- **Cites**, opened, can also show a short note on what the cited work says, written by AI from the
-  work's abstract and checked against it.
+- **Cites**: point at the line to see the same card a citation in the text shows, with who wrote
+  the work, its entry in the references and every passage that cites it. Opened, it can also show a
+  short note on what the cited work says, written by AI from the work's abstract and checked
+  against it.
+- Point at a line that is cut short to read the whole of it.
 - The top of the column shows where you are, and where the argument has got to.

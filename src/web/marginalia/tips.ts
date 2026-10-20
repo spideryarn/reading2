@@ -11,6 +11,8 @@
  *
  * The shut lines and questions carry only their key, as `data-marg-tip`, and
  * the reading view's one delegated card draws them (BlockLinkCard.tsx § MARG_NOTE)
+ * — except a *Cites* line, whose card has been the prose's own `CiteCard`
+ * since 2026-10-20 (plan 261020g), so it has no row here
  * — a column of dozens of notes costs one Floating UI instance, not dozens. The
  * idea stamp, the path and the arc have cards of their own and read their
  * origin line from here. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
@@ -26,7 +28,6 @@ export type MargTipKey =
   | "faq"
   | "timeline"
   | "reception"
-  | "citation"
   | "comment-own"
   | "comment-owner";
 
@@ -60,16 +61,6 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "Others say",
     what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
     how: "From Sources' Claims. AI searched the web and judged how the page bears on the claim. The quote is the page's own words; where the page had no usable title, AI wrote the headline, in the AI's typeface.",
-  },
-  citation: {
-    head: "Cites",
-    /* "Press this line", not "Press it" (Greg, spya-xf6m2u: *"I don't see
-       anything to press"*): the line is the button. And only what opens — the
-       by-line, the reference entry and, where there is one, the checked note
-       from the work's abstract (261017h, 261018i); never the model's reason
-       (261003j). */
-    what: "A work the article cites, at the first place it does. Press this line to open it and see who wrote it, its entry in the reference list, and, where we found its abstract, a short note on what the work says.",
-    how: "From Sources' Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words. The note on what the work says was written by AI from the work's abstract alone, and checked against it.",
   },
   "comment-own": {
     head: "Yours",

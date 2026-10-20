@@ -64,6 +64,7 @@ import {
 } from "@floating-ui/react";
 
 import { DELAY } from "./tooltip-delay.js";
+import { type Voice, withVoice } from "./voice.js";
 
 /* Re-exported: the tests that time a Tooltip import it from here. */
 export { DELAY };
@@ -608,6 +609,7 @@ export function ControlTip({
   state,
   what,
   drawn,
+  drawnVoice,
   how,
   press,
   tap,
@@ -624,6 +626,8 @@ export function ControlTip({
    * this card it is not the same words for every reader.
    */
   drawn?: string | undefined;
+  /** Whose words `drawn` is, when not ours — a Marginalia line's own (fonts.md, plan 261020g). */
+  drawnVoice?: Voice | undefined;
   how: string;
   /**
    * **What pressing this control does, or where it goes** — the one line in the
@@ -664,7 +668,7 @@ export function ControlTip({
       <div className="tip-soon-head">{head}</div>
       {state && <p>{state}</p>}
       <p className="tip-soon-what">{what}</p>
-      {drawn && <p className="tip-soon-drawn">{drawn}</p>}
+      {drawn && <p className={drawnVoice ? withVoice("tip-soon-drawn", drawnVoice) : "tip-soon-drawn"}>{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
       {press && <p className="tip-soon-press">{press}</p>}
       {tap && <p className="tip-soon-tap">{tap}</p>}

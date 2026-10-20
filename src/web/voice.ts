@@ -47,6 +47,11 @@ export function voiceClass(voice: Voice): string {
   }
 }
 
+/** Whether an attribute's value names a voice — a `data-marg-voice` read back off the page. */
+export function isVoice(value: string | null): value is Voice {
+  return value === "author" || value === "ai" || value === "reader" || value === "ui";
+}
+
 /** `voiceClass`, joined onto the element's own classes. */
 export function withVoice(className: string, voice: Voice): string {
   return `${className} ${voiceClass(voice)}`;

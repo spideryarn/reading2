@@ -40,6 +40,8 @@ import {
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
+  MarginCiteActions,
+  type MarginCiteSenders,
   MarginNotesSlot,
   type MarginFeed,
   NO_OWNER_FEED,
@@ -2870,6 +2872,20 @@ export function Reader({
     () => ({ summaries: chatSummaries, onAsk: askWork, onOpen: openClaimChat }),
     [chatSummaries, askWork, openClaimChat],
   );
+  /**
+   * **What a *Cites* line's card in the margin can do** — the prose card's own
+   * senders (below, `ProseHoverCard`), so a press there records the same
+   * origin. Memoised, because every *Cites* line reads it and Reader re-renders
+   * on every scroll (GPT Sol F5 on plan 261020g). Null for a visitor, whose
+   * column draws no citations anyway. MarginaliaColumn.tsx § MarginCiteSenders.
+   */
+  const marginCiteActions = useMemo<MarginCiteSenders | null>(
+    () =>
+      owner
+        ? { onAsk: askWork, onCheck: checkCitedWorkInChat, onOpen: openCitedWorkFromCard, onJump: jumpTo }
+        : null,
+    [owner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
+  );
   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(
     () => ({ summaries: chatSummaries, onAsk: askIdea, onOpen: openClaimChat }),
@@ -4472,6 +4488,7 @@ export function Reader({
               which was the first sign it was not carrying its space. */}
         </div>
       )}
+      <MarginCiteActions.Provider value={marginCiteActions}>
       <TableView
         article={article}
         /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
@@ -4554,6 +4571,7 @@ export function Reader({
         onSelect={selectProse}
         onOpenComment={openCommentDialog}
       />
+      </MarginCiteActions.Provider>
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and
           it calls the same `selectProse`, saying it was a finger — which is
