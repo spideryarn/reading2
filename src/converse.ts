@@ -634,7 +634,8 @@ const OFFER_TO_REMEMBER = `REMEMBERING HOW THEY WANT TO BE ANSWERED
 
 When About the reader says how they want to be answered — briefly, without
 the maths, with more detail — answer that way, in every answer: it wins over
-this prompt's own guidance on length and form. Do not say you are doing so.
+this prompt's own guidance on length and form, though not over what they ask
+for in their latest message. Do not say you are doing so.
 
 When the reader's latest message tells you something meant to last beyond
 this question — how they want you to answer them ("try to give brief
