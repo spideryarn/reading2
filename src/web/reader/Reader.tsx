@@ -235,7 +235,7 @@ import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-conte
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
 import { useModeFlashOwnership } from "./mode-flash.js";
-import { proseFound, railFound, selectPassages } from "./passages.js";
+import { proseFound, railFound, railMarks, selectPassages } from "./passages.js";
 import { quoteAlphaByBlock } from "../spine-marks.js";
 import { stepQuote } from "../QuotesPanel.js";
 import { stepByKey } from "../list-step.js";
@@ -4342,6 +4342,7 @@ export function Reader({
           outline={outline}
           layoutKey={layoutKey}
           matches={hitBlocks}
+          marksWords={railMarks(mode)}
           reading={owner?.readingTime.reach}
           quotes={quoteRail}
           onJump={jumpTo}

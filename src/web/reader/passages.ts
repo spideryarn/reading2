@@ -45,6 +45,7 @@
  */
 import type { BandMode } from "../../modes.js";
 import type { Found } from "../search-hits.js";
+import { GENERIC_RAIL_MARKS, type RailMarks, SEARCH_RAIL_MARKS } from "../spine-key.js";
 
 /**
  * One producer's pair: the passages it has published, and which of them the
@@ -169,6 +170,67 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
          answer. A fifteenth mode goes red here, at the point it is added,
          rather than silently drawing whichever slot the last arm happened to
          name. visitor.ts § `visitorGap` is the same idiom. */
+      const unhandled: never = mode;
+      return unhandled;
+    }
+  }
+}
+
+/* Module constants, not literals in the switch: `Spine` is memoised and this is
+   called on every `Reader` render, so a fresh object each time would redraw the
+   rail on every scroll tick (Spine.tsx § memo). */
+const IDEA_RAIL_MARKS: RailMarks = {
+  label: "this idea",
+  one: "passage of this idea",
+  many: "passages of this idea",
+};
+const EVENT_RAIL_MARKS: RailMarks = {
+  label: "this event",
+  one: "passage of this event",
+  many: "passages of this event",
+};
+const REFEREE_RAIL_MARKS: RailMarks = {
+  label: "referee passages",
+  one: "referee passage",
+  many: "referee passages",
+};
+
+/**
+ * **What the spine's lane marks are, in the open mode's words** — the label the
+ * spine card's key puts beside their swatches (src/web/spine-key.tsx; plan
+ * 261020e). Total over `BandMode` for `selectPassages`' reason: a mode that
+ * starts publishing passages has to say here what its marks are, or the key
+ * would call them something else's. **What that does not catch** (GPT Sol, plan
+ * review F4): a mode already listed below that starts publishing passages
+ * keeps its generic words until somebody comes here — so a mode added to
+ * `selectPassages`' passage arms should be moved to a named arm here too.
+ *
+ * Only the modes whose slot can reach the lane need a real answer: Quotes' and
+ * Skim's passages are quotes, which `railFound` sends to their own strip.
+ */
+export function railMarks(mode: BandMode): RailMarks {
+  switch (mode) {
+    case "search":
+      return SEARCH_RAIL_MARKS;
+    case "ideas":
+      return IDEA_RAIL_MARKS;
+    case "timeline":
+      return EVENT_RAIL_MARKS;
+    case "referee":
+      return REFEREE_RAIL_MARKS;
+    case "quotes":
+    case "skim":
+    case "plain":
+    case "chat":
+    case "glossary":
+    case "summary":
+    case "diagram":
+    case "learn":
+    case "structure":
+    case "sources":
+    case "faq":
+      return GENERIC_RAIL_MARKS;
+    default: {
       const unhandled: never = mode;
       return unhandled;
     }

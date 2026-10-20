@@ -118,6 +118,13 @@ import type { ReadReach } from "./reading-time.js";
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { WhereCard } from "./WhereCard.js";
+import {
+  type RailMarks,
+  SEARCH_RAIL_MARKS,
+  SpineKey,
+  type SpineKeyItem,
+  spineKeyItems,
+} from "./spine-key.js";
 import { spineLabel, type WhereRow, whereForBand } from "./where.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
@@ -280,6 +287,12 @@ interface Props {
    * has to know this feature exists.
    */
   matches?: Map<BlockId, BlockMatch> | undefined;
+  /**
+   * What the `matches` lanes are, in the open mode's words — for the card's
+   * key, its count and each band's accessible name. reader/passages.ts §
+   * `railMarks`. Defaults to Search's, which is what the lanes were built for.
+   */
+  marksWords?: RailMarks | undefined;
   /**
    * How long the reader has spent on each block, as a reach in sixteenths of
    * the rail — `useReadingTime`'s `reach`, reading-time.ts § `readReach`.
@@ -518,6 +531,7 @@ function SpineInner({
   outline,
   layoutKey,
   matches = NO_MATCHES,
+  marksWords = SEARCH_RAIL_MARKS,
   reading = NO_READING,
   quotes = NO_QUOTES,
   onJump,
@@ -964,6 +978,27 @@ function SpineInner({
   );
 
   /**
+   * **The card's key: what the rail is drawing now** — spine-key.tsx, Greg's
+   * `spya-ah5ws6`. Built from the very values the marks below are drawn from,
+   * so the key cannot list a mark that is not on the rail or miss one that is.
+   * One swatch per lane that drew something, in lane order, because a lane
+   * whose search matched nothing on this page takes no room either.
+   */
+  const keyItems = useMemo(() => {
+    const byLane = new Map<number, string>();
+    for (const m of marks) if (!byLane.has(m.lane)) byLane.set(m.lane, m.rgb);
+    return spineKeyItems({
+      /* Only a back-matter band the rail actually gives height to. */
+      supplement: metrics?.l1.some((b) => b.entry.supplement && b.height > 0) ?? false,
+      reading: readPaths !== null,
+      from: from !== null,
+      quotes: quoteStrip.length > 0,
+      laneColours: [...byLane.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c),
+      marksLabel: marksWords.label,
+    });
+  }, [metrics, readPaths, from, quoteStrip, marks, marksWords]);
+
+  /**
    * How many matches fall inside each hoverable band, by its node id.
    *
    * This is where "how common" gets a number rather than a shape. The rail
@@ -1390,6 +1425,7 @@ function SpineInner({
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
                   here={hereHitId === b.entry.node.id}
+                  keyItems={keyItems}
                   /* Only when a finger opened it. A mouse reader hovering the
                      rail is one click from anywhere and does not need telling;
                      saying "tap again" to somebody holding a mouse is noise. */
@@ -1412,7 +1448,7 @@ function SpineInner({
                    description is what a screen reader can be configured not to
                    read. "Four matches here" is the whole reason somebody using
                    the rail during a search would press this one. */
-                aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0)}
+                aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0, marksWords)}
                 /* **The same fact the card puts in words, in the one place a
                    screen reader will find it.** `you are here` in the card is
                    the tooltip's *description*, which a screen reader can be
@@ -1552,12 +1588,14 @@ function bandLabel(band: Band): { text: string; voice: Voice } {
 }
 
 /** The band's name for a screen reader, with the matches in it if there are any. */
-function ariaFor(band: Band, matches: number): string {
+function ariaFor(band: Band, matches: number, words: RailMarks): string {
   const name = band.parent
     ? `${band.parent.title} › ${bandLabel(band).text}`
     : bandLabel(band).text;
   if (matches === 0) return name;
-  return `${name} — ${matches} search ${matches === 1 ? "match" : "matches"}`;
+  /* In the open mode's words: the lanes are Ideas' or Timeline's passages as
+     often as Search's, and "3 search matches" in Ideas was simply wrong. */
+  return `${name} — ${matches} ${matches === 1 ? words.one : words.many}`;
 }
 
 function BandCard({
@@ -1566,9 +1604,12 @@ function BandCard({
   position,
   matches,
   here = false,
+  keyItems,
   showTapHint = false,
 }: {
   band: Band;
+  /** What the rail is drawing now, keyed under the foot — spine-key.tsx. */
+  keyItems: readonly SpineKeyItem[];
   /** The band's place in the outline — `whereForBand`. */
   where: readonly WhereRow[];
   position: number;
@@ -1671,6 +1712,11 @@ function BandCard({
             two are a few pixels apart. */}
         {here && <span className="tip-here">you are here</span>}
       </div>
+      {/* **What the spine is, and what its colours mean** — Greg, 2026-10-19,
+          `spya-ah5ws6`. Under the section's own facts, because those are what
+          the reader pointed for; above the tap hint, which is about the next
+          tap and has to stay last. */}
+      <SpineKey items={keyItems} />
       {/* **Said out loud, because a tap that does nothing visible reads as a
           broken control.** On a touch device the first tap opens this card and
           does not move the article — which is the right behaviour on a rail of

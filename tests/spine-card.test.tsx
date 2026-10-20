@@ -45,6 +45,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Spine } from "../src/web/Spine.js";
 import type { OutlineEntry } from "../src/web/tree.js";
+import type { BlockMatch } from "../src/web/search-hits.js";
+import { SEARCH_RAIL_MARKS } from "../src/web/spine-key.js";
 import type { BlockId, NodeId, TreeNode } from "../src/types.js";
 
 class FakeResizeObserver {
@@ -666,5 +668,106 @@ describe("a bullet that would repeat a row of the outline", () => {
     expect(rows).toContain("Participants");
     expect(rows).toContain("Results");
     expect(kidText(card)).toEqual(["Stimulus timing", "Participants", "Results", "Procedure"]);
+  });
+});
+
+/**
+ * **The key under the foot: what the spine is, and what is on it now** — plan
+ * 261020e, Greg's `spya-ah5ws6`. The assertions that matter are the negative
+ * ones: a key that listed every mark whatever the rail drew would pass every
+ * "it says search matches" test and be the full legend this plan passed over.
+ */
+describe("the key", () => {
+  const keyed = (card: HTMLElement) =>
+    [...card.querySelectorAll<HTMLElement>(".tip-key-items li")].map((li) => li.dataset.key);
+
+  function mountWith(props: Partial<Parameters<typeof Spine>[0]>) {
+    act(() => {
+      root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} {...props} />);
+    });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+  }
+
+  it("says what the spine is, and keys only the two marks that are always drawn", () => {
+    mountSpine();
+    const card = openCard(S1);
+    expect(card.querySelector(".tip-key-what")?.textContent).toContain("whole article");
+    expect(keyed(card)).toEqual(["here", "screen"]);
+  });
+
+  it("keys the lanes when, and only when, they draw something — one swatch per lane", () => {
+    mountWith({
+      matches: new Map<BlockId, BlockMatch>([
+        ["b1" as BlockId, { searches: [{ runId: "r1", slot: 0 }, { runId: "r2", slot: 3 }], count: 2 }],
+        ["b2" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
+      ]),
+      marksWords: SEARCH_RAIL_MARKS,
+    });
+    const card = openCard(S1);
+    expect(keyed(card)).toEqual(["here", "screen", "lanes"]);
+    const lanes = card.querySelector<HTMLElement>('[data-key="lanes"]')!;
+    expect(lanes.textContent).toBe("search matches");
+    expect(
+      [...lanes.querySelectorAll<HTMLElement>(".tip-key-swatch")].map((s) => s.style.background),
+    ).toEqual(["rgb(var(--cat-0-rgb))", "rgb(var(--cat-3-rgb))"]);
+  });
+
+  it("does not key a lane for a match on a block the page does not have", () => {
+    mountWith({
+      matches: new Map<BlockId, BlockMatch>([
+        ["gone" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
+      ]),
+    });
+    expect(keyed(openCard(S1))).toEqual(["here", "screen"]);
+  });
+
+  it("keys the quote strip when there are quotes, in the open mode's words for the lanes", () => {
+    mountWith({
+      quotes: new Map<BlockId, number>([["b3" as BlockId, 0.9]]),
+      matches: new Map<BlockId, BlockMatch>([
+        ["b1" as BlockId, { searches: [{ runId: "i1", slot: 0 }], count: 1 }],
+      ]),
+      marksWords: { label: "this idea", one: "passage of this idea", many: "passages of this idea" },
+    });
+    const card = openCard(S1);
+    expect(keyed(card)).toEqual(["here", "screen", "lanes", "quotes"]);
+    expect(card.querySelector('[data-key="lanes"]')?.textContent).toBe("this idea");
+  });
+
+  it("is hidden from a screen reader, which hears the card as every band's description", () => {
+    mountSpine();
+    expect(openCard(S1).querySelector(".tip-key")?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("a band's accessible name counts the lane marks in the open mode's words", () => {
+  function mountWith(props: Partial<Parameters<typeof Spine>[0]>) {
+    act(() => {
+      root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} {...props} />);
+    });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+  }
+  const MATCH = new Map<BlockId, BlockMatch>([
+    ["b0" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
+  ]);
+  const names = () =>
+    [...host.querySelectorAll(".spine-hit")].map((b) => b.getAttribute("aria-label") ?? "");
+
+  it("says search matches by default", () => {
+    mountWith({ matches: MATCH });
+    expect(names().some((n) => n.endsWith("— 1 search match"))).toBe(true);
+  });
+
+  it("and not search matches in Ideas, where the lane is an idea's passages", () => {
+    mountWith({
+      matches: MATCH,
+      marksWords: { label: "this idea", one: "passage of this idea", many: "passages of this idea" },
+    });
+    expect(names().some((n) => n.endsWith("— 1 passage of this idea"))).toBe(true);
+    expect(names().some((n) => n.includes("search"))).toBe(false);
   });
 });
