@@ -542,7 +542,7 @@ export interface CommandExecutor {
    * **Put a question about the debate, seen from this angle, in Chat's box** —
    * since 2026-10-05, plan 261005k: what the bar's suggested lens row presses.
    * The reading view's own waiting handoff (Reader.tsx §
-   * `suggestedLensInChat`), deliberately not the sending wrapper Debate's box
+   * `suggestedLensInChat`), deliberately not the sending one Sources › Investigate
    * calls, so nothing is sent until the reader presses Send. The bar's own,
    * like `quickSearch`: chat's chips never see it.
    *

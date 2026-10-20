@@ -284,6 +284,10 @@ const RECEPTION_TITLE = "The Leiden replication";
 const CITATION_TITLE = "Elements of Episodic Memory";
 /** Sources › Not cited's one stored row (plan 261011ac): a paper OpenAlex found that the Bibliography does not list. */
 const RELATED_TITLE = "Instruments Before Theories";
+/* Investigate's first suggested question, written out rather than imported, so a
+   valid `?sources=investigate` that drew Reception (or nothing of Investigate's) is red
+   (GPT Sol's F7 on plan 261020n). */
+const INVESTIGATE_SUGGESTED = "How has this piece been received, and by whom?";
 const RELATED_WORK = {
   kind: "found",
   works: [{ openalexId: "W1234567", title: RELATED_TITLE, authors: ["Ada Lovelace"], authorCount: 1, year: 2019 }],
@@ -1277,8 +1281,10 @@ const SPENDS: Record<Mode, Spend> = {
      Links reads markup already in the article and spends nothing. Not cited
      reads its stored search and spends nothing: its search is its own button,
      never a press that opens it (plan 261011ac, F1), so a `POST
-     /api/related-work` here is red. Each press buys only its own sub-mode's
-     work. */
+     /api/related-work` here is red. Investigate (plan 261020n) arms nothing and
+     sends nothing on arrival: each of its rows is one chat question on its
+     own press, so a `POST /api/chat/…` here is red. Each press buys only its
+     own sub-mode's work. */
   sources: {
     kind: "delegated",
     presses: [
@@ -1287,6 +1293,7 @@ const SPENDS: Record<Mode, Spend> = {
       { search: "?sources=links", steps: [], spends: [] },
       { search: "?sources=reception", steps: ["reception"], spends: [] },
       { search: "?sources=claims", steps: ["sources-claims"], spends: [] },
+      { search: "?sources=investigate", steps: [], spends: [] },
     ],
   },
   /* One model call over the article, like Ideas. */
@@ -1592,9 +1599,10 @@ const DRAWS: Record<Mode, Draws> = {
 };
 
 /**
- * **Sources' five sub-modes**, each drawn by its real controller — `DRAWS`
- * asks of the default view only, Bibliography, so Not cited, Links, Reception and Claims
- * get rows here too (GPT Sol's F4 on plan 261009l). One band in every view,
+ * **Sources' six sub-modes**, each drawn by its real controller — `DRAWS`
+ * asks of the default view only, Bibliography, so Not cited, Links, Reception,
+ * Claims and Investigate get rows here too (GPT Sol's F4 on plan 261009l; Investigate's is F7
+ * on plan 261020n, and names Investigate's own class and content). One band in every view,
  * with one (i), the panel's: the chip row is that band's header, never a
  * surface of its own.
  */
@@ -1604,9 +1612,10 @@ const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string
   { search: "?mode=sources&sources=links", where: ".mode-band.sources.links", says: LINK_PHRASE },
   { search: "?mode=sources&sources=reception", where: ".mode-band.sources.rcp", says: RECEPTION_TITLE },
   { search: "?mode=sources&sources=claims", where: ".mode-band.sources.rcp", says: CLAIM_STATEMENT },
+  { search: "?mode=sources&sources=investigate", where: ".mode-band.sources.investigate:not(.rcp)", says: INVESTIGATE_SUGGESTED },
 ];
 
-describe("phase B — Sources' five sub-modes", () => {
+describe("phase B — Sources' six sub-modes", () => {
   for (const view of SOURCES_VIEWS_DRAW) {
     it(
       `${view.search}: one band, its own body, the chip row as its head and one (i)`,
@@ -1625,6 +1634,7 @@ describe("phase B — Sources' five sub-modes", () => {
           "Links",
           "Reception",
           "Claims",
+          "Investigate",
         ]);
       },
       PHASE_MS,

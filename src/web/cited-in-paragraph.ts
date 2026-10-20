@@ -57,11 +57,12 @@ const TITLE_SHOWN = 48;
 export function workShortName(work: Pick<CitableWork, "title" | "authors" | "year">): string {
   const authors = work.authors?.trim() ? shortAuthors(work.authors.trim()) : "";
   const year = work.year?.trim() ?? "";
-  const lead = authors !== "" ? authors : cut(work.title.trim());
+  const lead = authors !== "" ? authors : shortTitle(work.title.trim());
   return year !== "" ? `${lead} ${year}` : lead;
 }
 
-function cut(title: string): string {
+/** A title cut at a word past `TITLE_SHOWN` characters, with an ellipsis. */
+export function shortTitle(title: string): string {
   if (title.length <= TITLE_SHOWN) return title;
   const head = title.slice(0, TITLE_SHOWN);
   const space = head.lastIndexOf(" ");

@@ -1,4 +1,4 @@
-/* reception.css — Sources › Reception and Claims (ReceptionAndClaimsPanel.tsx): the host, the quotation from a
+/* reception.css — Sources › Reception and Claims (ReceptionAndClaimsPanel.tsx), and Sources › Investigate (InvestigatePanel.tsx): the host, the quotation from a
    stranger's page, the fenced-off block of things a model guessed, and the
    relevance bar the reader sets over Claims' list. The rest is
    `.gloss`'s, unchanged.
@@ -271,7 +271,7 @@
 }
 
 /* **Checking the claims** (ReceptionAndClaimsPanel.tsx § OwnerListedClaims, plan 261008i
-   stage 3): the box and Check are the angle box's row below (`.gloss-ask`),
+   stage 3): the box and Check are Investigate's question box's row below (`.gloss-ask`),
    wrapping the button under the box in a narrow band. Under each claim its
    checked rows, the sentence for a claim with nothing to read, and the
    failure sentence, set as the empty sentence is. A typed claim is a group
@@ -295,38 +295,42 @@
   .rcp-dig { min-height: 2.5rem; }
 }
 
-/* **Look at the debate from an angle** (ReceptionAndClaimsPanel.tsx § Angles, plan
-   261005k): the owner's box at the top of the panel and *Your angles* under
-   it.
+/* **Sources › Investigate** (InvestigatePanel.tsx, plan 261020n Stage 2): the owner's box at
+   the top, then the questions in four short sections. The box and *Your
+   questions* were Reception's angle box and *Your angles* (plan 261005k)
+   until that plan moved them here.
 
    The box, its row and its button are Glossary's *Look up a term*
    (footnotes.css § `.gloss-ask`), which rules it off below and leaves room for
    the band's (i) (glossary.css). Set here: the button keeps its words on one
    line and gives the box the rest, and on a coarse pointer the button and each
-   line of the list are a finger tall (docs/project/touch.md). The field's 1rem
-   floor on a touch screen is narrow-window.css's, for every field.
+   question are a finger tall (docs/project/touch.md). The field's 1rem floor on
+   a touch screen is narrow-window.css's, for every field.
 
-   A line of the list is the claim's mark again (origin-chat.css): an
-   icon, the words on one line cut with an ellipsis, and a count. The words are
-   the reader's and take their face from voices.css (`.voice-reader`); the
+   A question is one press: Chat's bubbles and the words, which wrap rather
+   than clip, because the row has to say in full what it will send. A line of
+   *Your questions* is the claim's mark again (origin-chat.css): an icon, the
+   words on one line cut with an ellipsis, and a count. Whose words are whose
+   is voices.css's (`.voice-author`, `.voice-reader`, `.voice-ai`); the
    quotation marks and the count are ours. */
-.rcp-lens-send { flex: none; white-space: nowrap; }
+.investigate-send { flex: none; white-space: nowrap; }
 /* In a narrow band the button goes under the box, not beside it: side by side
-   on an iPad the box was 117px and its placeholder read "Look at the d…"
-   (seen in the browser, 2026-10-06). The box asks for 12rem before it shares
-   its line. */
-.rcp-lens-row { flex-wrap: wrap; }
-.rcp-lens-row .gloss-ask-input { flex: 1 1 12rem; }
-.rcp-angles { margin-top: 0.35rem; }
-.rcp-angles-head { padding-top: 0.15rem; }
-.rcp-angles-list { margin: 0; padding: 0; list-style: none; }
-.rcp-angle {
+   on an iPad the box was 117px and its placeholder clipped (seen in the
+   browser, 2026-10-06, on the angle box). The box asks for 12rem before it
+   shares its line. */
+.investigate-box-row { flex-wrap: wrap; }
+.investigate-box-row .gloss-ask-input { flex: 1 1 12rem; }
+.investigate-section { padding: 0.2rem 0.7rem 0.35rem; }
+.investigate-head { padding-top: 0.15rem; }
+.investigate-list { margin: 0; padding: 0; list-style: none; }
+.investigate-q,
+.investigate-yours-line {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.35rem;
   width: 100%;
   min-width: 0;
-  padding: 0.15rem 0;
+  padding: 0.2rem 0;
   border: 0;
   background: none;
   color: var(--ink-soft);
@@ -335,29 +339,51 @@
   text-align: left;
   cursor: pointer;
 }
-.rcp-angle > svg { flex: none; color: var(--ink-faint); }
-.rcp-angle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.rcp-angle:active { color: var(--ink); }
+.investigate-q > svg,
+.investigate-yours-line > svg { flex: none; color: var(--ink-faint); align-self: center; }
+.investigate-q:focus-visible,
+.investigate-yours-line:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.investigate-q:active,
+.investigate-yours-line:active { color: var(--ink); }
 @media (hover: hover) {
-  .rcp-angle:hover { color: var(--ink); }
+  .investigate-q:hover,
+  .investigate-yours-line:hover { color: var(--ink); }
 }
-.rcp-angle-quoted {
+.investigate-q-words { min-width: 0; overflow-wrap: anywhere; }
+/* A long claim is cut at two lines: the row is a pointer to the claim, which
+   Claims draws in full. */
+.investigate-claims .investigate-q-words {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* A claim or a work with a chat: its words, and the mark under them. */
+.investigate-asked {
+  padding: 0.2rem 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+.investigate-mark { margin-top: 0.15rem; }
+.investigate-yours-line { align-items: center; }
+.investigate-yours-quoted {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rcp-angle-count {
+.investigate-yours-count {
   flex: none;
   margin-left: auto;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
-/* The gist on its own line under the angle, lined up with the words after the
-   icon; two lines then an ellipsis, from `.origin-chat-gist` (plan 261011c). */
-.rcp-angle:has(.rcp-angle-gist) { flex-wrap: wrap; }
-.rcp-angle-gist {
+/* The gist on its own line under the question, lined up with the words after
+   the icon; two lines then an ellipsis, from `.origin-chat-gist` (plan 261011c). */
+.investigate-yours-line:has(.investigate-yours-gist) { flex-wrap: wrap; }
+.investigate-yours-gist {
   flex: 1 0 100%;
   min-width: 0;
   padding-left: calc(12px + 0.35rem);
@@ -365,9 +391,10 @@
   font-size: 0.78rem;
 }
 @media (pointer: coarse) {
-  .rcp-lens-send,
-  .rcp-angle,
-  .rcp-angles-more { min-height: 2.5rem; }
+  .investigate-send,
+  .investigate-q,
+  .investigate-yours-line,
+  .investigate-yours-more { min-height: 2.5rem; }
 }
 
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no

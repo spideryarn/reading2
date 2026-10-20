@@ -618,6 +618,11 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
     case "not-cited":
     case "links":
       return null;
+    /* Investigate's rows each send one chat question on their own press, through
+       Chat's route and its limits; opening the sub-mode buys nothing (plan
+       261020n § Spend). */
+    case "investigate":
+      return null;
     case "reception":
       return "reception";
     case "claims":

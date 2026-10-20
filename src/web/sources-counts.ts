@@ -1,5 +1,5 @@
 /**
- * **The numbers on Sources' five chips, and the rows behind them** —
+ * **The numbers on Sources' chips, and the rows behind them** —
  * pure selectors, used by the chip row (SourcesMode.tsx §
  * `SourcesViews`) and by the panels that draw the lists (BibliographyPanel,
  * NotCitedPanel, LinksPanel, ReceptionAndClaimsPanel), so a chip's number and the list under it are one derivation
@@ -26,6 +26,8 @@
  *   sources on screen, and then those sources plus any rows an older search
  *   kept (plan 261008i § 5); with no list, the older search's rows through
  *   the relevance bar and the thread.
+ * - **Investigate** has no number: there is nothing to count before a press, and its
+ *   *Your questions* is not a list the chip should number (plan 261020n).
  *
  * Imports no React, so a test can call it on fixtures alone.
  */

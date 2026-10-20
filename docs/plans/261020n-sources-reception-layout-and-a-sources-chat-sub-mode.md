@@ -1,4 +1,4 @@
-# Sources: a Reception you can read at a glance, and an Ask sub-mode
+# Sources: a Reception you can read at a glance, and an Investigate sub-mode
 
 Feedback `spya-dk4tfq` (#645, SPIDERYARN-READING2-M8), addendum `spya-x4xpw4`; overseer queue item
 `qi-a4538kz9`. Up: [reception.md](../project/reception.md), [sources.md](../project/sources.md).
@@ -76,7 +76,7 @@ not the product, so it is not a finding.
 At about 540px, in the default state:
 
 ```
- ┌ Bibliography │ Not cited │ Links │ Reception 12 │ Claims │ Ask ┐        (i)
+ ┌ Bibliography │ Not cited │ Links │ Reception 12 │ Claims │ Investigate ┐        (i)
  │ as found · date · stance                       ← sorts the rows inside every section
  │ ┌ AI  What the AI noticed in these sources ────────────┐   ← one AI-labelled frame
  │ │ ▸ ☆ Key sources                                  3   │
@@ -203,23 +203,30 @@ New ones:
 
 A browser pass at 1440 and at 390 against the same mocked data, with before and after shots.
 
-## Stage 2 — the Ask sub-mode
+## Stage 2 — the Investigate sub-mode
 
-### The name: **Ask**
+### The name: **Investigate**
+
+The chip is **Investigate**. Greg asked for a sub-mode "for basically doing lots of searching to try
+and figure out what people think about the article" (2026-10-19, spya-x4xpw4), and *Investigate* is
+that verb. It was first drafted as *Ask*, then *Ask the web*, and both were wrong: in the command bar
+a label that is or starts with "ask" outranks Chat's own nickname `ask`
+(tests/command-match-mode-aliases.test.ts), so typing "ask" would have opened Sources instead of
+Chat. *Questions* collides with Chat's nickname `question`.
 
 - **Chat** is a mode, and a sub-mode's label may not repeat another row's
   (tests/mode-catalog.test.ts).
 - **Explore** is Learn's.
 - **Discuss** suggests other people.
-- **Investigate** and **Inquire** are long.
+- **Inquire** is long; *Inquiry* is an alias.
 
-*Ask* matches the app's *Ask in chat*, and it is a verb, as Greg's examples are questions. The
-runner-up is *Inquiry*. Aliases: *investigate*, *research*, *what do others say*, *sources chat*.
+Aliases: *inquiry*, *research*, *ask the web*, *what do others say*, *sources chat*, *dig deeper*.
+Plain *ask* and *question* are deliberately not aliases: they are Chat's.
 
 ### What the reader sees
 
 ```
- ┌ … │ Reception │ Claims │ Ask ┐
+ ┌ … │ Reception │ Claims │ Investigate ┐
  │ [ Ask about this piece and what others say…        ] [💬]
  │ SUGGESTED
  │  💬 How has this piece been received, and by whom?
@@ -236,7 +243,7 @@ runner-up is *Inquiry*. Aliases: *investigate*, *research*, *what do others say*
 ```
 
 **A press sends.** Every row and the box hand the question to Chat, as the angle box does today
-(`handToChat`). The answer streams there, and Chat's *Back to … in Sources › Ask* line returns. A
+(`handToChat`). The answer streams there, and Chat's *Back to … in Sources › Investigate* line returns. A
 question in *Your questions* opens its chat beside Sources, as a claim's mark does.
 
 **Why not a chat inside the band.** Opus checked this. The floating dialog can only start a chat
@@ -256,7 +263,7 @@ next step. It goes ahead if Greg wants it.
 
 **No new origin word, no migration.** The `reception` lens shape already exists and the database
 admits it. What changes is where its way back lands: `openOrigin`, `originBack` and
-`threadSource`'s tooltip now name *Sources › Ask*. The angle chats already made land there too,
+`threadSource`'s tooltip now name *Sources › Investigate*. The angle chats already made land there too,
 which is right, because that is where *Your questions* now lists them. The stored word stays
 `reception`; no reader sees it.
 
@@ -267,7 +274,7 @@ find little.* after it. The fence stays, because a suggested claim or title is t
 
 **Tailored questions, with no model call.**
 - The claims come from Claims' stored list, when the owner has made it, up to four, in article
-  order. The Ask chip never buys the list.
+  order. The Investigate chip never buys the list.
 - The works come from Bibliography, the three it leans on most (`relevance`).
 
 Both are already loaded by the band. A model writing the questions would mean a new step and a new
@@ -275,20 +282,20 @@ cost before any press. It would also put model words into a message the reader s
 suggested question worded from the reader's profile waits for Send by the privacy page's promise.
 Deferred until the templates prove too generic.
 
-**The angle box and *Your angles* leave Reception** and become Ask's box and *Your questions*. That
+**The angle box and *Your angles* leave Reception** and become Investigate's box and *Your questions*. That
 is one less control on top of the panel Greg found bewildering.
 
 ### Spend
 
 Each press is one ordinary chat turn with web search, the same as *Check this claim in chat* today.
-It adds several new one-press places that send a paid chat turn, but no new spend mechanism and no new guard: every press goes through Chat's own route and its limits (GPT Sol's F9). Tests: arriving on Ask sends nothing, one press is one chat POST, and a visitor has no senders mounted. The chip arms nothing (`activationForSources`
-returns `null` for Ask, as for Links). A link, Back or a restore buys nothing, because nothing on the
+It adds several new one-press places that send a paid chat turn, but no new spend mechanism and no new guard: every press goes through Chat's own route and its limits (GPT Sol's F9). Tests: arriving on Investigate sends nothing, one press is one chat POST, and a visitor has no senders mounted. The chip arms nothing (`activationForSources`
+returns `null` for Investigate, as for Links). A link, Back or a restore buys nothing, because nothing on the
 panel spends until a press.
 
 ### Visitors
 
-Ask is owner-only: a visitor has no chat. It is left out of the visitor's chip row, and
-`?sources=ask` draws Bibliography for a visitor (`visitorSourcesView`), as Not cited does. That
+Investigate is owner-only: a visitor has no chat. It is left out of the visitor's chip row, and
+`?sources=investigate` draws Bibliography for a visitor (`visitorSourcesView`), as Not cited does. That
 follows an existing pattern rather than editing a defence.
 
 ### What it touches
@@ -297,13 +304,13 @@ follows an existing pattern rather than editing a defence.
 table:
 
 - `SourcesView` and `SOURCES_SUB_MODES` (the label, description and aliases). `ReceptionAndClaimsView`
-  is defined today as Sources' views minus three, so adding `ask` would quietly widen it: it becomes
+  is defined today as Sources' views minus three, so adding `investigate` would quietly widen it: it becomes
   the positive union `"reception" | "claims"`, and both SourcesMode controllers route each view with
   an exhaustive `switch` (F5);
 - params.ts `sourcesParam` and `visitorSourcesView`;
 - `activationForSources`;
-- the chip row in SourcesMode.tsx, and a new `AskPanel` that takes the chip row as `head`;
-- sources-counts (no count for Ask: there is nothing to count before a press, and *Your questions*
+- the chip row in SourcesMode.tsx, and a new `InvestigatePanel` that takes the chip row as `head`;
+- sources-counts (no count for Investigate: there is nothing to count before a press, and *Your questions*
   is not a list the chip should number);
 - Reader's senders, passed down: the lens sender, `checkClaim`, `askWork`, and the bundles for the
   marks;
@@ -311,28 +318,28 @@ table:
   whose *Angle: …* becomes *Question: …*, because a suggested question is not the reader's angle (F6);
 - the help page `src/web/help/pages/modes/sources.md`;
 - the command bar's aliases;
-- the docs: sources.md gets a § Ask, the old § Look at the debate from an angle in reception.md moves
+- the docs: sources.md gets a § Investigate, the old § Look at the debate from an angle in reception.md moves
   there, and chat-from-a-mode.md's table row changes.
 
 ### The tests
 
-- the chip and the address, and a visitor never seeing Ask;
+- the chip and the address, and a visitor never seeing Investigate;
 - the suggested questions present, and a claim and a work row appearing only when their lists exist;
 - a press sends with the right origin and question (lens, claim, work);
 - an existing claim or work chat shows its mark instead of a button;
-- the way back from an angle chat lands on Ask;
+- the way back from an angle chat lands on Investigate;
 - the old Reception has no angle box;
 - `chat-handoff.test.ts` for the new builder and its fence;
 - `every-mode-draws-its-surface.test.tsx`'s `SOURCES_VIEWS_DRAW` and the chip-count assertion, and
-  `url-state.test.ts`'s address and visitor inventories, with Ask's own panel content, so a valid Ask
+  `url-state.test.ts`'s address and visitor inventories, with Investigate's own panel content, so a valid Investigate
   address that drew Reception would fail (F7).
 
 ## Deferred, named
 
-- **Ask's conversation opening beside Sources** in the floating dialog, so the reader never leaves
+- **Investigate's conversation opening beside Sources** in the floating dialog, so the reader never leaves
   the mode. It needs a third `ChatTarget` arm for an un-anchored chat with an origin.
 - **Model-written suggested questions**, if the templates prove generic.
-- **Renaming the stored origin word** `reception` to `ask`, which needs one migration. Nothing a
+- **Renaming the stored origin word** `reception` to `investigate`, which needs one migration. Nothing a
   reader sees depends on it.
 - **A real-data browser pass** on a production article's Reception (Tinbergen 1963), once deployed,
   because the local rows were synthetic.
@@ -341,7 +348,7 @@ table:
 
 - **Fold every section into one long list with headings, and no disclosures.** It would be cheaper,
   but it is what Greg found bewildering: headings alone did not make the groups visible.
-- **For Ask, a launcher with only fixed questions and no tailored rows.** It would be simpler still,
+- **For Investigate, a launcher with only fixed questions and no tailored rows.** It would be simpler still,
   but Greg asked for questions about "the articles it has cited" and "whether its claims have been
   supported", and the two stored lists answer that at no cost.
 
@@ -365,6 +372,6 @@ The verdict was *revise before build*. All nine findings are taken:
 ## Progress
 
 - [x] Plan reviewed by GPT Sol (revise before build; all nine taken, above)
-- [ ] Stage 1 built, tested, browser-checked, code-reviewed by GPT Sol, committed
-- [ ] Stage 2 built, tested, browser-checked, code-reviewed by GPT Sol, committed
+- [x] Stage 1 built, tested, browser-checked, code-reviewed by GPT Sol (pass after five fixes; F6, the panel's overall complexity, left as wider), committed
+- [x] Stage 2 built, renamed Investigate, tested, browser-checked (one POST per press, intercepted), code-reviewed by GPT Sol (four found, four fixed), committed
 - [ ] Docs, user-feedback note, queue item done, pushed to dev

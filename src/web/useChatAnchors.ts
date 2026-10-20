@@ -332,18 +332,18 @@ export function threadForOrigin(
   return best;
 }
 
-/** A chat's summary whose origin is a lens: what one line of Debate's *Your angles* is drawn from. */
+/** A chat's summary whose origin is a lens: what one line of Sources › Investigate's *Your questions* is drawn from. */
 export type LensThread = ThreadSummary & { origin: LensOrigin };
 
 /**
- * **Every chat that was started from an angle typed into Debate's box**,
- * newest first: Debate's *Your angles*, the way back to them
- * (plan 261005k, A). Derived from the summaries, as `threadForOrigin` is, so
- * nothing is stored on Debate's side.
+ * **Every chat that was started from a lens**, newest first: Sources › Investigate's
+ * *Your questions*, the way back to them (plan 261020n; Reception's *Your
+ * angles* from plan 261005k, A, until then). Derived from the summaries, as
+ * `threadForOrigin` is, so nothing is stored on Sources' side.
  *
- * A list and not a lookup: an angle is the reader's own free words with
- * nothing in Debate to hang a mark on, and two chats started from the same
- * words are two conversations, so each gets its line. `kind === "chat"`
+ * A list and not a lookup: a question is free words with nothing in the
+ * article to hang a mark on, and two chats started from the same words are
+ * two conversations, so each gets its line. `kind === "chat"`
  * positively, for `threadForOrigin`'s reason.
  */
 export function lensThreads(summaries: readonly ThreadSummary[]): LensThread[] {

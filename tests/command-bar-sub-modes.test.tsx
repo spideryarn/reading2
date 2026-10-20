@@ -574,14 +574,14 @@ describe("Enter on Referee › Hidden text, on the reading view", () => {
    so a sub-mode that lives only in the panel is one the bar never offers; and
    Reader's batched setter enumerates its keys, so one missing from it opens
    the mode and drops the view. */
-describe("Sources' five sub-modes", () => {
+describe("Sources' six sub-modes", () => {
   const BIBLIOGRAPHY: SubMode = { mode: "sources", view: "bibliography" };
   const NOT_CITED: SubMode = { mode: "sources", view: "not-cited" };
   const LINKS: SubMode = { mode: "sources", view: "links" };
   const CLAIMS: SubMode = { mode: "sources", view: "claims" };
   const RECEPTION: SubMode = { mode: "sources", view: "reception" };
 
-  it("lists all five under Sources, in the control's order", () => {
+  it("lists all six under Sources, in the control's order", () => {
     reading();
     openBar();
     type("sources");
@@ -592,6 +592,7 @@ describe("Sources' five sub-modes", () => {
       "Sources › Links",
       "Sources › Reception",
       "Sources › Claims",
+      "Sources › Investigate",
     ]);
     /* Its name until 2026-10-09 still finds it, ahead of Referee (plan 261009w). */
     type("peer review");

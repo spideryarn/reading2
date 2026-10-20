@@ -354,7 +354,7 @@ function receptionOwner(row: ClaimReceptionRow): UseReception {
 }
 
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 describe("a Debate row on screen", () => {
   it("draws the registry by-line and names the exact fields it supplied", async () => {

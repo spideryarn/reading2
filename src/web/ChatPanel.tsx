@@ -131,6 +131,7 @@ import {
   CHAT_FROM_LABEL,
   GUIDE_LABEL,
   type LearnConversationView,
+  LENS_BACK,
   narrowed,
   originBack,
   sourcesIn,
@@ -1401,7 +1402,7 @@ function OriginBack({ origin, onBack }: { origin: ThreadOrigin; onBack(origin: T
       <span className="chat-origin-back-text">
         Back to{" "}
         {back.quote === null ? (
-          "your angle"
+          LENS_BACK
         ) : (
           <span className={withVoice("chat-origin-back-quote", "author")}>“{back.quote}”</span>
         )}{" "}

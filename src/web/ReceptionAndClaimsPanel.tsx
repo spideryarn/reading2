@@ -263,7 +263,6 @@ import {
   type IdentificationLevel,
   type ListedClaim,
   MAX_CHECK_TARGETS,
-  MAX_LENS_CHARS,
   MAX_OWN_CLAIM_CHARS,
   type RegistrySource,
   type ThreadSummary,
@@ -311,8 +310,8 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 import { type CitedInParagraph, workShortName, worksCitedIn } from "./cited-in-paragraph.js";
-import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
-import { OriginChatMark, originChatTip } from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
+import { OriginChatMark } from "./OriginChat.js";
 import { claimFocusKey, type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { useRenderCount } from "./perf.js";
 import type { UseReception } from "./useReception.js";
@@ -1036,21 +1035,15 @@ export type ReceptionAndClaimsAccess =
  * by matching the claim against `summaries` — the reading view's list, which
  * `Reader` owns and keeps current.
  *
- * **And an angle's chat, since the same day** (`onLens`, plan 261005k, A):
- * the box at the top of the panel starts one, and *Your angles* under it is
- * the way back, found in the same `summaries` (`lensThreads`).
+ * An angle's chat (`onLens`, plan 261005k, A) was started here too, from a
+ * box at the top of Reception, until 2026-10-20: the box and its *Your
+ * angles* are Sources › Investigate's now (InvestigatePanel.tsx, plan 261020n Stage 2).
  */
 export interface ReceptionAndClaimsChats {
   summaries: readonly ThreadSummary[];
   /** Start this claim's chat, or reopen it when another surface reaches this sender. */
   onCheck(origin: ClaimOrigin): void;
-  /**
-   * Start a fresh chat that looks at the debate from this angle, the reader's
-   * own words. Goes to Chat and sends the question, as `onCheck` does, so
-   * the press is what starts the web search.
-   */
-  onLens(lens: string): void;
-  /** Open a conversation already started from a claim or an angle, beside Sources. */
+  /** Open a conversation already started from a claim, beside Sources. */
   onOpen(threadId: string): void;
 }
 
@@ -1058,20 +1051,6 @@ export interface ReceptionAndClaimsChats {
 export const SOURCES_CLAIM_CHECK_CLAIM = "Check this claim in chat";
 /** The mark on a claim a chat was started from. */
 export const SOURCES_CLAIMS_OPEN_CLAIM_CHAT = "Open the chat about this claim";
-
-/** The angle box: its accessible name, and (with an ellipsis) its placeholder. */
-export const RECEPTION_LENS_LABEL = "Look at the debate from an angle";
-/** The box's button. The words Glossary's handoff to Chat already uses. */
-export const RECEPTION_LENS_SEND = "Ask in chat";
-/** The button's tooltip: where a press goes, and that it asks at once. */
-export const RECEPTION_LENS_TIP =
-  "Opens Chat and asks what others say on this straight away, with a web search.";
-/** The heading over the chats started from an angle. */
-export const RECEPTION_ANGLES_HEAD = "Your angles";
-/** A line of *Your angles*: its accessible name. */
-export const RECEPTION_OPEN_ANGLE_CHAT = "Open the chat about this angle";
-/** How many of them are on screen before *Show all*. */
-export const RECEPTION_ANGLES_SHOWN = 3;
 
 interface Props {
   access: ReceptionAndClaimsAccess;
@@ -1555,13 +1534,6 @@ export function ReceptionAndClaimsPanel({
       }
     >
 
-      {/* **The angle box and *Your angles*, first and unconditional for the
-          owner**: before any search is stored, while one is loading, on a
-          stale one. An angle is a chat and needs no stored Reception (GPT Sol's
-          review of plan 261005k, answer 2). A visitor has no chat and gets
-          neither. */}
-      {access.kind === "owner" && <Angles chats={access.claimChats} />}
-
       {view === "reception" && owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {view === "reception" && owner?.status === "loading" && (
@@ -1768,125 +1740,6 @@ export function ReceptionAndClaimsPanel({
       )}
 
     </ModeSurface>
-  );
-}
-
-/**
- * **Look at the debate from an angle** — the owner's box at the top of the
- * panel, and *Your angles* under it.
- * Plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A.
- *
- * ```
- *  [ Look at the debate from an angle…        ] [💬 Ask in chat]
- *  YOUR ANGLES
- *   💬 “replication attempts”                               2
- *   💬 “how it relates to Smith 2019”                       1
- * ```
- *
- * **The box starts a chat; it does not steer the stored search.** Enter or
- * the button hands the words to `Reader`, which opens Chat on a fresh
- * conversation and sends the question (plan 261006j). So this component starts
- * no job and has no waiting state: the answer arrives in Chat, which the
- * reader is by then looking at. Why a chat and not a steered search is in
- * docs/project/reception.md § Look at the debate from an angle.
- *
- * **The list is the way back**, one line per chat started from an angle,
- * newest first, found in the reading view's thread summaries (`lensThreads`).
- * A line opens its chat beside Sources, as a claim's mark does. The newest
- * `RECEPTION_ANGLES_SHOWN` and then *Show all*, so a reader with many does not
- * have to scroll past them to reach the debate on a phone.
- *
- * The box and its row are Glossary's *Look up a term* (`.gloss-ask`), which
- * this band already shares the `gloss` feature with: the same field, the
- * reader's face from voices.css, and the same room left for the band's (i).
- * No sentence under the box (docs/project/mode.md): what a press does is the
- * button's tooltip.
- */
-function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
-  const [lens, setLens] = useState("");
-  const [all, setAll] = useState(false);
-  const angles = useMemo(() => lensThreads(chats.summaries), [chats.summaries]);
-  const shown = all ? angles : angles.slice(0, RECEPTION_ANGLES_SHOWN);
-  const words = lens.trim();
-  return (
-    <div className="gloss-ask rcp-lens">
-      <form
-        className="gloss-ask-row rcp-lens-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (words === "") return;
-          chats.onLens(words);
-          /* The words have become the fresh chat's first question. */
-          setLens("");
-        }}
-      >
-        {/* `maxLength` is the server's cap, counted here before trimming, so
-            the box can only refuse what the route would refuse or a little
-            more: the harmless direction (GlossaryPanel.tsx § `AskATerm`). */}
-        <input
-          className="gloss-ask-input"
-          type="text"
-          /* Enter submits this form and goes to Chat. */
-          enterKeyHint="go"
-          value={lens}
-          maxLength={MAX_LENS_CHARS}
-          placeholder={`${RECEPTION_LENS_LABEL}…`}
-          aria-label={RECEPTION_LENS_LABEL}
-          onChange={(e) => setLens(e.target.value)}
-          onKeyDown={(e) => {
-            /* Accepting an IME candidate is not a request to open Chat.
-               Cancel implicit submission, including engines that report 229
-               instead of isComposing; an ordinary Enter still uses the form. */
-            if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
-          }}
-        />
-        <button type="submit" className="gloss-btn rcp-lens-send" disabled={words === ""} data-tip={RECEPTION_LENS_TIP}>
-          <MessagesSquare size={12} aria-hidden="true" />
-          {RECEPTION_LENS_SEND}
-        </button>
-      </form>
-      {angles.length > 0 && (
-        <div className="rcp-angles">
-          <h3 className="rcp-group-head rcp-angles-head">{RECEPTION_ANGLES_HEAD}</h3>
-          <ul className="rcp-angles-list">
-            {shown.map((chat) => (
-              <li key={chat.id}>
-                <button
-                  type="button"
-                  className="rcp-angle"
-                  aria-label={`${RECEPTION_OPEN_ANGLE_CHAT}: ${chat.origin.lens}`}
-                  aria-describedby={chat.gist ? `rcp-angle-gist-${chat.id}` : undefined}
-                  data-tip={originChatTip(RECEPTION_OPEN_ANGLE_CHAT, chat.turns, chat.gist ? "gist" : "none")}
-                  onClick={() => chats.onOpen(chat.id)}
-                >
-                  <MessagesSquare size={12} aria-hidden="true" />
-                  {/* What the reader typed, so in the reader's face
-                      (docs/project/fonts.md). The quotation marks are ours. */}
-                  <span className="rcp-angle-quoted">
-                    “<span className="rcp-angle-words voice-reader">{chat.origin.lens}</span>”
-                  </span>
-                  <span className="rcp-angle-count">{chat.turns}</span>
-                  {/* The chat's gist under the angle, as every other item's mark
-                      shows it (OriginChat.tsx § OriginChatMark; Greg,
-                      2026-10-10, spya-rbp55k: *"true for anywhere where we
-                      offer Ask in Chat"*, plan 261011c). The model's words. */}
-                  {chat.gist && (
-                    <span id={`rcp-angle-gist-${chat.id}`} className="rcp-angle-gist origin-chat-gist voice-ai">
-                      {chat.gist}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {!all && angles.length > RECEPTION_ANGLES_SHOWN && (
-            <button type="button" className="rcp-more rcp-angles-more" onClick={() => setAll(true)}>
-              Show all {angles.length}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -2854,7 +2707,7 @@ function OwnerListedClaims({
             >
               <div className="gloss-ask-row rcp-check-row">
                 {/* `maxLength` is the route's cap, counted before trimming —
-                    the harmless direction (`Angles` above). */}
+                    the harmless direction (InvestigatePanel.tsx § `QuestionBox`). */}
                 <input
                   className="gloss-ask-input"
                   type="text"
