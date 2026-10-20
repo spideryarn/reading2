@@ -135,6 +135,14 @@ export type ReaderPlan =
        */
       readonly highPower: number;
       /**
+       * **How many articles' worth the `used` articles take** — a long PDF is
+       * one article added and one slot per 50 pages (plan 261020b), so a reader
+       * with one 150-page article reads *1 article added, using 3 of your 3*,
+       * never *3 articles added*. A sum of whole slots from the ledger, not a
+       * division of points. Absent means the same as `used`.
+       */
+      readonly usedSlots?: number;
+      /**
        * **Papers not yet AI-processed**, counted against this allowance at a
        * hundredth of an article each — charged and not yet paid for in full by
        * *Read this*, plus those in flight.
@@ -202,6 +210,8 @@ export type ReaderPlan =
       readonly highPower: number;
       /** As `free`'s. */
       readonly minimal: number;
+      /** As `free`'s. */
+      readonly usedSlots?: number;
       /** ISO. When the allowance starts again — the renewal, not the ending. */
       readonly periodEnd: string;
       /**
@@ -537,10 +547,41 @@ function isRatio(plan: {
   sharedHalfPrice: number;
   highPower: number;
   minimal: number;
+  usedSlots?: number;
 }): boolean {
   return (
-    plan.sharedHalfPrice === 0 && plan.highPower === 0 && plan.minimal === 0 && plan.used <= plan.limit
+    plan.sharedHalfPrice === 0 &&
+    plan.highPower === 0 &&
+    plan.minimal === 0 &&
+    plan.used <= plan.limit &&
+    (plan.usedSlots ?? plan.used) === plan.used
   );
+}
+
+/**
+ * **A ratio of slots, when a long PDF is the only reason the count is not one**
+ * — the slots used out of the allowance, said beside the articles added
+ * (plan 261020b). Null otherwise. Nothing divides: both are ledger sums.
+ */
+function slotsRatio(plan: {
+  used: number;
+  limit: number;
+  sharedHalfPrice: number;
+  highPower: number;
+  minimal: number;
+  usedSlots?: number;
+}): string | null {
+  const slots = plan.usedSlots ?? plan.used;
+  if (slots <= plan.used || slots > plan.limit) return null;
+  if (plan.sharedHalfPrice !== 0 || plan.highPower !== 0 || plan.minimal !== 0) return null;
+  return `${articleCount(plan.used)} added, using ${slots} of your ${plan.limit}`;
+}
+
+/** *"A PDF counts one article for every 50 pages…"* — or nothing, without a long one. */
+function longClause(plan: { used: number; usedSlots?: number; sharedHalfPrice: number }): string {
+  const slots = plan.usedSlots ?? plan.used;
+  if (slots <= plan.used || plan.sharedHalfPrice !== 0) return "";
+  return `A PDF counts as one article for every 50 pages, so these use ${slots} of the allowance. `;
 }
 
 /**
@@ -607,6 +648,7 @@ function howTheyStand(plan: {
   sharedHalfPrice: number;
   highPower: number;
   minimal: number;
+  usedSlots?: number;
 }): string {
   return howTheArticlesStand(plan) + minimalClause(plan.minimal);
 }
@@ -616,6 +658,7 @@ function howTheArticlesStand(plan: {
   limit: number;
   sharedHalfPrice: number;
   highPower: number;
+  usedSlots?: number;
 }): string {
   if (plan.highPower > 0) {
     return (
@@ -633,7 +676,10 @@ function howTheArticlesStand(plan: {
      enforcement budget is in points, the page is handed integer counts, and
      neither end has a better claim on the multiplication than the other. Whole
      articles only, which is what the sentence is about. */
-  const fits = plan.used * 2 - plan.sharedHalfPrice <= plan.limit * 2;
+  /* Counted in rows, so it is only a true sentence when every row is one slot:
+     a long PDF (plan 261020b) leaves it unsaid rather than wrong. */
+  const fits =
+    (plan.usedSlots ?? plan.used) === plan.used && plan.used * 2 - plan.sharedHalfPrice <= plan.limit * 2;
   return (
     `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each` +
     (fits ? ` — that is how ${plan.used} fit an allowance of ${plan.limit}. ` : ". ")
@@ -682,6 +728,20 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
      free tier nobody else has. Absent gifts, nothing changes. */
   const makeup = giftMakeup(plan.limit, plan.gifts);
   const madeOf = makeup === null ? "" : ` (${makeup})`;
+  const bySlots = slotsRatio(plan);
+  if (bySlots !== null) {
+    return {
+      headline: `Free — ${bySlots}${madeOf}`,
+      detail:
+        longClause(plan) +
+        (plan.atLimit
+          ? "That is the whole free allowance, which is a lifetime one rather than a monthly " +
+            `one. ${wayOut}Everything you have added stays exactly where it is, and reading ` +
+            "is never limited."
+          : `The free allowance is ${plan.limit} articles for the lifetime of the account, ` +
+            "not per month. Reading is never limited."),
+    };
+  }
   if (isRatio(plan)) {
     return {
       headline: `Free — ${plan.used} of ${plan.limit} articles used${madeOf}`,
@@ -697,6 +757,7 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
     headline: `Free — ${articleCount(plan.used)} added, on an allowance of ${plan.limit}${madeOf}`,
     detail:
       howTheyStand(plan) +
+      longClause(plan) +
       (plan.atLimit
         ? "The allowance is a lifetime one rather than a monthly one, and it is spent. " +
           wayOut +
@@ -786,11 +847,15 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
                 : nonePublicNow(plan.limit)
               : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `) +
           minimalClause(plan.minimal);
+      const bySlots = slotsRatio(plan);
       return {
-        headline: isRatio(plan)
-          ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`
-          : `${plan.tierName} — ${articleCount(plan.used)} this month, on an allowance of ${plan.limit}`,
-        detail: shared + paidTiming(plan, ends),
+        headline:
+          bySlots !== null
+            ? `${plan.tierName} — ${bySlots} this month`
+            : isRatio(plan)
+              ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`
+              : `${plan.tierName} — ${articleCount(plan.used)} this month, on an allowance of ${plan.limit}`,
+        detail: (bySlots !== null ? longClause(plan) : shared + longClause(plan)) + paidTiming(plan, ends),
       };
     }
   }

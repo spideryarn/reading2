@@ -200,7 +200,8 @@ import { openingTitleReader } from "./opening-title.js";
 import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
-import { MAX_PAGES } from "./uploads.js";
+import { MAX_PAGES, slotsForPages } from "./uploads.js";
+import type { StagePricing } from "./billing/admission.js";
 import { savedFromInHtml } from "./saved-from.js";
 import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
@@ -227,6 +228,11 @@ import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
   articleHadNoText,
+  BILLING_NOT_AVAILABLE,
+  longPdfQuotaReached,
+  longPdfUses,
+  pdfGrewOnRerun,
+  PDF_NOT_PRICED,
   codeOfMessage,
   documentHadTooLittleText,
   documentIsABotCheck,
@@ -778,6 +784,23 @@ export interface StepContext {
    * requeues. docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md.
    */
   beginPaidWork?: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">;
+  /**
+   * **Price a PDF stage 1 has counted, against this job's reservation** —
+   * `priceFetchedPdf` in src/store/pg-billing.ts, bound to this claim by
+   * src/jobs.ts like `beginPaidWork`. `previousPages` is the page count of the
+   * raw source this fetch replaces (null for none, or a web page), which a
+   * re-run with no reservation may not exceed for free. Called before the raw
+   * is written or an upload promoted, so a refusal leaves nothing paid begun.
+   * Absent from a command line or a test, where nothing is charged.
+   * docs/plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md.
+   */
+  priceFetchedPdf?: (pages: number, previousPages: number | null) => Promise<StagePricing>;
+  /**
+   * **Stage 2's read-only belt**: does this job's reservation cover a PDF of
+   * `pages`? `pdfPricing` in src/store/pg-billing.ts. Absent where nothing is
+   * charged.
+   */
+  pdfIsPriced?: (pages: number) => Promise<"priced" | "unasked" | "underpriced">;
   /**
    * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
    * which this file cannot import. The structure step's slices path stops
@@ -1536,7 +1559,7 @@ async function refuseAnOverlongPdf(
   ctx: StepContext,
   bytes: Uint8Array,
   mark?: () => Promise<boolean>,
-): Promise<void> {
+): Promise<number | null> {
   const slug = ctx.slug;
   let pages: number;
   try {
@@ -1551,11 +1574,15 @@ async function refuseAnOverlongPdf(
       { slug, step: "fetch", why: (err as Error).name },
       `page count: ${slug} would not open`,
     );
-    return;
+    /* No count, so nothing to price: `pass0` refuses this file in stage 2
+       before any model call, which is what makes one slot safe here. */
+    return null;
   }
   try {
     refuseTooManyPages(pages, MAX_PAGES);
-    return;
+    /* **The count goes back** so the caller can price it (plan 261020b): one
+       slot per 50 pages, through `priceTheDocument` below. */
+    return pages;
   } catch (err) {
     if (!(err instanceof TooManyPages)) throw err;
     /* **Awaited before the throw**, for the reason `acquireUpload`'s `refuse`
@@ -1585,6 +1612,89 @@ async function refuseAnOverlongPdf(
         `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
     });
   }
+}
+
+/**
+ * **The page count of the raw source this fetch is about to replace** — what
+ * rule 4 of plan 261020b compares a re-run against. The manifest's own count
+ * when it has one; for a manifest written before 2026-10-20, its stored bytes
+ * counted with `countPdfPages`. Null for no previous source, or one that was a
+ * web page, which counts as one slot either way.
+ *
+ * **Outside any lock**, by construction: it is called before the reprice opens
+ * its transaction, and it reads Storage. A count that cannot be had is null,
+ * which makes the comparison fall back to the article's charged rows — the
+ * direction that refuses rather than lets through.
+ */
+async function previousSourcePages(ctx: StepContext, store: ArtifactReads): Promise<number | null> {
+  const previous = await store.read(ctx.slug, "fetch", "raw");
+  if (previous === null || previous.kind !== "pdf") return null;
+  if (previous.pages !== undefined) return previous.pages;
+  try {
+    return await countPdfPages(await readRawBytes(previous, { slug: ctx.slug }), ctx.signal);
+  } catch (err) {
+    ctx.signal.throwIfAborted();
+    plog.warn(
+      { slug: ctx.slug, step: "fetch", why: err instanceof Error ? err.name : typeof err },
+      `page count: ${ctx.slug}'s previous source could not be counted`,
+    );
+    return null;
+  }
+}
+
+/**
+ * **Charge a PDF its slots, once stage 1 has counted it** — one slot per 50
+ * pages (plan 261020b) — or refuse it, before the raw is written or an upload
+ * promoted, so a refusal leaves nothing paid begun and an upload `claimed`
+ * for Retry.
+ *
+ * Returns the warning the step's stored detail should carry, or null: a PDF
+ * over 50 pages, charged against a reservation, says so and carries on
+ * (Greg: *"don't block - just let them know"*). An administrator, a minimal
+ * paper and a re-run are charged nothing here and are told nothing. Nothing at
+ * all happens where no claim is pricing (a command line, a test).
+ */
+async function priceTheDocument(
+  ctx: StepContext,
+  store: ArtifactReads,
+  pages: number | null,
+): Promise<string | null> {
+  if (pages === null || !ctx.priceFetchedPdf) return null;
+  /* Only a document heavier than one slot can be heavier than what a re-run
+     is allowed; one slot needs no previous count, and no Storage read. */
+  const previous = slotsForPages(pages) > 1 ? await previousSourcePages(ctx, store) : null;
+  const priced = await ctx.priceFetchedPdf(pages, previous);
+  switch (priced.kind) {
+    case "unpriced":
+    case "minimal":
+      return null;
+    case "priced":
+      return priced.slots > 1 ? longPdfUses(priced.pages, priced.slots) : null;
+    case "refused": {
+      const { refusal } = priced;
+      throw stageFailure(
+        longPdfQuotaReached({
+          pages: priced.pages,
+          slots: priced.slots,
+          slotsLeft: priced.slotsLeft,
+          ...(refusal.shareToMakeRoom === undefined ? {} : { shareToMakeRoom: refusal.shareToMakeRoom }),
+        }),
+      );
+    }
+    case "refused-rerun":
+      throw stageFailure(pdfGrewOnRerun(priced.pages, priced.slots, priced.paidSlots));
+    case "unavailable":
+      throw stageFailure(BILLING_NOT_AVAILABLE);
+    default: {
+      const never: never = priced;
+      throw new Error(`unhandled pricing ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/** The step's detail, with a long PDF's warning after it when there is one. */
+function withWarning(detail: string, warning: string | null): string {
+  return warning === null ? detail : `${detail}. ${warning}`;
 }
 
 /**
@@ -1647,6 +1757,8 @@ async function convertedText(
 async function acquireUpload(
   ctx: StepContext,
   upload: JobUpload,
+  /* For the raw source this replaces, which a re-run's price is compared with. */
+  reads: ArtifactReads,
 ): Promise<{ manifest: RawManifest; detail: string }> {
   const record = await readUpload(upload.id);
   if (!record) {
@@ -1730,9 +1842,13 @@ async function acquireUpload(
      unconditional here only because every upload was a PDF; a web page has no
      pages to count, and `MAX_PAGES` is a statement about what transcription
      costs rather than about how long a document may be. */
-  if (kind === "pdf") {
-    await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
-  }
+  const pages =
+    kind === "pdf" ? await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages")) : null;
+  /* **Priced here, still before the promotion**: a refusal throws with the
+     record still `claimed`, so a Retry once the allowance grows can promote it
+     (plan 261020b). Not through `refuse`, which would reject the upload for
+     ever over something that is not about the file. */
+  const warning = await priceTheDocument(ctx, reads, pages);
 
   /* **The decoded string for a web page, the arrived bytes for a PDF** — the
      rule is `storedDocumentBytes`'s and this calls it rather than restating it,
@@ -1834,6 +1950,8 @@ async function acquireUpload(
        */
     storedSha256,
     storedBytes: storedBytes.byteLength,
+    /* What its slots were priced from — `RawManifest.pages`. */
+    ...(pages === null ? {} : { pages }),
     fetchedAt: new Date().toISOString(),
   };
 
@@ -1870,7 +1988,7 @@ async function acquireUpload(
      `writeRaw` was refactored to prevent. The bytes are already in the
      content-addressed bucket, under `storedSha256`, put there by
      `storeRawSource` above. */
-  return { manifest, detail: `${kb} KB` };
+  return { manifest, detail: withWarning(`${kb} KB`, warning) };
 }
 
 /**
@@ -2884,14 +3002,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * PDF look permanently unfetched, and it would re-fetch on every retry.
      */
     produces: ["raw"],
-    async run(ctx) {
+    async run(ctx, store) {
       /* **The one branch in the whole pipeline that knows where an article came
          from.** An upload has nothing to fetch — the bytes are already ours —
          so this half verifies them and writes the same manifest the other half
          does. See `acquireUpload`, and the label this step shows, which is not
          "Fetching the page" when there is nothing to fetch. */
       if (ctx.upload) {
-        const { manifest, detail } = await acquireUpload(ctx, ctx.upload);
+        const { manifest, detail } = await acquireUpload(ctx, ctx.upload, store);
         return { parts: { raw: manifest }, detail };
       }
       const url = requireUrl(ctx);
@@ -2907,7 +3025,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          what stage 1 decided the bytes *are*, never on the address — a `.pdf`
          URL that served a Cloudflare challenge is HTML (docs/project/fetching.md).
          No upload record here, so nothing to mark. */
-      if (!("convertedFrom" in doc) && doc.kind === "pdf") await refuseAnOverlongPdf(ctx, doc.bytes);
+      const pages =
+        !("convertedFrom" in doc) && doc.kind === "pdf" ? await refuseAnOverlongPdf(ctx, doc.bytes) : null;
+      /* **Priced before `writeRaw`, too** (plan 261020b): stage 2 cannot run
+         without the raw, so nothing paid starts on a document whose slots were
+         refused. A web page, Word and Europe PMC's JATS have no count and stay
+         one slot. */
+      const warning = await priceTheDocument(ctx, store, pages);
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
@@ -2918,7 +3042,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* A page built from what arrived (Europe PMC's JATS) goes through its own
          seam, which stores the page and describes the XML: src/fetch.ts §
          `ConvertedHtml`. */
-      const manifest = "convertedFrom" in doc ? await writeConvertedRaw(doc) : await writeRaw(doc);
+      const written = "convertedFrom" in doc ? await writeConvertedRaw(doc) : await writeRaw(doc);
+      /* What its slots were priced from — `RawManifest.pages`. */
+      const manifest: RawManifest = pages === null ? written : { ...written, pages };
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
          history, and nothing writes one down: the enqueue line in src/jobs.ts
@@ -2936,7 +3062,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         { slug: ctx.slug, step: "fetch", host, kb, ...(via === null ? {} : { ...via, tried }) },
         `fetch ${ctx.slug}: ${kb} KB`,
       );
-      return { parts: { raw: manifest }, detail: fetchDetail(kb, via) };
+      return { parts: { raw: manifest }, detail: withWarning(fetchDetail(kb, via), warning) };
     },
   },
 
@@ -3261,6 +3387,24 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             );
           }
           throw err;
+        }
+      }
+
+      /* **The belt: is this PDF priced?** (plan 261020b, R2-F4.) One read-only
+         question before transcription, which is where the money is: does the
+         job's reservation carry the slots stage 1 counted? A manifest with no
+         count was written before 2026-10-20 and is grandfathered; a job with no
+         reservation is not asked. No is a fault of ours, failed closed. */
+      if (manifest.pages !== undefined && ctx.pdfIsPriced) {
+        const priced = await ctx.pdfIsPriced(manifest.pages);
+        if (priced === "underpriced") {
+          plog.error(
+            { slug: ctx.slug, step: "extract", jobId: ctx.jobId, pages: manifest.pages },
+            `extract ${ctx.slug}: a ${manifest.pages}-page PDF reached transcription without its slots`,
+          );
+          throw stageFailure(PDF_NOT_PRICED, {
+            authored: `The job's reservation does not cover ${manifest.pages} pages; see plan 261020b.`,
+          });
         }
       }
 

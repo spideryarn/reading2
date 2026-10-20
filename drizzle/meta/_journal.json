@@ -1450,6 +1450,13 @@
       "when": 1792478178580,
       "tag": "20261020063618_fold_tutorial_into_recall",
       "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "7",
+      "when": 1792518263757,
+      "tag": "20261020174423_long_pdf_slots_and_raw_pages",
+      "breakpoints": true
     }
   ]
 }

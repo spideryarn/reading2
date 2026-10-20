@@ -36,6 +36,7 @@ import {
   codeOfMessage,
   ingestQuotaReached,
   isQuotaRefusal,
+  longPdfQuotaReached,
   minimalQuotaReached,
 } from "../src/messages.js";
 import { BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE } from "../src/messages.js";
@@ -490,11 +491,12 @@ describe("which failures get an upgrade link beside them", () => {
     const monthly = ingestQuotaReached({ limit: 20, resetAt: new Date("2026-10-03") }).message;
     const lapsed = ingestQuotaReached({ limit: 3, lapsed: true }).message;
     const minimal = minimalQuotaReached({ fits: 0 }).message;
-    for (const message of [free, monthly, lapsed, minimal]) expect(isQuotaRefusal(message)).toBe(true);
+    const longPdf = longPdfQuotaReached({ pages: 250, slots: 5, slotsLeft: 2 }).message;
+    for (const message of [free, monthly, lapsed, minimal, longPdf]) expect(isQuotaRefusal(message)).toBe(true);
     /* And the codes they carry are exactly the list — so another refusal added
        without being added to `QUOTA_CODES`
        fails here rather than silently losing its link. */
-    expect([free, monthly, lapsed, minimal].map(codeOfMessage).sort()).toEqual(
+    expect([free, monthly, lapsed, minimal, longPdf].map(codeOfMessage).sort()).toEqual(
       [...QUOTA_CODES].sort(),
     );
   });

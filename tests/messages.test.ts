@@ -23,6 +23,8 @@ import {
   providerHttpFailure,
   authProviderRefused,
   highPowerNoRoom,
+  longPdfQuotaReached,
+  pdfGrewOnRerun,
   minimalQuotaReached,
   alreadyOnYourShelf,
   ingestQuotaReached,
@@ -142,6 +144,9 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
     ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
     ingestQuotaReached({ limit: 3, lapsed: true }),
   ],
+  /* One code, one wording for every plan (plan 261020b); only the numbers move. */
+  longPdfQuotaReached: [longPdfQuotaReached({ pages: 250, slots: 5, slotsLeft: 2 })],
+  pdfGrewOnRerun: [pdfGrewOnRerun(350, 7, 1)],
   /* One code, one wording: the paid form differs only in its date. */
   highPowerNoRoom: [highPowerNoRoom({ resetAt: new Date("2026-10-01T00:00:00Z") })],
   /* One code, one wording, as for `highPowerNoRoom`: the other forms differ

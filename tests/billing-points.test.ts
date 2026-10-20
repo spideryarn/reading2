@@ -262,7 +262,7 @@ describe("what an ingest costs", () => {
     await givenCharged(await givenArticle("public-one", "public"));
 
     const usage = await usageFor(OWNER, FREE);
-    expect(usage).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 1, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(usage).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 1, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0, slots: { chargedFullPrice: 1, chargedHalfPrice: 1, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 } });
     /* **The literal, not the constants.** Writing this as
        `PRIVATE_INGEST_COST + PUBLIC_INGEST_COST` follows whatever those become,
        so it stays green with the discount switched off — watched doing exactly
@@ -286,7 +286,7 @@ describe("what an ingest costs", () => {
   it("charges a reservation full price, because nobody knows yet", async () => {
     expect((await reserveIngest(OWNER)).kind).toBe("admitted");
     const usage = await usageFor(OWNER, FREE);
-    expect(usage).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 0, inFlightIngest: 1, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(usage).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 0, inFlightIngest: 1, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0, slots: { chargedFullPrice: 0, chargedHalfPrice: 0, inFlightIngest: 1, highPowerFullPrice: 0, highPowerHalfPrice: 0 } });
     expect(wallUsed(usage)).toBe(200);
   });
 
@@ -305,6 +305,7 @@ describe("what an ingest costs", () => {
       inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
+      slots: { chargedFullPrice: 1, chargedHalfPrice: 0, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 },
     });
   });
 });
@@ -339,7 +340,7 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
     const article = await givenArticle("deleted-while-public", "public");
     await givenCharged(article);
     const before = await usageFor(OWNER, FREE);
-    expect(before).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 1, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(before).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 1, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0, slots: { chargedFullPrice: 0, chargedHalfPrice: 1, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 } });
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
 
@@ -353,7 +354,7 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
     const article = await givenArticle("deleted-while-private", "private");
     await givenCharged(article);
     const before = await usageFor(OWNER, FREE);
-    expect(before).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 0, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(before).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 0, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0, slots: { chargedFullPrice: 1, chargedHalfPrice: 0, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 } });
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
 
@@ -495,6 +496,7 @@ describe("a paid period counts public rows by its own bounds", () => {
       inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
+      slots: { chargedFullPrice: 0, chargedHalfPrice: 2, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 },
     });
   });
 

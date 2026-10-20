@@ -228,6 +228,14 @@ export interface RawManifest {
    * docs/plans/260828b-artifacts-pg-has-sol.md.
    */
   storedBytes?: number;
+  /**
+   * **A PDF's page count, as stage 1 counted it** — `article_revisions.raw_pages`.
+   * What its slots were priced from (plan 261020b): a re-run that fetches again
+   * compares against it, and stage 2 asks whether the job's reservation covers
+   * it. Absent for anything that is not a PDF and for every manifest written
+   * before 2026-10-20, which is the grandfathered case.
+   */
+  pages?: number;
   fetchedAt: string;
   /** Present only on a backfilled manifest, saying so in a sentence. */
   backfilled?: string;

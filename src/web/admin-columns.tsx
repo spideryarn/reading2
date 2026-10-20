@@ -218,6 +218,16 @@ function Plan({ user }: { user: AdminUser }) {
  * would be a count of something that was never counted. Drawn on the page rather
  * than sent from the server because those two uuids are already in this bundle.
  */
+/** The slot sums, each defaulting to its count when the server sent none. */
+function slotSums(user: AdminUser) {
+  return {
+    ingests: user.ingestSlots ?? user.ingests,
+    ingestsShared: user.ingestsSharedSlots ?? user.ingestsShared,
+    highPower: user.highPowerSlots ?? user.highPower,
+    highPowerShared: user.highPowerSharedSlots ?? user.highPowerShared,
+  };
+}
+
 function Ingests({ user }: { user: AdminUser }) {
   if (isAdmin(user.id)) {
     return <span data-tip="Administrators take no quota slot, so nothing is counted">—</span>;
@@ -234,11 +244,14 @@ function Ingests({ user }: { user: AdminUser }) {
      src/billing/ is the directory the browser may not reach
      (tests/client-imports.test.ts) — the same reason src/billing-plan.ts is a
      flat module; tests/admin-page.test.tsx pins the sum. */
+  /* **Priced from the slot sums, printed from the counts** — a long PDF is one
+     article added and up to eight slots (plan 261020b). */
+  const slots = slotSums(user);
   const spent =
-    (user.ingests - user.ingestsShared) * 200 +
-    user.ingestsShared * 100 +
-    (user.highPower - user.highPowerShared) * 200 +
-    user.highPowerShared * 100 +
+    (slots.ingests - slots.ingestsShared) * 200 +
+    slots.ingestsShared * 100 +
+    (slots.highPower - slots.highPowerShared) * 200 +
+    slots.highPowerShared * 100 +
     user.minimal * 2;
   const budget = user.ingestLimit * 200;
   const papers =
@@ -291,7 +304,10 @@ function Ingests({ user }: { user: AdminUser }) {
     user.ingestsShared === 0 &&
     user.highPower === 0 &&
     user.minimal === 0 &&
-    user.ingests <= user.ingestLimit
+    user.ingests <= user.ingestLimit &&
+    /* And every row one slot: a long PDF makes `1 / 3` false. */
+    slots.ingests === user.ingests &&
+    slots.highPower === user.highPower
   ) {
     return (
       <span data-tip={`${user.ingests} of ${user.ingestLimit} used ${window}`}>

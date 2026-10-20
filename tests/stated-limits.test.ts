@@ -105,7 +105,7 @@ describe("the limits the upload dialog states", () => {
 
   it("says the sentence these tests are about", () => {
     /* Red by changing MAX_PAGES to 251 in src/uploads.ts. */
-    expect(uploadLimits()).toBe("PDF, web page, Word, Markdown or text file, up to 50 MB. PDFs up to 250 pages.");
+    expect(uploadLimits()).toBe("PDF, web page, Word, Markdown or text file, up to 50 MB. PDFs up to 250 pages; every 50 pages counts as one article.");
     expect(MAX_PAGES).toBe(250);
     expect(MAX_UPLOAD_BYTES).toBe(50 * 1024 * 1024);
   });

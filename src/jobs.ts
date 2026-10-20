@@ -66,6 +66,8 @@ import { mintId } from "./ids.js";
 import { costStore, totalLedger } from "./store/ai-calls.js";
 import type { LedgerRead } from "./store/contracts.js";
 import { pgJobStore } from "./store/pg-jobs.js";
+import { pdfPricing, priceFetchedPdf } from "./store/pg-billing.js";
+import { priceWithResync } from "./billing/admission.js";
 /* The refusal a publication answers with, by name, because the walk has to tell
    it apart from a database fault: one is a draft that is not fit to be an
    article and ends the job with something a person can act on, the other is a
@@ -1370,6 +1372,9 @@ async function runStep(
   /* `JobStore.beginPaidStep` on this claim: for a `oncePerJob` step here, and
      for a purchase inside a step through `StepContext.beginPaidWork`. */
   beginPaidStep: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">,
+  /* The long-PDF reprice and its stage-2 assertion, bound to this claim — see
+     `StepContext.priceFetchedPdf`. */
+  billing: Pick<StepContext, "priceFetchedPdf" | "pdfIsPriced">,
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   /* **The article's power, read once per step, when the step starts** (plan
      260930f decision 3): flipping High-powered AI mid-job moves the steps
@@ -1413,6 +1418,7 @@ async function runStep(
     /* The same once-per-job marker as `oncePerJob` below, for a purchase a
        step makes part-way through (Illustrated's plates). Plan 261009o. */
     beginPaidWork: beginPaidStep,
+    ...billing,
     stepBudgetMs: STEP_BUDGET_MS[step.name],
     /* Which lease window this is, and whether `pauseForDeadline` would grant
        one more. `requeues` is absent at zero (src/store/pg-jobs.ts), so it is
@@ -3287,6 +3293,14 @@ async function walkClaim(
         parts.onStepSpend,
         parts.power,
         (name) => store.beginPaidStep(job.id, attempt, name),
+        {
+          /* **Bound to this claim**, as `beginPaidStep` is: the reprice is fenced
+             on `attempt`, so a stale claimant can neither lower nor raise the
+             replacement's slots (plan 261020b). Stale entitlements resync once. */
+          priceFetchedPdf: (pages, previousPages) =>
+            priceWithResync(job.ownerId, () => priceFetchedPdf(job.id, attempt, pages, previousPages)),
+          pdfIsPriced: (pages) => pdfPricing(job.id, pages),
+        },
       );
 
       if (ran.outcome === "skipped") continue;

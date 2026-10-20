@@ -82,6 +82,10 @@
  *
  * ## The wall is the predicates below, and nothing else spells it
  *
+ * Since 2026-10-20 a row can be several articles' worth (a long PDF, one slot
+ * per 50 pages), so the ingest, upgrade and High-powered predicates take a
+ * slot count; their single-slot forms are the old rules unchanged.
+ *
  * Four questions, four functions, one module (GPT Sol's plan review, P1): the
  * pg-billing locked paths, `/profile`'s `atLimit`, the sharing offer, the
  * voucher and admin read-outs all ask these rather than comparing numbers of
@@ -184,7 +188,31 @@ export function budgetFor(limit: Articles): Points {
  * of overdraft (GPT Sol's plan review, P1).
  */
 export function admitsIngest(used: Points, budget: Points): boolean {
-  return used + PRIVATE_INGEST_COST <= budget + INGEST_OVERDRAFT;
+  return admitsIngestOf(used, budget, 1);
+}
+
+/**
+ * **May an ingest of `slots` articles' worth be added?** A long PDF costs one
+ * slot per 50 pages (`slotsForPages`, src/uploads.ts): `used + 200 × slots <=
+ * budget + 100` — the same half-article overdraft, at the instant the admission
+ * commits. {@link admitsIngest} is its `slots = 1` case. Stage 1's reprice
+ * (`priceFetchedPdf`, src/store/pg-billing.ts) passes `used` *without* the row
+ * being repriced, so the row is never counted twice.
+ */
+export function admitsIngestOf(used: Points, budget: Points, slots: number): boolean {
+  assertSlots(slots);
+  return used + PRIVATE_INGEST_COST * slots <= budget + INGEST_OVERDRAFT;
+}
+
+/**
+ * A slot count is a whole number from 1 to 8 — the database's own check
+ * (`ingest_events_slots`). Thrown rather than clamped: a count from a query
+ * that came back as something else must not quietly price a PDF at nothing.
+ */
+export function assertSlots(slots: number): void {
+  if (!Number.isInteger(slots) || slots < 1 || slots > 8) {
+    throw new Error(`${String(slots)} is not a slot count; a row is between 1 and 8 articles' worth`);
+  }
 }
 
 /**
@@ -207,12 +235,20 @@ export const MINIMAL_CREDIT: UpgradeCredit = 2;
  * the publication that settles it supersedes the minimal row, so the paper
  * totals exactly one ingest.
  */
-export function admitsUpgrade(used: Points, budget: Points, credit: UpgradeCredit): boolean {
+export function admitsUpgrade(
+  used: Points,
+  budget: Points,
+  credit: UpgradeCredit,
+  slots = 1,
+): boolean {
   if (credit !== 0 && credit !== MINIMAL_CREDIT) {
     /* The type says this cannot happen; a number from a query could. */
     throw new Error(`an upgrade credit of ${String(credit)} points is not one a paper can have`);
   }
-  return used + (PRIVATE_INGEST_COST - credit) <= budget + INGEST_OVERDRAFT;
+  /* A long minimal paper is `slots` articles' worth once read, less the same
+     credit — its stored `pages` decides it, since *Read this* never fetches. */
+  assertSlots(slots);
+  return used + (PRIVATE_INGEST_COST * slots - credit) <= budget + INGEST_OVERDRAFT;
 }
 
 /**
@@ -231,8 +267,11 @@ export function admitsMinimal(used: Points, budget: Points): boolean {
  * `used + cost <= budget`, where `cost` is an ingest of the same article —
  * {@link PRIVATE_INGEST_COST} or {@link PUBLIC_INGEST_COST}.
  */
-export function admitsHighPower(used: Points, budget: Points, cost: Points): boolean {
-  return used + cost <= budget;
+export function admitsHighPower(used: Points, budget: Points, cost: Points, slots = 1): boolean {
+  /* A long article is charged its slots again (Greg, 2026-10-20, answer 2),
+     still whole. */
+  assertSlots(slots);
+  return used + cost * slots <= budget;
 }
 
 /**

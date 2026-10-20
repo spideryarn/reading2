@@ -256,6 +256,9 @@ export const REVISION_CARRY_POLICY: Record<
      inherited the reference and lost the byte count would describe an object it
      could no longer size. */
   rawByteCount: "carry",
+  /* The page count the source was priced from (plan 261020b): a fact about
+     the stored bytes, so it travels with them, like the byte count. */
+  rawPages: "carry",
   rawFilename: "carry",
   /* Where an uploaded page says it was saved from: a fact about the stored
      bytes, like the filename, so a force-extract keeps it. A new upload

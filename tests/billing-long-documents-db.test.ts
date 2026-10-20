@@ -1,0 +1,564 @@
+/**
+ * **A long PDF costs one slot per 50 pages — the ledger half**, against a real
+ * database. The arithmetic alone is tests/billing-long-documents.test.ts.
+ *
+ * > I think we need to allow import of longer articles. … each 100 pages counts
+ * > as 1 article … if I'm a user with 2 articles left, and I upload a 150-page
+ * > article, it uses up both those article-slots.
+ * >
+ * > — Greg, 2026-10-19 (and 50 pages a slot, not 100, on 2026-10-20)
+ *
+ * docs/plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md,
+ * stage 2's list. What is held here, and why each is a way the quota could
+ * quietly let a long document run on one slot:
+ *
+ * 1. **Usage prices slots, and counts rows** — a 3-slot row is 600 points and
+ *    one article added; public halves it per slot; deletion freezes all of it.
+ * 2. **The reprice** (`priceFetchedPdf`): Greg's two-slots-left pair at 50
+ *    pages; twenty concurrent reprices on one account; a stale claimant; the
+ *    administrator; a minimal row recording its pages; the same count twice.
+ * 3. **Rule 4**, a re-run with no reservation: refused above what the article
+ *    already was, allowed at or below; a legacy 200-page article's Rebuild; a
+ *    web page rebuilt into a long PDF.
+ * 4. **The paths that skip stage 1** carry the weight: a retry, *Read this* on a
+ *    long minimal paper and on a legacy one, High-powered AI on a long article
+ *    and on a legacy one.
+ * 5. **The sharing offer** answers the request's own cost.
+ * 6. **Barriers** (R2-F5): a reprice against Stop, expiry, the store's own
+ *    ending and a visibility change, each a real second writer held behind a
+ *    third connection, finishing without deadlock with the reservation in a
+ *    state the ledger can explain.
+ *
+ * A real database, this file's own owner, no Stripe and no network.
+ */
+
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { withRetrySlot } from "../src/billing/admission.js";
+import { FREE } from "../src/billing/tiers.js";
+import { loadEnvLocal } from "../src/env.js";
+import { mintId } from "../src/ids.js";
+import { runAsOwner } from "../src/owner.js";
+import type { OwnerId } from "../src/owner.js";
+import { mintAttempt, StaleAttemptError } from "../src/store/jobs.js";
+import {
+  ingestEligibility,
+  ingestSlotsUsed,
+  ingestsUsed,
+  pdfPricing,
+  priceFetchedPdf,
+  reserveIngest,
+  reserveUpgrade,
+  switchOnHighPower,
+  usageFor,
+  wallUsed,
+} from "../src/store/pg-billing.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
+import { pgVisibilityStore } from "../src/store/pg-visibility.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
+
+/* Before `pgReady`, or the whole file refuses for the wrong reason. */
+loadEnvLocal();
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
+const { pool } = await pgReady({
+  suite: "tests/billing-long-documents-db.test.ts",
+  tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events", "spideryarn.articles", "spideryarn.jobs"],
+  /* The migration this file is about: without it every case would fail on a
+     missing column rather than on the rule it checks. */
+  columns: [
+    { table: "spideryarn.ingest_events", column: "slots" },
+    { table: "spideryarn.ingest_events", column: "pages" },
+    { table: "spideryarn.article_revisions", column: "raw_pages" },
+  ],
+  keepPool: true,
+  max: 6,
+});
+
+/** Fixed and distinctive, so a killed run's rows are cleared rather than added to. */
+const OWNER = "0b11a1a0-0000-4000-8000-00000010ba01" as OwnerId;
+const SLUG = "long-pdf-";
+
+/** No tier sells anything, so every admission is the free one: 600 points, three articles. */
+const NO_TIERS = [] as const;
+
+/* --------------------------------------------------------------- fixture -- */
+
+async function givenArticle(name: string, visibility: "private" | "public" = "private"): Promise<string> {
+  const { rows } = await pool.query<{ id: string }>(
+    `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
+     values ($1, $2, $3, case when $3 = 'public' then now() end)
+     returning id`,
+    [OWNER, `${SLUG}${name}`, visibility],
+  );
+  return rows[0]!.id;
+}
+
+/** A charged row of `slots`, written straight in — what a settlement leaves behind. */
+async function givenCharged(
+  articleId: string | null,
+  slots = 1,
+  kind: "ingest" | "minimal" = "ingest",
+  pages: number | null = null,
+): Promise<string> {
+  const { rows } = await pool.query<{ id: string }>(
+    `insert into spideryarn.ingest_events (owner_id, kind, reserved_at, succeeded_at, article_id, slots, pages)
+     values ($1, $2, now(), now(), $3, $4, $5)
+     returning id`,
+    [OWNER, kind, articleId, slots, pages],
+  );
+  return rows[0]!.id;
+}
+
+/** A reservation the route would have taken: one slot, through the real admission. */
+async function reserved(): Promise<string> {
+  const admission = await reserveIngest(OWNER, undefined, NO_TIERS);
+  if (admission.kind !== "admitted") throw new Error(`reserving answered ${admission.kind}`);
+  return admission.reservationId;
+}
+
+/** A running job on a live claim, carrying `ingestEventId` — what stage 1 runs inside. */
+async function givenRunningJob(
+  slug: string,
+  ingestEventId: string | null,
+): Promise<{ readonly id: string; readonly attempt: string }> {
+  const id = mintId();
+  const attempt = mintAttempt();
+  await pool.query(
+    `insert into spideryarn.jobs
+       (id, owner_id, slug, steps, status, work_key, ingest_event_id, attempt_id, lease_expires_at)
+     values ($1, $2, $3, '[]'::jsonb, 'running', $4, $5, $6, now() + interval '10 minutes')`,
+    [id, OWNER, `${SLUG}${slug}`, `work-${id}`, ingestEventId, attempt],
+  );
+  return { id, attempt };
+}
+
+async function row(id: string) {
+  const { rows } = await pool.query<{
+    slots: number;
+    pages: number | null;
+    succeeded: boolean;
+    released: boolean;
+  }>(
+    `select slots, pages, succeeded_at is not null as succeeded, released_at is not null as released
+       from spideryarn.ingest_events where id = $1`,
+    [id],
+  );
+  if (!rows[0]) throw new Error(`no ingest_events row ${id}`);
+  return rows[0];
+}
+
+const price = (job: { id: string; attempt: string }, pages: number, previous: number | null = null) =>
+  priceFetchedPdf(job.id, job.attempt, pages, previous, NO_TIERS);
+
+async function clear(): Promise<void> {
+  await pool.query("delete from spideryarn.jobs where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.ingest_events where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.article_visibility_changes where actor_owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.articles where owner_id = $1", [OWNER]);
+  await pool.query("delete from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
+}
+
+beforeEach(async () => {
+  await seedAuthUser(pool, { id: OWNER, email: `long-pdf-${OWNER}@spideryarn.local`, onConflictDoNothing: true });
+  await clear();
+});
+
+afterAll(async () => {
+  await clear();
+  await pool.query("delete from auth.users where id = $1", [OWNER]).catch(() => {});
+  await pool.end();
+});
+
+/* ---------------------------------------------------------------- usage -- */
+
+describe("usage prices slots and counts rows", () => {
+  it("a 3-slot article is 600 points and one article added", async () => {
+    await givenCharged(await givenArticle("u1"), 3);
+    const usage = await usageFor(OWNER, FREE);
+    expect(wallUsed(usage)).toBe(600);
+    expect(ingestsUsed(usage)).toBe(1);
+    expect(ingestSlotsUsed(usage)).toBe(3);
+  });
+
+  it("public halves every slot, and deletion freezes the half", async () => {
+    await givenCharged(await givenArticle("u2", "public"), 3);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(300);
+    await pool.query("delete from spideryarn.articles where slug = $1", [`${SLUG}u2`]);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(300);
+  });
+
+  it("an unsettled reservation counts 200 a slot, once repriced", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("u3", reservation);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(200);
+    expect(await price(job, 120)).toMatchObject({ kind: "priced", slots: 3 });
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(600);
+  });
+});
+
+/* -------------------------------------------------------------- reprice -- */
+
+describe("stage 1 reprices the reservation once the pages are counted", () => {
+  it("Greg's pair at 50 pages: with two slots left, 100 pages admits and 101 is refused", async () => {
+    await givenCharged(await givenArticle("g0"));
+    const a = await givenRunningJob("g1", await reserved());
+    expect(await price(a, 100)).toMatchObject({ kind: "priced", slots: 2, pages: 100 });
+
+    await clear();
+    await givenCharged(await givenArticle("g0b"));
+    const reservation = await reserved();
+    const b = await givenRunningJob("g2", reservation);
+    const refused = await price(b, 101);
+    expect(refused).toMatchObject({ kind: "refused", slots: 3, pages: 101, slotsLeft: 2 });
+    /* Nothing written: the row is still the one slot the route took. */
+    expect(await row(reservation)).toMatchObject({ slots: 1, pages: null, succeeded: false, released: false });
+  });
+
+  it("twenty concurrent reprices on one account admit only what fits", async () => {
+    /* A free account: three slots. Two one-slot reservations, as the route
+       would let through, then each reprices to 2 slots (100 pages): one fits
+       (200 + 400 ≤ 700) and the second cannot (400 + 400 > 700). */
+    const reservations = [await reserved(), await reserved()];
+    const claims = await Promise.all(reservations.map((r, i) => givenRunningJob(`burst-${i}`, r)));
+    /* Twenty calls at once, ten on each job. */
+    const calls = Array.from({ length: 20 }, (_, i) => price(claims[i % claims.length]!, 100));
+    const answers = await Promise.all(calls);
+    expect(answers.every((a) => a.kind === "priced" || a.kind === "refused")).toBe(true);
+    /* Whatever interleaving won, exactly one was repriced and the wall held. */
+    const weights = await Promise.all(reservations.map(async (r) => (await row(r)).slots));
+    expect(weights.sort()).toEqual([1, 2]);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(600);
+  });
+
+  it("a stale claimant can neither lower nor raise the replacement's slots", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("stale", reservation);
+    expect(await price(job, 150)).toMatchObject({ kind: "priced", slots: 3 });
+    /* A deadline handoff: the job now belongs to a new attempt. */
+    const replacement = mintAttempt();
+    await pool.query("update spideryarn.jobs set attempt_id = $2 where id = $1", [job.id, replacement]);
+    await expect(price(job, 10)).rejects.toBeInstanceOf(StaleAttemptError);
+    await expect(price(job, 400)).rejects.toBeInstanceOf(StaleAttemptError);
+    expect((await row(reservation)).slots).toBe(3);
+  });
+
+  it("the same count twice is a no-op", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("twice", reservation);
+    expect(await price(job, 150)).toMatchObject({ kind: "priced", slots: 3 });
+    expect(await price(job, 150)).toMatchObject({ kind: "priced", slots: 3 });
+    expect(await row(reservation)).toMatchObject({ slots: 3, pages: 150 });
+  });
+
+  it("a minimal paper records its pages and stays at a hundredth", async () => {
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.ingest_events (owner_id, kind) values ($1, 'minimal') returning id`,
+      [OWNER],
+    );
+    const reservation = rows[0]!.id;
+    const job = await givenRunningJob("minimal", reservation);
+    expect(await price(job, 300)).toEqual({ kind: "minimal" });
+    expect(await row(reservation)).toMatchObject({ slots: 1, pages: 300 });
+    expect(await pdfPricing(job.id, 300)).toBe("unasked");
+  });
+
+  it("stage 2's belt: priced once repriced, underpriced before, unasked with no reservation", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("belt", reservation);
+    expect(await pdfPricing(job.id, 150)).toBe("underpriced");
+    await price(job, 150);
+    expect(await pdfPricing(job.id, 150)).toBe("priced");
+    const rerun = await givenRunningJob("belt-rerun", null);
+    expect(await pdfPricing(rerun.id, 400)).toBe("unasked");
+  });
+});
+
+/* ---------------------------------------------------------------- rule 4 -- */
+
+describe("rule 4: a re-run may not fetch a heavier PDF for free", () => {
+  it("is refused above what the article already was, and runs at or below it", async () => {
+    await givenCharged(await givenArticle("r4"), 2);
+    const job = await givenRunningJob("r4", null);
+    expect(await price(job, 100)).toEqual({ kind: "unpriced" });
+    expect(await price(job, 101)).toEqual({ kind: "refused-rerun", slots: 3, paidSlots: 2, pages: 101 });
+  });
+
+  it("a legacy 200-page article's Rebuild runs: its previous source was 200 pages", async () => {
+    await givenCharged(await givenArticle("legacy"), 1);
+    const job = await givenRunningJob("legacy", null);
+    expect(await price(job, 200, 200)).toEqual({ kind: "unpriced" });
+  });
+
+  it("a one-page web page rebuilt into a 400-page PDF is refused", async () => {
+    await givenCharged(await givenArticle("web"), 1);
+    const job = await givenRunningJob("web", null);
+    /* The previous source was a web page, which the fetch step passes as null. */
+    expect(await price(job, 400, null)).toMatchObject({ kind: "refused-rerun", slots: 8, paidSlots: 1 });
+  });
+
+  it("an article with no charged rows and no previous source is one slot", async () => {
+    await givenArticle("bare");
+    const job = await givenRunningJob("bare", null);
+    expect(await price(job, 51)).toMatchObject({ kind: "refused-rerun", paidSlots: 1 });
+  });
+});
+
+/* ---------------------------------------------- paths that skip stage 1 -- */
+
+describe("the paths that skip stage 1 carry the weight", () => {
+  it("a retry reserves the old row's slots", async () => {
+    const old = await reserved();
+    const job = await givenRunningJob("retry", old);
+    await price(job, 150);
+    await pool.query("update spideryarn.jobs set status = 'error', attempt_id = null, lease_expires_at = null where id = $1", [job.id]);
+    await pool.query("update spideryarn.ingest_events set released_at = now() where id = $1", [old]);
+
+    let taken: string | undefined;
+    await withRetrySlot({ jobId: job.id, ownerId: OWNER }, async (slot) => {
+      taken = slot.ingestEventId;
+    });
+    expect(taken).toBeDefined();
+    expect((await row(taken!)).slots).toBe(3);
+  });
+
+  it("Read this on a long minimal paper reserves its slots; a legacy one, one", async () => {
+    const long = await givenArticle("paper-long");
+    await givenCharged(long, 1, "minimal", 120);
+    const answer = await reserveUpgrade(OWNER, long, NO_TIERS);
+    expect(answer.kind).toBe("admitted");
+    if (answer.kind === "admitted") expect((await row(answer.reservationId)).slots).toBe(3);
+
+    await clear();
+    const legacy = await givenArticle("paper-legacy");
+    await givenCharged(legacy, 1, "minimal", null);
+    const old = await reserveUpgrade(OWNER, legacy, NO_TIERS);
+    if (old.kind !== "admitted") throw new Error(`Read this on a legacy paper answered ${old.kind}`);
+    expect((await row(old.reservationId)).slots).toBe(1);
+  });
+
+  it("Read this on a paper too long for what is left is refused", async () => {
+    await givenCharged(await givenArticle("other"), 1);
+    const long = await givenArticle("paper-too-long");
+    await givenCharged(long, 1, "minimal", 150); // 3 slots, 2 left
+    expect((await reserveUpgrade(OWNER, long, NO_TIERS)).kind).toBe("refused");
+  });
+
+  it("High-powered AI on a long article charges its slots again; a legacy one, one", async () => {
+    /* A 20-article budget is not available without a tier, so the long article
+       is 1 slot of the free 3 plus its own High-powered 2: 2 + 2 = 4 > 3. */
+    await givenCharged(await givenArticle("hp-long"), 2);
+    const refused = await runAsOwner(OWNER, () => switchOnHighPower(OWNER, `${SLUG}hp-long`, NO_TIERS));
+    expect(refused.kind).toBe("no-room");
+
+    await clear();
+    await givenCharged(await givenArticle("hp-legacy"), 1);
+    const on = await runAsOwner(OWNER, () => switchOnHighPower(OWNER, `${SLUG}hp-legacy`, NO_TIERS));
+    expect(on.kind).toBe("on");
+    const { rows } = await pool.query<{ slots: number }>(
+      "select slots from spideryarn.ingest_events where owner_id = $1 and kind = 'high_power'",
+      [OWNER],
+    );
+    expect(rows.map((r) => r.slots)).toEqual([1]);
+  });
+
+  it("High-powered AI writes the article's largest charged weight", async () => {
+    /* A re-add before 2026-10-07 could leave two charged rows; the larger wins. */
+    const articleId = await givenArticle("hp-two");
+    await givenCharged(articleId, 1);
+    await givenCharged(articleId, 1);
+    await pool.query(
+      "update spideryarn.ingest_events set slots = 2 where id = (select id from spideryarn.ingest_events where article_id = $1 limit 1)",
+      [articleId],
+    );
+    /* 3 slots charged already; the upgrade's 2 more would need 1,000 of 600. */
+    const answer = await runAsOwner(OWNER, () => switchOnHighPower(OWNER, `${SLUG}hp-two`, NO_TIERS));
+    expect(answer.kind).toBe("no-room");
+  });
+});
+
+/* ------------------------------------------------------- sharing offer -- */
+
+describe("the sharing offer answers the request's own cost", () => {
+  it("names enough articles for a five-slot PDF, or none when that is not enough", async () => {
+    /* Free, three slots: three private one-slot articles = 600. A five-slot
+       PDF needs 1,000 + used ≤ 700 — sharing all three frees 300, still not
+       enough, so a one-slot offer would be a false one. */
+    for (const n of ["s1", "s2", "s3"]) await givenCharged(await givenArticle(n), 1);
+    expect((await ingestEligibility(OWNER, NO_TIERS)).kind).toBe("refused");
+    const reservation = await pool.query<{ id: string }>(
+      `insert into spideryarn.ingest_events (owner_id) values ($1) returning id`,
+      [OWNER],
+    );
+    const job = await givenRunningJob("share", reservation.rows[0]!.id);
+    const refused = await price(job, 250);
+    expect(refused.kind).toBe("refused");
+    if (refused.kind === "refused") expect(refused.refusal.shareToMakeRoom).toBeUndefined();
+  });
+
+  it("names the long article first, because sharing it frees the most", async () => {
+    await givenCharged(await givenArticle("a-small"), 1);
+    await givenCharged(await givenArticle("z-long"), 2);
+    /* 600 used. A one-slot import: sharing the 2-slot article frees 200 → admits. */
+    const answer = await ingestEligibility(OWNER, NO_TIERS);
+    expect(answer.kind).toBe("refused");
+    if (answer.kind === "refused") expect(answer.shareToMakeRoom?.map((c) => c.title)).toEqual([`${SLUG}z-long`]);
+  });
+});
+
+/* ------------------------------------------------------------ barriers -- */
+
+type Settled<T> = { readonly ok: T } | { readonly err: unknown };
+const settle = <T>(p: Promise<T>): Promise<Settled<T>> =>
+  p.then(
+    (ok) => ({ ok }),
+    (err: unknown) => ({ err }),
+  );
+
+/**
+ * **Two real writers held behind a third connection's row lock, then let go.**
+ * tests/billing-settlement.test.ts § `racedOnJobRow`, for a lock on either the
+ * job row or the billing row. Asserts neither answered while held — the part a
+ * sequential test cannot do — and returns both outcomes without deciding the
+ * winner, so the cases below assert invariants.
+ */
+async function raced<A, B>(
+  lock: string,
+  params: unknown[],
+  first: () => Promise<A>,
+  second: () => Promise<B>,
+): Promise<[Settled<A>, Settled<B>]> {
+  const holder = await pool.connect();
+  try {
+    await holder.query("begin isolation level read committed");
+    await holder.query(lock, params);
+    const answered = [false, false];
+    const a = settle(first()).then((r) => {
+      answered[0] = true;
+      return r;
+    });
+    const b = settle(second()).then((r) => {
+      answered[1] = true;
+      return r;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(answered, "a writer answered while the row was held").toEqual([false, false]);
+    await holder.query("commit");
+    return await Promise.all([a, b]);
+  } finally {
+    holder.release();
+  }
+}
+
+const HOLD_JOB = "select 1 from spideryarn.jobs where id = $1 for update";
+const HOLD_BILLING = "select 1 from spideryarn.billing_accounts where owner_id = $1 for update";
+
+/**
+ * After a reprice raced an ending: the job ended, and the reservation is
+ * released at whatever weight the reprice left — never charged, never left in
+ * flight, and the reprice either landed or was fenced out.
+ */
+async function expectEndedAndReleased(
+  jobId: string,
+  reservation: string,
+  repriced: Settled<unknown>,
+): Promise<void> {
+  const { rows } = await pool.query<{ status: string }>("select status from spideryarn.jobs where id = $1", [jobId]);
+  expect(rows[0]?.status).not.toBe("running");
+  const after = await row(reservation);
+  expect(after).toMatchObject({ succeeded: false, released: true });
+  if ("err" in repriced) expect(repriced.err).toBeInstanceOf(StaleAttemptError);
+  else expect([1, 3]).toContain(after.slots);
+}
+
+describe("a reprice against every other writer finishes without deadlock", () => {
+  it("against Stop on a job no claimant is inside (terminal)", async () => {
+    await pool.query(
+      `insert into spideryarn.billing_accounts (owner_id) values ($1) on conflict do nothing`,
+      [OWNER],
+    );
+    const reservation = await reserved();
+    const job = await givenRunningJob("stop", reservation);
+    /* A claimant provably gone: the lease has lapsed, so Stop ends the job. */
+    await pool.query("update spideryarn.jobs set lease_expires_at = now() - interval '1 minute' where id = $1", [job.id]);
+    const [repriced, stopped] = await raced(
+      HOLD_JOB,
+      [job.id],
+      () => price(job, 150),
+      () => pgJobStore.requestCancel(job.id, OWNER),
+    );
+    expect("ok" in stopped).toBe(true);
+    /* The lease had lapsed, so the fence refuses the reprice whichever went first. */
+    expect("err" in repriced && repriced.err instanceof StaleAttemptError).toBe(true);
+    await expectEndedAndReleased(job.id, reservation, repriced);
+  });
+
+  it("against Stop on a live claim (non-terminal): the reprice lands, the job is cancelling", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("stop-live", reservation);
+    const [repriced, stopped] = await raced(
+      HOLD_JOB,
+      [job.id],
+      () => price(job, 150),
+      () => pgJobStore.requestCancel(job.id, OWNER),
+    );
+    expect("ok" in stopped).toBe(true);
+    expect(repriced).toMatchObject({ ok: { kind: "priced", slots: 3 } });
+    expect(await row(reservation)).toMatchObject({ slots: 3, succeeded: false, released: false });
+  });
+
+  it("against the store's own ending", async () => {
+    const reservation = await reserved();
+    const job = await givenRunningJob("finish", reservation);
+    const [repriced, finished] = await raced(
+      HOLD_JOB,
+      [job.id],
+      () => price(job, 150),
+      () => pgJobStore.finish(job.id, job.attempt, { status: "error", steps: [], error: "a test ending" }),
+    );
+    expect("ok" in finished).toBe(true);
+    await expectEndedAndReleased(job.id, reservation, repriced);
+  });
+
+  it("against expiry, terminal and requeue", async () => {
+    for (const budget of [0, 2]) {
+      await clear();
+      const reservation = await reserved();
+      const job = await givenRunningJob(`expire-${budget}`, reservation);
+      await pool.query("update spideryarn.jobs set lease_expires_at = now() - interval '1 minute' where id = $1", [job.id]);
+      const [repriced, swept] = await raced(
+        HOLD_JOB,
+        [job.id],
+        () => price(job, 150),
+        () => pgJobStore.settleExpired(undefined, OWNER, budget),
+      );
+      expect("ok" in swept).toBe(true);
+      /* A lapsed lease is outside the fence either way. */
+      expect("err" in repriced && repriced.err instanceof StaleAttemptError).toBe(true);
+      const after = await row(reservation);
+      expect(after.slots).toBe(1);
+      expect(after.succeeded).toBe(false);
+      /* Requeued keeps the reservation in flight; terminal releases it. */
+      expect(after.released).toBe(budget === 0);
+    }
+  });
+
+  it("against a visibility change, both behind the billing row", async () => {
+    const articleId = await givenArticle("vis");
+    await givenCharged(articleId, 1);
+    await pool.query(`insert into spideryarn.billing_accounts (owner_id) values ($1) on conflict do nothing`, [OWNER]);
+    const reservation = await reserved();
+    const job = await givenRunningJob("vis-job", reservation);
+    const [repriced, shared] = await raced(
+      HOLD_BILLING,
+      [OWNER],
+      () => price(job, 100),
+      () => runAsOwner(OWNER, () => pgVisibilityStore.set(`${SLUG}vis`, "public", true)),
+    );
+    expect("ok" in shared).toBe(true);
+    /* 1 charged (200, or 100 once public) + this job at 2 slots: fits either way. */
+    expect(repriced).toMatchObject({ ok: { kind: "priced", slots: 2 } });
+    expect((await row(reservation)).slots).toBe(2);
+  });
+});

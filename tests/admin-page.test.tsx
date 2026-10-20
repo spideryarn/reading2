@@ -379,6 +379,18 @@ describe("the users page", () => {
     expect(row).not.toContain("6 / 3");
   });
 
+  /* A 150-page PDF is one article added and three slots (plan 261020b): the
+     cell prices the slots, so `1 / 3` would be the wall looking failed. */
+  it("prices a long PDF by its slots, not by its one row", async () => {
+    const long: AdminUser = { ...BOB, ingests: 1, ingestsShared: 0, ingestSlots: 3, ingestLimit: 3 };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [long] })));
+    const el = await show();
+
+    const row = (rows(el)[0] ?? []).join("|");
+    expect(row).toContain("600 / 600 pts");
+    expect(row).not.toContain("1 / 3");
+  });
+
   it("includes public pricing and High-powered AI in a stale account's lifetime usage", async () => {
     const stale: AdminUser = {
       ...ALICE,
