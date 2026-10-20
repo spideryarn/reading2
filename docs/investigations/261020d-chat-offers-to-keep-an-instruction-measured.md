@@ -35,6 +35,12 @@ sentence rather than adding an opposite one, and no answer said it had saved any
 words were short and the reader's own: *"Retired engineer. Prefers brief answers."*, *"Already
 knows integrated information theory; skip explaining it."*
 
+Eight of the nine v2 offers also said that the reader could keep it with the button. Chat's second
+`brevity` run omitted that sentence. The original scorer did not check it (nor duplicate calls), so
+its recorded `ok` is narrower than the prompt's full contract; the scorer now checks both for future
+runs. The answer's relevance was inspected in the recorded prose; the mechanical guard only rejects
+an offer that replaces the answer with fewer than 20 words.
+
 **The one miss is a profession said in passing.** *"I'm an ICU nurse, so I see consciousness
 questions at the bedside"* was never offered, though the prompt names *"I'm a nurse"* as an
 example. Left as it is: Greg's report is about instructions, the guide still offers who they are,
@@ -67,3 +73,9 @@ unchanged prompt included, so the dev key had hit a limit. It was not shipped un
 what is in `OFFER_TO_REMEMBER`. The follow-up is its own queue entry (see the plan).
 
 The runs here cost about $2.00 in all.
+
+**Two wording changes landed after these runs and are not measured here**, both from GPT Sol's code
+review: `OFFER_TO_REMEMBER`'s last bullet now names its two exceptions to PROFILE_RULES (the tool
+argument, and a few words to the reader about the button), and `OFFER_PROFILE_TOOL`'s description
+says to replace a conflicting part rather than append. Both say what the prompt already asked for;
+neither could be rerun, for the 403 above.

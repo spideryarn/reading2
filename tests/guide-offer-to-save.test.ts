@@ -73,9 +73,10 @@ describe("who is offered it", () => {
       const tool = toolsFor(kind).find((t) => t.function.name === "offer_to_save");
       expect(tool).toBe(OFFER_PROFILE_TOOL);
     }
-    const params = OFFER_PROFILE_TOOL.function.parameters as { properties: { field: { enum: string[] } } };
+    const params = OFFER_PROFILE_TOOL.function.parameters as unknown as { properties: { field: { enum: string[] } } };
     expect(params.properties.field.enum).toEqual(["about_you"]);
     expect(OFFER_PROFILE_TOOL.function.description).not.toMatch(/at once/i);
+    expect(OFFER_PROFILE_TOOL.function.description).toMatch(/conflicts.*replace only the conflicting part/i);
   });
 
   it("is not offered to a spoken guide, and the live tool route would refuse it", () => {
@@ -127,6 +128,16 @@ describe("in Chat and Explore", () => {
         { ...ctx(kind), saved: { profile: null }, typed: "I prefer brief answers." },
       );
       expect(out.offer).toEqual({ field: "profile", text: "I prefer brief answers.", basis: null });
+    });
+
+    it(`${kind}: refuses an offer when About you could not be read`, async () => {
+      const out = await runTool(
+        "offer_to_save",
+        { field: "about_you", text: "I prefer brief answers." },
+        { ...ctx(kind), saved: undefined },
+      );
+      expect(out.offer).toBeUndefined();
+      expect(out.content).toMatch(/what is saved now could not be read/i);
     });
   }
 

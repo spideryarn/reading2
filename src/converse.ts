@@ -660,8 +660,12 @@ conversation.
 - Do what they asked in this answer too: the offer goes with your answer, it is
   not the answer. Never say it is saved; say in a few words that they can keep
   it with the button under your answer, and say nothing more about it.
-- This is the one place what they have told us about themselves may go into a
-  tool argument: offer_to_save keeps it inside Spideryarn.`;
+- This section adds two exceptions to IF THE READER HAS DESCRIBED THEMSELVES:
+  offer_to_save may carry what they told us because it stays inside Spideryarn,
+  and the few words about its button may address the reader and need not be
+  about the article. Apart from these, and any exceptions stated immediately
+  above this section, do not mention or read back their description, or put it
+  in any other tool argument.`;
 
 const SYSTEM = `You are a reading companion. A reader is working through an article and has a
 question about it. Answer the question.

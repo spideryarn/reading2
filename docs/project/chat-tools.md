@@ -1232,9 +1232,11 @@ About you does not say it yet, the model offers the current About you plus one s
 the card under the answer is the guide's ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx),
 drawn `pressOnly`) with the same basis check and Undo. A request about this answer only
 (*"shorter please"*) is not offered. The prompt section is `OFFER_TO_REMEMBER` in
-[`src/converse.ts`](../../src/converse.ts), after `PROFILE_RULES`, whose *never in a tool argument*
-it narrows for this one tool; it asks for the call first, before any prose, because a lone offer
-does not end a turn (`ENDS_THE_TURN`) and prose before it would go round again.
+[`src/converse.ts`](../../src/converse.ts), after `PROFILE_RULES`. It names the two narrow exceptions
+needed for the offer: this one tool may carry what the reader said because it stays inside
+Spideryarn, and the few words about the button may address the reader and need not be about the
+article. It asks for the call first, before any prose, because a lone offer does not end a turn
+(`ENDS_THE_TURN`) and prose before it would go round again.
 
 Neither save-at-once route reaches these kinds: `typed` is refused on any kind but the guide
 (src/routes.ts), the tool consults `savesAtOnce` only for the guide, and the card drops any `now`

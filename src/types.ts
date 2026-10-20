@@ -3397,11 +3397,12 @@ export interface ToolRun {
   /** Milliseconds. Absent while running. */
   ms?: number;
   /**
-   * **Words the guide offers to save for the reader**, drawn under its answer
-   * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
-   * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
-   * press is the write. The guide's runs only. Plan
-   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+   * **Words a conversation offers to save for the reader**, drawn under its
+   * answer as a card with a button they press (`offer_to_save` in
+   * src/chat-tools.ts, src/web/GuideSaveOffer.tsx). Nothing is saved by the
+   * tool: the reader's press is ordinarily the write. The guide may offer both
+   * fields and has two narrow save-at-once routes; Chat and Explore may offer
+   * About you only and are always press-only. Plans 261009q and 261020o.
    */
   offer?: SaveOffer;
   /**
@@ -3432,7 +3433,7 @@ export interface SaveOffer {
   field: "purpose" | "profile";
   text: string;
   /**
-   * What the field held when the guide made the offer (`null`: empty). The
+   * What the field held when the conversation made the offer (`null`: empty). The
    * tool makes no offer when that turn could not read it: without a basis the
    * card could not distinguish an empty field from one it was about to
    * overwrite. The card saves only while the field still holds this, so a

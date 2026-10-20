@@ -727,8 +727,9 @@ export const OFFER_PROFILE_TOOL: FunctionTool = {
       "Offer to add to the reader's About you something they told you that should last beyond this " +
       "question: how they want you to answer them, or what they already know or do. The reader sees " +
       "your words under your answer with a button, and nothing is saved unless they press it. Give " +
-      "the whole new text: their current About the reader exactly as written, then one short " +
-      "sentence of what they told you, as close to their own words as reads well.",
+      "the whole new text: keep their current About the reader exactly as written and add one short " +
+      "sentence of what they told you, as close to their own words as reads well. If that conflicts " +
+      "with something already there, replace only the conflicting part instead.",
     parameters: {
       type: "object",
       properties: {

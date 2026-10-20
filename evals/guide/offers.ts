@@ -386,7 +386,28 @@ for (const c of cases.filter((x) => only.length === 0 || only.includes(x.id))) {
     const stepsShown = result.tools.some((t) => t.steps !== undefined);
     /* Next steps are part of the safety claim: ending early is only sound if
        the accepted buttons survived onto the stored run. */
-    const saysSaved = /\b(i've|i have|it's|it is|is now|has been) saved\b/i.test(result.text);
+    const saysSaved =
+      /\b(?:i(?:'ve| have| just)?|we(?:'ve| have| just)?)\s+(?:now\s+)?saved\b|\b(?:it|this|that)\s+(?:is|has been|is now|has now been|'s)\s+saved\b/i.test(
+        result.text,
+      );
+    /* The central Chat/Explore safety claim is not merely reported in
+       `offers`: make a run fail if a regression marks any offer to save
+       without the press. The guide deliberately has its two narrow `now`
+       routes, so this assertion belongs to the other two kinds alone. */
+    const savesAtOnce = kind !== "guide" && offers.some((o) => o.now === true);
+    /* One call means one call, not merely one distinct field after a Set has
+       hidden duplicates. For Chat and Explore every wanted field is required
+       and none is optional, so the counts must match exactly. */
+    const callsOnce = kind === "guide" || offers.length === c.wants.length;
+    /* OFFER_TO_REMEMBER asks for a short, explicit account of what the button
+       does. The card alone cannot establish that the model followed this part
+       of the prompt. */
+    const mentionsButton = kind === "guide" || offers.length === 0 || (/\bbutton\b/i.test(result.text) && /\b(?:keep|save)\b/i.test(result.text));
+    /* A coarse guard against replacing the requested answer with the offer.
+       Recorded answers are still read for relevance; a lexical scorer cannot
+       establish that they answer the particular question. */
+    const answerWords = result.text.split(/\s+/).filter((w) => w !== "").length;
+    const answersToo = kind === "guide" || answerWords >= 20;
     /* Chat has no next steps and no early end, so its offer is asked for
        first, before any prose (plan 261020o, GPT Sol's F1). A round that wrote
        prose and offered, followed by a round of 300 characters or more, is the shape
@@ -395,7 +416,9 @@ for (const c of cases.filter((x) => only.length === 0 || only.includes(x.id))) {
     const offerRound = result.rounds.findIndex((x) => x.prose > 0 && x.tools.some((t) => t.startsWith("offer_to_save")));
     const secondAnswer = offerRound >= 0 && result.rounds.slice(offerRound + 1).some((x) => x.prose > 300);
     const ok =
-      (kind === "guide" ? stepsShown && !tail : !saysSaved && !secondAnswer) &&
+      (kind === "guide"
+        ? stepsShown && !tail
+        : !saysSaved && !secondAnswer && !savesAtOnce && callsOnce && mentionsButton && answersToo) &&
       !repeated &&
       JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
     total++;
@@ -415,12 +438,16 @@ for (const c of cases.filter((x) => only.length === 0 || only.includes(x.id))) {
       stepsShown,
       shape,
       saysSaved,
+      savesAtOnce,
+      callsOnce,
+      mentionsButton,
+      answersToo,
       secondAnswer,
-      words: result.text.split(/\s+/).filter((w) => w !== "").length,
+      words: answerWords,
       answer: result.text,
     });
     console.log(
-      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown || kind !== "guide" ? "" : " NO-STEPS"}${saysSaved ? " SAYS-SAVED" : ""}${secondAnswer ? " SECOND-ANSWER" : ""} words=${result.text.split(/\s+/).filter((w) => w !== "").length} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.now !== true ? "press" : o.route === "reworded" ? "NOW-reworded" : "NOW", o.text]))}`,
+      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown || kind !== "guide" ? "" : " NO-STEPS"}${saysSaved ? " SAYS-SAVED" : ""}${savesAtOnce ? " SAVES-AT-ONCE" : ""}${callsOnce ? "" : " CALL-COUNT"}${mentionsButton ? "" : " NO-BUTTON-WORDS"}${answersToo ? "" : " NO-ANSWER"}${secondAnswer ? " SECOND-ANSWER" : ""} words=${answerWords} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.now !== true ? "press" : o.route === "reworded" ? "NOW-reworded" : "NOW", o.text]))}`,
     );
   }
 }
