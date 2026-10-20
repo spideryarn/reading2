@@ -416,3 +416,13 @@ step; `npm run labels` after an ingest waits behind a `matter` job nothing drive
   settlement's order, which would deadlock. I moved it after the article, and a barrier test goes
   red (40P01) under the old order. The other fixes: High-powered wording now says the article's
   slots are charged again, and `NOWAIT` probes prove the nested lock order.
+- Three narrow checks of the High-powered fix (GPT Sol, read-only):
+  [2](261020b-longer-documents-up-to-400-pages-code-review-2-sol.md) found a queued import
+  (handed back at a deadline, or a retry's fresh job) still read as one slot. That was a P0, and it
+  now keys on any unsettled reservation. It also found that the add page's retry fired once after
+  the job died (P1). [3](261020b-longer-documents-up-to-400-pages-code-review-3-sol.md) confirmed a
+  case I suspected, a P0: an import stopped after fetch, then High-powered at one slot, then a Retry
+  on Opus. A first charge now waits while nothing is charged, nothing is in flight and nothing was
+  ever published. It also found a 409 in flight at completion that was never resent (P1).
+  [4](261020b-longer-documents-up-to-400-pages-code-review-4-sol.md): *approve*, no findings.
+  Every fix had a test watched go red first.

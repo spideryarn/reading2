@@ -886,7 +886,8 @@ article: 200 points a slot while private, 100 while public, live, and frozen on 
 trigger. **It carries the article's slots** (Greg, 2026-10-20, answer 2A to
 [261020b](../plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md)):
 `switchOnHighPower` copies the largest `slots` among the article's charged ingest rows
-(`articleSlots`), so a 250-page PDF is 5 to add and 5 more to switch on —
+(`chargedSlotsOf`) and any import still in flight (`activeImportPrice`), so a 250-page PDF is 5 to
+add and 5 more to switch on —
 [§ A long document costs a slot per 50 pages](#a-long-document-costs-a-slot-per-50-pages). So the
 article costs double:
 
@@ -911,9 +912,17 @@ The rules, each for a reason:
   second charge for something already had. If it doesn't fit, the answer is `[pay-high-power]`,
   which carries **no sharing offer**. That offer answers the ingest wall's question, and following
   it could publish an article and still leave the switch refused.
+- **Switched on while adding, it waits for the price.** The add page can ask before Fetch has
+  counted the pages. A first charge answers `pending` (a 409 the add page retries while the job
+  lives) when any import of the article with an unsettled reservation has not fetched yet. It also
+  answers `pending` when nothing is charged, nothing is in flight and nothing was ever published:
+  a long import stopped after fetch would otherwise read as one slot, and its Retry would then run
+  on Opus for one. GPT Sol found both in the code review (C1-F1, C2-F1, C3-F1 in
+  [261020b's reviews](../plans/261020b-longer-documents-up-to-400-pages-code-review-3-sol.md)).
 - **Admission, charge and switch are one transaction**, in the house lock order:
-  `lockBillingAccount`, then the article `for update` (`switchOnHighPower` in
-  [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)). A stale entitlement resyncs once
+  `lockBillingAccount`, then the article `for update`, then any live import's job and reservation
+  (`switchOnHighPower` in [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)). Article
+  before job is settlement's order; the reverse deadlocks with it. A stale entitlement resyncs once
   after the transaction commits, then gives a 503, exactly as for an ingest.
 - **The administrator is exempt**, and no row is written, as with ingests.
 - **The database enforces the row's shape** (`ingest_events_high_power_shape`). An upgrade is born
