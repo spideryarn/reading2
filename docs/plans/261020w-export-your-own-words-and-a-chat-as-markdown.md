@@ -80,9 +80,12 @@ never opened is not in the export — the same rule the `reader_notes` transcrip
 A pure module, types-only imports plus `answerAsSeen` and `articleUrl`, so both the browser and the
 server use it:
 
-- `conversationMarkdown(thread, { level })` — the body: title heading, the anchor passage if any,
+- `conversationMarkdown(thread, level)` — the body: title heading, the anchor passage if any,
   then each turn. `level` sets the heading depth, so the same body nests inside the larger file in
-  stage 3 (`# title` / `## You` standalone; `## title` / `### You` nested).
+  stage 3 (`# title` / `## You` standalone; `### title` / `#### You` nested).
+- The titles of articles brought into a conversation with an `@`-mention are listed as *Also
+  reading*, in the order they entered the conversation. The stored mention title is used even if
+  the article has since gone; its internal id and current owner-scoped slug are not.
 - `conversationDocument(thread, article, exportedAt)` — front matter plus the body at level 1.
 - `kindWords` moves out of `src/reader-notes.ts`'s private scope only if it fits; the export wants
   the app's own names (Chat, Recall, Explore, the guide), which are close to but not the same as
@@ -177,10 +180,11 @@ what became of it:
 - **F3 (P1)** a failed answer can keep partial text — "failed part-way; the above is what
   arrived" versus "No answer"; pending likewise; `interrupted` gets the unheard-words line; every
   flag that applies is said.
-- **F4 (P1)** comment rows are mixed — only `body` is labelled as the reader's; an answer shows
-  only when `status = 'done'`; a body-less explained passage (before 2026-08-28) is "Asked the AI
-  about this passage", with no invented question; highlights and bookmarks are named as marks;
-  severity, colour, criterion and the referee's placement are shown.
+- **F4 (P1)** comment rows are mixed — only `body` is labelled as the reader's; every stored answer
+  the reader saw is kept, including partial text retained after a failure, with unfinished and
+  failed states said separately; a body-less explanation attempt (before 2026-08-28) is "Asked the
+  AI about this passage", with no invented question; highlights and bookmarks are named as marks;
+  severity, colour, criterion, the referee's placement and web sources found are shown.
 - **F5 (P2)** comment order duplicated an existing rule — `byArticlePlace` in
   `src/reader-notes.ts` is now the one comparator, used by `reader_notes` and by this file.
 - **F6 (P1)** the Markdown route had no ceiling — it has the zip's, through `overBundleCap`, with
@@ -190,6 +194,29 @@ what became of it:
   Markdown build side by side; the Metadata buttons have their own wait and error each. The test
   was watched failing against a slug-keyed guard.
 - **F9 (P2)** `yourWordsMarkdown(rows, exportedAt)` takes the zip's timestamp.
+
+## Code review (GPT Sol, 2026-10-20)
+
+[261020w-code-review-sol.md](261020w-code-review-sol.md), run write-capable on commit `be1c37ccb`.
+No P0. It fixed five things inside the work, each with a test it watched fail first; I read the
+diff, reran the gates (typecheck, and 764 tests across the twelve suites touched, the Postgres
+ones included, which its sandbox could not reach) and committed it:
+
+- **C1 (P1)** a failed or pending comment explanation keeps the partial text the reader saw, with
+  its state said, rather than being exported as a bookmark.
+- **C2 (P2)** a comment answer's web sources go with it, as "Web sources it found", through the
+  renderer's shared `webLinksMarkdown`.
+- **C3 (P1)** the articles brought into a conversation with `@` are listed (title only), on the
+  clipboard and in the file, in turn order.
+- **C4 (P1)** the two Metadata buttons each show their own error, so a second failure is not hidden
+  behind the first.
+- **C5 (P2)** the export had its own comment classifier; `commentKind` moved from
+  `src/web/comment-nav.ts` to `src/comment-kind.ts` (re-exported where it was) and both use it.
+
+Reported as wider and pre-existing, not fixed here: **C6** the documented race in article transfer
+(the queued write-fencing work covers it); **C7** `reader_notes` says nothing of a failed
+comment explanation's partial answer; **C8** a replacement comment answer briefly shows the old
+answer's sources. C7 and C8 are queued for the Overseer.
 
 ## What landed
 

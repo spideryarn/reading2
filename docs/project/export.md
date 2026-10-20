@@ -84,9 +84,9 @@ Both go through one renderer, [`src/chat-markdown.ts`](../../src/chat-markdown.t
 conversation reads the same in the file and on the clipboard: `## You` and `## Spideryarn` turns,
 block ids left in (they are the provenance, the reason *Copy answer* keeps them), a spoken answer's
 `passages` and an answer's web citations listed under it, a Recall hint shown only if the reader
-opened it (`answerAsSeen`), and a line for a failed, unfinished, stopped, interrupted or truncated
-answer. Message text goes in unchanged, so a question that itself contains `## You` would confuse a
-naive parser: **the JSON files are the ones to import from**, and the zip's README says so.
+opened it (`answerAsSeen`), the titles of articles brought in with `@`-mentions, and a line for a
+failed, unfinished, stopped, interrupted or truncated answer. Message text goes in unchanged, so a
+question that itself contains `## You` would confuse a naive parser: **the JSON files are the ones to import from**, and the zip's README says so.
 
 Left out of `your-words.md` for now, and in the zip as JSON: searches, glossary look-ups, referee
 criteria, Sources claim checks, reading time.

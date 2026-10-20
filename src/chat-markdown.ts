@@ -40,6 +40,8 @@ export type MarkdownMessage = Pick<
 
 export interface MarkdownThread extends Pick<ChatThread, "title" | "kind" | "createdAt"> {
   readonly anchor?: ChatAnchor;
+  /** Other articles brought into this conversation with an @-mention, by title only. */
+  readonly mentioned?: readonly { readonly title: string }[];
   readonly messages: readonly MarkdownMessage[];
 }
 
@@ -127,6 +129,16 @@ function statusLines(message: MarkdownMessage, hasText: boolean): string[] {
   return out;
 }
 
+/** A Markdown list of web links, shared with comment answers in `your-words.md`. */
+export function webLinksMarkdown(
+  citations: readonly { readonly url: string; readonly title?: string | undefined }[],
+  label = "Web pages it cited",
+): string | null {
+  if (citations.length === 0) return null;
+  const items = citations.map((c) => `- ${c.title?.trim() ? `${oneLine(c.title)}: ` : ""}${c.url}`);
+  return `${label}:\n\n${items.join("\n")}`;
+}
+
 /**
  * **What the answer pointed at besides its own text.** A spoken answer is
  * forbidden to say an id aloud and points with `passages` instead
@@ -140,11 +152,8 @@ function pointerLines(message: MarkdownMessage): string[] {
     const items = passages.map((p) => `- ${p.blockIds.join(", ")}${p.why.trim() ? ` — ${oneLine(p.why)}` : ""}`);
     out.push(`Passages it pointed to:\n\n${items.join("\n")}`);
   }
-  const citations = message.citations ?? [];
-  if (citations.length > 0) {
-    const items = citations.map((c) => `- ${c.title?.trim() ? `${oneLine(c.title)}: ` : ""}${c.url}`);
-    out.push(`Web pages it cited:\n\n${items.join("\n")}`);
-  }
+  const citations = webLinksMarkdown(message.citations ?? []);
+  if (citations !== null) out.push(citations);
   return out;
 }
 
@@ -162,6 +171,10 @@ export function conversationMarkdown(
   const turn = "#".repeat(level + 1);
   const parts: string[] = [`${h} ${oneLine(thread.title) || "Untitled conversation"}`];
   parts.push(`${conversationKindName(thread.kind)}, started ${markdownTime(thread.createdAt)}.`);
+
+  if (thread.mentioned && thread.mentioned.length > 0) {
+    parts.push(`Also reading:\n\n${thread.mentioned.map((m) => `- ${oneLine(m.title)}`).join("\n")}`);
+  }
 
   if (thread.anchor && "quote" in thread.anchor && thread.anchor.quote.trim() !== "") {
     parts.push(`Started from this passage (${thread.anchor.blockId}):\n\n${blockquote(thread.anchor.quote)}`);

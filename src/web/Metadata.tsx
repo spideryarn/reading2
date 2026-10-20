@@ -2275,6 +2275,18 @@ function useDownload(start: () => Promise<ExportResult>): {
   return { busy, error, run };
 }
 
+/** One download's own failure, beside the control that made it. */
+function DownloadError({ message }: { message: string | null }) {
+  return message ? (
+    <p
+      role="alert"
+      className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
+    >
+      <TriangleAlert size={12} /> {message}
+    </p>
+  ) : null;
+}
+
 function ExportSection({
   slug,
   offer,
@@ -2287,8 +2299,6 @@ function ExportSection({
   /* The reader's own words, as one Markdown file — plan 261020w. Its own
      state, so the zip building does not hold this button, nor the reverse. */
   const words = useDownload(() => downloadYourWords(slug));
-  const error = zip.error ?? words.error;
-
   if (!offer) return null;
 
   return (
@@ -2321,6 +2331,7 @@ function ExportSection({
           without Spideryarn. It does not include the original file or web page, or the image files
           themselves — those are listed rather than included.
         </p>
+        <DownloadError message={zip.error} />
 
         {/* **Your own words, as one page** — Greg, 2026-10-19 (`spya-p88dcx`):
             *"Provide a way to export the user's input/content from an
@@ -2342,18 +2353,9 @@ function ExportSection({
           conversation, with the AI's replies marked as its own — as one Markdown file to read, keep,
           or paste into another AI.
         </p>
-
-        {/* `role="alert"`, because the rest of a failed export is invisible: no
-            file arrives, and nothing else on the page moves. Same reason
-            SourceLink's arm carries one. */}
-        {error ? (
-          <p
-            role="alert"
-            className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
-          >
-            <TriangleAlert size={12} /> {error}
-          </p>
-        ) : null}
+        {/* Each file keeps its own alert. If both fail, hiding one behind the
+            other's older error would make the second press fail silently. */}
+        <DownloadError message={words.error} />
       </div>
     </Section>
   );

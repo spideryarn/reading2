@@ -50,6 +50,7 @@ function rows(over: Rows = {}): ArticleRows {
     comments: [],
     chatThreads: [],
     chatMessages: [],
+    chatMentions: [],
     quizAttempts: [],
     articleTags: [],
     refereeCriteria: [],
@@ -102,7 +103,7 @@ describe("yourWordsMarkdown", () => {
     expect(md).toContain("_That paragraph is no longer in the article._");
   });
 
-  it("names each mark for what it is, and only shows an answer the reader read", () => {
+  it("names each mark for what it is, and preserves the answer the reader saw", () => {
     const md = yourWordsMarkdown(
       rows({
         comments: [
@@ -123,7 +124,63 @@ describe("yourWordsMarkdown", () => {
     expect(md).toContain("### Bookmark · spya-bbbbbb");
     // A whole-paragraph bookmark quotes the paragraph.
     expect(md).toContain("The paragraph:\n\n> Second paragraph, about survival value.");
-    expect(md).not.toContain("half an ans");
+    expect(md).toContain("half an ans");
+    expect(md).toContain("_This answer failed part-way; the above is what arrived._");
+  });
+
+  it("keeps a partial failed explanation and says that it failed part-way", () => {
+    const md = yourWordsMarkdown(
+      rows({
+        comments: [
+          comment({
+            id: "failed",
+            quote: "survival",
+            start: 30,
+            status: "error",
+            answer: "The half that the reader already saw.",
+          }),
+        ],
+      }),
+      EXPORTED,
+    );
+    expect(md).toContain("### Asked the AI about this passage · spya-bbbbbb");
+    expect(md).toContain("**Spideryarn answered:**\n\nThe half that the reader already saw.");
+    expect(md).toContain("_This answer failed part-way; the above is what arrived._");
+  });
+
+  it("does not relabel failed or chat-linked questions as ordinary bookmarks", () => {
+    const md = yourWordsMarkdown(
+      rows({
+        comments: [
+          comment({ id: "failed", quote: "survival", start: 30, status: "error" }),
+          comment({ id: "chat", quote: "value", start: 39, threadId: "t-linked" }),
+        ],
+      }),
+      EXPORTED,
+    );
+    expect(md.match(/### Asked the AI about this passage/g)).toHaveLength(2);
+    expect(md).toContain("_No answer: it failed._");
+    expect(md).not.toContain("### Bookmark");
+  });
+
+  it("keeps the web sources shown under a comment answer", () => {
+    const md = yourWordsMarkdown(
+      rows({
+        comments: [
+          comment({
+            body: "my question",
+            status: "done",
+            answer: "The answer.",
+            citations: [
+              { url: "https://example.test/a", title: "A source" },
+              { url: "https://example.test/b" },
+            ],
+          }),
+        ],
+      }),
+      EXPORTED,
+    );
+    expect(md).toContain("Web sources it found:\n\n- A source: https://example.test/a\n- https://example.test/b");
   });
 
   it("says which referee criterion a note answers, and where the reader placed it", () => {
@@ -189,9 +246,33 @@ describe("yourWordsMarkdown", () => {
       rows({
         chatThreads: [thread("t1", "chat", "Survival value"), thread("t2", "candidates", "Machinery")],
         chatMessages: [
-          message("t1", 1, "assistant", "It means fitness."),
-          message("t1", 0, "user", "What is it?"),
+          { ...message("t1", 3, "assistant", "The later answer."), id: "t1-3" },
+          { ...message("t1", 2, "user", "And later?"), id: "t1-a" },
+          { ...message("t1", 1, "assistant", "It means fitness."), id: "t1-1" },
+          { ...message("t1", 0, "user", "What is it?"), id: "t1-z" },
           message("t2", 0, "user", "candidate stuff"),
+        ],
+        chatMentions: [
+          {
+            threadId: "t1",
+            /* The snapshot orders mention rows by message id, not message
+               ordinal. These ids deliberately sort backwards so the export
+               has to recover the conversation order rather than inherit the
+               database's incidental order. */
+            messageId: "t1-a",
+            mentionedArticleId: "00000000-0000-4000-8000-0000000000cc",
+            title: "A later article",
+            position: 0,
+            createdAt: T("12:01"),
+          },
+          {
+            threadId: "t1",
+            messageId: "t1-z",
+            mentionedArticleId: "00000000-0000-4000-8000-0000000000bb",
+            title: "A related article",
+            position: 0,
+            createdAt: T("12:00"),
+          },
         ],
       }),
       EXPORTED,
@@ -200,7 +281,54 @@ describe("yourWordsMarkdown", () => {
     expect(md).toContain("Started from this passage (spya-aaaaaa):\n\n> First");
     expect(md.indexOf("#### You")).toBeLessThan(md.indexOf("#### Spideryarn"));
     expect(md.indexOf("What is it?")).toBeLessThan(md.indexOf("It means fitness."));
+    expect(md).toContain("Also reading:\n\n- A related article\n- A later article");
+    expect(md).not.toContain("00000000-0000-4000-8000-0000000000bb");
     expect(md).not.toContain("Machinery");
     expect(md).not.toContain("candidate stuff");
+  });
+
+  it("does not export a Recall hint until the reader opened it", () => {
+    const recall = {
+      id: "recall",
+      kind: "learn",
+      title: "Recall",
+      createdAt: T("12:00"),
+      anchorBlockId: null,
+      anchorQuote: null,
+      anchorStart: null,
+    };
+    const answer = {
+      threadId: "recall",
+      id: "recall-0",
+      ordinal: 0,
+      role: "assistant",
+      text: "What would change if Y?\n\nHint: the unopened secret.",
+      status: "done",
+      createdAt: T("12:01"),
+      citations: null,
+      searches: null,
+      tools: null,
+      model: null,
+      effort: null,
+      error: null,
+      stopped: false,
+      truncated: false,
+      passages: null,
+      interrupted: false,
+      editedAt: null,
+      stance: null,
+      help: false,
+      modality: null,
+      hintOpenedAt: null,
+    };
+    const hidden = yourWordsMarkdown(rows({ chatThreads: [recall], chatMessages: [answer] }), EXPORTED);
+    expect(hidden).toContain("What would change if Y?");
+    expect(hidden).not.toContain("the unopened secret");
+
+    const shown = yourWordsMarkdown(
+      rows({ chatThreads: [recall], chatMessages: [{ ...answer, hintOpenedAt: T("12:02") }] }),
+      EXPORTED,
+    );
+    expect(shown).toContain("the unopened secret");
   });
 });

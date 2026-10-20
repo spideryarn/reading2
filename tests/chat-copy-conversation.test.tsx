@@ -11,7 +11,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CopyConversation } from "../src/web/ChatPanel.js";
-import type { ChatThread } from "../src/types.js";
+import type { ChatThread, ChatThreadView } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,11 +32,11 @@ afterEach(() => {
 
 const at = "2026-10-19T20:41:00.000Z";
 
-function thread(messages: ChatThread["messages"]): ChatThread {
+function thread(messages: ChatThread["messages"]): ChatThreadView {
   return { id: "t1", title: "Survival value", createdAt: at, updatedAt: at, kind: "chat", messages };
 }
 
-function paint(t: ChatThread): void {
+function paint(t: ChatThreadView): void {
   act(() => {
     root.render(
       createElement(CopyConversation, {
@@ -93,5 +93,19 @@ describe("Copy this conversation", () => {
   it("is not drawn on a conversation with nothing in it", () => {
     paint(thread([]));
     expect(host.querySelector("button")).toBeNull();
+  });
+
+  it("copies the titles of articles brought into the conversation", async () => {
+    const wrote = clipboard();
+    paint({
+      ...thread([{ id: "m1", role: "user", text: "Compare them", createdAt: at, status: "done" }]),
+      mentioned: [{ available: false, title: "The other paper", reason: "deleted" }],
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="Copy this conversation as Markdown"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(wrote[0]).toContain("Also reading:\n\n- The other paper");
   });
 });

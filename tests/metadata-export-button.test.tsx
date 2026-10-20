@@ -486,4 +486,24 @@ describe("the your-words button beside it", () => {
     await settle();
     expect(clicked.map((c) => c.download)).toEqual([`${SLUG}-your-words.md`, `${SLUG}.zip`]);
   });
+
+  it("does not let one file's old failure hide the other file's failure", async () => {
+    let call = 0;
+    exportAnswer = () =>
+      new Response(JSON.stringify({ error: call++ === 0 ? "The zip failed." : "The Markdown failed." }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    await open();
+
+    await act(async () => exportButton()?.click());
+    await settle();
+    await act(async () => wordsButton()?.click());
+    await settle();
+
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent ?? "");
+    expect(alerts).toHaveLength(2);
+    expect(alerts.some((text) => text.includes("The zip failed."))).toBe(true);
+    expect(alerts.some((text) => text.includes("The Markdown failed."))).toBe(true);
+  });
 });

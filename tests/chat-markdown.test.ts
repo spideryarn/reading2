@@ -67,6 +67,16 @@ describe("conversationMarkdown", () => {
     expect(md).toContain("Started from this passage (spya-k3m9qt):\n\n> the study of\n> survival value");
   });
 
+  it("names the other articles brought into the conversation", () => {
+    const md = conversationMarkdown(
+      thread({
+        mentioned: [{ title: "A related paper" }, { title: "A second\narticle" }],
+      }),
+      1,
+    );
+    expect(md).toContain("Also reading:\n\n- A related paper\n- A second article");
+  });
+
   it("says when an answer failed, was stopped, or is still being written", () => {
     const md = conversationMarkdown(
       thread({

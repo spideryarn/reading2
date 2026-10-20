@@ -3094,7 +3094,7 @@ function CopyAnswer({ text }: { text: string }) {
  * Not drawn on a conversation with nothing in it yet.
  */
 export function CopyConversation(props: {
-  thread: ChatThread;
+  thread: ChatThreadView;
   article: MarkdownArticle;
   blocks: Map<string, string>;
 }) {
@@ -3111,7 +3111,7 @@ function CopyConversationButton({
   article,
   blocks,
 }: {
-  thread: ChatThread;
+  thread: ChatThreadView;
   article: MarkdownArticle;
   blocks: Map<string, string>;
 }) {

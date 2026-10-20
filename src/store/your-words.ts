@@ -29,13 +29,16 @@ import {
   conversationMarkdown,
   frontMatter,
   markdownTime,
+  webLinksMarkdown,
   type MarkdownThread,
 } from "../chat-markdown.js";
+import { commentKind } from "../comment-kind.js";
 import { byArticlePlace, type ArticlePlace } from "../reader-notes.js";
 import { storedThreadKind } from "../types.js";
 import { articleUrl } from "../urls.js";
 import type { ArticleRows } from "./article-rows.js";
 import { anchorOf, toMessage } from "./pg-chat.js";
+import { mentionKey } from "./pg-chat-mentions.js";
 
 type Comment = ArticleRows["comments"][number];
 
@@ -119,25 +122,47 @@ function commentsSection(rows: ArticleRows): string | null {
  * bookmark) or, before 2026-08-28, a passage they asked the AI to explain —
  * and no question is invented for it.
  */
-function markKind(comment: Comment, answered: boolean): string {
-  if (comment.body?.trim()) return "Note";
-  if (answered) return "Asked the AI about this passage";
-  if (comment.colour) return "Highlight";
-  return "Bookmark";
+function markWords(comment: Comment): string {
+  switch (commentKind(comment)) {
+    case "comment-ai":
+      return comment.body?.trim() ? "Note" : "Asked the AI about this passage";
+    case "comment":
+      return "Note";
+    case "highlight":
+      return "Highlight";
+    case "bookmark":
+      return "Bookmark";
+  }
+}
+
+/** What an unfinished or failed legacy explanation says beside any text kept. */
+function commentStatus(comment: Comment, hasAnswer: boolean): string | null {
+  if (comment.status === "pending") {
+    return hasAnswer
+      ? "_This answer was still being written when this was exported; the above is what had arrived._"
+      : "_This answer was still being written when this was exported._";
+  }
+  if (comment.status === "error") {
+    return hasAnswer
+      ? "_This answer failed part-way; the above is what arrived._"
+      : "_No answer: it failed._";
+  }
+  return null;
 }
 
 /**
  * One comment: the article's passage as a quote, the reader's words, and the
- * AI's answer marked as its own. Only a `done` answer is one the reader read
- * (the rule src/reader-notes.ts § `noteRow` keeps too).
+ * AI's answer marked as its own. A failed explanation may retain partial text
+ * the reader already saw, so answer presence — not only `done` — decides what
+ * is written, and its status is said separately.
  */
 function commentMarkdown(
   comment: Comment,
   blockText: string | undefined,
   criteria: ReadonlyMap<string, string>,
 ): string {
-  const answered = comment.status === "done" && !!comment.answer?.trim();
-  const kind = markKind(comment, answered);
+  const answer = comment.answer?.trim() || null;
+  const kind = markWords(comment);
   const heading = [
     kind === "Highlight" ? `Highlight (${comment.colour})` : kind,
     ...(comment.colour && kind !== "Highlight" ? [`${comment.colour} highlight`] : []),
@@ -160,7 +185,11 @@ function commentMarkdown(
     parts.push(`_Referee: on the criterion ${name ? `"${oneLine(name)}"` : comment.criterionId}${placed}._`);
   }
   if (comment.body?.trim()) parts.push(`**You wrote:**\n\n${comment.body.trim()}`);
-  if (answered) parts.push(`**Spideryarn answered:**\n\n${(comment.answer ?? "").trim()}`);
+  if (answer !== null) parts.push(`**Spideryarn answered:**\n\n${answer}`);
+  const sources = webLinksMarkdown(comment.citations ?? [], "Web sources it found");
+  if (sources !== null) parts.push(sources);
+  const status = commentStatus(comment, answer !== null);
+  if (status !== null) parts.push(status);
   return parts.join("\n\n");
 }
 
@@ -199,11 +228,34 @@ function conversationsSection(rows: ArticleRows): string | null {
     /* The store's own column-to-field mappings (`anchorOf`, `toMessage`,
        `storedThreadKind`), applied to the snapshot's rows — not `threadsFor`,
        which would read again outside the walk's one transaction. */
+    const messageOrder = new Map(
+      rows.chatMessages.filter((message) => message.threadId === t.id).map((message) => [message.id, message.ordinal]),
+    );
+    const seenMentions = new Set<string>();
+    const mentioned: { title: string }[] = [];
+    /* `readArticleRows` orders mention rows by message id for the JSON export;
+       ids carry no chronology. Restore the turn order the reading view uses. */
+    const mentionRows = rows.chatMentions
+      .filter((mention) => mention.threadId === t.id)
+      .sort(
+        (a, b) =>
+          (messageOrder.get(a.messageId) ?? Number.POSITIVE_INFINITY) -
+            (messageOrder.get(b.messageId) ?? Number.POSITIVE_INFINITY) ||
+          a.position - b.position ||
+          a.messageId.localeCompare(b.messageId),
+      );
+    for (const mention of mentionRows) {
+      const key = mentionKey(mention.mentionedArticleId, mention.title);
+      if (seenMentions.has(key)) continue;
+      seenMentions.add(key);
+      mentioned.push({ title: mention.title });
+    }
     threads.push({
       title: t.title,
       kind,
       createdAt: t.createdAt.toISOString(),
       ...anchorOf(t),
+      ...(mentioned.length > 0 ? { mentioned } : {}),
       messages,
     });
   }
