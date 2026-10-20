@@ -198,6 +198,67 @@
   font-style: italic;
 }
 
+/* **The spine's key** — spine-key.tsx, Greg's `spya-ah5ws6`: what the spine is
+   and what the colours on it now mean. Ruled off under the footer and set in
+   the footer's faint small voice, because it is the part of the card a reader
+   who knows the spine reads past. Each swatch wears its mark's own token and
+   opacity from styles/spine.css, so the key says the colour the rail draws
+   rather than a restatement of it; a lane's swatch is coloured inline from the
+   lane itself (`laneColour`). */
+.tip-key {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+.tip-key p { margin: 0; }
+.tip-key-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  margin: 0.3rem 0;
+  padding: 0;
+  list-style: none;
+}
+.tip-key-items li { display: inline-flex; align-items: center; gap: 0.25rem; }
+.tip-key-swatch {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: 0.4rem;
+  height: 0.7rem;
+}
+/* Two lanes' swatches touch, the way two lanes do on the rail. */
+.tip-key-lanes + .tip-key-lanes { margin-left: -0.2rem; }
+.tip-key-here { background: var(--depth-1); opacity: 0.8; }
+/* The two palest marks are drawn a little stronger than on the rail, where
+   they sit over a band and a reader sees them in context; at 6px on a card's
+   ground the rail's own 12% and 0.1 left nothing to see in light mode (browser
+   pass, plan 261020e). Still their own tokens. */
+.tip-key-screen {
+  border: 1px solid var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 20%, transparent);
+}
+.tip-key-supplement {
+  background: color-mix(in oklab, var(--depth-1) 25%, transparent);
+  border: 1px solid color-mix(in oklab, var(--depth-1) 45%, transparent);
+}
+.tip-key-reading {
+  background: color-mix(in oklab, var(--read-time) 35%, transparent);
+  border-right: 1px solid var(--read-time);
+}
+.tip-key-from { background: var(--ink-faint); opacity: 0.55; }
+.tip-key-quotes { background: rgb(var(--quote-rgb) / 0.95); }
+/* **Not in a window 600px tall or shorter.** The card cannot scroll, and in a 400px-tall window
+   the band's own row, its footer and the tap hint already need all of it
+   (`.where-detail` above). The section is what the reader pointed for; the key
+   is the part that can go. */
+@media (max-height: 600px) {
+  .tip-key { display: none; }
+}
+
 /* **The shelf table's row card** — library-columns.tsx § RowCard, plan 260928a.
 
    Defined by subtraction like Structure's, so it has no title line: the title

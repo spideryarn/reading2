@@ -110,6 +110,36 @@ function toVisibility(hidden: readonly string[]): VisibilityState {
 export function useShelfHiddenColumns(
   columns: readonly HideableColumn[],
 ): [VisibilityState, OnChangeFn<VisibilityState>] {
+  return useHiddenColumns(columns, SHELF_KEYS);
+}
+
+/** The two storage keys one table's choices live under. */
+export interface HiddenColumnKeys {
+  /** A JSON array of hidden ids, among the columns that start shown. */
+  hidden: string;
+  /** A JSON array of shown ids, among the columns that start hidden. */
+  shown: string;
+}
+
+const SHELF_KEYS: HiddenColumnKeys = { hidden: HIDDEN_COLUMNS_KEY, shown: SHOWN_COLUMNS_KEY };
+
+/**
+ * **The same, for any table, under keys of its own.** The shelf's is the
+ * wrapper above; `/admin/users` passes `ADMIN_USERS_COLUMN_KEYS` (AdminPage.tsx),
+ * whose five rarely-wanted counts start hidden — Greg, 2026-10-19
+ * (plan 261020c). The key strings identify the table; the object that carries
+ * them need not keep its identity across renders.
+ */
+export function useHiddenColumns(
+  columns: readonly HideableColumn[],
+  keys: HiddenColumnKeys,
+): [VisibilityState, OnChangeFn<VisibilityState>] {
+  /* Strings rather than `keys` itself below: an inline `{ hidden, shown }`
+     with the same values must not rebuild TanStack's controlled-state setter
+     on every render. The shelf render-loop postmortem is why that identity is
+     a contract rather than a micro-optimisation. */
+  const hiddenKey = keys.hidden;
+  const shownKey = keys.shown;
   /* Joined, so a `columns` rebuilt with the same ids (Library.tsx rebuilds it
      when `now` ticks) does not count as a change. */
   const canHide = columns.filter((c) => c.enableHiding !== false);
@@ -123,8 +153,8 @@ export function useShelfHiddenColumns(
   const startsHidden = useMemo(() => (lateKey ? lateKey.split("\n") : []), [lateKey]);
 
   const [visibility, setVisibility] = useState<VisibilityState>(() => {
-    const hidden = parseHiddenColumns(readRaw(HIDDEN_COLUMNS_KEY), hideable);
-    const shown = parseHiddenColumns(readRaw(SHOWN_COLUMNS_KEY), startsHidden);
+    const hidden = parseHiddenColumns(readRaw(hiddenKey), hideable);
+    const shown = parseHiddenColumns(readRaw(shownKey), startsHidden);
     return toVisibility(
       hideable.filter((id) =>
         startsHidden.includes(id) ? !shown.includes(id) : hidden.includes(id),
@@ -138,11 +168,11 @@ export function useShelfHiddenColumns(
       /* Only what may be hidden, and only what is: a stray `title: false` from
          anywhere never reaches the table or the store. */
       const hidden = hideable.filter((id) => next[id] === false);
-      write(HIDDEN_COLUMNS_KEY, hidden.filter((id) => !startsHidden.includes(id)));
-      write(SHOWN_COLUMNS_KEY, startsHidden.filter((id) => !hidden.includes(id)));
+      write(hiddenKey, hidden.filter((id) => !startsHidden.includes(id)));
+      write(shownKey, startsHidden.filter((id) => !hidden.includes(id)));
       setVisibility(toVisibility(hidden));
     },
-    [visibility, hideable, startsHidden],
+    [visibility, hideable, startsHidden, hiddenKey, shownKey],
   );
 
   return [visibility, onChange];
