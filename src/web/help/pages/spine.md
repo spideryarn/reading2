@@ -43,10 +43,11 @@ What each mark means:
 article showing where the section sits: the part it belongs to, the sections on either side, and its
 place in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist
 and what is inside it. Then come how many words it has, how far in it starts, and how many search
-matches it holds. A heading set in the author’s typeface is the author’s own; one in the AI’s was
-written by the AI. At the foot of every card is a small key to the colours on the spine at that
-moment: only the marks it is drawing now, so it changes as you open a search or a mode. Once a card is open, move slowly down the spine and the cards follow, so you can
-read the outline section by section.
+matches it holds (or, in Ideas, Timeline and Referee, how many of that mode's passages). A heading
+set in the author’s typeface is the author’s own; one in the AI’s was written by the AI. In all but
+the shortest windows, the foot of every card has a small key to the colours on the spine at that moment: only the marks it is drawing now, so it
+changes as you open a search or a mode. Once a card is open, move slowly down the spine and the cards
+follow, so you can read the outline section by section.
 
 ![The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts](images/spine-walk.gif "Move slowly down the spine and the card follows, one section at a time.")
 

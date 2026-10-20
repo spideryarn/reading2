@@ -40,13 +40,16 @@
  * geometry (`stubRowGeometry`), and scrolling moves the reading line between
  * them.
  */
+import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BAND_MODES } from "../src/modes.js";
 import { Spine } from "../src/web/Spine.js";
+import { railMarks } from "../src/web/reader/passages.js";
 import type { OutlineEntry } from "../src/web/tree.js";
 import type { BlockMatch } from "../src/web/search-hits.js";
-import { SEARCH_RAIL_MARKS } from "../src/web/spine-key.js";
+import { SEARCH_RAIL_MARKS, spineKeyItems } from "../src/web/spine-key.js";
 import type { BlockId, NodeId, TreeNode } from "../src/types.js";
 
 class FakeResizeObserver {
@@ -736,9 +739,69 @@ describe("the key", () => {
     expect(card.querySelector('[data-key="lanes"]')?.textContent).toBe("this idea");
   });
 
+  it("keys supplement, reading and quote marks only when they have visible geometry", () => {
+    const withSupplement = OUTLINE.map((entry) =>
+      entry.node.id === "p2" ? { ...entry, supplement: true as const } : entry,
+    );
+    mountWith({
+      outline: withSupplement,
+      reading: new Map<BlockId, number>([["b2" as BlockId, 8]]),
+      quotes: new Map<BlockId, number>([["b3" as BlockId, 0.9]]),
+    });
+    expect(keyed(openCard(S1))).toEqual([
+      "here",
+      "screen",
+      "quotes",
+      "reading",
+      "supplement",
+    ]);
+
+    const zeroHeightSupplement: OutlineEntry = {
+      node: node("notes", 1, { title: "Notes" }),
+      startRow: ROW_IDS.length,
+      endRow: ROW_IDS.length,
+      words: 0,
+      children: [],
+      supplement: true,
+    };
+    mountWith({
+      outline: [...OUTLINE, zeroHeightSupplement],
+      reading: new Map<BlockId, number>([["gone" as BlockId, 8]]),
+      quotes: new Map<BlockId, number>([["gone" as BlockId, 0.9]]),
+    });
+    expect(keyed(openCard(S1))).toEqual(["here", "screen"]);
+  });
+
+  it("includes the jump-origin chip only when the origin mark exists", () => {
+    const input = {
+      supplement: false,
+      reading: false,
+      quotes: false,
+      laneColours: [],
+      marksLabel: "marked passages",
+    };
+    expect(spineKeyItems({ ...input, from: false }).map((item) => item.kind)).not.toContain("from");
+    expect(spineKeyItems({ ...input, from: true }).map((item) => item.kind)).toContain("from");
+  });
+
   it("is hidden from a screen reader, which hears the card as every band's description", () => {
     mountSpine();
     expect(openCard(S1).querySelector(".tip-key")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("is hidden at 600px and below, and every swatch follows the rail's theme token", () => {
+    const css = readFileSync("src/web/styles/tooltip.css", "utf8");
+    expect(css).toMatch(/@media \(max-height: 600px\)\s*{\s*\.tip-key\s*{\s*display: none;/);
+    expect(css).toMatch(/\.tip-key-here\s*{[^}]*var\(--depth-1\)/);
+    expect(css).toMatch(/\.tip-key-screen\s*{[^}]*var\(--highlight\)/);
+    expect(css).toMatch(/\.tip-key-supplement\s*{[^}]*var\(--depth-1\)/);
+    expect(css).toMatch(/\.tip-key-reading\s*{[^}]*var\(--read-time\)/);
+    expect(css).toMatch(/\.tip-key-from\s*{[^}]*var\(--ink-faint\)/);
+    expect(css).toMatch(/\.tip-key-quotes\s*{[^}]*var\(--quote-rgb\)/);
+  });
+
+  it("keeps every mode's lane words stable for the memoised Spine", () => {
+    for (const mode of BAND_MODES) expect(railMarks(mode)).toBe(railMarks(mode));
   });
 });
 
@@ -769,5 +832,6 @@ describe("a band's accessible name counts the lane marks in the open mode's word
     });
     expect(names().some((n) => n.endsWith("— 1 passage of this idea"))).toBe(true);
     expect(names().some((n) => n.includes("search"))).toBe(false);
+    expect(openCard(S1).querySelector(".tip-matches")?.textContent).toBe("1 passage of this idea");
   });
 });

@@ -1424,6 +1424,7 @@ function SpineInner({
                   where={whereByBand.get(b.entry.node.id) ?? []}
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
+                  marksWords={marksWords}
                   here={hereHitId === b.entry.node.id}
                   keyItems={keyItems}
                   /* Only when a finger opened it. A mouse reader hovering the
@@ -1603,6 +1604,7 @@ function BandCard({
   where,
   position,
   matches,
+  marksWords,
   here = false,
   keyItems,
   showTapHint = false,
@@ -1614,6 +1616,8 @@ function BandCard({
   where: readonly WhereRow[];
   position: number;
   matches: number;
+  /** The open mode's words for the visible count, shared with the button. */
+  marksWords: RailMarks;
   /** The reading line is inside this band — see `hereHit` in `Spine`. */
   here?: boolean;
   showTapHint?: boolean;
@@ -1701,7 +1705,7 @@ function BandCard({
             a mark already says it. */}
         {matches > 0 && (
           <span className="tip-matches">
-            {matches} {matches === 1 ? "match" : "matches"}
+            {matches} {matches === 1 ? marksWords.one : marksWords.many}
           </span>
         )}
         <span>{position}% in</span>

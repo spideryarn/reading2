@@ -98,10 +98,10 @@ nine rows on an unscrollable card, mostly describing marks that are not on the r
 
 ## Trade-off named
 
-The key is on every card, every time, so the card grows by about three lines for a reader who
-already knows the spine. Kept small and faint like the footer. If it proves noisy, the obvious next
-step is to show it only for the first few cards, or only while a mark the reader has not seen is on
-the rail — deferred until somebody says it is noisy.
+In a window taller than 600px, the key is on every card, every time, so the card grows by about three
+lines for a reader who already knows the spine. Kept small and faint like the footer. If it proves
+noisy, the obvious next step is to show it only for the first few cards, or only while a mark the
+reader has not seen is on the rail — deferred until somebody says it is noisy.
 
 ## Stages
 
@@ -117,7 +117,7 @@ the rail — deferred until somebody says it is noisy.
 Plan review: [-plan-review-sol.md](261020e-spine-card-explains-the-spine-and-keys-its-colours-plan-review-sol.md).
 Taken:
 
-- **F1 height.** The key is hidden in windows under 600px tall (`tooltip.css § .tip-key`); the
+- **F1 height.** The key is hidden in windows 600px tall or shorter (`tooltip.css § .tip-key`); the
   browser pass found the worst card ends inside the window at 1440×900 and 1280×700.
 - **F2 accessibility.** The key is `aria-hidden` (the card is every band's description), and the
   band's accessible name now counts the lane in the open mode's words — it said "search matches"
@@ -137,3 +137,11 @@ hook mounted; the browser pass's counts (30/69/88/92 → 20/7/4/1) are the evide
 
 Browser pass on the built key (Sonnet, Playwright, both themes): swatches match the rail; the "on
 screen" and back-matter swatches were too pale in light mode and are drawn a little stronger.
+
+Code review ([-code-review-sol.md](261020e-spine-card-explains-the-spine-and-keys-its-colours-code-review-sol.md),
+workspace-write): three findings, all fixed by the reviewer and read before commit — the card's
+visible count still said "matches" in every mode (now `marksWords.one`/`.many`, as the button
+does); tests added for each optional chip, the height cutoff, the swatch tokens and `railMarks`'
+identity, each mutation-checked red; docs said "under 600px" where the rule is `max-height: 600px`.
+The deferred half is queue item `qi-bp4ez3yc`, asked in
+[q-je2p9y](../user-feedback/questions/q-je2p9y.md).
