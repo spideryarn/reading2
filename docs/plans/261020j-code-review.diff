@@ -1,0 +1,881 @@
+diff --git a/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-plan-review-prompt.md b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-plan-review-prompt.md
+new file mode 100644
+index 000000000..53bf592cd
+--- /dev/null
++++ b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-plan-review-prompt.md
+@@ -0,0 +1,21 @@
++You are reviewing a plan, read-only, in the Spideryarn repo (this worktree). Read
++docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md, then the code and docs it names:
++src/web/Metadata.tsx (SharingSection), src/web/AccessSharing.tsx, src/web/PublicPages.tsx
++(PublicMetadataPage), src/web/PublicChrome.tsx (SharedNotice, sharedSentence), src/web/article/ArticlePage.tsx,
++src/routes.ts (the /api/admin/articles routes, the /:slug/cost route, the admin namespace gate),
++src/store/public-access.ts, src/store/link-shared-slug.ts, src/store/pg-article-transfer.ts (listArticlesAcrossOwners),
++docs/project/admin.md (§ What it deliberately does not show, § One article's cost, § /admin/articles),
++docs/project/security-map.md.
++
++Questions, answer each:
++1. Is part 3 (an admin-only route returning an article's owner address, visibility and has-a-private-link,
++   gated on publicAccessWhere(slug, key)) an edit to a defence or within admin.md's existing rule? If it is a
++   widening, say the narrowest version that is not.
++2. Correctness holes: e.g. is the owner page truly only drawn for the owner (any fixture/admin/edge case
++   where "You own this article" would be false)? Is the visitor page ever drawn for the owner (session
++   unconfirmed, or other)? How does the visitor page know the signed-in user id for isAdmin?
++3. Is there existing shared code for looking up one account's email from the Auth service?
++4. Anything simpler that gives Greg the same answer?
++5. Is the deferred link-open tracking framed fairly for Greg to choose?
++
++Write your findings, numbered, most severe first, each with file:line evidence, to the output file.
+diff --git a/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-plan-review-sol.md b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-plan-review-sol.md
+new file mode 100644
+index 000000000..2ee589159
+--- /dev/null
++++ b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-plan-review-sol.md
+@@ -0,0 +1,23 @@
++# Plan review — say who owns an article on its details page
++
++1. **P1 — Part 3 widens the admin privacy defence for private-link articles. The narrowest non-widening version is public-only.** The existing rule says identifiers may not be followed into articles and that *which* articles belong to an account is the reader’s reading (`docs/project/admin.md:204-221`, `docs/project/admin.md:277-290`). `/admin/articles` preserves this by exposing another owner’s email beside an opaque article id, while returning a slug/title only for admin-owned or public articles (`src/store/pg-article-transfer.ts:640-679`; `docs/project/admin.md:978-985`). Part 3 joins a private slug and article in Greg’s browser to that owner address (`docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md:54-79`). Possessing a private key grants reading access; it does not grant disclosure of the owner’s account identity or prove the owner personally supplied the key. Reusing `publicAccessWhere`, itself catalogued as a defence (`docs/project/security-map.md:98-99`, `docs/project/security-map.md:130-133`), does not settle this separate policy question. The non-widening form is: owner details on the owner page; owner email on a visitor page only for public articles; private-link visitors see only “You don’t own this article” and “private link”. If Greg wants the private-link-to-account join, ask it explicitly as a defence change and document the exception in both `admin.md` and the security map.
++
++2. **P1 — `publicAccessWhere(slug, key)` does not establish the claimed “could already read as a visitor” condition.** It checks only public visibility or the matching token (`src/store/public-access.ts:45-60`). The real public read also inner-joins a current revision and refuses an article without a tree or blocks (`src/store/public-reader.ts:601-619`, `src/store/public-reader.ts:923-942`); a matching public/keyed import may instead return “still being added” (`src/store/public-reader.ts:928-934`). A direct call to the proposed route could therefore disclose ownership for an article the public route does not return, contrary to the claim at `docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md:62-65`. If approved, the query needs the same published/readable bar and must use `parseShareKey(query.get("key"))` before `accessFor`. Test public and keyed rows with no current revision, tree, or blocks and require 404.
++
++3. **P1 — The deferred link-open question is not decision-ready.** “Each public read that matched by key” is not a definition of an open: the predicate serves article, head, asset, comment, search, and source-guess reads (`src/store/public-reader.ts:593-619`, `src/store/public-reader.ts:658-700`, `src/store/public-reader.ts:759-872`, `src/store/public-reader.ts:1163-1234`). Even if narrowed to one successful article-payload GET, reloads, retries, and repeat visits are loads—not people—so the counter cannot answer “how many people”. Signed-in tracking also cannot happen inside the anonymous read: the client deliberately sends no credentials (`src/web/public-api.ts:1-21`), and the public dispatcher is structurally denied the request and owner identity (`src/public/routes.ts:24-39`). It would require a separate authenticated, best-effort POST with validation and duplicate semantics.
++
++   Present at least: do nothing; count successful payload loads for the current key, explicitly not people; or record signed-in accounts through that separate event, while signed-out people remain unknowable. For each, state who sees it, retention, whether owner/admin opens count, whether old key generations are retained, and that nothing is retroactive. Both tracking choices need privacy wording; the current privacy documentation says who opened a link is not recorded (`docs/project/privacy.md:843-864`), while the plan mentions a privacy change only for signed-in tracking (`docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md:91-97`). “Either resets” is a retention choice, not an implementation detail.
++
++4. **P2 — The ownership sentences are correct for a settled access result, but can become stale.** Ordinarily, the owner page is genuinely behind `access.kind === "owned"` (`src/web/article/ArticlePage.tsx:266-285`). That result requires a successful authenticated article request; 404 falls through to public access, while 401 produces `sessionUnconfirmed` (`src/web/article/access.ts:541-583`, `src/web/article/access.ts:603-618`). The generic article route has no admin bypass (`src/routes.ts:11226-11233`); the admin gate applies only under `/api/admin` (`src/routes.ts:14061-14110`). The fixture fallback is documented as dead and suppresses the sharing section if reached (`src/web/Metadata.tsx:743-787`, `src/web/Metadata.tsx:1329-1356`). Thus fixture/admin status is not a counterexample, and suppressing “You don’t own” when the session is unconfirmed is correct.
++
++   The counterexample is a later transfer. The article is fetched once across views (`src/web/article/ArticlePage.tsx:64-71`), while transfer changes `owner_id`, makes it private, and clears its key (`src/store/pg-article-transfer.ts:585-610`). An old owner’s tab can continue saying “You own this article”. Conversely, a gift claim can transfer a visitor’s article while it remains on screen; the existing hook re-reads only after the claim request settles (`src/web/article/useClaimSharedArticle.ts:1-24`, `src/web/article/useClaimSharedArticle.ts:67-79`). Either acknowledge ordinary stale UI or perform a fresh owner check before categorical wording; at minimum test the known gift-claim transition.
++
++5. **P2 — The admin visitor’s identity, key, and request lifetime need an explicit path.** `ArticlePage` already has the exact `readerId` used to key access (`src/web/article/ArticlePage.tsx:81-122`; `src/web/article/access.ts:254-324`), but `VisitorArticle` and `PublicMetadataPage` receive only `signedIn: boolean` (`src/web/article/ArticlePage.tsx:735-783`; `src/web/PublicPages.tsx:134-151`). The private `shareKey` likewise exists in `ArticlePage` but is not passed down (`src/web/article/ArticlePage.tsx:114-121`). `useSession()` is available—the owner metadata page uses it (`src/web/Metadata.tsx:535-541`)—but passing `readerId` is safer because it is the identity for which access was resolved. Pass both `readerId` and `shareKey`; require `!sessionUnconfirmed && isAdmin(readerId)`; bind the request to that id; and key/drop its response by slug, reader id, and key. Add a test that an unconfirmed admin session makes no admin request. The namespace gate remains the real authorization (`src/routes.ts:14080-14110`).
++
++6. **P2 — Shared single-account lookup already exists: `accountEmail`. Preserve its failure state.** `accountEmail(ownerId)` calls `GET /auth/v1/admin/users/{id}`, applies a five-second deadline, verifies the returned id, and returns `found | unavailable` (`src/store/admin-accounts.ts:422-456`, `src/store/admin-accounts.ts:548-590`). Use it rather than listing every account and filtering, as `/admin/articles` currently does (`src/routes.ts:10262-10278`). Do not flatten `unavailable` into an unexplained `ownerEmail: null`; the list route exposes `emailsAvailable` specifically so an Auth outage does not resemble an account without an address (`src/routes.ts:10265-10278`). Also decide whether to match `/admin/articles` on soft-deleted accounts: `accountEmail` does not filter them, while `listAccounts` does through `accountFrom` (`src/store/admin-accounts.ts:243-263`).
++
++7. **P3 — Parts 1–2 and the response can be simpler.** `PublicMetadataPage` already renders `SharedNotice` (`src/web/PublicPages.tsx:205-212`), which already prints `sharedSentence(sharedBy)` (`src/web/PublicChrome.tsx:227-229`, `src/web/PublicChrome.tsx:384-399`). A second Access section repeating that sentence duplicates public/private-link status and requires exporting a currently private helper. Add only “You don’t own this article” to the existing notice; signed-out and unconfirmed visitors need no new UI. On the owner side, reuse the `useSession()` already present in `Metadata`.
++
++   For a confirmed visitor, `mine` is already false by the capability seam, and `sharedBy` determines visibility because public wins (`src/store/public-access.ts:11-16`; `src/store/public-reader.ts:700-702`). The only new server facts are owner address and, for a public article, whether a private link is also active. If part 3 becomes public-only, the existing `/api/admin/articles` response can already be matched by slug (`src/store/pg-article-transfer.ts:663-679`); reusing that list versus adding a small single-row endpoint is then a latency choice, not a new privacy capability.
++
++**Verdict:** Parts 1–2 are sound after accounting for transfer staleness and avoiding duplicate visitor copy. Part 3 is not within the current defence for private-link articles: make it public-only or ask Greg to approve the explicit widening. Reframe link-open tracking before asking him to choose.
+\ No newline at end of file
+diff --git a/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md
+new file mode 100644
+index 000000000..4e8a83a80
+--- /dev/null
++++ b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md
+@@ -0,0 +1,152 @@
++# Say who owns an article, on its details page
++
++Feedback report `spya-cf30ac` (#622, `SPIDERYARN-READING2-KF`), from Greg (admin;
++`feedback-reporter.ts` exit 0), 2026-10-19 17:29 UTC, from
++`/read/tinbergen1963onethology-spya-ks84se/metadata`. Overseer queue item `qi-kz4dtr4a`.
++
++> It doesn't seem obvious who owns an article, so I'm lost track of whether this is an article that
++> I own or whether it's an article that somebody else owned when I set up a gift voucher for them.
++> Maybe it could be under the sharing section.
++>
++> I'm an admin, so I want all of the details that we have, e.g. Who owns it? Whether it's public?
++> Whether there's a private link for it? How many people and who have opened the private link? Etc.
++>
++> But for a non-admin user, it should only tell them if they're the owner, or if it's public, or if
++> it's a private link, etc.
++>
++> — Greg, 2026-10-19
++
++Adjacent work, read first: [261019n](261019n-admin-sees-other-users-articles-and-views-as-them.md)
++(view-as and Inspect, awaiting Greg as `q-kyhvkm`). Nothing here depends on its answer, and nothing
++here pre-empts it: no title, prose or reading of another reader's article reaches an admin page.
++
++## What there is today
++
++The article's details page (`/read/<slug>/metadata`) is two different pages
++([reader-capability.ts](../../src/web/reader-capability.ts) § What "visitor" means):
++
++- **The owner's** (`Metadata.tsx`) — drawn only when the owned read answered, so its reader *is*
++  the owner. Its *Access & sharing* card says "Only you can read this" / "…anyone who has the
++  private link" / "Anyone can read this…". It never says the word *own*, nor which account.
++- **A visitor's** (`PublicPages.tsx` § `PublicMetadataPage`) — anybody else, signed in or not.
++  Its banner (`SharedNotice`) says public or private link. It has no sharing section, and never
++  says *this is not yours*.
++
++So both halves of the non-admin ask are nearly there; what is missing is the sentence about
++ownership. For the admin, `/admin/articles` already lists every article's owner address by short
++id, with its visibility — but not on the article's page, and not whether it has a private link.
++
++## What was built, after GPT Sol's plan review
++
++[The review](261020j-say-who-owns-an-article-on-its-details-page-plan-review-sol.md) changed part 3,
++and the section below it is the draft as reviewed, kept for the reasoning.
++
++- **Sol F1 (accepted): part 3 as drafted widened a defence.** Holding a private link's key lets you
++  read the article; it does not let you learn whose account it is on, nor prove the owner handed you
++  the key. `/admin/articles` keeps another reader's private article to an opaque id beside its
++  owner, so joining that owner to a slug and a title in the admin's browser is new. So part 3 is
++  **public articles only**, and the private-link half is asked (`q-agbc89`).
++- **Which made the new route unnecessary** (Sol F7). `/api/admin/articles` already carries a slug
++  only for the admin's own and public articles, so the visitor page reads that list and matches by
++  slug: a private-link article *cannot* match, which is the rule held by the server rather than by
++  the component. No route, no key handling, and F2 (the drafted `where` was looser than the public
++  read) and F6 (`accountEmail`) do not arise. A private link gets one sentence saying its owner is
++  not shown, and no request. *Has a private link* for another reader's public article is not shown:
++  the list does not carry it, and on a public article it changes nothing about who can read.
++- **F5 (accepted):** the page is handed the `readerId` access was resolved for. The admin line asks
++  only for `isAdmin(readerId)`, a confirmed session and a public article, and is keyed on slug and
++  reader. The account address is shown only when the session's id is that reader's.
++- **F4 (accepted as ordinary staleness):** a transfer while the page is open leaves "You own this
++  article" on the old owner's tab until reload, as it leaves the whole card. The gift-claim hook
++  re-reads the article as the owner once the claim settles, which swaps the visitor page for the
++  owner's; nothing new is needed for it.
++- **F3 (accepted):** the link-open question is reframed (below, and in `q-agbc89`).
++
++Built: `src/web/Ownership.tsx` (`Ownership`, `AdminOwnerLine`), its first line in the owner's
++*Access & sharing* card (`Metadata.tsx`), an *Access* section on `PublicMetadataPage`, the strings
++in `src/messages.ts` § Sharing a document, a line in the Help's sharing page, and
++[admin.md § Whose article it is](../project/admin.md#whose-article-it-is-on-a-visitors-details-page).
++Tests: `tests/article-ownership.test.tsx`.
++
++## The draft as reviewed (simplest version)
++
++**1. The owner's card says so.** A first line in *Access & sharing*: **"You own this article"**,
++followed by the account it is on ("signed in as greg@…"), from the session's own `user.email`,
++nothing fetched. Same for everybody; for the admin it answers the question fully, because on this
++page the reader is the owner. Public and private-link state are the card's existing two switches.
++
++**2. A visitor's page says so.** A small *Access* section on `PublicMetadataPage`:
++
++- signed in, session confirmed: **"You don't own this article."** then the existing
++  `sharedSentence(sharedBy)` ("public" / "private link").
++- signed out: no ownership claim (we cannot say), just the shared sentence.
++- session unconfirmed: no ownership claim; `SharedNotice` already says the session could not be
++  confirmed, which is exactly the case where it might be theirs.
++
++**3. An admin visitor also sees the owner.** On `PublicMetadataPage`, when `isAdmin(user.id)`, the
++section adds: owner's address, public or not, private link on or off. From a new route
++
++```
++GET /api/admin/articles/:slug/ownership[?key=…]
++  → { ownerEmail: string | null, mine: boolean, visibility: "public" | "private", privateLink: boolean }
++```
++
++behind the existing namespace gate. **It answers only for an article the asker could already read
++as a visitor**: the lookup's `where` is `publicAccessWhere(slug, accessFor(key))`, the same predicate
++the public read uses, so a slug that is private and comes without its key is the ordinary 404. No
++key, no title and no prose in the answer; `share_token` is not selected (only `share_token IS NOT
++NULL`), so `tests/share-link-token-stays-home.test.ts`'s rule holds. The address comes from the
++Auth service for one id (the existing `listAccounts` path the list route uses, filtered, or a
++single-user lookup if one exists — whichever is already shared code).
++
++### Why this is not an edit to a defence
++
++[admin.md § What it deliberately does not show](../project/admin.md#what-it-deliberately-does-not-show):
++admin pages show account metadata, never "a title … or a sentence of anybody's reading", and
++"identifiers may not be followed into articles". This route does not follow an identifier into an
++article: the admin is already reading the article as a visitor, because it is public or because its
++owner gave them the key. Everything it returns is already on `/admin/articles` for that short id
++(owner address, visibility), except *has a private link*, a boolean about the article's sharing of
++the same kind as visibility. The cost route's precedent ("only for an article the administrator
++owns") is about *what somebody did with* an article; ownership is not that. If the reviewer
++disagrees, part 3 drops to public articles only, or is deferred and asked, and parts 1–2 ship alone.
++
++admin.md gets a short section saying what the route returns and why, beside § One article's cost.
++
++## Deferred, and asked
++
++**Who opened the private link, and how many.** Nothing records it: a link visit is an anonymous
++read through `linkSharedSlug`, and nothing is written. Recording it is a new field stored about
++readers (and, for a signed-out visitor, about somebody who has no account to attach it to), so per
++the brief it is planned and asked rather than built. The shape, for the question:
++
++- **Count only**: a counter on the article (`share_link_opens`, `share_link_last_opened_at`),
++  bumped on each public read that matched by key. No person recorded. Cheap; says nothing about who.
++- **Signed-in openers**: a row per (article, reader account, first/last opened) when the visitor is
++  signed in; signed-out opens counted only. Tells the admin *who* among accounts; needs a privacy
++  page line, and a decision on whether the owner sees it too.
++
++Either resets when the owner makes a new key. Question file `q-…` under
++`docs/user-feedback/questions/`; queued as its own Overseer item.
++
++**Reframed after Sol F3.** A "read that matched by key" is not an open: the same predicate serves the
++article, its head, assets, comments and searches, and reloads are loads, not people. The anonymous
++read carries no credentials by design (`src/web/public-api.ts`), so knowing *who* needs a separate,
++signed-in "I opened this" call from the page. And `privacy.md` says today that who opened a link is
++not recorded, so any choice but nothing changes that page. The three options, as `q-agbc89` puts
++them: nothing; a count of article loads per key, explicitly not people; or signed-in accounts
++recorded by a separate call, signed-out visitors counted only. Nothing is retroactive.
++
++**Simpler option passed over**: put the owner's address into the existing public payload when the
++requester is the admin. Fewer parts, but it braids an admin-only field into the public DTO that
++strangers' requests are built from, which `tests/public-dto-owner-only-fields.test.ts` exists to
++keep clean.
++
++## Tests
++
++- owner card: renders "You own this article" and the account address (red first).
++- visitor page: signed in → "You don't own"; signed out and unconfirmed → no ownership claim.
++- route: admin on a public slug → owner/visibility/privateLink; private slug without key → 404;
++  with the right key → 200; wrong key → 404; non-admin → 403 (the namespace gate); answer has no
++  `title`, `slug` or token key.
++- visitor page as admin: draws the owner line from the route; non-admin makes no request.
+diff --git a/docs/project/admin.md b/docs/project/admin.md
+index eef353d7a..164ccfb75 100644
+--- a/docs/project/admin.md
++++ b/docs/project/admin.md
+@@ -28,6 +28,7 @@ Built the same day. The plan, the options weighed and the review are in
+ - [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
+ - [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
+ - [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
++- [§ Whose article it is](#whose-article-it-is-on-a-visitors-details-page) — the owner's address, for a public article only
+ - [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
+ - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+   - [Engagement](#engagement-active-days-reading-time-failed-imports) — active days, reading time, failed imports, and the columns that start hidden
+@@ -629,6 +630,18 @@ that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by o
+ ([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
+ administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+ 
++## Whose article it is, on a visitor's details page
++
++Since 2026-10-20 (`spya-cf30ac`), the administrator reading somebody else's **public** article sees
++a line under *Access* on its details page: whose it is, by address. It is not a new route: the page
++reads `GET /api/admin/articles` and finds the row by slug, and that list carries a slug only for the
++administrator's own and public articles. So a **private-link** article cannot be matched, and the
++line says its owner is not shown. Holding the key lets you read it; it does not tell you whose it
++is, and changing that is a widening of § What it deliberately does not show, put to Greg as
++question `q-agbc89`. Every reader also gets *You own this article* or *You don't own this
++article* there, which needs nothing from these pages
++([261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md)).
++
+ ## The plan and ingest columns
+ 
+ Added 2026-09-03 beside spend, because "who is paying" and "who is expensive" are two halves of one
+diff --git a/src/messages.ts b/src/messages.ts
+index eda9af969..4cb736601 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4194,6 +4194,33 @@ export const BANNER_TRAINING_LINK = "privacy policy";
+ 
+ /* ── Sharing a document, for the owner ─────────────────────────────────────── */
+ 
++/**
++ * **Whose article this is**, the first line of the details page's *Access &
++ * sharing* (the owner's) and *Access* (a visitor's). Greg, 2026-10-19
++ * (`spya-cf30ac`): *"It doesn't seem obvious who owns an article"*.
++ * docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md.
++ */
++export const OWNERSHIP_YOURS = "You own this article.";
++export const OWNERSHIP_NOT_YOURS = "You don't own this article.";
++/** Then the account's address, then a full stop. */
++export const OWNERSHIP_SIGNED_IN_AS = "Signed in as";
++/** The administrator's line on a visitor's page: then the owner's address. */
++export const OWNERSHIP_ADMIN_OWNER = "Admin: it belongs to";
++export const OWNERSHIP_ADMIN_CHECKING = "Admin: looking up its owner…";
++/** The address could not be read from the sign-in service; the rest of the row could. */
++export const OWNERSHIP_ADMIN_NO_EMAIL = "Admin: the owner's address could not be read just now.";
++/** Not in the admin list under this address (renamed since, or the list is stale). */
++export const OWNERSHIP_ADMIN_NOT_LISTED = "Admin: it is not in the articles list under this address.";
++/**
++ * **A private-link article's owner is not shown, even to the administrator**
++ * — admin.md § What it deliberately does not show: the key lets you read it,
++ * not learn whose it is. Plan 261020j, question q-agbc89.
++ */
++export const OWNERSHIP_ADMIN_LINK =
++  "Admin: the owner of an article shared by private link is not shown, not even to an admin.";
++/** Then the reason from `describeFetchFailure`. */
++export const OWNERSHIP_ADMIN_FAILED = "Admin: could not look up its owner.";
++
+ /** The switch, off. */
+ export const SHARING_OFF = "Only you can read this.";
+ 
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index 86fc7831c..c3106fa17 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -295,6 +295,7 @@ import { isAdmin } from "../admin.js";
+ import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
+ import { CARD } from "./card.js";
+ import { useSession } from "./useSession.js";
++import { Ownership } from "./Ownership.js";
+ import { ProfileBox } from "./ProfileBox.js";
+ import { useAutosavedText } from "./useAutosavedText.js";
+ import { GuessedSourceLink } from "./Masthead.js";
+@@ -1600,6 +1601,7 @@ function SharingCard({
+      reads it to the switch whose *"Only you can read this"* depends on it.
+      `null` until that control has read it, and whenever it cannot say. */
+   const [linkOn, setLinkOn] = useState<boolean | null>(null);
++  const { user } = useSession();
+   const reportLink = useCallback((on: boolean | null) => {
+     setLinkOn(on);
+     onPrivateLink?.(slug, on);
+@@ -1620,6 +1622,11 @@ function SharingCard({
+           `${CARD} p-4`, matching the compact control cards elsewhere on the
+           page rather than "In one sentence"'s `p-5`. */}
+       <div className={`${CARD} tw:p-4`}>
++        {/* Whose it is, first: this page is drawn only for the owner
++            (Ownership.tsx). Greg, spya-cf30ac. */}
++        <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
++          <Ownership whose="yours" email={user?.email ?? null} />
++        </div>
+         <PrivateLink
+           slug={slug}
+           title={title}
+diff --git a/src/web/Ownership.tsx b/src/web/Ownership.tsx
+new file mode 100644
+index 000000000..e7876ae15
+--- /dev/null
++++ b/src/web/Ownership.tsx
+@@ -0,0 +1,141 @@
++/**
++ * **Whose article this is**, as the first line of the details page's sharing
++ * section — the owner's *Access & sharing* card and a visitor's *Access*.
++ * Greg, 2026-10-19 (`spya-cf30ac`):
++ *
++ * > It doesn't seem obvious who owns an article … Maybe it could be under the
++ * > sharing section.
++ *
++ * docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md.
++ *
++ * **It claims only what the page already knows.** The owner's page is drawn
++ * only when the owned read answered, so `"yours"` is never a guess; a visitor's
++ * page is drawn for anybody else, so `"not-yours"` is said only when the session
++ * is signed in *and* the server agreed it is somebody's — an unconfirmed session
++ * may be the owner's own (SharedNotice says so), and a signed-out reader is not
++ * told anything about ownership at all.
++ */
++import { useEffect, useState } from "react";
++
++import type { AdminArticle, AdminArticles } from "../admin-articles.js";
++import { isAdmin } from "../admin.js";
++import {
++  OWNERSHIP_ADMIN_CHECKING,
++  OWNERSHIP_ADMIN_FAILED,
++  OWNERSHIP_ADMIN_LINK,
++  OWNERSHIP_ADMIN_NO_EMAIL,
++  OWNERSHIP_ADMIN_NOT_LISTED,
++  OWNERSHIP_ADMIN_OWNER,
++  OWNERSHIP_NOT_YOURS,
++  OWNERSHIP_SIGNED_IN_AS,
++  OWNERSHIP_YOURS,
++} from "../messages.js";
++import type { PublicSharedBy } from "../public-types.js";
++import { apiFetch, readJson } from "./lib/api.js";
++import { describeFetchFailure } from "./lib/describe-failure.js";
++
++export function Ownership({
++  whose,
++  email,
++}: {
++  whose: "yours" | "not-yours";
++  /** The signed-in account's own address, or null when the session has none to show. */
++  email: string | null;
++}) {
++  return (
++    <p data-ownership={whose} className="tw:m-0 tw:text-sm tw:text-ink">
++      <span className="tw:font-semibold">{whose === "yours" ? OWNERSHIP_YOURS : OWNERSHIP_NOT_YOURS}</span>
++      {email && (
++        <span className="tw:text-ink-faint">
++          {" "}
++          {OWNERSHIP_SIGNED_IN_AS} {email}.
++        </span>
++      )}
++    </p>
++  );
++}
++
++/** What the administrator's line has to say, keyed on the request it answers. */
++type AdminRead =
++  | { kind: "checking" }
++  | { kind: "found"; row: AdminArticle; emailsAvailable: boolean }
++  | { kind: "not-listed" }
++  | { kind: "failed"; message: string };
++
++/**
++ * **The administrator's extra line on a visitor's details page**: whose the
++ * article is. Greg, `spya-cf30ac`: *"I'm an admin, so I want all of the details
++ * that we have"*.
++ *
++ * **Public articles only, and the server is what makes it so.** It reads the
++ * `/admin/articles` list (`GET /api/admin/articles`) and finds this article by
++ * slug — and that list carries a slug only for the administrator's own and
++ * public articles (pg-article-transfer.ts § `listArticlesAcrossOwners`). A
++ * private-link article has no slug there, so it cannot be matched however this
++ * component is called: holding the key lets you read it, not learn whose it is
++ * (admin.md § What it deliberately does not show). Whether that should change
++ * is question q-agbc89. So a private link gets a sentence saying so and makes
++ * no request.
++ *
++ * Mounted only for a confirmed session whose id `isAdmin` accepts; the
++ * namespace gate on `/api/admin` is the real check. The answer is kept only
++ * for the slug and reader it was asked for.
++ */
++export function AdminOwnerLine({
++  slug,
++  readerId,
++  sharedBy,
++}: {
++  slug: string;
++  readerId: string | null;
++  sharedBy: PublicSharedBy;
++}) {
++  const asks = isAdmin(readerId) && sharedBy === "public";
++  const [read, setRead] = useState<AdminRead>({ kind: "checking" });
++  useEffect(() => {
++    if (!asks) return;
++    let live = true;
++    setRead({ kind: "checking" });
++    apiFetch("/api/admin/articles")
++      .then((r) => readJson<AdminArticles>(r))
++      .then((body) => {
++        if (!live) return;
++        const row = body.articles.find((a) => a.slug === slug);
++        setRead(row ? { kind: "found", row, emailsAvailable: body.emailsAvailable } : { kind: "not-listed" });
++      })
++      .catch((e: Error) => {
++        if (live) setRead({ kind: "failed", message: describeFetchFailure(e) });
++      });
++    return () => {
++      live = false;
++    };
++  }, [asks, slug, readerId]);
++
++  if (!isAdmin(readerId)) return null;
++  return (
++    <p data-admin-owner className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-ink-faint">
++      {adminSentence(sharedBy, read)}
++    </p>
++  );
++}
++
++function adminSentence(sharedBy: PublicSharedBy, read: AdminRead): string {
++  if (sharedBy === "link") return OWNERSHIP_ADMIN_LINK;
++  switch (read.kind) {
++    case "checking":
++      return OWNERSHIP_ADMIN_CHECKING;
++    case "not-listed":
++      return OWNERSHIP_ADMIN_NOT_LISTED;
++    case "failed":
++      return `${OWNERSHIP_ADMIN_FAILED} ${read.message}`;
++    case "found":
++      /* `ownerEmail` is null both when the whole listing failed and when the
++         Auth service does not know the account; only the first is "just now". */
++      if (read.row.ownerEmail) return `${OWNERSHIP_ADMIN_OWNER} ${read.row.ownerEmail}.`;
++      return read.emailsAvailable ? `${OWNERSHIP_ADMIN_OWNER} account ${read.row.ownerId}.` : OWNERSHIP_ADMIN_NO_EMAIL;
++    default: {
++      const unreachable: never = read;
++      return unreachable;
++    }
++  }
++}
+diff --git a/src/web/PublicPages.tsx b/src/web/PublicPages.tsx
+index 0c1be175f..c3131a7d2 100644
+--- a/src/web/PublicPages.tsx
++++ b/src/web/PublicPages.tsx
+@@ -36,6 +36,8 @@ import { hostOf } from "../urls.js";
+ import { articleStats } from "./stats.js";
+ import { pageTitle, useDocumentTitle } from "./page-title.js";
+ import { SharedNotice } from "./PublicChrome.js";
++import { AdminOwnerLine, Ownership } from "./Ownership.js";
++import { useSession } from "./useSession.js";
+ import { GuessedSourceLink } from "./Masthead.js";
+ import { markedModes, NOUN } from "./visitor.js";
+ import { useExperimental } from "./useExperimental.js";
+@@ -134,6 +136,7 @@ export function PublicMetadataPage({
+   article,
+   available,
+   signedIn,
++  readerId = null,
+   sessionUnconfirmed,
+   sharedBy,
+ }: {
+@@ -142,6 +145,12 @@ export function PublicMetadataPage({
+   available: PublicArtefacts;
+   /** For the call to action only — reader-capability.ts § signedIn. */
+   signedIn: boolean;
++  /**
++   * Who access was resolved for, for the *Access* section only: the account
++   * address beside "You don't own this article", and the administrator's line
++   * (Ownership.tsx). Optional for tests that mount this page alone.
++   */
++  readerId?: string | null;
+   /** For the notice below only — reader-capability.ts § sessionUnconfirmed. */
+   sessionUnconfirmed: boolean;
+   /** For the notice below only — reader-capability.ts § sharedBy. */
+@@ -149,6 +158,7 @@ export function PublicMetadataPage({
+ }) {
+   const { meta } = article;
+   const stats = articleStats(article);
++  const { user } = useSession();
+   useDocumentTitle(pageTitle({ kind: "read", title: meta.title, view: "metadata" }));
+ 
+   /* **Where and when it was published, for a visitor too.** Greg, 2026-10-04:
+@@ -211,6 +221,20 @@ export function PublicMetadataPage({
+           copyFrom={webSource(meta)}
+         />
+ 
++        {/* **Whose it is**, Greg's spya-cf30ac: said only to a reader whose
++            session the server confirmed, since that is the one case where
++            "not yours" is known rather than guessed (Ownership.tsx). */}
++        {signedIn && !sessionUnconfirmed && (
++          <section data-access className="tw:mt-8">
++            <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
++            {/* The session's address only when it is the account access was
++                resolved for, so a sign-in changing under the page cannot put
++                one account's address beside the other's answer. */}
++            <Ownership whose="not-yours" email={user && user.id === readerId ? (user.email ?? null) : null} />
++            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} sharedBy={sharedBy} />
++          </section>
++        )}
++
+         <section className="tw:mt-8">
+           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>
+           <p className="tw:m-0 tw:text-sm tw:text-ink-faint">
+diff --git a/src/web/article/ArticlePage.tsx b/src/web/article/ArticlePage.tsx
+index 2a623584d..dacee0f69 100644
+--- a/src/web/article/ArticlePage.tsx
++++ b/src/web/article/ArticlePage.tsx
+@@ -278,6 +278,7 @@ export function ArticlePage({
+           searches={access.searches}
+           crossrefs={access.crossrefs}
+           signedIn={signedIn}
++          readerId={readerId}
+           sessionUnconfirmed={access.sessionUnconfirmed}
+           sharedBy={access.sharedBy}
+           view={view}
+@@ -738,6 +739,7 @@ function VisitorArticle({
+   searches,
+   crossrefs,
+   signedIn,
++  readerId,
+   sessionUnconfirmed,
+   sharedBy,
+   view,
+@@ -757,6 +759,12 @@ function VisitorArticle({
+   crossrefs: readonly Crossref[] | null;
+   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
+   signedIn: boolean;
++  /**
++   * **The identity access was resolved for**, for the details page's
++   * administrator line only (Ownership.tsx, plan 261020j): its request is
++   * keyed on this id rather than on a session read afresh below.
++   */
++  readerId: string | null;
+   /**
+    * **Only for what the chrome says**, and it goes to both views rather
+    * than to the reading view alone: the other is one click away and carries
+@@ -778,6 +786,7 @@ function VisitorArticle({
+         article={article}
+         available={available}
+         signedIn={signedIn}
++        readerId={readerId}
+         sessionUnconfirmed={sessionUnconfirmed}
+         sharedBy={sharedBy}
+       />
+diff --git a/src/web/help/pages/sharing.md b/src/web/help/pages/sharing.md
+index 4de147b4b..2c30409dc 100644
+--- a/src/web/help/pages/sharing.md
++++ b/src/web/help/pages/sharing.md
+@@ -13,6 +13,10 @@ There are two ways to let other people read one, and both are under **Access & s
+ article’s Metadata page: a private link, for the people you send it to, and making it public, for
+ everyone.
+ 
++**Is it yours?** The first line of **Access & sharing** says *You own this article*, and which
++account you are signed in as. On an article somebody else shared with you, the same page has an
++**Access** section saying *You don't own this article* instead.
++
+ **A private link.** Press **Create a link**, look at what somebody with the link would get, tick
+ that you have the right to share the text, and press **Create the link**. Then copy the link and
+ send it however you like.
+diff --git a/tests/article-ownership.test.tsx b/tests/article-ownership.test.tsx
+new file mode 100644
+index 000000000..3dd043dd8
+--- /dev/null
++++ b/tests/article-ownership.test.tsx
+@@ -0,0 +1,293 @@
++// @vitest-environment jsdom
++/**
++ * **Whose article this is, on its details page** — Greg, 2026-10-19
++ * (`spya-cf30ac`): *"It doesn't seem obvious who owns an article"*.
++ * docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md.
++ *
++ * The owner's page says *you own it* inside Access & sharing; a visitor's says
++ * *you don't* — but only to a session the server confirmed, because a signed-out
++ * reader, or one whose session came back 401, may be the owner.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { NuqsAdapter } from "nuqs/adapters/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Article } from "../src/types.js";
++import type { PublicArtefacts } from "../src/public-types.js";
++import {
++  OWNERSHIP_ADMIN_LINK,
++  OWNERSHIP_ADMIN_NO_EMAIL,
++  OWNERSHIP_ADMIN_OWNER,
++  OWNERSHIP_NOT_YOURS,
++  OWNERSHIP_YOURS,
++} from "../src/messages.js";
++
++const EMAIL = "reader@example.com";
++const READER = "00000000-0000-4000-8000-000000000001";
++/* The production administrator's id, written out: the constant is what is under test. */
++const ADMIN = "001bb7a0-7720-4f1b-8b9d-1ee6e63d132a";
++/** Which account the mocked session holds; the session's id is what `user.id === readerId` compares. */
++let sessionId = READER;
++/** What `GET /api/admin/articles` answers, and how often it was asked. */
++let adminList: unknown = { articles: [], emailsAvailable: true };
++let adminCalls = 0;
++
++vi.mock("../src/web/lib/supabase.js", () => ({
++  supabase: {
++    auth: {
++      getSession: async () => ({ data: { session: { access_token: "t" } } }),
++      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
++      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
++    },
++  },
++  googleSignInAvailable: false,
++}));
++vi.mock("../src/web/useSession.js", () => ({
++  useSession: () => ({
++    session: { access_token: "t" },
++    user: { id: sessionId, email: "reader@example.com" },
++    loading: false,
++    known: true,
++  }),
++}));
++vi.mock("../src/web/Dock.js", async (importOriginal) => ({
++  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
++  Dock: () => null,
++}));
++
++Object.defineProperty(window, "matchMedia", {
++  writable: true,
++  value: (q: string) => ({
++    matches: false,
++    media: q,
++    addEventListener() {},
++    removeEventListener() {},
++    addListener() {},
++    removeListener() {},
++    onchange: null,
++    dispatchEvent: () => false,
++  }),
++});
++
++const { Metadata } = await import("../src/web/Metadata.js");
++const { PublicMetadataPage } = await import("../src/web/PublicPages.js");
++
++const SLUG = "a-piece";
++
++const ARTICLE: Article = {
++  highPowerSince: null,
++  titleOverridden: false,
++  meta: { slug: SLUG, title: "A piece" },
++  blocks: [
++    {
++      id: "spya-aaaaaa",
++      tag: "p",
++      kind: "text",
++      text: "The first paragraph.",
++      words: 3,
++      html: "<p>The first paragraph.</p>",
++      gistable: true,
++    },
++  ],
++  assets: undefined,
++  navLabelStatus: "ready",
++  sourceGuess: undefined,
++  tree: {
++    version: "t",
++    generator: "t",
++    slug: SLUG,
++    rootId: "n0",
++    nodes: {
++      n0: { id: "n0", depth: 0, parent: null, children: [], range: ["spya-aaaaaa", "spya-aaaaaa"], title: "A piece" },
++    },
++  },
++};
++
++const NONE: PublicArtefacts = {
++  arc: false,
++  tweets: false,
++  glossary: false,
++  ideas: false,
++  quotes: false,
++  timeline: false,
++  sketch: false,
++  skim: false,
++  faq: false,
++  simpleSummary: false,
++  bibliography: false,
++  reception: false,
++};
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  sessionId = READER;
++  adminList = { articles: [], emailsAvailable: true };
++  adminCalls = 0;
++  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
++    const url = String(input);
++    if (url === "/api/admin/articles") {
++      adminCalls++;
++      return new Response(JSON.stringify(adminList), { status: 200, headers: { "content-type": "application/json" } });
++    }
++    if (url.startsWith("/api/metadata/")) {
++      return new Response(
++        JSON.stringify({
++          slug: SLUG,
++          dir: "data/a-piece",
++          stages: [],
++          comments: 0,
++          profile: null,
++          purpose: null,
++          archivedAt: null,
++          sharing: { visibility: "private", publicAt: null },
++        }),
++        { status: 200, headers: { "content-type": "application/json" } },
++      );
++    }
++    if (url.endsWith("/share-link")) {
++      return new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } });
++    }
++    return new Response("{}", { status: 200 });
++  });
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  host.remove();
++  vi.unstubAllGlobals();
++});
++
++async function settle(): Promise<void> {
++  for (let i = 0; i < 5; i++) {
++    await act(async () => {
++      await new Promise((go) => setTimeout(go, 0));
++    });
++  }
++}
++
++/** The Access & sharing section, found by its heading. */
++function section(label: string): HTMLElement | undefined {
++  const heading = [...host.querySelectorAll("h2")].find((h) => h.textContent?.trim() === label);
++  return heading?.closest("section") ?? undefined;
++}
++
++describe("the owner's details page", () => {
++  it("says you own it, and on which account, inside Access & sharing", async () => {
++    history.replaceState(null, "", `/read/${SLUG}/metadata`);
++    await act(async () => {
++      root.render(
++        createElement(
++          NuqsAdapter,
++          null,
++          createElement(Metadata, { slug: SLUG, article: ARTICLE, onRenamed: () => {}, onVisibility: () => {} }),
++        ),
++      );
++    });
++    await settle();
++    const card = section("Access & sharing");
++    expect(card, "no Access & sharing section").toBeDefined();
++    const line = card!.querySelector("[data-ownership]");
++    expect(line?.getAttribute("data-ownership")).toBe("yours");
++    expect(line?.textContent).toContain(OWNERSHIP_YOURS);
++    expect(line?.textContent).toContain(EMAIL);
++    expect(host.textContent).not.toContain(OWNERSHIP_NOT_YOURS);
++  });
++});
++
++describe("a visitor's details page", () => {
++  async function visitor(
++    signedIn: boolean,
++    sessionUnconfirmed: boolean,
++    { readerId = signedIn ? READER : null, sharedBy = "link" }: { readerId?: string | null; sharedBy?: "public" | "link" } = {},
++  ): Promise<void> {
++    history.replaceState(null, "", `/read/${SLUG}/metadata`);
++    await act(async () => {
++      root.render(
++        createElement(PublicMetadataPage, {
++          slug: SLUG,
++          article: ARTICLE,
++          available: NONE,
++          signedIn,
++          readerId,
++          sessionUnconfirmed,
++          sharedBy,
++        }),
++      );
++    });
++    await settle();
++  }
++
++  it("tells a confirmed signed-in reader it is not theirs", async () => {
++    await visitor(true, false);
++    const line = section("Access")?.querySelector("[data-ownership]");
++    expect(line?.getAttribute("data-ownership")).toBe("not-yours");
++    expect(line?.textContent).toContain(OWNERSHIP_NOT_YOURS);
++    expect(line?.textContent).toContain(EMAIL);
++    expect(host.textContent).not.toContain(OWNERSHIP_YOURS);
++  });
++
++  it.each([
++    ["signed out", false, false],
++    ["whose session the server could not confirm", true, true],
++  ])("makes no claim about ownership to a reader %s", async (_label, signedIn, unconfirmed) => {
++    await visitor(signedIn, unconfirmed);
++    expect(host.querySelector("[data-ownership]")).toBeNull();
++    expect(host.textContent).not.toContain(OWNERSHIP_NOT_YOURS);
++  });
++
++  it("shows no address when the session is not the account access was resolved for", async () => {
++    sessionId = "00000000-0000-4000-8000-000000000002";
++    await visitor(true, false);
++    expect(host.querySelector("[data-ownership]")?.textContent).not.toContain(EMAIL);
++  });
++
++  it("asks nothing of the admin routes for a reader who is not the administrator", async () => {
++    await visitor(true, false, { sharedBy: "public" });
++    expect(adminCalls).toBe(0);
++    expect(host.querySelector("[data-admin-owner]")).toBeNull();
++  });
++
++  it("asks nothing for an administrator whose session the server could not confirm", async () => {
++    sessionId = ADMIN;
++    await visitor(true, true, { readerId: ADMIN, sharedBy: "public" });
++    expect(adminCalls).toBe(0);
++    expect(host.querySelector("[data-admin-owner]")).toBeNull();
++  });
++
++  it("tells the administrator whose public article it is, matched by slug", async () => {
++    sessionId = ADMIN;
++    adminList = {
++      emailsAvailable: true,
++      articles: [
++        { id: "x", shortId: null, ownerId: READER, ownerEmail: "other@example.com", mine: false, createdAt: "", visibility: "public", processing: "full", title: "Another", slug: "another", published: true },
++        { id: "y", shortId: null, ownerId: READER, ownerEmail: "owner@example.com", mine: false, createdAt: "", visibility: "public", processing: "full", title: "A piece", slug: SLUG, published: true },
++      ],
++    };
++    await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
++    expect(adminCalls).toBe(1);
++    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(`${OWNERSHIP_ADMIN_OWNER} owner@example.com.`);
++  });
++
++  it("says the address could not be read when the Auth service listing failed", async () => {
++    sessionId = ADMIN;
++    adminList = {
++      emailsAvailable: false,
++      articles: [{ id: "y", shortId: null, ownerId: READER, ownerEmail: null, mine: false, createdAt: "", visibility: "public", processing: "full", title: "A piece", slug: SLUG, published: true }],
++    };
++    await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
++    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_NO_EMAIL);
++  });
++
++  it("does not look up a private-link article's owner, and says why", async () => {
++    sessionId = ADMIN;
++    await visitor(true, false, { readerId: ADMIN, sharedBy: "link" });
++    expect(adminCalls).toBe(0);
++    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_LINK);
++  });
++});
