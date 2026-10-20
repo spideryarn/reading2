@@ -207,6 +207,16 @@ describe("the prompt asks for TeX in the delimiters stage 1 draws", () => {
   });
 
   it("is named as a new version, so an article says which prompt read it", () => {
-    expect(PROMPT_VERSION).toBe("pdf-v4");
+    expect(PROMPT_VERSION).toBe("pdf-v5");
+  });
+
+  it("names the complete table encoding contract", () => {
+    const rule7 = SYSTEM.slice(SYSTEM.indexOf("7."), SYSTEM.indexOf("8."));
+    expect(rule7).toContain("ONE tab character between cells and a newline between rows");
+    expect(rule7).toContain("These tabs and newlines are the table's structure, not copied text");
+    expect(rule7).toContain("Write an empty cell as nothing between two tabs");
+    expect(rule7).toMatch(/A cell whose text\s+wraps onto several lines is one cell/);
+    expect(rule7).toMatch(/Never separate cells with\s+spaces or "\|"/);
+    expect(rule7).toContain("never add rows that are not printed");
   });
 });
