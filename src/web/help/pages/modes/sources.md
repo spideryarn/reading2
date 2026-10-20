@@ -132,9 +132,17 @@ for that.
 **Reception**
 
 - What others have written about this piece itself: replies, reviews, and work that cites it and
-  says something about it. Pages that link to the piece or quote it come first. Pages that only
-  mention its title follow under **Names this piece by its title only**: often a paper citing it,
-  sometimes a page about something else with the same title, so check before you rely on one.
+  says something about it. The AI's sections and **Cited by** start folded, so you see their outline
+  first; press one to open it. **Every page** starts open, so no source depends on a press.
+- **What the AI noticed in these sources**, at the top, holds **Key sources** (the ones the AI
+  thinks matter most, starred) and the themes several sources share, each with how many sources
+  are in it. A source can be in more than one.
+- **Every page**, open from the start, lists every source found. Pages that link to the piece or
+  quote it come first. Pages that only mention its title follow under **Mentions its title only —
+  may be another piece**: often a paper citing it, sometimes a page about something else with the
+  same title, so check before you rely on one. Each source is two lines: its title, then the site,
+  the year and one word of the AI's reading. Press the arrow beside it for the quoted excerpt, the
+  AI's full reading, and how we know the page is about this piece.
 - **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and
   is there before you search: it comes from OpenAlex, a public index of published work, which we
   ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of
@@ -149,9 +157,8 @@ for that.
   search from that angle. You can do this before searching at all. **Your angles**, under the box,
   lists the conversations you started this way once you send their first question; press one to
   open it again. Only whoever added the article has this.
-- **Threads across these sources**, at the top, are themes several sources share. Press one to show
-  only its sources. Reception can be ordered **as found**, by **date** or by **stance** (most
-  critical first).
+- Reception can be ordered **as found**, by **date** or by **stance** (most critical first); the
+  order applies inside every section.
 
 **Claims**
 
@@ -184,7 +191,7 @@ for that.
 
 ![The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work](../images/mode-sources-claims.png "Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.")
 
-Anything tagged **AI** is the AI’s reading, checked against nothing: the threads across sources, the
-key-source picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could
+Anything tagged **AI** is the AI’s reading, checked against nothing: the themes, the key-source
+picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could
 not tell) and its relevance. Quoted excerpts, by contrast, are checked against what the search
 returned.

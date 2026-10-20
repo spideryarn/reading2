@@ -1,28 +1,38 @@
 /**
- * **Reception's threads: the themes the sources share, and the key sources, as
- * filters on the list** — plan 260930j (SPIDERYARN-READING2-6M). Pure, so the
- * panel draws what these return and a test can check it without a DOM.
+ * **Reception's threads: the themes the sources share, and the key sources** —
+ * plan 260930j (SPIDERYARN-READING2-6M). Pure, so the panel draws what these
+ * return and a test can check it without a DOM.
  *
- * A *thread* is one button above the list. Pressing it narrows the list to its
- * rows; `?receptionthread=` holds which one (url-state.md: nothing the reader can
- * change lives in `useState`). The key sources are a thread too, `key`, so the
- * box has one kind of button and the list one kind of filter.
+ * **What a thread is depends on the sub-mode, since plan 261020n**
+ * (spya-dk4tfq). Greg found the box of filter buttons over Reception's list
+ * "bewildering": it looked like a table of contents and gathered nothing.
  *
- * **The filter runs after the relevance bar**, as a second narrowing. So a
- * thread's count is the rows *on screen* in it, and a thread the bar has
- * emptied is drawn disabled rather than offered as a button that empties the
- * list.
+ *  - **In Reception a thread is a section**: a collapsed `<details>` holding
+ *    its own rows, inside the AI's frame (ReceptionAndClaimsPanel.tsx §
+ *    `ReceptionSections`). It filters nothing — *Every page* under it holds
+ *    every row — and `?receptionthread=` opens that section and scrolls to it.
+ *  - **In Claims it is still a filter**: one button above the list, and
+ *    pressing it narrows the list to its rows; `?receptionthread=` holds which
+ *    one (url-state.md: nothing the reader can change lives in `useState`).
+ *    The key sources are a thread too, `key`, so the box has one kind of
+ *    button and the list one kind of filter.
+ *
+ * **In Claims the filter runs after the relevance bar**, as a second
+ * narrowing. So a thread's count is the rows *on screen* in it, and a thread
+ * the bar has emptied is drawn disabled rather than offered as a button that
+ * empties the list.
  *
  * **Scoped to the sub-mode on screen**, since 2026-10-03 (plan 261003o, step
  * 6). Reception and Claims each draw one search's rows, and one synthesis spans
  * both. So a thread is offered in a sub-mode only when it has a **stored** row
  * there (`threadsWithin`), and one the address names that has none there
- * narrows nothing and is not drawn as selected — Greg's `receptionthread=key`
- * link, whose key sources were all on one claim, must not empty Reception.
- * *No stored row here* and *rows here hidden by the bar* are different facts
- * and stay different: the second keeps its disabled button and its sentence.
+ * narrows nothing, opens nothing and is not drawn as selected — Greg's
+ * `receptionthread=key` link, whose key sources were all on one claim, must not
+ * empty Reception. *No stored row here* and *rows here hidden by the bar* are
+ * different facts and stay different: the second keeps its disabled button and
+ * its sentence.
  */
-import type { ReceptionKeyRole, ReceptionKeySource, ReceptionSynthesis } from "../types.js";
+import type { ReceptionKeySource, ReceptionSynthesis } from "../types.js";
 /* The constant lives in params.ts, the eager file, so that file need not
    import this one (tests/eager-client-graph.test.ts). */
 import { KEY_THREAD } from "./params.js";
@@ -39,18 +49,11 @@ export interface Thread {
   rowIds: ReadonlySet<string>;
 }
 
-/** The reason on a key row, in words a reader reads rather than the stored enum. */
-export const KEY_ROLE_LABEL: Record<ReceptionKeyRole, string> = {
-  responds: "takes it on",
-  advances: "moves it forward",
-  dissents: "takes a different view",
-  origin: "where the claim comes from",
-};
-
 /**
- * The buttons, in the order they are drawn: the key sources first, since they
- * are the answer to *which of these matter most*, then the themes in the
- * model's order. Empty for anything but a `made` synthesis.
+ * The threads, in the order Reception's sections and Claims' buttons draw
+ * them: the key sources first, since they answer *which of these matter most*,
+ * then the themes in the model's order. Empty for anything but a `made`
+ * synthesis.
  */
 export function threadsOf(synthesis: ReceptionSynthesis | null): Thread[] {
   if (synthesis?.kind !== "made") return [];

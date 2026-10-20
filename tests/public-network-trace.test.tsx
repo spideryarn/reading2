@@ -1621,6 +1621,10 @@ describe("a signed-out browser on a shared document", () => {
     const band = host.querySelector(".mode-band");
     expect(band, "a band is open").not.toBeNull();
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    /* A row is two lines until opened (plan 261020n): the quotation is one
+       press away, and the press asks the server nothing. */
+    expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
+    await act(async () => band?.querySelector<HTMLButtonElement>(".rcp-item > button.rcp-more")?.click());
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_RECEPTION_QUOTE);
     /* Reception draws the search about the piece; the other search's row is in
@@ -1637,7 +1641,7 @@ describe("a signed-out browser on a shared document", () => {
     const claims = chips.find((chip) => chip.textContent?.startsWith("Claims"));
     expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
     await act(async () => claims?.click());
-    await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
+    await until(() => band?.querySelector('a[href="https://answers.example.org/on-claims"]') != null);
     expect(new URLSearchParams(location.search).get("sources")).toBe("claims");
     expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the

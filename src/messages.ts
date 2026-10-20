@@ -5707,16 +5707,39 @@ export function receptionWithheldOnSharedLink(search: string, n: number): string
 }
 
 /**
- * **The heading over Reception's title-only rows** — the pages that name this
- * piece by its title and neither link nor quote it. Since 2026-10-03, when the
- * identification slider that used to hide them went (src/web/reception-levels.ts).
+ * **The heading over Reception's title-only rows**, inside *Every page* — the
+ * pages that name this piece by its title and neither link nor quote it. Since
+ * 2026-10-03, when the identification slider that used to hide them went
+ * (src/web/reception-levels.ts); worded this way since plan 261020n
+ * (spya-dk4tfq), when the closed row lost its LINKS / NAMES chip and this
+ * heading became the one place the group is named.
  *
  * A heading in our voice, so it states only what was checked: the title was
- * found in the page's extract. It does not say the page is *not* about this
- * piece — a paper that cites it, and a published reply, both look like this —
- * and it does not say it is. That is the reader's call, from the row.
+ * found in the page's extract. *May be another piece* is the decoy (a page
+ * about a different document with the same title), said as a possibility: a
+ * paper that cites it, and a published reply, look exactly like this, so it
+ * does not say the page is not about this piece either. That is the reader's
+ * call, from the row.
  */
-export const RECEPTION_TITLE_ONLY = "Names this piece by its title only";
+export const RECEPTION_TITLE_ONLY = "Mentions its title only — may be another piece";
+
+/**
+ * **The same fact on one row**, on its second line wherever the row is drawn —
+ * a theme's section or *Key sources* as well as *Every page* — because only
+ * *Every page* has the heading (plan 261020n). The exception is marked, not the
+ * rule: a row that links or quotes the piece says nothing on its closed line.
+ */
+export const RECEPTION_TITLE_ONLY_FLAG = "title only, may be another piece";
+
+/**
+ * **Reception's sections** (plan 261020n): the AI's frame around its key
+ * sources and themes — the frame says whose the headings inside it are, so the
+ * panel's rule that a heading is a claim we stand behind still holds (GPT Sol's
+ * F2 on that plan) — and *Every page*, the one section in our voice, which
+ * lists every row the search kept.
+ */
+export const RECEPTION_AI_FRAME = "What the AI noticed in these sources";
+export const RECEPTION_EVERY_PAGE = "Every page";
 
 /**
  * **The button under Reception's empty sentence, when Claims has rows** — it

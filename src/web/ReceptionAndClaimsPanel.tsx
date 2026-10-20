@@ -57,12 +57,20 @@
  * The panel keeps its stored name until the deep rename
  * (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md § Stage 3).
  *
- *  - **Reception** draws the rows that link or quote the piece, then the ones
- *    that only name it under a heading saying so ([`reception-levels.ts`](reception-levels.ts)
- *    — a slider hid those until 2026-10-03, and with them the citing papers the
- *    search was changed to find). `?receptionby=` orders within each group. It
- *    ends with *Cited by* for the owner (below), and for a visitor with one
- *    link out, a Scholar search for who cites the piece.
+ *  - **Reception** is sections, since plan 261020n (spya-dk4tfq: *"The
+ *    Reception sub-mode UI is really confusing - I can't tell what's what.
+ *    Perhaps start with things default-collapsed"*). First one frame labelled
+ *    *AI · What the AI noticed in these sources*, holding a closed `<details>`
+ *    for the key sources and one for each theme, each with its count and the
+ *    theme's gist; then **Every page**, open, with the rows that link or quote
+ *    the piece and then the ones that only name it under a heading saying so
+ *    ([`reception-levels.ts`](reception-levels.ts) — a slider hid those until
+ *    2026-10-03, and with them the citing papers the search was changed to
+ *    find); then, for the owner, a closed *Cited by* (below). A visitor's ends
+ *    with one link out instead, a Scholar search for who cites the piece. A row
+ *    is in every section that names it. `?receptionby=` orders the rows inside
+ *    every section, and `?receptionthread=` no longer filters Reception: it
+ *    opens that section and scrolls the list to it (`ReceptionSections`).
  *  - **Claims** is always grouped by claim, in article order, most directly
  *    bearing first within a claim ([`reception-order.ts`](reception-order.ts)). The
  *    relevance bar (`?bears=`) is its one control.
@@ -83,43 +91,67 @@
  * before the paid search has run as well — and nothing in it can start that
  * search. It does not move Reception's count, which stays the web search's
  * rows: a list we have not read is a different kind of thing. A visitor gets
- * the Scholar link alone.
+ * the Scholar link alone. Since plan 261020n it is a section closed by
+ * default, like the AI's, with its count in its summary once its read answers:
+ * it is the readers' most trusted signal of whether a piece is taken
+ * seriously, and it was five screens down under two caveat paragraphs.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
- * **A heading is a claim we stand behind**, which is why the only headings are
- * the article's own words for a claim — located in its block before the row was
- * kept — and *Names this piece by its title only*, which is what was checked.
- * Grouping by `relation`, or by stance, would put the model's reading of a
- * stranger's page in a heading; so stance is an order and never a grouping,
- * a claim's heading carries no for/against tally, and the model's readings stay
- * inside rows.
+ * **A heading is a claim we stand behind**, which is why the only headings in
+ * our voice are the article's own words for a claim — located in its block
+ * before the row was kept — and the ones that name what was checked or where a
+ * list came from: *Every page*, *Mentions its title only — may be another
+ * piece*, *Cited by*. **The AI's themes are headings too, since plan 261020n,
+ * and that is why they are only ever drawn inside the frame labelled AI** (GPT
+ * Sol's F2 on that plan), as the threads box's were: the label says whose they
+ * are. Grouping by `relation`, or by stance, would put the model's reading of a
+ * stranger's page in a heading of ours; so stance is an order and never a
+ * grouping, no section carries a for/against tally, and the model's readings
+ * of each page stay inside rows.
  * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 1,
  * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md.
  *
- * ## What a row says, top to bottom
+ * ## What a row says: two lines, then the rest one press away
  *
- *  1. **The work: its title**, the headline and the link out; with no title,
- *     the address. Under it the site — Greg asked for *"ideally from
+ * Every row was six to eight lines and the same shape until plan 261020n, so
+ * twelve of them read as one strip in which only the title differed. Now a
+ * row is two lines until it is opened, in Reception, in Claims' older-search
+ * rows and under a checked claim alike (`Row`):
+ *
+ *  1. **The lean's icon, the star on a key source, and the work's title** —
+ *     the headline and the link out; with no title, the address. The icon is
+ *     `LEAN_APPEARANCE`'s, named for a screen reader as the AI's; the title is
+ *     the wire's, never the model's.
+ *  2. **The site and the year**, then *title only, may be another piece* on a
+ *     row that only names the piece, then **one word of the AI's, tagged
+ *     *AI***: in Reception the page's `relation` (*disputes it*), on a claim
+ *     row how directly it bears (`bears`), which is what Claims orders by. The
+ *     site stays on every row because Greg asked for *"ideally from
  *     authoritative sources"* and there is no honest way to rank authority
  *     (any list we maintain is wrong per domain, and on an ML paper the
  *     sharpest critique is routinely a pseudonymous blog), so the one
- *     authority signal a reader can judge stays on every row. The title and
- *     the site are the wire's, never the model's.
- *  2. **The model's reading, one line, labelled *AI***: `relation` and `lean`.
- *     It is what a reader decides with, so it comes before the quotation
- *     rather than after it; its paragraph (`applies`, `limits`) is behind
- *     `more`, inside a fence labelled *AI interpretation*. Nothing in the
- *     returned evidence verifies any of it, and drawing it like the quotation
- *     would claim it is as checkable (the plan's § Attribution, rule 5).
- *  3. **The quotation**, characters located in that page's own extract by the
- *     spaced matcher and stored as the *haystack's* spelling rather than the
- *     model's. It is the reader's one-action check.
+ *     authority signal a reader can judge is left where they can judge it.
+ *     Only the exception is flagged: the LINKS / NAMES chip that said the
+ *     same thing on every row went, because readers took it for a stance.
  *
- * `more` holds everything else the ⓘ hover card used to: the full title and
- * quotation, the AI's paragraph, the address, a direct row's witness, and the
- * way out. A button with
- * `aria-expanded`, so a tap and a keyboard get what a pointer gets — the card
- * was a portalled dialog a keyboard reader tabbed past (the plan's F12).
+ * A toggle opens the rest, and **the quotation comes first** after the key
+ * source's reason, so the evidence is read before the AI's reading of it:
+ *
+ *  - **The quotation**, characters located in that page's own extract by the
+ *    spaced matcher and stored as the *haystack's* spelling rather than the
+ *    model's. It is the reader's one-action check: one press, never more.
+ *  - **The model's reading, one line, labelled *AI***: `bears`, `relation` and
+ *    `lean`, then its paragraph (`applies`, `limits`) inside a fence labelled
+ *    *AI interpretation*. Nothing in the returned evidence verifies any of it,
+ *    and drawing it like the quotation would claim it is as checkable (plan
+ *    260905f § Attribution, rule 5).
+ *  - **The byline and whose reading it is**, how the page identifies the
+ *    piece in plain words with the evidence (the chip's tooltip until then),
+ *    the address, and the way out.
+ *
+ * The toggle is a button with `aria-expanded`, named for the source it opens,
+ * so a tap and a keyboard get what a pointer gets — the ⓘ card it replaced in
+ * 2026-09 was a portalled dialog a keyboard reader tabbed past (260905f's F12).
  *
  * ## The lean is a direction with an icon, never a score
  *
@@ -145,12 +177,13 @@
  * `publicReception`, plan 260929c), and a visitor's panel draws the stored rows
  * with no job, no verb and no read: nothing on it can start a search.
  */
-import { type ReactNode, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown,
+  ChevronRight,
   CircleHelp,
   Equal,
   ExternalLink,
+  Flag,
   Globe,
   LoaderCircle,
   MessagesSquare,
@@ -198,7 +231,10 @@ import {
   RECEPTION_RESPONSES_NONE,
   SOURCES_CLAIMS_NONE_SHARED,
   RECEPTION_RESPONSES_NONE_SHARED,
+  RECEPTION_AI_FRAME,
+  RECEPTION_EVERY_PAGE,
   RECEPTION_TITLE_ONLY,
+  RECEPTION_TITLE_ONLY_FLAG,
   SOURCES_CLAIMS_UNJUDGED,
   RECEPTION_UNDATED,
   RECEPTION_THREADS_FAILED,
@@ -223,6 +259,7 @@ import {
   type ReceptionCounts,
   type ReceptionKeySource,
   type ReceptionLean,
+  type ReceptionRelation,
   type IdentificationLevel,
   type ListedClaim,
   MAX_CHECK_TARGETS,
@@ -259,11 +296,11 @@ import {
 import { registryAuthorName } from "../registry-work.js";
 import { scholarUrl } from "../scholar-search.js";
 import { citerUrl } from "../citer-link.js";
-import { KEY_ROLE_LABEL, keyByRow, shownInThread, type Thread, threadsOf } from "./reception-threads.js";
+import { keyByRow, shownInThread, type Thread, threadsOf } from "./reception-threads.js";
 import { readStoredSynthesis } from "../reception-synthesis.js";
 import type { ReceptionAndClaimsView } from "./params.js";
 import { SOURCES_SUB_MODES } from "./sub-modes.js";
-import { claimsSelection, listedClaims, receptionSelection } from "./sources-counts.js";
+import { claimsSelection, listedClaims, type ReceptionSection, receptionSelection } from "./sources-counts.js";
 import { MODE_LABEL } from "../title-text.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
@@ -367,13 +404,13 @@ const NO_CLAIMS: readonly ClaimRow[] = [];
 
 /**
  * The rows that name this article in their own extract — the ones that carry
- * `identifies`, and therefore the ones with a level to put on a chip.
+ * `identifies`, and therefore the ones with a level to say in the open row.
  */
 function directOf(row: DrawnRow): DirectRow | null {
   return "articleReferenceQuote" in row ? row : null;
 }
 
-/** The witness that a page names this article, for the row's `more`. */
+/** The witness that a page names this article, for the open row. */
 function referenceOf(row: DrawnRow): string | null {
   return directOf(row)?.articleReferenceQuote ?? null;
 }
@@ -398,8 +435,9 @@ function referenceOf(row: DrawnRow): string | null {
  *
  * **The target of the lean is the row's own**, which is why the labels do not
  * name it: the article itself on a direct row, the `claimQuote` on a claim row.
- * The row says which — the identification chip on a direct row, and on a claim
- * row the claim heading it sits under. Sol's F19 —
+ * The row says which — on a direct row, the open row's words for how the page
+ * identifies the piece (the chip until plan 261020n), and on a claim row the
+ * claim heading it sits under. Sol's F19 —
  * without a stated target "leans-for" could mean a friendly register, agreement
  * with one claim, or praise for the whole piece.
  *
@@ -733,6 +771,19 @@ export function headCount(rows: readonly { url: string }[]): string {
 }
 
 /**
+ * **Reception's count in the (i)**, which is the chip's: how many rows the
+ * search kept, and where every one of them is (GPT Sol's F3 on plan 261020n).
+ * Not *on screen*: a row can be drawn in several sections, or in none that is
+ * open, so *on screen* would be either a double count or a number a reader
+ * cannot see.
+ */
+export function receptionFoundLine(n: number): string {
+  if (n === 0) return "No sources found.";
+  if (n === 1) return `1 source found; ${RECEPTION_EVERY_PAGE} lists it.`;
+  return `${n} sources found; ${RECEPTION_EVERY_PAGE} lists all of them.`;
+}
+
+/**
  * Reception's order bar's words — Glossary's register, short and lower-case. A
  * `Record`, so a fourth order cannot arrive without them.
  *
@@ -797,29 +848,63 @@ export function emptyGroupNote(counts: ReceptionCounts, group: "direct" | "claim
 }
 
 /**
- * **What a row's chip says**, and it is the name of a fact rather than a grade.
+ * **How an open row says it identifies the piece**, in plain words, and it is
+ * the name of a fact rather than a grade.
  *
  * `identificationLevel` is a lookup over a fixed strength order, never a sum
- * (src/types.ts), and these three words are that lookup made readable. They say
- * *this piece* rather than *this article* only because the panel's own sentences
- * do; nothing turns on it.
+ * (src/types.ts), and these three phrases are that lookup made readable. Until
+ * plan 261020n they were a chip on every closed row (*LINKS THIS PIECE*), and
+ * readers took the chip for a stance; now the closed row flags only the
+ * exception (`RECEPTION_TITLE_ONLY_FLAG`) and the open row says which.
  *
  * **All three are drawn identically.** They are ordered — a link is stronger
- * evidence than a title — but a chip that got redder as the evidence got weaker
+ * evidence than a title — but words that got redder as the evidence got weaker
  * would be a scale, and a scale over one fact is the composite this feature
- * refused: docs/project/quotes.md, and the plan's § 2. The order shows in the
- * layout instead: the *names* rows sit under their own heading
+ * refused: docs/project/quotes.md, and plan 260905f's § 2. The order shows in
+ * the layout instead: the *names* rows sit under their own heading
  * (reception-levels.ts).
  */
 const IDENTIFICATION_LABEL: Record<IdentificationLevel, string> = {
-  linked: "Links this piece",
-  quoted: "Quotes this piece",
-  named: "Names this piece",
+  linked: "Links to this article",
+  quoted: "Quotes this article",
+  named: "Mentions its title only",
 };
 
 /**
+ * **The one AI word on a Reception row's second line**: `relation` as a phrase
+ * about the piece, so a row reads *AI: disputes it* rather than a bare verb. A
+ * `Record`, so a sixth relation cannot arrive without its words. Drawn as a
+ * fixed word reporting the model's verdict, so in the app's face, as
+ * `.rcp-relation` always was (voices.css, 261002b § 2).
+ */
+const RELATION_WORD: Record<ReceptionRelation, string> = {
+  disputes: "disputes it",
+  qualifies: "qualifies it",
+  extends: "extends it",
+  corroborates: "corroborates it",
+  unclear: "unclear",
+};
+
+/**
+ * A stored relation came off JSONB unchecked. Keep an unknown value inside the
+ * fixed vocabulary rather than drawing model- or hand-written text in the UI
+ * face; `unclear` is the vocabulary's honest unknown, not a failure state.
+ */
+function storedRelation(relation: unknown): ReceptionRelation {
+  return typeof relation === "string" && Object.hasOwn(RELATION_WORD, relation)
+    ? (relation as ReceptionRelation)
+    : "unclear";
+}
+
+/** The closed row's phrase for a checked stored relation. */
+function relationWord(relation: unknown): string {
+  return RELATION_WORD[storedRelation(relation)];
+}
+
+/**
  * **Every signal this row earned, as sentences** — the tooltip Greg asked for
- * by name, 2026-09-06: *"a tooltip for each showing the reasons"*.
+ * by name, 2026-09-06: *"a tooltip for each showing the reasons"*, and since
+ * plan 261020n a list in the open row, under the plain words above.
  *
  * It is **the evidence itself and not a gloss on it**: the address that matched,
  * the article's own words found in that page's extract, the title or byline it
@@ -827,10 +912,10 @@ const IDENTIFICATION_LABEL: Record<IdentificationLevel, string> = {
  * which is the whole reason the level is a name and not a number.
  *
  * **The `quoted` signal's block id is deliberately left out.** It is a location
- * in *our* article, and this card cannot be pointed into — `Tooltip` sets
- * `handleClose: null`, so nothing in here can be clicked — which would make it
- * an identifier the reader can neither follow nor use. The quotation is the
- * evidence; the id is machinery.
+ * in *our* article, drawn as plain text in a list of sentences — it was a
+ * tooltip nothing in could be clicked, and is text in the open row now — which
+ * would make it an identifier the reader can neither follow nor use. The
+ * quotation is the evidence; the id is machinery.
  *
  * A string list rather than markup so a test can read what a reader reads.
  */
@@ -876,8 +961,8 @@ function describeSignal(signal: PublicIdentificationSignal): string {
  * bottom.
  *
  * The floor fires on a single 8-word window, so a real hit on a long article
- * rounds to zero — and *"0% of the article turns up here"* under a chip that
- * says the page quotes it reads as a contradiction, or as a bug.
+ * rounds to zero — and *"0% of the article turns up here"* under words that
+ * say the page quotes it reads as a contradiction, or as a bug.
  */
 function share(ratio: number): string {
   if (!(ratio > 0)) return "0%";
@@ -1044,8 +1129,10 @@ interface Props {
    */
   articleYear: number | null;
   /**
-   * Which thread narrows the list — `?receptionthread=`, a theme id or `key`, or
-   * `null` for none (reception-threads.ts). A visitor's Reception payload carries the
+   * `?receptionthread=`, a theme id or `key`, or `null` for none
+   * (reception-threads.ts): in Claims the thread that narrows the list, and in
+   * Reception, since plan 261020n, the section to open and scroll to — it
+   * filters nothing there. A visitor's Reception payload carries the
    * synthesis since 2026-10-01 unless the public boundary withheld a row
    * (src/public/dto.ts § `publicSynthesis`), and then there is nothing to name.
    */
@@ -1137,40 +1224,102 @@ export function ReceptionAndClaimsPanel({
   const keyRows = useMemo(() => keyByRow(synthesis), [synthesis]);
 
   /**
-   * **Reception: the rows about this piece, in two groups, every one on
-   * screen.** No bar: the identification slider that stood here hid the
-   * title-only rows by default, and those are the citing papers
-   * (reception-levels.ts).
+   * **Reception: every stored row about this piece, and the AI's sections
+   * over them** (plan 261020n). No bar: the identification slider that stood
+   * here hid the title-only rows by default, and those are the citing papers
+   * (reception-levels.ts). And no filter: a thread is a section now, so
+   * nothing the reader sets can take a row off *Every page*.
    *
-   * Which order is drawn and which are offered are asked of the groups the
-   * **thread left on screen**: an order whose distinction depended on rows
-   * outside the thread would be an inert button over this list.
+   * Which order is drawn and which are offered are asked of *Every page*'s
+   * two groups, which hold every row: an order that changes nothing there
+   * changes nothing in a section either, since a section's rows are some of
+   * the same rows.
    */
-  const selected = useMemo(
-    () => receptionSelection(reception, threads, threadParam),
-    [reception, threads, threadParam],
-  );
-  const receptionThreads = selected.threads;
-  const receptionThread = selected.thread;
-  const receptionShown = selected.shown;
-  const sections = useMemo(() => receptionSections(receptionShown), [receptionShown]);
-  const shownSections = useMemo(() => [sections.confirmed, sections.titleOnly], [sections]);
+  const selected = useMemo(() => receptionSelection(reception, threads), [reception, threads]);
+  const receptionRows = selected.rows;
+  const levels = useMemo(() => receptionSections(receptionRows), [receptionRows]);
+  const everyLevels = useMemo(() => [levels.confirmed, levels.titleOnly], [levels]);
   const order = useMemo(
-    () => effectiveReceptionOrder(shownSections, requestedOrder, articleYear),
-    [shownSections, requestedOrder, articleYear],
+    () => effectiveReceptionOrder(everyLevels, requestedOrder, articleYear),
+    [everyLevels, requestedOrder, articleYear],
   );
   const orders = useMemo(
-    () => receptionOrderOptions(shownSections, articleYear),
-    [shownSections, articleYear],
+    () => receptionOrderOptions(everyLevels, articleYear),
+    [everyLevels, articleYear],
   );
   const confirmed = useMemo(
-    () => orderReceptionRows(sections.confirmed, order, articleYear),
-    [sections, order, articleYear],
+    () => orderReceptionRows(levels.confirmed, order, articleYear),
+    [levels, order, articleYear],
   );
   const titleOnly = useMemo(
-    () => orderReceptionRows(sections.titleOnly, order, articleYear),
-    [sections, order, articleYear],
+    () => orderReceptionRows(levels.titleOnly, order, articleYear),
+    [levels, order, articleYear],
   );
+
+  /**
+   * **Which of Reception's AI sections are open** — the panel's own, and not
+   * stored: url-state.md keeps in the address what a reader would want a link
+   * to carry, and a fold is not that (the plan's decision). Every one starts
+   * closed, so the outline is the first thing on screen; *Every page* starts
+   * open, so every stored row is drawn before any press (postmortem 261003h,
+   * GPT Sol's F1 on plan 261020n).
+   */
+  const [openSections, setOpenSections] = useState<ReadonlySet<string>>(() => new Set());
+  const [everyOpen, setEveryOpen] = useState(true);
+  const onSection = (id: string, open: boolean) =>
+    setOpenSections((was) => {
+      if (was.has(id) === open) return was;
+      const next = new Set(was);
+      if (open) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  /**
+   * **`?receptionthread=` opens its section and brings it into view** — an
+   * old filter link, or a way back from elsewhere — on arrival and on every
+   * later change of the parameter (GPT Sol's F8). Once per value: a re-render
+   * with the same address does not reopen what the reader folded or drag the
+   * list back. An id with no section in Reception — a stale link, or a theme
+   * of an older search's claim rows (F4) — does nothing, and is tried again
+   * only when the sections change, which is how a link that arrives before
+   * the search has been read still lands.
+   */
+  const listScroller = useRef<HTMLDivElement>(null);
+  const appliedThread = useRef<string | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<{ id: string } | null>(null);
+  useEffect(() => {
+    if (view !== "reception" || threadParam === null) {
+      appliedThread.current = null;
+      return;
+    }
+    if (appliedThread.current === threadParam) return;
+    if (!selected.sections.some((section) => section.thread.id === threadParam)) {
+      /* A stale value is still a parameter change. Forget the previously
+         applied id so returning to it later applies it again; leave this null
+         so the same value is also retried if a late search adds its section. */
+      appliedThread.current = null;
+      return;
+    }
+    appliedThread.current = threadParam;
+    setOpenSections((was) => (was.has(threadParam) ? was : new Set(was).add(threadParam)));
+    /* A fresh object, so the same section asked for again still scrolls. */
+    setScrollTarget({ id: threadParam });
+  }, [view, threadParam, selected.sections]);
+  /* **The list's own scroller, never the page.** `scrollIntoView` would move
+     every scrollable ancestor, the window included, and on a phone the band
+     sits over the prose. In a layout effect, after the commit that opened the
+     section, so the distance is measured with its rows drawn. */
+  useLayoutEffect(() => {
+    if (scrollTarget === null) return;
+    const box = listScroller.current;
+    if (box === null) return;
+    const target = [...box.querySelectorAll<HTMLElement>("[data-reception-section]")].find(
+      (el) => el.dataset.receptionSection === scrollTarget.id,
+    );
+    if (target === undefined) return;
+    box.scrollTop += target.getBoundingClientRect().top - box.getBoundingClientRect().top;
+  }, [scrollTarget]);
 
   /**
    * **Claims: the relevance bar, applied once, then the thread, then the
@@ -1238,9 +1387,10 @@ export function ReceptionAndClaimsPanel({
     },
   });
 
-  /* **The rows on screen**: the sub-mode's own, through its bar and its thread.
-     The head count in the (i) reads this. */
-  const rows: readonly ReceptionRow[] = view === "reception" ? receptionShown : claimsShown;
+  /* **The rows on screen**: Reception's every stored row (*Every page*), and
+     Claims' through its bar and its thread. The head count in the (i) reads
+     this. */
+  const rows: readonly ReceptionRow[] = view === "reception" ? receptionRows : claimsShown;
 
   /* **What this sub-mode's search came back with, when that was nothing** —
      asked of the stored rows, so a list the reader's own bar or thread emptied
@@ -1253,8 +1403,9 @@ export function ReceptionAndClaimsPanel({
   /* **Each search's losses**, for the (i) — both searches', whichever sub-mode
      is open, because provenance is about the run rather than the screen. Each
      is handed the rows its own sub-mode shows: `sourcesNote` counts the pages
-     that *contribute to the rows shown*, and a bar or a thread decides which
-     those are (GPT Sol's review of 260930j, F6). */
+     that *contribute to the rows shown*, and in Claims a bar or a thread
+     decides which those are (GPT Sol's review of 260930j, F6). Reception shows
+     every stored row, on *Every page*. */
   const foot = useMemo(() => {
     if (reception === null) return [];
     /* A visitor's foot is what the public boundary withheld, and only that:
@@ -1263,10 +1414,10 @@ export function ReceptionAndClaimsPanel({
     if (isShared(reception)) return withheldLines(reception);
     const claims = reception.claims;
     return footLines({
-      direct: { rows: receptionShown, counts: reception.direct.counts },
+      direct: { rows: receptionRows, counts: reception.direct.counts },
       claims: notRun(claims) ? null : { rows: claimsShown, counts: claims.counts },
     });
-  }, [reception, receptionShown, claimsShown]);
+  }, [reception, receptionRows, claimsShown]);
   /* **This debate's press did not search for claims** (`debate/7` on). The
      (i) says so for both arms, where the claims search's own sentences would
      otherwise be; a debate stored before then shows its claim rows under
@@ -1307,12 +1458,16 @@ export function ReceptionAndClaimsPanel({
      2026-10-01 (spya-ucu35y, plan 261001m): the count, the foot lines that
      were under the last row, the extracts-only sentence, and when the search
      ran. Since 2026-10-03 also what each sub-mode is, which docs/project/mode.md
-     keeps off the panel (no description line under a control). The count is
-     **the rows on screen**, so it moves with the sub-mode, the bar and the
-     thread; `headCount` says why it is excerpts *and* pages. It and the foot
-     lines are different facts: **what is on screen**, and **pages each search
-     returned**, each naming its own search. A visitor's debate keeps
-     `searchedAt` and nothing else of provenance (src/public-types.ts). */
+     keeps off the panel (no description line under a control). In Claims the
+     count is **the rows on screen**, so it moves with the bar and the thread;
+     `headCount` says why it is excerpts *and* pages. In Reception, where a
+     row can be drawn in several sections, *on screen* would count it as many
+     times or say nothing a reader could check, so it is the rows found and
+     where they all are (`receptionFoundLine`, GPT Sol's F3 on plan 261020n),
+     the chip's number. It and the foot lines are different facts: **what was
+     kept**, and **pages each search returned**, each naming its own search. A
+     visitor's debate keeps `searchedAt` and nothing else of provenance
+     (src/public-types.ts). */
   const made = owner?.reception ?? null;
   /* The owner's *Cited by* is on screen with or without a stored search, so
      where it comes from and what is sent is said in both. */
@@ -1320,7 +1475,7 @@ export function ReceptionAndClaimsPanel({
   const about =
     reception && ready ? (
       <>
-        <p>{headCount(rows)} on screen.</p>
+        <p>{view === "reception" ? receptionFoundLine(receptionRows.length) : `${headCount(rows)} on screen.`}</p>
         {RECEPTION_AND_CLAIMS_VIEWS.map((v) => (
           <p key={v}>
             {SOURCES_SUB_MODES[v].label}: {SOURCES_SUB_MODES[v].description}.
@@ -1344,12 +1499,6 @@ export function ReceptionAndClaimsPanel({
       aboutCiters
     );
 
-  /* The sub-mode on screen's threads, the one selected there, and the rows its
-     counts are out of: Claims' are the rows its bar left, Reception's every
-     stored row, since nothing there hides one. */
-  const viewThreads = view === "reception" ? receptionThreads : claimThreads;
-  const viewThread = view === "reception" ? receptionThread : claimThread;
-  const beforeThread: readonly ReceptionRow[] = view === "reception" ? directRows : barredClaims.visible;
   const scholar = articleTitle?.trim() ? scholarUrl(articleTitle.trim()) : null;
 
   /**
@@ -1510,7 +1659,7 @@ export function ReceptionAndClaimsPanel({
             />
           )}
 
-          <div className="rcp-scroll">
+          <div className="rcp-scroll" ref={listScroller}>
             {/* **The negative result**, which on a famous piece with no
                 reception has to read as a finding — and, under Reception's,
                 the way to what the other search did find. */}
@@ -1527,14 +1676,15 @@ export function ReceptionAndClaimsPanel({
               </button>
             )}
 
-            {/* **The threads, above the rows and inside the scroller** — they
-                are a reading of the list, so they scroll with it rather than
-                pinning over it like the bar. Plan 260930j. */}
-            {viewThreads.length > 0 && (
+            {/* **Claims' threads, above the rows and inside the scroller** —
+                they are a reading of the list, so they scroll with it rather
+                than pinning over it like the bar. Plan 260930j. Reception's
+                are sections since plan 261020n (`ReceptionSections`, below). */}
+            {view === "claims" && claimThreads.length > 0 && (
               <Threads
-                threads={viewThreads}
-                selected={viewThread}
-                visible={beforeThread}
+                threads={claimThreads}
+                selected={claimThread}
+                visible={barredClaims.visible}
                 shown={rows}
                 onThread={onThread}
               />
@@ -1549,12 +1699,33 @@ export function ReceptionAndClaimsPanel({
 
             {view === "reception" ? (
               <>
-                <ReceptionList confirmed={confirmed} titleOnly={titleOnly} keyRows={keyRows} />
+                {selected.sections.length > 0 && (
+                  <ReceptionSections
+                    sections={selected.sections}
+                    order={order}
+                    articleYear={articleYear}
+                    keyRows={keyRows}
+                    open={openSections}
+                    onToggle={onSection}
+                  />
+                )}
+                {receptionRows.length > 0 && (
+                  <EveryPage
+                    count={receptionRows.length}
+                    confirmed={confirmed}
+                    titleOnly={titleOnly}
+                    titleOnlyCount={levels.titleOnly.length}
+                    keyRows={keyRows}
+                    open={everyOpen}
+                    onToggle={setEveryOpen}
+                  />
+                )}
                 {/* **Who cites it.** A paper that cites the piece and says
                     something about it is reception, and the search looks for
                     those. The owner then gets the list itself, from OpenAlex
-                    (`citedBy`, which ends with the Scholar link). A visitor
-                    gets no list in v1, so for them it is still one link out —
+                    (`citedBy`, a closed section that ends with the Scholar
+                    link). A visitor gets no list in v1, so for them it is still
+                    one quiet last line out —
                     a search by title, never a guessed address (plan 261003f's
                     rule for author links) — and it is there when Reception
                     kept nothing, which is when it is most use. `noreferrer`
@@ -1748,14 +1919,31 @@ const CITERS_SHOWN = 10;
  * **Every outcome has a sentence**, so a missing list is never a blank, and
  * the Scholar link stays under all of them: it is the way on when we have
  * nothing, and a second opinion when we have something.
+ *
+ * **A closed section since plan 261020n**, the last of Reception's, with the
+ * list's length in its summary once the read has answered with a list: the
+ * number of rows under it, not OpenAlex's count, which the first sentence
+ * inside says in its own words (a count that disagrees with the list under it
+ * is threshold.ts's worst failure). Its caveats stay inside, every one of
+ * them, and where the list comes from is in the band's (i) (`CITERS_ABOUT`).
+ * Its content is drawn closed as well as open: unlike an AI section, it is
+ * the only place these rows are.
  */
 function CitedBy({ citers, scholar }: { citers: UseCiters; scholar: string | null }) {
-  const headId = useId();
+  const [open, setOpen] = useState(false);
+  const found = citers.result?.kind === "found" ? citers.result.citers.length : null;
   return (
-    <section className="rcp-group rcp-citers" aria-labelledby={headId}>
-      <h3 id={headId} className="rcp-group-head">
-        {CITERS_HEADING}
-      </h3>
+    <details
+      className="rcp-section rcp-citers"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="rcp-section-head">
+        <span className="rcp-section-label">
+          <span className="rcp-section-name">{CITERS_HEADING}</span>
+          {found !== null && <span className="rcp-section-count">{found}</span>}
+        </span>
+      </summary>
       {citers.result === null ? (
         <p className="rcp-citers-note" role="status">
           <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" /> {CITERS_LOADING}
@@ -1769,7 +1957,7 @@ function CitedBy({ citers, scholar }: { citers: UseCiters; scholar: string | nul
           <ExternalLink size={11} aria-hidden="true" />
         </a>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -2069,9 +2257,11 @@ function OrderBar({
 }
 
 /**
- * **The threads box**: the key sources and the themes the sources share, each
- * a button that narrows the list to its rows — plan 260930j, Greg's *"highlight
- * key themes from other people and commentary … and key nodes"*.
+ * **Claims' threads box**: the key sources and the themes the sources share,
+ * each a button that narrows the list to its rows — plan 260930j, Greg's
+ * *"highlight key themes from other people and commentary … and key nodes"*.
+ * Reception drew it too until plan 261020n, which made its threads sections
+ * (`ReceptionSections`): readers took the box for a table of contents.
  *
  * `aria-pressed` toggle buttons in a group, the order bar's shape. One at a
  * time: pressing the pressed one clears it, as does *show all*. A thread the
@@ -2225,8 +2415,117 @@ function ReceptionGroups({
 }
 
 /**
- * **Reception's list: the pages that link or quote this piece, then the ones
- * that only name it, under a heading that says so.**
+ * **The AI's sections of Reception, in one frame that says whose they are** —
+ * plan 261020n. The key sources first, when the synthesis picked any, since
+ * they answer *which of these matter most*; then each theme in the model's
+ * order (`threadsOf`), scoped to Reception's own rows (`receptionSelection`).
+ *
+ * ```
+ *  ┌ AI  What the AI noticed in these sources ──────┐
+ *  │ ▸ ☆ Key sources                             3  │
+ *  │ ▸ Seeming versus being                      3  │
+ *  │     Three sources pick up the essay's point…   │
+ *  └────────────────────────────────────────────────┘
+ * ```
+ *
+ * Each section is a native `<details>`, Claims' `rcp-group` idiom: the
+ * browser's own disclosure, so a keyboard and a screen reader get it for
+ * free, and the summary carries the name, the count and the theme's gist.
+ * **Closed by default, and a closed one draws no rows**: every row it would
+ * hold is on *Every page* under it, open, so nothing is hidden by the fold
+ * (postmortem 261003h) and the page does not carry every row twice.
+ *
+ * **Every string a theme brings is the model's**, drawn as text in the
+ * model's face (fonts.md); *Key sources* and the counts are ours. The frame's
+ * label is what lets a theme's name be a heading at all (the file header § A
+ * heading is a claim we stand behind).
+ *
+ * Inside a section the rows that link or quote the piece come first and the
+ * title-only ones after them, each run in the chosen order; there is no
+ * heading between them, so a title-only row says so on its own second line.
+ * Under *date* the second run has no marker for the article's year: two
+ * markers in one short list would read as two places in time.
+ */
+function ReceptionSections({
+  sections,
+  order,
+  articleYear,
+  keyRows,
+  open,
+  onToggle,
+}: {
+  sections: readonly ReceptionSection[];
+  order: ReceptionOrder;
+  articleYear: number | null;
+  keyRows: ReadonlyMap<string, ReceptionKeySource>;
+  open: ReadonlySet<string>;
+  onToggle(id: string, open: boolean): void;
+}) {
+  return (
+    <section className="rcp-sections-ai" aria-label={RECEPTION_AI_FRAME}>
+      <h3 className="rcp-sections-ai-head">
+        <span className="rcp-ai-tag" data-tip="The AI's reading of the sources below — nothing in what the search returned checks it">
+          AI
+        </span>
+        {RECEPTION_AI_FRAME}
+      </h3>
+      {sections.map(({ thread, rows }) => {
+        const isOpen = open.has(thread.id);
+        return (
+          <details
+            key={thread.id}
+            className={`rcp-section ${thread.kind === "key" ? "rcp-section-key" : "rcp-section-theme"}`}
+            data-reception-section={thread.id}
+            open={isOpen}
+            onToggle={(e) => onToggle(thread.id, e.currentTarget.open)}
+          >
+            <summary className="rcp-section-head">
+              <span className="rcp-section-label">
+                {thread.kind === "key" && <Star size={12} aria-hidden="true" className="rcp-key-star" />}
+                <span className="rcp-section-name">{thread.label}</span>
+                <span
+                  className="rcp-section-count"
+                  data-tip={`${rows.length} ${rows.length === 1 ? "source" : "sources"} here, all of them also on ${RECEPTION_EVERY_PAGE}`}
+                >
+                  {rows.length}
+                </span>
+              </span>
+              {thread.gist && <span className="rcp-section-gist">{thread.gist}</span>}
+            </summary>
+            {isOpen && <SectionRows rows={rows} order={order} articleYear={articleYear} keyRows={keyRows} />}
+          </details>
+        );
+      })}
+    </section>
+  );
+}
+
+/** One AI section's rows: those that link or quote the piece, then the title-only ones, each in the order chosen. */
+function SectionRows({
+  rows,
+  order,
+  articleYear,
+  keyRows,
+}: {
+  rows: readonly DirectRow[];
+  order: ReceptionOrder;
+  articleYear: number | null;
+  keyRows: ReadonlyMap<string, ReceptionKeySource>;
+}) {
+  const levels = receptionSections(rows);
+  return (
+    <>
+      <ReceptionGroups groups={orderReceptionRows(levels.confirmed, order, articleYear)} keyRows={keyRows} />
+      <ReceptionGroups groups={orderReceptionRows(levels.titleOnly, order, null)} keyRows={keyRows} />
+    </>
+  );
+}
+
+/**
+ * **Every page: every row the search kept, the pages that link or quote this
+ * piece and then the ones that only name it, under a heading that says so.**
+ * The one section in our voice, and the one open by default — the place
+ * nothing depends on a theme to be found (plan 261020n, GPT Sol's F1).
  *
  * The first group has no heading: it is what the sub-mode is. **The second
  * always has one**, including when it is the only group — a page that names
@@ -2235,25 +2534,42 @@ function ReceptionGroups({
  * reception. Under its heading it is on screen and flagged; so is the citing
  * paper and the published reply, which look exactly the same to us.
  */
-function ReceptionList({
+function EveryPage({
+  count,
   confirmed,
   titleOnly,
+  titleOnlyCount,
   keyRows,
+  open,
+  onToggle,
 }: {
+  count: number;
   confirmed: readonly ReceptionGroup<DirectRow>[];
   titleOnly: readonly ReceptionGroup<DirectRow>[];
+  titleOnlyCount: number;
   keyRows: ReadonlyMap<string, ReceptionKeySource>;
+  open: boolean;
+  onToggle(open: boolean): void;
 }) {
   return (
-    <>
+    <details className="rcp-section rcp-every" open={open} onToggle={(e) => onToggle(e.currentTarget.open)}>
+      <summary className="rcp-section-head">
+        <span className="rcp-section-label">
+          <span className="rcp-section-name">{RECEPTION_EVERY_PAGE}</span>
+          <span className="rcp-section-count">{count}</span>
+        </span>
+      </summary>
       <ReceptionGroups groups={confirmed} keyRows={keyRows} />
       {titleOnly.length > 0 && (
         <section className="rcp-group rcp-title-only">
-          <h3 className="rcp-group-head">{RECEPTION_TITLE_ONLY}</h3>
+          <h3 className="rcp-group-head">
+            {RECEPTION_TITLE_ONLY}
+            <span className="rcp-group-count"> · {titleOnlyCount}</span>
+          </h3>
           <ReceptionGroups groups={titleOnly} keyRows={keyRows} />
         </section>
       )}
-    </>
+    </details>
   );
 }
 
@@ -2835,46 +3151,6 @@ function CitedHere({ blockId, citedIn }: { blockId: BlockId; citedIn: CitedInPar
 }
 
 /**
- * **The chip on a row about this piece**: how it identifies the article, with
- * every signal it earned in a tooltip.
- *
- * Claim rows have no chip since 2026-09-29. Their *On what it claims* pill said
- * the same thing on every row, and what it stood for — *this answers a claim,
- * not the piece* — is said by the claim itself, on the row or as its heading.
- * The chip stays because it has evidence behind it: *this page is about this
- * piece* and *this page argues about the same thing* are different kinds of
- * relevance, and the chip is the one of the two that needed proving.
- */
-function IdentificationChip({ row }: { row: DirectRow }) {
-  const level = identificationLevel(row);
-  const evidence = identificationEvidence(row);
-  return (
-    <Tooltip
-      placement="bottom"
-      keepSide
-      className="rcp-mark-card"
-      content={
-        <>
-          <span className="rcp-mark-card-head">How this page identifies the article</span>
-          <ul className="rcp-mark-card-list">
-            {evidence.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </>
-      }
-    >
-      {/* A real button, so it is a tab stop and `useFocus` gives a keyboard
-          reader the same card a pointer gets. It does nothing on press —
-          `cursor: help` says so: this is a reveal, not a control. */}
-      <button type="button" className={`rcp-mark rcp-mark-${level}`}>
-        {IDENTIFICATION_LABEL[level]}
-      </button>
-    </Tooltip>
-  );
-}
-
-/**
  * **Is the search engine's title cut short?** Its own ellipsis, three dots or
  * one — *"Memory Sources Associated with REM and NREM Dream Reports ..."*.
  */
@@ -2948,7 +3224,8 @@ export function rowWork(row: DrawnRow): {
 
 /**
  * **The authors on the byline**: all of them up to three, and past three the
- * first two and *et al.* — the full list is in `more`.
+ * first two and *et al.* — on a *Cited by* row. A source's open row lists
+ * every author (`RowDetail`).
  */
 export function bylineAuthors(authors: readonly string[]): string {
   if (authors.length <= 3) return authors.join(", ");
@@ -2956,9 +3233,12 @@ export function bylineAuthors(authors: readonly string[]): string {
 }
 
 /**
- * **One source**, in the order the file header gives: what the work is, the
- * AI's reading of it, the quotation — and `more`. A claim row says nothing of
- * the claim it answers: it is always under that claim's heading (`ClaimsList`).
+ * **One source, two lines until opened** — in the order the file header gives
+ * (§ What a row says). Line one: the lean's icon, the star on a key source, the
+ * title and the link out. Line two: the site, the year, the title-only flag,
+ * and one AI-tagged word. Everything else is `RowDetail`, behind the toggle.
+ * A claim row says nothing of the claim it answers: it is always under that
+ * claim's heading (`ClaimsList`).
  */
 function Row({
   row,
@@ -2982,150 +3262,147 @@ function Row({
   const direct = directOf(row);
   const bears = readBears(row);
   const work = rowWork(row);
-  const byline = [
-    work.authors.length > 0 ? bylineAuthors(work.authors) : null,
-    work.year === null ? null : String(work.year),
-  ].filter((part): part is string => part !== null);
-  const registryBylineFields = work.registryFields.filter(
-    (field): field is "authors" | "year" => field === "authors" || field === "year",
-  );
-  const aiBylineFields = [
-    work.authors.length > 0 && !work.registryFields.includes("authors") ? "authors" : null,
-    work.year !== null && !work.registryFields.includes("year") ? "year" : null,
-  ].filter((field): field is "authors" | "year" => field !== null);
-  const aiBylineNote =
-    aiBylineFields.length === 0
+  /* **Only the exception is flagged** (plan 261020n): a row that only names
+     the piece, wherever it is drawn — a theme's section has no heading to say
+     so. A claim row has no identification at all (`directOf`). */
+  const titleOnly = direct !== null && identificationLevel(direct) === "named";
+  /* The year's provenance, on hover: a registry's record, or the AI's reading
+     of the page, which was found in its extract but not checked as its date. */
+  const yearNote =
+    work.year === null
       ? null
-      : registryBylineFields.length === 0
-        ? "As the AI read it off the page — found in the page's extract, not checked as its byline"
-        : receptionWorkFieldsNote(aiBylineFields);
-  return (
-    <li className={`rcp-item${open ? " open" : ""}${keySource ? " key" : ""}`}>
-      {/* **A key source says so first, and why** — above the title, because it
-          is the reason a reader would look at this row before the others.
-          Labelled AI like the reading below it: nothing checks the pick.
-          Plan 260930j. */}
-      {keySource && (
-        <p className="rcp-key-line">
-          <span className="rcp-ai-tag" data-tip="The AI's pick — nothing in what the search returned checks it">
-            AI
-          </span>
-          <Star size={12} aria-hidden="true" className="rcp-key-star" />
-          <span className="rcp-key-label">Key source · {KEY_ROLE_LABEL[keySource.role]}</span>
-          <span className="rcp-key-why">{keySource.why}</span>
-        </p>
-      )}
-      {/* **The work is the headline**, and it is the link out — a real `<a href>`
-          so the browser's own affordances work (the status bar, a middle
-          click). `noreferrer` as well as `noopener`: this is a stranger's page
-          and the address of the article being read is not its business.
-          Clamped to two lines by CSS alone, so the whole title is still in the
-          accessibility tree; `more` unclamps it. */}
-      {/* `rcp-title-ai` only when the headline is the model's reading of the
-          page; a registry's or search engine's title, or the address, stays UI. */}
-      <a
-        className={work.titleIsAI ? "rcp-title rcp-title-ai" : "rcp-title"}
-        href={row.url}
-        target="_blank"
-        rel="noreferrer noopener"
-        data-tip={row.url}
-      >
-        {work.headline}
-        <ExternalLink size={11} aria-hidden="true" />
-      </a>
-
-      {/* The small line under the title: *authors · year · site*. The authors
-          and year are the AI's reading of the page, so they are drawn quieter
-          than the site and say so on hover — the site is the wire's, and it
-          stays because it is the one authority signal a reader can judge. Left
-          off when the headline is already the address. */}
-      {(byline.length > 0 || !work.headlineIsAddress || direct) && (
-        <p className="rcp-meta">
-          {byline.length > 0 && (
-            <span
-              className="rcp-byline"
-              data-tip={[
-                work.registry !== null && registryBylineFields.length > 0
-                  ? receptionRegistryNote(work.registry, registryBylineFields)
-                  : null,
-                aiBylineNote,
-              ].filter((note): note is string => note !== null).join(" ")}
-            >
-              {byline.join(" · ")}
-              {work.registry !== null && registryBylineFields.length > 0 && (
-                <span className="tw:sr-only"> — {receptionRegistryNote(work.registry, registryBylineFields)}</span>
-              )}
-            </span>
-          )}
-          {byline.length > 0 && !work.headlineIsAddress && (
-            <span aria-hidden="true" className="rcp-dot">
-              ·
-            </span>
-          )}
-          {!work.headlineIsAddress && <span className="rcp-site">{hostOf(row.url)}</span>}
-          {direct && <IdentificationChip row={direct} />}
-        </p>
-      )}
-
-      {/* **The AI's reading, one line and labelled.** Up here because it is what
-          a reader decides with; the paragraph behind it is in `more`, inside
-          the fence. Separate words, not merged: *"qualifies · Could not tell"*
-          is an honest pair of answers rather than a contradiction. `bears`
-          leads when the AI gave one — it is what a claim's rows are ordered by. */}
-      <p className="rcp-ai-line">
+      : work.registry !== null && work.registryFields.includes("year")
+        ? receptionRegistryNote(work.registry, ["year"])
+        : receptionWorkFieldsNote(["year"]);
+  const meta: { key: string; node: ReactNode }[] = [];
+  if (!work.headlineIsAddress) meta.push({ key: "site", node: <span className="rcp-site">{hostOf(row.url)}</span> });
+  if (work.year !== null) {
+    meta.push({
+      key: "year",
+      node: (
+        <span className="rcp-year" data-tip={yearNote ?? undefined}>
+          {work.year}
+        </span>
+      ),
+    });
+  }
+  if (titleOnly) {
+    meta.push({
+      key: "flag",
+      node: (
+        <span className="rcp-flag">
+          <Flag size={11} aria-hidden="true" />
+          {RECEPTION_TITLE_ONLY_FLAG}
+        </span>
+      ),
+    });
+  }
+  /* **The one AI word**: a Reception row's `relation`, said of the piece; a
+     claim row's `bears`, which is what Claims orders by, or that the AI gave
+     none. The full reading is the open row's. */
+  meta.push({
+    key: "ai",
+    node: (
+      <span className="rcp-ai-word">
         <span className="rcp-ai-tag" data-tip="The AI's reading of this page — nothing in what the search returned checks it">
           AI
         </span>
-        {(bears !== null || direct === null) && (
-          <>
-            <span className="rcp-bears">{bears === null ? SOURCES_CLAIMS_UNJUDGED : BEARS_LABEL[bears]}</span>
-            <span aria-hidden="true" className="rcp-dot">
-              ·
-            </span>
-          </>
+        {direct !== null ? (
+          <span className="rcp-relation">{relationWord(row.relation)}</span>
+        ) : (
+          <span className="rcp-bears">{bears === null ? SOURCES_CLAIMS_UNJUDGED : BEARS_LABEL[bears]}</span>
         )}
-        <span className="rcp-relation">{row.relation}</span>
-        <span aria-hidden="true" className="rcp-dot">
-          ·
-        </span>
-        <span className={`rcp-lean rcp-lean-${look.tone}`}>
-          <Icon size={12} aria-hidden="true" />
-          {look.label}
-        </span>
-      </p>
-
-      {/* Characters we located in that page's own extract. A `<blockquote>`
-          because that is what it is, and rendered as text: this is a slice of a
-          stranger's page and nothing here may ever become markup. Three lines
-          until `more`. */}
-      <blockquote className="rcp-quote">“{row.sourceQuote}”</blockquote>
-
+      </span>
+    ),
+  });
+  return (
+    <li className={`rcp-item${open ? " open" : ""}${keySource ? " key" : ""}`}>
+      {/* **The toggle**, first in the row so it lines up down the list. Its
+          name says *which* source — a list of twelve buttons all called
+          "more" is no list to a screen reader — and starts with the word a
+          voice-control reader would say. */}
       <button
         type="button"
         className="rcp-more"
         aria-expanded={open}
         aria-controls={detailId}
+        data-tip={open ? "Show less" : "Show the quotation and the rest"}
         onClick={() => setOpen((was) => !was)}
       >
-        {/* The name says *which* source — a list of twelve buttons all called
-            "more" is no list to a screen reader — and still starts with the
-            word on screen, so a voice-control reader can say what they see. */}
-        {open ? "less" : "more"}
-        <span className="tw:sr-only"> about “{work.headline}”</span>
-        <ChevronDown size={12} aria-hidden="true" />
+        <ChevronRight size={13} aria-hidden="true" />
+        <span className="tw:sr-only">
+          {open ? "less" : "more"} about “{work.headline}”
+        </span>
       </button>
-      <RowDetail id={detailId} row={row} work={work} hidden={!open} />
+      <p className="rcp-row-head">
+        {/* The lean at a glance: the icon alone, named for a screen reader and
+            on hover as the AI's. Its word is in the open row's AI line. */}
+        <span
+          className={`rcp-lean-mark rcp-lean-${look.tone}`}
+          role="img"
+          aria-label={`AI: ${look.label}`}
+          data-tip={`The AI's reading of this page: ${look.label}`}
+        >
+          <Icon size={13} aria-hidden="true" />
+        </span>
+        {keySource && (
+          <span className="rcp-key-mark" role="img" aria-label="The AI's key source" data-tip="The AI's key source">
+            <Star size={12} aria-hidden="true" className="rcp-key-star" />
+          </span>
+        )}
+        {/* **The work is the headline**, and it is the link out — a real
+            `<a href>` so the browser's own affordances work (the status bar, a
+            middle click). `noreferrer` as well as `noopener`: this is a
+            stranger's page and the address of the article being read is not
+            its business. Clamped to one line by CSS alone, so the whole title
+            is still in the accessibility tree; opening the row unclamps it.
+            `rcp-title-ai` only when the headline is the model's reading of the
+            page; a registry's or search engine's title, or the address, stays
+            UI. */}
+        <a
+          className={work.titleIsAI ? "rcp-title rcp-title-ai" : "rcp-title"}
+          href={row.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-tip={row.url}
+        >
+          {work.headline}
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      </p>
+      <p className="rcp-meta">
+        {/* The AI word takes no dot: its tag already sets it apart, and it is
+            pushed to the line's end, so when it wraps it starts its own line
+            without an orphan `·` (the browser pass on plan 261020n). */}
+        {meta.map((part, i) => (
+          <span key={part.key} className={part.key === "ai" ? "rcp-meta-part rcp-meta-ai" : "rcp-meta-part"}>
+            {i > 0 && part.key !== "ai" && (
+              <span aria-hidden="true" className="rcp-dot">
+                ·
+              </span>
+            )}
+            {part.node}
+          </span>
+        ))}
+      </p>
+      <RowDetail id={detailId} row={row} work={work} keySource={keySource} hidden={!open} />
     </li>
   );
 }
 
 /**
- * **What `more` opens**: everything the ⓘ card held, in the row rather than
- * over it — every author, and whose reading the title, authors and year are;
- * the AI's paragraph inside its fence; the page's full address; a direct row's
- * witness that this page names *this* article; and the way out. The full
- * title and quotation are the row's own,
- * unclamped (`.rcp-item.open` in reception.css), rather than drawn a second time.
+ * **What the toggle opens**, quotation first after the key source's reason —
+ * the evidence before the AI's reading of it (plan 261020n):
+ *
+ *  1. *☆ AI's key source:* and the why-sentence, on a key row. The role word
+ *     went: two readers found it opaque.
+ *  2. The quotation, located in that page's own extract.
+ *  3. The AI's full line — `bears` · `relation` · `lean` — and its paragraph
+ *     inside the fence.
+ *  4. Every author, and whose reading the title, authors and year are.
+ *  5. How the page identifies the piece, in plain words, with every signal it
+ *     earned (the chip's tooltip until then), and a direct row's witness.
+ *  6. The full address, and the way out.
  *
  * Rendered closed with `hidden` rather than not at all, so `aria-controls`
  * always names an element that exists.
@@ -3138,14 +3415,20 @@ function RowDetail({
   id,
   row,
   work,
+  keySource,
   hidden,
 }: {
   id: string;
   row: DrawnRow;
   work: ReturnType<typeof rowWork>;
+  keySource: ReceptionKeySource | undefined;
   hidden: boolean;
 }) {
   const reference = referenceOf(row);
+  const direct = directOf(row);
+  const bears = readBears(row);
+  const look = LEAN_APPEARANCE[readStoredLean(row)];
+  const Icon = look.icon;
   /* Only the parts actually drawn as the AI's: an engine title that won is the
      wire's, and calling it the AI's reading would be false (F2). */
   const aiParts = [
@@ -3155,11 +3438,44 @@ function RowDetail({
   ].filter((part): part is string => part !== null);
   return (
     <div id={id} className="rcp-detail" hidden={hidden}>
-      {work.authors.length > 0 && <p className="rcp-authors">By {work.authors.join(", ")}</p>}
-      {aiParts.length > 0 && <p className="rcp-note rcp-work-note">{receptionWorkFieldsNote(aiParts)}</p>}
-      {work.registry !== null && (
-        <p className="rcp-note rcp-work-note">{receptionRegistryNote(work.registry, work.registryFields)}</p>
+      {/* **Why the AI picked it**, labelled the AI's in its own words: nothing
+          checks the pick. Plan 260930j; the role word went in 261020n. */}
+      {keySource && (
+        <p className="rcp-key-line">
+          <Star size={12} aria-hidden="true" className="rcp-key-star" />
+          <span className="rcp-key-label">AI's key source:</span>
+          <span className="rcp-key-why">{keySource.why}</span>
+        </p>
       )}
+      {/* Characters we located in that page's own extract. A `<blockquote>`
+          because that is what it is, and rendered as text: this is a slice of
+          a stranger's page and nothing here may ever become markup. */}
+      <blockquote className="rcp-quote">“{row.sourceQuote}”</blockquote>
+      {/* **The AI's reading, one line and labelled**, unchanged in content
+          from when it was on the closed row. Separate words, not merged:
+          *"qualifies · Could not tell"* is an honest pair of answers rather
+          than a contradiction. `bears` leads when the AI gave one. */}
+      <p className="rcp-ai-line">
+        <span className="rcp-ai-tag" data-tip="The AI's reading of this page — nothing in what the search returned checks it">
+          AI
+        </span>
+        {(bears !== null || direct === null) && (
+          <>
+            <span className="rcp-bears">{bears === null ? SOURCES_CLAIMS_UNJUDGED : BEARS_LABEL[bears]}</span>
+            <span aria-hidden="true" className="rcp-dot">
+              ·
+            </span>
+          </>
+        )}
+        <span className="rcp-relation">{storedRelation(row.relation)}</span>
+        <span aria-hidden="true" className="rcp-dot">
+          ·
+        </span>
+        <span className={`rcp-lean rcp-lean-${look.tone}`}>
+          <Icon size={12} aria-hidden="true" />
+          {look.label}
+        </span>
+      </p>
       {/* **The fence.** Everything outside it is either the wire's or the
           article's; everything inside it is a model's reading of a stranger's
           page, and nothing in the returned evidence verifies any of it. */}
@@ -3171,8 +3487,25 @@ function RowDetail({
             rather than invent a limitation. */}
         {row.limits && <p className="rcp-limits">{row.limits}</p>}
       </div>
-      {/* The full address, which the row shows only the host of. */}
-      <p className="rcp-url">{row.url}</p>
+      {work.authors.length > 0 && <p className="rcp-authors">By {work.authors.join(", ")}</p>}
+      {aiParts.length > 0 && <p className="rcp-note rcp-work-note">{receptionWorkFieldsNote(aiParts)}</p>}
+      {work.registry !== null && (
+        <p className="rcp-note rcp-work-note">{receptionRegistryNote(work.registry, work.registryFields)}</p>
+      )}
+      {/* **How this page identifies the article**: the level in plain words,
+          then the evidence for it, one signal to a line — the address that
+          matched, the words found in the page's extract — which a reader can
+          check against the page behind the link. */}
+      {direct !== null && (
+        <div className="rcp-identifies">
+          <p className="rcp-identifies-level">{IDENTIFICATION_LABEL[identificationLevel(direct)]}</p>
+          <ul className="rcp-identifies-list">
+            {identificationEvidence(direct).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {/* A direct row's whole claim is that this page is about this piece, and
           this is the witness for it: words from the source's own extract in
           which it names the article. A row without one cannot exist in that
@@ -3185,9 +3518,10 @@ function RowDetail({
           the witness has to carry the article's address, its title, or a short
           title with the byline. */}
       {reference && <p className="rcp-ref">It names this article: “{reference}”</p>}
-      {/* What the quotation was checked against was said here, on every row,
-          until 2026-10-03; it is said once, in the band's (i) (plan 261003o,
-          step 8). */}
+      {/* The full address, which the row shows only the host of. What the
+          quotation was checked against is said once, in the band's (i) (plan
+          261003o, step 8). */}
+      <p className="rcp-url">{row.url}</p>
       <a className="rcp-out" href={row.url} target="_blank" rel="noreferrer noopener">
         Read it on {hostOf(row.url)}
         <ExternalLink size={11} aria-hidden="true" />
