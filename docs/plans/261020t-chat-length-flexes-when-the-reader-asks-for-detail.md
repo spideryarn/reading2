@@ -123,7 +123,13 @@ nothing left). Told the Overseer; Greg raised it to $600 and the arms ran the sa
   `allOrStop`. F7, prove only the prompt changed: article hash, model and effort recorded and
   checked, `chat-principles.ts` fingerprinted. F8, one transient failure stranded an arm: a rerun
   fills in what is missing.
-- Code: (to come — GPT Sol, workspace-write.)
+- **Code, GPT Sol (workspace-write, fixes in place): "pass with fixes"**
+  ([261020t-code-review-sol.md](261020t-code-review-sol.md)). It recomputed every number and
+  unblinded table above from the result files and found them exact, and found no prompt conflict or
+  misfire on the gutter's help turn. Three fixes, all checked: the harness now validates each arm's
+  shape and refuses to pair arms with different effort or shared prompt source (the plan claimed
+  this before the code did); `tests/eval-source-fingerprint.test.ts` pins `chat-principles.ts` in
+  the fingerprint; and `ai-gateway.md` says $600.
 
 ## Result
 
