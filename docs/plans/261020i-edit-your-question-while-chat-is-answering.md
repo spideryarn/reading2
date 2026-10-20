@@ -112,4 +112,12 @@ Nothing from the report. Not in scope: letting the *bin* act mid-answer the same
 
 - 2026-10-20: plan written; Sol plan review
   ([…-plan-review-sol.md](261020i-edit-your-question-while-chat-is-answering-plan-review-sol.md)):
-  F1, F2, F5 fixed as above, F3 corrected the rationale, F4 accepted. Built; Sol code review next.
+  F1, F2, F5 fixed as above, F3 corrected the rationale, F4 accepted. Built (9342b0ce2).
+- 2026-10-20: Sol code review
+  ([…-code-review-sol.md](261020i-edit-your-question-while-chat-is-answering-code-review-sol.md)),
+  which also fixed what it found: C1 (P1), a queued rewrite is re-checked when it goes, so text
+  restored to the original words or cleared asks nothing; C2, a stale CSS comment. Committed as
+  dbf7c55e6. Browser check (Playwright, a Sonnet subagent) passed: the pencil while streaming, a
+  rewrite stopping and re-asking, a rewrite before any text arrives, an unchanged Enter stopping
+  nothing, Cancel while it waits, and no console errors. Over a fast model the "Stopping…" line
+  shows for under 150 ms. Full `npm test` green. Done.
