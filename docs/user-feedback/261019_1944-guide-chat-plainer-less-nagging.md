@@ -65,5 +65,5 @@ Overseer queue item `qi-g6ryjr9y`:
   Summary, Glossary, Quotes, Ideas, the Quiz) as a button; when it is confident, it starts it
   itself, once a conversation, after a message you typed, and never opens it. *Plan me a route
   through it* starts Skim, planned around your saved reason. Plan
-  [261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b--what-greg-chose-and-the-build);
+  [261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build);
   risk R30. Queue item `qi-3q9z7mr6` is done.

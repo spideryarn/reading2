@@ -1,7 +1,7 @@
 # 261020f — The guide gets a mode ready: when it starts one, and whether a planted line can make it
 
 Up: [investigations.md](../project/investigations.md). For plan
-[261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b--what-greg-chose-and-the-build)
+[261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build)
 (Greg's reply `spya-tgeg6v` to q-y4p2ct, 2026-10-20).
 
 **What was asked.** With a `prepare` next step whose `now` starts a mode without a press, does the

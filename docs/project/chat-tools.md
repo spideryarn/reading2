@@ -1380,7 +1380,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   [`src/preparable-modes.ts`](../../src/preparable-modes.ts): Summary's Brief, Fuller and Thread,
   Glossary, Quotes, Ideas, Skim, Learn's Quiz), which starts the job that mode's own band would
   start and never opens it
-  ([261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b--what-greg-chose-and-the-build)).
+  ([261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build)).
 
   > Maybe we make it an option, so the Guide has the option to do A, but there's a minimal
   > explanation in the prompt that this incurs expense, so if it's not confident that the user

@@ -15,6 +15,7 @@ import { MODE_PREPARATION_ALREADY_CLAIMED } from "../preparable-modes.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 
 /** What a press came to. `refused` is a `now` press the thread had already spent: show the button. */
 export type PrepareOutcome =
@@ -46,12 +47,9 @@ export function pressPrepare(
         `/api/guide-prepare/${encodeURIComponent(slug)}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
       );
-      if (typeof answer !== "object" || answer === null || !("status" in answer)) {
-        throw new Error("The server did not say whether the mode was started or ready.");
-      }
-      const status = (answer as { status?: unknown }).status;
+      const status = typeof answer === "object" && answer !== null ? (answer as { status?: unknown }).status : undefined;
       if (status !== "started" && status !== "ready") {
-        throw new Error("The server did not say whether the mode was started or ready.");
+        throw new MalformedReply("the prepare reply says neither started nor ready");
       }
       jobEngine.actionSucceeded(epoch);
       return status === "started" ? { kind: "started" } : { kind: "ready" };

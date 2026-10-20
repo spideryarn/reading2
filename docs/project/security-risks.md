@@ -270,7 +270,7 @@ where A read: *"Risk: a planted line in an article could get one mode made, at m
 conversation."* Where it lives: [security-map.md, the `chipFor` row](security-map.md#where-the-defences-physically-live),
 `preparePolicy` in [`src/chat-tools.ts`](../../src/chat-tools.ts), `claimModePreparation` in
 [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts),
-[261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b--what-greg-chose-and-the-build).
+[261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build).
 Undoing it is `checkNextStep` reading `now` as always false.
 
 ## Proposed
