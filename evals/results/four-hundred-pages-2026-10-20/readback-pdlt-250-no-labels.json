@@ -1,0 +1,31 @@
+{
+ "slug": "l250-pdlt-spya-kzdjm5",
+ "loadMs": 5926,
+ "blocks": 2680,
+ "kinds": {
+  "heading": 157,
+  "text": 2496,
+  "quote": 20,
+  "media": 7
+ },
+ "treeNodes": 2741,
+ "leavesWithNavLabel": 0,
+ "navLabelStatus": "pending",
+ "responseBytes": 2262159,
+ "responseMB": 2.262,
+ "gzipBytes": 351568,
+ "fractionOfVercel4_5MB": 0.503,
+ "topLevelKeyBytes": {
+  "meta": 23213,
+  "titleOverridden": 5,
+  "blocks": 1894344,
+  "tree": 342833,
+  "assets": 1596,
+  "navLabelStatus": 9,
+  "visibility": 9,
+  "privateLinkOn": 5,
+  "archivedAt": 4,
+  "sourceGuess": 0,
+  "highPowerSince": 4
+ }
+}
