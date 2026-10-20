@@ -24,7 +24,7 @@
  *   panel's composer and by the floating dialog's (its conversation arm, not
  *   its passage arm), so the words follow the reader between the two.
  * - **The box under Chat's list**, one string: it belongs to no conversation.
- * - **Learn's unsent words, by kind** — Recall, Tutorial and Explore are
+ * - **Learn's unsent words, by kind** — Recall and Explore are
  *   each one conversation per article, and the band decides which conversation
  *   that is, so the words are handed to whichever it selects.
  * - **Where Chat was**: the conversation that was open, or the list. `?thread=`
@@ -97,7 +97,7 @@ export interface ChatDrafts {
   listMentions(): readonly PickedMention[];
   setListMentions(picked: readonly PickedMention[]): void;
 
-  /** Recall's, Tutorial's or Explore's unsent words. */
+  /** Recall's or Explore's unsent words. */
   learn(kind: LearnKind): string;
   setLearn(kind: LearnKind, text: string): void;
 

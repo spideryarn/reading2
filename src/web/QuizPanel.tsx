@@ -217,7 +217,7 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
 }
 
 /**
- * **Recall | Tutorial | Explore | Quiz**, at the top of the Learn band.
+ * **Recall | Explore | Quiz**, at the top of the Learn band.
  *
  * A control rather than two links, because the two are one choice — and it is
  * rendered by `LearnBand` and handed to whichever panel is showing, so that
@@ -245,9 +245,11 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
  * Recall's sentences were `MODE_CATALOG.learn.how` until that day, when the
  * catalog's paragraph was cut to what is true of the whole mode. Each claim,
  * against the source:
- *  - Recall, Tutorial: no turn runs before the reader's first message; the
- *    prompts are in src/converse.ts, and Tutorial is built for a reader who
- *    has not read the piece (docs/project/learn-mode.md § Tutorial).
+ *  - Recall: no turn runs before the reader's first message; the prompt is
+ *    `LEARN_SYSTEM` in src/converse.ts, which since 2026-10-20 (when Recall
+ *    took Tutorial in) starts a reader who has not read the piece from zero
+ *    and teaches a small cited piece when the reader is stuck
+ *    (docs/project/learn-mode.md § One adaptive voice). Tutorial's own card went with it.
  *  - Explore: highlights and notes go in the digest with every turn; earlier
  *    conversations go as a list it may open, not as their text
  *    (src/reader-notes.ts; GPT Sol's plan review, finding 1).
@@ -257,9 +259,7 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
  */
 export const LEARN_VIEW_HOW: Readonly<Record<LearnView, string>> = {
   recall:
-    "The AI does not reply until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. It is asked to point its replies back to the passages they use.",
-  tutorial:
-    "It waits on you too. It is about what the author says, and it works even if you have not read the piece yet.",
+    "The AI does not reply until you have said or typed something. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead, and if you have not read the piece yet, it takes you through it a little at a time. It is asked to point its replies back to the passages they use.",
   explore:
     "It is sent your highlights and notes, plus a list of your earlier conversations. It can open one of those and may search the web when useful.",
   quiz: "Pressing it writes the questions if there are none yet. A model compares each answer with the article, using the question's reference passages.",
@@ -395,7 +395,7 @@ export function QuizPanel({
    * "read nothing" and hide the whole quiz.
    */
   readSoFar?: ReadSoFar | undefined;
-  /** The Recall | Tutorial | Explore | Quiz control, built by `LearnBand`. */
+  /** The Recall | Explore | Quiz control, built by `LearnBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
       every citation chip in the band is drawn through. */
@@ -1105,7 +1105,7 @@ export function QuizPanel({
         <>
           {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
               docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the Recall | Tutorial | Explore | Quiz control, which is the one thing here
+              stays for the Recall | Explore | Quiz control, which is the one thing here
               the Dock does *not* say. */}
           {subMode}
           {/* Written for your profile, and the Regenerate in its panel — Greg,

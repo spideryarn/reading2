@@ -203,7 +203,7 @@ function canonical(artefact: string, value: unknown, fromFile = false): unknown 
         key === "threads"
         ? raw.map((t) => {
             const thread = { kind: "chat", ...(t as Record<string, unknown>) };
-            return fromFile && (thread.kind === "review" || thread.kind === "remember")
+            return fromFile && (thread.kind === "review" || thread.kind === "remember" || thread.kind === "tutorial")
               ? { ...thread, kind: "learn" }
               : thread;
           })

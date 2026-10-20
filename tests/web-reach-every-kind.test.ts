@@ -7,7 +7,7 @@
  * > often users are going to wanting to be situating this article relative to
  * > other stuff on the web
  *
- * Recall and Tutorial always had the tool; their prompts kept them in the
+ * Recall always had the tool; their prompts kept them in the
  * article, and "where does this piece sit?" was not a reason to leave it. The
  * guide searches through its own `search_web` since plan 261012g, for questions
  * about how to read the piece, and sends the subject's questions to Chat.
@@ -75,8 +75,8 @@ describe("web search", () => {
   });
 });
 
-describe("Recall and Tutorial", () => {
-  for (const kind of ["learn", "tutorial"] as const) {
+describe("Recall", () => {
+  for (const kind of ["learn"] as const) {
     it(`${kind}: asking where the piece stands is a reason to search`, () => {
       const system = flat(systemOf(kind));
       expect(system).toContain("they ask where the piece stands");

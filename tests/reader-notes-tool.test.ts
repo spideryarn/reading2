@@ -329,14 +329,12 @@ describe("threadIndexRows — the reader's other conversations", () => {
       [
         thread("spya-t00001", { kind: "chat" }),
         thread("spya-t00002", { kind: "learn" }),
-        thread("spya-t00003", { kind: "tutorial" }),
         thread("spya-t00004", { kind: "explore" }),
       ],
       undefined,
     ).rows.join("\n");
     expect(rows).toContain("a chat");
     expect(rows).toContain("Recall");
-    expect(rows).toContain("Tutorial");
     expect(rows).toContain("Explore");
     expect(rows).not.toContain("learn");
     expect(rows).not.toContain("explore");
@@ -922,7 +920,7 @@ describe("toolsFor — who is offered the reader's notes (PR-3)", () => {
     expect(names(kind)).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
   });
 
-  it.each(["learn", "tutorial", "candidates"] as const)("gives %s the shared eight only", (kind) => {
+  it.each(["learn", "candidates"] as const)("gives %s the shared eight only", (kind) => {
     expect(names(kind)).toEqual(CHAT_TOOLS.map((t) => t.function.name));
   });
 
@@ -1079,7 +1077,7 @@ describe("runTool — reader_notes", () => {
     expect(out.content).not.toContain("<<<UNTRUSTED");
   });
 
-  it.each(["learn", "tutorial", "candidates"] as const)(
+  it.each(["learn", "candidates"] as const)(
     "is not a tool at all for a %s thread, and reads nothing",
     async (kind) => {
       const out = await runTool("reader_notes", {}, ctx({ kind }));
@@ -1224,7 +1222,7 @@ describe("converse — the request it sends, per thread kind", () => {
     expect(result).not.toContain("THE-THREAD-THIS-TURN-IS-IN");
   });
 
-  it.each(["learn", "tutorial", "candidates"] as const)(
+  it.each(["learn", "candidates"] as const)(
     "does not offer it to %s, and a model that asks anyway is told there is no such tool",
     async (kind) => {
       const { offered, result } = await turn(kind);

@@ -736,7 +736,7 @@ describe("the bundle is the faithful projection", () => {
 
     /* Until 2026-10-02 `export.ts` mapped anything that was not `remember` (now `learn`) to
        `chat`, so a reader's Candidates thread came back as an ordinary chat,
-       silently, and this test pinned that contrast. Adding Tutorial as a fourth
+       silently, and this test pinned that contrast. Adding a further
        kind made it a loss of the same shape, so the rollback now writes every
        known kind as itself — tests/store-export-thread-kind.test.ts, plan
        261002i. */

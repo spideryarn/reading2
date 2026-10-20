@@ -57,7 +57,7 @@ afterEach(() => {
 describe("who is offered it", () => {
   it("is the guide's, and no other kind's", () => {
     expect(names(toolsFor("guide"))).toContain("offer_to_save");
-    for (const kind of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "explore", "candidates"] as const) {
       expect(names(toolsFor(kind))).not.toContain("offer_to_save");
     }
   });

@@ -188,6 +188,26 @@ describe("Readers only", () => {
     expect(asked[2]?.url).toContain("before=");
   });
 
+  /* **Admins only** (`spya-kmqd7n`, 261020p): the third button asks the server
+     for admins, says so when there are none, and Everyone goes back to no `from`. */
+  it("asks the server for admins, and says so when there are none", async () => {
+    await act(async () => root.render(<Page />));
+    await waitFor("the first request", () => asked.length === 1);
+
+    await act(async () => button("Admins only").click());
+    await waitFor("the admins request", () => asked.length === 2);
+    expect(asked[1]?.url).toContain("from=admins");
+    expect(button("Admins only").getAttribute("aria-pressed")).toBe("true");
+    expect(button("Everyone").getAttribute("aria-pressed")).toBe("false");
+
+    await act(async () => asked[1]?.answer({ reports: [], hasMore: false, nextCursor: null }));
+    await waitFor("the empty sentence", () => host.textContent?.includes("No administrator has filed a report yet.") === true);
+
+    await act(async () => button("Everyone").click());
+    await waitFor("the everyone request", () => asked.length === 3);
+    expect(asked[2]?.url).not.toContain("from=");
+  });
+
   it("is not overtaken by a Load older that was in flight when it was pressed", async () => {
     await act(async () => root.render(<Page />));
     await waitFor("the first request", () => asked.length === 1);

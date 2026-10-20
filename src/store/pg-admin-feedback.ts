@@ -56,7 +56,7 @@
  * hand, never a join. docs/project/admin.md states the same boundary.
  */
 
-import { and, desc, eq, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { ADMIN_USER_IDS } from "../admin.js";
 import { prefixWithinBytes } from "../json-budget.js";
@@ -78,6 +78,8 @@ import {
   ADMIN_FEEDBACK_MAX,
   FEEDBACK_LIST_BYTES,
 } from "../types.js";
+import type { QuestionReportAcrossOwners, QuestionReportsAcrossOwners } from "./contracts.js";
+import { firstLineOf } from "./pg-feedback.js";
 
 /**
  * **What crosses owners, written out by hand.** See the header — this list is
@@ -257,7 +259,11 @@ export async function listFeedbackAcrossOwners(
     .where(
       and(
         cursor ? after(cursor) : undefined,
-        from === "readers" ? notInArray(feedbackTable.ownerId, [...ADMIN_USER_IDS]) : undefined,
+        from === "readers"
+          ? notInArray(feedbackTable.ownerId, [...ADMIN_USER_IDS])
+          : from === "admins"
+            ? inArray(feedbackTable.ownerId, [...ADMIN_USER_IDS])
+            : undefined,
       ),
     )
     /* Newest first, then the whole primary key, so the order is *total*.
@@ -378,4 +384,57 @@ export async function setFeedbackIgnoredAcrossOwners(
     .where(and(eq(feedbackTable.ownerId, ownerId), eq(feedbackTable.id, id)))
     .returning(LIST_COLUMNS);
   return row ? toListed(row) : null;
+}
+
+/**
+ * **The reports agents' questions name, whoever filed them** — so a thread in
+ * the admin's *Needs a decision* can show a reader's suggestion beside the
+ * question about it, marked as theirs. Greg, 2026-10-19 (`spya-y43ha0`): *"it's
+ * important that other users' feedback can show up in the needs input section,
+ * and it should be highlighted clearly as such"*. docs/plans/261020p-….
+ *
+ * **The one read in this file not keyed on the pair**, because a question file
+ * names its report by id alone. The header's warning is exactly the risk: a
+ * lookup on the id can hand back somebody else's report. So an id answers only
+ * when **exactly one row, across every owner the admin's own included**, holds
+ * it; an id two rows share comes back in `ambiguous` and resolves to nothing
+ * (GPT Sol's plan review, F1). Ids are random, so in practice that is never,
+ * and when it is, the thread shows its question alone rather than a guess.
+ *
+ * The projection is the list's own few fields, written out: what the admin
+ * already sees of the same report on `/admin/feedback`, and nothing more.
+ */
+export async function questionReportsAcrossOwners(
+  ids: readonly string[],
+): Promise<QuestionReportsAcrossOwners> {
+  if (ids.length === 0) return { found: [], ambiguous: [] };
+  const rows = await getDb()
+    .select({
+      id: feedbackTable.id,
+      ownerId: feedbackTable.ownerId,
+      number: feedbackTable.number,
+      body: feedbackTable.body,
+      reporterEmail: feedbackTable.reporterEmail,
+    })
+    .from(feedbackTable)
+    .where(inArray(feedbackTable.id, [...ids]));
+  const found: QuestionReportAcrossOwners[] = [];
+  const ambiguous: string[] = [];
+  for (const id of new Set(rows.map((row) => row.id))) {
+    const holders = rows.filter((row) => row.id === id);
+    const [only] = holders;
+    if (holders.length !== 1 || only === undefined) {
+      ambiguous.push(id);
+      continue;
+    }
+    found.push({
+      id: only.id,
+      ownerId: only.ownerId,
+      number: only.number,
+      firstLine: firstLineOf(only.body),
+      body: only.body,
+      reporterEmail: only.reporterEmail,
+    });
+  }
+  return { found, ambiguous };
 }

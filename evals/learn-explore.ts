@@ -24,9 +24,10 @@
  * the plan, PR-6). Everything else is the same: the article, the reader's
  * scripted messages, the fixtures, the model, web search on, our tools on.
  *
- * ## The machinery is Tutorial's
+ * ## The machinery is Tutorial's eval's (now Recall's)
  *
- * evals/learn-tutorial.ts: scripted readers per article, five turns each,
+ * evals/learn-recall-turns.ts (`evals/learn-tutorial.ts` until Recall took
+ * Tutorial in, 2026-10-20): scripted readers per article, five turns each,
  * the model's own replies as history, `--readers`, `--out`, a prompt hash in
  * every result file, and its quotation screen (`quoteCheck`), imported.
  *
@@ -124,7 +125,7 @@ import { renderProfile } from "../src/profile.js";
 import { readerNotesDigest, threadTranscript } from "../src/reader-notes.js";
 import type { Block, BlockId, ChatMessage, ChatThread, Comment, Meta, ThreadKind } from "../src/types.js";
 import { askJudge } from "./learn-explore-judge.js";
-import { loadArticle, quoteCheck, row, words } from "./learn-tutorial.js";
+import { loadArticle, quoteCheck, row, words } from "./learn-recall-turns.js";
 import { storedResult } from "./stored-result.js";
 
 const RESULTS = path.resolve(import.meta.dirname, "results");
@@ -213,9 +214,11 @@ const NOEMA: ReaderSet = {
       ],
       earlier: [
         {
+          /* A Tutorial conversation until Tutorial was folded into Recall
+             (2026-10-20); the transcript is the same either way. */
           id: "thr-noema-tutorial",
-          kind: "tutorial",
-          title: "Tutorial",
+          kind: "learn",
+          title: "Recall",
           exchanges: [
             [
               "I read it at the weekend. The bit I remember best is the difference between seeming conscious and being conscious.",
@@ -391,8 +394,8 @@ const AGENTS: ReaderSet = {
         },
         {
           id: "thr-agents-tutorial",
-          kind: "tutorial",
-          title: "Tutorial",
+          kind: "learn",
+          title: "Recall",
           exchanges: [
             [
               "I read it yesterday. Three waves of agents, each one found what the last left behind, and the last got admin on an OpenAI cluster.",

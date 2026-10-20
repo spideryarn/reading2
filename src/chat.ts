@@ -100,6 +100,37 @@ function normaliseKind(thread: ChatThread): ChatThread {
   return kind === thread.kind ? thread : { ...thread, kind };
 }
 
+/**
+ * **A file's Tutorial thread folded into its Recall thread**, as
+ * drizzle/20261020063618_fold_tutorial_into_recall.sql folds the rows.
+ *
+ * `tutorial` is the one retired kind that is also a merge: an article could
+ * have one Recall thread and one Tutorial thread, and after the retirement both
+ * would read as `learn`, which an article has at most one of
+ * (`chat_threads_one_learn`). So, as the migration does: the Recall thread is
+ * kept, the Tutorial thread's messages are appended after its own in their own
+ * order, its `updatedAt` becomes the later of the two, and its gist is dropped
+ * because the transcript it summarised has grown. A Tutorial thread alone just
+ * becomes the Recall thread (`normaliseKind`), keeping everything.
+ *
+ * Takes the threads as read from disk, before `normaliseKind`, because only
+ * the raw kind says which was which. GPT Sol's F4 on
+ * docs/plans/261020m-recall-and-tutorial-become-one-recall.md.
+ */
+export function foldRetiredTutorial(threads: readonly ChatThread[]): ChatThread[] {
+  const rawKind = (t: ChatThread): unknown => (t as { kind?: unknown }).kind;
+  const tutorial = threads.find((t) => rawKind(t) === "tutorial");
+  const recall = threads.find((t) => rawKind(t) !== "tutorial" && kindFromFile(rawKind(t)) === "learn");
+  if (!tutorial || !recall) return [...threads];
+  const { gist: _gist, ...kept } = recall;
+  const merged: ChatThread = {
+    ...kept,
+    updatedAt: tutorial.updatedAt > recall.updatedAt ? tutorial.updatedAt : recall.updatedAt,
+    messages: [...recall.messages, ...tutorial.messages],
+  };
+  return threads.filter((t) => t !== tutorial).map((t) => (t === recall ? merged : t));
+}
+
 export async function loadThreads(slug: string): Promise<ChatThread[]> {
   assertSlug(slug);
   try {
@@ -112,7 +143,7 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
       await readFile(fileFor(slug), "utf8"),
       `chat.json for ${slug}`,
     );
-    return (parsed.threads ?? []).map(normaliseKind);
+    return foldRetiredTutorial(parsed.threads ?? []).map(normaliseKind);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
     // No file yet is normal. A file that will not parse means every
@@ -162,8 +193,8 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  /* Every single-thread kind, not only Learn: Tutorial, Explore and the guide
-     are one per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
+  /* Every single-thread kind, not only Learn: Explore and the guide are one
+     per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
   if (named || !isSingleThreadKind(kind)) return named;
   return threads.find((t) => t.kind === kind);
 }
@@ -540,7 +571,8 @@ export function withSpokenTurn(
      request may omit its kind, so the **stored** thread is asked too, inside
      the transaction and before any row is minted or appended: without this a
      kind-less spoken turn landed in an Explore thread (GPT Sol's review of
-     261003l, CR-11), and the same door stood open to Tutorial and Candidates. */
+     261003l, CR-11), and the same door stood open to Candidates (and to Tutorial,
+     until it was folded into Recall). */
   if (existing && !isSpokenKind(existing.kind)) {
     throw new ChatConflict("That conversation does not take a live conversation.");
   }

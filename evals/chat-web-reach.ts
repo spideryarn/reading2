@@ -128,8 +128,8 @@ const CASES: readonly Case[] = [
 ];
 
 /**
- * **The cases for every kind but Chat** — Learn's Recall (`learn`), Tutorial,
- * Explore and the guide. Added by
+ * **The cases for every kind but Chat** — Learn's Recall (`learn`), Tutorial (until
+ * it was folded into Recall, 2026-10-20), Explore and the guide. Added by
  * docs/plans/261011t-web-search-in-every-chat-kind-and-reading-a-given-address.md
  * after Greg's `spya-drbkvc`: a reader in a Learn sub-mode asked how the piece
  * sat among others, and it would not search. None is anchored and none is a
@@ -232,7 +232,7 @@ const GUIDE_CASES: readonly Case[] = [
 ];
 
 /* The kinds a reader converses in; Candidates is Referee's and has its own eval. */
-const KINDS = ["chat", "learn", "tutorial", "explore", "guide"] as const;
+const KINDS = ["chat", "learn", "explore", "guide"] as const;
 type EvalKind = (typeof KINDS)[number];
 const casesFor = (kind: EvalKind): readonly Case[] =>
   kind === "chat" ? CASES : kind === "guide" ? GUIDE_CASES : OTHER_KIND_CASES;

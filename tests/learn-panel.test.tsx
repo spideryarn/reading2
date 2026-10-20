@@ -58,7 +58,7 @@ function type(words: string) {
   });
 }
 
-function paint(thread: ChatThread, kind: "chat" | "learn" | "tutorial" | "explore" = "learn") {
+function paint(thread: ChatThread, kind: "chat" | "learn" | "explore" = "learn") {
   act(() => {
     root.render(
       createElement(ChatPanel, {
@@ -353,7 +353,7 @@ describe("Explore's panel", () => {
     expect(host.querySelector('[aria-label="Explore what you think about this article"]')).not.toBeNull();
   });
 
-  it("draws no list, and no Recall or Tutorial invitation", () => {
+  it("draws no list, and no Recall invitation", () => {
     paint(empty(), "explore");
     expect(host.querySelector(".chat-threads")).toBeNull();
     expect(host.textContent).not.toMatch(/Say what you took from this article/);

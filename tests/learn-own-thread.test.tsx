@@ -113,7 +113,7 @@ const AT = "2026-09-20T10:00:00.000Z";
 
 function thread(
   id: string,
-  kind: "chat" | "learn" | "tutorial" | "explore",
+  kind: "chat" | "learn" | "explore",
   over: Partial<ChatThread> = {},
 ): ChatThread {
   return {
@@ -132,7 +132,6 @@ function thread(
 
 const CHAT = thread("spya-chat02", "chat");
 const LEARN = thread("spya-rem002", "learn");
-const TUTORIAL = thread("spya-tut002", "tutorial");
 const EXPLORE = thread("spya-exp002", "explore");
 
 let host: HTMLDivElement;
@@ -177,7 +176,7 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(kind: "chat" | "learn" | "tutorial" | "explore", search: string): Promise<void> {
+async function mount(kind: "chat" | "learn" | "explore", search: string): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () =>
     root.render(
@@ -221,7 +220,7 @@ function prop<T>(name: string): T {
 const listed = (props = last()): ChatThread[] => (props?.listed as ChatThread[] | undefined) ?? [];
 
 it("uses URL-parseable conversation ids for its navigation cases", () => {
-  for (const t of [CHAT, LEARN, TUTORIAL, EXPLORE]) {
+  for (const t of [CHAT, LEARN, EXPLORE]) {
     expect(threadParam.parse(t.id), t.id).toBe(t.id);
   }
   expect(threadParam.parse("spya-gqne02")).toBe("spya-gqne02");
@@ -239,7 +238,7 @@ describe("Chat lists Learn's conversations, and opens only its own kind", () => 
   });
 
   it("hands Learn no list of other conversations", async () => {
-    stored = [CHAT, LEARN, TUTORIAL, EXPLORE];
+    stored = [CHAT, LEARN, EXPLORE];
     await mount("learn", "?mode=learn");
     for (const props of renders) {
       expect(props.listed).toBeUndefined();
@@ -472,88 +471,33 @@ describe("Start over waits for the server", () => {
   });
 });
 
-/* Tutorial, Learn's third sub-mode (plan 261002i): its own single thread,
-   with Recall's lifecycle and none of Live. */
-describe("Tutorial opens its own one conversation", () => {
-  it("opens the stored Tutorial thread, never Recall's or a list", async () => {
-    stored = [CHAT, LEARN, TUTORIAL];
-    await mount("tutorial", "?mode=learn&learn=tutorial");
-    expect(last()?.threadId).toBe(TUTORIAL.id);
-    expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
-    for (const props of renders) expect(drawsList(props)).toBe(false);
-  });
-
-  it("is not listed in Recall", async () => {
-    stored = [LEARN, TUTORIAL];
-    await mount("learn", "?mode=learn");
-    expect(shown().map((t) => t.id)).toEqual([LEARN.id]);
-  });
-
-  it("begins its own conversation when there is none, of its own kind", async () => {
-    stored = [LEARN];
-    await mount("tutorial", "?mode=learn&learn=tutorial");
-    const opened = shown();
-    expect(opened).toHaveLength(1);
-    expect(opened[0]?.kind).toBe("tutorial");
-    expect(opened[0]?.id).not.toBe(LEARN.id);
-  });
-
-  it("offers no Live conversation", async () => {
-    stored = [TUTORIAL];
-    await mount("tutorial", "?mode=learn&learn=tutorial");
-    expect(last()?.live).toBeUndefined();
-    expect(last()?.onStartLive).toBeUndefined();
-  });
-
-  it("starts Tutorial over only after the stored thread has been deleted", async () => {
-    stored = [TUTORIAL];
-    await mount("tutorial", "?mode=learn&learn=tutorial");
-    await act(async () => prop<(id: string) => void>("onDelete")(TUTORIAL.id));
-    await settle();
-    expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
-    expect(last()?.threadId ?? null).toBeNull();
-    expect(shown()).toHaveLength(0);
-
-    await act(async () => releaseDelete?.(200));
-    await settle();
-    const fresh = shown()[0];
-    expect(fresh?.kind).toBe("tutorial");
-    expect(fresh?.id).not.toBe(TUTORIAL.id);
-    expect(fresh?.messages).toHaveLength(0);
-    expect(last()?.threadId).toBe(fresh?.id);
-  });
-});
-
 /* Explore, Learn's fourth sub-mode (plan 261003l): its own single thread,
    with Recall's lifecycle and none of Live. */
 describe("Explore opens its own one conversation", () => {
-  it("opens the stored Explore thread, never Recall's, Tutorial's or a list", async () => {
-    stored = [CHAT, LEARN, TUTORIAL, EXPLORE];
+  it("opens the stored Explore thread, never Recall's or a list", async () => {
+    stored = [CHAT, LEARN, EXPLORE];
     await mount("explore", "?mode=learn&learn=explore");
     expect(last()?.threadId).toBe(EXPLORE.id);
     expect(shown().map((t) => t.id)).toEqual([EXPLORE.id]);
     for (const props of renders) expect(drawsList(props)).toBe(false);
   });
 
-  it("is not listed in Recall or in Tutorial; Chat lists it and cannot open it", async () => {
-    stored = [CHAT, LEARN, TUTORIAL, EXPLORE];
+  it("is not listed in Recall; Chat lists it and cannot open it", async () => {
+    stored = [CHAT, LEARN, EXPLORE];
     await mount("learn", "?mode=learn");
     expect(shown().map((t) => t.id)).toEqual([LEARN.id]);
-    await mount("tutorial", "?mode=learn&learn=tutorial");
-    expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
     await mount("chat", "?mode=chat");
     expect(shown().map((t) => t.id)).toEqual([CHAT.id]);
     expect(listed().map((t) => t.id)).toContain(EXPLORE.id);
   });
 
   it("begins its own conversation when there is none, of its own kind", async () => {
-    stored = [LEARN, TUTORIAL];
+    stored = [LEARN];
     await mount("explore", "?mode=learn&learn=explore");
     const opened = shown();
     expect(opened).toHaveLength(1);
     expect(opened[0]?.kind).toBe("explore");
     expect(opened[0]?.id).not.toBe(LEARN.id);
-    expect(opened[0]?.id).not.toBe(TUTORIAL.id);
   });
 
   it("overrules a stale ?thread= that names another conversation", async () => {
@@ -591,14 +535,14 @@ describe("Explore opens its own one conversation", () => {
 });
 
 /* **Live is a capability a kind has or has not**, said for every kind
-   (`OFFERS_LIVE`), where it used to be `kind === "tutorial"` — under which
+   (`OFFERS_LIVE`), where it used to be a test for one kind — under which
    Explore would have drawn a Live button and met a 400 on its first spoken
    turn. GPT Sol's review of plan 261003l, PR-5. */
 describe("which conversations offer Live", () => {
   it("is exactly the kinds a spoken turn may create or join", async () => {
     const { OFFERS_LIVE } = await import("../src/web/modes/conversation/ConversationModes.js");
     const { isSpokenKind } = await import("../src/chat.js");
-    expect(Object.keys(OFFERS_LIVE).sort()).toEqual(["chat", "explore", "learn", "tutorial"]);
+    expect(Object.keys(OFFERS_LIVE).sort()).toEqual(["chat", "explore", "learn"]);
     for (const [kind, offers] of Object.entries(OFFERS_LIVE)) {
       expect(`${kind}: ${String(offers)}`).toBe(`${kind}: ${String(isSpokenKind(kind))}`);
     }

@@ -156,13 +156,14 @@ describe("the Learn prompt itself", () => {
      spya-c8x66d): brief, block links always, and nudges that fill the gap
      when the reader is struggling rather than making them fail. */
   it("asks for a nudge, a gap filled when they are stuck, block ids and brevity", () => {
-    expect(system).toContain("THEN A NUDGE");
+    expect(system).toContain("THEN A CUE OR A SMALL PIECE TAUGHT");
     expect(system).toContain("TWO DIRECTIONS");
     expect(system).toContain("NEVER MAKE THEM FAIL TWICE");
     expect(system).toContain("FILL THE GAP");
     expect(system).toContain("EVERY REPLY POINTS INTO THE ARTICLE");
     expect(system).toMatch(/120 is the ceiling for the reply\s+before the hint/);
-    expect(system).toContain("exactly one interrogative sentence and one");
+    expect(system).toMatch(/ONE question per reply at most: one interrogative sentence and one/);
+    expect(system).toMatch(/a\s+reply may have none when ADAPT says/);
     expect(system).toContain('directions joined by "or"');
   });
 
@@ -171,15 +172,15 @@ describe("the Learn prompt itself", () => {
      docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md */
   describe("the question links its passage and carries a hint", () => {
     it("puts the passage's id on the question itself, not just somewhere in the reply", () => {
-      expect(system).toContain("THE NUDGE'S QUESTION CARRIES ITS OWN PASSAGE");
-      expect(system).toMatch(/inside the question,? or straight after its question mark/);
+      expect(system).toContain("THE QUESTION CARRIES ITS OWN PASSAGE");
+      expect(system).toMatch(/inside the\s+question,?\s+or\s+straight\s+after\s+its\s+question\s+mark/);
       expect(system).toMatch(/An id somewhere\s+else\s+in\s+the\s+reply\s+does\s+not\s+count/);
     });
 
     it("asks for a hint in the exact shape splitHint reads, and only after a nudge", async () => {
       const { HINT_MARKER, splitHint } = await import("../src/recall-hint.js");
       expect(system).toContain("A HINT, HIDDEN UNTIL THEY ASK FOR IT");
-      expect(system).toMatch(/When, and only when, the reply ends with\s+a nudge/);
+      expect(system).toMatch(/When the reply ends with a question\s+whose answer is in the article and has NOT just been shown/);
       expect(system).toMatch(/25 words at most/);
       expect(system).toMatch(/never a question/);
       expect(system).toMatch(/does not state the answer/);
@@ -209,11 +210,11 @@ describe("the Learn prompt itself", () => {
     it("revised the old length and question-last wording rather than adding beside it", () => {
       expect(system).not.toContain("120 is a ceiling unless");
       expect(system).not.toContain("ONE nudge per reply, at the end:");
-      expect(system).toMatch(/last sentence before\s+the hint/);
+      expect(system).toMatch(/last\s+sentence\s+before\s+the\s+hint/);
     });
 
-    it("leaves Tutorial, Explore and Chat without a hint rule", () => {
-      for (const kind of ["tutorial", "explore", "chat"] as const) {
+    it("leaves Explore and Chat without a hint rule", () => {
+      for (const kind of ["explore", "chat"] as const) {
         const other = String(buildConverseMessages({ ...base, kind })[0]?.content);
         expect(other, kind).not.toContain("Hint:");
         expect(other, kind).not.toContain("A HINT, HIDDEN");
@@ -222,14 +223,55 @@ describe("the Learn prompt itself", () => {
   });
 
   it("makes the clarification exception explicit before and inside the detailed rules", () => {
-    expect(system).toContain("A pure clarification is the exception");
+    expect(system).toMatch(/A pure clarification is\s+the exception/);
     expect(system).toContain('such as "the brain stuff", "the other thing" or "that bit"');
     expect(system).toContain("make that question the whole reply");
   });
 
   it("does not turn a filled gap straight back into the same test", () => {
-    expect(system).toContain("Do not immediately ask them to recall");
+    expect(system).toMatch(/Do not immediately ask\s+them to recall/);
     expect(system).toContain("the answer you just supplied");
+  });
+
+  /* Tutorial folded in, 2026-10-20 (spya-gtzeqm, plan 261020m): a reader who
+     has not read it is started from zero and never quizzed on unread text; a
+     say-it-back is theirs alone, and carries no hint. */
+  describe("Tutorial's teaching, folded in", () => {
+    it("starts a reader who has not read it from zero, and never asks what they remember", () => {
+      expect(system).toContain("HOW TO START");
+      expect(system).toMatch(/start at the beginning,\s+from zero/);
+      expect(system).toMatch(/never ask what they "remember" of the piece/);
+    });
+
+    it("teaches one small cited piece and a task when there is nothing to recall", () => {
+      expect(system).toContain("TEACH ONE SMALL PIECE");
+      expect(system).toContain("A SAY-IT-BACK IS FOR A READER WHO HAS NOT READ IT");
+      expect(system).toContain("THEIR OWN VIEW IS THE EXCEPTION");
+      expect(system).toContain("COME BACK TO EARLIER POINTS");
+      expect(system).toContain("ADAPT TO WHO THEY ARE");
+    });
+
+    it("gives no hint where a hint would be the answer or there is no answer", () => {
+      expect(system).toMatch(/NO HINT after a say-it-back/);
+      expect(system).toMatch(/after a question about a\s+case the article does not discuss/);
+    });
+
+    it("names novel application as an allowed question beyond the article's claims", () => {
+      expect(system).toMatch(
+        /Three kinds of question are not about what the piece\s+says[\s\S]*a new case the article does\s+not discuss/,
+      );
+    });
+
+    it("makes newly taught say-it-back the deliberate exception to the no-gimmes rule", () => {
+      expect(system).toMatch(
+        /No gimmes[\s\S]*deliberate exception[\s\S]*say-it-back[\s\S]*newly taught/,
+      );
+    });
+
+    it("offers a reader who has not read it a way in, in the opening line", () => {
+      const opening = String(buildConverseMessages({ ...base, kind: "learn" })[2]?.content);
+      expect(opening).toContain("It's fine if you haven't read it yet");
+    });
   });
 
   it("ranks the reader's own words above the nudge, and the rules above both", () => {

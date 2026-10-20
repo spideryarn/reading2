@@ -44,6 +44,7 @@ import type { NewFeedback } from "../src/store/contracts.js";
 import { pgFeedbackStore } from "../src/store/pg-feedback.js";
 import {
   listFeedbackAcrossOwners,
+  questionReportsAcrossOwners,
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
   setFeedbackIgnoredAcrossOwners,
@@ -597,10 +598,57 @@ describe("the admin feedback read on Postgres", () => {
       }
       expect(walked).not.toContain(mine);
       expect(walked).toEqual(expect.arrayContaining(theirs));
+
+      /* **Admins only** (`spya-kmqd7n`, 261020p): the mirror image. The
+         administrator's report is the newest, so it is on the first page;
+         every row there is one `isAdmin` accepts, and none of Alice's is. */
+      const admins = await listFeedbackAcrossOwners(ADMIN_FEEDBACK_MAX, null, "admins");
+      for (const r of admins.reports) expect(isAdmin(r.ownerId), r.ownerId).toBe(true);
+      const adminIds = admins.reports.map((r) => r.id);
+      expect(adminIds).toContain(mine);
+      for (const id of theirs) expect(adminIds).not.toContain(id);
     } finally {
       await getDb()
         .delete(feedbackTable)
         .where(and(eq(feedbackTable.ownerId, ADMIN_USER_ID_LOCAL), eq(feedbackTable.id, mine)));
+    }
+  });
+
+  /**
+   * **A question's report, whoever filed it** (`spya-y43ha0`, plan 261020p).
+   * A question names its report by id alone, so an id answers only when one
+   * row across every owner holds it: two readers sharing one, or the admin and
+   * a reader, resolve to nothing rather than to a guess (GPT Sol's plan
+   * review, F1). The administrator's report added here is removed afterwards.
+   */
+  it("finds a question's report whoever filed it, and nothing for an id two accounts share", async () => {
+    await seedAuthUser(getDb(), { id: ADMIN_USER_ID_LOCAL, email: ADMIN_EMAIL_LOCAL, onConflictDoNothing: true });
+    const alone = mintId();
+    const readersShare = mintId();
+    const adminShares = mintId();
+    const nobody = mintId();
+    try {
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: alone, body: "\n  Please build this\nand that" })));
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: readersShare })));
+      await runAsOwner(BOB, () => pgFeedbackStore.submit(report({ id: readersShare })));
+      await runAsOwner(BOB, () => pgFeedbackStore.submit(report({ id: adminShares })));
+      await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () => pgFeedbackStore.submit(report({ id: adminShares })));
+
+      const got = await questionReportsAcrossOwners([alone, readersShare, adminShares, nobody]);
+      expect(got.found.map((one) => one.id)).toEqual([alone]);
+      const [found] = got.found;
+      expect(found?.ownerId).toBe(ALICE);
+      expect(found?.firstLine).toBe("Please build this");
+      expect(found?.body).toBe("\n  Please build this\nand that");
+      expect(Number.isSafeInteger(found?.number)).toBe(true);
+      expect(typeof found?.reporterEmail).toBe("string");
+      expect(Object.keys(found ?? {}).sort()).toEqual(["body", "firstLine", "id", "number", "ownerId", "reporterEmail"]);
+      expect([...got.ambiguous].sort()).toEqual([readersShare, adminShares].sort());
+      expect(await questionReportsAcrossOwners([])).toEqual({ found: [], ambiguous: [] });
+    } finally {
+      await getDb()
+        .delete(feedbackTable)
+        .where(and(eq(feedbackTable.ownerId, ADMIN_USER_ID_LOCAL), eq(feedbackTable.id, adminShares)));
     }
   });
 

@@ -1,5 +1,5 @@
 /* quiz.css — the Quiz sub-mode of Learn (QuizPanel.tsx), and the
-   Recall | Tutorial | Explore | Quiz switch that sits at the left of the
+   Recall | Explore | Quiz switch that sits at the left of the
    band's head.
 
    Its structural classes are the glossary band's rather than a second
@@ -18,7 +18,7 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Tutorial | Explore | Quiz, at the left of the band's head: the
+/* Recall | Explore | Quiz, at the left of the band's head: the
    part-switcher every mode shares, `.summ-views` / `.summ-view-btn`
    (mode-band.css § the part-switcher; plan 261007h § F2), so its look is not
    here. Toggle buttons with `aria-pressed`, and the pressed one is filled. It
@@ -29,29 +29,36 @@
    than wrap, as every part-switcher does: the bin and the Written-for-you
    badge after it are pushed to the row's right end, and give up nothing. */
 .band-head > .learn-submode { margin-right: auto; }
-/* **Four chips (every owner since 2026-10-11; only with the Experimental switch
-   on before that) tighten their side padding, and
-   only in a narrow head**; anywhere else they take the bar's own (0.6rem, 0.8rem
+/* **Three or more chips tighten their side padding, and only in a narrow
+   head**; anywhere else they take the bar's own (0.6rem, 0.8rem
    under a finger), as every other part-switcher does. Until 2026-10-07 they were
    tight at every width, 4px a side even at 1440 where the head has 490px, and
    looked cramped beside every other mode's bar (the designer's review of plan
    261007h § F2).
 
    The narrow head is an iPad's: its band is 288px, so the head row has 226px
-   of content under a finger (the (i) keeps the right 49.6px). Four chips are
-   about 264px at 0.8rem and 196px at 0.25rem, and the bin Recall, Tutorial and
-   Explore add beside them is 22px plus a 7px gap: 225px fits, 293px would
-   scroll. A phone's head is 317px and a 1024px window's 346px, so both have
-   the room. The line is 19rem (304px), between the two; below it the bar would
-   still scroll sideways and fade at the edge rather than break, so the line
-   is about comfort, not correctness. Measured 2026-10-07; plan 261005h item B
-   measured the first version.
+   of content under a finger (the (i) keeps the right 49.6px). Four chips
+   (Recall, Tutorial, Explore, Quiz) were about 264px at 0.8rem and 196px at
+   0.25rem, and the bin Recall and Explore add beside them is 22px plus a 7px
+   gap: 225px fits, 293px would scroll. A phone's head is 317px and a 1024px
+   window's 346px, so both have the room. The line is 19rem (304px), between
+   the two; below it the bar would still scroll sideways and fade at the edge
+   rather than break, so the line is about comfort, not correctness. Measured
+   2026-10-07; plan 261005h item B measured the first version.
+
+   **Three chips since 2026-10-20**, when Tutorial was folded into Recall
+   (plan 261020m). Without Tutorial's chip the three should come to roughly
+   190px at 0.8rem, which with the bin would just fit the iPad's 226px — an
+   estimate from the numbers above, not a measurement. So the rule now starts
+   at three, which keeps the iPad safe at the cost of tighter chips there; if
+   a measurement shows three fit at full padding, it can go back to four (a
+   rule for a fourth part, should one come).
 
    `container` on the head, not the bar: the bar shrinks to what it holds, and
-   it is the head's width that decides whether four wide chips fit. */
+   it is the head's width that decides whether the chips fit. */
 .band-head:has(> .learn-submode) { container: learn-head / inline-size; }
 @container learn-head (max-width: 19rem) {
-  .learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
+  .learn-submode:has(> .learn-submode-btn:nth-child(3)) > .learn-submode-btn {
     padding-inline: 0.25rem;
   }
 }

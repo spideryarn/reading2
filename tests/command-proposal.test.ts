@@ -68,9 +68,9 @@ describe("RISK", () => {
 describe("the two proposals chat and the guide share (plan 261007j)", () => {
   it("parses a mode key of either shape, and nothing else", () => {
     expect(parseProposalToken("[cmd:mode:mode%3Aglossary]")).toEqual({ id: "mode", key: "mode:glossary" });
-    expect(parseProposalToken("[cmd:mode:submode%3Alearn%3Atutorial]")).toEqual({
+    expect(parseProposalToken("[cmd:mode:submode%3Alearn%3Aexplore]")).toEqual({
       id: "mode",
-      key: "submode:learn:tutorial",
+      key: "submode:learn:explore",
     });
     for (const raw of [
       "[cmd:mode:glossary]",
@@ -92,7 +92,7 @@ describe("the two proposals chat and the guide share (plan 261007j)", () => {
     expect(parseProposalToken("[cmd:quick-search:%20%20]")).toBeNull();
     expect(parseProposalToken(`[cmd:quick-search:${"a".repeat(201)}]`)).toBeNull();
     for (const proposal of [
-      { id: "mode", key: "submode:learn:tutorial" },
+      { id: "mode", key: "submode:learn:explore" },
       { id: "quick-search", words: "rock & roll" },
     ] as const) {
       expect(parseProposalToken(formatProposalToken(proposal))).toEqual(proposal);

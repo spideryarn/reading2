@@ -400,7 +400,7 @@ describe("a guide turn", () => {
 });
 
 describe("a turn of any other kind", () => {
-  it.each(["chat", "learn", "tutorial", "explore", "candidates"] as const)(
+  it.each(["chat", "learn", "explore", "candidates"] as const)(
     "%s neither asks for the count nor carries the line",
     async (kind) => {
       const count = vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(0);

@@ -43,8 +43,8 @@ you, start with [Your first article](/help/first-article).
 ## Afterwards
 
 - **Open [Learn](/help/mode-learn)** when you want it to stick. In **Recall** you say what you took
-  from the piece and find out where you went wrong; **Tutorial** takes a little of the piece at a
-  time; **Quiz** asks up to twenty short questions.
+  from the piece and find out where you went wrong — or, if you haven't read it yet, it takes you
+  through a little at a time; **Quiz** asks up to twenty short questions.
 - **Go back to Ideas** for **What this piece adds**, a short list of the ideas worth taking away.
 - **Read the [Summary](/help/mode-summary)** to check you came away with the main points.
 

@@ -311,9 +311,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <Portrait shot={SHOTS.learn} title="Learn." mode="learn">
             Type or talk about what you remember of the piece. Short replies correct what comes apart
             from it, link the passage, and usually nudge you to remember a little more — filling the
-            gap when you are stuck rather than making you fail. Written not to be annoying,
-            patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
-            at a time and ask you to put it in your own words. Or Explore, which starts from what you
+            gap when you are stuck rather than making you fail. Not read it yet? It takes you through
+            the piece a little at a time and asks you to put each part in your own words. Written not
+            to be annoying, patronising or superior. Or choose Explore, which starts from what you
             have marked and helps you work out what you think.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29

@@ -4593,7 +4593,9 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore','guide')`),
+    /* `tutorial` until 2026-10-20, when Tutorial was folded into Recall:
+       drizzle/20261020063618_fold_tutorial_into_recall.sql. */
+    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','explore','guide')`),
     /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
        modes is wider than the union on purpose: the later callers are named
        in the plan, and widening a CHECK is a migration each time. Necessary
@@ -4674,20 +4676,17 @@ export const chatThreads = spideryarn.table(
      *
      * `chat_threads_one_remember`, over `kind = 'remember'`, until 2026-10-06:
      * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql.
+     *
+     * `chat_threads_one_tutorial` guarded the Tutorial thread the same way
+     * until 2026-10-20, when Tutorial was folded into Recall and its threads
+     * into this one: drizzle/20261020063618_fold_tutorial_into_recall.sql,
+     * docs/plans/261020m-recall-and-tutorial-become-one-recall.md.
      */
     uniqueIndex("chat_threads_one_learn")
       .on(t.articleId)
       .where(sql`${t.kind} = 'learn'`),
     /**
-     * **One Tutorial thread per article**, for the same reason and with the
-     * same fallback (`targetOf`). No fold was needed when it was added: no
-     * Tutorial thread existed before the index. docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md.
-     */
-    uniqueIndex("chat_threads_one_tutorial")
-      .on(t.articleId)
-      .where(sql`${t.kind} = 'tutorial'`),
-    /**
-     * **One Explore thread per article**, Learn's fourth sub-mode: the same
+     * **One Explore thread per article**, one of Learn's sub-modes: the same
      * reason, the same fallback, and again no fold, because no Explore thread
      * existed before the index. docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md.
      */

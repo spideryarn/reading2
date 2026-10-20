@@ -380,7 +380,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * screen to say why. `replace`, like `?debatethread=`: it narrows a list
  * rather than moving to a new view.
  *
- * `learn` is one word for Recall, Tutorial and Explore together. Which
+ * `learn` is one word for Recall and Explore together. Which
  * conversation belongs to which word is `chatFrom` in thread-source.ts; the
  * words are here so this eager file does not import that one. It was
  * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
@@ -1370,26 +1370,27 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ----------------------------------------------- Learn's four sub-modes --
+/* ---------------------------------------------- Learn's three sub-modes --
    docs/plans/260831al-review-quiz-sub-mode.md. The key was `?remember=` until
    2026-10-06 and is not aliased: an old link opens Learn at Recall
    (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md;
    last-view.ts § `NEVER_REMEMBERED` keeps such a link a link). */
 
 /** Free recall, or the questions the piece asks you back. */
-/* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
-   docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
-   Explore (since 2026-10-03,
+/* In the order the chips are drawn: Recall, Explore (since 2026-10-03,
    docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
-   Quiz. The three conversations sit together and the one that is not a
-   conversation comes last. */
-export const LEARN_VIEWS = ["recall", "tutorial", "explore", "quiz"] as const;
+   Quiz. The two conversations sit together and the one that is not a
+   conversation comes last. Tutorial sat between Recall and Explore from
+   2026-10-02 until 2026-10-20, when Recall absorbed it; an old
+   `?learn=tutorial` is lifted to Recall before anything reads it (router.ts §
+   `liftLegacyLearnTutorial`), and would read as Recall here anyway.
+   docs/plans/261020m-recall-and-tutorial-become-one-recall.md. */
+export const LEARN_VIEWS = ["recall", "explore", "quiz"] as const;
 export type LearnView = (typeof LEARN_VIEWS)[number];
 
 /**
- * Which part of Learn is open — `recall` (the default, omitted), `tutorial`,
- * `explore` or `quiz`. Tutorial and Explore are conversations like Recall, each
- * with its own one thread, so `?thread=` follows them exactly as it follows
+ * Which part of Learn is open — `recall` (the default, omitted), `explore` or
+ * `quiz`. Explore is a conversation like Recall, with its own one thread, so `?thread=` follows them exactly as it follows
  * Recall; only Quiz clears it.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A

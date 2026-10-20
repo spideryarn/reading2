@@ -22,7 +22,7 @@ const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" }
 const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
 
 /** The system message a turn of this kind is sent. */
-const system = (kind: "chat" | "learn" | "tutorial" | "explore"): string => {
+const system = (kind: "chat" | "learn" | "explore"): string => {
   const messages = buildConverseMessages({ meta, blocks, history: [], question: "q", kind });
   const found = messages.find((m) => m.role === "system");
   if (!found) throw new Error(`no system message for a ${kind} turn`);
@@ -30,7 +30,7 @@ const system = (kind: "chat" | "learn" | "tutorial" | "explore"): string => {
 };
 
 describe("the rule about linking to the web", () => {
-  it.each(["chat", "learn", "tutorial", "explore"] as const)("is in the %s prompt", (kind) => {
+  it.each(["chat", "learn", "explore"] as const)("is in the %s prompt", (kind) => {
     const prompt = system(kind);
     expect(prompt).toContain("LINKING TO THE WEB");
     expect(prompt).toContain("NEVER invent a URL");
@@ -52,7 +52,6 @@ describe("the rule about linking to the web", () => {
       return prompt.slice(at).split("\n\n").slice(0, 3).join("\n\n");
     };
     expect(clip(system("learn"))).toBe(clip(system("chat")));
-    expect(clip(system("tutorial"))).toBe(clip(system("chat")));
     expect(clip(system("explore"))).toBe(clip(system("chat")));
   });
 
