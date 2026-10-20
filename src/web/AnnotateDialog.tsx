@@ -703,7 +703,7 @@ export function AnnotateDialog({
             )}
             {/* **Discard, not Cancel**: it is the only control here that throws
                 the reader's words away, and it says so. */}
-            <button type="button" className="linky" onClick={discard}>
+            <button type="button" className="linky tone-negative" onClick={discard}>
               Discard
             </button>
             {/* **`type="button"`, and it matters.** Enter in a form presses its
@@ -722,7 +722,7 @@ export function AnnotateDialog({
             </button>
             {/* Never disabled for being empty: saving nothing is a bookmark,
                 which is the point. The only submit button in the box. */}
-            <button type="submit" className="annotate-save" disabled={waiting}>
+            <button type="submit" className="annotate-save tone-positive" disabled={waiting}>
               Save
             </button>
           </div>

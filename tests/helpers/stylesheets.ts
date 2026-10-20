@@ -35,6 +35,14 @@ const ROOT = path.resolve(import.meta.dirname, "..", "..");
 /** The one file `main.tsx` imports. Everything else hangs off it. */
 export const ENTRY = "src/web/tailwind.css";
 
+/**
+ * **The one hand-written sheet in a layer above the utilities**, imported from
+ * `ENTRY` as `layer(tone)` rather than from `styles.css` (plan 261020z; the
+ * note above its import in tailwind.css). It is part of the reading view's
+ * cascade, and the last of it.
+ */
+export const TONE_SHEET = "src/web/button-tone.css";
+
 /** The former contents of `styles.css`, rooted at the file that still names them. */
 const READER_ROOT = "src/web/styles.css";
 
@@ -53,12 +61,12 @@ export interface Sheet {
  * `--color-…` match something nobody in this repo wrote.
  *
  * The `layer(...)`/`prefix(...)`/`source(...)` suffixes are ignored rather than
- * parsed. **One relative import does carry one** — `tailwind.css`'s
+ * parsed. **Two relative imports do carry one**, both in `tailwind.css`:
  * `@import "./styles.css" layer(app)`, which is the whole mechanism that puts
- * the reading-view rules in `@layer app` (see that file's header). A second one
- * anywhere would be the bug, and
- * `tests/styles-entry-is-imports-only.test.ts` is what refuses it, in the only
- * file that could grow one.
+ * the reading-view rules in `@layer app` (see that file's header), and
+ * `@import "./button-tone.css" layer(tone)`, the one sheet above the utilities.
+ * A third anywhere would be the bug, and
+ * `tests/styles-entry-is-imports-only.test.ts` is what refuses it.
  */
 /**
  * **Both spellings, because CSS has two and the ban is only worth what it
@@ -205,7 +213,7 @@ export function allSheets(): Sheet[] {
  * was introduced to avoid.
  */
 export function readerSheets(): Sheet[] {
-  return walk(READER_ROOT).filter((s) => s.path.startsWith("src/web/"));
+  return [...walk(READER_ROOT), ...walk(TONE_SHEET)].filter((s) => s.path.startsWith("src/web/"));
 }
 
 /** `readerSheets()` concatenated, in cascade order. */

@@ -297,6 +297,11 @@ describe("Author gifts", () => {
     await act(async () => button(card(DRAFT), "Send")?.click());
     expect(writes()).toEqual([]);
     expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
+    /* Plan 261020z: green outline send, red back-out. */
+    const sendTo = button(card(DRAFT), "Send to ann@example.test");
+    expect(sendTo?.classList.contains("tone-positive")).toBe(true);
+    expect(sendTo?.getAttribute("data-variant")).toBe("outline");
+    expect(button(card(DRAFT), "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
     await settle();
     /* Plan 261010i: the gift as the confirmation showed it, so an agent's edit since is refused. */
@@ -468,6 +473,9 @@ describe("Author gifts", () => {
     const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
     expect(box.value).toBe("Old notes.\nSecond line.");
     await act(async () => sets(box, "Old notes.\nSecond line.\nShe replied."));
+    /* Plan 261020z: Save notes green, Cancel red. */
+    expect(button(c, "Save notes")?.classList.contains("tone-positive")).toBe(true);
+    expect(button(c, "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button(c, "Save notes")?.click());
     await settle();
     expect(writes()).toEqual([
@@ -669,6 +677,9 @@ describe("Author gifts", () => {
     await act(async () => button(c, "Edit")?.click());
     const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
     await act(async () => sets(name, "Ann Author"));
+    /* Plan 261020z: Save green, Cancel red. */
+    expect(button(c, "Save")?.classList.contains("tone-positive")).toBe(true);
+    expect(button(c, "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button(c, "Save")?.click());
     await settle();
     expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { recipientName: "Ann Author" } }]);

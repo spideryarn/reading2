@@ -128,11 +128,11 @@ export function AddShareLink({
             {/* The press that makes a link. `LinkAtAdd.create` refuses it
                 without the tick too; the disabled state is the reader being
                 told why. */}
-            <Button type="button" size="sm" disabled={!state.rights} onClick={() => link.create()}>
+            <Button type="button" variant="outline" size="sm" className="tone-positive" disabled={!state.rights} onClick={() => link.create()}>
               <Link2 size={14} />
               Create the link
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => link.cancel()}>
+            <Button type="button" variant="ghost" size="sm" className="tone-negative" onClick={() => link.cancel()}>
               Cancel
             </Button>
           </div>

@@ -1118,10 +1118,10 @@ function VoucherRow({
             onSubmit={(e) => void save(e)}
             className="tw:flex tw:flex-wrap tw:gap-2"
           >
-            <button type="submit" disabled={busy} className={BUTTON}>
+            <button type="submit" disabled={busy} className={`${BUTTON} tone-positive`}>
               {busy ? "Saving…" : "Save"}
             </button>
-            <button type="button" disabled={busy} onClick={() => setEditing(false)} className={BUTTON}>
+            <button type="button" disabled={busy} onClick={() => setEditing(false)} className={`${BUTTON} tone-negative`}>
               Cancel
             </button>
           </form>

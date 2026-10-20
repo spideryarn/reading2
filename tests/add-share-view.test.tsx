@@ -80,6 +80,16 @@ describe("the press for every public-sharing state", () => {
     expect(publicPress()).toBeNull();
   });
 
+  it("paints the confirmation's send green and its back-out red", () => {
+    /* Plan 261020z. */
+    render({ kind: "confirming", rights: false });
+    const named = (label: string) =>
+      [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === label);
+    expect(named("Share it")?.classList.contains("tone-positive")).toBe(true);
+    expect(named("Share it")?.getAttribute("data-variant")).toBe("outline");
+    expect(named("Cancel")?.classList.contains("tone-negative")).toBe(true);
+  });
+
   it("keeps the confirmation's own Cancel mapped to cancel, not untick", () => {
     render({ kind: "confirming", rights: false });
     expect(publicPress()).toBeNull();

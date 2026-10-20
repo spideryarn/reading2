@@ -449,6 +449,9 @@ describe("dismissing it with words unsaved", () => {
     type(box(0), "A physicist.");
     const done = button(/^Done$/);
     if (!done) throw new Error("no Done button");
+    /* Plan 261020z: Done is the green outline send. */
+    expect(done.classList.contains("tone-positive")).toBe(true);
+    expect(done.getAttribute("data-variant")).toBe("outline");
     await act(async () => done.click());
     expect(panel()).not.toBeNull();
     await act(async () => patches[0]?.answer(ok({ profile: "A physicist." })));

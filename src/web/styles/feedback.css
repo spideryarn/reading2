@@ -390,7 +390,7 @@ a.fb-earlier-page:focus-visible {
   gap: 0.5rem;
 }
 /* **Green to send, red to put off or back out**: `.tone-positive` and
-   `.tone-negative`, styles/button-tone.css, which also dims either when it
+   `.tone-negative`, src/web/button-tone.css, which also dims either when it
    cannot be pressed. Send reply and Send addendum are green by construction
    (FeedbackSendBox.tsx); Defer for now and Cancel red; Bring back neutral,
    because it undoes a deferral (261011h, 261020f). */
@@ -762,7 +762,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   font-size: 0.8rem;
   cursor: pointer;
 }
-/* **Send is green; Cancel and Close are red** — styles/button-tone.css, which
+/* **Send is green; Cancel and Close are red** — src/web/button-tone.css, which
    paints them and dims an unpressable one. Send went green first (spya-bvzavw,
    plan 261017c), because the bottom-right sent on Write but shut on Earlier;
    Cancel and Close stayed grey until Greg asked for them red too (spya-as0et6,

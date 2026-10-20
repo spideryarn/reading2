@@ -1647,15 +1647,17 @@ function ControlsAcrossModes() {
             the pair that ends a form: the button that sends what you wrote is{" "}
             <code className="design-token">--positive</code> green, the one that leaves or puts off
             without sending is <code className="design-token">--danger</code> red — text and border
-            only, no wash, hover the same, dimmed when it cannot be pressed unless it is working.
-            Red is a back-out cue, not a promise about draft retention: Write's Cancel and Earlier's
-            Close keep the Write draft; the addendum's existing Cancel discards its local draft.
-            Navigation (Previous, Next) and undoing (Bring back) stay neutral. The words carry the
-            meaning; the colour is a shortcut.
+            only, no wash even on hover, dimmed when it cannot be pressed unless it is working. One
+            class on any button: a shadcn <code>Button</code> (outline or ghost, never the orange
+            fill), an admin pill or a hand-rolled one, because the sheet is in a layer above the
+            utilities. Red is a back-out cue, not a promise about draft retention: Write's Cancel
+            keeps the Write draft; the addendum's Cancel discards its own. Not for a delete (the
+            destructive fill), navigation, undoing, or a button that starts a model call. The words
+            carry the meaning; the colour is a shortcut.
           </>
         }
         finger={<>the family's own size; the colour adds nothing to the target.</>}
-        usedBy="the Feedback dialog: Send and Cancel on Write, Close on Earlier, Send addendum and Cancel, Send reply and Defer for now"
+        usedBy="the Feedback dialog's pairs; sharing and private links on Add and Metadata; an author gift; Start again; the reader panel's Done; a note's Save and Discard; Chat's rename and edit-a-question ticks; the admin pages' Save and Send. The list: plan 261020z"
       >
         <button type="button" className="fb-cancel tone-negative">
           Cancel
@@ -1663,6 +1665,15 @@ function ControlsAcrossModes() {
         <button type="button" className="fb-send tone-positive">
           Send
         </button>
+        <Button type="button" variant="outline" size="sm" className="tone-positive">
+          Share it
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="tone-negative">
+          Cancel
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="tone-positive" disabled>
+          Share it
+        </Button>
       </Family>
 
       <Family

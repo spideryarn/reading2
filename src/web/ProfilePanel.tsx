@@ -707,6 +707,7 @@ function PanelBody({
               type="button"
               size="xs"
               variant="ghost"
+              className="tone-negative"
               disabled={about.inFlight || purpose.inFlight || dictating}
               onClick={() => {
                 /* Explicitly suppress the hooks' unmount flush: the label says
@@ -723,7 +724,8 @@ function PanelBody({
           <Button
             type="button"
             size="xs"
-            className="prof-panel-done"
+            variant="outline"
+            className="prof-panel-done tone-positive"
             disabled={closing}
             onClick={() => {
               if (ask(true)) onClose();

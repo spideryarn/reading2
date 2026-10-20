@@ -180,6 +180,10 @@ async function arm(): Promise<void> {
   for (const step of AUTHOR_GIFT_AT_ADD_STEPS) expect(box.textContent).toContain(step);
   expect(box.textContent).toContain("up to three searches");
   expect(button(AUTHOR_GIFT_AT_ADD_CONFIRM, box)?.disabled).toBe(true);
+  /* Plan 261020z: green outline send, red back-out. */
+  expect(button(AUTHOR_GIFT_AT_ADD_CONFIRM, box)?.classList.contains("tone-positive")).toBe(true);
+  expect(button(AUTHOR_GIFT_AT_ADD_CONFIRM, box)?.getAttribute("data-variant")).toBe("outline");
+  expect(button("Cancel", box)?.classList.contains("tone-negative")).toBe(true);
   const rights = [...box.querySelectorAll("label")]
     .find((l) => l.textContent?.includes(SHARING_RIGHTS_CONFIRM))
     ?.querySelector("input");

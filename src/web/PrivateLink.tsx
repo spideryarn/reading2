@@ -302,7 +302,7 @@ export function PrivateLink({
             <span>{SHARING_RIGHTS_CONFIRM}</span>
           </label>
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <Button type="button" size="sm" disabled={!rights} onClick={() => void change("on")}>
+            <Button type="button" variant="outline" size="sm" className="tone-positive" disabled={!rights} onClick={() => void change("on")}>
               <Link2 size={14} />
               Create the link
             </Button>
@@ -310,6 +310,7 @@ export function PrivateLink({
               type="button"
               variant="ghost"
               size="sm"
+              className="tone-negative"
               onClick={() => {
                 setConfirming(false);
                 setRights(false);

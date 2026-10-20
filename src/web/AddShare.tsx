@@ -174,11 +174,11 @@ export function AddShare({
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             {/* The press that publishes. `ShareAtAdd.share` refuses it without
                 the tick too; the disabled state is the reader being told why. */}
-            <Button type="button" size="sm" disabled={!state.rights} onClick={() => share.share()}>
+            <Button type="button" variant="outline" size="sm" className="tone-positive" disabled={!state.rights} onClick={() => share.share()}>
               <Globe size={14} />
               Share it
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => share.cancel()}>
+            <Button type="button" variant="ghost" size="sm" className="tone-negative" onClick={() => share.cancel()}>
               Cancel
             </Button>
           </div>
