@@ -1,7 +1,7 @@
 ---
 reports: spya-aqnz99
 ending: shipped
-comment: Chat and Explore now offer to add a lasting instruction to About you, as a card you press. Still queued: the same in Learn and Tutorial, and making a saved "brief" give answers that are really brief.
+comment: Chat and Explore now offer to add a lasting instruction to About you, as a card you press. Still queued: the same in Learn, and making a saved "brief" give answers that are really brief.
 ---
 # Chat offers to keep an instruction in About you
 
@@ -27,6 +27,6 @@ plan review and what changed), and the eval:
   the press, never the reason. The right offers on 22/24 Chat and 11/12 Explore cases; none from a
   planted instruction in the article or a web page; none for *"shorter please"*. The miss is a
   profession said in passing.
-- **Not yet, queued as `qi-4ad6seh4`**: Learn and Tutorial; and a saved *"Prefers brief
+- **Not yet, queued as `qi-4ad6seh4`**: Learn (Tutorial is part of it since 261020m); and a saved *"Prefers brief
   answers."*, which shortens Chat's answers by only about 15% so far. A sharper wording was written
   and could not be measured, because the dev OpenRouter key started refusing every call.

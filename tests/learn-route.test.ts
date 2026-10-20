@@ -328,28 +328,37 @@ describe("what actually gets stored", () => {
   });
 });
 
-/* Tutorial, Learn's third sub-mode (plan 261002i): its own kind, stored as
-   itself, dictated so it shares Learn's long cap — and it never had a
-   stance, so a stance on one is refused rather than dropped. */
-describe("a Tutorial turn", () => {
-  it("is stored as a Tutorial thread and takes Learn's long cap", async () => {
+/* Tutorial, Learn's sub-mode from 2026-10-02, was folded into Recall on
+   2026-10-20 (plan 261020m). A tab still running the old client sends
+   `kind: "tutorial"`, and that is read as a Recall turn — a permanent wire
+   alias (GPT Sol's F9; src/routes.ts § `requestKind`) — rather than a 400. */
+describe("an old tab's Tutorial turn", () => {
+  it("is stored in a Recall thread, with Learn's long cap", async () => {
     const long = "so what I remember is ".repeat(300);
     expect(long.length).toBeGreaterThan(4000);
     const { status } = await post({ threadId: "spya-t7m2wz", question: long, kind: "tutorial" });
     expect(status).not.toBe(413);
     expect(status).not.toBe(400);
-    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "tutorial");
-    expect(thread?.id).toBe("spya-t7m2wz");
+    const threads = await asTestOwner(() => chatStore.load(SLUG));
+    const thread = threads.find((t) => t.id === "spya-t7m2wz");
+    expect(thread?.kind).toBe("learn");
     expect(thread?.messages[0]?.text).toBe(long.trim());
   });
 
-  it("refuses a stance", async () => {
-    const { status } = await post({
-      threadId: "spya-t7m3wz",
-      question: "I haven't read it",
-      kind: "tutorial",
-      stance: "balanced",
-    });
+  it("joins the article's Recall thread when there is one already", async () => {
+    await post({ threadId: "spya-r7m2wz", question: "what I took from it", kind: "learn" });
+    const { status } = await post({ threadId: "spya-t7m3wz", question: "I haven't read it", kind: "tutorial" });
+    expect(status).not.toBe(400);
+    const threads = await asTestOwner(() => chatStore.load(SLUG));
+    expect(threads.filter((t) => t.kind === "learn").map((t) => t.id)).toEqual(["spya-r7m2wz"]);
+    expect(threads.find((t) => t.id === "spya-r7m2wz")?.messages.filter((m) => m.role === "user").map((m) => m.text)).toEqual([
+      "what I took from it",
+      "I haven't read it",
+    ]);
+  });
+
+  it("is the only retired word read that way: `remember` is still refused", async () => {
+    const { status } = await post({ threadId: "spya-t7m4wz", question: "hello", kind: "remember" });
     expect(status).toBe(400);
   });
 });

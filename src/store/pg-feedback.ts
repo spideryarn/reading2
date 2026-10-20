@@ -317,8 +317,12 @@ function toDeferral(row: { questionId: string; deferredAt: Date | null; updatedA
 /** As much of a report's first line as fits beside a question's title. */
 const FIRST_LINE_CHARS = 140;
 
-/** The first line with anything on it, cut at `FIRST_LINE_CHARS` with a mark that it was. */
-function firstLineOf(body: string): string {
+/**
+ * The first line with anything on it, cut at `FIRST_LINE_CHARS` with a mark
+ * that it was. Also pg-admin-feedback.ts's, for another reader's report in a
+ * thread, so the two first lines cannot be cut differently.
+ */
+export function firstLineOf(body: string): string {
   const line = body.split(/\r\n|[\n\r]/).find((one) => one.trim() !== "")?.trim() ?? "";
   return line.length > FIRST_LINE_CHARS ? `${line.slice(0, FIRST_LINE_CHARS).trimEnd()}…` : line;
 }

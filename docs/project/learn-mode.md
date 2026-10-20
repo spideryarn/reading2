@@ -2,12 +2,14 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-27, and named *Remember* from 2026-09-01 to 2026-10-05, *Learn* since; Recall, Tutorial and Quiz since 2026-10-02, and Explore since 2026-10-03** — the Review → Remember rename and its reasoning are in
+**Built 2026-08-27, and named *Remember* from 2026-09-01 to 2026-10-05, *Learn* since; Recall and Quiz since 2026-10-02, Explore since 2026-10-03, and Tutorial from 2026-10-02 until 2026-10-20, when Recall took it in** — the Review → Remember rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
 types — about what they remember of the article, and the model corrects briefly where their account
 and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
 the gap when they are stuck. One voice since 2026-10-02; until then four **stances** (Balanced,
-Respond, Socratic, Signposts) were picked per turn. Where the four sub-modes are going:
+Respond, Socratic, Signposts) were picked per turn. A reader who has not read the piece is welcome
+too: Recall starts them from zero and teaches it a cited piece at a time. Where the three sub-modes
+are going:
 [learning-vision.md](learning-vision.md).
 
 **It has been called Learn since 2026-10-05** (Greg, report `spya-mvmpks`;
@@ -52,8 +54,9 @@ The plan, the reasoning and the cross-family review:
    the article answers the reader       the reader answers, and finds out
                                         where they were off
 
-   can be used to avoid reading         CANNOT be — there is nothing to
-                                        say until you have read it
+   can be used to avoid reading         a reader who has not read it is
+                                        taught a cited piece at a time,
+                                        and sent into each passage
 ```
 
 ## In this doc
@@ -61,8 +64,9 @@ The plan, the reasoning and the cross-family review:
 - [§ Why this one is not the anti-goal](#why-this-one-is-not-the-anti-goal) — why a model that talks to you is still reading-augmenting
 - [§ One adaptive voice](#one-adaptive-voice) — how Recall decides what to say next
 - [§ The prompt is the feature](#the-prompt-is-the-feature) — before editing Recall's prompt; evals
-- [§ Tutorial, the third sub-mode](#tutorial-the-third-sub-mode) — Tutorial's intent and prompt
-- [§ Explore, the fourth sub-mode](#explore-the-fourth-sub-mode) — Explore's remit, critiques, reader notes
+- [§ Tutorial, folded into Recall on 2026-10-20](#tutorial-folded-into-recall-on-2026-10-20) — what Tutorial was, and what moved where
+- [§ Who sees which chip](#who-sees-which-chip) — three chips, for every owner
+- [§ Explore](#explore) — Explore's remit, critiques, reader notes
 - [§ A link after a quotation shows the quoted words](#a-link-after-a-quotation-shows-the-quoted-words) — the quote-then-link rendering
 - [§ A Recall question links its passage, and has a Hint button](#a-recall-question-links-its-passage-and-has-a-hint-button) — passage links and hints
 - [§ Recall's `learn` conversation IS a chat thread](#recalls-learn-conversation-is-a-chat-thread) — one thread per article, and why it is stored like chat
@@ -76,17 +80,21 @@ The plan, the reasoning and the cross-family review:
 [vision.md § Anti-goals](vision.md#anti-goals) names *"a chatbot with the article stuffed in the
 context window"*, and [260826a-chat-mode.md § Say the awkward thing
 first](../plans/260826a-chat-mode.md#say-the-awkward-thing-first) is a long apology for building one anyway.
-Recall needs no such apology, and the reason is structural rather than a promise: **the reader has to
-have read the piece before they can use it at all.** There is nothing to say otherwise, and the
-output is a set of paragraphs to go back to. vision.md's *recall* entry is the nearest thing already
-written down; this is that idea with the direction reversed, the reader supplying the answer first.
+Recall needs less of one. For a reader who has read the piece the reason is structural: they supply
+the answer first, and the output is a set of paragraphs to go back to. vision.md's *recall* entry is
+the nearest thing already written down; this is that idea with the direction reversed.
 
-**Tutorial is the exception, and Greg made it** (§ Tutorial, the third sub-mode): a reader who has
-not read the piece may start there. What keeps it on the right side of the anti-goal is a rule
-rather than a structure — every piece it teaches is a short quotation or close paraphrase with its
-block id, and the reader is sent into that passage rather than told the piece instead of it. That is
-a promise the prompt makes and the eval checks, which is weaker than Recall's, and it is the thing to
-watch.
+**Since 2026-10-20 that is not the whole of it.** Until then Recall was unusable without having read
+the piece — there was nothing to say — and that was the guarantee. When Recall took Tutorial in
+([261020m](../plans/261020m-recall-and-tutorial-become-one-recall.md)), it took in Tutorial's
+exception too, which Greg made himself (*"it may be that the user says nothing. I haven't read it
+yet"*, `spya-j0scgz`): a reader who has not read it is started from zero and taught it a piece at a
+time. What keeps that on the right side of the anti-goal is a rule rather than a structure — every
+piece taught is a short quotation or close paraphrase with its block id, and the reader is sent into
+that passage rather than told the piece instead of it (*"This is guided reading, never a replacement
+for it"*, in `LEARN_SYSTEM`). That is a promise the prompt makes and the eval checks
+([`evals/learn-recall-turns.ts`](../../evals/learn-recall-turns.ts), whose `notRead` reader is that
+case), which is weaker than the structure was, and it is the thing to watch.
 
 ## One adaptive voice
 
@@ -115,6 +123,16 @@ So the four stances went, and the per-point triage Balanced did became the whole
    own 25-word ceiling. A long explanation becomes a pointer to the passage and a suggestion that
    Chat is the place to talk it through. (Greg also asked for a tool that starts that chat itself;
    there is none yet — [learning-vision.md](learning-vision.md).)
+
+**Teach or cue, since 2026-10-20**, when Recall took Tutorial in: a cue names where and what, never
+what it said, for a reader who has something to recall; for one who has not read it, remembers
+nothing, is stuck, or got nothing from the last nudge, Recall **teaches** one small cited piece
+instead and asks them to do something with it — say it back, say why the author needs it, give a
+case, apply it, connect it to an earlier part — climbing when they succeed and stepping down when
+they do not. Every three or four turns, and by the fourth reply at the latest, it reaches back to an
+earlier point, and it adapts to who the reader is (an expert is taken to the passage their goal is
+about; a newcomer gets plain words and small steps). § Tutorial, folded into Recall, below, has what
+came from where.
 
 The ranking that governed the stances survives, with the nudge in their place: **the entitlement
 rules, then the reader's own words, then the nudge.** The research behind the nudges and the hint
@@ -166,8 +184,8 @@ the prompt *said* correctly and the model did not do:
    wanted, the second is the sentence to delete.
 
 **The world is not the article** (2026-10-18). When the model knows the piece is wrong on the
-point at hand, Recall and Tutorial now say so in one labelled sentence before the nudge or the
-task. That never counts against the reader's reading, which the entitlement section still judges
+point at hand, Recall now says so in one labelled sentence before the nudge (Tutorial did too,
+before the task, until it was folded into Recall). That never counts against the reader's reading, which the entitlement section still judges
 against the article alone. They may search to check a doubt they already have, but never to hunt
 for an objection. Greg's `spya-h5mteu`;
 [prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
@@ -227,7 +245,57 @@ article rather than a verdict on the reader. A green count with a patronising an
 [silent-success.md](../reusable/silent-success.md) is about, so the report prints every answer in
 full and the pass condition is a person reading them.
 
-## Tutorial, the third sub-mode
+## Tutorial, folded into Recall on 2026-10-20
+
+Greg, report `spya-gtzeqm`:
+
+> Can we collapse Recall and Tutorial to get the best of both worlds (and reduce the number of
+> sub-modes)?
+>
+> — Greg, 2026-10-19
+
+So Learn's chips went from Recall · Tutorial · Explore · Quiz to **Recall · Explore · Quiz**, and
+Recall does what both did ([261020m](../plans/261020m-recall-and-tutorial-become-one-recall.md),
+with GPT Sol's plan review). Recall kept its name because it is the default chip, the one with the
+data, the Hint button and Live, and because the principle Greg keeps returning to is recall; the
+one thing Tutorial's name said better — that a reader who has not read it is welcome — moved into
+Recall's chip card and its empty-state invitation. What moved where:
+
+- **The prompt.** `TUTORIAL_SYSTEM` is gone. What it had that Recall lacked is in `LEARN_SYSTEM`
+  ([`src/converse.ts`](../../src/converse.ts)): HOW TO START (the not-read reader started from zero,
+  a goal taken as a goal), the small cited piece and a task about it when there is nothing to recall
+  (§ One adaptive voice, *Teach or cue*), the task ladder with own-view questions rationed, COME BACK
+  TO EARLIER POINTS, ADAPT TO WHO THEY ARE, and the pointer to Explore. Tutorial's recency line in
+  the final message became Recall's (`lengthLine`), and Tutorial's opening offer became Recall's
+  (`readItFor`): *"It's fine if you haven't read it yet, or haven't finished."* The conflicts between
+  the two (teach or cue, one length, which questions carry a hint) are settled in the plan.
+- **The screen.** Tutorial's chip and card went; Recall's card and its empty state
+  (`LearnInvitation` in [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)) say that it is fine
+  not to have read it, and that Recall will take the reader through it a piece at a time.
+- **Stored conversations.**
+  [`drizzle/20261020063618_fold_tutorial_into_recall.sql`](../../drizzle/20261020063618_fold_tutorial_into_recall.sql)
+  appended each article's Tutorial messages to its Recall thread (after Recall's last turn, in their
+  own order; the Recall thread's id, Live sessions and comments kept or repointed; its gist cleared),
+  renamed every other Tutorial thread to `learn`, and dropped `chat_threads_one_tutorial` and the
+  kind from the CHECK. Nothing a reader wrote was deleted. A `chat.json` holding both is folded the
+  same way on read (`foldRetiredTutorial` in [`src/chat.ts`](../../src/chat.ts)).
+- **Old words.** `?learn=tutorial` opens Recall (`liftLegacyLearnTutorial` in
+  [`src/web/router.ts`](../../src/web/router.ts), for a remembered last view too); a request with
+  `kind: "tutorial"` from a tab open across the deploy is a Recall turn (`requestKind` in
+  [`src/routes.ts`](../../src/routes.ts)); a cached thread list that still says `tutorial` is read
+  as Recall ([`src/web/chat/retired-kinds.ts`](../../src/web/chat/retired-kinds.ts)); typing
+  *tutorial* in the command bar finds Recall. A stored chat answer's `submode:learn:tutorial` chip
+  is not aliased: the live door's check is a defence, and production had none.
+- **The eval.** `evals/learn-tutorial.ts` became
+  [`evals/learn-recall-turns.ts`](../../evals/learn-recall-turns.ts), Recall's multi-turn half, run
+  against kind `learn`, counting hints (a hint after a say-it-back is a defect);
+  [`evals/learn-recall.ts`](../../evals/learn-recall.ts) stays the single-turn half. Both were run
+  on the old prompts and three drafts of the new one:
+  [261020c](../investigations/261020c-merged-recall-prompt-against-recall-and-tutorial-evals.md).
+  The draft that taught everybody a say-it-back is why that task is now kept for a reader who has
+  not read the piece: for one who has, it gives up the act of recall.
+
+### What Tutorial was (2026-10-02 to 2026-10-20)
 
 **Built 2026-10-02**, from Greg's report `spya-j0scgz`:
 
@@ -237,8 +305,7 @@ full and the pass condition is a person reading them.
 > account anything from the user profile or the why are you reading this information. … lots of
 > small increments is probably better than big, slow increments.
 
-The chip order and visibility are in [§ Who sees which chip](#who-sees-which-chip-since-2026-10-11)
-(`?learn=tutorial`). **Each visible chip has its
+It had its own chip, between Recall and Explore (`?learn=tutorial`). **Each visible chip has its
 own card** since 2026-10-04 (`LEARN_VIEW_HOW` in
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx)), and the band's (i) is two short sentences
 and a list of the visible parts rather than one paragraph, because a chip's card never opens under a finger
@@ -253,13 +320,13 @@ reading is taken straight to it. The research is
 `TUTORIAL_SYSTEM` in [`src/converse.ts`](../../src/converse.ts), sharing Recall's spoken-input and
 citing sections by interpolation.
 
-**Why a reader who has not read it is allowed.** § Why this one is not the anti-goal rests on
-Learn being unusable without reading, and Tutorial is not. Greg decided the case himself —
-*"it may be that the user says nothing. I haven't read it yet"* — so Tutorial is built as **guided
+**Why a reader who has not read it was allowed.** § Why this one is not the anti-goal rested on
+Learn being unusable without reading, and Tutorial was not. Greg decided the case himself —
+*"it may be that the user says nothing. I haven't read it yet"* — so Tutorial was built as **guided
 reading**: every piece it teaches is a short quotation or close paraphrase with its block id,
 sent back into the article, never a summary standing in for it.
 
-**The machinery is Recall's.** A fourth `ThreadKind`, `tutorial`, one per article
+**The machinery was Recall's.** A fourth `ThreadKind`, `tutorial`, one per article
 (`chat_threads_one_tutorial`, beside Learn's index; `SINGLE_THREAD_KINDS` in
 [`src/types.ts`](../../src/types.ts) is the one list `targetOf` and `ConversationBand` read). Same
 band, same panel, same tall dictation box, Start over, Learn's long length cap, chat's job and
@@ -268,7 +335,7 @@ well at the moment"*, so the band passes no Live controls and `SpokenKind` stays
 The empty state asks the opening question, so the reader speaks first and the model never writes an
 unprompted turn.
 
-**Eval**: [`evals/learn-tutorial.ts`](../../evals/learn-tutorial.ts) — three scripted readers
+**Eval**: `evals/learn-tutorial.ts`, now [`evals/learn-recall-turns.ts`](../../evals/learn-recall-turns.ts) — three scripted readers
 (has not read it, remembers some, an expert with a profile and a narrow goal), five turns each,
 read in full. Five runs (`evals/results/remember-tutorial.261002i-run-1.md` … `-run-4.md`, then
 `remember-tutorial.md`). The substance was right from the first: the reader who had not read it was
@@ -284,7 +351,7 @@ and the reminder covers paraphrase too: run 5 had every opening turn linked, fou
 cited, and none over 112 words. Still imperfect: "that's exactly" survives as an opener twice, and
 one opening turn asked a two-part question.
 
-### It is about the author first (2026-10-03)
+### It was about the author first (2026-10-03)
 
 Greg, `spya-mtsf0y`, after a session on a paper he had read well:
 
@@ -316,17 +383,19 @@ for the reader's view two turns running.
 haven't read it yet, or haven't finished."* A first message with nothing of the piece in it and no
 request is started from zero without comment; a short one that names a goal is taken to the goal.
 
-**What the reader thinks has its own sub-mode since the same day**: § Explore, the fourth
-sub-mode, below, which starts from the reader's comments, highlights and conversations.
+**What the reader thinks has its own sub-mode since the same day**: § Explore, below, which
+starts from the reader's comments, highlights and conversations.
 
-### Who sees which chip, since 2026-10-11
+## Who sees which chip
 
-Every owner sees all four chips, switch on or off. Learn came out of the experimental switch on
-2026-10-05 with Recall, Tutorial and Quiz, and Explore followed on 2026-10-11 (Greg, `spya-jm0nfg`:
-*"because it's useful"*). The history is in
+Every owner sees all three chips, switch on or off. Learn came out of the experimental switch on
+2026-10-05 with Recall, Tutorial and Quiz, Explore followed on 2026-10-11 (Greg, `spya-jm0nfg`:
+*"because it's useful"*), and Tutorial went into Recall on 2026-10-20. The history is in
 [experimental-features.md](experimental-features.md#what-is-behind-it-today).
 
-## Explore, the fourth sub-mode
+<a id="explore-the-fourth-sub-mode"></a>
+
+## Explore
 
 **Built 2026-10-03**, stage 2 of
 [261003l](../plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md). Greg asked
@@ -350,9 +419,10 @@ And before it was built he said what "push" should not mean:
 >
 > — Greg, 2026-10-03
 
-The chips read **Recall · Tutorial · Explore · Quiz** (`?learn=explore`). Recall and Tutorial are
-about what the author says; Explore is about what the reader thinks. It is where Tutorial's rationed
-own-view turns go (§ It is about the author first).
+The chips read **Recall · Explore · Quiz** (`?learn=explore`; Tutorial sat between Recall and
+Explore until 2026-10-20). Recall is about what the author says; Explore is about what the reader
+thinks. It is where Recall's rationed own-view questions go — Tutorial's, before Recall took it in
+(§ It was about the author first).
 
 **Widened on 2026-10-05 to what may be wrong with the piece.** Greg, report `spya-mvmpks`:
 
@@ -374,7 +444,7 @@ whose rules are there to keep the move fair
   strongest answer. The piece's claim or qualification gets its own sentence and block id; the
   objection follows as the model's marked, uncited view, and is dropped if nothing is left of it.
 - **An absence is said of a passage or an argument, never of the whole piece.** The text the model
-  is given may lack footnotes and captions (Tutorial's prompt has the same rule).
+  is given may lack footnotes and captions (Recall's prompt has the same rule).
 - **It says whose view it is**: the model's own, marked as such, or somebody's found by searching
   and linked.
 - **Possible, not settled**: stated plainly, with what would settle it; no verdict on the piece as
@@ -383,12 +453,13 @@ whose rules are there to keep the move fair
 - **Asked, it answers** with a problem, not a question back. Unasked, it is one move among five.
 
 It is not Debate. Debate is a stored survey of what the web says about the piece; this is one turn
-of a conversation, about the argument or the reader's own doubt. Tutorial is unchanged.
+of a conversation, about the argument or the reader's own doubt. Tutorial was unchanged by it.
 
-There are four chips for every owner, and in a narrow band head the group tightens its side padding
-(`quiz.css`, an `@container learn-head` query around
-`.learn-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the 288px band on
-an iPad. Anywhere wider, they take the part-switcher's own padding.
+There are three chips for every owner (four until 2026-10-20), and in a narrow band head the group
+tightens its side padding (`quiz.css`, an `@container learn-head` query around
+`.learn-submode:has(> …:nth-child(3))`) so the chips and the start-over bin fit the 288px band on
+an iPad. Anywhere wider, they take the part-switcher's own padding. Whether three would fit at full
+padding was estimated, not measured; `quiz.css` says so.
 
 **What a turn does.** One move, in under about 150 words, with one question at most and last:
 
@@ -451,23 +522,23 @@ Tests: [`explore-kind.test.ts`](../../tests/explore-kind.test.ts) (the prompt, w
 lands, the byte-identical prefix) and
 [`explore-digest-route.test.ts`](../../tests/explore-digest-route.test.ts) (the request that goes
 out on an opening send, a retry, an edit, a second turn and a trimmed history; none for Chat,
-Recall, Tutorial or Candidates).
+Recall or Candidates).
 
 ### How it opens, and what it does not have
 
-The reader speaks first, as in Tutorial. The empty state says in two lines what Explore is for and
+The reader speaks first, as in Recall. The empty state says in two lines what Explore is for and
 offers four starters as buttons, each sent as the reader's first message word for word: *Start
 from what I've marked and discussed*, *Help me apply this to my own work*, *Where does this sit in
 the wider world?*, and since 2026-10-05 *Where might this piece be wrong, or missing something?*
 Recall's invitation refuses buttons because a Recall starter would be the reader's
 account written by us; these are requests, and put no view in the reader's mouth.
 
-**The machinery is Tutorial's**: a fifth `ThreadKind`, `explore`, one per article
+**The machinery is Recall's**, as Tutorial's was: a fifth `ThreadKind`, `explore`, one per article
 (`chat_threads_one_explore`), the same band, panel, tall dictation box, Start over and long length
-cap, chat's job and model. **No Live**, as Tutorial: which kinds offer it is `OFFERS_LIVE` in
+cap, chat's job and model. **No Live**, as Tutorial had none: which kinds offer it is `OFFERS_LIVE` in
 [`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx), said for every
 kind, where it was a `kind === "tutorial"` check that would have given Explore a button and a 400.
-A spoken turn would also carry no digest. **No command buttons**, as Recall and Tutorial.
+A spoken turn would also carry no digest. **No command buttons**, as Recall.
 
 **The eval** (2026-10-03):
 [`evals/learn-explore.ts`](../../evals/learn-explore.ts), written up in
@@ -490,7 +561,7 @@ arm's final state, one judge of the same family, and fixture notes that are not 
 
 ## A link after a quotation shows the quoted words
 
-In every answer drawn by `Cited` — Chat, Recall, Tutorial, Explore — a block link whose sentence quotes the
+In every answer drawn by `Cited` — Chat, Recall, Explore — a block link whose sentence quotes the
 article paints **those words** when pressed, not the whole paragraph. Greg, `spya-hzpf9b`: *"so
 that the user can see the quote in situ."* His links were all to the right blocks; the blocks were
 200 to 250 words long.
@@ -523,8 +594,11 @@ Greg, `spya-fryxrf`, 2026-10-04, on questions like "Do you remember what comes n
 **What a reader sees.** The nudge question that ends most Recall replies carries the block link of
 the passage that answers it, so they can go and look instead of remembering. Under a new answer is a
 closed **Hint** button. Pressed, it opens one line that makes the answer much easier to reach without
-being the answer. A pure clarification has neither link nor hint. Recall only: Tutorial, Explore and
-Chat have no hint.
+being the answer. A pure clarification has neither link nor hint. Recall only: Explore and Chat have
+no hint. Since Recall took Tutorial in (2026-10-20), four kinds of Recall question carry **no
+hint**: the not-read reader's opening question, a question asking the reader's own view, a
+say-it-back whose answer is the piece just taught, and an application to a case the article does
+not discuss — `splitHint` fails open, so a reply without one is drawn as written.
 
 **The model writes the hint in the same reply**, so the button opens at once and costs no second
 call. The contract is one shape, and `LEARN_SYSTEM` asks for exactly it:
@@ -675,8 +749,8 @@ lives on the **question** row, is a different rule and still crosses both
 
 ```
    ┌────────────────────────────────────────────────────────┐
-   │  system:  SYSTEM, LEARN_SYSTEM, TUTORIAL_SYSTEM     │  ← the KIND
-   │           or EXPLORE_SYSTEM                            │
+   │  system:  SYSTEM, LEARN_SYSTEM, EXPLORE_SYSTEM,        │  ← the KIND
+   │           CANDIDATES_SYSTEM or GUIDE_SYSTEM            │
    ├────────────────────────────────────────────────────────┤
    │  user:    the whole article, with block ids            │
    │           ▒▒▒▒▒ cache_control: ephemeral ▒▒▒▒▒         │  ← THE BREAKPOINT
@@ -719,9 +793,9 @@ Learn is one step further out again as the only mode whose content comes from th
 the list was shared — both
 modes showed every thread, a Remember row carried a `remember` tag, and opening one from chat moved
 `?mode=` with `?thread=`. Since `spya-peszam` (above) Recall shows its single thread directly,
-with no list, no `+`, no rename and the header reading *Learn*; Tutorial and Explore use the same
+with no list, no `+`, no rename and the header reading *Learn*; Explore uses the same
 one-thread shape. **Chat's side of that rule
-changed on 2026-10-05** (report `spya-hyfqkq`): Recall's, Tutorial's and Explore's conversations
+changed on 2026-10-05** (report `spya-hyfqkq`): Recall's and Explore's conversations
 are listed in Chat again, each as a row with Learn's icon that leads back here. Chat cannot open,
 rename or delete one —
 [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article). The thread is **derived during render** — the stored one if there is one, else
@@ -735,8 +809,8 @@ tab started for it (an answer, a spoken exchange) is still out (`settled` in `us
 DELETE always names a thread the server knows and never has to wait for one, and an empty, unnamed
 or half-answered conversation simply has no button.
 
-**What is typed and not sent stays in the box across a mode change**, since 2026-10-04, for Recall,
-Tutorial and Explore alike — kept per kind rather than per thread, because the band picks the
+**What is typed and not sent stays in the box across a mode change**, since 2026-10-04, for Recall
+and Explore alike — kept per kind rather than per thread, because the band picks the
 thread and may pick a different one on the way back. In memory only, so a reload loses it. **Start
 over does not clear the box**: a refused delete puts the conversation back, and the words should
 still be under it. [`chat-draft.ts`](../../src/web/chat-draft.ts);
@@ -758,7 +832,7 @@ differs is an empty state and a box six rows tall instead of one. Likewise one
 second chat state machine.
 
 **Live works in a Recall conversation too, and is saved as one** — including when it is the
-first thing said in the empty conversation Recall opens with. Tutorial and Explore have none
+first thing said in the empty conversation Recall opens with. Explore has none
 (§ How it opens, and what it does not have). Spoken rows carry no stance.
 [live-conversation.md](live-conversation.md) has the rule and the bug that prompted it.
 
@@ -769,7 +843,7 @@ beside it and first place in the row. Greg:
 > the input box should be much larger for Review mode, and probably emphasise the microphone UI,
 > because talking will be much less annoying than typing.
 
-Because talking is the expected input, a Recall, Tutorial or Explore turn has **its own length limit**
+Because talking is the expected input, a Recall or Explore turn has **its own length limit**
 (`MAX_LEARN_CHARS`, 20,000) rather than sharing chat's 4,000: that number is a considered cap on a
 typed question and an accident applied to a spoken paragraph, and a reader who talked for four
 minutes would have hit it after paying for the transcription. Same mistake `MAX_QUOTE_CHARS` had to

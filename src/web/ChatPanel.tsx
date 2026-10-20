@@ -384,7 +384,7 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Tutorial | Explore | Quiz control**, when this panel is one of
+   * **The Recall | Explore | Quiz control**, when this panel is one of
    * Learn's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
@@ -509,8 +509,8 @@ export function ChatPanel({
   onOrigin,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* **Learn's layout, for all three of its conversations** — Recall,
-     Tutorial and Explore are each one thread per article, dictated into a tall
+  /* **Learn's layout, for both of its conversations** — Recall and
+     Explore are each one thread per article, dictated into a tall
      box, with no list (`LEARN_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
   const learn = isLearnKind(kind);
@@ -568,7 +568,7 @@ export function ChatPanel({
    * the store once (`ChatHandoff` in ConversationModes.tsx), does not come
    * back after the reader has cleared it.
    *
-   * **Learn's is by kind, not by id.** Recall, Tutorial and Explore are each
+   * **Learn's is by kind, not by id.** Recall and Explore are each
    * one conversation per article and the band decides which conversation that
    * is — it can be a different one on the way back, when a stored one has
    * arrived or Start over has begun another — so the words go to whichever it
@@ -654,7 +654,7 @@ export function ChatPanel({
       about={
         learn ? (
           <LearnSubModesAbout
-            current={kind === "tutorial" ? "tutorial" : kind === "explore" ? "explore" : "recall"}
+            current={kind === "explore" ? "explore" : "recall"}
           />
         ) : open ? (
           /* Which model answered this conversation, and its thinking
@@ -663,9 +663,7 @@ export function ChatPanel({
         ) : undefined
       }
       label={
-        kind === "tutorial"
-          ? "A tutorial on this article"
-          : kind === "explore"
+        kind === "explore"
             ? "Explore what you think about this article"
             : learn
             ? "Recall what you took from this article"
@@ -1087,8 +1085,8 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
 /**
  * Every conversation about this article, most recently used first.
  *
- * **Every one, since 2026-10-05**: Recall's, Tutorial's and Explore's as well
- * as the chats, each with an icon at its head for where it came from, and a
+ * **Every one, since 2026-10-05**: Recall's and Explore's (and Tutorial's,
+ * until it was folded into Recall on 2026-10-20) as well as the chats, each with an icon at its head for where it came from, and a
  * filter above them when they came from more than one place. It showed only
  * chats from 2026-10-01 (plan 261001m) until report `spya-hyfqkq` asked for
  * all of them; plan
@@ -2148,9 +2146,7 @@ export function Conversation({
           <GuideGreeting greeting={openingGreeting} starts={empty} onAsk={(q) => onSend(q)} />
         )}
         {empty &&
-          (kind === "guide" ? null : kind === "tutorial" ? (
-            <TutorialInvitation />
-          ) : kind === "explore" ? (
+          (kind === "guide" ? null : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
           ) : kind === "learn" ? (
             <LearnInvitation />
@@ -2348,6 +2344,15 @@ export function Conversation({
  * So the nudges are prose. They are there because "say what you took from it"
  * is a genuinely hard instruction to obey from a standing start, and naming
  * three ways in is the cheapest help that does not contaminate the answer.
+ *
+ * **And it says a reader who has not read it is welcome**, since Recall took
+ * Tutorial in on 2026-10-20 (docs/plans/261020m-recall-and-tutorial-become-one-recall.md):
+ * Tutorial's empty state said so, and it is the one thing Tutorial's name said
+ * better. **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
+ * 2026-10-03, about Tutorial's: *"I don't think the user should have to say
+ * that they haven't read it … you're letting them know it's okay if they
+ * haven't read/finished it."* `readItFor` in src/converse.ts says the same
+ * thing in the same way.
  */
 function LearnInvitation() {
   return (
@@ -2357,39 +2362,16 @@ function LearnInvitation() {
         apart from the piece — and at the paragraphs worth another look.
       </p>
       <p className="chat-empty-hint">
+        It's fine if you haven't read it yet, or haven't finished. Then I'll take you through it a
+        piece at a time, each with a link to its passage and a question for you to answer in your
+        own words.
+      </p>
+      <p className="chat-empty-hint">
         It doesn't need to be tidy. Talking is usually easier than typing, and rambling is fine.
       </p>
       <p className="chat-empty-hint">
         Stuck for a way in? Try the argument in one sentence, the part you're least sure of, or what
         you'd tell someone about it.
-      </p>
-    </div>
-  );
-}
-
-/**
- * **Tutorial's empty state asks the opening question**, so the reader speaks
- * first and the model never writes an unprompted turn. Greg, `spya-j0scgz`:
- * *"I think it might start with the sort of basic recall question. You know,
- * what do you remember about the article? But it may be that the user says
- * nothing. I haven't read it yet."*
- *
- * **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
- * 2026-10-03: *"I don't think the user should have to say that they haven't
- * read it … you're letting them know it's okay if they haven't read/finished
- * it."* The composer's placeholder and `readItFor` in src/converse.ts say the
- * same thing in the same way.
- */
-function TutorialInvitation() {
-  return (
-    <div className="chat-suggest">
-      <p className="chat-empty-hint">
-        What do you remember about this article? It's fine if you haven't read it yet, or haven't
-        finished — we can start from wherever you are.
-      </p>
-      <p className="chat-empty-hint">
-        We'll take short turns: a little of the piece at a time, with a link to the passage, and then
-        a question for you to answer in your own words.
       </p>
     </div>
   );
@@ -3401,7 +3383,7 @@ export function Composer({
      box starts non-empty, and then unrecorded until it is emptied
      (composer-modality.ts). */
   const provenance = useRef(freshProvenance(draft));
-  /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
+  /* Recall's and Explore's box alike: tall, microphone first. */
   const learn = isLearnKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
@@ -3761,12 +3743,11 @@ export function Composer({
             ? "Waiting for the answer…"
             : kind === "guide"
               ? "Ask how to read this, or say what you're after"
-              : kind === "tutorial"
-              ? "What do you remember about it? It's fine if you haven't read it yet."
               : kind === "explore"
                 ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
                 : learn
-                ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
+                ? /* Tutorial's offer, since Recall took Tutorial in (plan 261020m). */
+                  "Tell me what you took from this, in your own words. It's fine if you haven't read it yet."
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {

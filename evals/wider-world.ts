@@ -12,9 +12,9 @@
  * § Measuring it. Method: docs/project/prompting-guide.md § Measuring a prompt
  * change.
  *
- * **It calls production's own functions** — `converse` (kinds `chat`, `learn`,
- * `tutorial`, our tools off as in evals/learn-recall.ts) and `markAnswerStream`
- * (src/quiz-mark.ts) — so there is no copy of any prompt in here to drift. The
+ * **It calls production's own functions** — `converse` (kinds `chat` and
+ * `learn`, and `tutorial` until Recall took it in on 2026-10-20; our tools
+ * off as in evals/learn-recall.ts) and `markAnswerStream` (src/quiz-mark.ts) — so there is no copy of any prompt in here to drift. The
  * arms are separated in time, not in code: `before` runs on the commit before
  * the prompt change, `after` on the commit with it. Each arm records the git
  * HEAD, whether `src/` was dirty, and a sha256 of the prompt sources, so an arm
@@ -85,11 +85,11 @@ type Want =
   | "no-outside-note"
   | "article-correction";
 
-type Surface = "chat" | "learn" | "tutorial" | "quiz";
+type Surface = "chat" | "learn" | "quiz";
 
 interface ConverseCase {
   readonly name: string;
-  readonly surface: "chat" | "learn" | "tutorial";
+  readonly surface: "chat" | "learn";
   readonly want: Want;
   /** The blocks the case is about, shown to the judge beside the replies. */
   readonly blocks: readonly string[];
@@ -189,7 +189,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: "wrong-antikythera-tutorial",
-    surface: "tutorial",
+    surface: "learn", // Tutorial's case until 2026-10-20 (plan 261020m); the name is kept
     want: "outside-note",
     facts: FACTS.antikythera,
     blocks: [ANTIKYTHERA],
@@ -263,7 +263,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: "plain-mcculloch-tutorial",
-    surface: "tutorial",
+    surface: "learn", // Tutorial's case until 2026-10-20 (plan 261020m); the name is kept
     want: "no-outside-note",
     facts: FACTS.plain,
     blocks: [MCCULLOCH],
@@ -303,7 +303,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: "plain-nagel-tutorial",
-    surface: "tutorial",
+    surface: "learn", // Tutorial's case until 2026-10-20 (plan 261020m); the name is kept
     want: "no-outside-note",
     facts: FACTS.plain,
     blocks: [NAGEL],
@@ -331,7 +331,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: "reader-wrong-tutorial",
-    surface: "tutorial",
+    surface: "learn", // Tutorial's case until 2026-10-20 (plan 261020m); the name is kept
     want: "article-correction",
     facts: FACTS.readerWrong,
     blocks: [REPLACEMENT],
@@ -347,18 +347,14 @@ const CASES: readonly Case[] = [
  */
 const ID = /\bspya-[a-z0-9]+\b/;
 
-/** Tutorial's word ceiling, from `TUTORIAL_SYSTEM`'s "never over 140" (src/converse.ts). */
-const TUTORIAL_WORD_LIMIT = 140;
-
 /**
  * **The mode's own contract**, so that an outside note which breaks the mode —
- * pushes Recall over its length, adds a second question to a Tutorial turn,
- * grades a quiz answer — shows up beside the note. Learn reuses the checker
+ * pushes Recall over its length, leaves a nudge without its hint, grades a
+ * quiz answer — shows up beside the note. Learn reuses the checker
  * evals/learn-recall.ts uses, rather than a second copy of it.
  */
 type ModeScreen =
   | { surface: "learn"; checks: Omit<ReplyChecks, "body" | "hint"> & { overBodyLimit: boolean } }
-  | { surface: "tutorial"; words: number; overLimit: boolean; questionMarks: number; endsOnQuestion: boolean }
   | { surface: "quiz"; words: number; gradeWords: number }
   | { surface: "chat" };
 
@@ -370,9 +366,6 @@ interface Screen {
   questionMarks: number;
   mode: ModeScreen;
 }
-
-/** The last thing in the reply is a question, allowing closing quotes and bracketed ids after the mark. */
-const ENDS_ON_QUESTION = /[?？](?:["'”’»)]|\s*\[[^\]\n]*\])*\s*$/;
 
 function screen(text: string, surface: Surface, knownIds: ReadonlySet<string>): Screen {
   const sentences = text.split(/(?<=[.!?])\s+|\n+/).filter((s) => s.trim());
@@ -387,15 +380,6 @@ function screen(text: string, surface: Surface, knownIds: ReadonlySet<string>): 
       mode = { surface, checks: { ...checks, overBodyLimit: checks.bodyWords > BODY_WORD_LIMIT } };
       break;
     }
-    case "tutorial":
-      mode = {
-        surface,
-        words,
-        overLimit: words > TUTORIAL_WORD_LIMIT,
-        questionMarks,
-        endsOnQuestion: ENDS_ON_QUESTION.test(text.trim()),
-      };
-      break;
     case "quiz":
       mode = { surface, words, gradeWords: gradeWords(text) };
       break;
@@ -429,12 +413,6 @@ function modeLine(m: ModeScreen): string[] {
         ...(c.strayHint ? ["⚠︎ stray hint"] : []),
       ];
     }
-    case "tutorial":
-      return [
-        `tutorial: ${m.words} words${warn(m.overLimit)} (≤${TUTORIAL_WORD_LIMIT})`,
-        `${m.questionMarks} ?${warn(m.questionMarks !== 1)} (want 1)`,
-        `ends on the question: ${m.endsOnQuestion ? "yes" : "no ⚠︎"}`,
-      ];
     case "quiz":
       return [`quiz: ${m.words} words`, `grade words: ${m.gradeWords}${warn(m.gradeWords > 0)}`];
     case "chat":

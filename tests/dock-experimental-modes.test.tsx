@@ -75,7 +75,7 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   "timeline",
   "referee",
   /* Learn was here from 2026-09-03 until 2026-10-05, when Greg asked for
-     Recall, Quiz and Tutorial in the mainstream features (spya-cnqcjf). Its
+     Recall and Quiz in the mainstream features (spya-cnqcjf). Its
      Explore chip stayed behind the switch, one level down, until 2026-10-11:
      tests/learn-header-cards.test.tsx § "every part of Learn is shown". */
   /* Debate (2026-09-05) and Citations (2026-09-11) were here until 2026-10-09,

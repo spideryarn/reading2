@@ -409,7 +409,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 
 ```
  POST /api/admin/feedback/deferrals ──▶ a row in feedback_question_deferrals ("not now")
- GET  …/earlier?questions=3         ──▶ threads: replies (acted on and not), a state, the report's text
+ GET  …/earlier?questions=4         ──▶ threads: replies, a state, and the report's text and owner
 ```
 
 - **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
@@ -443,13 +443,29 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
   its title and text, which an agent wrote, in the model's face and as plain text with its line
   breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
-  *Details*; the report it is about, **only when it is the admin's own**, whole and shut, under
-  *Your report #301*; and the admin's replies, in the reader's face: first those **an agent has
+  *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
+  2026-10-20, a reader's** (below); and the admin's replies, in the reader's face: first those **an agent has
   acted on**, each marked *acted on*, with a line saying what happened next is written in the
   question; then those **no agent has acted on yet**. At most the newest five of each, with a count
   of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
   group and as which list each reply is in. A tab from before 261010h asks `questions=2` and gets
   threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
+- **A reader's report in its thread, marked as theirs** (since 2026-10-20). Greg, 2026-10-19
+  (`spya-y43ha0`): *"it's important that other users' feedback can show up in the needs input
+  section, and it should be highlighted clearly as such, and that I can respond to that. And so I
+  can basically be a gate, or a filter, or a judge, or a lens on what users are suggesting."* So a
+  question whose `report:` is somebody else's shows that report too: *a reader's #650* before its
+  number in the contents and the thread, in the orange text colour, and its words shut under *A
+  reader's report #650 · from* the address it was filed under, with an orange rule down their left
+  (*another admin's* for another admin's). The browser asks `questions=4`, whose report says
+  `whose` (`yours`, `reader` or `admin`) and `from`; a tab from before asks `questions=3` and gets
+  only the admin's own report, as it was built to check. The report is found **across owners**,
+  through `adminStore`, and **only when exactly one account holds that id**: report ids are unique
+  per owner, so an id two accounts share, the admin's own included, shows no report and logs a
+  warning rather than guess whose it is
+  ([261020p](../plans/261020p-greg-gates-readers-feedback-admins-filter-readers-reports-in-needs-a-decision.md);
+  `questionReportsAcrossOwners` in [`pg-admin-feedback.ts`](../../src/store/pg-admin-feedback.ts)).
+  What it shows is what `/admin/feedback` already shows the same admin.
 - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
   thread keeps its words when you move to another. It grows with what is in it and never scrolls
   itself (`useFitTextarea`), so the panel is the one scroller: two scrollers under one finger with
@@ -486,10 +502,12 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
-- **Two builds at once.** The browser asks `questions=3`. A tab from before 261010h asks
-  `questions=2` and gets the previous thread shape exactly; one from before 261008i asks nothing
-  and gets the six-key questions from then. In the other direction, this browser maps either older
-  shape into today's threads (with no acted replies). A 404 on a reply says to copy the words,
+- **Two builds at once.** The browser asks `questions=4`. A tab from before 261020p asks
+  `questions=3` and gets the previous report shape exactly; one from before 261010h asks
+  `questions=2` and gets threads without acted replies; one from before 261008i asks nothing and
+  gets the six-key questions from then. In the other direction, this browser maps all three older
+  shapes into today's threads, treating the report as the admin's own and adding whichever reply
+  lists the older shape lacked. A 404 on a reply says to copy the words,
   reload and reply again. If the questions are not what the browser expects, the whole list shows
   the ordinary "would not load" sentence, never some of them. If a later list no longer contains a
   question while its thread is open or its box has words, that question stays beside the draft
@@ -994,7 +1012,8 @@ with the same asymmetry in `AdminStore` and `VisibilityStore`.
 
 **[`/admin/feedback`](admin.md)**, since 2026-09-02 — every reader's reports, newest first, with
 the mirror state written as words. **Readers only** (since 2026-10-01) leaves out the
-administrators' own, by `src/admin.ts`'s list, on the server (`?from=readers`). `psql` against the `feedback` table
+administrators' own, by `src/admin.ts`'s list, on the server (`?from=readers`); **Admins only**
+(since 2026-10-20, `spya-kmqd7n`) shows only those (`?from=admins`). `psql` against the `feedback` table
 ([database.md](database.md)) still works, and Sentry
 ([sentry-error-monitoring.md](sentry-error-monitoring.md)) still has its copy.
 

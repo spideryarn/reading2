@@ -6,7 +6,7 @@
  *
  *  1. the profile badge is an icon with no words in every mode, and
  *     it has a card;
- *  2. each of Learn's four chips has a card of its own;
+ *  2. each of Learn's three chips has a card of its own;
  *  3. Learn's (i) is short pieces and a list, not one paragraph.
  *
  * The cards are opened the way tests/referee-tooltips.test.tsx opens them: a
@@ -246,9 +246,9 @@ describe("Learn's chips", () => {
     const row = host.querySelector(".learn-submode");
     expect([...(row?.children ?? [])]).toEqual(chips);
     expect(chips.map((c) => c.textContent)).toEqual(LEARN_VIEWS.map((v) => LEARN_SUB_MODES[v].label));
-    expect(chips.map((c) => c.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false"]);
+    expect(chips.map((c) => c.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
     act(() => chips[1]?.click());
-    expect(changed).toEqual(["tutorial"]);
+    expect(changed).toEqual(["explore"]);
     for (const [i, view] of LEARN_VIEWS.entries()) {
       const chip = chips[i] as HTMLElement;
       await hover(chip);
@@ -270,12 +270,12 @@ describe("Learn's chips", () => {
         createElement(LearnSubModeToggle, { slug: "a-paper", value: "recall", experimental: true, onChange: () => {} }),
       );
     });
-    const tutorial = host.querySelector<HTMLButtonElement>(".learn-submode-btn:nth-of-type(2)");
-    if (!tutorial) throw new Error("no Tutorial chip");
-    act(() => tutorial.focus());
+    const explore = host.querySelector<HTMLButtonElement>(".learn-submode-btn:nth-of-type(2)");
+    if (!explore) throw new Error("no Explore chip");
+    act(() => explore.focus());
     expect(cards()).toHaveLength(1);
-    expect(cards()[0]?.querySelector(".tip-soon-head")?.textContent).toBe("Tutorial");
-    expect(tutorial.getAttribute("aria-describedby")).toBe(cards()[0]?.id);
+    expect(cards()[0]?.querySelector(".tip-soon-head")?.textContent).toBe("Explore");
+    expect(explore.getAttribute("aria-describedby")).toBe(cards()[0]?.id);
   });
 
   it("keep the claims the catalog used to carry about Recall's one voice", () => {
@@ -288,30 +288,30 @@ describe("Learn's chips", () => {
 });
 
 /**
- * Greg, 2026-10-04 (spya-cnqcjf): Recall, Quiz and Tutorial are mainstream,
+ * Greg, 2026-10-04 (spya-cnqcjf): Recall and Quiz are mainstream,
  * and Explore stayed behind the switch. Greg, 2026-10-11 (spya-jm0nfg):
  * Explore is out too, *"because it's useful"*. So every Learn part is drawn,
  * switch on or off, by the bar's own rule (experimental-visibility.ts).
  * docs/plans/261011p-learn-explore-out-of-the-experimental-switch.md.
  */
 describe("every part of Learn is shown, switch on or off", () => {
-  const ALL_FOUR = ["Recall", "Tutorial", "Explore", "Quiz"];
+  const ALL_THREE = ["Recall", "Explore", "Quiz"];
 
-  function chipLabels(value: "recall" | "tutorial" | "explore" | "quiz", experimental: boolean): (string | null)[] {
+  function chipLabels(value: "recall" | "explore" | "quiz", experimental: boolean): (string | null)[] {
     act(() => {
       root.render(createElement(LearnSubModeToggle, { slug: "a-paper", value, experimental, onChange: () => {} }));
     });
     return [...host.querySelectorAll<HTMLElement>(".learn-submode-btn")].map((c) => c.textContent);
   }
 
-  function aboutLabels(current: "recall" | "tutorial" | "explore" | "quiz"): (string | null | undefined)[] {
+  function aboutLabels(current: "recall" | "explore" | "quiz"): (string | null | undefined)[] {
     act(() => {
       root.render(createElement(LearnSubModesAbout, { current }));
     });
     return [...host.querySelectorAll("li strong")].map((s) => s.textContent);
   }
 
-  function barLabels(experimentalOn: boolean, learn: "recall" | "tutorial" | "explore" | "quiz"): string[] {
+  function barLabels(experimentalOn: boolean, learn: "recall" | "explore" | "quiz"): string[] {
     return subModeRows(["learn"], experimentalOn, { diagram: "sketch", learn }).map((row) =>
       row.kind === "submode" ? LEARN_SUB_MODES[row.sub.view as "recall"].label : "not a sub-mode row",
     );
@@ -325,10 +325,10 @@ describe("every part of Learn is shown, switch on or off", () => {
     expect(MODE_CATALOG.learn.experimental).toBe(false);
   });
 
-  it("the helper: all four views in every state", () => {
+  it("the helper: all three views in every state", () => {
     for (const on of [false, true]) {
       for (const current of LEARN_VIEWS) {
-        expect(visibleLearnViews(on, current)).toEqual(["recall", "tutorial", "explore", "quiz"]);
+        expect(visibleLearnViews(on, current)).toEqual(["recall", "explore", "quiz"]);
       }
     }
   });
@@ -336,7 +336,7 @@ describe("every part of Learn is shown, switch on or off", () => {
   it("the chips", () => {
     for (const on of [false, true]) {
       for (const current of LEARN_VIEWS) {
-        expect(chipLabels(current, on)).toEqual(ALL_FOUR);
+        expect(chipLabels(current, on)).toEqual(ALL_THREE);
         /* Every state has one pressed chip. */
         const pressed = [...host.querySelectorAll<HTMLElement>('.learn-submode-btn[aria-pressed="true"]')];
         expect(pressed.map((c) => c.textContent)).toEqual([LEARN_SUB_MODES[current].label]);
@@ -347,19 +347,19 @@ describe("every part of Learn is shown, switch on or off", () => {
   it("the (i) list", () => {
     for (const on of [false, true]) {
       switchIs.on = on;
-      for (const current of LEARN_VIEWS) expect(aboutLabels(current)).toEqual(ALL_FOUR);
+      for (const current of LEARN_VIEWS) expect(aboutLabels(current)).toEqual(ALL_THREE);
     }
   });
 
   it("the command bar's rows", () => {
     for (const on of [false, true]) {
-      for (const current of LEARN_VIEWS) expect(barLabels(on, current)).toEqual(ALL_FOUR);
+      for (const current of LEARN_VIEWS) expect(barLabels(on, current)).toEqual(ALL_THREE);
     }
   });
 });
 
 describe("Learn's (i)", () => {
-  it("lists the four sub-modes, one line each", () => {
+  it("lists the three sub-modes, one line each", () => {
     act(() => {
       root.render(createElement(LearnSubModesAbout, { current: "recall" }));
     });
@@ -377,7 +377,7 @@ describe("Learn's (i)", () => {
   });
 
   it("is added to each Learn conversation band, and not to Chat", () => {
-    const props = (kind: "chat" | "learn" | "tutorial" | "explore") => ({
+    const props = (kind: "chat" | "learn" | "explore") => ({
       slug: "a-paper",
       kind,
       loaded: true,
@@ -409,10 +409,10 @@ describe("Learn's (i)", () => {
     act(() => about.click());
     for (const on of [false, true]) {
       switchIs.on = on;
-      for (const kind of ["learn", "tutorial", "explore"] as const) {
+      for (const kind of ["learn", "explore"] as const) {
         act(() => root.render(createElement(ChatPanel, props(kind))));
         const labels = [...document.querySelectorAll(".band-about-list li strong")].map((s) => s.textContent);
-        expect(labels, `${kind}, experimental=${on}`).toEqual(["Recall", "Tutorial", "Explore", "Quiz"]);
+        expect(labels, `${kind}, experimental=${on}`).toEqual(["Recall", "Explore", "Quiz"]);
       }
     }
     act(() => root.render(createElement(ChatPanel, props("chat"))));

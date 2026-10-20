@@ -468,7 +468,6 @@ const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
   chat: "New chat",
   learn: "Remembering",
   candidates: "Finding reviewers",
-  tutorial: "Tutorial",
   explore: "Exploring",
   guide: "Guide",
 };

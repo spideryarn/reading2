@@ -2918,6 +2918,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 261006a: the thread kind `remember` → `learn`, replayed the same way
      against the schema of the day before. `pgReady`, its own three articles. */
   "tests/learn-kind-migration.test.ts": "private-postgres",
+  /* 261020m: Tutorial folded into Recall, replayed the same way against the
+     schema of the day before. `pgReady`, its own three articles. */
+  "tests/tutorial-fold-migration.test.ts": "private-postgres",
   /* 261002b: a job row written under a retired step name reads back under the new one. */
   "tests/retired-step-names.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",

@@ -1,17 +1,18 @@
 /**
  * **The wider world, labelled: one section, shared by the prompts that answer
- * or mark the reader and otherwise stay in the article** — Chat, Recall,
- * Tutorial and Quiz marking. Greg, 2026-10-18 (`spya-h5mteu`): *"I do want to
+ * or mark the reader and otherwise stay in the article** — Chat, Recall
+ * and Quiz marking (and Tutorial, until it was folded into Recall on
+ * 2026-10-20). Greg, 2026-10-18 (`spya-h5mteu`): *"I do want to
  * distinguish between what is in the article versus what's in the pre-training
  * versus what's in the web search. But I don't want to restrict it into black
  * and white away to what's in the article."*
  *
- * Interpolated, like `plainWords` (src/plain-words.ts), so the four cannot
- * drift and the next prompt that wants it imports it rather than writing a
- * fifth copy. What is shared is the trigger, the three labels, how sure to
+ * Interpolated, like `plainWords` (src/plain-words.ts), so the copies cannot
+ * drift and the next prompt that wants it imports it rather than writing
+ * another. What is shared is the trigger, the three labels, how sure to
  * sound, the privacy rule for a search, and "never against the reader". Where
  * the note goes is NOT shared: each prompt has its own turn shape (Recall ends
- * on a nudge and a hint, Tutorial on a task, Quiz may not open with a verdict),
+ * on a nudge or a task and a hint, Quiz may not open with a verdict),
  * so each passes its own `placement` sentence. GPT Sol's plan review, F1.
  *
  * The trigger is narrow on purpose (F2): in argumentative writing nearly every

@@ -565,13 +565,18 @@ const FROM_LABEL: Record<FeedbackFrom, { label: string; title: string }> = {
     label: "Readers only",
     title: "Leave out the administrators' own reports — src/admin.ts says who they are",
   },
+  admins: {
+    label: "Admins only",
+    title: "Only the administrators' own reports — src/admin.ts says who they are",
+  },
 };
 
 /**
  * **Whose reports** — Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
  * filter to show only non-admin suggestions (i.e. suggestions from people other
- * than me)."* Two buttons with `aria-pressed`, the shape the shelf's own
- * two-way toggles take. The filtering is the server's (`?from=readers`).
+ * than me)."* And 2026-10-19 (`spya-kmqd7n`): *"And also show a filter for
+ * admins only on this page."* Buttons with `aria-pressed`, the shape the shelf's
+ * own toggles take. The filtering is the server's (`?from=readers`, `?from=admins`).
  */
 function FeedbackFromToggle({
   from,
@@ -667,7 +672,9 @@ function FeedbackInbox({
         <p className="tw:text-sm tw:text-muted-foreground">
           {from === "readers"
             ? "No reader other than an administrator has filed a report yet."
-            : "Nobody has filed a report yet."}
+            : from === "admins"
+              ? "No administrator has filed a report yet."
+              : "Nobody has filed a report yet."}
         </p>
       ) : (
         <>

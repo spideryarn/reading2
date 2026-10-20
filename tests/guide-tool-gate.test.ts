@@ -177,7 +177,7 @@ describe("every other kind", () => {
     expect(calls.store).toEqual([]);
   });
 
-  it.each(["learn", "tutorial", "candidates", undefined] as const)(
+  it.each(["learn", "candidates", undefined] as const)(
     "%s is still refused reader_notes and reads nothing",
     async (kind) => {
       const out = await runTool("reader_notes", {}, ctx(kind));

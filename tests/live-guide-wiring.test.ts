@@ -53,6 +53,6 @@ describe("the browser's kinds are the server's", () => {
   it("accepts exactly chat, learn and guide", () => {
     const kinds: Record<import("../src/web/live/wiring.js").LiveThreadKind, true> = { chat: true, learn: true, guide: true };
     for (const kind of Object.keys(kinds)) expect(isSpokenKind(kind)).toBe(true);
-    for (const kind of ["candidates", "tutorial", "explore"]) expect(isSpokenKind(kind)).toBe(false);
+    for (const kind of ["candidates", "explore"]) expect(isSpokenKind(kind)).toBe(false);
   });
 });

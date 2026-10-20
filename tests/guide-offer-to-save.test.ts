@@ -60,7 +60,7 @@ describe("who is offered it", () => {
   it("is the guide's, Chat's and Explore's, and no other kind's", () => {
     expect(names(toolsFor("guide"))).toContain("offer_to_save");
     for (const kind of ["chat", "explore"] as const) expect(names(toolsFor(kind))).toContain("offer_to_save");
-    for (const kind of ["learn", "tutorial", "candidates"] as const) {
+    for (const kind of ["learn", "candidates"] as const) {
       expect(names(toolsFor(kind))).not.toContain("offer_to_save");
     }
     /* What Live flattens for a chat stays without it. */
@@ -88,7 +88,7 @@ describe("who is offered it", () => {
   });
 
   it("is refused to a kind that is not offered it", async () => {
-    for (const kind of ["learn", "tutorial", "candidates", undefined] as const) {
+    for (const kind of ["learn", "candidates", undefined] as const) {
       const out = await runTool("offer_to_save", { field: "about_you", text: "A nurse." }, ctx(kind));
       expect(out.detail, String(kind)).toBe("no such tool");
       expect(out.offer).toBeUndefined();

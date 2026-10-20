@@ -133,7 +133,7 @@ describe("answerAsSeen", () => {
   });
 
   it("leaves every other kind of conversation alone", () => {
-    for (const kind of ["chat", "tutorial", "explore", "candidates"] as const) {
+    for (const kind of ["chat", "explore", "candidates"] as const) {
       expect(answerAsSeen({ role: "assistant", text }, kind)).toBe(text);
     }
   });
