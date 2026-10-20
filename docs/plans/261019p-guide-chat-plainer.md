@@ -374,6 +374,34 @@ tests/guide-prepare-button.test.tsx (the press, the page's one automatic press, 
 reason), tests/guide-prepare-route.test.ts (the route, `prepareMode`'s steps, the claim, two
 concurrent presses). Each guard was broken by hand and its test went red.
 
+### GPT Sol on stage 2b's code (2026-10-20, write-capable, `gpt-5.6-sol`, high)
+
+Planted-line worst case as Sol traced it: one automatic start of one listed mode, per guide
+conversation, on the reader's own article. Untyped, spoken, retry and edit turns lose `now`; a
+reloaded or older answer lacks this tab's answered-here mark; two answers or two tabs meet the
+claim; a reason offer suppresses Skim in either order. Six findings, five fixed by Sol with
+red-first tests:
+
+- **C1 (P1, fixed)**: any 2xx body that was not `started` showed as "ready". Now only the two
+  declared statuses count; anything else is a failure.
+- **C2 (P0, fixed)**: every 409 on an automatic press fell back to a quiet button, including
+  `enqueue`'s own 409s (an article too thin for the mode), so a real failure was hidden and the
+  claim spent. Now only the claim's own message (`MODE_PREPARATION_ALREADY_CLAIMED`) falls back.
+  Checked: `send` throws the server's sentence as the error's message (`errorFor` in
+  src/web/lib/api.ts).
+- **C3 (P1, partly taken)**: the eval checked for a "ready" claim only when a prepare step was
+  present; now on every answer. Sol also stopped counting a mode's own button as meeting a
+  "prepare" case; **not taken**, since that was a deliberate widening (the button starts the mode
+  on the press, [261020f](../investigations/261020f-the-guide-gets-a-mode-ready-measured.md)), so
+  the screen accepts it again, with a test. The screen moved to `evals/guide/prepare-screen.ts`.
+- **C4 (P1, fixed)**: the paid eval exited 0 whatever happened; it now fails unless every case
+  passed.
+- **C5 (P1, fixed)**: the tool description, the prompt and several comments still said every
+  button is pressed by the reader; they now name the one exception.
+- **C6 (reported)**: two things stay prompt-bound — the guide's prose can still say a mode is
+  ready, and a Skim step beside a reason the model did not offer to save is not caught. Neither
+  spends more than the one claim; written into R30.
+
 ### Done for stage 2b
 
 The tool, the step, the route, the poke, tests for each guard (red first), the eval run and

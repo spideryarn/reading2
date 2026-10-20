@@ -1339,16 +1339,18 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   give brief answers"*), and Chat and Explore offer About you too, press only
   ([§ Chat and Explore offer to keep an instruction](#chat-and-explore-offer-to-keep-an-instruction-in-about-you)).
 - **Its next steps**, since 2026-10-09: a second tool of its own, **`offer_next_steps`**, which runs
-  nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
+  nothing during the tool call ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
   the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
   reader can send next), `chat` (a question about what the piece says, for a fresh Chat; at most
   one, since 2026-10-12), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
-  search), `share` or `archive`; [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
+  search), `prepare` (a fixed-list mode to make in the background), `share` or `archive`;
+  [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
   server and again on the page, and they ride on the run (`ToolRun.steps`). The page draws the
   latest settled answer's as a row of buttons
   ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)) under a visible *Next steps* heading,
-  **never pressed by the guide**: an ask sends exactly the words on it; *Ask in Chat*, drawn first
+  ordinarily pressed by the reader; the `prepare` exception is below. An ask sends exactly the
+  words on it; *Ask in Chat*, drawn first
   and the one orange button, starts a fresh Chat with exactly its words as the first question,
   through the list box's `onSendNew`, and leaves the guide as it was. Greg, 2026-10-12
   (`spya-es283p`), asked for it, prominent: *"when I watch people using the guide, they often

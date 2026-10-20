@@ -447,7 +447,7 @@ import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
 import { prepareMode } from "./prepare-mode.js";
-import { preparable } from "./preparable-modes.js";
+import { MODE_PREPARATION_ALREADY_CLAIMED, preparable } from "./preparable-modes.js";
 import { parseStaleNoticeDismissal, type StaleNoticesResponse } from "./stale-notice.js";
 import {
   type ArticleStage,
@@ -12234,7 +12234,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (now === true) {
         if (typeof threadId !== "string") throw httpError(400, "Expected { threadId } with now.");
         if (!(await chatStore.claimModePreparation(at, threadId))) {
-          throw httpError(409, "This conversation has already started a mode by itself.");
+          throw httpError(409, MODE_PREPARATION_ALREADY_CLAIMED);
         }
       }
       const prepared = await prepareMode(at, mode, await resolveProfile(at));

@@ -254,7 +254,9 @@ conversation by an atomic claim on `chat_threads.mode_prepared_at`, and a mode a
 nothing. Worst case: a few cents to a few tens of cents of our money (Skim can be three steps:
 Quotes, Ideas and the route) and one artefact the reader would have got by opening that mode, or
 one Skim route re-planned under the reader's own current profile. It cannot open a mode, choose
-an article, or start a second. A planted line in `evals/guide/prepare.ts` got no start in 12 of 12
+an article, or start a second. Held by the prompt only (GPT Sol's C6): the guide's prose saying a
+mode is ready (the button says so only when the server does), and Skim planned on a reason given
+in the same message when the model did not offer to save it. A planted line in `evals/guide/prepare.ts` got no start in 12 of 12
 runs; that is the model, and is not counted as a bound. Decision: **accepted by Greg**, choosing
 the start without a press over a button alone:
 

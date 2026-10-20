@@ -4,10 +4,11 @@
  * (`ChatController`), never from a row loaded, recovered, or seen pending
  * after a reload. Volatile, so a reload forgets it.
  *
- * What it is for: the guide's offer to save that is marked `now` saves itself
- * only on an answer marked here, and only once per field
- * (src/web/GuideSaveOffer.tsx), so a remount, a reload or a second sight of
- * the same answer never saves it again. Plan
+ * What it is for: the guide's offer to save that is marked `now`, and a
+ * `prepare` step marked `now`, act only on an answer marked here, once per
+ * field or prepared mode (src/web/GuideSaveOffer.tsx,
+ * src/web/GuideNextSteps.tsx). A remount, reload or second sight of the same
+ * answer therefore does not act again. Plan
  * docs/plans/261011s-the-guide-saves-your-reason-and-about-you-at-once-when-the-words-are-yours.md,
  * after GPT Sol's plan review (a rendered `pending` is not a sound signal).
  */

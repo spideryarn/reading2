@@ -25,9 +25,12 @@
  *   server adds whichever of those the panel would (src/prepare-mode.ts).
  *
  * Node-free: the page reads it to draw the button, the server to check it.
- * tests/prepare-mode.test.ts holds every key inside `guideModeKeys()`.
+ * tests/guide-prepare-step.test.ts holds every key inside `guideModeKeys()`.
  */
 import type { StepName } from "./types.js";
+
+/** The route's one 409 that means an automatic press should fall back to the reader's button. */
+export const MODE_PREPARATION_ALREADY_CLAIMED = "This conversation has already started a mode by itself.";
 
 export interface Preparable {
   /** The step the mode's own panel starts. */

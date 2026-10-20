@@ -7,7 +7,8 @@
  * tests/guide-prepare-route.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runTool, type ToolContext } from "../src/chat-tools.js";
+import { prepareEvalExitCode, readyClaimProblem, satisfiesPrepareRequest } from "../evals/guide/prepare-screen.js";
+import { OFFER_NEXT_STEPS_TOOL, runTool, type ToolContext } from "../src/chat-tools.js";
 import { converse, type ConverseEvent } from "../src/converse.js";
 import { guideModeKeys } from "../src/guide.js";
 import { checkNextSteps, startedAMode } from "../src/next-steps.js";
@@ -45,7 +46,34 @@ describe("the list a prepare step may name", () => {
   });
 });
 
+describe("the paid eval's preparation screen", () => {
+  it("rejects a ready claim even when the answer omitted the prepare step", () => {
+    expect(readyClaimProblem("Your summary is now ready.")).toBe("says it is ready");
+  });
+
+  it("counts a prepare step, or the wanted mode's own button, and nothing else", () => {
+    const skim = /skim/;
+    expect(satisfiesPrepareRequest([{ kind: "prepare", mode: "mode:skim", now: false }], "", skim)).toBe(true);
+    expect(satisfiesPrepareRequest([{ kind: "mode", mode: "mode:skim" }], "", skim)).toBe(true);
+    expect(satisfiesPrepareRequest([], "Try [cmd:mode:skim Skim].", skim)).toBe(true);
+    expect(satisfiesPrepareRequest([{ kind: "mode", mode: "mode:glossary" }], "", skim)).toBe(false);
+    expect(satisfiesPrepareRequest([{ kind: "mode", mode: "mode:skim" }], "", undefined)).toBe(false);
+    expect(satisfiesPrepareRequest([], "", skim)).toBe(false);
+  });
+
+  it("returns failure when any paid case fails its screen", () => {
+    expect(prepareEvalExitCode(7, 8)).toBe(1);
+    expect(prepareEvalExitCode(8, 8)).toBe(0);
+    expect(prepareEvalExitCode(0, 0)).toBe(1);
+  });
+});
+
 describe("offer_next_steps with a prepare step", () => {
+  it("tells the model that now is the one button the page may press", () => {
+    expect(OFFER_NEXT_STEPS_TOOL.function.description).toMatch(/prepare.*now.*page presses/i);
+    expect(OFFER_NEXT_STEPS_TOOL.function.description).not.toMatch(/each button is pressed by the reader/i);
+  });
+
   it("keeps now on a turn the reader typed", async () => {
     const out = await runTool("offer_next_steps", prepare("mode:skim", true), ctx());
     expect(out.steps).toEqual([{ kind: "prepare", mode: "mode:skim", now: true }]);

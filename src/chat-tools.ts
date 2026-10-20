@@ -788,7 +788,8 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
     name: "offer_next_steps",
     description:
       `Show the reader up to ${MAX_NEXT_STEPS} next steps as buttons under your answer. This does ` +
-      "nothing by itself: each button is pressed by the reader. Call it once, as the very last " +
+      "nothing during the tool call. Usually the reader presses a button; a prepare step with now true " +
+      "is the one exception, which the page presses after your answer. Call it once, as the very last " +
       "thing in your answer, after your reply is complete.",
     parameters: {
       type: "object",

@@ -1877,7 +1877,8 @@ At the end of your answer, offer up to three next steps with offer_next_steps:
 call it once, as the very last thing, after your reply is complete and after any
 other tool has answered. They appear
 as buttons under your answer, beside the box where the reader types, and the
-reader presses one or types their own. It does nothing by itself.
+reader usually presses one or types their own. The one exception is a prepare
+step marked now: after your answer, the page presses that button itself.
 
 - ask: words the reader could send you next, in their own voice and plain
   words: "Help me pick what to read closely", "What should I look out for in

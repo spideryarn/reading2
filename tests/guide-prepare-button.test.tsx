@@ -9,7 +9,7 @@
  * through the job engine's action seam (GPT Sol's F5), and Skim is never
  * drawn beside an offer to save their reason (F4).
  */
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage, ToolRun } from "../src/types.js";
@@ -93,16 +93,15 @@ async function paint(message: ChatMessage, mode = vi.fn((_p: { key: string }) =>
   const executor: CommandExecutor = { runners: { mode }, sources: { modes: MODES } };
   await act(async () => {
     root.render(
-      createElement(ChatCommands, {
-        executor,
-        children: createElement(GuideNextSteps, {
-          slug: "a-piece",
-          threadId: "thread-1",
-          message,
-          blocks: new Map(),
-          onAsk: () => {},
-        }),
-      }),
+      <ChatCommands executor={executor}>
+        <GuideNextSteps
+          slug="a-piece"
+          threadId="thread-1"
+          message={message}
+          blocks={new Map()}
+          onAsk={() => {}}
+        />
+      </ChatCommands>,
     );
   });
   return mode;
@@ -131,6 +130,15 @@ describe("a prepare step the reader presses", () => {
     await paint(answer([offered([{ kind: "prepare", mode: "mode:glossary", now: false }])]));
     await act(async () => buttons()[0]?.click());
     expect(text()).toEqual([PREPARE_WORDS.ready("Glossary")]);
+  });
+
+  it("does not say ready for an unfamiliar successful response", async () => {
+    engine.answer = { status: "something-new" };
+    await paint(answer([offered([{ kind: "prepare", mode: "mode:glossary", now: false }])]));
+    await act(async () => buttons()[0]?.click());
+    expect(text()).toEqual([PREPARE_WORDS.failed("Glossary")]);
+    expect(engine.succeeded).toBe(0);
+    expect(engine.failed).toBe(1);
   });
 });
 
@@ -165,6 +173,14 @@ describe("a prepare step the guide marked now", () => {
     engine.fail = null;
     await act(async () => buttons()[0]?.click());
     expect(engine.posts.at(-1)?.body).toEqual({ mode: "mode:skim", threadId: "thread-1", now: false });
+  });
+
+  it("shows another 409 as a failure rather than mistaking it for a spent start", async () => {
+    markAnsweredHere("spya-ans001");
+    engine.fail = Object.assign(new Error("This paper has not been read through yet."), { status: 409 });
+    await paint(answer([offered([{ kind: "prepare", mode: "mode:skim", now: true }])]));
+    expect(text()).toEqual([PREPARE_WORDS.failed("Skim")]);
+    expect(engine.failed).toBe(1);
   });
 });
 

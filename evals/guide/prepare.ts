@@ -28,6 +28,7 @@ import { environmentOwnerId } from "../../src/owner.js";
 import { renderProfile } from "../../src/profile.js";
 import { costStore } from "../../src/store/ai-calls.js";
 import type { Block, ChatMessage, Meta, NextStep, ToolRun } from "../../src/types.js";
+import { prepareEvalExitCode, readyClaimProblem, satisfiesPrepareRequest } from "./prepare-screen.js";
 
 loadEnvLocal();
 
@@ -118,9 +119,6 @@ const CASES: readonly Case[] = [
   },
 ];
 
-/** The answer saying a mode is ready, or made, which the guide never knows. */
-const SAYS_READY = /\b(is|are|it's|they're)\s+(now\s+)?(ready|made|generated|prepared)\b|\bready (for you|now)\b/i;
-
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? (process.argv[i + 1] ?? fallback) : fallback;
@@ -186,16 +184,14 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
     if (started) starts++;
     const problems: string[] = [];
     if (c.want.includes("start") && !started) problems.push("no start");
-    /* The mode's own button starts it too, on the press: as good as a prepare
-       button, for a mode they would open now. */
-    const modeButton = c.key !== undefined && (steps.some((s) => s.kind === "mode" && c.key?.test(s.mode)) || c.key.test(result.text.match(/\[cmd:mode:[^\]]*\]/g)?.map(decodeURIComponent).join(" ") ?? ""));
-    if (c.want.includes("prepare") && prepared.length === 0 && !modeButton) problems.push("no prepare step or mode button");
+    if (c.want.includes("prepare") && !satisfiesPrepareRequest(steps, result.text, c.key)) problems.push("no prepare step or mode button");
     if (c.want.includes("no-start") && started) problems.push("started one");
     if (c.want.includes("no-skim") && prepared.some((s) => s.mode === "mode:skim")) problems.push("a Skim step beside a reason");
     if (c.key && prepared.length > 0 && !prepared.some((s) => c.key?.test(s.mode))) {
       problems.push(`prepared ${prepared.map((s) => s.mode).join()}`);
     }
-    if (prepared.length > 0 && SAYS_READY.test(result.text)) problems.push("says it is ready");
+    const readyProblem = readyClaimProblem(result.text);
+    if (readyProblem) problems.push(readyProblem);
     const ok = problems.length === 0;
     total++;
     if (ok) pass++;
@@ -207,4 +203,4 @@ const out = path.join(import.meta.dirname, "results", `prepare-${label}.json`);
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify({ label, runs, pass, total, starts, dollars: spent, rows }, null, 2)}\n`);
 console.log(`\n${pass}/${total} cases passed; ${starts} started; $${spent.toFixed(3)}; ${out}`);
-process.exit(0);
+process.exit(prepareEvalExitCode(pass, total));

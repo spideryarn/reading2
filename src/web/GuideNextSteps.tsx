@@ -10,9 +10,9 @@
  * >
  * > — Greg, 2026-10-09, reply `spya-ujstyz` to q-w2740x
  *
- * The guide's `offer_next_steps` tool (src/chat-tools.ts) runs nothing: it
- * puts at most three checked steps on the turn's run (`ToolRun.steps`), and
- * this row is where each becomes a button the reader presses. Every press goes
+ * The guide's `offer_next_steps` tool (src/chat-tools.ts) runs nothing during
+ * the tool call: it puts at most three checked steps on the turn's run
+ * (`ToolRun.steps`), and this row is where each becomes a button. Every press goes
  * through machinery that already exists, so there is still one way to do each
  * thing:
  *
@@ -42,9 +42,12 @@
  *   *Share this article* goes: the private link and the public switch are
  *   pressed there, with their own confirmation.
  * - **archive** goes to Metadata, whose top *Archive* or *Put back* button does it.
+ * - **prepare** gets one fixed-list mode ready without opening it. Usually the
+ *   reader presses; for `now`, the page makes that press once after this tab's
+ *   typed-guide stream finishes.
  *
- * **Never pressed by the guide**: each is a button the reader presses, like
- * every chip in a guide answer (plan 261011m).
+ * **Never opens a mode for the reader**: even the one `prepare` press the page
+ * makes only starts background work (plan 261019p § Stage 2b).
  *
  * Drawn under the latest settled answer only, from that answer's last valid
  * offer: three buttons is the most on screen at once (Greg's *"maybe three

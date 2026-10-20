@@ -11,7 +11,7 @@
  * Kept per answer and key, outside the button, so the remount a transcript
  * redraw causes neither presses twice nor forgets what the press said.
  */
-import type { Job } from "../types.js";
+import { MODE_PREPARATION_ALREADY_CLAIMED } from "../preparable-modes.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -42,14 +42,23 @@ export function pressPrepare(
   const pending = (async (): Promise<PrepareOutcome> => {
     const epoch = jobEngine.epoch();
     try {
-      const answer = await send<{ status: "started"; job: Job } | { status: "ready" }>(
+      const answer = await send<unknown>(
         `/api/guide-prepare/${encodeURIComponent(slug)}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
       );
+      if (typeof answer !== "object" || answer === null || !("status" in answer)) {
+        throw new Error("The server did not say whether the mode was started or ready.");
+      }
+      const status = (answer as { status?: unknown }).status;
+      if (status !== "started" && status !== "ready") {
+        throw new Error("The server did not say whether the mode was started or ready.");
+      }
       jobEngine.actionSucceeded(epoch);
-      return answer.status === "started" ? { kind: "started" } : { kind: "ready" };
+      return status === "started" ? { kind: "started" } : { kind: "ready" };
     } catch (err) {
-      if (body.now && statusOf(err) === 409) return { kind: "refused" };
+      if (body.now && statusOf(err) === 409 && err instanceof Error && err.message === MODE_PREPARATION_ALREADY_CLAIMED) {
+        return { kind: "refused" };
+      }
       const message = describeFetchFailure(err instanceof Error ? err : new Error(String(err)));
       jobEngine.actionFailed(message, statusOf(err), epoch);
       return { kind: "failed", message };
