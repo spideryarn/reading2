@@ -11,6 +11,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-a0wpv4": "shipped",
   "spya-a353as": "shipped",
   "spya-a40t70": "shipped",
+  "spya-a48229": "shipped",
   "spya-a4rfbk": "shipped",
   "spya-a4xsg3": "shipped",
   "spya-a52jsr": "shipped",
@@ -439,6 +440,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-sg53hn": "shipped",
   "spya-sgf8g6": "shipped",
   "spya-sgfxuv": "shipped",
+  "spya-shf45w": "shipped",
   "spya-skpxw2": "awaiting",
   "spya-skq3fg": "shipped",
   "spya-skqwg8": "shipped",
@@ -647,6 +649,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a40t70": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
+  "spya-a48229": "On dev. Recording starts the moment the microphone opens, on every browser; on Chrome and Edge it used to start a second late, losing your first words. While it is still opening, the line under the box says \"Wait — opening the microphone…\".",
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
   "spya-a63vmt": "Shipped. In Chat, type @ to bring in one of your own articles, archived and public included; citations of it open it at the passage. Other people's articles are not included.",
   "spya-ah5ws6": "On dev. Every spine card ends in a key to what the spine is and the colours on it now. Search marks already paint the spine and follow the threshold. Which other modes should paint it is asked in q-je2p9y (queued as qi-bp4ez3yc).",
@@ -744,6 +747,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-s6qhzv": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
   "spya-s8pf4r": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",
   "spya-sbj3yk": "Both sentences now say what happened, and arXiv papers find their DOI, so Attention gets its Cited by list. Since 11 October a piece with no DOI is also looked up at OpenAlex by title and authors, strictly checked.",
+  "spya-shf45w": "On dev: Active days, Reading time and Failed imports columns, and five counts hidden behind Columns. Active days misses days spent only reading; whether to record those is a question for you.",
   "spya-skpxw2": "Part built: type @ in Chat to bring in one of your articles, so an uploaded file can be brought in once it is an article. Attachments that belong to an article are still a question for you.",
   "spya-skq3fg": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",

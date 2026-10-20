@@ -35,7 +35,14 @@
  * sorts at the low end rather than being banished with the unknowns.
  */
 
-import { type AdminUser, formatSpendNanos, formatWholeDollars, isAdmin } from "../admin.js";
+import {
+  type AdminUser,
+  failureKindLabel,
+  formatReadingTime,
+  formatSpendNanos,
+  formatWholeDollars,
+  isAdmin,
+} from "../admin.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
@@ -51,9 +58,15 @@ import { exactly, timeAgo } from "./relative-time.js";
  */
 export const ADMIN_CHIP_ORDER = [
   "signedUp",
+  /* Straight after the default, the three Greg named as what he most cares
+     about (2026-10-19, plan 261020c), and then the errors. */
+  "activeDays",
+  "readingTime",
+  "articles",
+  "importFailures",
   "lastSignIn",
   "lastRead",
-  /* Third among the numbers, above the counts. "Who is expensive" is the
+  /* Above the remaining counts. "Who is expensive" is the
      question this page gained on 2026-09-02 and the one a subscription price is
      argued from; how many articles somebody has is context for it. */
   "spend",
@@ -62,7 +75,6 @@ export const ADMIN_CHIP_ORDER = [
      are read before "how much have they got on the shelf". */
   "plan",
   "ingests",
-  "articles",
   "uploads",
   "questions",
   "email",
@@ -317,6 +329,108 @@ function Ingests({ user }: { user: AdminUser }) {
 }
 
 /**
+ * **Active days, with what it can and cannot see on hover.** The caveat is on
+ * the cell rather than only in a doc because the number undercounts in exactly
+ * the direction Greg's question cares about — days spent only reading — and a
+ * bare count would read as a measurement it is not. `activitySources` in
+ * src/store/pg-admin.ts is the list the last paragraph describes.
+ */
+function ActiveDays({ user, now }: { user: AdminUser; now: number }) {
+  const what =
+    "Counted from AI features they used, articles added, comments, and each article's latest open. " +
+    "A day spent only reading is missed unless it was an article's latest open.";
+  if (user.activeDays === 0) {
+    const none = `No recorded activity\n\n${what}`;
+    return (
+      <span data-tip={none}>
+        0<span className="tw:sr-only"> ({none})</span>
+      </span>
+    );
+  }
+  const ago = timeAgo(user.lastActiveAt, now);
+  const last = ago ? `Last active ${ago} (${exactly(user.lastActiveAt) ?? ""})` : "No last activity recorded";
+  const tip =
+    `${user.activeDays} ${user.activeDays === 1 ? "day" : "days"} with recorded activity, ` +
+    `${user.activeDays30} of them in the last 30 (UTC days)\n\n${last}\n\n${what}`;
+  /* The tip is a card for a pointer; the same words go to a screen reader in
+     the cell itself, as `When` does with its exact time (Sol, finding 5). */
+  return (
+    <span data-tip={tip}>
+      {user.activeDays}
+      {user.activeDays30 > 0 && (
+        <span aria-hidden="true" className="tw:text-xs tw:text-muted-foreground"> · {user.activeDays30} in 30d</span>
+      )}
+      <span className="tw:sr-only"> ({tip})</span>
+    </span>
+  );
+}
+
+/**
+ * **Total reading time**, which is the reading-time feature's running totals
+ * (docs/project/reading-time.md) summed: a passage on screen while they were
+ * active, one second per second however many passages share it.
+ */
+function ReadingTime({ user }: { user: AdminUser }) {
+  /* To a tenth: the stored seconds are fractional (Sol's code review), and a
+     sum of doubles can carry noise like `61.30000000001` past that. */
+  const exact = `${Math.round(user.readingSeconds * 10) / 10} seconds`;
+  const tip =
+    (user.readingSeconds > 0 ? `${exact} with their own articles on screen` : "No reading time recorded") +
+    "\n\nRecorded for everyone since 5 Oct 2026, and for experimental readers from mid-September. " +
+    "An article deleted takes its time with it.";
+  return (
+    <span data-tip={tip}>
+      {formatReadingTime(user.readingSeconds)}
+      <span className="tw:sr-only"> ({tip})</span>
+    </span>
+  );
+}
+
+/**
+ * **Failed imports, and what each was.** Greg, 2026-10-19: *"I don't just want
+ * a number … I want a tooltip that will give me some indication of what they
+ * are and how severe and when."* One line per failure: when, at which step,
+ * and what kind of failure — `failureKindLabel` says why a kind and not a
+ * severity. **Never the address or the error sentence** — those name what they
+ * were reading, and the script in the last line is where a developer reads
+ * them. Drawn in --danger when any shown was ours to fix.
+ *
+ * They are **attempts**: a Retry is a second record, and deleting the article
+ * takes its records with it (Sol, finding 6), so the card says so.
+ */
+function ImportFailures({ user, now }: { user: AdminUser; now: number }) {
+  const since =
+    "Each attempt counts, so a retried import that failed twice is 2. Records start 8 Oct 2026 and go " +
+    "with the article; a PDF that never finished uploading is not an import and is not counted.";
+  if (user.importFailures === 0) {
+    const none = `No failed imports\n\n${since}`;
+    return (
+      <span className="tw:text-muted-foreground" data-tip={none}>
+        0<span className="tw:sr-only"> ({none})</span>
+      </span>
+    );
+  }
+  const lines = user.recentImportFailures.map((f) => {
+    const when = timeAgo(f.at, now) ?? f.at;
+    const where = f.step ? `at ${f.step}` : "outside a step";
+    return `${when} (${exactly(f.at) ?? f.at}) · ${where} · ${failureKindLabel(f.kind).label}`;
+  });
+  const earlier = user.importFailures - user.recentImportFailures.length;
+  const ours = user.recentImportFailures.some((f) => failureKindLabel(f.kind).ours);
+  const tip =
+    `${user.importFailures} failed import ${user.importFailures === 1 ? "attempt" : "attempts"}, newest first\n\n` +
+    lines.join("\n") +
+    (earlier > 0 ? `\n…and ${earlier} earlier` : "") +
+    `\n\n${since} Details: npx tsx scripts/import-records.ts`;
+  return (
+    <span className={ours ? "tw:text-danger" : undefined} data-tip={tip}>
+      {user.importFailures}
+      <span className="tw:sr-only"> ({tip})</span>
+    </span>
+  );
+}
+
+/**
  * The marker on the administrator's own row, and nobody else's.
  *
  * Greg, 2026-09-03: *"also indicate if a row is an admin user or not"*.
@@ -367,13 +481,20 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
     label: string,
     hint: string,
     value: (u: AdminUser) => number,
+    startsHidden = false,
   ): SortableColumn<AdminUser> => ({
     id,
     header,
     accessorFn: value,
     sortDescFirst: true,
     sortingFn: numberOrMissing<AdminUser>(),
-    meta: { label, hint, ends: ["fewest first", "most first"], numeric: true },
+    meta: {
+      label,
+      hint,
+      ends: ["fewest first", "most first"],
+      numeric: true,
+      ...(startsHidden ? { startsHidden: true } : {}),
+    },
     cell: ({ row }) => value(row.original),
   });
 
@@ -480,6 +601,37 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
       },
       cell: ({ row }) => <When iso={row.original.lastReadAt} now={now} absent="Never opened one" />,
     },
+    /* **The engagement pair**, beside the date that is nearest to them — plan
+       261020c. Greg, 2026-10-19: *"Really what I most care about is number of
+       articles, total time spent reading, number of unique days"*. */
+    {
+      id: "activeDays",
+      header: "Active days",
+      accessorFn: (u) => u.activeDays,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<AdminUser>(),
+      meta: {
+        label: "Active days",
+        hint: "Distinct UTC days with recorded activity — reading alone is not recorded per day",
+        ends: ["fewest first", "most first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <ActiveDays user={row.original} now={now} />,
+    },
+    {
+      id: "readingTime",
+      header: "Reading",
+      accessorFn: (u) => u.readingSeconds,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<AdminUser>(),
+      meta: {
+        label: "Reading time",
+        hint: "Time their own articles were on screen while they read, summed",
+        ends: ["least first", "most first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <ReadingTime user={row.original} />,
+    },
     {
       id: "spend",
       header: "Spend",
@@ -546,11 +698,30 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
       (u) => u.minimal,
     ),
     counted("articles", "Articles", "Articles", "How many are on their shelf", (u) => u.articles),
-    counted("archived", "Archived", "Archived", "How many they have taken off it", (u) => u.archived),
-    counted("uploads", "Uploads", "Uploads", "PDFs that finished uploading", (u) => u.uploads),
-    counted("questions", "Comments", "Comments", "Passages they have marked", (u) => u.questions),
-    counted("chats", "Chats", "Chats", "Conversations started", (u) => u.chats),
-    counted("searches", "Searches", "Searches", "Meaning searches run", (u) => u.searches),
+    {
+      id: "importFailures",
+      header: "Failed imports",
+      accessorFn: (u) => u.importFailures,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<AdminUser>(),
+      meta: {
+        label: "Failed imports",
+        hint: "Import attempts that ended in an error, with each one's time, step and kind on hover",
+        ends: ["fewest first", "most first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <ImportFailures user={row.original} now={now} />,
+    },
+    /* **The five below start hidden**, behind the Columns menu above the
+       table — Greg, 2026-10-19: *"get rid of some of the columns that are not
+       really that useful, like archived, uploads, searches, chats, comments, or
+       make it easy to sort of have them default hidden"*. Hidden rather than
+       removed, so a support email that needs one is a tick away. */
+    counted("archived", "Archived", "Archived", "How many they have taken off it", (u) => u.archived, true),
+    counted("uploads", "Uploads", "Uploads", "PDFs that finished uploading", (u) => u.uploads, true),
+    counted("questions", "Comments", "Comments", "Passages they have marked", (u) => u.questions, true),
+    counted("chats", "Chats", "Chats", "Conversations started", (u) => u.chats, true),
+    counted("searches", "Searches", "Searches", "Meaning searches run", (u) => u.searches, true),
     counted("opens", "Opens", "Opens", "Times they have opened an article, summed", (u) => u.opens),
   ];
 }

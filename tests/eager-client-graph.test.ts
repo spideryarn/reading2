@@ -558,6 +558,12 @@ const SHARED_WITH_READER = [
   "src/web/ModeSurface.tsx",
   "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
+  /* Arrived 2026-10-20 with /admin/users' Columns menu (plan 261020c), by the
+     zero-cost route: `Library.tsx` already imports it for the shelf table's
+     remembered hidden columns, and /admin/users now reuses the same hook with
+     its own storage keys rather than a second copy. Small, and importing only
+     React and TanStack Table, which the shelf already loads. */
+  "src/web/shelf-hidden-columns.ts",
   /* Arrived 2026-10-03 with the reader's own tags (plan 261003d), by the
      second zero-cost route: `ShelfEntry.tsx` (already here) draws every card's
      tags and their editor, so the editor, its API module and the spelling rules
