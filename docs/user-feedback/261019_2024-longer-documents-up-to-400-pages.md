@@ -1,7 +1,7 @@
 ---
 reports: spya-p5x9wy
 ending: awaiting
-comment: Planned, not built: charging one slot per 100 pages changes the slot quota, which is a defence, so it is three questions for you first (the charge, High-powered on long PDFs, and the price per 100 pages).
+comment: You answered 1A 2A, and 50 pages a slot rather than 100. Being built now: the charge is raised once the pages are counted, before any transcription is paid for, and a 400-page PDF is 8 slots.
 ---
 # Longer documents, up to 400 pages, at one slot per 100 pages
 

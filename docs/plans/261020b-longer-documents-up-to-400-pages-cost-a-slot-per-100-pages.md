@@ -4,7 +4,8 @@ Up: [plans.md](../project/plans.md)
 
 Report `spya-p5x9wy` (Sentry `SPIDERYARN-READING2-M4`), Overseer queue item `qi-ajxrg7a4`. Status:
 **approved by Greg 2026-10-20 (reply `spya-km9brn` to [q-x8gdr3](../user-feedback/questions/q-x8gdr3.md)),
-being built.** The change edits the slot quota, which is a defence listed in
+being built — the slot price ships with the cap still at 250, because a 400-page maths book does not
+import yet** ([§ Stage 1, measured](#stage-1-measured-the-cap-stays-at-250-for-now)). The change edits the slot quota, which is a defence listed in
 [security-map.md](../project/security-map.md)
 ([billing.md § The quota](../project/billing.md#the-quota-and-the-one-thing-it-has-to-survive)), so it
 was planned and asked first. The file name still says *100 pages*, the price Greg first asked for; it
@@ -339,6 +340,34 @@ move past what loads.
 4. **Docs.** billing.md gains *§ A long document costs a slot per 50 pages*; ingest-queue.md,
    `/help` (it states the limits), `stated-limits.test.ts`'s numbers, the security-map line for
    billing.
+
+## Stage 1, measured: the cap stays at 250 for now
+
+[261020e](../investigations/261020e-four-hundred-page-imports-measured.md), $12.38. **A 400-page
+ordinary book loads** (10 minutes, $2.46, a 3.1 MB response). **Dense proceedings only just do**
+(two of three transcription windows, 5 s to spare, ~4.0 MB with labels). **A maths-heavy 400-page
+book does not**: all three 740-second transcription windows ran out, and each paid for almost the
+whole book again, because a window that runs out saves only the chunks that passed first time
+(`src/pdf-read.ts` § `keepChunk`), and no single transcription call has a time limit of its own. The
+same book at 250 pages loaded with 24 s left, so today's cap is already marginal for that kind of
+document.
+
+**So, by the rule this plan set — the cap does not move past what loads — `MAX_PAGES` stays 250**,
+and the slot price ships under it: 1–5 slots, a 250-page PDF costing 5. Greg was told in the
+question that the cap would go only as high as what loads. The ledger is built for 8 slots, so
+raising the cap later is one constant and its sentences.
+
+**What would let it move to 400**, queued rather than done here, because each is a change to stage 2
+with its own review and a second paid measurement:
+
+1. a window that runs out keeps every chunk it has finished, recovered ones included;
+2. a time limit on each transcription call;
+3. measuring the 4.5 MB response limit on Vercel itself (`qi-sbytr395`), since ~4.0 MB is a near miss.
+
+Four more bugs the measurement found, with evidence in 261020e: the out-of-windows failure tells the
+reader `[jb-gone]` and that a retry resumes, neither true; a page that fails `[ai-pdf-incomplete]`
+the same way twice is told a retry may help; a labels batch asked for 38 and given 39 fails the whole
+step; `npm run labels` after an ingest waits behind a `matter` job nothing drives.
 
 ## Deferred, by name
 
