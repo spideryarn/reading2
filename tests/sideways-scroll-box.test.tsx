@@ -310,7 +310,8 @@ describe("DataTable's sidewaysCue", () => {
     expect(host.querySelector("[data-scroll-fade]")).toBeNull();
     const table = host.querySelector("table");
     expect(table?.parentElement?.className).toBe(
-      "tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border",
+      /* `isolate` keeps a pinned first column's z-index inside the box (plan 261019o). */
+      "tw:relative tw:isolate tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border",
     );
     expect(table?.parentElement?.parentElement).toBe(host);
   });

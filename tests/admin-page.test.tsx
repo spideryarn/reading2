@@ -267,6 +267,17 @@ describe("the users page", () => {
    * wrong question — the fraction stops being a fraction the moment the count
    * passes the allowance, whichever way it got there. GPT Sol, 2026-09-05.
    */
+  /* Plan 261019o, spya-t45cfc: "keep the first column, which shows the name,
+     frozen/visible the whole time". */
+  it("pins the Account column while the table scrolls sideways", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    const pinned = [...el.querySelectorAll("table tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned).toEqual([[0], [0], [0]]);
+  });
+
   it("shows points when the count is over the allowance, even with nothing public", async () => {
     const unshared: AdminUser = { ...BOB, ingests: 6, ingestsShared: 0, ingestLimit: 3 };
     vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [unshared] })));

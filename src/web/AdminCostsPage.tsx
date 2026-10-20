@@ -85,6 +85,7 @@ import { Shell } from "./AdminPage.js";
 import { RankBar, StackedDayChart } from "./cost-charts.js";
 import {
   DataTable,
+  PINNED,
   type SortableColumn,
   chipClass,
   naturalDirections,
@@ -818,6 +819,7 @@ function Ranking({
           rows={sorted}
           caption={`Total cost by ${DIMENSION_LABEL[dim].toLowerCase()}`}
           sidewaysCue
+          pinFirst
         />
       </div>
     </>
@@ -828,14 +830,6 @@ function Ranking({
 
 const CELL = "tw:px-3 tw:py-2 tw:text-right tw:tabular-nums tw:whitespace-nowrap";
 const HEAD = "tw:px-3 tw:py-2 tw:text-xs tw:font-normal tw:text-muted-foreground tw:whitespace-nowrap";
-/**
- * The label column, held at the left while the table scrolls sideways. Opaque
- * in the page's own colour — the table sits on the page, not on a card — so a
- * shaded cell passing under it does not show through, in either theme. The
- * shadow is the column's right-hand rule: a collapsed border does not travel
- * with a sticky cell.
- */
-const PINNED = "tw:sticky tw:left-0 tw:z-10 tw:bg-background tw:shadow-[1px_0_0_var(--border)]";
 
 /**
  * Rows × columns, with both sets of totals. A plain table rather than
@@ -1180,7 +1174,7 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
                       <th
                         key={header}
                         scope="col"
-                        className={`${HEAD} ${i === CAUSE_COLUMNS.length - 1 ? "tw:text-right" : "tw:text-left"}`}
+                        className={`${HEAD} ${i === CAUSE_COLUMNS.length - 1 ? "tw:text-right" : "tw:text-left"} ${i === 0 ? PINNED : ""}`}
                       >
                         {header}
                       </th>
@@ -1193,9 +1187,9 @@ function Failures({ rows }: { rows: CostCubeRow[] }) {
                       {[cause.phase, cause.failureClass, cause.status, cause.upstream, cause.model, cause.task].map(
                         (value, i) => (
                           <td
-                            // biome-ignore lint/suspicious/noArrayIndexKey: six fixed columns of one row.
+                            // biome-ignore lint/suspicious/noArrayIndexKey: six fixed columns of one row; the first, which phase failed, is held (plan 261019o).
                             key={i}
-                            className="tw:px-3 tw:py-2 tw:text-left tw:whitespace-nowrap tw:text-foreground"
+                            className={`tw:px-3 tw:py-2 tw:text-left tw:whitespace-nowrap tw:text-foreground ${i === 0 ? PINNED : ""}`}
                           >
                             {value}
                           </td>

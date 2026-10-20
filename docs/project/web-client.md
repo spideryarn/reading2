@@ -215,7 +215,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   threshold slider uses it rather than a bare `<input type="range">`
   ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
-  the URL.
+  the URL. `pinFirst` holds its first column while it scrolls sideways; a hand-drawn table puts
+  `PINNED` from the same file on its first `<th>` and `<td>`s, as every `/admin` table does
+  ([261019o](../plans/261019o-admin-tables-freeze-the-first-column.md)).
 - **`src/web/lib/SidewaysScrollBox.tsx` § `SidewaysScrollBox`, `useScrollBox`** — the box a wide
   table scrolls sideways in. While its content overflows it is a named tab stop, so the arrow keys
   can scroll it; `DataTable` draws it for you. A hand-written `overflow-x-auto` div is the older

@@ -9,6 +9,9 @@
  *
  *  - a live **import** job for the slug draws *Still being added* with that
  *    job's card, and the article is read again when the job is done;
+ *  - an import that **already failed** draws its card too, and only the
+ *    newest import of the slug counts, never an older one behind it
+ *    (spya-zt7u0h, plan 261019n);
  *  - a live **mode** job for the slug does not (GPT Sol's plan review, P2-3);
  *  - *no job* is only said of a list asked for **after** the 404: every case
  *    starts from a tab whose list was read, empty, before the page arrived
@@ -30,6 +33,8 @@ let calls: string[] = [];
 let queue: Job[] | Error = [];
 /** A case may keep the list from answering until it lets go. */
 let hold: Promise<void> | null = null;
+/** What pressing Retry answers, while the polled list may still hold the old job. */
+let retryResult: Job | null = null;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -48,6 +53,9 @@ vi.mock("../src/web/lib/api.js", async (importActual) => ({
         if (queue instanceof Error) throw queue;
         return json({ jobs: queue });
       });
+    }
+    if (url.endsWith("/retry") && method === "POST" && retryResult !== null) {
+      return Promise.resolve(json(retryResult));
     }
     return Promise.reject(new Error(`unexpected fetch ${method} ${url}`));
   },
@@ -120,6 +128,7 @@ beforeEach(async () => {
   unreadableAfterCompletion = false;
   queue = [];
   hold = null;
+  retryResult = null;
   vi.useFakeTimers();
   Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   jobEngine.start(READER);
@@ -199,6 +208,126 @@ describe("signed in, at an address nobody can read yet", () => {
     expect(text()).toContain("The page answered 403.");
     expect(text()).not.toContain(NOT_SHARED);
     expect(attempts.every((a) => a === 0)).toBe(true);
+  });
+
+  /* spya-zt7u0h: Greg opened his own failed PDF import from /admin/articles
+     and was told *Not shared*. A fresh visit to an import that has already
+     failed draws its card, with the reason and its Retry, as one followed
+     while it ran does. */
+  it("draws a failed import's card on a fresh visit, not Not shared", async () => {
+    queue = [
+      job(IMPORT, "error", {
+        error: "Extracting the article did not finish.",
+        steps: [
+          { name: "fetch", label: "The fetch step", status: "done" },
+          { name: "extract", label: "The extract step", status: "error", error: "Extracting the article did not finish." },
+        ],
+      } as Partial<Job>),
+    ];
+    await show(READER);
+    await advance(0);
+
+    expect(text()).toContain("Extracting the article did not finish.");
+    expect(text()).not.toContain(NOT_SHARED);
+    expect(attempts.every((a) => a === 0)).toBe(true);
+  });
+
+  it("draws the newest import of the slug when an older one failed and a newer one is running", async () => {
+    queue = [
+      job(IMPORT, "running", { id: "sba-j2", title: "The second try", createdAt: "2026-10-05T10:00:00.000Z" }),
+      job(IMPORT, "error", { title: "The first try" }),
+    ];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain("The second try");
+    expect(text()).not.toContain("The first try");
+  });
+
+  /* GPT Sol's plan review, finding 5: status must not outrank recency. */
+  it("draws a newer failed retry, not the older failure this tab followed", async () => {
+    queue = [job(IMPORT, "running", { title: "The first try" })];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain("The first try");
+
+    /* The first fails; a retry from another tab starts and fails before this tab sees it run. */
+    queue = [
+      job(IMPORT, "error", { id: "sba-j2", title: "The second try", createdAt: "2026-10-05T10:00:00.000Z" }),
+      job(IMPORT, "error", { title: "The first try" }),
+    ];
+    await advance(1500);
+    await advance(LIST_WAIT_MS);
+    expect(text()).toContain("The second try");
+    expect(text()).not.toContain("The first try");
+  });
+
+  it("draws Retry's replacement before the polled list has it", async () => {
+    queue = [job(IMPORT, "error", { title: "The failed try" })];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain("The failed try");
+
+    retryResult = job(IMPORT, "running", {
+      id: "sba-j2",
+      title: "The retry now running",
+      createdAt: "2026-10-05T10:00:00.000Z",
+    });
+    const retry = [...(host?.querySelectorAll("button") ?? [])].find((button) => button.textContent?.includes("Retry"));
+    expect(retry, "the failed import did not offer Retry").toBeDefined();
+    await act(async () => {
+      retry?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await advance(0);
+
+    expect(text()).toContain("The retry now running");
+    expect(text()).not.toContain("The failed try");
+  });
+
+  it("breaks a createdAt tie by id, as the job store does", async () => {
+    queue = [
+      job(IMPORT, "error", { id: "sba-j1", title: "The lower id", createdAt: "2026-10-05T10:00:00.000Z" }),
+      job(IMPORT, "running", { id: "sba-j2", title: "The higher id", createdAt: "2026-10-05T10:00:00.000Z" }),
+    ];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain("The higher id");
+    expect(text()).not.toContain("The lower id");
+  });
+
+  it("does not let a malformed or missing createdAt hide a valid import", async () => {
+    const missing = job(IMPORT, "error", { id: "sba-j8", title: "The undated job" });
+    delete (missing as { createdAt?: string }).createdAt;
+    queue = [
+      job(IMPORT, "error", { id: "sba-j9", title: "The malformed job", createdAt: "not-a-date" }),
+      missing,
+      job(IMPORT, "running", { id: "sba-j2", title: "The valid job", createdAt: "2026-10-05T10:00:00.000Z" }),
+    ];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain("The valid job");
+    expect(text()).not.toContain("The malformed job");
+    expect(text()).not.toContain("The undated job");
+  });
+
+  it("does not fall back to an older failure behind a newer completed import", async () => {
+    unreadableAfterCompletion = true;
+    queue = [
+      job(IMPORT, "done", { id: "sba-j2", title: "The second try", createdAt: "2026-10-05T10:00:00.000Z" }),
+      job(IMPORT, "error", { title: "The first try" }),
+    ];
+    await show(READER);
+    await advance(0);
+    await advance(LIST_WAIT_MS * 2);
+    expect(Math.max(...attempts)).toBe(1);
+    expect(text()).not.toContain("The first try");
+    expect(text()).toContain(NOT_SHARED);
+  });
+
+  it("says Not shared over a failed mode job for the slug", async () => {
+    queue = [job(["glossary"], "error", { url: "https://example.com/a-paper" })];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain(NOT_SHARED);
   });
 
   it("says Not shared over a live mode job for the slug", async () => {
