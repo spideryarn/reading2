@@ -594,3 +594,20 @@ Three postmortems name the classes:
 [261020b](../postmortems/261020b-a-read-only-handler-is-not-a-read-only-request-lifecycle.md),
 [261020c](../postmortems/261020c-a-sql-regex-state-machine-cannot-own-the-server-transaction-state.md),
 [261020d](../postmortems/261020d-authorization-expiry-must-remove-data-already-on-screen.md).
+
+### Landing (2026-10-20)
+
+- **The migration was renumbered** at the merge with dev, which had gained
+  `20261020164021_article_open_times`: regenerated as `20261020225640_view_as_sessions` on top
+  of it (identical DDL, the two hand-written `auth.users` keys appended again), so the journal
+  stays in time order and drizzle will apply it.
+- **Not applied to the shared local database.** Its ledger holds an unpushed row from another
+  worktree (`20261020204049_chat_threads_mode_prepared_at`), and `db:migrate` rightly refuses to
+  reconcile until that lands on dev. The private test lane applies the migration cleanly on every
+  run.
+- **No browser run yet**, for the same reason: the dev server shares that database, so "View as"
+  cannot start a session on it. The tab is covered in jsdom (tests/view-as-*.test.ts[x]) and the
+  gate against Postgres; the first real-browser pass belongs after the next `db:migrate`.
+- **Dev's new open counter** (`POST /api/library/:slug/open`, now also writing
+  `article_open_times`) is a POST, so the gate refuses it, and ArticlePage already skips it while
+  viewing as.
