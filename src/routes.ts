@@ -6160,7 +6160,7 @@ interface CheckAsked {
  *
  * **The typed claim is never echoed** into an error, and is trimmed and
  * refused rather than cut: 400 empty, 413 over `MAX_OWN_CLAIM_CHARS`, the
- * angle box's limit and status.
+ * lens's limit and status.
  */
 function readCheckRequest(body: unknown): CheckAsked {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {

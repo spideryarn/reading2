@@ -1626,7 +1626,7 @@ function mountVisitorTweets(): ReactNode {
 }
 
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 function mountReception(reception: Reception | null, over: Partial<ReceptionOwner> = {}): ReactNode {
   return createElement(ReceptionAndClaimsPanel, {
@@ -1915,9 +1915,10 @@ const TWEETS_VISITOR: BandShape = {
  * both went with plan 261003o. The relevance bar (`.rcp-rel`) is Claims', so
  * Reception, which this fixture opens on, has none.
  *
- * `div.gloss-ask.rcp-lens` is the owner's *Look at the debate from an angle*
- * box, the first row since 2026-10-05 (plan 261005k, A) and a deliberate
- * change to both shapes: it is drawn with or without a stored debate.
+ * `div.gloss-ask.rcp-lens`, the owner's *Look at the debate from an angle*
+ * box, was the first row from 2026-10-05 (plan 261005k, A) until 2026-10-20,
+ * when it became Sources › Investigate's box (plan 261020n Stage 2) — a deliberate
+ * change to both shapes.
  */
 const RECEPTION_SHAPE: BandShape = {
   className: "mode-band gloss rcp sources has-about",
@@ -1926,7 +1927,6 @@ const RECEPTION_SHAPE: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "div.gloss-ask.rcp-lens",
     "div.rcp-scroll",
   ],
   headChildren: ["div.summ-views.rcp-views[aria-label,data-more-unmasked,role]"],
@@ -1950,7 +1950,6 @@ const RECEPTION_LOADING: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "div.gloss-ask.rcp-lens",
     "p.band-waiting.gloss-quiet[role]",
     "div.rcp-scroll",
   ],

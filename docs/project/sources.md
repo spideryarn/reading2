@@ -2,11 +2,17 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band with five sub-modes: **Bibliography**, the works the piece cites (the
-Citations mode until 2026-10-09), **Not cited**, papers close to it that its bibliography does not
-list (the owner's, since 2026-10-11), **Links**, every web address its own text links to (since
-2026-10-11), then **Reception**, what others have written about the piece, and **Claims**, the
-claims it rests on for the reader to check against the web (Debate's two). Out of the experimental
+One mode in the band, with six sub-modes:
+
+- **Bibliography**: the works the piece cites (the Citations mode until 2026-10-09).
+- **Not cited**: papers close to it that its bibliography does not list (the owner's, since
+  2026-10-11).
+- **Links**: every web address its own text links to (since 2026-10-11).
+- **Reception**: what others have written about the piece (one of Debate's two).
+- **Claims**: the claims it rests on, for the reader to check against the web (Debate's other).
+- **Investigate**: questions for Chat about all of that (the owner's, since 2026-10-20).
+
+It has been out of the experimental
 switch, in every reader's bar, since the day it was made.
 
 > I'm inclined to go with B and then C1 to begin with. … For question two, I guess let's move this
@@ -30,12 +36,13 @@ for Reception and Claims. This page owns the merge.
 
 ## In this doc
 
-- [§ The band](#the-band) — one chip row, four panels, one surface
+- [§ The band](#the-band) — one chip row, five panels, one surface
 - [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
+- [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
 - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
-- [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited
+- [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited or Investigate
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
 - [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate) — Peer review, then Sources
@@ -44,11 +51,12 @@ for Reception and Claims. This page owns the merge.
 ## The band
 
 ```
- ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 ┐   (i)
+ ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 │ Investigate ┐   (i)
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
  │ NotCitedPanel                                       ← Not cited (the owner's only)
  │ LinksPanel                                          ← Links
  │ ReceptionAndClaimsPanel, as the Debate mode drew it         ← Reception, Claims
+ │ InvestigatePanel                                    ← Investigate (the owner's only)
 ```
 
 **A wrapper, not a rewrite.** `SourcesBand` reads the sub-mode and hands one chip row to
@@ -155,10 +163,72 @@ when one has no works. The plan, its review and what was passed over are
 from `meta.source`; a visitor gets the neutral sentence, because their meta does not carry
 `source` and a missing `url` there may be a refused address, not an upload.
 
+## Investigate
+
+> let's also add a new Chat sub-mode to the Sources mode (pick a name for it) for basically doing
+> lots of searching to try and figure out what people think about the article, about the articles
+> it has cited, and whether its claims have been supported, i.e. a general Chat mode for Sources.
+>
+> So maybe the sub-mode would open up a chat with a whole bunch of suggested questions […] - and as
+> always, the user could also choose to ignore the suggested questions, and just type into the
+> input box.
+>
+> — Greg, 2026-10-19 (addendum spya-x4xpw4), in [261020n](../plans/261020n-sources-reception-layout-and-a-sources-chat-sub-mode.md)
+
+Since 2026-10-20, for the owner: the sixth chip, `?sources=investigate`. It is **a place to start
+chats from**, not a chat drawn in the band. Top to bottom:
+
+- **A question box.** It replaced Reception's *Look at the debate from an angle*.
+- **Five suggested questions**, the same for every article: how it has been received, whether its
+  main claims are borne out, who disagrees most and why, whether the studies it leans on have held
+  up, and what has been published since.
+- **About its claims**: up to four of Claims' listed claims, in article order. These appear only
+  when the owner has already made the list; this chip never buys it.
+- **About the works it cites**: the three Bibliography rates the piece as leaning on most
+  (`relevance`). A work with no rating is left out.
+- **Your questions**: every chat started from the box or a suggested question, newest first, each
+  with its gist. This was Reception's *Your angles*.
+
+**Each press sends**, as every *Ask in chat* does. It opens Chat on a fresh conversation, and
+Chat's *Back to your question in Investigate* returns here.
+- **A claim row or a work row** goes through Claims' or Bibliography's own sender. It therefore
+  records the same origin as that list's button does, reopens the item's chat if one exists, and
+  shows the same mark in the button's place, in both places.
+- **The box and the suggested questions** store a lens origin, `{ mode: "reception", lens }`, with
+  the question as the lens. The question is sent fenced, followed by *Search the web widely, and say
+  plainly if you find little.* (`askInSources`, `chat-handoff.ts`).
+
+**Why it is a launcher, and not a chat inside the band.** The floating chat beside a mode can only
+start a chat anchored on a paragraph, and a second `ConversationBand` inside Sources would be a
+second way of doing what Chat already does. Opening the conversation beside Sources, so that the
+reader never leaves the mode, is the named next step in the plan.
+
+**Why "Investigate".** It was built as *Ask*. But a chip label beginning with *ask* outranks Chat's
+own nickname `ask` in the command bar (`tests/command-match-mode-aliases.test.ts`), and *Questions*
+collides with Chat's `question`. *Investigate* says what Greg asked for: lots of searching.
+
+**What each press costs**: one ordinary chat turn with web search, through Chat's route and its
+limits. There is no new spend mechanism. The chip arms nothing (`activationForSources` returns
+`null`), and arriving by a link, Back or a restore sends nothing.
+
+**The stored origin word is still `reception`**, which is the angle box's word. Every lens chat,
+including those made from the old angle box, opens its way back here. No reader sees the word, and
+renaming it is a migration left for later (the plan's § Deferred).
+
+**Not for visitors.** Their chip row leaves Investigate out, and a shared `?sources=investigate`
+draws Bibliography (params.ts § `visitorSourcesView`), as Not cited does.
+
+What the lens is, and what to know before changing it, is still
+[reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle).
+The panel is [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx).
+Tests: `tests/reception-lens.test.tsx` covers the panel, and `tests/reception-lens-in-chat.test.tsx`
+covers the whole journey with its one POST per press.
+
 ## The address, and old links
 
-`?mode=sources`, and `?sources=reception` or `claims`; Bibliography is the default and is
-left off. Each sub-mode keeps its own parameters, unchanged: `?citeby=` and `?citebar=` for
+`?mode=sources`, and `?sources=` names Bibliography, Not cited, Links, Reception, Claims or
+Investigate; Bibliography is the default and is left off. Each sub-mode keeps its own parameters,
+unchanged: `?citeby=` and `?citebar=` for
 Bibliography, `?receptionby=`, `?bears=` and `?receptionthread=` for Reception and Claims.
 
 **Every old address lands on the sub-mode it meant**, through one function,
@@ -202,9 +272,10 @@ rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *p
 **Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
 button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
 `activationForSources`): the `bibliography` list for Bibliography, nothing for Not cited or Links,
-the `reception` web search for Reception, and the `sources-claims` list for Claims. Not cited's
+the `reception` web search for Reception, the `sources-claims` list for Claims, and nothing for
+Investigate, whose every press is a chat ([§ Investigate](#investigate)). Not cited's
 search is its panel's own button and nothing else ([§ Not cited](#not-cited)). Every read stays
-mounted in all five sub-modes, so
+mounted in all six sub-modes, so
 the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
 lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
 anything.
@@ -244,9 +315,10 @@ the policy about blocks would change what every public article shows, and was le
 [261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
 the report.
 
-**Not cited is not there at all.** The visitor's chip row leaves it out, and a shared
-`?sources=not-cited` draws Bibliography (params.ts § `visitorSourcesView`), so a visitor never asks
-`/api/related-work` (*tests/public-network-trace.test.tsx*).
+**Not cited and Investigate are not there at all.** The visitor's chip row leaves both out. A
+shared `?sources=not-cited` or `?sources=investigate` draws Bibliography (params.ts §
+`visitorSourcesView`), so a visitor never asks `/api/related-work` and never mounts an Investigate
+sender (*tests/public-network-trace.test.tsx*).
 
 ## Cited in this paragraph
 
@@ -278,7 +350,7 @@ for a cited work, `sources-claims` for a claim, and `reception` for an angle. Th
 `citations` for a work and `debate` for both other shapes; old rows are read under the current names.
 Chat's list shows all three under Sources' icon and one `sources` filter;
 the tooltip names the sub-mode (*Started from a claim in Sources › Claims*), and the way back
-opens that sub-mode: a work on Bibliography with its row in view, an angle on Reception, a claim on
+opens that sub-mode: a work on Bibliography with its row in view, a question (an angle, before 2026-10-20) on Investigate, a claim on
 Claims with its row in view ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
 Reader.tsx § `openOrigin`, GPT Sol's F5).
 
@@ -324,8 +396,9 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   lists behind them, shared with the panels.
 - [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx),
   [`src/web/NotCitedPanel.tsx`](../../src/web/NotCitedPanel.tsx),
-  [`src/web/LinksPanel.tsx`](../../src/web/LinksPanel.tsx) and
-  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the four panels; each takes the chip row
+  [`src/web/LinksPanel.tsx`](../../src/web/LinksPanel.tsx),
+  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) and
+  [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) — the five panels; each takes the chip row
   as `head`, and ReceptionAndClaimsPanel draws C1's cited works under claims.
 - [`src/web/useRelatedWork.ts`](../../src/web/useRelatedWork.ts) — Not cited's read and press;
   [`src/related-work.ts`](../../src/related-work.ts) — the query, the search and the exclusion,

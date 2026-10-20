@@ -1,13 +1,14 @@
 /**
  * **Sources mode's controller** — what this piece cites, and what others
- * say about it. One band, five sub-modes (`?sources=`):
+ * say about it. One band, six sub-modes (`?sources=`):
  *
  * ```
- *  ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 ┐  (i)
+ *  ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 │ Investigate ┐  (i)
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (default)
  *  │ NotCitedPanel, OpenAlex's search on the owner's press  ← Not cited (owner only)
  *  │ LinksPanel, read from the article's markup                    ← Links
  *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims
+ *  │ InvestigatePanel, questions handed to Chat                     ← Investigate (owner only)
  * ```
  *
  * Citations and Debate were two modes, both behind the experimental switch,
@@ -19,7 +20,7 @@
  * was put to him: *"B Sources. Rename comprehensively, eg including docs,
  * code, database etc"* (spya-egmn6r).
  *
- * **A wrapper, not a rewrite.** The four panels each own their list; this
+ * **A wrapper, not a rewrite.** The five panels each own their list; this
  * draws one chip row (`SourcesViews`, below)
  * and hands it to whichever panel the sub-mode names as that panel's `head`,
  * so there is exactly one `ModeSurface` on screen, the panel's, with
@@ -27,7 +28,7 @@
  * numbers come from sources-counts.ts, the same selectors the panels draw
  * their lists with (GPT Sol's F4).
  *
- * **Every read stays mounted in all five sub-modes**, so each chip can show
+ * **Every read stays mounted in all six sub-modes**, so each chip can show
  * its count, and **each auto-run is gated on its own sub-mode**: a press that
  * lands on Reception arms the paid search and nothing else, and a press armed
  * for one sub-mode that finds another on screen is retired unspent
@@ -37,9 +38,9 @@
  *
  * The visitor twin, `VisitorSourcesBand`, draws the same chips and panels
  * off the public payload and mounts none of those hooks, so it can neither
- * read the owner's lists nor start anything. It has no Not cited chip, and
- * reads `?sources=not-cited` as Bibliography (params.ts §
- * `visitorSourcesView`). Any one of the three artefacts
+ * read the owner's lists nor start anything. It has no Not cited or Investigate chip,
+ * and reads `?sources=not-cited` and `?sources=investigate` as Bibliography (params.ts
+ * § `visitorSourcesView`). Any one of the three artefacts
  * opens the mode for a visitor (visitor.ts § POLICY); a sub-mode with nothing
  * stored says so inside the band.
  *
@@ -89,6 +90,7 @@ import { type LinkableWork, type LinkedBlock, type OutboundLink, outboundLinks }
 import { LinksPanel } from "../../LinksPanel.js";
 import { useRelatedWork } from "../../useRelatedWork.js";
 import { NotCitedPanel } from "../../NotCitedPanel.js";
+import { InvestigatePanel, type SourcesInvestigateChats } from "../../InvestigatePanel.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -98,7 +100,7 @@ function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | nu
 const NO_WORKS: readonly LinkableWork[] = [];
 
 /**
- * **The owner's band.** Every read the five sub-modes need, the chip row, and
+ * **The owner's band.** Every read the six sub-modes need, the chip row, and
  * the panel the sub-mode names.
  *
  * A component of its own for the reason every artefact band is: the hooks
@@ -120,6 +122,7 @@ export function SourcesBand({
   articleTitle,
   workChats,
   claimChats,
+  investigateChats,
   citeFocus,
   onCiteFocusTaken,
   claimFocus,
@@ -145,8 +148,10 @@ export function SourcesBand({
   articleTitle: string | null;
   /** A chat about one cited work (BibliographyPanel § `BibliographyAccess`). */
   workChats?: CitedWorkChats;
-  /** A claim's chat and an angle's (ReceptionAndClaimsPanel § `ReceptionAndClaimsChats`). */
+  /** A claim's chat (ReceptionAndClaimsPanel § `ReceptionAndClaimsChats`). */
   claimChats: ReceptionAndClaimsChats;
+  /** Investigate's senders and the way back (InvestigatePanel.tsx § `SourcesInvestigateChats`). */
+  investigateChats: SourcesInvestigateChats;
   /** One work to bring into view in Bibliography, once (BibliographyPanel § `Props.focus`). */
   citeFocus: CiteFocus | null;
   onCiteFocusTaken(focus: CiteFocus): void;
@@ -189,45 +194,70 @@ export function SourcesBand({
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
 
-  if (view === "bibliography")
-    return (
-      <BibliographyPanel
-        access={{ kind: "owner", owner: bibliography, ...(workChats ? { chats: workChats } : {}) }}
-        head={head}
-        {...citeControls}
-        onJump={onJump}
-        focus={citeFocus}
-        onFocusTaken={onCiteFocusTaken}
-      />
-    );
-  if (view === "not-cited") return <NotCitedPanel related={related} head={head} />;
-  if (view === "links")
-    return (
-      <LinksPanel
-        links={links}
-        fromPdf={fromPdf}
-        works={bibliography.bibliography?.citations ?? NO_WORKS}
-        head={head}
-        onJump={onJump}
-        onOpenWork={onOpenWork}
-      />
-    );
-  return (
-    <ReceptionAndClaimsPanel
-      access={{ kind: "owner", owner: reception, claimList, checks, citers, claimChats }}
-      head={head}
-      onJump={onJump}
-      view={view}
-      onView={setView}
-      {...receptionAndClaimsControls}
-      blockOrder={blockOrder}
-      articleYear={yearOf(publishedAt)}
-      articleTitle={articleTitle}
-      focus={claimFocus}
-      onFocusTaken={onClaimFocusTaken}
-      citedIn={citedInOf(bibliography.bibliography?.citations ?? null, onOpenWork)}
-    />
-  );
+  switch (view) {
+    case "bibliography":
+      return (
+        <BibliographyPanel
+          access={{ kind: "owner", owner: bibliography, ...(workChats ? { chats: workChats } : {}) }}
+          head={head}
+          {...citeControls}
+          onJump={onJump}
+          focus={citeFocus}
+          onFocusTaken={onCiteFocusTaken}
+        />
+      );
+    case "not-cited":
+      return <NotCitedPanel related={related} head={head} />;
+    case "links":
+      return (
+        <LinksPanel
+          links={links}
+          fromPdf={fromPdf}
+          works={bibliography.bibliography?.citations ?? NO_WORKS}
+          head={head}
+          onJump={onJump}
+          onOpenWork={onOpenWork}
+        />
+      );
+    /* Claims' list only while it is current, as Claims hands its rows a
+       sender only then (ReceptionAndClaimsPanel.tsx § `ListedClaims`); Investigate
+       never buys it (plan 261020n). */
+    case "investigate":
+      return (
+        <InvestigatePanel
+          head={head}
+          chats={investigateChats}
+          claims={
+            claimList.stale
+              ? null
+              : listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList })
+          }
+          works={bibliography.bibliography?.citations ?? null}
+        />
+      );
+    case "reception":
+    case "claims":
+      return (
+        <ReceptionAndClaimsPanel
+          access={{ kind: "owner", owner: reception, claimList, checks, citers, claimChats }}
+          head={head}
+          onJump={onJump}
+          view={view}
+          onView={setView}
+          {...receptionAndClaimsControls}
+          blockOrder={blockOrder}
+          articleYear={yearOf(publishedAt)}
+          articleTitle={articleTitle}
+          focus={claimFocus}
+          onFocusTaken={onClaimFocusTaken}
+          citedIn={citedInOf(bibliography.bibliography?.citations ?? null, onOpenWork)}
+        />
+      );
+    default: {
+      const unhandled: never = view;
+      return unhandled;
+    }
+  }
 }
 
 /**
@@ -286,8 +316,9 @@ export function VisitorSourcesBand({
 }) {
   useRenderCount("VisitorSourcesBand");
   const [named, setView] = useQueryState("sources", sourcesParam);
-  /* Not cited is the owner's: a shared `?sources=not-cited` draws Bibliography,
-     and the address is left as it is (plan 261011ac, F6). */
+  /* Not cited and Investigate are the owner's: a shared `?sources=not-cited` or
+     `?sources=investigate` draws Bibliography, and the address is left as it is (plan
+     261011ac, F6; plan 261020n § Visitors). */
   const view = visitorSourcesView(named);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
@@ -302,43 +333,55 @@ export function VisitorSourcesBand({
     thread: receptionAndClaimsControls.thread,
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
-  /* `not-cited` never reaches here (`visitorSourcesView`); named so the type narrows. */
-  if (view === "bibliography" || view === "not-cited")
-    return (
-      <BibliographyPanel
-        access={{ kind: "visitor", bibliography }}
-        head={head}
-        {...citeControls}
-        onJump={onJump}
-        focus={citeFocus}
-        {...(onCiteFocusTaken ? { onFocusTaken: onCiteFocusTaken } : {})}
-      />
-    );
-  if (view === "links")
-    return (
-      <LinksPanel
-        links={links}
-        fromPdf={false}
-        works={bibliography?.citations ?? NO_WORKS}
-        head={head}
-        onJump={onJump}
-        onOpenWork={onOpenWork}
-      />
-    );
-  return (
-    <ReceptionAndClaimsPanel
-      access={{ kind: "visitor", reception, claimList }}
-      head={head}
-      onJump={onJump}
-      view={view}
-      onView={setView}
-      {...receptionAndClaimsControls}
-      blockOrder={blockOrder}
-      articleYear={yearOf(publishedAt)}
-      articleTitle={articleTitle}
-      citedIn={citedInOf(bibliography?.citations ?? null, onOpenWork)}
-    />
-  );
+  switch (view) {
+    /* `not-cited` and `investigate` never reach here (`visitorSourcesView`); named so
+       the switch is exhaustive and a new sub-mode has to say what a visitor
+       gets. */
+    case "bibliography":
+    case "not-cited":
+    case "investigate":
+      return (
+        <BibliographyPanel
+          access={{ kind: "visitor", bibliography }}
+          head={head}
+          {...citeControls}
+          onJump={onJump}
+          focus={citeFocus}
+          {...(onCiteFocusTaken ? { onFocusTaken: onCiteFocusTaken } : {})}
+        />
+      );
+    case "links":
+      return (
+        <LinksPanel
+          links={links}
+          fromPdf={false}
+          works={bibliography?.citations ?? NO_WORKS}
+          head={head}
+          onJump={onJump}
+          onOpenWork={onOpenWork}
+        />
+      );
+    case "reception":
+    case "claims":
+      return (
+        <ReceptionAndClaimsPanel
+          access={{ kind: "visitor", reception, claimList }}
+          head={head}
+          onJump={onJump}
+          view={view}
+          onView={setView}
+          {...receptionAndClaimsControls}
+          blockOrder={blockOrder}
+          articleYear={yearOf(publishedAt)}
+          articleTitle={articleTitle}
+          citedIn={citedInOf(bibliography?.citations ?? null, onOpenWork)}
+        />
+      );
+    default: {
+      const unhandled: never = view;
+      return unhandled;
+    }
+  }
 }
 
 /** `?citeby=` and `?citebar=`, Bibliography's order and threshold, which both bands share. */
@@ -373,11 +416,12 @@ function useReceptionAndClaimsControls() {
 }
 
 /**
- * **Bibliography | Not cited | Links | Reception | Claims** — Sources' five
- * sub-modes, the band's header row; four for a visitor, who has no Not cited
- * (`VISITOR_SOURCES_VIEWS`). It was Debate's two-way control (`DebateViews`,
- * 2026-10-03, plan 261003o) until 2026-10-09, widened to three, then four and
- * five on 2026-10-11, and is built the way
+ * **Bibliography | Not cited | Links | Reception | Claims | Investigate** — Sources'
+ * six sub-modes, the band's header row; four for a visitor, who has no Not
+ * cited and no Investigate (`VISITOR_SOURCES_VIEWS`). It was Debate's two-way control
+ * (`DebateViews`, 2026-10-03, plan 261003o) until 2026-10-09, widened to
+ * three, then four and five on 2026-10-11, and six on 2026-10-20 (plan
+ * 261020n), and is built the way
  * Summary's Brief | Fuller | Thread is: a radiogroup of buttons, each its own
  * tab stop, drawn joined so they read as one choice (mode-band.css § the
  * part-switcher).
@@ -386,7 +430,8 @@ function useReceptionAndClaimsControls() {
  * so a reader on Bibliography can see there are three replies a press away —
  * Greg read one claim's two sources as the whole debate because nothing told
  * him there were others. Bibliography has no number while there is no list,
- * and Not cited none until a stored search has been read.
+ * Not cited none until a stored search has been read, and Investigate never one:
+ * there is nothing to count before a press.
  *
  * **What each one is goes in its card, never in a sentence under the row**:
  * docs/project/mode.md bans a description line there (GPT Sol's F8 on
@@ -396,7 +441,7 @@ function useReceptionAndClaimsControls() {
  *
  * The owner's press arms the chip's own work, the same contract as its
  * command-bar row (activation.ts § `activationForSources`): Bibliography the
- * citations, Not cited and Links nothing, Reception the paid search, Claims the claims list. A stored list
+ * citations, Not cited, Links and Investigate nothing, Reception the paid search, Claims the claims list. A stored list
  * consumes its token without running. A visitor can never arm owner work.
  */
 export function SourcesViews({
@@ -468,6 +513,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
       return { n: counts.reception, noun: plural(counts.reception, "source") };
     case "claims":
       return { n: counts.claims.n, noun: plural(counts.claims.n, counts.claims.unit) };
+    case "investigate":
+      return null;
     default: {
       const unhandled: never = view;
       return unhandled;
@@ -492,4 +539,9 @@ const VIEW_HOW: Record<SourcesView, string> = {
     "Found by a search of the open web, run once and kept. Each page has to link, quote or name this piece, and each quotation is checked against what the search returned.",
   claims:
     "Listed by one model call over the article, with no web search, and kept. Each claim is in the article's own words, checked against the paragraph it names, with a line in the AI's words under it.",
+  /* Checked against InvestigatePanel.tsx: the fixed questions are ours, the claims
+     are Claims' stored list, the works Bibliography's `relevance`, and every
+     row and the box go through Reader's `handToChat` with `send`. */
+  investigate:
+    "Nothing runs until you press a question. Then Chat opens and asks it with a web search. The suggested questions are fixed; the claims and works are taken from Claims and Bibliography once they exist.",
 };

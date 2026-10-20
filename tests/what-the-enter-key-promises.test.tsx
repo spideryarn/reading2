@@ -88,6 +88,9 @@ const PROMISES: Record<string, string> = {
   /* Enter opens the selected mode — it goes somewhere. Not `search`: the search
      is the typing, and the list narrows as you type rather than on Enter. */
   "CommandBar.tsx › Type a command": "go",
+  /* Sources › Investigate's question box: Enter opens Chat with the question
+     sent, so it goes somewhere. */
+  "InvestigatePanel.tsx › gloss-ask-input": "go",
   /* Fields of the criterion form, whose submit button runs it. Not steps in a
      wizard, so `next` would be a lie about where the key goes. */
   "ReceptionAndClaimsPanel.tsx › gloss-ask-input": "go",

@@ -22,8 +22,11 @@ import type { ThreadOrigin } from "./types.js";
 export function titleFromOrigin(origin: ThreadOrigin): string {
   switch (origin.mode) {
     case "reception":
-      /* An angle the reader typed. */
-      return titleFrom(`Angle: ${origin.lens}`);
+      /* A question asked in Sources › Investigate, typed or suggested, which is why
+         not *Angle:* any more: a suggested question is not the reader's angle
+         (GPT Sol's F6 on plan 261020n). An older angle chat keeps the title
+         it was given. */
+      return titleFrom(`Question: ${origin.lens}`);
     case "sources-claims":
       return titleFrom(`Claim: ${origin.quote}`);
     case "glossary":

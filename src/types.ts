@@ -4588,9 +4588,11 @@ export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | Bibliogra
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
 
 /**
- * An angle the reader asked to see the debate from: their own words, trimmed
- * and non-empty, at most `MAX_LENS_CHARS`. No block and no quote. Two chats
- * may share one lens; they are then two lines in Reception's *Your angles*.
+ * A question asked in Sources › Investigate, typed or suggested (plan 261020n), or an
+ * angle from Reception's box before that plan moved it, or the command bar's
+ * suggested lens: the words, trimmed and non-empty, at most `MAX_LENS_CHARS`.
+ * No block and no quote. Two chats may share one lens; they are then two
+ * lines in Investigate's *Your questions*.
  */
 export type LensOrigin = { mode: "reception"; lens: string };
 
@@ -8293,7 +8295,7 @@ export type SourcesClaimListFound = SourcesClaimListResponse;
 /** The most claims one press may search: pass B's shape, one call over a few claims. */
 export const MAX_CHECK_TARGETS = 4;
 
-/** A typed claim's ceiling, the angle box's: refused when over, never cut. */
+/** A typed claim's ceiling, Investigate's question box's too: refused when over, never cut. */
 export const MAX_OWN_CLAIM_CHARS = MAX_PURPOSE_CHARS;
 
 /**

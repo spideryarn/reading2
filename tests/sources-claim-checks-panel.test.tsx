@@ -140,7 +140,7 @@ function paint(
           claimList,
           checks: owned,
           citers: { result: { kind: "no-doi" }, retry: () => {} },
-          claimChats: { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} },
+          claimChats: { summaries: [], onCheck: () => {}, onOpen: () => {} },
         },
         onJump: () => {},
         view: "claims",

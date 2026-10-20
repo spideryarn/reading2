@@ -244,9 +244,9 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Sources' five sub-modes**: Bibliography (the Citations mode until
+ * **Sources' six sub-modes**: Bibliography (the Citations mode until
  * 2026-10-09), Not cited and Links (since 2026-10-11), then Reception and Claims (the Debate
- * mode's two, since 2026-10-03). The band's chip row, SourcesMode.tsx §
+ * mode's two, since 2026-10-03), and Investigate last (since 2026-10-20, plan 261020n). The band's chip row, SourcesMode.tsx §
  * `SourcesViews`; Bibliography first because it is the default. Greg,
  * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in
  * this article (i.e. the former Citations mode) "Bibliography", and this
@@ -317,6 +317,17 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
        Not through command-match.ts § `FORMER_PARENT_NAMES`, which would give
        Bibliography a Debate compound it never had. */
     aliases: ["debate claims"],
+  },
+  /* The owner's questions for Chat about the piece and what others say: a
+     few suggested, a few about its claims and the works it leans on, and a
+     box. Greg, 2026-10-19 (spya-x4xpw4): *"a general Chat mode for Sources"*.
+     Not called Chat, which is a mode's label (tests/mode-catalog.test.ts §
+     never another row's label). Plan 261020n § Stage 2. */
+  investigate: {
+    label: "Investigate",
+    description: "Questions about this piece and what others say: suggested ones or your own, answered in Chat with a web search",
+    experimental: false,
+    aliases: ["inquiry", "research", "ask the web", "what do others say", "sources chat", "dig deeper"],
   },
 };
 

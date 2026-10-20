@@ -1,5 +1,5 @@
 ---
-keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite
+keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat
 related: mode-referee, faq-beyond-the-article
 ---
 
@@ -9,20 +9,22 @@ A piece sits among other people’s work: the works it builds on, and what other
 since. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;
 **Not cited** lists papers close to it that its bibliography does not;
 **Links** lists every web address the piece itself links to;
-**Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,
-so you can check what others say about each one. Every source links out, so you can check it rather
-than take our word for it.
+**Reception** is what others say about the piece itself; **Claims** lists the claims it rests on,
+so you can check what others say about each one; and **Investigate** offers questions about all of it to
+put to [Chat](/help/mode-chat), which searches the web to answer. Every source links out, so you can
+check it rather than take our word for it.
 
 ![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with its two bars, and where the piece first cites it.")
 
 ## When to use it
 
 For an academic paper or a report, where the questions are “what is this built on, and where do I
-find it?” and “what have others made of it?”. Five buttons at the top choose the view; the number
+find it?” and “what have others made of it?”. Six buttons at the top choose the view; the number
 on each is how much it has to show. Bibliography is usually prepared in the background when the
 article is added; if it was not, pressing Bibliography makes it. Reception and Claims are never
 made in the background: pressing their view makes them (as does running them again from the
-article's details page), and each is kept. Reception’s is a search of the open web: it takes
+article's details page), and each is kept. Investigate makes nothing until you press a question.
+Reception’s is a search of the open web: it takes
 about a minute, and often finds nothing, which it says plainly, because many pieces have no
 reception at all. A link or Back to a view never starts anything; it shows a button instead, such as
 **Search the web**. Only whoever added the article can make these; visitors to a shared article see
@@ -132,9 +134,17 @@ for that.
 **Reception**
 
 - What others have written about this piece itself: replies, reviews, and work that cites it and
-  says something about it. Pages that link to the piece or quote it come first. Pages that only
-  mention its title follow under **Names this piece by its title only**: often a paper citing it,
-  sometimes a page about something else with the same title, so check before you rely on one.
+  says something about it. The AI's sections and **Cited by** start folded, so you see their outline
+  first; press one to open it. **Every page** starts open, so no source depends on a press.
+- **What the AI noticed in these sources**, at the top, holds **Key sources** (the ones the AI
+  thinks matter most, starred) and the themes several sources share, each with how many sources
+  are in it. A source can be in more than one.
+- **Every page**, open from the start, lists every source found. Pages that link to the piece or
+  quote it come first. Pages that only mention its title follow under **Mentions its title only —
+  may be another piece**: often a paper citing it, sometimes a page about something else with the
+  same title, so check before you rely on one. Each source is two lines: its title, then the site,
+  the year and one word of the AI's reading. Press the arrow beside it for the quoted excerpt, the
+  AI's full reading, and how we know the page is about this piece.
 - **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and
   is there before you search: it comes from OpenAlex, a public index of published work, which we
   ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of
@@ -143,15 +153,10 @@ for that.
   author and the year) match; the list then names the record it matched, so you can check it. Only
   whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s
   title.
-- To look at the piece from an angle of your own, such as how it relates to another paper, type it
-  in the box at the top and press **Ask in chat**. It does not change the results shown here: it
-  opens a new conversation in [Chat](/help/mode-chat) and sends a question that asks for a web
-  search from that angle. You can do this before searching at all. **Your angles**, under the box,
-  lists the conversations you started this way once you send their first question; press one to
-  open it again. Only whoever added the article has this.
-- **Threads across these sources**, at the top, are themes several sources share. Press one to show
-  only its sources. Reception can be ordered **as found**, by **date** or by **stance** (most
-  critical first).
+- To ask about the piece from an angle of your own, use **Investigate** (below). The box that was here has
+  moved there.
+- Reception can be ordered **as found**, by **date** or by **stance** (most critical first); the
+  order applies inside every section.
 
 **Claims**
 
@@ -182,9 +187,25 @@ for that.
   Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to
   bear on their claim only loosely or partly.
 
+**Investigate**
+
+- Questions about the piece and what others say about it, each answered in a new conversation in
+  [Chat](/help/mode-chat), which searches the web. A press sends the question straight away, and
+  costs one chat answer; opening Investigate, or coming back to it, sends nothing.
+- **Suggested** questions are the same for every piece: how it has been received, whether its main
+  claims are borne out, who disagrees with it most, whether the studies it leans on have held up,
+  and what has been published since.
+- **About its claims** asks about up to four of the claims in Claims, once that list has been made
+  (Investigate never makes it). **About the works it cites** asks about the three works Bibliography says
+  the piece leans on most. These are the same conversations as the chat icon in Claims and
+  Bibliography: one already started shows its short summary instead, and opens it again.
+- Or type your own question in the box at the top and press **Ask in chat**. **Your questions**
+  lists every conversation started here, newest first; press one to open it again.
+- Only whoever added the article has Investigate: visitors to a shared article have no chat.
+
 ![The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work](../images/mode-sources-claims.png "Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.")
 
-Anything tagged **AI** is the AI’s reading, checked against nothing: the threads across sources, the
-key-source picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could
+Anything tagged **AI** is the AI’s reading, checked against nothing: the themes, the key-source
+picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could
 not tell) and its relevance. Quoted excerpts, by contrast, are checked against what the search
 returned.

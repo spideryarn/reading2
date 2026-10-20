@@ -38,7 +38,7 @@ remains.
 | Mode | The button is on | Component | Owning section |
 |---|---|---|---|
 | Sources › Claims | each claim's heading (icon only) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `ClaimsList` | [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) |
-| Sources › Reception | the angle box (a *lens*: the reader's words, no item) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `Angles` | [reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle) |
+| Sources › Investigate | the question box and each suggested question (a *lens*: the words, no item); its claim and work rows use Claims' and Bibliography's senders | [`InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) § `InvestigatePanel` | [reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
 | Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
@@ -95,14 +95,14 @@ Since 2026-10-10:
 - **A first press still goes to Chat's band**, as before. Reopening keeps the reader in their mode.
 - **"One" is a rule of the buttons, not of the database.** Two tabs can still make two chats about
   an item; the mark shows the newest. A reader who wants a fresh one starts a plain chat in Chat.
-- **Not the lens** (Sources › Reception's angle box, the reader's own words, where a second angle is
-  a second question) and not Summary's paragraph button, which has no origin.
+- **Not the lens** (Sources › Investigate's question box and suggested questions, where a second
+  press starts a second conversation) and not Summary's paragraph button, which has no origin.
 
 **The gist goes wherever a chat was started from and there is room to show it** (Greg, 2026-10-10,
 `spya-rbp55k`: *"if I click Ask in Chat and get a nice response, that that should auto-generate a
 short summary that shows up in the citation entry, and that that should be true for anywhere where
 we offer Ask in Chat"*; plan [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)).
-Since 2026-10-11 that is also each of *Your angles* (under the reader's words) and a comment that
+Since 2026-10-11 that is also each lens chat, now under *Your questions* (under the reader's words), and a comment that
 started a chat (under *Open the conversation this started*). Not yet: Summary's paragraph button,
 which stores nothing to find the chat by (`qi-vj7p4sbh`), and Quotes, Timeline and FAQ, which have
 no button yet (`qi-bd6h2fnd`). Glossary's *Ask in chat* after a free-term lookup found nothing has
@@ -120,7 +120,7 @@ Tests: `has one chat`, `a prose hover card's Ask in chat, on an item that alread
 > — Greg, 2026-10-09 (spya-tv6wn5), in [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)
 
 An open chat in Chat's band that has an origin draws one line above its transcript: the mode's own
-icon and *Back to "the item's name" in Mode* (an angle reads *Back to your angle in Sources › Reception*),
+icon and *Back to "the item's name" in Mode* (a lens reads *Back to your question in Sources › Investigate*),
 clipped on one line. The origin is the stored one, or, before the server has named a fresh thread,
 the one waiting beside its draft (`ConversationBand`, `pendingOrigin`). The words are
 [`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`; the line is
@@ -136,7 +136,7 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Bibliography | the focus (`citeFocus`) and `showBand`, on Bibliography | the row scrolled into view, the bar lowered if needed |
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
 | Sources › Claims, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?receptionthread=`, and a focus | the claim's row in view, an older search's claim unfolded |
-| Sources › Reception, an angle | one push of `mode=sources&sources=reception` | the angles box |
+| Sources › Investigate, a lens question (including an angle chat made before Investigate) | one push of `mode=sources&sources=investigate` | the question under *Your questions* |
 
 **The way back lands on the item, and the item is one press from its block.** No arm jumps the
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT
