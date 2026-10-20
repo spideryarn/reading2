@@ -6,9 +6,11 @@
    a submit … update our design system". Plan 261020f; first drawn as the
    Feedback thread's Send reply and Defer for now (261011h).
 
-   **What red means here is narrow**: leave, or put off, without sending. Not
-   "destructive" — Feedback's Cancel and Close keep the draft. An act that
-   loses something is the `--destructive` fill (shadcn's destructive Button).
+   **What red means here is narrow**: leave, or put off, without sending. It is
+   a direction cue, not a promise about whether that particular form retains
+   its draft: Feedback's Write Cancel and Earlier Close keep the Write draft;
+   the addendum box's existing Cancel discards its local addendum. A dedicated
+   destructive act uses the `--destructive` fill (shadcn's destructive Button).
    The words carry the meaning and the colour is a shortcut, as
    colour-scales.md asks of a red/green pair.
 

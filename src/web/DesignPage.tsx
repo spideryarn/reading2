@@ -1648,9 +1648,10 @@ function ControlsAcrossModes() {
             <code className="design-token">--positive</code> green, the one that leaves or puts off
             without sending is <code className="design-token">--danger</code> red — text and border
             only, no wash, hover the same, dimmed when it cannot be pressed unless it is working.
-            Red here is not destructive: Cancel keeps the draft. Navigation (Previous, Next) and
-            undoing (Bring back) stay neutral. The words carry the meaning; the colour is a
-            shortcut.
+            Red is a back-out cue, not a promise about draft retention: Write's Cancel and Earlier's
+            Close keep the Write draft; the addendum's existing Cancel discards its local draft.
+            Navigation (Previous, Next) and undoing (Bring back) stay neutral. The words carry the
+            meaning; the colour is a shortcut.
           </>
         }
         finger={<>the family's own size; the colour adds nothing to the target.</>}

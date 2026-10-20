@@ -216,6 +216,22 @@ function ok(status: number): () => Promise<Response> {
   return async () => new Response(JSON.stringify({ id: "x" }), { status });
 }
 
+/**
+ * A Feedback action gets exactly one tone and no Tailwind utility alongside
+ * it. The latter is a cascade rule, not taste: utilities are in the higher
+ * layer and would beat button-tone.css regardless of specificity.
+ */
+function expectTone(button: HTMLButtonElement, tone: "tone-positive" | "tone-negative"): void {
+  expect(
+    [...button.classList].filter((name) => name.startsWith("tone-")),
+    button.textContent ?? tone,
+  ).toEqual([tone]);
+  expect(
+    [...button.classList].filter((name) => name.startsWith("tw:")),
+    `${button.textContent ?? tone}: Tailwind utilities outrank button-tone.css`,
+  ).toEqual([]);
+}
+
 function show(open: boolean) {
   act(() => {
     root.render(
@@ -1185,7 +1201,7 @@ describe("the feedback dialog", () => {
     /* This file's shared cleanup unmounts its normal fixture, so this CSS-only
        assertion still mounts one and remains independently runnable with `-t`. */
     mount();
-    expect(host.querySelector("button.fb-send")?.classList.contains("tone-positive")).toBe(true);
+    expectTone(host.querySelector<HTMLButtonElement>("button.fb-send")!, "tone-positive");
     const css = readerCssNoComments();
     for (const [dimmed, working] of [
       [".tone-positive:disabled", ".tone-positive[data-working]:disabled"],
@@ -2305,8 +2321,8 @@ describe("the Earlier tab", () => {
         expect(addBox).not.toBeNull();
         expect(addBox?.classList.contains("fb-reply-thread")).toBe(false);
         expect(addBox?.querySelector(".fb-defer")).toBeNull();
-        expect(button(addBox!, "Send addendum").classList.contains("tone-positive")).toBe(true);
-        expect(button(addBox!, "Cancel").classList.contains("tone-negative")).toBe(true);
+        expectTone(button(addBox!, "Send addendum"), "tone-positive");
+        expectTone(button(addBox!, "Cancel"), "tone-negative");
       });
 
       it("draws each report's addenda under its words, oldest first, timed, as text with its lines, on any status", async () => {
@@ -3097,13 +3113,12 @@ describe("the Earlier tab", () => {
            moves you, so neither. The header's ✕ is the app's one shared cross. */
         it("colours the footers' buttons by what they do", async () => {
           await openThread();
-          const tones = (name: string) => [...button(foot(), name).classList].filter((c) => c.startsWith("tone-"));
-          expect(tones("Close")).toEqual(["tone-negative"]);
-          expect(tones("‹ Previous")).toEqual([]);
-          expect(tones("Next ›")).toEqual([]);
+          expectTone(button(foot(), "Close"), "tone-negative");
+          expect([...button(foot(), "‹ Previous").classList].filter((c) => c.startsWith("tone-"))).toEqual([]);
+          expect([...button(foot(), "Next ›").classList].filter((c) => c.startsWith("tone-"))).toEqual([]);
           click(tab("Write"));
-          expect(tones("Cancel")).toEqual(["tone-negative"]);
-          expect(tones("Send")).toEqual(["tone-positive"]);
+          expectTone(button(foot(), "Cancel"), "tone-negative");
+          expectTone(button(foot(), "Send"), "tone-positive");
           expect(host.querySelector(".fb-close")?.className).not.toMatch(/tone-/);
         });
 
@@ -3604,6 +3619,12 @@ describe("the Earlier tab", () => {
         expect(posts).toHaveLength(1);
         /* In flight: drawn at full strength, not dimmed (plan 261019c). */
         expect(thread().querySelector(".fb-reply-send")?.hasAttribute("data-working")).toBe(true);
+        /* Defer is unavailable because the reply owns the thread, rather than
+           working itself: disabled, no working exception, therefore dimmed. */
+        const deferButton = button(thread(), "Defer for now");
+        expectTone(deferButton, "tone-negative");
+        expect(deferButton.disabled).toBe(true);
+        expect(deferButton.hasAttribute("data-working")).toBe(false);
         await act(async () => gate.release?.());
         await settle();
         expect(thread().querySelector(".fb-question-answer")).not.toBeNull();
@@ -3615,9 +3636,9 @@ describe("the Earlier tab", () => {
         /* Green to send and red to defer (spya-zjsqe6, plan 261011h; one shared
            pair since 261020f). */
         expect(button(thread(), "Send reply").closest(".fb-reply")?.classList.contains("fb-reply-thread")).toBe(true);
-        expect(button(thread(), "Send reply").classList.contains("tone-positive")).toBe(true);
+        expectTone(button(thread(), "Send reply"), "tone-positive");
         expect(button(thread(), "Defer for now").classList.contains("fb-defer")).toBe(true);
-        expect(button(thread(), "Defer for now").classList.contains("tone-negative")).toBe(true);
+        expectTone(button(thread(), "Defer for now"), "tone-negative");
         answer = deferral();
         click(button(thread(), "Defer for now"));
         await settle();
@@ -3699,6 +3720,12 @@ describe("the Earlier tab", () => {
           );
         };
         click(button(thread(), "Defer for now"));
+        const deferButton = button(thread(), "Defer for now");
+        expectTone(deferButton, "tone-negative");
+        expect(deferButton.disabled).toBe(true);
+        expect(deferButton.hasAttribute("data-working")).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").hasAttribute("data-working")).toBe(false);
         act(() => {
           replyBoxes()[0]?.dispatchEvent(
             new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
