@@ -159,6 +159,10 @@ export function PublicMetadataPage({
   const { meta } = article;
   const stats = articleStats(article);
   const { user } = useSession();
+  /* `readerId` is the account for which the access result below was resolved.
+     A session event can reach this hook before it reaches App and changes that
+     prop, so do not make a claim — or an admin request — during that crossing. */
+  const sessionMatchesReader = readerId !== null && user?.id === readerId;
   useDocumentTitle(pageTitle({ kind: "read", title: meta.title, view: "metadata" }));
 
   /* **Where and when it was published, for a visitor too.** Greg, 2026-10-04:
@@ -224,13 +228,10 @@ export function PublicMetadataPage({
         {/* **Whose it is**, Greg's spya-cf30ac: said only to a reader whose
             session the server confirmed, since that is the one case where
             "not yours" is known rather than guessed (Ownership.tsx). */}
-        {signedIn && !sessionUnconfirmed && (
+        {signedIn && !sessionUnconfirmed && sessionMatchesReader && (
           <section data-access className="tw:mt-8">
             <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
-            {/* The session's address only when it is the account access was
-                resolved for, so a sign-in changing under the page cannot put
-                one account's address beside the other's answer. */}
-            <Ownership whose="not-yours" email={user && user.id === readerId ? (user.email ?? null) : null} />
+            <Ownership whose="not-yours" email={user.email ?? null} />
             <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} sharedBy={sharedBy} />
           </section>
         )}

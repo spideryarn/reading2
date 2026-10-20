@@ -8,6 +8,7 @@
  * *you don't* — but only to a session the server confirmed, because a signed-out
  * reader, or one whose session came back 401, may be the owner.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
@@ -21,15 +22,19 @@ import {
   OWNERSHIP_NOT_YOURS,
   OWNERSHIP_YOURS,
 } from "../src/messages.js";
+import { ADMIN_USER_ID_PROD } from "../src/admin.js";
 
 const EMAIL = "reader@example.com";
-const READER = "00000000-0000-4000-8000-000000000001";
-/* The production administrator's id, written out: the constant is what is under test. */
-const ADMIN = "001bb7a0-7720-4f1b-8b9d-1ee6e63d132a";
+const READER = "00000000-0000-4000-8000-0000000ce1f0";
+/* The production administrator's id, imported rather than written out: `tests/admin.test.ts`
+   pins the literal, and a uuid written in two test files trips `tests/fixture-ids.test.ts`. */
+const ADMIN = ADMIN_USER_ID_PROD;
 /** Which account the mocked session holds; the session's id is what `user.id === readerId` compares. */
 let sessionId = READER;
 /** What `GET /api/admin/articles` answers, and how often it was asked. */
 let adminList: unknown = { articles: [], emailsAvailable: true };
+/** Queued answers for tests which hold one request while the page moves on. */
+let adminReplies: Promise<unknown>[] = [];
 let adminCalls = 0;
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -125,12 +130,17 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sessionId = READER;
   adminList = { articles: [], emailsAvailable: true };
+  adminReplies = [];
   adminCalls = 0;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/api/admin/articles") {
       adminCalls++;
-      return new Response(JSON.stringify(adminList), { status: 200, headers: { "content-type": "application/json" } });
+      const queued = adminReplies.shift();
+      return new Response(JSON.stringify(queued ? await queued : adminList), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
     if (url.startsWith("/api/metadata/")) {
       return new Response(
@@ -177,6 +187,18 @@ function section(label: string): HTMLElement | undefined {
   return heading?.closest("section") ?? undefined;
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function articleAt(slug: string): Article {
+  return { ...ARTICLE, meta: { ...ARTICLE.meta, slug }, tree: { ...ARTICLE.tree, slug } };
+}
+
 describe("the owner's details page", () => {
   it("says you own it, and on which account, inside Access & sharing", async () => {
     history.replaceState(null, "", `/read/${SLUG}/metadata`);
@@ -185,7 +207,13 @@ describe("the owner's details page", () => {
         createElement(
           NuqsAdapter,
           null,
-          createElement(Metadata, { slug: SLUG, article: ARTICLE, onRenamed: () => {}, onVisibility: () => {} }),
+          createElement(Metadata, {
+            slug: SLUG,
+            article: ARTICLE,
+            readerId: READER,
+            onRenamed: () => {},
+            onVisibility: () => {},
+          }),
         ),
       );
     });
@@ -198,20 +226,45 @@ describe("the owner's details page", () => {
     expect(line?.textContent).toContain(EMAIL);
     expect(host.textContent).not.toContain(OWNERSHIP_NOT_YOURS);
   });
+
+  it("does not put a new session's address beside the old reader's ownership answer", async () => {
+    sessionId = "00000000-0000-4000-8000-000000000002";
+    await act(async () => {
+      root.render(
+        createElement(
+          NuqsAdapter,
+          null,
+          createElement(Metadata, {
+            slug: SLUG,
+            article: ARTICLE,
+            readerId: READER,
+            onRenamed: () => {},
+            onVisibility: () => {},
+          }),
+        ),
+      );
+    });
+    await settle();
+    expect(section("Access & sharing")?.querySelector("[data-ownership]")?.textContent).not.toContain(EMAIL);
+  });
 });
 
 describe("a visitor's details page", () => {
   async function visitor(
     signedIn: boolean,
     sessionUnconfirmed: boolean,
-    { readerId = signedIn ? READER : null, sharedBy = "link" }: { readerId?: string | null; sharedBy?: "public" | "link" } = {},
+    {
+      readerId = signedIn ? READER : null,
+      sharedBy = "link",
+      slug = SLUG,
+    }: { readerId?: string | null; sharedBy?: "public" | "link"; slug?: string } = {},
   ): Promise<void> {
-    history.replaceState(null, "", `/read/${SLUG}/metadata`);
+    history.replaceState(null, "", `/read/${slug}/metadata`);
     await act(async () => {
       root.render(
         createElement(PublicMetadataPage, {
-          slug: SLUG,
-          article: ARTICLE,
+          slug,
+          article: articleAt(slug),
           available: NONE,
           signedIn,
           readerId,
@@ -241,10 +294,12 @@ describe("a visitor's details page", () => {
     expect(host.textContent).not.toContain(OWNERSHIP_NOT_YOURS);
   });
 
-  it("shows no address when the session is not the account access was resolved for", async () => {
-    sessionId = "00000000-0000-4000-8000-000000000002";
-    await visitor(true, false);
-    expect(host.querySelector("[data-ownership]")?.textContent).not.toContain(EMAIL);
+  it("makes no claim or admin request when the live session is not the account access was resolved for", async () => {
+    sessionId = READER;
+    await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
+    expect(host.querySelector("[data-ownership]")).toBeNull();
+    expect(host.querySelector("[data-admin-owner]")).toBeNull();
+    expect(adminCalls).toBe(0);
   });
 
   it("asks nothing of the admin routes for a reader who is not the administrator", async () => {
@@ -289,5 +344,66 @@ describe("a visitor's details page", () => {
     await visitor(true, false, { readerId: ADMIN, sharedBy: "link" });
     expect(adminCalls).toBe(0);
     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_LINK);
+  });
+
+  it("does not let an earlier slug's late owner answer overwrite the current one", async () => {
+    sessionId = ADMIN;
+    const old = deferred<unknown>();
+    adminReplies = [
+      old.promise,
+      Promise.resolve({
+        emailsAvailable: true,
+        articles: [
+          {
+            id: "new",
+            shortId: null,
+            ownerId: READER,
+            ownerEmail: "current@example.com",
+            mine: false,
+            createdAt: "",
+            visibility: "public",
+            processing: "full",
+            title: "A piece",
+            slug: SLUG,
+            published: true,
+          },
+        ],
+      }),
+    ];
+
+    await visitor(true, false, { readerId: ADMIN, sharedBy: "public", slug: "old-piece" });
+    expect(adminCalls).toBe(1);
+    await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
+    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(
+      `${OWNERSHIP_ADMIN_OWNER} current@example.com.`,
+    );
+
+    old.resolve({
+      emailsAvailable: true,
+      articles: [
+        {
+          id: "old",
+          shortId: null,
+          ownerId: READER,
+          ownerEmail: "stale@example.com",
+          mine: false,
+          createdAt: "",
+          visibility: "public",
+          processing: "full",
+          title: "Old piece",
+          slug: "old-piece",
+          published: true,
+        },
+      ],
+    });
+    await settle();
+    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(
+      `${OWNERSHIP_ADMIN_OWNER} current@example.com.`,
+    );
+  });
+
+  it("qualifies the visitor ownership sentence in Help as signed-in only", () => {
+    const help = readFileSync("src/web/help/pages/sharing.md", "utf8").replace(/\s+/g, " ");
+    expect(help).toContain("When you’re signed in and open an article somebody else shared with you");
   });
 });

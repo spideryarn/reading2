@@ -266,7 +266,7 @@ export function ArticlePage({
   return (
     <>
       {access.kind === "owned" ? (
-        <OwnedArticle key={slug} slug={slug} article={access.article} view={view} />
+        <OwnedArticle key={slug} slug={slug} article={access.article} view={view} readerId={readerId} />
       ) : (
         <VisitorArticle
           key={slug}
@@ -303,10 +303,13 @@ function OwnedArticle({
   slug,
   article: fetched,
   view,
+  readerId,
 }: {
   slug: string;
   article: Article;
   view: ArticleView;
+  /** The account for which the owned read answered. */
+  readerId: string | null;
 }) {
   /**
    * The title the reader has just given this article, if they have.
@@ -485,6 +488,7 @@ function OwnedArticle({
       <Metadata
         slug={slug}
         article={article}
+        readerId={readerId}
         onRenamed={renameTo}
         onVisibility={sharedTo}
         onPrivateLink={linkedTo}

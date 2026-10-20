@@ -93,10 +93,13 @@ export function AdminOwnerLine({
   const asks = isAdmin(readerId) && sharedBy === "public";
   const [read, setRead] = useState<AdminRead>({ kind: "checking" });
   useEffect(() => {
-    if (!asks) return;
+    if (!asks || readerId === null) return;
     let live = true;
     setRead({ kind: "checking" });
-    apiFetch("/api/admin/articles")
+    /* Bind the request to the same account whose confirmed access result
+       mounted this line. If the session moves while the token is being read,
+       apiFetch refuses before sending rather than asking /api/admin as B. */
+    apiFetch("/api/admin/articles", {}, readerId)
       .then((r) => readJson<AdminArticles>(r))
       .then((body) => {
         if (!live) return;

@@ -14,8 +14,8 @@ article’s Metadata page: a private link, for the people you send it to, and ma
 everyone.
 
 **Is it yours?** The first line of **Access & sharing** says *You own this article*, and which
-account you are signed in as. On an article somebody else shared with you, the same page has an
-**Access** section saying *You don't own this article* instead.
+account you are signed in as. When you’re signed in and open an article somebody else shared with
+you, the same page has an **Access** section saying *You don't own this article* instead.
 
 **A private link.** Press **Create a link**, look at what somebody with the link would get, tick
 that you have the right to share the text, and press **Create the link**. Then copy the link and
