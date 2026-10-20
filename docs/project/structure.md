@@ -59,6 +59,27 @@ asked to see are the gists. The plan, and GPT Sol's review of it, is
 [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
 it are [keyboard.md § ← / → in Structure](keyboard.md).
 
+## The ribbon between the columns
+
+> Somehow make it clearer visually in the UI of the Structure mode that the 2nd column is a subset
+> of the 1st, kinda like a Sankey diagram. Use screenshots.
+>
+> — Greg, 2026-10-19, spya-vqpeyr, in [261020l](../plans/261020l-structure-columns-sankey-ribbon.md)
+
+In the two columns, the marked part in column A wears a grey ground, and a band of the same grey
+curves across the gutter from that row's height to the height of everything column B draws (its
+header through its last row), ending in column B's bracket: one row becoming all of that. Drawn
+only when column B has sections; between parts, or on an undivided part, the columns look as they
+did before. The orange stays on the one deepest row.
+
+It is an SVG measured off the laid-out columns
+([`src/web/structure-ribbon.ts`](../../src/web/structure-ribbon.ts) is the geometry,
+`StructurePanel.tsx` § the ribbon reads the rects), so it is wherever the rows actually are. It
+cannot move a row, which is what keeps it out of the capacity measurement. It curves across the
+gutter and column B's bracket inset, so the switch to two columns did not move; a wider gutter
+would have taken the columns off an 11-inch iPad held landscape. The list face and Expanded have no
+ribbon; their indentation already says "inside".
+
 ## A mark for the figures a row holds
 
 > perhaps we can have an icon for each diagram or table contained in a section within structure so
