@@ -188,6 +188,15 @@ describe("/admin/articles", () => {
     expect(matchesFilter(mine!, "  ")).toBe(true);
   });
 
+  /* Plan 261019o, spya-zzewu7: "keep the first column frozen (article name)". */
+  it("pins the Article column while the table scrolls sideways", async () => {
+    await mount();
+    const pinned = [...host.querySelectorAll("table tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned).toEqual([[0], [0], [0]]);
+  });
+
   it("keeps the exact creation time readable without hovering a date cell", async () => {
     await mount();
     const cell = rowFor("alice@example.test")?.querySelector("td[data-tip]");

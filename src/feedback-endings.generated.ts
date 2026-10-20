@@ -450,6 +450,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-t0dg9u": "shipped",
   "spya-t0exj8": "shipped",
   "spya-t3es7k": "shipped",
+  "spya-t45cfc": "shipped",
   "spya-t6cdve": "shipped",
   "spya-t6nmxt": "shipped",
   "spya-t80rep": "shipped",
@@ -623,6 +624,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
   "spya-zz4z4c": "shipped",
+  "spya-zzewu7": "shipped",
   "spya-zzvm6e": "shipped",
 };
 
@@ -720,6 +722,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-srg5fa": "The guide no longer opens a mode by itself: it suggests one with a button you press. Every chat's typing box is bigger and stands out more, and the suggestion buttons sit in the centre.",
   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
   "spya-sy4rn0": "Search's toggle is now just words and meaning. A meaning search shows a quick answer in about a second and swaps in the thorough one by itself once you stop typing; old quick links still open it.",
+  "spya-t45cfc": "Every /admin table now keeps its first column on screen while it scrolls sideways — Account on /admin/users, Article on /admin/articles, Email on /admin/vouchers, and the label column of all four /admin/costs tables.",
   "spya-t6nmxt": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-t858ug": "Live conversation is on GPT-Live for everyone now, with no engine dropdown. With Experimental features on, Realtime is a small arrow on the Live button.",
   "spya-t9qu3v": "The hang wasn't reproduced, so the three ways Send could do nothing are closed instead: Send now works while the microphone is on, and a send gives up after a minute. And an unsent report now survives a reload.",
@@ -766,5 +769,6 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
   "spya-zux9w6": "The citation, glossary and quote cards now each end in Open in Sources / Glossary / Quotes. Cards on comments, chat anchors and search-style highlights are queued as their own piece of work.",
   "spya-zz4z4c": "Every \"older version of the article\" notice now has an × that holds until that thing is made again. Quiz's is left: there no answer can be marked, and the notice is the only thing saying why.",
+  "spya-zzewu7": "Every /admin table now keeps its first column on screen while it scrolls sideways — Account on /admin/users, Article on /admin/articles, Email on /admin/vouchers, and the label column of all four /admin/costs tables.",
   "spya-zzvm6e": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",
 };

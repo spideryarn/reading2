@@ -34,6 +34,7 @@ import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { BUTTON, INPUT, Refusal } from "./admin-vouchers-parts.js";
 import { Link } from "./Link.js";
+import { PINNED } from "./lib/DataTable.js";
 import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { exactly } from "./relative-time.js";
@@ -347,7 +348,10 @@ export function AdminArticlesPage() {
             <caption className="tw:sr-only">{CAPTION}</caption>
             <thead>
               <tr className="tw:border-b tw:border-border">
-                <th className={HEAD}>Article</th>
+                {/* The column that says what a row is, held while the rest
+                    scroll (plan 261019o). Its floor is lower on a phone, where
+                    a held column is one you cannot scroll past. */}
+                <th className={`${HEAD} ${PINNED}`}>Article</th>
                 <th className={HEAD}>Owner</th>
                 <th className={HEAD}>Added</th>
                 <th className={HEAD}>Visibility</th>
@@ -360,7 +364,7 @@ export function AdminArticlesPage() {
             <tbody>
               {rows.map((a) => (
                 <tr key={a.id} className="tw:border-b tw:border-border">
-                  <td className={`${CELL} tw:min-w-56`}>
+                  <td className={`${CELL} ${PINNED} tw:min-w-40 tw:sm:min-w-56`}>
                     <ArticleCell article={a} />
                   </td>
                   <td className={`${CELL} tw:min-w-48`}>
