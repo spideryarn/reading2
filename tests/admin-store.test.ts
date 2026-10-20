@@ -30,6 +30,7 @@
 import { describe, expect, it } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
+import type { OwnerId } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -226,6 +227,10 @@ describe("the admin user list", () => {
    * reservation dated tomorrow, which a closed window must not call recent
    * (Sol's plan review, finding 3) but which is still a day: 3 and 1.
    *
+   * Reading: two rows on a published scratch article total 7.5 seconds. A zero
+   * here would be `mergeUsers`'s fallback and would prove neither the query nor
+   * its driver mapper, so this has to be non-zero and fractional.
+   *
    * Failed imports: twelve errors and one cancellation, so the total is 12, the
    * list is capped at ten, and the cancellation counts for nothing.
    */
@@ -233,17 +238,28 @@ describe("the admin user list", () => {
     const { randomUUID } = await import("node:crypto");
     const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
     const { getDb } = await import("../src/db/client.js");
-    const { importRecords, ingestEvents } = await import("../src/db/schema.js");
+    const { importRecords, ingestEvents, readingTime } = await import("../src/db/schema.js");
     const { eq, sql } = await import("drizzle-orm");
     const { RECENT_FAILURES_SHOWN } = await import("../src/admin.js");
+    const { scratchArticleInPg } = await import("./helpers/scratch-article.js");
 
     const owner = randomUUID();
     const db = getDb();
     const DAY = 86_400_000;
     /* Noon UTC today, so "an hour earlier" is still today whatever the clock says. */
     const noon = new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00.000Z`).getTime();
+    let removeArticle: (() => Promise<void>) | undefined;
     try {
       await seedAuthUser(db, { id: owner, email: `admin-engage-${owner}@example.invalid` });
+      const article = await scratchArticleInPg(`admin-engage-${owner}`, { ownerId: owner as OwnerId });
+      removeArticle = article.remove;
+      const [first, second] = article.blocks;
+      expect(first?.id, "the scratch article has no first block").toBeDefined();
+      expect(second?.id, "the scratch article has no second block").toBeDefined();
+      await db.insert(readingTime).values([
+        { articleId: article.articleId, blockId: first!.id, seconds: 6.5 },
+        { articleId: article.articleId, blockId: second!.id, seconds: 1 },
+      ]);
       for (const at of [noon, noon - 3_600_000, noon - 40 * DAY, noon + DAY]) {
         await db.insert(ingestEvents).values({ ownerId: owner, reservedAt: new Date(at), releasedAt: new Date(at) });
       }
@@ -277,8 +293,10 @@ describe("the admin user list", () => {
         step: "fetch",
         kind: "bug",
       });
-      expect(mine?.readingSeconds).toBe(0);
+      expect(mine?.readingSeconds).toBe(7.5);
+      expect(typeof mine?.readingSeconds).toBe("number");
     } finally {
+      await removeArticle?.();
       await db.delete(importRecords).where(eq(importRecords.ownerId, owner));
       await db.delete(ingestEvents).where(eq(ingestEvents.ownerId, owner));
       await db.execute(sql`delete from auth.users where id = ${owner}`);

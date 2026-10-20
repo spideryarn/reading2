@@ -63,7 +63,7 @@ const { ColumnsMenu, DataTable, SortChips, useSortedTable } = await import(
 const { sinkLast } = await import("../src/web/lib/table-sort.js");
 const { TooltipGroup } = await import("../src/web/Tooltip.js");
 const { ShelfControls } = await import("../src/web/ShelfControls.js");
-const { HIDDEN_COLUMNS_KEY, SHOWN_COLUMNS_KEY, useShelfHiddenColumns } = await import(
+const { HIDDEN_COLUMNS_KEY, SHOWN_COLUMNS_KEY, useHiddenColumns, useShelfHiddenColumns } = await import(
   "../src/web/shelf-hidden-columns.js"
 );
 const { adminColumns } = await import("../src/web/admin-columns.js");
@@ -712,6 +712,26 @@ describe("visibility state identity", () => {
     expect(seen).toHaveLength(2);
     expect(seen[1]?.visibility).toBe(seen[0]?.visibility);
     expect(seen[1]?.onChange).toBe(seen[0]?.onChange);
+  });
+
+  it("keeps the setter when an equivalent keys object is rebuilt", () => {
+    const seen: object[] = [];
+
+    function IdentityHarness(): ReactElement {
+      const columns = useMemo(() => libraryColumns(shelf, NOW), []);
+      const [tick, setTick] = useState(0);
+      const [, onColumnVisibilityChange] = useHiddenColumns(columns, {
+        hidden: "spya.identity-test.hidden",
+        shown: "spya.identity-test.shown",
+      });
+      seen.push(onColumnVisibilityChange);
+      return createElement("button", { type: "button", onClick: () => setTick((n) => n + 1) }, tick);
+    }
+
+    act(() => root.render(createElement(IdentityHarness)));
+    click(host.querySelector("button") as HTMLButtonElement);
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toBe(seen[0]);
   });
 });
 

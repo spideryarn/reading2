@@ -62,7 +62,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { AdminHome, AdminUsersPage } = await import("../src/web/AdminPage.js");
+const { ADMIN_USERS_COLUMN_KEYS, AdminHome, AdminUsersPage } = await import("../src/web/AdminPage.js");
 
 /* The page's sort lives in the address bar through nuqs, which needs its
    adapter above it — src/web/main.tsx wraps the whole app in the same one, and
@@ -182,9 +182,25 @@ const jsonOk = (body: unknown) =>
 
 let host: HTMLDivElement;
 let root: Root;
+let stored: Map<string, string>;
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  /* Node's own `localStorage` shadows jsdom's and is `undefined` in this lane.
+     Give this page the same real round-trip store as the shelf visibility
+     suite, so revealing a default-hidden column can prove the admin key. */
+  stored = new Map();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+      clear: () => stored.clear(),
+      key: () => null,
+      length: 0,
+    },
+  });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -277,7 +293,7 @@ describe("the users page", () => {
 
   /* Greg, 2026-10-19: "archived, uploads, searches, chats, comments … default
      hidden". Hidden, not gone: the Columns menu is drawn and says how many. */
-  it("starts with the five rarely-wanted counts hidden, behind a Columns menu", async () => {
+  it("starts with the five rarely-wanted counts hidden, and reveals one from Columns", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
     const el = await show();
 
@@ -292,6 +308,21 @@ describe("the users page", () => {
       (b.getAttribute("aria-label") ?? "").startsWith("Columns"),
     );
     expect(menu?.getAttribute("aria-label")).toBe("Columns, 5 hidden — choose which the table shows");
+
+    const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(press, "pointerType", { value: "mouse" });
+    act(() => menu?.dispatchEvent(press));
+    const archived = [...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')].find(
+      (item) => (item.textContent ?? "").trim() === "Archived",
+    );
+    expect(archived, "Archived is not offered in Columns").toBeDefined();
+    act(() => archived?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+
+    const revealed = [...el.querySelectorAll("thead th")].map((th) => th.textContent ?? "");
+    expect(revealed.some((h) => h.includes("Archived"))).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem(ADMIN_USERS_COLUMN_KEYS.shown) ?? "null")).toEqual([
+      "archived",
+    ]);
   });
 
   /* The card behind the count: when, which step, what kind — and nothing that
@@ -306,6 +337,17 @@ describe("the users page", () => {
     expect(card).toContain("at fetch · defect here, ours to fix");
     expect(card).toContain("outside a step · transient, a retry may help");
     expect(tips.some((t) => t.startsWith("No failed imports")), "Bob's zero has no card").toBe(true);
+  });
+
+  it("keeps fractional seconds exact in the reading-time detail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [{ ...ALICE, readingSeconds: 12_000.5 }] })));
+    const el = await show();
+
+    const tip = [...el.querySelectorAll<HTMLElement>("[data-tip]")]
+      .map((node) => node.dataset.tip ?? "")
+      .find((text) => text.includes("with their own articles on screen"));
+    expect(tip).toContain("12000.5 seconds");
+    expect(tip).not.toContain("12001 seconds");
   });
 
   /**

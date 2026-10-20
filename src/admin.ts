@@ -316,7 +316,7 @@ export interface AdminUser {
   importFailures: number;
   /**
    * The most recent of those, newest first, at most `RECENT_FAILURES_SHOWN`.
-   * **When, which step, and how serious — never the address, the slug or the
+   * **When, which step, and what kind — never the address, the slug or the
    * error sentence**, which names what they were reading (admin.md § What it
    * deliberately does not show).
    */
@@ -486,7 +486,7 @@ export function formatReadingTime(seconds: number): string {
 
 /** One failed import, as /admin/users may show it. */
 export interface AdminImportFailure {
-  /** ISO. When it ended. */
+  /** ISO. When it ended, or when its record was written if no ending was stored. */
   at: string;
   /** The first step whose status was `error`, e.g. `fetch`. Absent when the job failed outside a step. */
   step?: string;

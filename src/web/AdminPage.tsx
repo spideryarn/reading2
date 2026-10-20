@@ -61,8 +61,8 @@ const EMPTY: AdminUser[] = [];
 
 /**
  * Where `/admin/users` remembers which columns are hidden, in this browser —
- * the shelf's mechanism under keys of its own (plan 261020c). A module
- * constant because `useHiddenColumns` keys its setter on it.
+ * the shelf's mechanism under keys of its own (plan 261020c). Exported so the
+ * page test can prove a reveal is stored under the admin keys, not the shelf's.
  */
 export const ADMIN_USERS_COLUMN_KEYS: HiddenColumnKeys = {
   hidden: "spya.admin.users.hiddenColumns",

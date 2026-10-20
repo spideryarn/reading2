@@ -34,12 +34,13 @@
  * which is not a statement at all but an HTTP call to the Auth service
  * (admin-accounts.ts).
  *
- * **Seven aggregates and two plain reads as of 2026-09-03**, against a pool of
- * five (src/db/client.ts): the five article-shaped ones, spend, the ingest
- * ledger, every `billing_accounts` row, and the (cached) tier table. Still one
- * round trip's worth of waiting rather than several, on a page one person opens
- * a few times a day — but it is the point at which adding another stops being
- * free. docs/project/admin.md § Where the numbers come from.
+ * **Ten aggregates and two plain reads as of 2026-10-20**, against a pool of
+ * five (src/db/client.ts): the five article-shaped counts, spend, the ingest
+ * ledger, activity, reading time and failed imports; beside them, every
+ * `billing_accounts` row and the (cached) tier table. They run together, but
+ * queue across the five connections; this is an admin page one person opens a
+ * few times a day, not a reader-facing request. docs/project/admin.md § Where
+ * the numbers come from.
  *
  * The file is in three parts for one reason — so that each of them can be
  * checked by something: `mergeUsers` is pure and takes two owners' worth of
@@ -178,7 +179,7 @@ export interface IngestTally {
 export interface ActivityTally {
   owner: string;
   days: number;
-  /** Of `days`, those on or after the UTC date 29 days before today. */
+  /** Of `days`, those from the UTC date 29 days before today through today. */
   days30: number;
   lastAt: Date | null;
 }
@@ -856,11 +857,10 @@ const rawPgAdminStore: AdminStore = {
   async listUsersAcrossOwners(): Promise<AdminUser[]> {
     const q = adminQueries(getDb());
 
-    /* All six at once — five grouped aggregates and one HTTP listing. They
-       depend on none of each other, so the wall-clock cost is one round trip
-       rather than six. Five of them are queries and the pool is sized 5
-       (src/db/client.ts), so they no longer queue one deep as they did when the
-       accounts were a query too.
+    /* Everything at once — ten aggregates, two plain reads and one HTTP
+       listing. They depend on none of each other. The database work queues
+       across the pool of five (src/db/client.ts), which is still preferable to
+       imposing several explicit serial rounds on this one-person admin page.
 
        **The accounts are asked of the Auth service over HTTP**, not of the
        database: `auth.users` is Supabase's and `spideryarn_app` has no grants
@@ -893,29 +893,19 @@ const rawPgAdminStore: AdminStore = {
         q.questions,
         q.chats,
         q.searches,
-        /* The sixth aggregate, and the pool is sized 5 (src/db/client.ts), so one
-           of the six now waits for a connection. Measured against the alternative
-           — a second round trip after the first five — that is still one wall
-           clock's worth of latency rather than two, and this is an admin page a
-           single person opens. */
+        /* Spend is the sixth aggregate, so this is where work first queues on
+           the pool rather than all beginning on its own connection. */
         productSpendByOwner(month.since, month.until),
-        /* Three more since 2026-09-03, for the plan column, and the paragraph
-           above is now about nine things queueing five deep rather than six
-           queueing one. That is still one round trip's worth of waiting rather
-           than several, on a page one person opens a few times a day — but it is
-           the point at which "add another aggregate" stops being free, and the
-           next column should read `allTiers`'s cache or join something that is
-           already here rather than making it ten. */
+        /* The ingest aggregate and two plain reads support the plan column.
+           `allTiers` is normally served by its thirty-second cache. */
         q.ingests,
         allAccountSnapshots(),
         /* Cached for thirty seconds, so on a page being reloaded this is usually
            not a query at all. */
         allTiers(),
-        /* Three more on 2026-10-20 for engagement (plan 261020c), against the
-           paragraph above's warning, and taken knowingly: each is a different
-           table, none can join the others without multiplying rows, and the
-           page is still opened by one person. Twelve queries five deep is a
-           few round trips' waiting on an admin page, not a reader's. */
+        /* Three more aggregates on 2026-10-20 for engagement (plan 261020c),
+           taken knowingly: each is a different table, none can join the
+           others without multiplying rows, and this is not a reader request. */
         q.activity,
         q.reading,
         q.failures,

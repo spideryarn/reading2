@@ -91,7 +91,7 @@ and what the account may do*), and the error sentence often contains the address
 `import_records` exists since 2026-10-08, so the tip says *"since 8 Oct"*.
 
 Why only imports: they are the one failure that is (a) stored per account, (b) a reader-visible
-failure rather than a retried blip, and (c) already classified by severity. Greg named *"upload
+failure rather than a retried blip, and (c) already classified by kind. Greg named *"upload
 errors"* first; a failed upload that never became an import has no row anywhere and is not counted —
 said in the tip.
 

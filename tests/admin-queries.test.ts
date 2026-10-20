@@ -21,6 +21,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { adminQueries } from "../src/store/pg-admin.js";
 import * as schema from "../src/db/schema.js";
+import { SITE_OWNER_ID } from "../src/site-account.js";
 
 /**
  * A Drizzle handle with no connection behind it.
@@ -232,6 +233,18 @@ describe("active days", () => {
     expect(sql).toMatch(/select "owner_id", "started_at" as "at" from "ai_calls"/);
   });
 
+  it("takes exactly the four intended sources and excludes the site account", () => {
+    const sql = sqlOf(q.activity);
+    const params = paramsOf(q.activity);
+    expect(sql).toMatch(/union all \(select "owner_id", "reserved_at" from "ingest_events"\)/);
+    expect(sql).toMatch(
+      /select "articles"\."owner_id", "comments"\."created_at" from "comments" inner join "articles"/,
+    );
+    expect(sql).toMatch(/union all \(select "owner_id", "last_opened_at" as "at" from "articles"/);
+    expect(sql).toMatch(/where "activity"\."owner_id" <> \$\d/);
+    expect(params).toContain(SITE_OWNER_ID);
+  });
+
   it("puts the last-30 window between today and 29 days ago, so a future row is not recent", () => {
     expect(sqlOf(q.activity)).toMatch(
       /between \(now\(\) at time zone 'UTC'\)::date - 29 and \(now\(\) at time zone 'UTC'\)::date/,
@@ -242,6 +255,7 @@ describe("active days", () => {
     /* Comments and the latest open: once per branch. */
     const sql = sqlOf(q.activity);
     expect(sql.match(/"current_revision_id" is not null/g) ?? []).toHaveLength(2);
+    expect(sql.match(/left\("articles"\."slug", 1\) <> '_'/g) ?? []).toHaveLength(2);
   });
 });
 

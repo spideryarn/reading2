@@ -371,7 +371,9 @@ function ActiveDays({ user, now }: { user: AdminUser; now: number }) {
  * active, one second per second however many passages share it.
  */
 function ReadingTime({ user }: { user: AdminUser }) {
-  const exact = `${Math.round(user.readingSeconds)} seconds`;
+  /* To a tenth: the stored seconds are fractional (Sol's code review), and a
+     sum of doubles can carry noise like `61.30000000001` past that. */
+  const exact = `${Math.round(user.readingSeconds * 10) / 10} seconds`;
   const tip =
     (user.readingSeconds > 0 ? `${exact} with their own articles on screen` : "No reading time recorded") +
     "\n\nRecorded for everyone since 5 Oct 2026, and for experimental readers from mid-September. " +
@@ -419,7 +421,7 @@ function ImportFailures({ user, now }: { user: AdminUser; now: number }) {
     `${user.importFailures} failed import ${user.importFailures === 1 ? "attempt" : "attempts"}, newest first\n\n` +
     lines.join("\n") +
     (earlier > 0 ? `\n…and ${earlier} earlier` : "") +
-    `\n\n${since} The address and the error: npx tsx scripts/import-records.ts`;
+    `\n\n${since} Details: npx tsx scripts/import-records.ts`;
   return (
     <span className={ours ? "tw:text-destructive" : undefined} data-tip={tip}>
       {user.importFailures}
