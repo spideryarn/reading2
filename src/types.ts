@@ -3421,7 +3421,12 @@ export type NextStep =
   | { kind: "mode"; mode: string }
   | { kind: "search"; words: string }
   | { kind: "share" }
-  | { kind: "archive" };
+  | { kind: "archive" }
+  /* A mode to get ready in the background, never opened: a key from
+     `PREPARABLE` (src/preparable-modes.ts). `now` is the guide's choice to
+     start it without a press; the page makes that press itself, once
+     (plan 261019p § Stage 2b). */
+  | { kind: "prepare"; mode: string; now: boolean };
 
 /**
  * **One offer to save**: which of the reader's two profile fields, and the

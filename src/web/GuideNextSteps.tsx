@@ -50,9 +50,12 @@
  * offer: three buttons is the most on screen at once (Greg's *"maybe three
  * would be about right"*), and an older answer's steps would be stale.
  */
-import { Archive, MessageSquare, Share2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { Archive, Hourglass, LoaderCircle, MessageSquare, Share2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { checkNextSteps } from "../next-steps.js";
+import { preparable } from "../preparable-modes.js";
+import { takeAnsweredHere } from "./chat/answered-here.js";
+import { type PrepareOutcome, pressFor, pressPrepare } from "./prepare-press.js";
 import type { ChatMessage, NextStep, ToolRun } from "../types.js";
 import { chipFor } from "./chat-commands.js";
 import { CommandChip, useChatCommands } from "./CommandChip.js";
@@ -116,12 +119,15 @@ export function inDrawOrder(steps: readonly NextStep[]): NextStep[] {
 
 export function GuideNextSteps({
   slug,
+  threadId,
   message,
   blocks,
   onAsk,
   onChat,
 }: {
   slug: string;
+  /** The guide conversation, which a `prepare` step's automatic press claims. Absent: no prepare step. */
+  threadId?: string | undefined;
   /** The conversation's latest message; the row is drawn only under a settled answer. */
   message: ChatMessage | undefined;
   blocks: ReadonlyMap<string, string>;
@@ -134,8 +140,11 @@ export function GuideNextSteps({
 }) {
   const commands = useChatCommands();
   if (!mayShowSteps(message)) return null;
+  const reasonOffered = offersAReason(message.tools);
   const steps = inDrawOrder(
-    (stepsIn(message.tools) ?? []).filter((step) => drawable(step, commands, blocks, onChat !== undefined)),
+    (stepsIn(message.tools) ?? []).filter((step) =>
+      drawable(step, commands, blocks, onChat !== undefined, reasonOffered),
+    ),
   );
   if (steps.length === 0) return null;
   return (
@@ -148,7 +157,16 @@ export function GuideNextSteps({
              and CommandChip status belong to that answer, not merely to the
              step's words, so the message id is part of the identity. */
           <li key={`${message.id}:${JSON.stringify(step)}`}>
-            <Step step={step} slug={slug} blocks={blocks} commands={commands} onAsk={onAsk} onChat={onChat} />
+            <Step
+              step={step}
+              slug={slug}
+              threadId={threadId}
+              answerId={message.id}
+              blocks={blocks}
+              commands={commands}
+              onAsk={onAsk}
+              onChat={onChat}
+            />
           </li>
         ))}
       </ul>
@@ -168,10 +186,23 @@ function drawable(
   commands: CommandExecutor | null,
   blocks: ReadonlyMap<string, string>,
   canChat: boolean,
+  reasonOffered: boolean,
 ): boolean {
   switch (step.kind) {
     case "mode":
       return commands !== null && chipFor(formatProposalToken({ id: "mode", key: step.mode }), commands, blocks) !== null;
+    /* Only a mode this reader could open here, as a mode step; and never Skim
+       beside an offer of their reason, whose save lands after the answer, so
+       a route started now would be planned on the old one. The server refuses
+       that pair too, when the offer comes first; this holds it whichever
+       order the model wrote them (GPT Sol's F4 on plan 261019p § Stage 2b). */
+    case "prepare":
+      return (
+        commands !== null &&
+        preparable(step.mode) !== undefined &&
+        !(reasonOffered && preparable(step.mode)?.step === "skim") &&
+        chipFor(formatProposalToken({ id: "mode", key: step.mode }), commands, blocks) !== null
+      );
     case "search":
       return commands !== null && chipFor(formatProposalToken({ id: "quick-search", words: step.words }), commands, blocks) !== null;
     case "chat":
@@ -190,6 +221,8 @@ function drawable(
 function Step({
   step,
   slug,
+  threadId,
+  answerId,
   blocks,
   commands,
   onAsk,
@@ -197,6 +230,8 @@ function Step({
 }: {
   step: NextStep;
   slug: string;
+  threadId: string | undefined;
+  answerId: string;
   blocks: ReadonlyMap<string, string>;
   commands: CommandExecutor | null;
   onAsk(words: string): void;
@@ -221,6 +256,10 @@ function Step({
       );
     case "search":
       return commands === null ? null : <SearchStep words={step.words} commands={commands} blocks={blocks} />;
+    case "prepare":
+      return threadId === undefined ? null : (
+        <PrepareStep slug={slug} threadId={threadId} answerId={answerId} mode={step.mode} now={step.now} />
+      );
     case "share":
       return (
         <button type="button" className="chat-suggest-btn" onClick={() => navigate(metadataHref(slug, "access-sharing"))}>
@@ -238,6 +277,94 @@ function Step({
       return never;
     }
   }
+}
+
+/** Did this answer offer to save the reader's reason (a card, pressed or saving itself)? */
+export function offersAReason(tools: readonly ToolRun[] | undefined): boolean {
+  return (tools ?? []).some((run) => run.name === "offer_to_save" && run.status === "done" && run.offer?.field === "purpose");
+}
+
+/** The words a prepare step shows, in each state. Ours, not the model's. */
+export const PREPARE_WORDS = {
+  idle: (name: string) => `Get ${name} ready`,
+  pressing: (name: string) => `Getting ${name} ready…`,
+  started: (name: string) => `Started: ${name} will be ready soon`,
+  ready: (name: string) => `${name} is ready`,
+  failed: (name: string) => `Could not start ${name}. Try again`,
+} as const;
+
+/**
+ * **Get a mode ready, without opening it** — plan 261019p § Stage 2b, Greg's
+ * reply to q-y4p2ct. The reader's press (B), or, for a step the guide marked
+ * `now`, the page's own, once, on an answer this tab watched being written
+ * (`takeAnsweredHere`, the save card's rule): never on a reload, never twice
+ * (A). Either way the button says what happened, so a start is never hidden,
+ * and it never says *ready* until the server found the mode made. A `now`
+ * press the conversation had already spent comes back as an ordinary button.
+ */
+function PrepareStep({
+  slug,
+  threadId,
+  answerId,
+  mode,
+  now,
+}: {
+  slug: string;
+  threadId: string;
+  answerId: string;
+  mode: string;
+  now: boolean;
+}) {
+  const name = preparable(mode)?.name ?? mode;
+  const [state, setState] = useState<"idle" | "pressing" | PrepareOutcome["kind"]>("idle");
+  const live = useRef(true);
+  const press = (auto: boolean) => {
+    setState("pressing");
+    void pressPrepare(slug, { mode, threadId, now: auto }, answerId).then((outcome) => {
+      if (live.current) setState(outcome.kind === "refused" ? "idle" : outcome.kind);
+    });
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per mount; the answer id keys the row, and `takeAnsweredHere` is true once
+  useEffect(() => {
+    live.current = true;
+    const earlier = pressFor(answerId, mode);
+    if (earlier) {
+      setState("pressing");
+      void earlier.then((outcome) => live.current && setState(outcome.kind === "refused" ? "idle" : outcome.kind));
+    } else if (now && takeAnsweredHere(answerId, `prepare:${mode}`)) {
+      press(true);
+    }
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const words =
+    state === "idle"
+      ? PREPARE_WORDS.idle(name)
+      : state === "pressing"
+        ? PREPARE_WORDS.pressing(name)
+        : state === "started"
+          ? PREPARE_WORDS.started(name)
+          : state === "ready"
+            ? PREPARE_WORDS.ready(name)
+            : PREPARE_WORDS.failed(name);
+  const pressable = state === "idle" || state === "failed";
+  return (
+    <button
+      type="button"
+      className="chat-suggest-btn"
+      disabled={!pressable}
+      aria-live="polite"
+      onClick={() => pressable && press(false)}
+    >
+      {state === "pressing" ? (
+        <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" />
+      ) : (
+        <Hourglass size={13} aria-hidden="true" />
+      )}{" "}
+      {words}
+    </button>
+  );
 }
 
 /**

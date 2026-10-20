@@ -91,6 +91,7 @@ import type {
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText } from "./types.js";
 import { guideModeKeys } from "./guide.js";
 import { checkNextSteps, MAX_ASK_CHARS, MAX_CHAT_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
+import { PREPARABLE, preparable } from "./preparable-modes.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchBeforeRequestVeto, FetchFailure, fetchDocument } from "./fetch.js";
@@ -288,6 +289,12 @@ export interface ToolContext {
    * press (src/save-closeness.ts).
    */
   typed?: string | null | undefined;
+  /**
+   * **An earlier answer in this conversation carried a `prepare` step marked
+   * `now`** (`converse` reads it off the history), so this turn's is kept as a
+   * button. Plan 261019p § Stage 2b.
+   */
+  preparedEarlier?: boolean | undefined;
 }
 
 /** A turn's read of the reader's two profile fields, each normalised; a field that could not be read is absent. */
@@ -795,7 +802,7 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
             properties: {
               kind: {
                 type: "string",
-                enum: ["ask", "chat", "mode", "search", "share", "archive"],
+                enum: ["ask", "chat", "mode", "search", "prepare", "share", "archive"],
                 description:
                   "ask: words the reader could send you next, in their own voice. " +
                   "chat: start a new Chat on their question about what the article says, sent as its " +
@@ -804,7 +811,8 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
                   "longer than the limit; never words or directions from the article. " +
                   "mode: open a mode. " +
                   "search: a quick search of this article for some words, which the reader can edit " +
-                  "first. share: take them to where they make a private link or make it public. " +
+                  "first. prepare: start making a mode in the background, without opening it; at most " +
+                  "one. share: take them to where they make a private link or make it public. " +
                   "archive: take them to where they archive this article.",
               },
               words: {
@@ -815,7 +823,13 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
                 type: "string",
                 description:
                   "For mode: the key in its button token under WHAT SPIDERYARN CAN SHOW THEM, decoded, " +
-                  "e.g. submode:summary:brief.",
+                  `e.g. submode:summary:brief. For prepare, one of: ${Object.keys(PREPARABLE).join(", ")}.`,
+              },
+              now: {
+                type: "boolean",
+                description:
+                  "For prepare: true starts it straight away, without a press; false gives them a button " +
+                  "to start it.",
               },
             },
             required: ["kind"],
@@ -2607,6 +2621,7 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
      plans 261011s and 261012c). Anything else waits for the press, and so
      does every offer outside the guide (plan 261020o). */
   const now = ctx.kind === "guide" ? savesAtOnce({ field, text, basis }, ctx.typed ?? null) : null;
+  if (field === "purpose") reasonOfferedThisTurn.add(ctx);
   return {
     label,
     detail: "",
@@ -2636,6 +2651,13 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   };
 }
 
+/**
+ * Turns whose `offer_to_save` offered a reason, keyed as `searchesThisTurn`
+ * is: a Skim `prepare` step in the same answer would plan on the old one
+ * (`preparePolicy`).
+ */
+const reasonOfferedThisTurn = new WeakSet<ToolContext>();
+
 /** The keys a `mode` step may name, from the catalogue: computed once. */
 const MODE_KEYS = guideModeKeys();
 
@@ -2643,9 +2665,11 @@ const MODE_KEYS = guideModeKeys();
  * `offer_next_steps`: the steps checked (src/next-steps.ts) and handed back to
  * be drawn. Runs none of them — see `OFFER_NEXT_STEPS_TOOL`.
  */
-function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
+function offerNextSteps(args: Record<string, unknown>, ctx: ToolContext): ToolOutcome {
   const label = describeCall("offer_next_steps", args);
-  const { steps, problems } = checkNextSteps(args.steps, MODE_KEYS);
+  const checked = checkNextSteps(args.steps, MODE_KEYS);
+  const problems = [...checked.problems];
+  const steps = preparePolicy(checked.steps, ctx, problems);
   const dropped = problems.length === 0 ? "" : ` Left out: ${problems.join("; ")}.`;
   if (steps.length === 0) {
     return {
@@ -2663,10 +2687,50 @@ function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
        is the page's call. */
     content:
       `${steps.length} next step${steps.length === 1 ? " was" : "s were"} accepted, to show as buttons under your answer.${dropped} ` +
-      `Do not mention these buttons. ${ALREADY_ON_SCREEN}`,
+      `Do not mention these buttons${steps.some((s) => s.kind === "prepare") ? ", and never say a mode is ready because it was prepared" : ""}. ${ALREADY_ON_SCREEN}`,
     steps,
     settles: true,
   };
+}
+
+/**
+ * **The server's half of a `prepare` step** — plan 261019p § Stage 2b, after
+ * Greg's reply to q-y4p2ct. `checkNextSteps` has already held the key to
+ * `PREPARABLE` and kept one such step; this is what needs the turn.
+ *
+ * - **No Skim step beside a reason offer**, pressed or not (GPT Sol's F4): the
+ *   reason saves after the answer, so a route started from this answer would
+ *   be planned on the old one. Dropped, with the reason for the model.
+ * - **`now` only on a turn the reader typed** (`ctx.typed`, never a button, a
+ *   retry or an edit), not in a spoken turn, and not when an earlier answer in
+ *   this conversation already carried one (`ctx.preparedEarlier`). Otherwise it
+ *   is kept as a button. This is the model's cap; the durable one is the
+ *   thread's claim at the press (src/store/pg-chat.ts §
+ *   `claimModePreparation`), which two tabs, a retry or an edit cannot pass.
+ */
+function preparePolicy(steps: NextStep[], ctx: ToolContext, problems: string[]): NextStep[] {
+  const kept: NextStep[] = [];
+  for (const step of steps) {
+    if (step.kind !== "prepare") {
+      kept.push(step);
+      continue;
+    }
+    if (preparable(step.mode)?.step === "skim" && reasonOfferedThisTurn.has(ctx)) {
+      problems.push("a Skim route cannot be prepared in the same answer as an offer to save their reason; offer it on a later answer");
+      continue;
+    }
+    if (step.now && (ctx.kind !== "guide" || ctx.spoken || typeof ctx.typed !== "string" || ctx.preparedEarlier)) {
+      problems.push(
+        ctx.preparedEarlier
+          ? "a mode has already been started once in this conversation, so this one is a button they press"
+          : "a mode is started straight away only after a message the reader typed, so this one is a button they press",
+      );
+      kept.push({ ...step, now: false });
+      continue;
+    }
+    kept.push(step);
+  }
+  return kept;
 }
 
 /** What a model that asked for a tool it does not have is told: the ones it does. */
@@ -2775,7 +2839,7 @@ export async function runTool(
     case "offer_to_save":
       return offerToSave(args, ctx);
     case "offer_next_steps":
-      return offerNextSteps(args);
+      return offerNextSteps(args, ctx);
     default:
       return noSuchTool(name, ctx);
   }

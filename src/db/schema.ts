@@ -4456,6 +4456,16 @@ export const chatThreads = spideryarn.table(
     gist: text("gist"),
     /** When `gist` was written. Store when it happened. */
     gistAt: timestamp("gist_at", { withTimezone: true }),
+    /**
+     * **When this guide conversation started a mode by itself**, the one time it
+     * may (plan docs/plans/261019p-guide-chat-plainer.md § Stage 2b, Greg's
+     * reply to q-y4p2ct). Claimed atomically at the press, `… WHERE
+     * mode_prepared_at IS NULL`, so two tabs, a retry or an edit cannot start a
+     * second (src/store/pg-chat.ts § `claimModePreparation`). Null: none yet, or
+     * any other kind of conversation. A reader's own press of *Get … ready*
+     * claims nothing.
+     */
+    modePreparedAt: timestamp("mode_prepared_at", { withTimezone: true }),
 
     /**
      * **The passage this conversation was started from**, as three columns.
