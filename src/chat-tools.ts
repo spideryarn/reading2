@@ -553,7 +553,10 @@ export const READER_NOTES_TOOL: FunctionTool = {
     description:
       "The reader's own notes on THIS article: their comments, highlights and bookmarks, each " +
       "with the block it is on, followed by a list of their other conversations about the " +
-      "article. Give a conversation's id as `thread` to read that conversation instead. Use it " +
+      "article. Give a conversation's id as `thread` to read that conversation instead: its " +
+      "questions and answers, numbered from 1 for the oldest: the newest that fit, in order; " +
+      "when the answer says there are earlier ones, call again with the `before` it names. " +
+      "Use it " +
       "with no `thread` when the reader asks what they think, what they marked or wrote, or " +
       "refers to an earlier conversation. When the list of their other conversations that " +
       "comes with the question shows one that took up what they are asking now, pass its " +
@@ -569,6 +572,12 @@ export const READER_NOTES_TOOL: FunctionTool = {
           description:
             "Optional. The id of one of their other conversations, exactly as this tool listed " +
             "it. Omit to see the notes and the list.",
+        },
+        before: {
+          type: "integer",
+          description:
+            "Optional, with `thread`. Read the exchanges numbered below this one. Use the " +
+            "number a previous answer told you to; omit to read the newest.",
         },
       },
     },
@@ -2397,6 +2406,16 @@ async function readReaderNotes(
 ): Promise<ToolOutcome> {
   const label = describeCall("reader_notes", args);
   const wanted = typeof args.thread === "string" ? args.thread.trim() : "";
+  /* `before` is a place in one conversation. Without one it would quietly
+     become the notes and the list, which is not what was asked for. */
+  if (wanted === "" && args.before !== undefined && args.before !== null) {
+    return {
+      label,
+      detail: "no conversation named",
+      content:
+        "`before` reads the earlier part of one conversation, so it needs that conversation's id as `thread`. Nothing was read.",
+    };
+  }
 
   let comments: Comment[];
   let threads: ChatThread[];
@@ -2427,7 +2446,19 @@ async function readReaderNotes(
   }
 
   if (wanted !== "") {
-    const transcript = threadTranscript(threads, wanted, ctx.threadId);
+    /* A model may send the number as a string. Anything else it sends becomes
+       NaN, which threadTranscript answers with a sentence: never a throw, and
+       never a quiet fall back to the newest page. */
+    const raw = args.before;
+    const before =
+      raw === undefined || raw === null
+        ? undefined
+        : typeof raw === "number"
+          ? raw
+          : typeof raw === "string" && raw.trim() !== ""
+            ? Number(raw)
+            : Number.NaN;
+    const transcript = threadTranscript(threads, wanted, ctx.threadId, before);
     log("model").info(
       {
         tool: "reader_notes",
