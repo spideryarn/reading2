@@ -185,3 +185,14 @@ build*, five findings. P1-1 taken in part (no hidden-tab commit while dictating)
 declined, P1-2 and P1-3 declined, all three with Opus arbitrating (Stages 2 and 3 say why). P2-4
 taken: the ratchet is per component and lists `EditQuestion` and `CommentBody`. P3-5 taken: no
 separate purpose-busy state; the replacement effect reads the ref.
+
+**Code review, GPT Sol (gpt-5.6-sol, high, workspace-write), 2026-10-20** —
+[261020r-dictation-code-review-sol.md](261020r-dictation-code-review-sol.md). *Ship with the fixes
+above*, two findings, both fixed by Sol and checked here. P1: a microphone press (or a transcription
+retry) batched with a public-copy answer could unmount the box before its layout effect said busy;
+`useBusyDictation` now says busy at the press. Its fix had a hole of its own, found on reading it: a
+press the hook refuses (a moved offer, a press inside the cap's grace) never changes `busy`, so the
+claim was never taken back and the page would have waited for ever. A layout effect after every
+render now settles a claim, with a test that goes red without it. P2: the ratchet now reads the TSX
+syntax tree (Babel) rather than lines, so an inline textarea or a microphone named in a comment
+cannot fool it, and two textareas in one component fail as ambiguous.

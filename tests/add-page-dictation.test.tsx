@@ -61,6 +61,8 @@ const mic = vi.hoisted(() => ({
   state: new Map<string, { armed: boolean; transcribing: boolean }>(),
   options: new Map<string, unknown>(),
   reported: [] as Array<Record<string, string> | undefined>,
+  /** The hook refuses a start, as it does for a moved offer or a press in the cap's grace. */
+  refuse: false,
 }));
 vi.mock("../src/web/useDictation.js", () => ({
   useDictation: (options: { keep?: { box: string } }) => {
@@ -86,17 +88,28 @@ vi.mock("../src/web/useDictation.js", () => ({
       recording: null,
       keptOnDevice: false,
       canRetry: false,
-      toggle() {},
+      testBox: name,
+      toggle() {
+        if (mic.refuse && !s.armed) return false;
+        mic.state.set(name, { armed: !s.armed, transcribing: false });
+      },
       dismiss() {},
       chooseDevice() {},
       clearRecording() {},
-      retry() {},
+      retry() {
+        mic.state.set(name, { armed: false, transcribing: true });
+      },
     };
   },
 }));
 vi.mock("../src/web/DictationStrip.js", async (importActual) => ({
   ...(await importActual<typeof import("../src/web/DictationStrip.js")>()),
-  DictationStrip: () => null,
+  DictationStrip: ({ dictation }: { dictation: { testBox: string; retry(): void } }) =>
+    createElement("button", {
+      type: "button",
+      "data-test-retry": dictation.testBox,
+      onClick: dictation.retry,
+    }),
 }));
 vi.mock("../src/web/dictation-upload.js", () => ({
   useReaderTranscriber: () => async () => {
@@ -318,6 +331,7 @@ beforeEach(() => {
   mic.state.clear();
   mic.options.clear();
   mic.reported.length = 0;
+  mic.refuse = false;
   purposes.clear();
   readerProfile = null;
   events.length = 0;
@@ -415,6 +429,20 @@ describe("every press that opens the article", () => {
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
+  it("a microphone press the hook refuses does not leave the page holding", async () => {
+    await start();
+    act(() => purposeBox()?.focus());
+    type(purposeBox(), "the evidence");
+    await finish();
+    mic.refuse = true;
+    act(() => mics()[0]?.click());
+    await settle();
+    for (const b of openButtons()) expect(b.disabled, "a refused start left the page thinking a box was busy").toBe(false);
+    act(() => openButtons()[0]?.click());
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+  });
+
   it("once Open is waiting on a save, neither microphone can start", async () => {
     await start();
     act(() => purposeBox()?.focus());
@@ -446,6 +474,42 @@ describe("every press that opens the article", () => {
 
 describe("somebody else's public copy, answered while the purpose box is dictating", () => {
   const THEIRS = { slug: "their-public-copy", title: "Their Public Copy" };
+
+  it("keeps the box when the microphone press and public-copy answer land in one batch", async () => {
+    let answer: (value: AddAnswer) => void = () => {};
+    addResult = new Promise((resolve) => {
+      answer = resolve;
+    });
+    render(URL_SOURCE);
+    await settle();
+
+    act(() => {
+      mics()[0]?.click();
+      answer({ publicCopy: THEIRS });
+    });
+    await settle();
+
+    expect(purposeBox(), "the answer unmounted a dictation before its layout effect reported busy").not.toBeNull();
+    expect(button(PUBLIC_COPY_READ)?.disabled).toBe(true);
+  });
+
+  it("keeps the box when a transcription retry and public-copy answer land in one batch", async () => {
+    let answer: (value: AddAnswer) => void = () => {};
+    addResult = new Promise((resolve) => {
+      answer = resolve;
+    });
+    render(URL_SOURCE);
+    await settle();
+
+    act(() => {
+      host.querySelector<HTMLButtonElement>(`[data-test-retry="${purposeName()}"]`)?.click();
+      answer({ publicCopy: THEIRS });
+    });
+    await settle();
+
+    expect(purposeBox(), "the answer unmounted a retry before its layout effect reported busy").not.toBeNull();
+    expect(button(PUBLIC_COPY_READ)?.disabled).toBe(true);
+  });
 
   it("keeps the box, disables the Read link, and lets the box go once the words are in", async () => {
     let answer: (value: AddAnswer) => void = () => {};

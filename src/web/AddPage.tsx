@@ -2340,12 +2340,41 @@ function useBusyDictation({
   });
   const tell = useRef(onBusyChange);
   tell.current = onBusyChange;
+  /** Busy said at a press, before the hook's own state has rendered. */
+  const claimed = useRef(false);
+  const claim = (): void => {
+    if (dictate.busy) return;
+    claimed.current = true;
+    tell.current(true);
+  };
+  const toggle = (): void => {
+    /* The press and an add answer can be batched into one render. Say busy at
+       the press, before that render can remove this box. */
+    claim();
+    dictate.toggle();
+  };
+  const retry = (): void => {
+    /* Retrying kept audio also enters `transcribing`, and has the same
+       same-batch unmount race as a first microphone press. */
+    claim();
+    dictate.dictation.retry();
+  };
   useLayoutEffect(() => {
     tell.current(dictate.busy);
   }, [dictate.busy]);
+  /* **A refused press leaves `busy` false**, so the effect above never runs
+     again to take the claim back (a moved offer the hook will not clear, a
+     press inside the cap's grace, a retry with nothing to send), and the page
+     would wait for ever. The first render after the press settles it. Every
+     render, but it calls out only after a claim. */
+  useLayoutEffect(() => {
+    if (!claimed.current) return;
+    claimed.current = false;
+    if (!dictate.busy) tell.current(false);
+  });
   /* A box that has gone is not busy: its dictation was aborted with it. */
   useLayoutEffect(() => () => tell.current(false), []);
-  return dictate;
+  return { ...dictate, dictation: { ...dictate.dictation, retry }, toggle };
 }
 
 /**

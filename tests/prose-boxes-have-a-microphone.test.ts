@@ -29,6 +29,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { parse as babelParse } from "@babel/parser";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -60,37 +61,106 @@ function tsxFiles(dir: string): string[] {
   });
 }
 
-/** A JSX textarea opening a line: `<textarea` or shadcn's `<Textarea`, never one named in a comment. */
-const TEXTAREA = /^\s*<(?:textarea|Textarea)\b/;
-/** A top-level declaration, at the start of a line: where one component ends and the next begins. */
-const DECLARATION = /^(?:export\s+)?(?:default\s+)?(?:function\s+(\w+)|const\s+(\w+)\s*[=:])/;
-/* The strip counts: every box with a microphone draws one under itself, even
-   where the button is drawn by a small wrapper (the add page's `AddMic`). */
-const MICROPHONE = /useDictationField\(|<DictationButton\b|<DictationStrip\b|<ProfileBox\b/;
-
 interface Box {
   /** `src/web/File.tsx#Component`. */
   where: string;
   mic: boolean;
 }
 
-const boxes: Box[] = tsxFiles(WEB).flatMap((path) => {
-  const file = relative(ROOT, path);
-  const lines = readFileSync(path, "utf8").split("\n");
-  const declarations = lines.flatMap((line, at) => {
-    const m = DECLARATION.exec(line);
-    return m ? [{ name: m[1] ?? m[2] ?? "?", at }] : [];
+interface SyntaxNode {
+  type: string;
+  [key: string]: unknown;
+}
+
+function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
+  visit(node);
+  for (const [key, child] of Object.entries(node)) {
+    if (key === "loc" || key === "extra" || key === "comments" || key === "tokens") continue;
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        if (item && typeof item === "object" && "type" in item) walk(item as SyntaxNode, visit);
+      }
+    } else if (child && typeof child === "object" && "type" in child) {
+      walk(child as SyntaxNode, visit);
+    }
+  }
+}
+
+interface ComponentRoot {
+  name: string;
+  root: SyntaxNode;
+}
+
+function componentRoots(entry: SyntaxNode): ComponentRoot[] {
+  const top =
+    entry.type === "ExportNamedDeclaration" || entry.type === "ExportDefaultDeclaration"
+      ? (entry.declaration as SyntaxNode | undefined)
+      : entry;
+  if (!top) return [];
+  if (top.type === "FunctionDeclaration" || top.type === "ClassDeclaration") {
+    const id = top.id as SyntaxNode | undefined;
+    return [{ name: id?.type === "Identifier" ? String(id.name) : "?", root: top }];
+  }
+  if (top.type !== "VariableDeclaration") return [{ name: "?", root: top }];
+  return (top.declarations as SyntaxNode[]).flatMap((declaration) => {
+    const id = declaration.id as SyntaxNode | undefined;
+    const root = declaration.init as SyntaxNode | undefined;
+    return root
+      ? [{ name: id?.type === "Identifier" ? String(id.name) : "?", root }]
+      : [];
   });
-  return lines.flatMap((line, at) => {
-    if (!TEXTAREA.test(line)) return [];
-    const own = declarations.filter((d) => d.at <= at).at(-1);
-    const next = declarations.find((d) => d.at > at);
-    const body = lines.slice(own?.at ?? 0, next?.at ?? lines.length).join("\n");
-    return [{ where: `${file}#${own?.name ?? "?"}`, mic: MICROPHONE.test(body) }];
+}
+
+function boxesIn(file: string, source: string): Box[] {
+  const tree = babelParse(source, {
+    sourceType: "module",
+    sourceFilename: file,
+    plugins: ["typescript", "jsx", "decorators-legacy"],
   });
-});
+  const found: Box[] = [];
+  const add = (name: string, root: SyntaxNode): void => {
+    let textareas = 0;
+    let mic = false;
+    walk(root, (node) => {
+      if (node.type === "CallExpression") {
+        const callee = node.callee as SyntaxNode | undefined;
+        if (callee?.type === "Identifier" && callee.name === "useDictationField") mic = true;
+      }
+      if (node.type !== "JSXOpeningElement") return;
+      const tag = node.name as SyntaxNode | undefined;
+      const tagName = tag?.type === "JSXIdentifier" ? tag.name : undefined;
+      if (tagName === "textarea" || tagName === "Textarea") textareas += 1;
+      if (tagName === "DictationButton" || tagName === "DictationStrip" || tagName === "ProfileBox") mic = true;
+    });
+    for (let i = 0; i < textareas; i++) found.push({ where: `${file}#${name}`, mic });
+  };
+  for (const entry of tree.program.body as unknown as SyntaxNode[]) {
+    for (const component of componentRoots(entry)) add(component.name, component.root);
+  }
+  return found;
+}
+
+const boxes: Box[] = tsxFiles(WEB).flatMap((path) =>
+  boxesIn(relative(ROOT, path), readFileSync(path, "utf8")),
+);
 
 describe("prose boxes have a microphone", () => {
+  it("finds a textarea wherever JSX puts it on the line", () => {
+    const found = boxesIn(
+      "src/web/Inline.tsx",
+      "function Inline() { return <textarea aria-label=\"Words\" />; }",
+    );
+    expect(found.map((box) => box.where)).toEqual(["src/web/Inline.tsx#Inline"]);
+  });
+
+  it("does not mistake a microphone named only in a comment for one the component draws", () => {
+    const [found] = boxesIn(
+      "src/web/CommentOnly.tsx",
+      "function CommentOnly() { /* <DictationStrip /> */ return <textarea />; }",
+    );
+    expect(found?.mic).toBe(false);
+  });
+
   it("finds the boxes it is about (a scan that matches nothing proves nothing)", () => {
     const withMic = boxes.filter((b) => b.mic).map((b) => b.where);
     expect(withMic).toEqual(
@@ -101,6 +171,13 @@ describe("prose boxes have a microphone", () => {
         "src/web/FeedbackSendBox.tsx#FeedbackSendBox",
       ]),
     );
+  });
+
+  it("does not let a second textarea hide behind one microphone in the same component", () => {
+    const counts = new Map<string, number>();
+    for (const box of boxes) counts.set(box.where, (counts.get(box.where) ?? 0) + 1);
+    const ambiguous = [...counts].filter(([, count]) => count > 1);
+    expect(ambiguous, "give each textarea its own component, or make this ratchet account for each occurrence").toEqual([]);
   });
 
   it("every textarea is in a component with a microphone, or is listed with its reason", () => {
