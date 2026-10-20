@@ -33,7 +33,7 @@ import type { AdminUser } from "../admin.js";
 import { FEEDBACK_FROM, type AdminFeedbackReport, type FeedbackFrom } from "../types.js";
 import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
-import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
+import { ColumnsMenu, DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
@@ -54,9 +54,20 @@ import { AdminPublicTopics } from "./AdminPublicTopics.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
+import { type HiddenColumnKeys, useHiddenColumns } from "./shelf-hidden-columns.js";
 
 /** Kept out of the render so the table is not rebuilt from a fresh `[]`. */
 const EMPTY: AdminUser[] = [];
+
+/**
+ * Where `/admin/users` remembers which columns are hidden, in this browser —
+ * the shelf's mechanism under keys of its own (plan 261020c). Exported so the
+ * page test can prove a reveal is stored under the admin keys, not the shelf's.
+ */
+export const ADMIN_USERS_COLUMN_KEYS: HiddenColumnKeys = {
+  hidden: "spya.admin.users.hiddenColumns",
+  shown: "spya.admin.users.shownColumns",
+};
 
 /**
  * Stable identity, and — see lib/DataTable.tsx — the tiebreak behind every sort.
@@ -338,12 +349,16 @@ export function AdminUsersPage() {
     [sorting, natural, setBy, setDir],
   );
 
+  const [columnVisibility, onColumnVisibilityChange] = useHiddenColumns(columns, ADMIN_USERS_COLUMN_KEYS);
+
   const table = useSortedTable({
     data: users ?? EMPTY,
     columns,
     sorting,
     onSortingChange,
     rowId: idOf,
+    columnVisibility,
+    onColumnVisibilityChange,
   });
 
   const rows = table.getRowModel().rows;
@@ -398,6 +413,9 @@ export function AdminUsersPage() {
       <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
         {users ? <SortChips table={table} order={ADMIN_CHIP_ORDER} /> : <span />}
         <div className="tw:flex tw:items-center tw:gap-3">
+          {/* Always drawn, like the shelf's: it is the only way back to a
+              hidden column, and five start hidden here. */}
+          <ColumnsMenu table={table} />
           {users && (
             /* **Counted off `sorted`, which is the list the table is drawn
                from** — not off `users`, the list the request returned.

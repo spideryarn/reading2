@@ -579,6 +579,15 @@ Four decisions worth keeping:
   once one is open the neighbours open with no second wait and running the pointer down the rail
   reads the article's sections one after another. Built on Floating UI — why that library, and what
   it is doing for us: [tooltips.md](tooltips.md).
+
+  **Every card in a window taller than 600px ends in a key** (since 2026-10-20, Greg's `spya-ah5ws6`: *"also explain to the user
+  what the Spine means/how it works/what all the colours etc connote"*): one sentence on what the
+  spine is, then a swatch and two words for **each kind of mark the rail is drawing now, and only
+  those** — so it grows a *search matches* chip, in each lane's colour, when a search is on. The full
+  legend is nine kinds of mark on a card that cannot scroll; the reader's question is about the one
+  in front of them. Hidden from screen readers (the card is every band's description) and in windows
+  600px tall or shorter. [`spine-key.tsx`](../../src/web/spine-key.tsx);
+  [261020e](../plans/261020e-spine-card-explains-the-spine-and-keys-its-colours.md).
 - **There is one rail, and it is the collapsed one** — 12px of bands, ticks and marks, at every
   window width. Halved from 24px on 2026-08-28, and the names it can no longer hold were already in
   the hover card — [260828ay-spine-rail.md](../plans/260828ay-spine-rail.md).

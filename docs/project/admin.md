@@ -30,6 +30,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
 - [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
 - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+  - [Engagement](#engagement-active-days-reading-time-failed-imports) — active days, reading time, failed imports, and the columns that start hidden
 - [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
 - [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
 - [§ `/admin/articles`](#adminarticles-moving-an-article-to-another-account) — moving an article to another account
@@ -704,6 +705,35 @@ asked for.
 There are two date columns and they are not the same question: a session lasts weeks, so **a recent
 sign-in is not evidence anybody has read anything**. `Last read` is the most recent open across
 their own articles.
+
+### Engagement: active days, reading time, failed imports
+
+> So I'm trying to get a kind of overall measure of engagement. I suppose the best one would be number
+> of unique days on which they have used the app […] Really what I most care about is number of
+> articles, total time spent reading, number of unique days on which they've used it.
+>
+> — Greg, 2026-10-19 (`spya-shf45w`, `spya-g8bw5j`)
+
+Three columns since 2026-10-20, all read from rows that already existed, so nothing new is stored
+about a reader
+([261020c](../plans/261020c-admin-users-engagement-active-days-reading-time-failed-imports-fewer-default-columns.md)):
+
+- **Active days**: distinct UTC days with recorded activity, and how many fell in the last 30.
+  **It undercounts, and the cell says so.** Nothing records a day spent only reading, so such a day
+  is counted only while it is some article's latest open. What does count is listed on
+  `activitySources` in [`pg-admin.ts`](../../src/store/pg-admin.ts), and the plan says why
+  `job_step` calls and `reader_arrivals` are left out. Making it exact needs a per-day record, and
+  that is a question to Greg rather than a column.
+- **Reading**: the [reading-time](reading-time.md) totals summed over their own articles.
+- **Failed imports**: failed `import_records` *attempts*, with the newest ten on the card. Each
+  shows when, at which step, and what kind of failure (a `FailureKind`, which is not a severity).
+  The address and the error sentence stay off the wire under § What it deliberately does not show;
+  `scripts/import-records.ts` is where a developer reads them.
+
+**Five counts start hidden**: Archived, Uploads, Comments, Chats and Searches. They are behind the
+same **Columns** menu as the shelf's table, remembered per browser under `spya.admin.users.*`
+(`useHiddenColumns` in [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts)). They are
+hidden rather than removed, because Greg offered *"or make it easy to … have them default hidden"*.
 
 ### The count above the table counts the table
 

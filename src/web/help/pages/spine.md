@@ -30,19 +30,24 @@ What each mark means:
   article sees it.
 - **One faint grey bar across the full width: where you jumped from.** It appears with the **↩ back
   to …** button and goes when that does — see [Jumping around](/help/jumping-around).
+- **A thin purple strip down the left edge: the quotes**, in every mode, brighter for the stronger
+  ones.
 - **Coloured marks down the right edge: the passages the open mode points at.** In Search, each
-  search you have switched on gets its own narrow lane in its own colour; in Quotes, Ideas, Skim and
-  the other modes that point at passages, the marks are those passages. **Each mark is as tall as
-  its paragraph**, so you can see how a set of results is spread: bunched in one section, scattered
-  evenly, or only in the notes. A list of results cannot show you that.
+  search you have switched on gets its own narrow lane in its own colour, and the marks follow the
+  threshold as you move it. In Ideas and Timeline they are the passages of the idea or event you
+  pressed, and in Referee its passages. **Each mark is as tall as its paragraph**, so you can see
+  how a set of results is spread: bunched in one section, scattered evenly, or only in the notes. A
+  list of results cannot show you that.
 
 **Point at the spine to read it.** Every section has a card. It starts with a small outline of the
 article showing where the section sits: the part it belongs to, the sections on either side, and its
 place in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist
 and what is inside it. Then come how many words it has, how far in it starts, and how many search
-matches it holds. A heading set in the author’s typeface is the author’s own; one in the AI’s was
-written by the AI. Once a card is open, move slowly down the spine and the cards follow, so you can
-read the outline section by section.
+matches it holds (or, in Ideas, Timeline and Referee, how many of that mode's passages). A heading
+set in the author’s typeface is the author’s own; one in the AI’s was written by the AI. In all but
+the shortest windows, the foot of every card has a small key to the colours on the spine at that moment: only the marks it is drawing now, so it
+changes as you open a search or a mode. Once a card is open, move slowly down the spine and the cards
+follow, so you can read the outline section by section.
 
 ![The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts](images/spine-walk.gif "Move slowly down the spine and the card follows, one section at a time.")
 
