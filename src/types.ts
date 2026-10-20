@@ -8627,7 +8627,7 @@ export interface AdminFeedbackQuestionAnswer {
 
 /**
  * **One open question an agent has put to the admin, as a thread** — part of
- * `GET /api/admin/feedback/earlier?questions=3`. An agent wrote `title` and
+ * `GET /api/admin/feedback/earlier?questions=4`. An agent wrote `title` and
  * `body` (a file under docs/user-feedback/questions/, compiled into the
  * server): plain text, to be drawn as text with its line breaks kept. The
  * file's `refs` line is for agents and is never here; its `repeats` reach only
@@ -8643,11 +8643,15 @@ export interface AdminFeedbackQuestion {
   /** `yyyy-mm-dd`: the day it was asked. */
   asked: string;
   /**
-   * The report it is about, when it names one **and that report is this
-   * admin's own**, with its whole text (shown shut); otherwise null, and the
-   * body has to stand without it.
+   * The report it is about, with its whole text (shown shut), and **whose it
+   * is**. The admin's own when it names one of theirs; otherwise the one other
+   * account's report under that id, marked as a reader's or another admin's
+   * and with the address it was filed under, so a thread about somebody else's
+   * suggestion is told apart at a glance (`spya-y43ha0`, plan 261020p). Null
+   * when it names none, none is found, or two accounts hold that id
+   * (report ids are unique per owner only): then the body stands alone.
    */
-  report: { id: string; number: number; firstLine: string; body: string } | null;
+  report: FeedbackQuestionReport | null;
   /**
    * This admin's replies **no agent has acted on yet**, oldest first. One that
    * has been acted on is in `actedAnswers` instead.
@@ -8674,7 +8678,7 @@ export interface AdminFeedbackQuestion {
 
 /**
  * **A question as a server before 261008i sends it**, and as the new server
- * still sends it to a request without `questions=2` or `questions=3`, so a
+ * still sends it to a request without `questions=2`, `3` or `4`, so a
  * tab from before the deploy keeps working after it (F3). Six keys, the newest
  * reply only.
  */
@@ -8712,18 +8716,54 @@ export interface AdminEarlierFeedbackPage {
 }
 
 /**
+ * **Whose report a question is about** (plan 261020p): the signed-in admin's
+ * own, a reader's, or another admin's. `isAdmin` decides the last two.
+ */
+export const FEEDBACK_QUESTION_REPORT_WHOSE = ["yours", "reader", "admin"] as const;
+export type FeedbackQuestionReportWhose = (typeof FEEDBACK_QUESTION_REPORT_WHOSE)[number];
+
+/**
+ * The report a thread is about, as shape 4 sends it. `from` is the address the
+ * report was filed under, `reporterEmail` on `/admin/feedback`, for somebody
+ * else's; null for the admin's own, who knows who they are.
+ */
+export interface FeedbackQuestionReport {
+  id: string;
+  number: number;
+  firstLine: string;
+  body: string;
+  whose: FeedbackQuestionReportWhose;
+  from: string | null;
+}
+
+/**
+ * **A question as a server before 261020p sends it**, and as the new server
+ * still sends it to `questions=3`, so a tab from before that deploy keeps
+ * working after it: the report only when it is the admin's own, and without
+ * `whose` or `from`, because that tab checks the report's keys exactly.
+ */
+export type AdminFeedbackQuestionV3 = Omit<AdminFeedbackQuestion, "report"> & {
+  report: { id: string; number: number; firstLine: string; body: string } | null;
+};
+
+/** The same answer to `questions=3`: the shape before 261020p. */
+export interface AdminEarlierFeedbackPageV3 extends Omit<AdminEarlierFeedbackPage, "questions"> {
+  questions: AdminFeedbackQuestionV3[];
+}
+
+/**
  * **A question as a server before 261010h sends it**, and as the new server
  * still sends it to `questions=2`, so a tab from before that deploy keeps
  * working after it: no acted replies.
  */
-export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestion, "actedAnswers" | "olderActedAnswers">;
+export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestionV3, "actedAnswers" | "olderActedAnswers">;
 
 /** The same answer to `questions=2`: the shape before 261010h. */
 export interface AdminEarlierFeedbackPageV2 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV2[];
 }
 
-/** The same answer to a request without `questions=2` or `3`: the shape before 261008i (F3). */
+/** The same answer to a request without `questions=2`, `3` or `4`: the shape before 261008i (F3). */
 export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV1[];
 }
@@ -9087,22 +9127,24 @@ export function decodeFeedbackCursor(
 }
 
 /**
- * **Whose reports the inbox shows** — everyone's, or only the readers', which
- * is everyone who is not an administrator (src/admin.ts § `ADMIN_USER_IDS`, the
- * list `isAdmin` reads). Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
- * filter to show only non-admin suggestions (i.e. suggestions from people other
- * than me)."* docs/plans/261001l-….
+ * **Whose reports the inbox shows** — everyone's, only the readers', which is
+ * everyone who is not an administrator (src/admin.ts § `ADMIN_USER_IDS`, the
+ * list `isAdmin` reads), or only the administrators'. Greg, 2026-10-01
+ * (SPIDERYARN-READING2-87): *"provide a filter to show only non-admin
+ * suggestions (i.e. suggestions from people other than me)."*
+ * docs/plans/261001l-…. And 2026-10-19 (`spya-kmqd7n`): *"And also show a
+ * filter for admins only on this page."* docs/plans/261020p-….
  *
  * Applied by the store, not the browser: the inbox is paged, and a page of
  * Greg's own reports filtered away in the browser would read *no reports,
  * there are older ones*.
  */
-export const FEEDBACK_FROM = ["everyone", "readers"] as const;
+export const FEEDBACK_FROM = ["everyone", "readers", "admins"] as const;
 export type FeedbackFrom = (typeof FEEDBACK_FROM)[number];
 
 /**
  * `?from=` read back: absent is `"everyone"`, and anything else that is not one of
- * the two is `"malformed"`, which the route turns into a 400 — never a quiet
+ * the three is `"malformed"`, which the route turns into a 400 — never a quiet
  * *everyone*, which would show Greg his own reports under a filter that says it
  * hides them. The same three-answer shape as `decodeFeedbackCursor`.
  */

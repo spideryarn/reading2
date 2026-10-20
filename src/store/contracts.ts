@@ -2127,8 +2127,8 @@ export interface AdminStore {
    * an ordinary account holder can add rows to.
    */
   /**
-   * `from` is `"readers"` to leave out the administrators' own reports
-   * (`FeedbackFrom` in src/types.ts); the cursor carries no filter, so a caller
+   * `from` is `"readers"` to leave out the administrators' own reports, or
+   * `"admins"` for only those (`FeedbackFrom` in src/types.ts); the cursor carries no filter, so a caller
    * paging under one passes it on every page.
    */
   listFeedbackAcrossOwners(
@@ -2175,6 +2175,29 @@ export interface AdminStore {
     id: string,
     ignored: boolean,
   ): Promise<AdminFeedbackReport | null>;
+  /**
+   * **The reports agents' questions name, whoever filed them** — for the
+   * threads in the admin's *Needs a decision* (plan 261020p). A question file
+   * names a report by id alone, which is unique per owner and not globally,
+   * so this is the one lookup here not keyed on the pair, and it makes up for
+   * that by **answering only for an id exactly one row holds, across every
+   * owner the admin's own included**. An id two rows share is in `ambiguous`
+   * and resolves to nothing, never to a guess at whose it is.
+   */
+  questionReportsAcrossOwners(ids: readonly string[]): Promise<QuestionReportsAcrossOwners>;
+}
+
+/** One report a question names, with whose it is. */
+export interface QuestionReportAcrossOwners extends LinkedFeedbackReport {
+  ownerId: string;
+  /** The address the reader held when they wrote, as `/admin/feedback` shows it. */
+  reporterEmail: string;
+}
+
+/** `questionReportsAcrossOwners`' answer: the ids one row holds, and the ids more than one does. */
+export interface QuestionReportsAcrossOwners {
+  found: QuestionReportAcrossOwners[];
+  ambiguous: string[];
 }
 
 
