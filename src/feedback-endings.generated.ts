@@ -11,6 +11,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-a0wpv4": "shipped",
   "spya-a353as": "shipped",
   "spya-a40t70": "shipped",
+  "spya-a48229": "shipped",
   "spya-a4rfbk": "shipped",
   "spya-a4xsg3": "shipped",
   "spya-a52jsr": "shipped",
@@ -646,6 +647,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a40t70": "\"Why are you reading this?\" is now at the top and grows; About you is offered if empty; a big green tick and Open at top and bottom say it is done; PDFs show a bar of sections read. Time-left is queued.",
+  "spya-a48229": "On dev. Recording starts the moment the microphone opens, on every browser; on Chrome and Edge it used to start a second late, losing your first words. While it is still opening, the line under the box says \"Wait — opening the microphone…\".",
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
   "spya-a63vmt": "Shipped. In Chat, type @ to bring in one of your own articles, archived and public included; citations of it open it at the passage. Other people's articles are not included.",
   "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).",
