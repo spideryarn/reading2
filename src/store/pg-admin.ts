@@ -67,16 +67,20 @@
  * choice, and it also leaves that sentence in auth.md true.
  */
 
-import { count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, lte, ne, sql } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 
 import type { Db } from "../db/client.js";
 import { getDb } from "../db/client.js";
 import {
+  aiCalls,
   articles,
   billingAccounts,
   chatThreads,
   comments,
+  importRecords,
   ingestEvents,
+  readingTime,
   searchRuns,
   uploads,
 } from "../db/schema.js";
@@ -92,7 +96,7 @@ import {
   currentUtcMonth,
   productSpendByOwner,
 } from "./ai-calls-spend-pg.js";
-import type { AdminUser } from "../admin.js";
+import { type AdminUser, RECENT_FAILURES_SHOWN } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -167,9 +171,43 @@ export interface IngestTally {
   highPowerInPeriodShared: number;
 }
 
+/**
+ * Active days, per owner — distinct UTC days over `activitySources`.
+ * docs/plans/261020c-admin-users-engagement-active-days-reading-time-failed-imports-fewer-default-columns.md.
+ */
+export interface ActivityTally {
+  owner: string;
+  days: number;
+  /** Of `days`, those on or after the UTC date 29 days before today. */
+  days30: number;
+  lastAt: Date | null;
+}
+
+/** Total reading seconds, per owner. */
+export interface ReadingTally {
+  owner: string;
+  seconds: number;
+}
+
+/**
+ * One failed import, newest first within its owner, already capped at
+ * `RECENT_FAILURES_SHOWN` by the query; `total` is the owner's whole count,
+ * repeated on each of their rows.
+ */
+export interface FailureRow {
+  owner: string;
+  at: Date;
+  step: string | null;
+  kind: string | null;
+  total: number;
+}
+
 /** Everything the merge needs, named so the call site reads as a sentence. */
 export interface UserCounts {
   shelf: ShelfTally[];
+  activity: ActivityTally[];
+  reading: ReadingTally[];
+  failures: FailureRow[];
   uploads: CountRow[];
   questions: CountRow[];
   chats: CountRow[];
@@ -383,6 +421,14 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
   const shelf = new Map(counts.shelf.map((r) => [r.owner, r]));
   const spend = counts.spend;
   const ingests = new Map(counts.ingests.map((r) => [r.owner, r]));
+  const activity = new Map(counts.activity.map((r) => [r.owner, r]));
+  const reading = new Map(counts.reading.map((r) => [r.owner, r.seconds]));
+  const failures = new Map<string, FailureRow[]>();
+  for (const row of counts.failures) {
+    const mine = failures.get(row.owner);
+    if (mine) mine.push(row);
+    else failures.set(row.owner, [row]);
+  }
   /* One clock for the whole merge, so two rows cannot be decided either side of
      a period boundary — the same reason `spendMonth` is settled before any
      query runs in `listUsersAcrossOwners`. */
@@ -427,6 +473,18 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
         searches: searches.get(p.id) ?? 0,
         opens: mine?.opens ?? 0,
         ...optional("lastReadAt", iso(mine?.lastReadAt ?? null)),
+        activeDays: activity.get(p.id)?.days ?? 0,
+        activeDays30: activity.get(p.id)?.days30 ?? 0,
+        ...optional("lastActiveAt", iso(activity.get(p.id)?.lastAt ?? null)),
+        readingSeconds: reading.get(p.id) ?? 0,
+        /* The query caps the rows and sorts them; the merge only carries them.
+           `total` is on every row of an owner, so the first one's is theirs. */
+        importFailures: failures.get(p.id)?.[0]?.total ?? 0,
+        recentImportFailures: (failures.get(p.id) ?? []).map((f) => ({
+          at: f.at.toISOString(),
+          ...optional("step", f.step ?? undefined),
+          ...optional("kind", f.kind ?? undefined),
+        })),
         /* `?? 0` on all three, for the reason stated above about every other
            lookup here: a `group by` returns nothing at all for an owner with
            nothing to count, and a missing field on a page whose content is
@@ -648,7 +706,138 @@ export function adminQueries(db: Db) {
       .leftJoin(billingAccounts, eq(billingAccounts.ownerId, ingestEvents.ownerId))
       .leftJoin(articles, eq(articles.id, ingestEvents.articleId))
       .groupBy(ingestEvents.ownerId),
+
+    /* **Active days: distinct UTC dates over every timestamp the reader
+       caused**, unioned and then counted once — a day with a chat and a
+       comment is one day, not two. `activitySources` says what is in it and
+       what is not; the 30-day figure counts dates on or after the UTC date 29
+       days before today, so today and the 29 before it. */
+    activity: (() => {
+      const all = activitySources(db).as("activity");
+      const day = sql`(${all.at} at time zone 'UTC')::date`;
+      /* A closed range, so a row stamped in the future (a skewed clock, a
+         hand-written row) is not "recent". Sol's plan review, finding 3. */
+      const today = sql`(now() at time zone 'UTC')::date`;
+      return db
+        .select({
+          owner: all.owner,
+          days: sql<number>`count(distinct ${day})`.mapWith(Number),
+          days30: sql<number>`count(distinct ${day}) filter (
+              where ${day} between ${today} - 29 and ${today})`.mapWith(Number),
+          lastAt: sql<Date | null>`max(${all.at})`.mapWith(articles.lastOpenedAt),
+        })
+        .from(all)
+        /* The site account is not a reader (the merge drops it too); left out
+           here so its calls are not counted only to be thrown away. */
+        .where(ne(all.owner, SITE_OWNER_ID))
+        .groupBy(all.owner);
+    })(),
+
+    /* **Reading time, through the article** like the counts above, and on the
+       shelf for the same reason: a row only ever exists for a block of an
+       article that published. `sum` of a `double precision` — the driver
+       hands that back as a number already, and `mapWith(Number)` keeps it so
+       if the column ever becomes `numeric`. */
+    reading: db
+      .select({
+        owner: articles.ownerId,
+        seconds: sql<number>`coalesce(sum(${readingTime.seconds}), 0)`.mapWith(Number),
+      })
+      .from(readingTime)
+      .innerJoin(articles, eq(readingTime.articleId, articles.id))
+      .where(onTheShelf())
+      .groupBy(articles.ownerId),
+
+    /* **Failed imports, the newest `RECENT_FAILURES_SHOWN` per owner, and the
+       owner's whole count on every row.** Ranked in a sub-select, as
+       `trimFinished` in pg-jobs.ts ranks, so the payload stays bounded however
+       many an account collects. `recorded_at` stands in for a missing
+       `finished_at`; `job_id` is the tiebreak, because neither timestamp is a
+       total order. **Only `status = 'error'`** — `cancelled` is the reader
+       stopping it, not something going wrong — and **no slug, URL or error
+       sentence is selected**, for the header's rule 1. */
+    failures: (() => {
+      const at = sql<Date>`coalesce(${importRecords.finishedAt}, ${importRecords.recordedAt})`;
+      const ranked = db
+        .select({
+          owner: importRecords.ownerId,
+          at: at.mapWith(importRecords.recordedAt).as("at"),
+          step: importRecords.failedStep,
+          kind: importRecords.failureKind,
+          total: sql<number>`count(*) over (partition by ${importRecords.ownerId})`
+            .mapWith(Number)
+            .as("total"),
+          rank: sql<number>`row_number() over (
+              partition by ${importRecords.ownerId}
+              order by ${at} desc, ${importRecords.jobId} desc)`.as("rank"),
+        })
+        .from(importRecords)
+        .where(eq(importRecords.status, "error"))
+        .as("ranked");
+      return db
+        .select({
+          owner: ranked.owner,
+          at: ranked.at,
+          step: ranked.step,
+          kind: ranked.kind,
+          total: ranked.total,
+        })
+        .from(ranked)
+        .where(lte(ranked.rank, RECENT_FAILURES_SHOWN))
+        .orderBy(ranked.owner, ranked.rank);
+    })(),
   };
+}
+
+/**
+ * **Every timestamp that says an account did something here**, as `(owner,
+ * at)` — what Active days counts. Exported so tests/admin-queries.test.ts can
+ * read what it means.
+ *
+ * - `ai_calls` with `scope_kind = 'request'` — a model call inside somebody's
+ *   own signed-in request, billed to whoever was asking (`ownerFor` in
+ *   src/ai-spend.ts). **Not `job_step`**, although Spend counts it: a job step
+ *   runs whenever the queue gets to it, and `scripts/stage.ts` records its
+ *   runs that way too, so it would date a reader's day by our clock. Sol's plan
+ *   review, finding 1.
+ * - `ingest_events.reserved_at` — an article or paper added.
+ * - `comments.created_at`, through the article and on the shelf, as every
+ *   article-shaped count in this file is.
+ * - `articles.last_opened_at`, on the shelf — **one** day per article, the
+ *   latest open.
+ *
+ * **Not `reader_arrivals`**, which looks like the sign-up day and is not: its
+ * migration backfilled every account in the shared Auth project with its
+ * creation date, including accounts that never used this app (Sol, finding 1).
+ *
+ * **What it cannot see is a day of reading alone.** Opening an article bumps a
+ * counter and overwrites `last_opened_at`; reading time is a running total with
+ * no date (/privacy promises *"the totals, not a history"*). So such a day is
+ * counted only while it is an article's most recent open. Making that exact
+ * needs a new record of which days somebody used the app, which is a question
+ * for Greg in the plan rather than something built here.
+ */
+export function activitySources(db: Db) {
+  return unionAll(
+    db
+      /* **Named `at` here, in the first branch**, because a union's columns
+         are named by its first select: left as the bare column, the outer
+         query read `"activity"."started_at"` for every branch's time — right
+         by accident, and wrong the day the branches are reordered. */
+      .select({ owner: aiCalls.ownerId, at: sql<Date>`${aiCalls.startedAt}`.as("at") })
+      .from(aiCalls)
+      .where(eq(aiCalls.scopeKind, "request")),
+    db.select({ owner: ingestEvents.ownerId, at: ingestEvents.reservedAt }).from(ingestEvents),
+    db
+      .select({ owner: articles.ownerId, at: comments.createdAt })
+      .from(comments)
+      .innerJoin(articles, eq(comments.articleId, articles.id))
+      .where(onTheShelf()),
+    db
+      .select({ owner: articles.ownerId, at: sql<Date>`${articles.lastOpenedAt}`.as("at") })
+      .from(articles)
+      .where(and(onTheShelf(), isNotNull(articles.lastOpenedAt))),
+  );
 }
 
 /* ------------------------------------------------------------ the store --- */
@@ -682,7 +871,21 @@ const rawPgAdminStore: AdminStore = {
        heading — a one-second-a-month bug that nothing would ever reproduce. */
     const month = currentUtcMonth();
 
-    const [people, shelf, uploaded, questions, chats, searches, spend, ingests, accounts, tiers] =
+    const [
+      people,
+      shelf,
+      uploaded,
+      questions,
+      chats,
+      searches,
+      spend,
+      ingests,
+      accounts,
+      tiers,
+      activity,
+      reading,
+      failures,
+    ] =
       await Promise.all([
         listAccounts(accountSource()),
         q.shelf,
@@ -708,10 +911,21 @@ const rawPgAdminStore: AdminStore = {
         /* Cached for thirty seconds, so on a page being reloaded this is usually
            not a query at all. */
         allTiers(),
+        /* Three more on 2026-10-20 for engagement (plan 261020c), against the
+           paragraph above's warning, and taken knowingly: each is a different
+           table, none can join the others without multiplying rows, and the
+           page is still opened by one person. Twelve queries five deep is a
+           few round trips' waiting on an admin page, not a reader's. */
+        q.activity,
+        q.reading,
+        q.failures,
       ]);
 
     return mergeUsers(people, {
       shelf,
+      activity,
+      reading,
+      failures,
       uploads: uploaded,
       questions,
       chats,

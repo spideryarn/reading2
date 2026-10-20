@@ -215,4 +215,73 @@ describe("the admin user list", () => {
       await db.execute(sql`delete from auth.users where id = ${owner}`);
     }
   }, SLOW);
+
+  /**
+   * **The engagement figures, exactly, from rows we put there** (plan 261020c),
+   * for the reason the case above gives: a `?? 0` passes every type check.
+   *
+   * Active days: three ingest reservations on two UTC days today-ish and one
+   * 40 days ago, so `activeDays` is 2 and `activeDays30` is 1 — the same day
+   * twice must count once, and an old day must count only in the total. And a
+   * reservation dated tomorrow, which a closed window must not call recent
+   * (Sol's plan review, finding 3) but which is still a day: 3 and 1.
+   *
+   * Failed imports: twelve errors and one cancellation, so the total is 12, the
+   * list is capped at ten, and the cancellation counts for nothing.
+   */
+  it("counts active days and failed imports exactly", async () => {
+    const { randomUUID } = await import("node:crypto");
+    const { seedAuthUser } = await import("./helpers/seed-auth-user.js");
+    const { getDb } = await import("../src/db/client.js");
+    const { importRecords, ingestEvents } = await import("../src/db/schema.js");
+    const { eq, sql } = await import("drizzle-orm");
+    const { RECENT_FAILURES_SHOWN } = await import("../src/admin.js");
+
+    const owner = randomUUID();
+    const db = getDb();
+    const DAY = 86_400_000;
+    /* Noon UTC today, so "an hour earlier" is still today whatever the clock says. */
+    const noon = new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00.000Z`).getTime();
+    try {
+      await seedAuthUser(db, { id: owner, email: `admin-engage-${owner}@example.invalid` });
+      for (const at of [noon, noon - 3_600_000, noon - 40 * DAY, noon + DAY]) {
+        await db.insert(ingestEvents).values({ ownerId: owner, reservedAt: new Date(at), releasedAt: new Date(at) });
+      }
+      for (let i = 0; i < 13; i++) {
+        const at = new Date(noon - i * 60_000);
+        await db.insert(importRecords).values({
+          jobId: `admin-engage-${owner}-${i}`,
+          ownerId: owner,
+          slug: `admin-engage-${i}`,
+          status: i === 0 ? "cancelled" : "error",
+          failureKind: i === 1 ? "bug" : null,
+          failedStep: i === 1 ? "fetch" : null,
+          steps: [],
+          createdAt: at,
+          finishedAt: at,
+        });
+      }
+
+      const { pgAdminStore } = await import("../src/store/pg-admin.js");
+      const mine = (await pgAdminStore.listUsersAcrossOwners()).find((u) => u.id === owner);
+
+      expect(mine, `the seeded account ${owner} is not in the admin list`).toBeDefined();
+      expect(mine?.activeDays, "today, 40 days ago, tomorrow").toBe(3);
+      expect(mine?.activeDays30, "today only: tomorrow is not recent").toBe(1);
+      expect(mine?.lastActiveAt).toBe(new Date(noon + DAY).toISOString());
+      expect(mine?.importFailures, "twelve errors; the cancellation is not one").toBe(12);
+      expect(mine?.recentImportFailures).toHaveLength(RECENT_FAILURES_SHOWN);
+      /* Newest error first: i = 1, the one with a kind and a step. */
+      expect(mine?.recentImportFailures[0]).toEqual({
+        at: new Date(noon - 60_000).toISOString(),
+        step: "fetch",
+        kind: "bug",
+      });
+      expect(mine?.readingSeconds).toBe(0);
+    } finally {
+      await db.delete(importRecords).where(eq(importRecords.ownerId, owner));
+      await db.delete(ingestEvents).where(eq(ingestEvents.ownerId, owner));
+      await db.execute(sql`delete from auth.users where id = ${owner}`);
+    }
+  }, SLOW);
 });

@@ -206,3 +206,71 @@ describe("the ingest ledger's half-price split", () => {
     );
   });
 });
+
+/* ------------------------------------------------- engagement, 261020c --- */
+
+describe("active days", () => {
+  it("counts reader requests' model calls, and not job steps, evals or the CLI", () => {
+    /* Sol's plan review, finding 1: a job step runs on the queue's clock and
+       `scripts/stage.ts` records its runs as `job_step` too. */
+    const sql = sqlOf(q.activity);
+    const params = paramsOf(q.activity);
+    expect(sql).toMatch(/from "ai_calls" where "ai_calls"\."scope_kind" = \$\d/);
+    expect(params).toContain("request");
+    expect(params).not.toContain("job_step");
+  });
+
+  it("leaves out reader_arrivals, whose backfill is not anybody's sign-up day", () => {
+    expect(sqlOf(q.activity)).not.toMatch(/reader_arrivals/);
+  });
+
+  it("counts a day once however many sources it appears in, by UTC date", () => {
+    const sql = sqlOf(q.activity);
+    expect(sql).toMatch(/union all/);
+    expect(sql).toMatch(/count\(distinct \("at" at time zone 'UTC'\)::date\)/);
+    /* Every branch's time under the one name the union takes from its first. */
+    expect(sql).toMatch(/select "owner_id", "started_at" as "at" from "ai_calls"/);
+  });
+
+  it("puts the last-30 window between today and 29 days ago, so a future row is not recent", () => {
+    expect(sqlOf(q.activity)).toMatch(
+      /between \(now\(\) at time zone 'UTC'\)::date - 29 and \(now\(\) at time zone 'UTC'\)::date/,
+    );
+  });
+
+  it("asks the shelf predicate of both article-shaped sources", () => {
+    /* Comments and the latest open: once per branch. */
+    const sql = sqlOf(q.activity);
+    expect(sql.match(/"current_revision_id" is not null/g) ?? []).toHaveLength(2);
+  });
+});
+
+describe("reading time", () => {
+  it("sums through the article, on the shelf, by the article's owner", () => {
+    const sql = sqlOf(q.reading);
+    expect(sql).toMatch(/sum\("reading_time"\."seconds"\)/);
+    expect(sql).toMatch(/inner join "articles" on "reading_time"\."article_id" = "articles"\."id"/);
+    expect(sql).toMatch(/"current_revision_id" is not null/);
+    expect(sql).toMatch(/group by "articles"\."owner_id"/);
+  });
+});
+
+describe("failed imports", () => {
+  it("are the error rows only, capped per owner, newest first", () => {
+    const sql = sqlOf(q.failures);
+    const params = paramsOf(q.failures);
+    expect(sql).toMatch(/where "import_records"\."status" = \$\d/);
+    expect(params).toContain("error");
+    expect(params).not.toContain("cancelled");
+    expect(sql).toMatch(/row_number\(\) over \(\s*partition by "owner_id"\s*order by coalesce/);
+    expect(sql).toMatch(/"rank" <= \$\d/);
+  });
+
+  it("select nothing that names what was being read", () => {
+    /* admin.md's one rule: no slug, no URL, no filename, no sentence. */
+    const sql = sqlOf(q.failures);
+    for (const column of ['"slug"', '"url"', '"upload_filename"', '"error"', '"steps"']) {
+      expect(sql, column).not.toContain(column);
+    }
+  });
+});

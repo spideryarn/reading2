@@ -94,6 +94,15 @@ const ALICE: AdminUser = {
   chats: 5,
   searches: 7,
   opens: 99,
+  activeDays: 6,
+  activeDays30: 3,
+  lastActiveAt: "2026-08-27T09:00:00.000Z",
+  readingSeconds: 12_000,
+  importFailures: 2,
+  recentImportFailures: [
+    { at: "2026-08-25T09:00:00.000Z", step: "fetch", kind: "bug" },
+    { at: "2026-08-20T09:00:00.000Z", kind: "retry" },
+  ],
   lastReadAt: "2026-08-27T09:00:00.000Z",
   spendNanos: 1_234_500_000,
   spendCalls: 42,
@@ -128,6 +137,11 @@ const BOB: AdminUser = {
   chats: 0,
   searches: 0,
   opens: 0,
+  activeDays: 0,
+  activeDays30: 0,
+  readingSeconds: 0,
+  importFailures: 0,
+  recentImportFailures: [],
   spendNanos: 0,
   spendCalls: 0,
   spendUnpricedCalls: 0,
@@ -256,7 +270,42 @@ describe("the users page", () => {
     // Alice's numbers, all of them, in the row rather than anywhere on the page.
     const alice = table.find((r) => r[0]?.includes("alice@example.test")) ?? [];
     expect(alice.join("|")).toContain("12");
-    expect(alice.join("|")).toContain("40");
+    // The engagement three (plan 261020c): active days, reading time, failures.
+    expect(alice.join("|")).toContain("6 · 3 in 30d");
+    expect(alice.join("|")).toContain("3h 20m");
+  });
+
+  /* Greg, 2026-10-19: "archived, uploads, searches, chats, comments … default
+     hidden". Hidden, not gone: the Columns menu is drawn and says how many. */
+  it("starts with the five rarely-wanted counts hidden, behind a Columns menu", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    const headers = [...el.querySelectorAll("thead th")].map((th) => th.textContent ?? "");
+    for (const gone of ["Archived", "Uploads", "Comments", "Chats", "Searches"]) {
+      expect(headers.some((h) => h.includes(gone)), `${gone} is shown`).toBe(false);
+    }
+    for (const kept of ["Active days", "Reading", "Articles", "Failed imports", "Opens"]) {
+      expect(headers.some((h) => h.includes(kept)), `${kept} is missing`).toBe(true);
+    }
+    const menu = [...el.querySelectorAll("button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith("Columns"),
+    );
+    expect(menu?.getAttribute("aria-label")).toBe("Columns, 5 hidden — choose which the table shows");
+  });
+
+  /* The card behind the count: when, which step, what kind — and nothing that
+     names what they were reading, because nothing of the kind is on the wire. */
+  it("lists each failed import's time, step and kind on the count", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    const tips = [...el.querySelectorAll<HTMLElement>("[data-tip]")].map((t) => t.dataset.tip ?? "");
+    const card = tips.find((t) => t.startsWith("2 failed import attempts"));
+    expect(card, "no failed-imports card").toBeDefined();
+    expect(card).toContain("at fetch · defect here, ours to fix");
+    expect(card).toContain("outside a step · transient, a retry may help");
+    expect(tips.some((t) => t.startsWith("No failed imports")), "Bob's zero has no card").toBe(true);
   });
 
   /**

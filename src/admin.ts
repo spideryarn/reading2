@@ -288,6 +288,40 @@ export interface AdminUser {
   /** ISO. The most recent open across all their articles, if there is one. */
   lastReadAt?: string;
 
+  /* -------------------------------------------------------- engagement ---
+   *
+   * Greg, 2026-10-19 (spya-shf45w): *"the best one would be number of unique
+   * days on which they have used the app"*. Plan
+   * docs/plans/261020c-admin-users-engagement-active-days-reading-time-failed-imports-fewer-default-columns.md.
+   *
+   * **Built from rows that already exist, so it undercounts**: nothing records
+   * the days somebody only read, so a day spent reading and doing nothing else
+   * is missed unless it is the most recent one. The cell says so;
+   * `activitySources` in src/store/pg-admin.ts lists what does count.
+   */
+
+  /** Distinct UTC days with recorded activity, ever. */
+  activeDays: number;
+  /** How many of `activeDays` fall in the last 30 UTC days, today included. */
+  activeDays30: number;
+  /** ISO. The latest recorded activity of any kind, if there is any. */
+  lastActiveAt?: string;
+  /** Seconds a passage of their own articles was on screen while they read, summed. */
+  readingSeconds: number;
+  /**
+   * Import **attempts** of theirs that ended in an error, among the records
+   * still held: a Retry is a new job and so a second record, and deleting the
+   * article deletes its records. The records start 2026-10-08.
+   */
+  importFailures: number;
+  /**
+   * The most recent of those, newest first, at most `RECENT_FAILURES_SHOWN`.
+   * **When, which step, and how serious — never the address, the slug or the
+   * error sentence**, which names what they were reading (admin.md § What it
+   * deliberately does not show).
+   */
+  recentImportFailures: AdminImportFailure[];
+
   /* ------------------------------------------------------------- spend ---
    *
    * **What this account's reading cost us in model calls**, over a period the
@@ -407,6 +441,57 @@ export interface AdminUser {
    * 2026-09-03.
    */
   ingestWindow: "period" | "lifetime" | "stale";
+}
+
+/** How many failures `AdminUser.recentImportFailures` carries at most. */
+export const RECENT_FAILURES_SHOWN = 10;
+
+/**
+ * **What kind of failure it was**, read off its `FailureKind` (src/messages.ts)
+ * — the classification the import already made, not a second one.
+ *
+ * **A kind, not a severity.** Greg asked *"how severe"*, and the honest answer
+ * is the nearest thing stored: whose fault it was and whether trying again can
+ * help. `FailureKind` is about the next step, not about impact, so calling
+ * `bug` "high" would claim a measurement nothing made — Sol's plan review,
+ * finding 4. `ours` marks the two kinds that are ours to fix, which is what the
+ * cell's colour says. A kind this does not know is drawn raw, so a new one
+ * shows itself (the rule `planStatus` is drawn raw for).
+ */
+export function failureKindLabel(kind: string | undefined): { label: string; ours: boolean } {
+  switch (kind) {
+    case "bug":
+      return { label: "defect here, ours to fix", ours: true };
+    case "ours":
+      return { label: "our account or configuration", ours: true };
+    case "blocked":
+      return { label: "a service refused the request", ours: false };
+    case "retry":
+      return { label: "transient, a retry may help", ours: false };
+    case undefined:
+      return { label: "unclassified", ours: false };
+    default:
+      return { label: `kind "${kind}"`, ours: false };
+  }
+}
+
+/** Seconds as `3h 20m`, `12m` or `<1m`; `—` for none at all. */
+export function formatReadingTime(seconds: number): string {
+  if (seconds <= 0) return "—";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes === 0) return "<1m";
+  const hours = Math.floor(minutes / 60);
+  return hours === 0 ? `${minutes}m` : `${hours}h ${minutes % 60}m`;
+}
+
+/** One failed import, as /admin/users may show it. */
+export interface AdminImportFailure {
+  /** ISO. When it ended. */
+  at: string;
+  /** The first step whose status was `error`, e.g. `fetch`. Absent when the job failed outside a step. */
+  step?: string;
+  /** `FailureKind` (src/messages.ts) as stored; absent for a row that recorded none. */
+  kind?: string;
 }
 
 /**

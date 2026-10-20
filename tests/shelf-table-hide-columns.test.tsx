@@ -570,6 +570,16 @@ describe("right-clicking a header", () => {
 /* --------------------------------------------------------- remembered ---- */
 
 describe("remembered in this browser", () => {
+  /* **The literal strings, not the constants.** Every other case here seeds
+     and reads storage through the imported names, so changing both values
+     would pass the whole file while every reader's saved choice quietly
+     stopped applying. The hook took its keys as a parameter on 2026-10-20
+     (/admin/users has its own, plan 261020c); Sol's finding 8 there. */
+  it("keeps the shelf's storage keys exactly as they were", () => {
+    expect(HIDDEN_COLUMNS_KEY).toBe("spya.shelf.hiddenColumns");
+    expect(SHOWN_COLUMNS_KEY).toBe("spya.shelf.shownColumns");
+  });
+
   it("stays hidden across an unmount and a remount", async () => {
     paint();
     await hideFromMenu("Length");
@@ -747,7 +757,12 @@ describe("hiding the column the shelf is sorted by (Sol P-6)", () => {
 
 /* ------------------------------------------------------------- /admin ---- */
 
-describe("/admin's table, which did not ask for any of this", () => {
+/* **A table that passes no visibility state**, which is what /admin/users
+   was when this was written. It has its own Columns menu since 2026-10-20
+   (plan 261020c, through `useHiddenColumns`, and tests/admin-page.test.tsx
+   holds that); this harness still passes no state, so it still checks what
+   DataTable does for a page that did not ask: every column, and no menu. */
+describe("a table that passes no visibility state (the admin columns, without it)", () => {
   function user(n: number, over: Partial<AdminUser> = {}): AdminUser {
     return {
       id: `admin-hide-${n}`,
@@ -761,6 +776,11 @@ describe("/admin's table, which did not ask for any of this", () => {
       chats: 0,
       searches: 0,
       opens: n * 3,
+      activeDays: 0,
+      activeDays30: 0,
+      readingSeconds: 0,
+      importFailures: 0,
+      recentImportFailures: [],
       spendNanos: 0,
       spendCalls: 0,
       spendUnpricedCalls: 0,
@@ -808,7 +828,7 @@ describe("/admin's table, which did not ask for any of this", () => {
       [...host.querySelectorAll("button")].some((b) =>
         (b.getAttribute("aria-label") ?? "").startsWith("Columns"),
       ),
-      "/admin grew a Columns menu",
+      "a table with no visibility state grew a Columns menu",
     ).toBe(false);
 
     for (const cell of host.querySelectorAll("thead th")) {
