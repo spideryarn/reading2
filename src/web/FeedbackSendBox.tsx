@@ -158,7 +158,8 @@ export function FeedbackSendBox({
         )}
         <button
           type="button"
-          className="fb-copy fb-reply-send"
+          /* Green: it sends what you wrote (button-tone.css, plan 261020f). */
+          className="fb-copy fb-reply-send tone-positive"
           disabled={sending || held || dictate.busy || over || value.trim() === ""}
           /* Working, so drawn at full strength rather than dimmed (plan 261019c). */
           data-working={sending ? "" : undefined}

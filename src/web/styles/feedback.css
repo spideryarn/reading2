@@ -389,27 +389,11 @@ a.fb-earlier-page:focus-visible {
   align-items: center;
   gap: 0.5rem;
 }
-.fb-reply-send:disabled { opacity: 0.45; cursor: default; }
-/* Sending: disabled, but working, so not dimmed — as `.fb-send` below. */
-.fb-reply-send[data-working]:disabled { opacity: 1; cursor: progress; }
-/* **Green to send, red to put off**, in a Needs-a-decision thread only — Greg,
-   2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
-   shortcut, as colour-scales.md asks of a red/green pair. The addendum box
-   shares the send box and stays neutral; so does Bring back, which undoes a
-   deferral and should not look like one. Plan 261011h. The thread wrapper plus
-   the shared-shape class make each rule outweigh the later `.fb-copy` rest,
-   hover and `aria-disabled` rules; the last is not used here today, but must
-   not silently neutralise the colour if these controls adopt it.
-   **No wash behind**: a tint of the same colour takes the light theme under
-   the 4.5:1 the two tokens are measured at (GPT Sol, plan review 1). */
-.fb-reply-thread .fb-copy.fb-reply-send,
-.fb-reply-thread .fb-copy.fb-reply-send:hover,
-.fb-reply-thread .fb-copy.fb-defer,
-.fb-reply-thread .fb-copy.fb-defer:hover { border-color: currentColor; }
-.fb-reply-thread .fb-copy.fb-reply-send,
-.fb-reply-thread .fb-copy.fb-reply-send:hover { color: var(--positive); }
-.fb-reply-thread .fb-copy.fb-defer,
-.fb-reply-thread .fb-copy.fb-defer:hover { color: var(--danger); }
+/* **Green to send, red to put off or back out**: `.tone-positive` and
+   `.tone-negative`, styles/button-tone.css, which also dims either when it
+   cannot be pressed. Send reply and Send addendum are green by construction
+   (FeedbackSendBox.tsx); Defer for now and Cancel red; Bring back neutral,
+   because it undoes a deferral (261011h, 261020f). */
 /* **As tall as its words, never a scroller of its own** (useFitTextarea.ts):
    the panel is the one scroller, which is what lets iOS keep the caret in
    view with the keyboard up (spya-za2tse). */
@@ -766,21 +750,13 @@ details.fb-threads-group > summary { cursor: pointer; }
   font-size: 0.8rem;
   cursor: pointer;
 }
-/* **Send is green, Cancel and Close grey** (spya-bvzavw, plan 261017c): the
-   bottom-right sends on Write but on Earlier was Close, which shuts. Green is
-   `--positive`, as *Send reply* is in a thread (261011h), because both send
-   what you wrote to us; the words still say which is which. The border takes
-   the green too and keeps it on hover, as Send reply's does. */
-.fb-cancel { color: var(--ink-soft); }
-.fb-send { color: var(--positive); border-color: currentColor; }
-.fb-send:disabled { opacity: 0.45; cursor: default; }
-/* **Working is not "cannot be pressed".** Sending, Adding the picture: the
-   button is disabled, but its spinner and word are the only sign anything is
-   happening, and those states were coded at 0.45 when Greg saw neither on an
-   iPad (spya-an90k0) — where a disabled button at `opacity < 1` is also our
-   leading suspect for one that paints nothing (plan 260912c). Plan 261019c. */
-.fb-send[data-working]:disabled { opacity: 1; cursor: progress; }
-.fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
+/* **Send is green; Cancel and Close are red** — styles/button-tone.css, which
+   paints them and dims an unpressable one. Send went green first (spya-bvzavw,
+   plan 261017c), because the bottom-right sent on Write but shut on Earlier;
+   Cancel and Close stayed grey until Greg asked for them red too (spya-as0et6,
+   plan 261020f). **Working is not "cannot be pressed"**: Sending and Adding
+   the picture carry `data-working` and stay at full strength (spya-an90k0,
+   plan 261019c). */
 /* The thread pager again, in Earlier's footer beside Close, kept to the right. */
 .fb-foot-pager { justify-content: flex-end; }
 
