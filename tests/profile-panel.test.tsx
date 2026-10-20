@@ -437,6 +437,9 @@ describe("dismissing it with words unsaved", () => {
 
     const close = button(/close without saving/i);
     if (!close) throw new Error("no explicit way out after a refused save");
+    /* Plan 261020z: the explicit back-out is red. This branch is the only one
+       that renders it, so Done's assertion below cannot cover it. */
+    expect(close.classList.contains("tone-negative")).toBe(true);
     await act(async () => close.click());
     expect(panel()).toBeNull();
     expect(left, "the explicit escape retried through the unmount flush").toEqual([]);

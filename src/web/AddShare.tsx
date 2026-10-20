@@ -123,8 +123,8 @@ export function AddShare({
 
       {offered === "open" && (
         <Tooltip placement="bottom" content={<TipNote>{SHARING_OPEN_TIP}</TipNote>}>
-          {/* `outline`: this opens the question. The primary is on *Share it*,
-              which is the press that publishes. */}
+          {/* `outline`: this opens the question. The green *Share it* inside
+              the confirmation is the press that publishes. */}
           <Button
             type="button"
             variant="outline"

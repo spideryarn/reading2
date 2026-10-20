@@ -271,8 +271,8 @@ export function PrivateLink({
           <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{PRIVATE_LINK_WHAT}</p>
           {inventory ? (
             <Tooltip placement="bottom" content={<TipNote>{PRIVATE_LINK_OPEN_TIP}</TipNote>}>
-              {/* `outline`: this opens the question. The primary is on
-                  *Create the link*, which is the press that makes one. */}
+              {/* `outline`: this opens the question. The green *Create the
+                  link* inside the confirmation is the press that makes one. */}
               <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(true)}>
                 <Link2 size={14} />
                 Create a link

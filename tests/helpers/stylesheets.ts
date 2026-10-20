@@ -14,7 +14,8 @@
  *
  * The rule for a test author: **ask for the set you mean, never for a file.**
  * `readerCss()` is what "the hand-written reading-view rules" means today and
- * will go on meaning after the next split.
+ * will go on meaning after the next split. It returns the resolved contents,
+ * not the import statements whose targets the walker has already inserted.
  *
  * The order matters and is preserved — but only because the graph is kept
  * **flat**, and `walk()` below now enforces that rather than assuming it. See
@@ -190,8 +191,8 @@ function walk(start: string): Sheet[] {
 }
 
 /**
- * **Every sheet the client loads**, in cascade order: `tailwind.css`, the
- * reading-view sheets beneath it, and the two under `styles/`.
+ * **Every sheet the client loads**, in cascade order: the two under `styles/`,
+ * the reading-view sheets, the tone sheet and `tailwind.css`.
  *
  * For a test that asks a question about *all* the CSS — that no sheet reads a
  * custom property nothing defines, say. `tests/css-tokens.test.ts` is the
@@ -219,7 +220,14 @@ export function readerSheets(): Sheet[] {
 /** `readerSheets()` concatenated, in cascade order. */
 export function readerCss(): string {
   return readerSheets()
-    .map((s) => s.css)
+    /* `walk()` has already resolved these edges. Leaving the written imports
+       in the concatenation is not merely redundant: an imports-only sheet
+       immediately before a rule makes a naive `selector { … }` scanner read
+       all of its `@import` text as part of that selector. Several tests use
+       exactly that deliberately small scanner. The built CSS contains the
+       imported rules here, not the import statements, so remove them once in
+       the shared helper instead of teaching every consumer the same repair. */
+    .map((s) => s.css.replace(/^\s*@import\s+[^;]+;\s*$/gm, ""))
     .join("\n");
 }
 

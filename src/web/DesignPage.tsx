@@ -1647,13 +1647,13 @@ function ControlsAcrossModes() {
             the pair that ends a form: the button that sends what you wrote is{" "}
             <code className="design-token">--positive</code> green, the one that leaves or puts off
             without sending is <code className="design-token">--danger</code> red — text and border
-            only, no wash even on hover, dimmed when it cannot be pressed unless it is working. One
-            class on any button: a shadcn <code>Button</code> (outline or ghost, never the orange
-            fill), an admin pill or a hand-rolled one, because the sheet is in a layer above the
-            utilities. Red is a back-out cue, not a promise about draft retention: Write's Cancel
-            keeps the Write draft; the addendum's Cancel discards its own. Not for a delete (the
-            destructive fill), navigation, undoing, or a button that starts a model call. The words
-            carry the meaning; the colour is a shortcut.
+            only, with low-contrast hover washes suppressed, and dimmed when it cannot be pressed
+            unless it is working. One class on any button: a shadcn <code>Button</code> (outline or
+            ghost, never the orange fill), an admin pill or a hand-rolled one, because the sheet is
+            in a layer above the utilities. Red is a back-out cue, not a promise about draft
+            retention: Write's Cancel keeps the Write draft; the addendum's Cancel discards its
+            own. Not for a delete (the destructive fill), navigation, undoing, or a button that
+            starts a model call. The words carry the meaning; the colour is a shortcut.
           </>
         }
         finger={<>the family's own size; the colour adds nothing to the target.</>}

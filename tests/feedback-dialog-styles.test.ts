@@ -23,11 +23,7 @@ import {
 
 /* The whole reader cascade, not the file that owns these rules: a later sheet
    touching the same hooks is part of the answer too. */
-const CSS = readerCssNoComments()
-  /* Imports out: styles.css (all imports, no braces) now comes before
-     button-tone.css, and the rule scanner below would read its text as part of
-     the first tone selector. */
-  .replace(/^@import[^;]*;/gm, "");
+const CSS = readerCssNoComments();
 
 interface FoundDeclaration {
   at: number;
@@ -107,15 +103,29 @@ describe("green to send, red to back out: button-tone.css", () => {
     [".tone-negative", "var(--danger)"],
   ] as const;
 
-  it("draws the text and the border in the tone, with no wash behind, hover included", () => {
+  it("draws the text and the border in the tone without replacing a family's resting background", () => {
     for (const [tone, colour] of TONES) {
       expectUnconditional(tone, "color", colour);
       expectUnconditional(tone, "border-color", "currentColor");
-      /* A tint behind takes Light under the 4.5:1 the tokens are held to, and
-         so does a family's hover wash under red (Sol, 261020z). */
+      /* A tint behind takes Light under the 4.5:1 the tokens are held to. */
       expect(declared(CSS, tone, "background"), tone).toEqual([]);
       expect(declared(CSS, tone, "background-color"), tone).toEqual([]);
-      expectUnconditional(`${tone}:hover`, "background-color", "transparent");
+      expect(declared(CSS, `${tone}:hover`, "background-color"), tone).toEqual([]);
+    }
+    /* Annotate Save owns a real resting face rather than a hover wash. A
+       generic toned :hover rule used to remove it only under the pointer. */
+    expect(declared(CSS, ".annotate-save", "background")).toEqual(["var(--page)"]);
+  });
+
+  it("removes the low-contrast hover wash from the two families that have one", () => {
+    for (const [tone] of TONES) {
+      for (const selector of [
+        `[data-slot="button"][data-variant="outline"]${tone}:hover`,
+        `[data-slot="button"][data-variant="ghost"]${tone}:hover`,
+        `.chat-icon${tone}:hover`,
+      ]) {
+        expectUnconditional(selector, "background-color", "transparent");
+      }
     }
   });
 
@@ -149,8 +159,12 @@ describe("green to send, red to back out: button-tone.css", () => {
       ".tone-positive | border-color: currentColor",
       ".tone-negative | color: var(--danger)",
       ".tone-negative | border-color: currentColor",
-      ".tone-positive:hover | background-color: transparent",
-      ".tone-negative:hover | background-color: transparent",
+      '[data-slot="button"][data-variant="outline"].tone-positive:hover | background-color: transparent',
+      '[data-slot="button"][data-variant="outline"].tone-negative:hover | background-color: transparent',
+      '[data-slot="button"][data-variant="ghost"].tone-positive:hover | background-color: transparent',
+      '[data-slot="button"][data-variant="ghost"].tone-negative:hover | background-color: transparent',
+      ".chat-icon.tone-positive:hover | background-color: transparent",
+      ".chat-icon.tone-negative:hover | background-color: transparent",
     ]);
   });
 

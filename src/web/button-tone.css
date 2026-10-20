@@ -17,11 +17,14 @@
    red/green pair.
 
    **Colour only**: the text and the border take it, at rest and on hover.
-   Shape, size and padding stay the family's own. **No wash behind, hover
-   included**: a tint of the same hue takes the light theme under the 4.5:1
-   that tests/appearance-palette.test.ts holds both tokens to (GPT Sol,
-   261011h), and a family's hover wash (shadcn's `bg-highlight/10`, Chat's
-   `--surface-raised`) under red drops it below 4.5:1 too (Sol, 261020z).
+   Shape, size, padding and the family's resting background stay its own. A
+   tint of the same hue takes the light theme under the 4.5:1 that
+   tests/appearance-palette.test.ts holds both tokens to (GPT Sol, 261011h),
+   and the hover washes on shadcn's outline/ghost buttons and Chat's icon
+   buttons take red under 4.5:1 too, so those two families suppress their wash
+   while toned (Sol, 261020z). Do not suppress every family's hover
+   generically: Annotate's Save rests on `--page`, and turning only its hover
+   transparent makes the button's face flash away under the pointer.
 
    **Its own layer, `tone`, after `utilities`** — imported from tailwind.css,
    not styles.css, and so it lives beside that file rather than in styles/. In
@@ -39,8 +42,12 @@
   color: var(--danger);
   border-color: currentColor;
 }
-.tone-positive:hover,
-.tone-negative:hover {
+[data-slot="button"][data-variant="outline"].tone-positive:hover,
+[data-slot="button"][data-variant="outline"].tone-negative:hover,
+[data-slot="button"][data-variant="ghost"].tone-positive:hover,
+[data-slot="button"][data-variant="ghost"].tone-negative:hover,
+.chat-icon.tone-positive:hover,
+.chat-icon.tone-negative:hover {
   background-color: transparent;
 }
 /* **Coloured and unpressable reads as pressable**, so it dims — unless it is

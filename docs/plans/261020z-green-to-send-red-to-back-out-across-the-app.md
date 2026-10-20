@@ -34,11 +34,12 @@ dialog's pairs and built the shared piece, `.tone-positive` / `.tone-negative` i
    `styles-entry-is-imports-only` holds `tailwind.css` to exactly its two layered local imports
    and the layer statement's order.
 
-   The specificity arithmetic in `button-tone.css` (the `:hover` and
-   `[aria-disabled="true"]:hover` repeats) goes: a later layer wins in every state with one plain
-   selector. **Hover keeps no wash** (`background-color: transparent`): shadcn's outline and ghost
-   hover to `bg-highlight/10`, and red over that on a dark raised surface falls under 4.5:1
-   (Sol, plan review 2).
+   A later layer wins in every state with one plain tone selector. **The families that add a hover
+   wash keep no wash**: shadcn's outline and ghost hover to `bg-highlight/10`, and Chat's icons to
+   `--surface-raised`; red over either on a dark raised surface falls under 4.5:1 (Sol, plan review
+   2), so toned instances of those families set `background-color: transparent` on hover. The rule
+   is deliberately scoped: Annotate's Save rests on `--page`, and a generic transparent hover made
+   that face disappear only while the pointer was over it (code review).
 3. **A send button that is a solid orange fill becomes `variant="outline"`** before it takes
    `tone-positive`: green text on an orange fill is unreadable, and the tone deliberately sets no
    background (261011h: a wash takes light theme under 4.5:1). The question said so: *"The send
@@ -84,7 +85,8 @@ Greg: *"use your judgment, don't over-use it"*. The rule is for **the pair that 
 - **Ask AI** in `AnnotateDialog` and **Regenerate** in `ProfilePanel`: each starts a model call, a
   family of its own (controls.md, "starts a model call"); the pair's send is Save / Done beside them.
 - **Undo, Restore, Bring back** (`AddAuthorGift`, `AdminAuthorGifts`, Feedback) — undoing.
-- **`AdminAuthorGifts`' Discard** — a row action beside Edit and Look up again, with Restore after.
+- **`AdminAuthorGifts`' Discard, and the row's Send** — row actions beside Edit and Look up again.
+  The row's Send only opens the confirmation, whose *Send to …* is the green one.
 - **`DictationStrip`'s Save / Discard** — salvage of a recording that failed to send, not a form.
 - **Every job's stop cross** (`JobProgress`, `LiveButton`'s Cancel while connecting), every dismiss
   cross on a hint or toast, and every dialog's header `.close-x` — stopping, dismissing, closing.

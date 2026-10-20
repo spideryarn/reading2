@@ -98,8 +98,8 @@ export function AddShareLink({
 
       {canAsk && (
         <Tooltip placement="bottom" content={<TipNote>{PRIVATE_LINK_OPEN_TIP}</TipNote>}>
-          {/* `outline`: this opens the question. The primary is on *Create
-              the link*, which is the press that makes one. */}
+          {/* `outline`: this opens the question. The green *Create the link*
+              inside the confirmation is the press that makes one. */}
           <Button type="button" variant="outline" size="sm" className="tw:mt-2" onClick={() => link.open()}>
             <Link2 size={14} />
             {LINK_AT_ADD_LABEL}
