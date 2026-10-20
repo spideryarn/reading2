@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "19 October 2026";
+const LAST_UPDATED = "20 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -222,9 +222,23 @@ export function PrivacyPage() {
             <strong className="tw:text-foreground">How long you have spent on each part of your
             articles</strong> — a running total of the seconds each
             passage has been on your screen. Some of Spideryarn’s features use it — to show you
-            where you have been, for example. We keep the totals, not a history of your reading (our
-            ordinary server logs do show when an update arrived). It is not shown to anybody reading
-            an article you have shared, and it goes when the article does.
+            where you have been, for example. We keep the totals, not a history of which passages
+            you read when (our ordinary server logs do show when an update arrived). It is not shown
+            to anybody reading an article you have shared, and it goes when the article does.
+          </li>
+          {/* **Since 2026-10-20**: `article_open_times`, so that Active days on
+              /admin/users counts a day spent only reading — Greg's answer to
+              question q-xcc7xq. One row per account per UTC half-hour, and no
+              article column. The ordinary request log still names the slug,
+              so the prose distinguishes that short-lived log from this durable
+              record. It cascades with the account, not the article.
+              docs/project/privacy.md § Article open times; plan 261020y. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">When you open your articles</strong> — the
+            time, at most once each half hour. That record does not say which article; the ordinary
+            server log for the request does, and is kept about a day. We keep the record so that we
+            can see how often Spideryarn is used. It is not shown to anybody reading an article you
+            have shared, and it goes when your account does.
           </li>
           {/* **Since 2026-10-08**: `import_records`, kept so we can find out
               afterwards why an import failed, and outlasting the job list on

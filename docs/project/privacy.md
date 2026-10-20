@@ -16,6 +16,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
 - [§ Import records](#import-records) — the record of each import, and when it goes
 - [§ Reading time](#reading-time) — the bullet and what it must keep true
+- [§ Article open times](#article-open-times) — the durable record and the short-lived request log
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
 - [§ A sentence in the command bar](#a-sentence-in-the-command-bar) — what the pick models see
@@ -505,6 +506,35 @@ happens in the browser or on our server. Reconsider the bullet before storing an
 totals, showing them or a conclusion drawn from them to a shared link's reader, or sending either
 outside Spideryarn — to a model, for example. The plan is
 [261001a](../plans/261001a-privacy-reading-time-wording.md).
+
+## Article open times
+
+**Added 2026-10-20**, with plan
+[261020y](../plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md): `article_open_times`,
+one row per account per UTC half-hour in which it opened one of its own articles, so that Active
+days on `/admin/users` counts a day spent only reading
+([admin.md § Engagement](admin.md#engagement-active-days-reading-time-failed-imports)).
+
+> B yes. e.g. store which days (and times?) they've opened an article
+>
+> — Greg, 2026-10-20, answering [q-xcc7xq](../user-feedback/questions/q-xcc7xq.md)
+
+What the bullet says, and what keeps each part true:
+
+- **"The time, at most once each half hour"** — the primary key is `(owner_id, slot)`, and
+  `recordOpen` (src/store/pg-shelf.ts) inserts `on conflict do nothing`.
+- **"That record does not say which article"** — the table has no article column. The ordinary
+  request log is different: its path names the article slug and the page says so, with the same
+  about-a-day retention disclosed under Vercel. Adding article identity to the durable record needs
+  this bullet rewritten first.
+- **"Not shown to anybody reading an article you have shared"** — only the owner's open is recorded
+  (the route is owner-scoped; a visitor's browser sends no POST), and only `activitySources` in
+  src/store/pg-admin.ts reads it, as a count of days.
+- **"It goes when your account does"** — `on delete cascade` to `auth.users`. Not with the article,
+  on purpose: the open happened, and Active days should not shrink when an article is deleted.
+
+The reading-time bullet's *"not a history of your reading"* became *"not a history of which passages
+you read when"* the same day, so the two bullets do not read as contradicting each other.
 
 ## Shelf topics
 

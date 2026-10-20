@@ -733,16 +733,19 @@ their own articles.
 >
 > — Greg, 2026-10-19 (`spya-shf45w`, `spya-g8bw5j`)
 
-Three columns since 2026-10-20, all read from rows that already existed, so nothing new is stored
-about a reader
+Three columns since 2026-10-20
 ([261020c](../plans/261020c-admin-users-engagement-active-days-reading-time-failed-imports-fewer-default-columns.md)):
 
-- **Active days**: distinct UTC days with recorded activity, and how many fell in the last 30.
-  **It undercounts, and the cell says so.** Nothing records a day spent only reading, so such a day
-  is counted only while it is some article's latest open. What does count is listed on
-  `activitySources` in [`pg-admin.ts`](../../src/store/pg-admin.ts), and the plan says why
-  `job_step` calls and `reader_arrivals` are left out. Making it exact needs a per-day record, and
-  that is a question to Greg rather than a column.
+- **Active days**: distinct UTC days with recorded activity, and how many fell in the last 30. What
+  counts is listed on `activitySources` in [`pg-admin.ts`](../../src/store/pg-admin.ts), and the
+  plan says why `job_step` calls and `reader_arrivals` are left out. **Since 2026-10-20 it includes
+  each article open**, from `article_open_times` — the time, at most once per account per UTC
+  half-hour, not which article
+  ([261020y](../plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md), Greg's answer
+  to [q-xcc7xq](../user-feedback/questions/q-xcc7xq.md); the
+  [privacy page](privacy.md#article-open-times) says we keep it). It was not backfilled, so **days
+  before then still undercount**: a day spent only reading is counted only while it is some
+  article's latest open, and the cell says so.
 - **Reading**: the [reading-time](reading-time.md) totals summed over their own articles.
 - **Failed imports**: failed `import_records` *attempts*, with the newest ten on the card. Each
   shows when, at which step, and what kind of failure (a `FailureKind`, which is not a severity).

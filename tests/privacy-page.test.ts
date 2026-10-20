@@ -208,7 +208,18 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "19 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "20 October 2026"');
+  });
+
+  it("distinguishes the article-free open record from the request log", () => {
+    /* Plan 261020y: `article_open_times`, one row per account per UTC
+       half-hour, with no article column, cascading with the account. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "the time, at most once each half hour. That record does not say which article; the ordinary server log for the request does, and is kept about a day. We keep the record so that we can see how often Spideryarn is used. It is not shown to anybody reading an article you have shared, and it goes when your account does.",
+    );
+    /* And the reading-time bullet no longer reads as denying that history. */
+    expect(prose).toContain("We keep the totals, not a history of which passages you read when");
   });
 
   it("says what the notes on cited works send, and that an upload's are looked up by identifier only", () => {
