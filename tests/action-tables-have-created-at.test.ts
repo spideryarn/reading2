@@ -35,6 +35,7 @@ type Allowance = { column: string } | { exempt: string };
  * row is not something a person or a model did at a moment.
  */
 const WITHOUT_CREATED_AT: Record<string, Allowance> = {
+  article_open_times: { column: "opened_at" },
   article_visibility_changes: { column: "at" },
   /* A fetch cache rather than an action, but it does say when it fetched. */
   bibliographic_records: { column: "fetched_at" },

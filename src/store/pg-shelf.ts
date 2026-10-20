@@ -23,6 +23,7 @@ import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql,
 
 import { getDb } from "../db/client.js";
 import {
+  articleOpenTimes,
   articles,
   articleRevisions,
   importRecords,
@@ -54,6 +55,21 @@ import { pgArticleReader } from "./pg.js";
  * looks like an empty library.
  */
 const CONFIG = "english";
+
+/** How long one row of `article_open_times` stands for. It must divide a day. */
+const OPEN_SLOT = "30 minutes";
+
+/**
+ * **The UTC half-hour a moment falls in** — the key that throttles
+ * `article_open_times` to one row per account per slot. `date_bin` from a UTC
+ * midnight, so with a stride that divides a day no slot crosses a UTC midnight,
+ * and a 23:50 open cannot swallow a 00:10 one and lose a day from Active days
+ * (GPT Sol's plan review of 261020y, finding 1). Exported for the test that
+ * pins exactly that.
+ */
+export function openSlot(at: SQL): SQL<Date> {
+  return sql<Date>`date_bin(${sql.raw(`'${OPEN_SLOT}'`)}::interval, ${at}, '2000-01-01 00:00:00+00'::timestamptz)`;
+}
 
 /**
  * **The article this delete is about to destroy, read and locked** — taking its
@@ -419,12 +435,26 @@ const rawPgShelfStore: ShelfStore = {
        failure this repo keeps finding (docs/reusable/silent-success.md). The
        filesystem side gets the same guarantee a different way, by serialising
        its read-modify-write in one process. */
-    const [row] = await db()
-      .update(articles)
-      .set({ opens: sql`${articles.opens} + 1`, lastOpenedAt: sql`now()` })
-      .where(ownedSlug(slug))
-      .returning({ slug: articles.slug });
-    if (!row) throw notFound(slug);
+    const ownerId = currentOwnerId();
+    await getDb().transaction(async (tx) => {
+      const [row] = await tx
+        .update(articles)
+        .set({ opens: sql`${articles.opens} + 1`, lastOpenedAt: sql`now()` })
+        .where(ownedSlug(slug, ownerId))
+        .returning({ slug: articles.slug });
+      if (!row) throw notFound(slug);
+      /* **And when, for Active days on /admin/users** (src/db/schema.ts §
+         `articleOpenTimes`). After the update, so an open of somebody else's
+         slug has already 404'd. The primary key is the throttle: a second open
+         in the same half-hour, or a second tab at the same moment, conflicts
+         and writes nothing — no read first, so nothing to race. The same
+         transaction's `now()`, so `opened_at` is the `last_opened_at` the
+         slot's first open wrote. */
+      await tx
+        .insert(articleOpenTimes)
+        .values({ ownerId, slot: openSlot(sql`now()`), openedAt: sql`now()` })
+        .onConflictDoNothing({ target: [articleOpenTimes.ownerId, articleOpenTimes.slot] });
+    }, READ_COMMITTED);
   },
 
   async articlesOpenedBefore(slug: string): Promise<number> {

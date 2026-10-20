@@ -2,7 +2,7 @@
 reports: spya-shf45w
 addenda: spya-g8bw5j
 ending: shipped
-comment: On dev: Active days, Reading time and Failed imports columns, and five counts hidden behind Columns. Active days misses days spent only reading; whether to record those is a question for you.
+comment: On dev: Active days, Reading time and Failed imports columns, and five counts hidden behind Columns. Since your answer, Active days also counts each article opened, from now on.
 ---
 # /admin/users: active days, reading time, failed imports, and fewer columns by default
 
@@ -35,10 +35,12 @@ with both GPT Sol reviews beside it. No new data about readers is stored.
   (reading time) are all covered by the three columns above. A whole-userbase chart such as
   retention was not added.
 
-**One part is awaiting Greg**: question [q-xcc7xq](questions/q-xcc7xq.md). Active days misses a day
-spent only reading, which is his own example, because nothing stores the dates of reading. Making it
-exact means storing the date of each day a reader used the app, plus a line on `/privacy`. That half
-is queued as `qi-ajznwhmm`, needs-greg.
+**The part put to Greg is answered**: question [q-xcc7xq](questions/q-xcc7xq.md). Active days
+missed a day spent only reading, his own example. He chose to record it (*"B yes. e.g. store which
+days (and times?) they've opened an article"*), so since plan
+[261020y](../plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md) the time of each
+article open is kept, at most once per half hour and not which article, with a line on `/privacy`.
+Days before it shipped still undercount, and the cell says so. Queue item `qi-ajznwhmm`.
 
 Deferred and named in the plan: failed model calls while a reader waited, and Sentry issues per
 account.
