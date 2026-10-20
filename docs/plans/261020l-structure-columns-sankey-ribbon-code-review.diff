@@ -1,0 +1,574 @@
+diff --git a/docs/project/structure.md b/docs/project/structure.md
+index 4451ffe84..71da6ffa5 100644
+--- a/docs/project/structure.md
++++ b/docs/project/structure.md
+@@ -59,6 +59,27 @@ asked to see are the gists. The plan, and GPT Sol's review of it, is
+ [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
+ it are [keyboard.md § ← / → in Structure](keyboard.md).
+ 
++## The ribbon between the columns
++
++> Somehow make it clearer visually in the UI of the Structure mode that the 2nd column is a subset
++> of the 1st, kinda like a Sankey diagram. Use screenshots.
++>
++> — Greg, 2026-10-19, spya-vqpeyr, in [261020l](../plans/261020l-structure-columns-sankey-ribbon.md)
++
++In the two columns, the marked part in column A wears a grey ground, and a band of the same grey
++curves across the gutter from that row's height to the height of everything column B draws (its
++header through its last row), ending in column B's bracket: one row becoming all of that. Drawn
++only when column B has sections; between parts, or on an undivided part, the columns look as they
++did before. The orange stays on the one deepest row.
++
++It is an SVG measured off the laid-out columns
++([`src/web/structure-ribbon.ts`](../../src/web/structure-ribbon.ts) is the geometry,
++`StructurePanel.tsx` § the ribbon reads the rects), so it is wherever the rows actually are. It
++cannot move a row, which is what keeps it out of the capacity measurement. It curves across the
++gutter and column B's bracket inset, so the switch to two columns did not move; a wider gutter
++would have taken the columns off an 11-inch iPad held landscape. The list face and Expanded have no
++ribbon; their indentation already says "inside".
++
+ ## A mark for the figures a row holds
+ 
+ > perhaps we can have an icon for each diagram or table contained in a section within structure so
+diff --git a/src/web/StructurePanel.tsx b/src/web/StructurePanel.tsx
+index 19f9c9168..c8ba24d28 100644
+--- a/src/web/StructurePanel.tsx
++++ b/src/web/StructurePanel.tsx
+@@ -59,6 +59,8 @@ import type { Figure } from "../figures.js";
+ import type { BlockId } from "../types.js";
+ import { FigureMark } from "./FigureMark.js";
+ import { jumpToRow } from "./fold.js";
++import { onFontsChanged } from "./fonts.js";
++import { STRUCT_BRACKET_PX } from "./layout.js";
+ import type { MatterRange } from "./matter-view.js";
+ import { MATTER_ROW_NOTE, MatterMark } from "./MatterMark.js";
+ import { ModeSurface } from "./ModeSurface.js";
+@@ -70,6 +72,7 @@ import {
+   structureProjection,
+   windowed,
+ } from "./structure.js";
++import { type Ribbon, ribbonFrom, ribbonPath, sameRibbon } from "./structure-ribbon.js";
+ import { Tooltip, TooltipGroup } from "./Tooltip.js";
+ import type { SummaryNode } from "./tree.js";
+ import { useTapReveal } from "./useTapReveal.js";
+@@ -717,6 +720,61 @@ export function StructurePanel({
+   const columnA = windowed(proj.columnA.rows, cap.a);
+   const columnB = windowed(proj.columnB.rows, cap.b);
+ 
++  /**
++   * **The ribbon from the marked part to column B** (structure-ribbon.ts;
++   * Greg, spya-vqpeyr). Read off the drawn columns after they are laid out, so
++   * it is wherever the rows actually are, never where arithmetic says they
++   * should be — the lesson of every clipped row in `capacityFrom`'s history.
++   *
++   * It cannot feed back into the capacity effect above: the SVG is out of flow
++   * and `data-ribbon` changes only a border's colour, so nothing it sets moves a
++   * row. Re-read on a new set of rows or a new window (a part crossed, a
++   * resize that changed the capacity), and by its own observer when a column
++   * changes size without either — a web font arriving, or column B's header
++   * wrapping differently.
++   *
++   * `:scope >` for the reason `columns()` in the panel's tests gives: the
++   * measuring copies come first in the grid and carry a marked row of their
++   * own, somewhere else.
++   */
++  const [ribbon, setRibbon] = useState<Ribbon | null>(null);
++  // biome-ignore lint/correctness/useExhaustiveDependencies: the drawn rows are the trigger and not an input — a new window or a part crossed is exactly when the ends move, and the effect reads the DOM those rows produced rather than the rows themselves.
++  useLayoutEffect(() => {
++    const grid = gridRef.current;
++    const sideA = grid?.querySelector<HTMLElement>(":scope > .struct-side:not(.struct-inner)") ?? null;
++    const sideB = grid?.querySelector<HTMLElement>(":scope > .struct-inner") ?? null;
++    const listA = sideA?.querySelector<HTMLElement>(":scope > .struct-col") ?? null;
++    const row = listA?.querySelector<HTMLElement>(".struct-row[aria-current]") ?? null;
++    const head = sideB?.querySelector<HTMLElement>(":scope > .struct-of") ?? null;
++    const list = sideB?.querySelector<HTMLElement>(":scope > .struct-col") ?? null;
++    const draw = () => {
++      const next = grid
++        ? ribbonFrom(
++            grid.getBoundingClientRect(),
++            row?.getBoundingClientRect() ?? null,
++            head?.getBoundingClientRect() ?? null,
++            list?.getBoundingClientRect() ?? null,
++          )
++        : null;
++      /* The guard is what stops this re-rendering for ever: the rows are
++         fresh arrays on every render, so the effect runs on every render, and
++         an unconditional set would be a new render each time. */
++      setRibbon((prev) => (sameRibbon(prev, next) ? prev : next));
++    };
++    draw();
++    /* Every box whose size can move an end: the marked row, the list above
++       it (a row wrapping higher up moves it down), column B's header and list,
++       and the grid. The sides are not enough on their own — they stretch to the
++       grid row, so a wrap inside one can leave its size alone. */
++    const ro = new ResizeObserver(draw);
++    for (const el of [grid, listA, row, head, list]) if (el) ro.observe(el);
++    const offFonts = onFontsChanged(draw);
++    return () => {
++      ro.disconnect();
++      offFonts();
++    };
++  }, [columnA.rows, columnB.rows, proj.ofPart]);
++
+   const nothing = proj.columnA.rows.length === 0;
+ 
+   return (
+@@ -733,7 +791,28 @@ export function StructurePanel({
+            says what is true of it rather than reporting a failure. */
+         <p className="struct-empty">This piece has no parts to lay out — it is one run of prose.</p>
+       ) : (
+-        <div className="struct-grid" ref={gridRef}>
++        <div className="struct-grid" ref={gridRef} {...(ribbon ? { "data-ribbon": "" } : {})}>
++          {/* **The ribbon: the marked part, becoming the whole of column B**,
++              Sankey-style (structure-ribbon.ts). First in the grid so the rows,
++              which are positioned, paint over it. Its 2px edge is column B's
++              bracket, drawn only as tall as column B's content and just left
++              of its rows (structure-ribbon.ts § `RIBBON_EDGE_INSET_PX`); the
++              border it replaces is still there in the box model, transparent,
++              so the band's width arithmetic (layout.ts §
++              `structureColumnsBand`) does not move. Decoration: the header
++              already names the part in words, and the lists keep their labels. */}
++          {ribbon ? (
++            <svg className="struct-ribbon" aria-hidden="true" focusable="false">
++              <path className="struct-ribbon-band" d={ribbonPath(ribbon)} />
++              <rect
++                className="struct-ribbon-edge"
++                x={ribbon.xEdge}
++                y={ribbon.bTop}
++                width={STRUCT_BRACKET_PX}
++                height={ribbon.bBottom - ribbon.bTop}
++              />
++            </svg>
++          ) : null}
+           {/* **The measuring copies: the whole of each column, laid out and never
+               seen.** `aria-hidden` and out of flow, so they cost the reader
+               nothing and the accessibility tree nothing — but they are laid out
+@@ -771,12 +850,13 @@ export function StructurePanel({
+               <Column column={columnA} label="Parts" figures={figures} onJump={onJump} />
+             </div>
+             <div className="struct-side struct-inner">
+-              {/* **The bracket, and the whole of the connector in v1.** It names
+-                  the row on the left that these rows are the inside of, and the
+-                  marked row in column A carries the matching edge marker. A drawn
+-                  taper between two independently measured columns needs geometry
+-                  redrawn on every resize and every boundary crossing; this answers
+-                  the same question — *these belong to that* — in CSS. */}
++              {/* **The header names the row on the left that these rows are
++                  the inside of**, in words; the ribbon above says it in shape.
++                  Until 2026-10-20 this header and a bracket were the whole of
++                  the connector, and the taper was deferred as geometry that
++                  would need redrawing on every resize and boundary crossing —
++                  which is what the ribbon's effect now does
++                  (docs/plans/261020l-structure-columns-sankey-ribbon.md). */}
+               {proj.ofPart ? (
+                 <p className="struct-of" ref={ofRef}>
+                   <span className="struct-num">{proj.ofPart.number}</span>
+diff --git a/src/web/styles/structure-mode.css b/src/web/styles/structure-mode.css
+index 6c32a32cd..8033a4cf5 100644
+--- a/src/web/styles/structure-mode.css
++++ b/src/web/styles/structure-mode.css
+@@ -120,6 +120,59 @@
+   border-left: 2px solid var(--rule-strong);
+ }
+ 
++/* **The ribbon, Sankey-style: the marked part becoming the whole of column B**
++   (StructurePanel.tsx § the ribbon; Greg, spya-vqpeyr, 2026-10-19). One band
++   across the gutter and column B's bracket inset (so the 1rem gutter, and the
++   switch to two columns, did not have to grow for it — structure-ribbon.ts §
++   `RIBBON_EDGE_INSET_PX`), as tall as the marked row at its left end and as tall as
++   column B's header and rows at its right, in the bracket's own grey so it
++   reads as the bracket and the row's edge mark joined up — and never in the
++   orange, which stays the one "now" (§ the deepest marked row).
++
++   While it is drawn it carries the bracket itself (`.struct-ribbon-edge`, only
++   as tall as column B's content), so the border goes transparent but keeps its
++   2px in the box model: layout.ts counts it, and a ribbon that moved the rows
++   would move the ribbon. Without one — between parts, an undivided part, before
++   layout — the border is the bracket, as it always was. */
++.struct-ribbon {
++  position: absolute;
++  inset: 0;
++  width: 100%;
++  height: 100%;
++  overflow: visible;
++  pointer-events: none;
++}
++.struct-ribbon-band {
++  fill: var(--struct-ribbon);
++}
++.struct-ribbon-edge {
++  fill: var(--rule-strong);
++}
++.struct-grid[data-ribbon] > .struct-inner {
++  border-left-color: transparent;
++}
++/* The orange thumb moves with the bracket, onto the ribbon's edge 4px left of
++   the rows — `RIBBON_EDGE_INSET_PX` in structure-ribbon.ts; change both. */
++.struct-grid[data-ribbon] > .struct-inner .struct-row[aria-current]::before {
++  left: -4px;
++}
++/* **The marked part is the ribbon's source, so it wears the ribbon's ground**:
++   row, ribbon and column B read as one shape, a Sankey node and its link,
++   rather than a row with a wedge beside it. Grey and never orange — the
++   orange stays on the one deepest row (§ the deepest marked row), and this
++   rule exists only while column B has sections, which is exactly when that
++   row is in column B. The same colour as `.struct-ribbon-band` and not a
++   lookalike, so the seam at the column's edge cannot show. */
++.struct-grid[data-ribbon] > .struct-side:not(.struct-inner) .struct-row[aria-current] {
++  background: var(--struct-ribbon);
++  /* Square where it meets the ribbon, or the row's radius cuts a notch into the seam. */
++  border-top-right-radius: 0;
++  border-bottom-right-radius: 0;
++}
++.struct-grid {
++  --struct-ribbon: color-mix(in oklab, var(--rule-strong) 55%, transparent);
++}
++
+ /* Column B's header: the part these rows are the inside of. Not a `.band-head`
+    — that would be the *band* naming itself, which the Dock already does. This
+    names the column's subject, which nothing else on screen says. */
+diff --git a/src/web/structure-ribbon.ts b/src/web/structure-ribbon.ts
+new file mode 100644
+index 000000000..092bd20a6
+--- /dev/null
++++ b/src/web/structure-ribbon.ts
+@@ -0,0 +1,113 @@
++/**
++ * **The ribbon between Structure's two columns: where it goes, as numbers.**
++ *
++ * Column B is the inside of the row marked in column A, and until 2026-10-20
++ * the only things that said so were a 2px rule down B's left edge and a matching
++ * 2px inset on the marked row, 16px apart with nothing joining them. Greg asked
++ * for it to read *"kinda like a Sankey diagram"* (spya-vqpeyr), so the space
++ * between the columns now carries one band whose left end is the marked row's
++ * height and whose right end is the height of everything column B draws: one
++ * row becoming all of that.
++ *
++ * Pure, so it can be tested without a layout engine: `StructurePanel` reads the
++ * rects and draws the path; this decides nothing about what is current.
++ * docs/plans/261020l-structure-columns-sankey-ribbon.md.
++ */
++
++/** The part of a `DOMRect` the ribbon reads. */
++export interface Box {
++  top: number;
++  bottom: number;
++  left: number;
++  right: number;
++}
++
++/**
++ * **How far left of column B's rows the ribbon's edge stands**, in px: its own
++ * 2px (`STRUCT_BRACKET_PX`) and a 2px gap, so the edge never touches a row's
++ * wash. structure-mode.css puts the current section's orange thumb at the same
++ * place (`left: -4px`) so it covers the edge; tests/structure-ribbon.test.tsx
++ * holds the two together.
++ *
++ * Inside column B's track, in the 0.6rem bracket inset the band's width
++ * arithmetic already pays for, rather than in a wider gutter: the curve gets
++ * ~24px instead of 16 and the switch to two columns does not move. A 2rem
++ * gutter was built first and moved it to 1181px, one pixel past an 11-inch
++ * iPad held landscape (GPT Sol's plan review, finding 5).
++ */
++export const RIBBON_EDGE_INSET_PX = 4;
++
++/** The ribbon in the grid's own coordinates, px from its top-left corner. */
++export interface Ribbon {
++  /** Where the marked row in column A ends. */
++  x0: number;
++  /** Where the band ends and column B's edge begins. */
++  xEdge: number;
++  aTop: number;
++  aBottom: number;
++  bTop: number;
++  bBottom: number;
++}
++
++/**
++ * The ribbon, or `null` when there is nothing for it to join.
++ *
++ * - `row` is the marked row in column A; none means the reader is between parts.
++ * - `head` is column B's header (the part's title), when there is one; the
++ *   ribbon starts there, because that header is the part again.
++ * - `list` is column B's visible list, its counters included; none means the
++ *   part has no sections, and column B is a sentence rather than the inside of
++ *   anything.
++ *
++ * Anything that is not a real shape inside the grid gives `null` too — jsdom,
++ * a first frame before layout, a band mid-close. A ribbon from zero-height or
++ * reversed rects would be drawn as nothing, or as something wrong, and claim to
++ * be drawn.
++ */
++export function ribbonFrom(
++  grid: Box,
++  row: Box | null,
++  head: Box | null,
++  list: Box | null,
++): Ribbon | null {
++  if (!row || !list) return null;
++  const all = [grid, row, list, ...(head ? [head] : [])];
++  if (!all.every((b) => [b.top, b.bottom, b.left, b.right].every(Number.isFinite))) return null;
++  if (!all.every((b) => b.bottom > b.top && b.right > b.left)) return null;
++  const x0 = row.right - grid.left;
++  const xEdge = list.left - RIBBON_EDGE_INSET_PX - grid.left;
++  if (x0 < 0 || xEdge <= x0 || list.right > grid.right + 1) return null;
++  return {
++    x0,
++    xEdge,
++    aTop: row.top - grid.top,
++    aBottom: row.bottom - grid.top,
++    bTop: Math.min((head ?? list).top, list.top) - grid.top,
++    bBottom: list.bottom - grid.top,
++  };
++}
++
++/** Whole pixels, so a sub-pixel jitter in a rect is not a redraw. */
++export function sameRibbon(a: Ribbon | null, b: Ribbon | null): boolean {
++  if (a === null || b === null) return a === b;
++  const k: (keyof Ribbon)[] = ["x0", "xEdge", "aTop", "aBottom", "bTop", "bBottom"];
++  return k.every((key) => Math.round(a[key]) === Math.round(b[key]));
++}
++
++/**
++ * The band's outline: across the top on one S-curve, down column B's edge,
++ * and back on another. The control points sit halfway across at each end's own
++ * height, which is the curve a Sankey link is drawn with, so both ends leave
++ * their column horizontally.
++ */
++export function ribbonPath(r: Ribbon): string {
++  const xm = (r.x0 + r.xEdge) / 2;
++  const n = (v: number) => Math.round(v * 10) / 10;
++  return [
++    `M ${n(r.x0)} ${n(r.aTop)}`,
++    `C ${n(xm)} ${n(r.aTop)} ${n(xm)} ${n(r.bTop)} ${n(r.xEdge)} ${n(r.bTop)}`,
++    `L ${n(r.xEdge)} ${n(r.bBottom)}`,
++    `C ${n(xm)} ${n(r.bBottom)} ${n(xm)} ${n(r.aBottom)} ${n(r.x0)} ${n(r.aBottom)}`,
++    "Z",
++  ].join(" ");
++}
+diff --git a/tests/structure-ribbon.test.tsx b/tests/structure-ribbon.test.tsx
+new file mode 100644
+index 000000000..c54fed766
+--- /dev/null
++++ b/tests/structure-ribbon.test.tsx
+@@ -0,0 +1,220 @@
++// @vitest-environment jsdom
++/**
++ * **The ribbon between Structure's two columns joins the marked part to the
++ * whole of column B, and is drawn only when there is something to join.**
++ *
++ * jsdom does no layout, so the panel test stubs `getBoundingClientRect` with a
++ * layout of its own and checks the panel read the right elements: the marked row
++ * in the *visible* column A (the hidden measuring copies carry an
++ * `aria-current` row too, at a different place), column B's header and its
++ * visible list. Whether the drawn shape reads as a Sankey link is a browser
++ * question — docs/plans/261020l-structure-columns-sankey-ribbon.md § Evidence.
++ */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { readFileSync } from "node:fs";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
++import { StructurePanel } from "../src/web/StructurePanel.js";
++import { RIBBON_EDGE_INSET_PX, ribbonFrom, ribbonPath } from "../src/web/structure-ribbon.js";
++import { buildGeometry, buildSummaryTree } from "../src/web/tree.js";
++
++/* Part one undivided; part two in two sections. */
++function fixture(): { tree: Tree; blocks: Block[] } {
++  const nodes: Record<NodeId, TreeNode> = {};
++  const blocks: Block[] = [];
++  const id = (n: number) => `spya-r${String(n).padStart(4, "0")}` as BlockId;
++  const block = () => {
++    const n = blocks.length;
++    blocks.push({ id: id(n), tag: "p", kind: "text", text: `block ${n}`, words: 2, html: `<p>block ${n}</p>`, gistable: true });
++    return n;
++  };
++  const a0 = block();
++  const a1 = block();
++  nodes["n-p1"] = { id: "n-p1", depth: 1, parent: "n-r", children: [], range: [id(a0), id(a1)], title: "PART ONE", gist: "One." };
++  const kids: NodeId[] = [];
++  const p2First = blocks.length;
++  for (let s = 0; s < 2; s++) {
++    const f = block();
++    const l = block();
++    const sid = `n-s${s}` as NodeId;
++    nodes[sid] = { id: sid, depth: 2, parent: "n-p2", children: [], range: [id(f), id(l)], title: `SECTION ${s}`, gist: `S${s}.` };
++    kids.push(sid);
++  }
++  nodes["n-p2"] = { id: "n-p2", depth: 1, parent: "n-r", children: kids, range: [id(p2First), id(blocks.length - 1)], title: "PART TWO", gist: "Two." };
++  nodes["n-r"] = { id: "n-r", depth: 0, parent: null, children: ["n-p1", "n-p2"], range: [id(0), id(blocks.length - 1)], title: "Root", gist: "Root." };
++  return { tree: { version: "1", generator: "test", slug: "t", rootId: "n-r", nodes }, blocks };
++}
++
++const { tree, blocks } = fixture();
++const geometry = buildGeometry(tree, blocks);
++const summaryRoot = buildSummaryTree(tree, blocks, geometry.leafDepth);
++const rowOf = (node: NodeId) => blocks.findIndex((x) => x.id === tree.nodes[node]?.range[0]);
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++let host: HTMLDivElement;
++let reactRoot: Root;
++
++function render(focusRow: number) {
++  act(() => {
++    reactRoot.render(
++      <StructurePanel root={summaryRoot} figures={[]} focusRow={focusRow} allowParagraphs={true} onJump={() => {}} />,
++    );
++  });
++  const band = host.querySelector(".mode-band.struct");
++  if (!band) throw new Error("no Structure band rendered");
++  return band;
++}
++
++const rect = (left: number, top: number, width: number, height: number) =>
++  ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON() {} }) as DOMRect;
++
++/**
++ * A made-up layout: a grid at (100, 50), column A's rows 300px wide, column
++ * B's rows from x=428 (a 16px gutter and the bracket's inset), the marked part
++ * at 200–240, column B's header at 50–70 and its list at 76–176. **The
++ * measuring copies get a different place** (900, and lists of their own), so a
++ * panel that read the hidden marked row would draw a ribbon starting at 850.
++ * `markedTop` moves the visible marked row, for the redraw tests.
++ */
++let markedTop = 200;
++function stubLayout() {
++  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
++    const el = this as HTMLElement;
++    const hidden = el.closest(".struct-measure") !== null;
++    if (el.classList.contains("struct-grid")) return rect(100, 50, 616, 600);
++    if (hidden) return rect(100, 900, 300, 40);
++    if (el.classList.contains("struct-of")) return rect(428, 50, 288, 20);
++    if (el.classList.contains("struct-col") && el.closest(".struct-inner")) return rect(428, 76, 288, 100);
++    if (el.classList.contains("struct-row") && el.hasAttribute("aria-current") && !el.closest(".struct-inner")) {
++      return rect(100, markedTop, 300, 40);
++    }
++    return rect(100, 50, 300, 300);
++  });
++}
++
++/** A ResizeObserver the test can fire, standing in for jsdom's missing one. */
++let observers: { cb: () => void; els: Element[] }[] = [];
++
++beforeEach(() => {
++  host = document.createElement("div");
++  document.body.appendChild(host);
++  reactRoot = createRoot(host);
++  markedTop = 200;
++  observers = [];
++  vi.stubGlobal(
++    "ResizeObserver",
++    class {
++      entry: { cb: () => void; els: Element[] };
++      constructor(cb: () => void) {
++        this.entry = { cb, els: [] };
++        observers.push(this.entry);
++      }
++      observe(el: Element) {
++        this.entry.els.push(el);
++      }
++      disconnect() {
++        observers = observers.filter((o) => o !== this.entry);
++      }
++    },
++  );
++});
++
++afterEach(() => {
++  act(() => reactRoot.unmount());
++  host.remove();
++  vi.restoreAllMocks();
++  vi.unstubAllGlobals();
++});
++
++const EXPECTED = { x0: 300, xEdge: 324, aTop: 150, aBottom: 190, bTop: 0, bBottom: 126 };
++
++describe("the ribbon's geometry", () => {
++  const grid = rect(100, 50, 616, 600);
++  const row = rect(100, 200, 300, 40);
++  const head = rect(428, 50, 288, 20);
++  const list = rect(428, 76, 288, 100);
++
++  it("runs from the row's height on the left to column B's header-through-list on the right", () => {
++    expect(ribbonFrom(grid, row, head, list)).toEqual(EXPECTED);
++    expect(EXPECTED.xEdge).toBe(428 - RIBBON_EDGE_INSET_PX - 100);
++  });
++
++  it("starts at the list when column B has no header", () => {
++    expect(ribbonFrom(grid, row, null, list)?.bTop).toBe(26);
++  });
++
++  it("is nothing when there is no marked part, no list, or no real layout", () => {
++    expect(ribbonFrom(grid, null, null, list)).toBeNull();
++    expect(ribbonFrom(grid, row, null, null)).toBeNull();
++    const none = rect(0, 0, 0, 0);
++    expect(ribbonFrom(none, none, none, none)).toBeNull();
++    expect(ribbonFrom(grid, rect(100, Number.NaN, 300, 40), head, list)).toBeNull();
++    /* Column B's rows left of column A's edge: reversed, not a ribbon. */
++    expect(ribbonFrom(grid, row, null, rect(200, 76, 288, 100))).toBeNull();
++  });
++
++  it("is a closed band whose ends are the two heights", () => {
++    expect(ribbonPath(EXPECTED)).toBe("M 300 150 C 312 150 312 0 324 0 L 324 126 C 312 126 312 190 300 190 Z");
++  });
++
++  it("puts the orange thumb on the ribbon's edge, where the stylesheet says", () => {
++    const css = readFileSync("src/web/styles/structure-mode.css", "utf8");
++    expect(css).toMatch(
++      new RegExp(
++        String.raw`\.struct-grid\[data-ribbon\] > \.struct-inner \.struct-row\[aria-current\]::before \{\s*left: -${RIBBON_EDGE_INSET_PX}px;`,
++      ),
++    );
++  });
++});
++
++describe("the Structure panel draws it", () => {
++  it("draws no ribbon without layout, and keeps the bracket", () => {
++    const band = render(rowOf("n-s0"));
++    expect(band.querySelector(".struct-ribbon")).toBeNull();
++    expect(band.querySelector(".struct-grid")?.hasAttribute("data-ribbon")).toBe(false);
++  });
++
++  it("joins the visible marked part to column B, not the measuring copy's", () => {
++    stubLayout();
++    const band = render(rowOf("n-s0"));
++    const path = band.querySelector(".struct-ribbon path.struct-ribbon-band");
++    expect(path?.getAttribute("d")).toBe(ribbonPath(EXPECTED));
++    const svg = band.querySelector(".struct-ribbon");
++    expect(svg?.getAttribute("aria-hidden")).toBe("true");
++    expect(svg?.getAttribute("focusable")).toBe("false");
++    expect(svg?.textContent).toBe("");
++    /* The CSS hook that hands the bracket over to the ribbon's own edge. */
++    expect(band.querySelector(".struct-grid")?.hasAttribute("data-ribbon")).toBe(true);
++  });
++
++  it("redraws when the marked row moves without a new render", () => {
++    stubLayout();
++    const band = render(rowOf("n-s0"));
++    const row = band.querySelector(".struct-grid > .struct-side:not(.struct-inner) .struct-row[aria-current]");
++    const watching = observers.find((o) => row && o.els.includes(row));
++    expect(watching, "the marked row is observed").toBeDefined();
++    markedTop = 260;
++    act(() => watching?.cb());
++    expect(band.querySelector(".struct-ribbon-band")?.getAttribute("d")).toBe(
++      ribbonPath({ ...EXPECTED, aTop: 210, aBottom: 250 }),
++    );
++  });
++
++  it("goes when the reader crosses into a part with no sections, and comes back", () => {
++    stubLayout();
++    render(rowOf("n-s0"));
++    let band = render(rowOf("n-p1"));
++    expect(band.querySelector(".struct-ribbon")).toBeNull();
++    band = render(rowOf("n-s1"));
++    expect(band.querySelector(".struct-ribbon")).not.toBeNull();
++  });
++
++  it("draws none on a part with no sections", () => {
++    stubLayout();
++    const band = render(rowOf("n-p1"));
++    expect(band.querySelector(".struct-ribbon")).toBeNull();
++    expect(band.querySelector(".struct-grid")?.hasAttribute("data-ribbon")).toBe(false);
++  });
++});
