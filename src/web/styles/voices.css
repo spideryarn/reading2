@@ -295,7 +295,7 @@
     .fb-addendum-body,
     .ill-steer-input,
     .cmdbar-input,
-    /* About you or the reason, quoted back in the guide's greeting (261009i) */
+    /* the reason quoted back in the guide's greeting (261009i, 261019p) */
     .guide-greeting-reader
 ) {
     font-family: var(--font-reader);

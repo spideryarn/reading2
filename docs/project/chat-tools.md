@@ -1247,8 +1247,13 @@ A thread kind of its own, `guide`, one per article (`chat_threads_one_guide`), o
 from the pinned row above the list. What makes it a guide rather than a chat:
 
 - **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
-  reading, never a summary in its place; ask why they are reading if they have not said; invite
-  *About you* once; under 60 words; point to at most two places, by block id. It carries our
+  reading, never a summary in its place; never assume they have read it; a concrete suggestion
+  first, from what they said, and a question about their reading at most once more and only as a
+  guess they can confirm; never a question about who they are; under 60 words; point to at most two
+  places, by block id. Since 2026-10-19
+  ([261019p](../plans/261019p-guide-chat-plainer.md); Greg, `spya-p4uqye`: *"shouldn't nag them
+  tooooo much for more information"*, and `spya-ptjk63`: *"make suggestions. Rather than simply
+  asking the user to do all the work in stating their needs"*). It carries our
   words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
   [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
@@ -1304,8 +1309,14 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   through the list box's `onSendNew`, and leaves the guide as it was. Greg, 2026-10-12
   (`spya-es283p`), asked for it, prominent: *"when I watch people using the guide, they often
   didn't notice that it was suggesting actions for them to take"*. So a question about the content
-  gets a sentence and that button rather than an answer
-  ([261012f](../plans/261012f-guide-hands-content-questions-to-a-new-chat.md)); a mode is the chip `chipFor` would make; a search is a box the
+  gets that button
+  ([261012f](../plans/261012f-guide-hands-content-questions-to-a-new-chat.md)), and since
+  2026-10-19 a short answer above it as well: at most three sentences on that one point, each
+  carrying its block id, ending on the passage to read; a question about the whole piece gets one
+  sentence of what kind of piece it is and Summary as a map, never its argument
+  ([261019p](../plans/261019p-guide-chat-plainer.md); Greg, `spya-yt2v73`: *"I think maybe they'll
+  just get confused/frustrated if the initial chat is weak/limited"*). The chat step's words are
+  the reader's question copied exactly, changed only where it would not stand on its own; a mode is the chip `chipFor` would make; a search is a box the
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
@@ -1322,12 +1333,16 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   2026-10-09 it asks in the conversation rather than in a box
   ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md); Greg,
   `spya-s6qhzv`: *"if we're in a chat interface, I want to use the chat interface"*). It welcomes
-  the reader to the piece by title, asks why they are reading it when no reason is stored, quotes
-  the start of *About you* back and asks if it is still right, and stays above the turns while the
-  conversation is mounted. What the reader answers is saved only through the guide's offer and
-  their press (above). While the conversation is empty it offers three ways in, each sent as the
-  reader's first message (*Where should I start?*, *Help me work out what I want from this*, *How
-  could I read this well?*; plan 261009u); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
+  the reader to the piece by title, asks why they are reading it when no reason is stored (*a few
+  words is plenty*) and says they can just ask something about it instead, and stays above the
+  turns while the conversation is mounted. Since 2026-10-19 it no longer asks about the reader
+  themselves, nor quotes *About you* back to ask if it is still right: the guide uses it without
+  asking. The older optional profile link remains only when a reason is already stored and *About
+  you* is empty ([261019p](../plans/261019p-guide-chat-plainer.md)). What the reader answers is saved only
+  through the guide's offer and their press (above). While the conversation is empty it offers
+  three ways in, each sent as the reader's first message (*Where should I start?*, *What is this
+  piece about?*, *Help me work out what I want from this*; plan 261009u, and 261019p's second
+  in place of *How could I read this well?*); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
 - **A row in the command bar**, *Guide chat*, on the owner's reading view (`guideRow` in
   [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does — first on
   an empty bar, with the guide's `Compass`, since 2026-10-10
@@ -1368,9 +1383,11 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   [url-state.md](url-state.md#an-article-never-opened-here-arrives-at-a-default)), which also
   stands in for the add page's "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
 
-Its cost is reported as `chat` (`jobFor`), on purpose for now. The eval is
+Its cost is reported as `chat` (`jobFor`), on purpose for now. The evals are
 [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and
-[`evals/guide/run.ts`](../../evals/guide/run.ts).
+[`evals/guide/run.ts`](../../evals/guide/run.ts), and for how it reads over a short conversation,
+[261019b](../investigations/261019b-guide-plainer-blind-judged.md) and
+[`evals/guide/conversations.ts`](../../evals/guide/conversations.ts).
 
 ## Not built, and worth building
 

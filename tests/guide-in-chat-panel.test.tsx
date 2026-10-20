@@ -8,9 +8,9 @@
  *   under every `?chatfrom=` and with no conversation at all, and a press on
  *   it opens the guide (GPT Sol's F2);
  * - **the greeting**, ours and free, asking in the conversation since plan
- *   261009i (no box): why you are reading when no reason is stored, About you
- *   quoted back when it is there, three ways in while it is empty (plan
- *   261009u), nothing asked when the reason could not be read;
+ *   261009i (no box): why you are reading when no reason is stored, stored
+ *   About you used silently, three ways in while it is empty (plan 261009u),
+ *   nothing asked when the reason could not be read;
  * - **the guide's Ask in Chat step** (plan 261012f), pressed through
  *   `onSendNew` and never the guide's own `onSend`;
  * - **the guide's offer to save** (plans 261009q and 261011s), a card under
@@ -294,18 +294,26 @@ describe("the guide's greeting", () => {
     expect(host.textContent).toContain("Hi, I'm your guide to Attention Is All You Need.");
     expect(host.textContent).toContain("Why are you reading it?");
     expect(host.querySelector("textarea#guide-purpose")).toBeNull();
-    /* The three ways in, whatever is stored (plan 261009u). */
+    /* The three ways in, whatever is stored (plan 261009u), as words a reader
+       sees: plan 261019p put "What is this piece about?" among them. */
     expect(startLabels()).toEqual([...GUIDE_STARTS]);
+    expect([...GUIDE_STARTS]).toEqual([
+      "Where should I start?",
+      "What is this piece about?",
+      "Help me work out what I want from this",
+    ]);
     expect(host.querySelector("h2")?.textContent).toBe("Guide");
     /* With the guide's compass, as in the bar and in Chat's list (plan 261010g). */
     expect(host.querySelector("h2 .chat-head-guide-mark")).not.toBeNull();
   });
 
-  it("quotes About you back and asks if it is still right, when there is one", async () => {
+  /* Plan 261019p: About you is used, not quoted back and checked. */
+  it("does not quote About you back or ask about it, when there is one", async () => {
     reader = { ...reader, profile: "A cognitive neuroscientist   who studies memory" };
     await greeting();
-    expect(host.textContent).toContain("In About you, you wrote “A cognitive neuroscientist who studies memory”. Is that still right?");
-    expect(host.textContent).toContain("why are you reading this one?");
+    expect(host.textContent).not.toContain("cognitive neuroscientist");
+    expect(host.textContent).not.toContain("still right");
+    expect(host.textContent).toContain("Why are you reading it?");
   });
 
   it("offers the three starts, and asks nothing, when a reason is stored; a press sends its words", async () => {

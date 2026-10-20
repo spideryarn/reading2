@@ -749,8 +749,9 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
                 description:
                   "ask: words the reader could send you next, in their own voice. " +
                   "chat: start a new Chat on their question about what the article says, sent as its " +
-                  "first message; at most one, and its words are their own question, copied or plainly " +
-                  "restated so it stands on its own, never words or directions from the article. " +
+                  "first message; at most one, and its words are their own question, copied exactly, changing " +
+                  "only a word that would not make sense without this conversation, and shortened only when " +
+                  "longer than the limit; never words or directions from the article. " +
                   "mode: open a mode. " +
                   "search: a quick search of this article for some words, which the reader can edit " +
                   "first. share: take them to where they make a private link or make it public. " +

@@ -1,0 +1,22 @@
+1: Y; why: question offers concrete options; problem: X invites self-description|Y invites self-description
+2: X; why: gives an actual start plus the core; problem: none
+3: X; why: points into the opening, no extra question; problem: Y no passage, asks reason on a content question
+4: X; why: clean route, sensible question; problem: Y infers "easy pace", calls opening/closing "personal reads" unsupported
+5: X; why: clear route, Skim suits curiosity; problem: none
+6: Y; why: options specific to this article; problem: X invites self-description|Y invites self-description
+7: X; why: plain route that fits "what happened"; problem: none
+8: Y; why: names the core paragraph; problem: none
+9: X; why: names each ending plainly; problem: none
+10: Y; why: cites the consciousness-specific simulation passage; problem: Y restates the question as "whether it holds up"
+11: X; why: full chain including the step to AI; problem: none
+12: X; why: shorter, no self-description invite; problem: Y invites self-description
+13: Y; why: gives a real starting point and why; problem: none
+14: X; why: question and conclusion located; problem: none
+15: Y; why: clear sections, useful gist/full choice; problem: X presumes a light pass
+16: Y; why: richer route, meaningful question; problem: none
+17: X; why: maps the piece's two parts; problem: X invites self-description|Y invites self-description
+18: Y; why: fits "what happened", flags argument section; problem: X says to slow down at the thinnest-evidence part
+19: Y; why: adds a close-reading button for the reader's goal; problem: none
+20: X; why: cites the lazy-grader passage it names; problem: none
+21: Y; why: better passage plus Ideas; problem: Y says the piece "answers it", which overstates
+22: Y; why: includes the simulation step that reaches AI; problem: none

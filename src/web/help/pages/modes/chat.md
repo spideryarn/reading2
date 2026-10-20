@@ -78,9 +78,11 @@ is room beside the text, with a greeting that is ours and costs nothing; nothing
 until you send something. When the guide suggests a mode or a passage, it gives you a button and
 says what pressing it will do; it never opens anything or moves you by itself. To help you decide
 how to read the piece, it can search the web for what others have said about it, and read one web
-page in an answer, such as one you paste in; a question about the subject itself, it hands to a new
-Chat. Its
-greeting asks why you are reading the piece: answer in the box below as you would any message. When
+page in an answer, such as one you paste in. Ask it what a passage or a term means and it answers in
+up to three short sentences, with links to the passages, and offers **Ask in Chat** to take your question
+further; a question about the subject beyond the piece, it hands to a new Chat. Its
+greeting asks why you are reading the piece, in a few words, or you can just ask it something:
+answer in the box below as you would any message. When
 you say why, or something about yourself, the guide offers to save it, as close to your own words
 as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is
 saved until you press, unless the words are exactly ones you typed in that message, or one whole

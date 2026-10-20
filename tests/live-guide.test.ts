@@ -64,6 +64,11 @@ describe("a Realtime session in a guide", () => {
     expect(text.indexOf(SPOKEN_GUIDE)).toBeLessThan(text.indexOf("THE ARTICLE"));
   });
 
+  it("scopes suggestion-first to questions about how to read, so content answers still start with the answer", () => {
+    expect(SPOKEN_GUIDE).toMatch(/When they ask how to read it, or tell you why\s+they are reading,[\s\S]*lead with one suggestion/i);
+    expect(text).toContain("Answer the question that was asked, in your first words");
+  });
+
   it("is offered the guide's tools and show_passage, and nothing from the web", () => {
     const expected = [SHOW_PASSAGE_TOOL.name, ...GUIDE_TOOLS.map((t) => t.function.name)].sort();
     expect(names(liveTools("guide"))).toEqual(expected);

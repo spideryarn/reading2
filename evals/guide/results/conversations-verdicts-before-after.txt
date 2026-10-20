@@ -1,0 +1,22 @@
+1: X; why: gives a real way in plus one purpose question; problem: Y asks about the reader themselves and gives no direction into the piece
+2: X; why: names the passage to start at and what to skim; problem: Y ends on a bare "Why are you reading it?"
+3: Y; why: answers in one line then points into the piece; problem: X sends a simple orientation question off to Chat
+4: Y; why: concrete route through the piece; problem: X asks why the friend thought of them (about the reader); Y also asks about the friend, more mildly
+5: X; why: concrete route, no extra question; problem: Y asks how long they have right after they answered the last question
+6: X; why: gives a route and options that match the request; problem: Y asks the reader to say something about themselves
+7: same; why: both give a clear straight-through route with skims; problem: none
+8: Y; why: short answer that points to two paragraphs to read; problem: X turns away a quick clarifying question
+9: X; why: grounded answer with passages for each ending; problem: Y only sends them to Chat
+10: Y; why: points to the relevant passages with a short gloss; problem: Y slightly overreaches with "not the same kind of thing as a transformer's"; X only sends them to Chat
+11: X; why: covers the whole chain, including the step to AI the reader asked for; problem: Y leaves out the simulation step to AI
+12: X; why: gives a route and a purpose question; problem: Y asks about the reader themselves and gives no direction
+13: Y; why: says where to start, what to skim and what to read closely; problem: none
+14: Y; why: answers briefly and sends them into the piece; problem: X sends a simple orientation question off to Chat
+15: Y; why: clear map of the parts plus a useful gist-or-full choice; problem: X uses a non sequitur ("since a friend sent it, skim…") and asks about plans with the friend
+16: Y; why: clear route with no further questions; problem: X asks another question after the reader has just answered one
+17: Y; why: gives a quick test passage and a purpose choice; problem: X asks the reader to say something about themselves
+18: Y; why: fuller map of the parts, with an events-or-argument choice; problem: none
+19: Y; why: brief gloss tied to the passages; problem: X turns away a quick clarifying question
+20: Y; why: direct answer grounded in passages; problem: Y's "blames neither" framing is debatable, and its quote is not visible in the snippet; X only sends them to Chat
+21: X; why: answers with the chain of passages and admits the hedge; problem: Y only sends them to Chat; X runs a little long
+22: X; why: tailored to the expert, skips what they know, covers the full chain; problem: none
