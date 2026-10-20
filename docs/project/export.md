@@ -31,6 +31,7 @@ file-by-file list, and the thing to edit when the layout changes.
                       addresses — the original's and this article's on Spideryarn
     article.json      the article on your shelf: your title, your purpose, sharing state
     README.md         the above, for whoever writes an importer
+    your-words.md     everything the reader wrote, as Markdown a person can read — below
     content/          revision.json, stamped.html, extracted.html, blocks.json,
                       block-identities.json, assets.json
     augmentations/    tree, glossary, glossary-lookups, glossary-hidden, ideas, quotes, timeline,
@@ -45,13 +46,50 @@ file-by-file list, and the thing to edit when the layout changes.
                       since 261008i)
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
-has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`,
+has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`, `your-words.md`,
 `content/revision.json` and `content/block-identities.json`, which are always written, the last even
 when empty. Anything holding a list wraps it in a single-key object, so the format has somewhere to
 grow.
 
 `articleBundle(slug)` is owner-scoped through `readArticleRows` and throws `ArticleNotFound` for a
 slug that is not this reader's, which a route turns into a 404 rather than a 500.
+
+## Your words, and one conversation, as Markdown
+
+> Provide a way to export the user's input/content from an article.
+>
+> Also, provide a way to export the whole of a chat (in a nice machine-readable and ideally also
+> human-readable format that could be pasted into another AI).
+>
+> — Greg, 2026-10-19 (`spya-p88dcx`)
+
+The zip had every word the reader wrote, but as JSON among thirty-odd files of the model's, and
+nothing could take one conversation anywhere. Since
+[261020w](../plans/261020w-export-your-own-words-and-a-chat-as-markdown.md) there are two more doors,
+both Markdown with a small front-matter header (every value a JSON string, so any YAML reader takes
+it), because Markdown is what a person reads plainly and what every chat model reads natively:
+
+- **`your-words.md`** — the reader's title, purpose and tags; their comments, notes, highlights and
+  bookmarks in article order, each under the passage it was made on; their quiz answers; and every
+  conversation but Referee's candidate threads. Wherever the AI's words sit beside the reader's
+  (an answer under a comment, a mark, a turn) they are labelled as the AI's. Built by
+  [`src/store/your-words.ts`](../../src/store/your-words.ts) from the same `readArticleRows` walk
+  as the zip, so it is owner-scoped and one snapshot. It is in the zip, and on its own at
+  `GET /api/export/:slug/your-words` (`sendYourWords` in `src/routes.ts`, the zip route's twin,
+  with the same 413 ceiling) behind the Metadata page's second Export button.
+- **Copy this conversation**, in the chat header (and in Recall and Explore): the open thread,
+  whole, on the clipboard. No fetch: the panel holds it already.
+
+Both go through one renderer, [`src/chat-markdown.ts`](../../src/chat-markdown.ts), so a
+conversation reads the same in the file and on the clipboard: `## You` and `## Spideryarn` turns,
+block ids left in (they are the provenance, the reason *Copy answer* keeps them), a spoken answer's
+`passages` and an answer's web citations listed under it, a Recall hint shown only if the reader
+opened it (`answerAsSeen`), and a line for a failed, unfinished, stopped, interrupted or truncated
+answer. Message text goes in unchanged, so a question that itself contains `## You` would confuse a
+naive parser: **the JSON files are the ones to import from**, and the zip's README says so.
+
+Left out of `your-words.md` for now, and in the zip as JSON: searches, glossary look-ups, referee
+criteria, Sources claim checks, reading time.
 
 ## `index.html` is an index, not a reader
 

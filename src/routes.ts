@@ -178,8 +178,9 @@ import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
 /* The download's two halves: the zip itself, and the one error a route has to
    turn into a 404 rather than let travel to the catch-all as a 500. Both come
    straight from the store, so this file adds no data model of its own. */
-import { articleBundle } from "./store/export-bundle.js";
-import { ArticleNotFound } from "./store/article-rows.js";
+import { articleBundle, overBundleCap } from "./store/export-bundle.js";
+import { ArticleNotFound, readArticleRows } from "./store/article-rows.js";
+import { yourWordsMarkdown } from "./store/your-words.js";
 import { ArtefactNotMadeYet } from "./store/artefact-not-made-yet.js";
 /* The mechanics of every binary answer below — status, `nosniff`, a byte
    length and the body — and none of their policies. GET only: this file never
@@ -980,6 +981,40 @@ async function sendArticleAsset(
        agree today; the entry is the one that stays true. */
     contentType: found.contentType,
   });
+}
+
+/**
+ * **The reader's own words on one article, as one Markdown file** —
+ * `your-words.md`, the same file the zip carries (src/store/your-words.ts).
+ *
+ * `sendExport`'s twin, for its reasons: ownership comes from `readArticleRows`
+ * (slug and owner in one `where`), `ArticleNotFound` is a 404 and never a 500,
+ * and the response is `attachment` and `no-store` because it is a reader's
+ * comments and conversations on a URL that is nothing but a slug. It has the
+ * zip's size ceiling too, below.
+ * docs/plans/261020w-export-your-own-words-and-a-chat-as-markdown.md.
+ */
+async function sendYourWords(res: ServerResponse, slug: string): Promise<void> {
+  const rows = await readArticleRows(slug).catch((err: unknown) => {
+    if (err instanceof ArticleNotFound) throw httpError(404, "No such article.");
+    throw err;
+  });
+  const bytes = new TextEncoder().encode(yourWordsMarkdown(rows, new Date()));
+  /* The zip's ceiling, and its reason: a buffered Vercel response tops out
+     there, and the platform's answer to more is a truncated file that looks
+     whole. This file is not compressed, so it can pass the ceiling on an
+     article whose zip does not. `overBundleCap` is the one comparison. */
+  if (overBundleCap(bytes.byteLength)) {
+    throw httpError(
+      413,
+      "You have written too much about this article to download in one file. That is a limit " +
+        "on our side, not something you did, and trying again will not help — the zip export " +
+        "has the same words, compressed, or tell us about it and we will raise it.",
+    );
+  }
+  res.setHeader("Content-Disposition", contentDisposition(`${slug}-your-words.md`, "attachment"));
+  res.setHeader("Cache-Control", "private, no-store");
+  sendBinary(res, { bytes, contentType: "text/markdown; charset=utf-8" });
 }
 
 /**
@@ -11610,6 +11645,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await sendExport(res, slugPart(captures, 1));
+    },
+  },
+  /* **The reader's own words, as one Markdown file** — the zip's
+     `your-words.md`, on its own. Under `/api/export/` because it is one more
+     way the article's data leaves; `slugPart` for the reason above.
+     `sendYourWords` has the rest. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/export\/([\w.%-]+)\/your-words$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      await sendYourWords(res, slugPart(captures, 1));
     },
   },
 

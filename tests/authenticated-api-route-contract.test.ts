@@ -858,6 +858,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/export/w1"],
   },
+  {
+    match: { kind: "regex", source: "^\\/api\\/export\\/([\\w.%-]+)\\/your-words$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/export/w1/your-words"],
+  },
   // -------------------------------------------------------------- comments
   {
     match: { kind: "regex", source: "^\\/api\\/comments\\/([\\w.%-]+)$", flags: "" },
@@ -1136,8 +1141,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    an admin's addenda to their own reports (plan 261010o); 118 with a
    reviewer's major/minor comment sort (plan 261011f); 120 with every article
    and one article's transfer (plan 261011n); 121 with Sources › Not cited
-   (plan 261011ac); 122 with a cited work's web note (plan 261018o). */
-const EXPECTED_MATCHER_COUNT = 122;
+   (plan 261011ac); 122 with a cited work's web note (plan 261018o); 123 with
+   your-words.md on its own (plan 261020w). */
+const EXPECTED_MATCHER_COUNT = 123;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1155,8 +1161,8 @@ const EXPECTED_MATCHER_COUNT = 122;
    261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
    with every article, and a transfer's preview and POST (plan 261011n); 150
    with Not cited's GET and POST (plan 261011ac); 151 with a cited work's web
-   note (plan 261018o). */
-const EXPECTED_GUARD_COUNT = 151;
+   note (plan 261018o); 152 with your-words.md (plan 261020w). */
+const EXPECTED_GUARD_COUNT = 152;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2382,6 +2388,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
         "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/export\\/([\\w.%-]+)\\/your-words$/",
         "GET regex /^\\/api\\/metadata\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/tweets\\/([\\w.%-]+)$/",
         // the glossary, 260911d

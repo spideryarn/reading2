@@ -187,6 +187,30 @@ function noteRow(c: Comment, inArticle: boolean): string {
 }
 
 /**
+ * **Where a comment sits in the article**, for sorting: the paragraph's
+ * position (`Infinity` when a re-extraction lost it), where the selected words
+ * start in it (`-1` for a whole-paragraph mark), when it was made (ISO), and
+ * its id as the last tie-break so the order is total.
+ */
+export interface ArticlePlace {
+  readonly at: number;
+  readonly start: number;
+  readonly created: string;
+  readonly id: string;
+}
+
+/**
+ * **Article order**, the one rule for listing a reader's marks: by paragraph,
+ * then by where the words start, then by when, then by id. Shared by the
+ * listing below and by your-words.md (src/store/your-words.ts), so the model
+ * and the export meet the reader's notes in the same order.
+ */
+export function byArticlePlace(a: ArticlePlace, b: ArticlePlace): number {
+  if (a.at !== b.at) return a.at < b.at ? -1 : 1;
+  return a.start - b.start || a.created.localeCompare(b.created) || a.id.localeCompare(b.id);
+}
+
+/**
  * The reader's comments, highlights and bookmarks as rows, in **article
  * order** — the order a reader meets the passages, which is the order a model
  * holding the article can follow. Within one paragraph, by where the selected
@@ -201,14 +225,13 @@ export function readerNotesRows(
   budget = NOTES_CHARS,
 ): Listing {
   const place = new Map(blocks.map((b, i) => [b.id as string, i]));
-  const at = (c: Comment) => place.get(c.blockId) ?? Number.POSITIVE_INFINITY;
-  const ordered = [...comments].sort(
-    (a, b) =>
-      at(a) - at(b) ||
-      (a.start ?? -1) - (b.start ?? -1) ||
-      a.createdAt.localeCompare(b.createdAt) ||
-      a.id.localeCompare(b.id),
-  );
+  const of = (c: Comment): ArticlePlace => ({
+    at: place.get(c.blockId) ?? Number.POSITIVE_INFINITY,
+    start: c.start ?? -1,
+    created: c.createdAt,
+    id: c.id,
+  });
+  const ordered = [...comments].sort((a, b) => byArticlePlace(of(a), of(b)));
   const rows = wholeRows(
     (function* () {
       for (const c of ordered) yield noteRow(c, place.has(c.blockId));
