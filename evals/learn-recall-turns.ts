@@ -1,10 +1,18 @@
 /**
- * Eval — does Learn's **Tutorial** prompt hold a short, teaching
- * back-and-forth over several turns?
+ * Eval — **Recall's multi-turn half**: does Learn's Recall prompt
+ * (`LEARN_SYSTEM`, kind `learn`) hold a short, teaching back-and-forth over
+ * several turns, including for a reader who has not read the piece?
  *
- *     npm run eval:tutorial -- data/noema-mythology-of-conscious-ai
+ *     npm run eval:recall-turns -- data/noema-mythology-of-conscious-ai
  *
- * **This one spends money.** Tutorial is a conversation, so a single reply
+ * The single-turn half is evals/learn-recall.ts (one reply per case). This
+ * file was Tutorial's eval, `evals/learn-tutorial.ts`, until 2026-10-20, when
+ * Recall took Tutorial in and its scripted readers came with it
+ * (docs/plans/261020m-recall-and-tutorial-become-one-recall.md); the results
+ * under `results/learn-tutorial*.md` and `results/*-tutorial*.md` are that
+ * prompt's.
+ *
+ * **This one spends money.** Recall is a conversation, so a single reply
  * says little: whether turns stay short, whether the task climbs as the reader
  * succeeds and drops when they struggle, whether an earlier point comes back —
  * those only show over several turns. So each reader below is a **script**:
@@ -22,12 +30,14 @@
  *   richRecall a long, good, opinionated    → leaving the piece for the reader's
  *              account, then own musings      own views (Greg, `spya-mtsf0y`)
  *
- * `--out=<name>` writes `results/<name>.md` instead of `learn-tutorial.md`,
+ * `--out=<name>` writes `results/<name>.md` instead of `learn-recall-turns.md`,
  * so one arm of a before/after never overwrites another
  * (docs/project/prompting-guide.md § Measuring a prompt change).
  *
  * As in evals/learn-recall.ts, **the pass condition is a person reading
- * it.** The counts (words, questions, citations) are prompts to look.
+ * it.** The counts (words, questions, citations, hints) are prompts to look,
+ * except one: a hint after a say-it-back task is a defect, since its answer
+ * is the piece just taught (plan 261020m, conflict 4).
  * docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md.
  */
 
@@ -39,6 +49,7 @@ import { buildConverseMessages, converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { findQuote } from "../src/quote-match.js";
 import { isMain } from "../src/is-main.js";
+import { splitHint } from "../src/recall-hint.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
 
 interface Reader {
@@ -183,6 +194,10 @@ export const row = (role: "user" | "assistant", text: string, i: number): ChatMe
   status: "done",
 });
 
+/** A say-it-back task: its answer is the piece just taught, so a hint after it
+ *  gives the answer away (plan 261020m, conflict 4). */
+const SAY_IT_BACK = /\b(in your own words|say (?:that|it) back|put (?:that|it|this) (?:in|into))\b/i;
+
 async function oneTurn(
   meta: Meta,
   blocks: Block[],
@@ -199,8 +214,8 @@ async function oneTurn(
     blocks,
     history,
     question: said,
-    slug: "eval-tutorial",
-    kind: "tutorial",
+    slug: "eval-recall-turns",
+    kind: "learn",
     profile,
     /* Our own tools off, as in learn-recall.ts: every turn is answerable
        from the article, and tools would make runs slow and non-comparable. */
@@ -319,32 +334,35 @@ function ownView(text: string): boolean {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const outName = args.find((a) => a.startsWith("--out="))?.slice("--out=".length) ?? "learn-tutorial";
+  const outName = args.find((a) => a.startsWith("--out="))?.slice("--out=".length) ?? "learn-recall-turns";
   if (!/^[a-z0-9.-]+$/.test(outName)) throw new Error(`--out takes a plain file stem, got: ${outName}`);
   const dir = args.find((a) => !a.startsWith("--")) ?? "data/noema-mythology-of-conscious-ai";
   const setName = args.find((a) => a.startsWith("--readers="))?.slice("--readers=".length) ?? "noema";
   if (!(setName in READER_SETS))
     throw new Error(`--readers takes one of ${Object.keys(READER_SETS).join(", ")}, got: ${setName}`);
   const readers = READER_SETS[setName as keyof typeof READER_SETS];
+  /* Recall's ceiling is on the body before the hint (Tutorial's was 140 on
+     the whole turn). */
+  const ceiling = 120;
   const { meta, blocks } = await loadArticle(dir);
   const lines: string[] = [];
   const say = (s = "") => {
     lines.push(s);
     console.log(s);
   };
-  say(`# Learn: Tutorial — ${meta.title ?? dir}`);
+  say(`# Learn: Recall over several turns — ${meta.title ?? dir}`);
   say();
-  say(`Article: \`${dir}\` (${blocks.length} blocks). ${readers.length} scripted readers (\`${setName}\`) × 5 turns. **Read the conversations.** See the header of \`evals/learn-tutorial.ts\`.`);
+  say(`Article: \`${dir}\` (${blocks.length} blocks). ${readers.length} scripted readers (\`${setName}\`) × 5 turns. **Read the conversations.** See the header of \`evals/learn-recall-turns.ts\`.`);
   /* Which prompt this run used, so two arms of a before/after can be told
      apart afterwards: the system prompt and the canned opening line, as
      production builds them. */
-  const built = buildConverseMessages({ meta, blocks, history: [], question: "", kind: "tutorial" });
+  const built = buildConverseMessages({ meta, blocks, history: [], question: "", kind: "learn" });
   const promptHash = createHash("sha256")
     .update(JSON.stringify([built[0]?.content, built[2]?.content]))
     .digest("hex")
     .slice(0, 12);
   say();
-  say(`Prompt: \`${promptHash}\` (sha256 of the Tutorial system prompt and opening line, first 12).`);
+  say(`Prompt: \`${promptHash}\` (sha256 of Recall's system prompt and opening line, first 12).`);
   say();
   let model = "";
   let long = 0;
@@ -359,6 +377,8 @@ async function main(): Promise<void> {
   let apart = 0;
   let own = 0;
   let ownEarly = 0;
+  let hinted = 0;
+  let hintAfterSayBack = 0;
   for (const r of readers) {
     say(`## ${r.name}`);
     say();
@@ -379,15 +399,20 @@ async function main(): Promise<void> {
       }
       total += 1;
       model = out.model || model;
-      const w = words(out.text);
+      const split = splitHint(out.text);
+      const w = words(split.body);
       const q = questions(out.text);
+      if (split.hint !== null) hinted += 1;
+      const lastQuestion = split.body.split(/(?<=[.!?])\s+/).filter((x) => x.includes("?")).at(-1) ?? "";
+      const sayBackHint = split.hint !== null && SAY_IT_BACK.test(lastQuestion);
+      if (sayBackHint) hintAfterSayBack += 1;
       const c = cites(out.text);
       const lower = out.text.toLowerCase();
       const hit = [
         ...BANNED.filter((p) => lower.includes(p)),
         ...BANNED_OPENERS.filter(([, pattern]) => pattern.test(out.text.trimStart())).map(([label]) => label),
       ];
-      if (w > 140) long += 1;
+      if (w > ceiling) long += 1;
       if (q > 1) multiQ += 1;
       if (c === 0) uncited += 1;
       if (hit.length) flagged += 1;
@@ -402,8 +427,8 @@ async function main(): Promise<void> {
       if (mine && i < 2) ownEarly += 1;
       const flag = (label: string, hits: readonly string[]) =>
         hits.length ? `, ⚠︎ ${label}: ${hits.join(" ")}` : "";
-      const quoteNote = `, ${quotes.article} article quotation${quotes.article === 1 ? "" : "s"}${flag("no id in the sentence", quotes.unlinked)}${flag("id names another block", quotes.misplaced)}${flag("not the article's words as quoted", quotes.altered)}${mine ? ", flagged OWN VIEW" : ""}`;
-      say(`**Tutor ${i + 1}** — ${w} words, ${q} question mark${q === 1 ? "" : "s"}, ${c} citation${c === 1 ? "" : "s"}${quoteNote}${hit.length ? `, ⚠︎ banned: ${hit.join(", ")}` : ""}${out.truncated ? ", ⚠︎ CUT OFF" : ""}`);
+      const quoteNote = `, ${quotes.article} article quotation${quotes.article === 1 ? "" : "s"}${flag("no id in the sentence", quotes.unlinked)}${flag("id names another block", quotes.misplaced)}${flag("not the article's words as quoted", quotes.altered)}${mine ? ", flagged OWN VIEW" : ""}${split.hint !== null ? ", hint" : ""}${sayBackHint ? ", ⚠︎ HINT AFTER SAY-IT-BACK" : ""}`;
+      say(`**Recall ${i + 1}** — ${w} words, ${q} question mark${q === 1 ? "" : "s"}, ${c} citation${c === 1 ? "" : "s"}${quoteNote}${hit.length ? `, ⚠︎ banned: ${hit.join(", ")}` : ""}${out.truncated ? ", ⚠︎ CUT OFF" : ""}`);
       say();
       say(out.text.trim());
       say();
@@ -414,7 +439,8 @@ async function main(): Promise<void> {
   say();
   say(`- model: \`${model}\``);
   say(`- replies: ${total}`);
-  say(`- over the 140-word ceiling: ${long}`);
+  say(`- over the ${ceiling}-word ceiling (body before the hint): ${long}`);
+  say(`- with a hint: ${hinted}; a hint after a say-it-back: ${hintAfterSayBack} (each is a defect)`);
   say(`- more than one question mark: ${multiQ} (one task per turn; a quoted question can trip this)`);
   say(`- citing no block: ${uncited}`);
   say(`- containing a banned phrase: ${flagged}`);

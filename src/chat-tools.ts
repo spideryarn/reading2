@@ -533,8 +533,8 @@ export const TOOL_NAMES = new Set(CHAT_TOOLS.map((t) => t.function.name));
  * The ninth tool, and **deliberately not in `CHAT_TOOLS`**.
  *
  * `CHAT_TOOLS` is what Live flattens into its session (src/live.ts) and what
- * Recall, Tutorial and Candidates are offered, and none of them should have
- * this: Live's tool endpoint has no thread to exclude, Recall and Tutorial are
+ * Recall and Candidates are offered, and none of them should have
+ * this: Live's tool endpoint has no thread to exclude, Recall is
  * about the article and are told not to guess at the reader, and Candidates is
  * Referee machinery. GPT Sol's review of
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md,
@@ -578,8 +578,8 @@ export const READER_NOTES_TOOL: FunctionTool = {
 /**
  * **Chat reads a paper the article cites** (plan 261011w), and **deliberately
  * not in `CHAT_TOOLS`**, for `READER_NOTES_TOOL`'s reason: Live flattens that
- * list, and a 25-second PDF read is no part of a spoken turn; Learn, Tutorial
- * and Candidates have no use for it; the guide is about how to read. Offered
+ * list, and a 25-second PDF read is no part of a spoken turn; Learn and
+ * Candidates have no use for it; the guide is about how to read. Offered
  * to `chat` and `explore` only. src/read-cited-work.ts is the tool.
  */
 export const READ_CITED_WORK_TOOL: FunctionTool = {
@@ -872,7 +872,6 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
     case "explore":
       return CHAT_TOOLS_WITH_NOTES;
     case "learn":
-    case "tutorial":
     case "candidates":
       return CHAT_TOOLS;
     case "guide":

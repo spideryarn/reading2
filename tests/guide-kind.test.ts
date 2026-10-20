@@ -53,7 +53,7 @@ describe("the kind itself", () => {
     expect(THREAD_KINDS).toContain("guide");
     expect(SINGLE_THREAD_KINDS).toContain("guide");
     expect(isSingleThreadKind("guide")).toBe(true);
-    expect(LEARN_KINDS).toEqual(["learn", "tutorial", "explore"]);
+    expect(LEARN_KINDS).toEqual(["learn", "explore"]);
     expect(isLearnKind("guide")).toBe(false);
     expect(isLearnKind("chat")).toBe(false);
     for (const kind of LEARN_KINDS) expect(isLearnKind(kind)).toBe(true);
@@ -93,7 +93,7 @@ describe("one guide per article", () => {
 describe("the guide's prompt", () => {
   it("is its own system prompt, not any other kind's", () => {
     const guide = systemOf("guide");
-    for (const other of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const other of ["chat", "learn", "explore", "candidates"] as const) {
       expect(guide).not.toEqual(systemOf(other));
     }
     expect(guide).toContain("guide to reading one article well");
@@ -184,7 +184,7 @@ describe("our words for the modes", () => {
   it("is in the guide's system prompt, and in no other kind's", () => {
     const section = modeWordsSection();
     expect(systemOf("guide")).toContain(section);
-    for (const other of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const other of ["chat", "learn", "explore", "candidates"] as const) {
       expect(systemOf(other)).not.toContain("WHAT SPIDERYARN CAN SHOW THEM");
     }
   });
@@ -200,7 +200,7 @@ describe("our words for the modes", () => {
       from = at;
     }
     expect(section).toContain("- Learn: ");
-    expect(section).toContain("  - Learn › Tutorial: ");
+    expect(section).toContain("  - Learn › Explore: ");
   });
 
   it("marks an experimental mode as one, and an ordinary one not", () => {
@@ -272,7 +272,7 @@ describe("how much the reader has used Spideryarn", () => {
   });
 
   it("is carried for the guide only, whatever a caller passes", () => {
-    for (const kind of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "explore", "candidates"] as const) {
       expect(lastOf(build(kind, { experience: "many" }))).not.toContain("HOW MUCH THEY HAVE USED SPIDERYARN");
     }
   });

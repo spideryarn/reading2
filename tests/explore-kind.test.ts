@@ -4,8 +4,8 @@
  * Greg, `spya-mtsf0y` and his reframing of it (both 2026-10-03, quoted in
  * docs/project/learn-mode.md § Explore): a conversation that is about what
  * the *reader* thinks, started from what they marked and discussed, and free
- * to look outside the article. One thread per article like Recall's and
- * Tutorial's, its own system prompt, and the one kind whose final message
+ * to look outside the article. One thread per article like Recall's,
+ * its own system prompt, and the one kind whose final message
  * carries the reader's notes on every turn.
  *
  * These are the pure halves. What the route sends is
@@ -63,10 +63,10 @@ const systemOf = (kind: ThreadKind) => String(build(kind)[0]?.content);
 const lastOf = (messages: ReturnType<typeof buildConverseMessages>) => String(messages.at(-1)?.content);
 
 describe("the kind itself", () => {
-  it("is a thread kind, and a single-thread one like Recall and Tutorial", () => {
+  it("is a thread kind, and a single-thread one like Recall", () => {
     expect(isThreadKind("explore")).toBe(true);
     expect(THREAD_KINDS).toContain("explore");
-    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore", "guide"]);
+    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "explore", "guide"]);
     expect(isSingleThreadKind("explore")).toBe(true);
   });
 
@@ -85,9 +85,9 @@ describe("the kind itself", () => {
 });
 
 describe("Explore's prompt", () => {
-  it("is its own system prompt, not chat's, Recall's or Tutorial's", () => {
+  it("is its own system prompt, not chat's or Recall's", () => {
     const explore = systemOf("explore");
-    for (const other of ["chat", "learn", "tutorial", "candidates"] as const) {
+    for (const other of ["chat", "learn", "candidates"] as const) {
       expect(explore).not.toEqual(systemOf(other));
     }
     expect(explore).toContain("thinking partner");
@@ -97,7 +97,6 @@ describe("Explore's prompt", () => {
     const greeting = String(build("explore")[2]?.content);
     expect(greeting).toMatch(/think/i);
     expect(greeting).not.toEqual(String(build("chat")[2]?.content));
-    expect(greeting).not.toEqual(String(build("tutorial")[2]?.content));
   });
 
   /* The shared rules, by interpolation, so a fix to one is a fix to all. */
@@ -157,7 +156,7 @@ describe("Explore's prompt", () => {
     }
   });
 
-  it("offers no command buttons, like Recall and Tutorial", () => {
+  it("offers no command buttons, like Recall", () => {
     expect(systemOf("explore")).not.toContain("[cmd:");
     expect(systemOf("explore")).not.toContain("OFFERING AN ACTION");
   });
@@ -201,8 +200,7 @@ describe("Explore's prompt", () => {
     /* A doubt held in the notes is not permission to drag every later turn
        back to fault-finding after the reader has moved on. */
     expect(testing).toMatch(/on later turns[\s\S]*latest message/i);
-    /* Tutorial and Recall are not given the move. */
-    expect(systemOf("tutorial")).not.toContain("TESTING THE PIECE");
+    /* Recall is not given the move. */
     expect(systemOf("learn")).not.toContain("TESTING THE PIECE");
     /* The mode's name, where the prompt says it (it was "the rest of Remember"). */
     expect(explore).toMatch(/like the rest of Learn/);
@@ -266,8 +264,8 @@ describe("the reader's notes in an Explore turn (PR-1)", () => {
 
   /* The route builds one for Explore only; the builder refuses to carry one for
      anybody else, so a caller's mistake cannot put a reader's notes into a
-     Recall, Tutorial or Candidates turn. */
-  it.each(["chat", "learn", "tutorial", "candidates"] as const)(
+     Recall or Candidates turn. */
+  it.each(["chat", "learn", "candidates"] as const)(
     "is never carried by a %s turn, even when one is handed in",
     (kind) => {
       const messages = build(kind, { notes: digest });
@@ -322,15 +320,13 @@ describe("one Explore thread per article", () => {
     expect(JSON.stringify(explore.threads)).toBe(before);
   });
 
-  it("appends a second Explore turn to the existing one, never to Recall's or Tutorial's", () => {
+  it("appends a second Explore turn to the existing one, never to Recall's", () => {
     const recall = withTurn([], { threadId: "spya-recab4", question: "what I took", kind: "learn" }, AT);
-    const tutorial = withTurn(recall.threads, { threadId: "spya-tutar4", question: "not read it", kind: "tutorial" }, AT);
-    const explore = withTurn(tutorial.threads, { threadId: "spya-expar4", question: "what do I think", kind: "explore" }, AT);
+    const explore = withTurn(recall.threads, { threadId: "spya-expar4", question: "what do I think", kind: "explore" }, AT);
     const again = withTurn(explore.threads, { threadId: "spya-expar5", question: "and again", kind: "explore" }, AT);
     expect(again.thread.id).toBe("spya-expar4");
     expect(again.threads.filter((t) => t.kind === "explore")).toHaveLength(1);
     expect(again.threads.find((t) => t.kind === "learn")?.messages).toHaveLength(2);
-    expect(again.threads.find((t) => t.kind === "tutorial")?.messages).toHaveLength(2);
   });
 });
 
@@ -358,7 +354,7 @@ describe("the profile reminder beside the question", () => {
   });
 
   it("is unchanged for the other kinds", () => {
-    for (const kind of ["chat", "learn", "tutorial", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "candidates"] as const) {
       const last = lastOf(build(kind, { profile }));
       expect(last).toContain("Do not address\nthe reader and do not mention this.");
     }

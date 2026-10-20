@@ -3281,6 +3281,20 @@ async function guideExperience(
   }
 }
 
+/**
+ * **A request's `kind`, with the one retired word read as what it became.**
+ * Tutorial was folded into Recall on 2026-10-20 (its threads by
+ * drizzle/20261020063618_fold_tutorial_into_recall.sql), so `kind: "tutorial"`
+ * from a tab still running the old client is a Recall turn, and lands in the
+ * article's Recall thread by `targetOf` (src/chat.ts). A permanent alias,
+ * unlike `review` and `remember`, which were renames and get a 400: GPT Sol's
+ * F9 on docs/plans/261020m-recall-and-tutorial-become-one-recall.md.
+ * Everything else passes through unchanged, to be validated by the caller.
+ */
+export function requestKind(sent: unknown): unknown {
+  return sent === "tutorial" ? "learn" : sent;
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -3292,7 +3306,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     useProfile,
     anchor,
     origin,
-    kind,
+    kind: sentKind,
     stance,
     help,
     typed,
@@ -3331,7 +3345,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      of the wrong kind. A tab left open across the deploy fails its next
      Recall turn until it reloads.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages,
-     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
+
+     **`tutorial` is the one alias, and it is permanent** (`requestKind`): it
+     was not renamed but retired into Recall, so a tab open across that deploy
+     asking for a Tutorial turn is asking for what Recall now is. */
+  const kind = requestKind(sentKind);
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
   }
@@ -3477,11 +3496,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingLearn = (storedKind ?? wantedKind) === "learn";
-  /* Tutorial and Explore are dictated too, so they share Learn's long cap
-     rather than chat's 4,000 — the same mistake `MAX_LEARN_CHARS` exists to
-     avoid. */
+  /* Explore is dictated too, so it shares Learn's long cap rather than chat's
+     4,000 — the same mistake `MAX_LEARN_CHARS` exists to avoid. */
   const effectiveKind = storedKind ?? wantedKind;
-  const longInput = askingLearn || effectiveKind === "tutorial" || effectiveKind === "explore";
+  const longInput = askingLearn || effectiveKind === "explore";
   /* **Chat only.** Learn's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -4603,8 +4621,8 @@ function liveKind(thread: ChatThread | undefined, sent: unknown): SpokenKind | u
   if (sent !== undefined && !isSpokenKind(sent)) {
     throw httpError(400, "kind must be a conversation that takes a live conversation");
   }
-  /* A caller may omit `kind`, but that does not make a stored Tutorial,
-     Explore or Candidates conversation eligible. Refuse it here, before the
+  /* A caller may omit `kind`, but that does not make a stored Explore or
+     Candidates conversation eligible. Refuse it here, before the
      Realtime mint or GPT-Live journal/create can spend anything; the spoken
      append has the same gate for the later write. */
   if (thread) {

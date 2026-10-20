@@ -18,7 +18,7 @@ describe("offer_next_steps, the tool", () => {
   it("is offered to a typed guide only, and not to Live's guide", () => {
     expect(names(toolsFor("guide"))).toContain("offer_next_steps");
     expect(names(GUIDE_TOOLS)).not.toContain("offer_next_steps");
-    for (const kind of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "explore", "candidates"] as const) {
       expect(names(toolsFor(kind))).not.toContain("offer_next_steps");
     }
   });

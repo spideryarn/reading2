@@ -50,8 +50,8 @@ const executor = (glossaryReady = true): CommandExecutor => ({
       ["mode:glossary", { key: "mode:glossary", label: "Glossary", description: "Terms", generates: true }],
       ["mode:structure", { key: "mode:structure", label: "Structure", description: "Shape", generates: false }],
       [
-        "submode:learn:tutorial",
-        { key: "submode:learn:tutorial", label: "Learn › Tutorial", description: "Turns", generates: false },
+        "submode:learn:explore",
+        { key: "submode:learn:explore", label: "Learn › Explore", description: "Turns", generates: false },
       ],
     ]),
   },
@@ -187,8 +187,8 @@ describe("a mode or a quick search as a chip", () => {
       enabled: true,
     });
     expect(chipFor("[cmd:mode:mode%3Astructure]", executor(), BLOCKS)?.target?.generates).toBe(false);
-    expect(chipFor("[cmd:mode:submode%3Alearn%3Atutorial]", executor(), BLOCKS)?.target?.label).toBe(
-      "Learn › Tutorial",
+    expect(chipFor("[cmd:mode:submode%3Alearn%3Aexplore]", executor(), BLOCKS)?.target?.label).toBe(
+      "Learn › Explore",
     );
   });
 

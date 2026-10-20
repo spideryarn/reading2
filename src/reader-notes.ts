@@ -275,8 +275,6 @@ function kindWords(kind: ThreadKind): string {
       return "a chat";
     case "learn":
       return "Recall";
-    case "tutorial":
-      return "Tutorial";
     case "explore":
       return "Explore";
     case "candidates":

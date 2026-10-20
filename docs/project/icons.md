@@ -289,7 +289,7 @@ Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Deb
   [260912c](../plans/260912c-send-button-icon-and-primary-style.md#what-gpt-sol-added-to-the-diagnosis).
 - [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx) — the quiz's step row as `ChevronLeft`,
   `ChevronRight` and `List`, each in a tooltip, and since 2026-10-03 Answer as chat's
-  `SendHorizontal` in the same 36px box (spya-fzgcqu); the Recall | Tutorial | Explore | Quiz switch beside it
+  `SendHorizontal` in the same 36px box (spya-fzgcqu); the Recall | Explore | Quiz switch beside it
   kept its words, and [quiz.md § On screen](quiz.md) says why (SPIDERYARN-READING2-71).
 
 ## See also

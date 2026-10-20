@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { quoteCheck } from "../evals/learn-tutorial.js";
+import { quoteCheck } from "../evals/learn-recall-turns.js";
 import type { Block } from "../src/types.js";
 
 const blocks: Block[] = [{
@@ -12,7 +12,7 @@ const blocks: Block[] = [{
   gistable: true,
 }];
 
-describe("Tutorial's quotation screen", () => {
+describe("the multi-turn Recall eval's quotation screen (Tutorial's, until 2026-10-20)", () => {
   it("recognises an unlinked phrase with a comma inside the closing mark", () => {
     // The question in entropy-after-1, richRecall turn 2: the screen missed it.
     const check = quoteCheck('Given that phrase, "facilitates its own transformation," what does it suggest?', blocks);

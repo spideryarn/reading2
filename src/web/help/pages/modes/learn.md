@@ -7,9 +7,9 @@ related: mode-chat, comments
 
 Reading something once rarely makes it stick; saying what you took from it, and finding out where
 you went wrong, does. Learn is for that. Tell it what you remember and it checks that against the
-piece, corrects one thing when needed, links the passage and nudges you to remember more. You can
-also work through the piece a little at a time in a Tutorial, answer a Quiz written from it, or use
-Explore to test your own view and where the piece may be weak. Every turn waits for you: the
+piece, corrects one thing when needed, links the passage and nudges you to remember more; if you
+haven't read it yet, it takes you through it a little at a time. You can also answer a Quiz written
+from it, or use Explore to test your own view and where the piece may be weak. Every turn waits for you: the
 remembering is yours to do.
 
 ![Recall: a reader’s short account of an essay on Pittsburgh, a reply that corrects one point with two quoted passages, then a question about a later part, and a Hint button](../images/mode-learn.png "Recall: say what you took from it. The reply corrects one thing, quotes the passages, and asks what you remember next.")
@@ -28,12 +28,13 @@ it again. For something you will not need next week, it is not worth the effort.
   clue if you want one. Say you don’t remember and it fills the gap instead. It does not praise or
   grade you, and disagreeing with the author is not counted as misunderstanding. There is one Recall
   conversation per article; the bin icon starts it over.
-- **Tutorial**: short turns, a little of the piece at a time. Say what you remember; it’s fine if
-  you haven’t read it yet, or haven’t finished. Each reply teaches one small piece, links the
-  passage, and asks you to put it in your own words, explain why the author needs it or connect it
-  to an earlier part. It is about what the author is saying; now and then it asks what you think.
-  Now and then it comes back to an earlier point. It takes your profile and your reason for reading
-  into account. Typed or dictated; there is no Live conversation here yet.
+
+  It’s fine if you haven’t read it yet, or haven’t finished: just start. Recall then begins with the
+  piece’s main claim and takes you through it a little at a time — each reply teaches one small
+  piece, links the passage, and asks you to put it in your own words, explain why the author needs
+  it or connect it to an earlier part. Now and then it comes back to an earlier point. It takes your
+  profile and your reason for reading into account. (This was a separate part of Learn called
+  Tutorial until October 2026.)
 - **Explore**: for deepening your thinking about the piece, including where it may be weak, more
   than for remembering what the piece says. It is sent what you have highlighted, bookmarked and
   written on this article, and a list of your other conversations about it, and starts from one of
