@@ -40,6 +40,21 @@ export interface AdminArticle {
    * article, with the title (spya-zt7u0h, plan 261019n).
    */
   readonly published: boolean | null;
+  /** What the ledger says it has cost over its whole life (plan 261020s). */
+  readonly cost: AdminArticleCost;
+}
+
+/**
+ * **One article's ID-keyed total cost**, `/admin/costs`' rule in bulk
+ * (src/store/ai-calls-spend-pg.ts § `spendByArticle`): the three pockets
+ * already added, in nano-dollars. Unlike `spendForArticle`, this does not
+ * claim slug-only rows. `unpricedCalls` reported no money, so a total with any
+ * is a floor. Zeros for an article nothing has spent on.
+ */
+export interface AdminArticleCost {
+  readonly nanos: number;
+  readonly calls: number;
+  readonly unpricedCalls: number;
 }
 
 export interface AdminArticles {

@@ -1388,16 +1388,22 @@ export const TASK_TIER: Record<Task, Tier> = {
  * `referee-hidden-check` (plan 261007l): the feature is "hand it to Opus", so
  * it is Opus whatever the article's setting.
  *
+ * `chat` (plan 261020q): Greg, 2026-10-19, *"Default to Opus 5.5 for Chats"*.
+ * Every thread kind that bills as `chat` — chat, Learn, the tutorial, Explore,
+ * the guide (`jobFor` in src/converse.ts). Not Candidates, which is its own
+ * job. About twice Sonnet's price a turn, on our bill, not the reader's.
+ *
  * **Membership alone does nothing at a call site**: `modelFor` does not apply
  * `powerFor`, so a caller that wants this has to resolve
  * `modelFor(task, powerFor(task, articlePower))` itself, as
- * src/referee-hidden-check.ts § `defaultModel` and the `simple` step do.
+ * src/referee-hidden-check.ts § `defaultModel`, src/converse.ts § `defaultModel`
+ * and the `simple` step do.
  *
  * Removing a task puts it back on the article's setting. A stored artefact
  * stays fresh either way, because `generationKey` treats the two models as one
  * generation.
  */
-export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple", "referee-hidden-check"]);
+export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple", "referee-hidden-check", "chat"]);
 
 /** The power `task` runs at on an article whose own setting is `articlePower`. */
 export function powerFor(task: Task, articlePower: ModelPower): ModelPower {

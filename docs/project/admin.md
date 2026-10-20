@@ -1003,6 +1003,14 @@ carries the title's words. A row per article does show how many each reader has 
 title would be a decision about [§ What it deliberately does not show](#what-it-deliberately-does-not-show),
 and a one-line change in `listArticlesAcrossOwners`.
 
+**Each row's Total cost** is every model call the ledger ties to the article by its id, over its
+whole life and whoever made it (`spendByArticle` in
+[`ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)): `/admin/costs`' rule and
+formatting, a `+` when it is a floor, and only the spend and call counts that `/admin/costs` already
+shows by opaque article id. The table can be ordered highest total cost first. Greg, 2026-10-19
+(`spya-vjyev3`): *"Also show Total Cost per article"* —
+[261020s](../plans/261020s-total-cost-column-on-admin-articles.md).
+
 | Route | Does |
 |---|---|
 | `GET /api/admin/articles` | the list — `private, no-store`; addresses only if the Auth service answered |

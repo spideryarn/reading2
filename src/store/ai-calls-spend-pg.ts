@@ -90,7 +90,7 @@
 
 import { createHmac } from "node:crypto";
 
-import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { CostCubeGroup } from "../cost-cube.js";
 import { type Db, getDb } from "../db/client.js";
@@ -926,6 +926,45 @@ export async function spendForArticle(article: ArticleIdentity): Promise<Article
     .where(belongsTo(article))
     .groupBy(aiCalls.scopeKind, aiCalls.purpose, aiCalls.stepName);
   return [...rows];
+}
+
+/**
+ * **What every article has cost, by its id** — `/admin/articles`' Total cost
+ * column (plan 261020s). The same three pockets and unpriced rule as every
+ * read here, over the article's whole life.
+ *
+ * **Rows keyed by `article_id` only**, which is `spendCube`'s rule and so
+ * `/admin/costs`'s: a row with only a recorded slug is not claimed to be any
+ * article. `belongsTo`'s slug fallback is deliberately not used. Across owners
+ * it would tie spend that `/admin/costs` shows only as a slug hash to a named
+ * private article, and it would make this page and `/admin/costs` disagree.
+ * Measured 2026-10-20 in production, the fallback matched no row at all, so
+ * Metadata's figure and this one agree today. GPT Sol, plan review, P1 and P2.
+ *
+ * Every owner's articles, for its one caller behind the `/api/admin` gate:
+ * spend and call counts tied to opaque ids, which `spendCube` already returns.
+ * An article with no rows is absent from the map, not zero.
+ */
+export async function spendByArticle(): Promise<Map<string, RunSpend>> {
+  const rows = await getDb()
+    .select({
+      articleId: aiCalls.articleId,
+      calls: CALLS,
+      creditsNanos: CREDITS,
+      byokNanos: BYOK,
+      computedNanos: COMPUTED,
+      unpricedCalls: UNPRICED_CALLS,
+    })
+    .from(aiCalls)
+    .where(isNotNull(aiCalls.articleId))
+    .groupBy(aiCalls.articleId);
+  return new Map(
+    rows.flatMap((r) =>
+      r.articleId === null
+        ? []
+        : [[r.articleId, { nanos: r.creditsNanos + r.byokNanos + r.computedNanos, calls: r.calls, unpricedCalls: r.unpricedCalls }]],
+    ),
+  );
 }
 
 /**
