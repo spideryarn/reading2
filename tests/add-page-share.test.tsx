@@ -302,6 +302,9 @@ describe("no request without the rights tick and the press", () => {
     expect(text(), "the inventory was not drawn").toContain("Glossary");
     expect(text(), "money inside the confirmation").not.toContain(UNSHARING_COSTS_ALLOWANCE);
     expect(button("Share it")?.disabled).toBe(true);
+    /* Plan 261020z: green send, red back-out. */
+    expect(button("Share it")?.classList.contains("tone-positive")).toBe(true);
+    expect(button("Cancel")?.classList.contains("tone-negative")).toBe(true);
     expect(puts).toEqual([]);
   });
 

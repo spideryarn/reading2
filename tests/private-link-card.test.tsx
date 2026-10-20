@@ -242,6 +242,10 @@ describe("making a link", () => {
     expect(host.textContent).toContain("These stay with you");
     expect(host.textContent).toContain(SHARING_RIGHTS_CONFIRM);
     expect(button("Create the link")?.disabled).toBe(true);
+    /* Plan 261020z: green to send, red to back out; the send is outline, not the filled default. */
+    expect(button("Create the link")?.classList.contains("tone-positive")).toBe(true);
+    expect(button("Create the link")?.getAttribute("data-variant")).toBe("outline");
+    expect(button("Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button("Create the link")?.click());
     await settle();
     expect(sent("POST")).toEqual([]);

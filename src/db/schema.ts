@@ -6152,6 +6152,35 @@ export const readerArrivals = spideryarn.table("reader_arrivals", {
 });
 
 /**
+ * **When each account opened an article, at most once per UTC half-hour** —
+ * what lets Active days on /admin/users count a day spent only reading.
+ * docs/plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md.
+ *
+ * - **Keyed on the account, not the article.** An open is something the
+ *   account did at a moment, which stays true after the article is deleted or
+ *   transferred; hung off the article, either would shrink the old owner's
+ *   days after the fact (GPT Sol's plan review, finding 2).
+ * - **Not which article.** The count needs only when, and which-article-when
+ *   is a reading history, which /privacy does not promise to keep.
+ * - **The primary key is the throttle.** `slot` is the UTC half-hour the open
+ *   fell in, and the insert is `on conflict do nothing`, so a reload or a run
+ *   through several articles makes one row, two tabs at once cannot make two,
+ *   and a slot never crosses a UTC midnight (src/store/pg-shelf.ts §
+ *   `recordOpen`).
+ */
+export const articleOpenTimes = spideryarn.table(
+  "article_open_times",
+  {
+    /** `auth.users(id)`, ON DELETE CASCADE. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    slot: timestamp("slot", { withTimezone: true }).notNull(),
+    /** The first open in the slot. */
+    openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.slot] })],
+);
+
+/**
  * **One row per time the administrator viewed the app as another reader**,
  * read-only — docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
  * § Part 3. Written only by the three `/api/admin/view-as` routes

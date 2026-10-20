@@ -1,5 +1,5 @@
 {
-  "id": "ba2bb6c0-c835-4671-9124-254f2d354a4b",
+  "id": "ce55cc37-fcbc-4f7c-a5e9-6c37489d05fb",
   "prevId": "2c4236c7-7c35-4205-8ebb-80b5e3d2d256",
   "version": "7",
   "dialect": "postgresql",
@@ -534,6 +534,46 @@
           "value": "(\"spideryarn\".\"ai_calls\".\"credits_used_nanos\" is null or \"spideryarn\".\"ai_calls\".\"credits_used_nanos\" >= 0)\n          and (\"spideryarn\".\"ai_calls\".\"byok_upstream_nanos\" is null or \"spideryarn\".\"ai_calls\".\"byok_upstream_nanos\" >= 0)\n          and (\"spideryarn\".\"ai_calls\".\"computed_cost_nanos\" is null or \"spideryarn\".\"ai_calls\".\"computed_cost_nanos\" >= 0)"
         }
       },
+      "isRLSEnabled": false
+    },
+    "spideryarn.article_open_times": {
+      "name": "article_open_times",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "article_open_times_owner_id_slot_pk": {
+          "name": "article_open_times_owner_id_slot_pk",
+          "columns": [
+            "owner_id",
+            "slot"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "spideryarn.article_revisions": {
@@ -9336,86 +9376,6 @@
         "uploads_rejected_has_reason": {
           "name": "uploads_rejected_has_reason",
           "value": "\"spideryarn\".\"uploads\".\"status\" <> 'rejected' or \"spideryarn\".\"uploads\".\"reason\" is not null"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.view_as_sessions": {
-      "name": "view_as_sessions",
-      "schema": "spideryarn",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "nonce_hash": {
-          "name": "nonce_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_id": {
-          "name": "actor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "subject_id": {
-          "name": "subject_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "view_as_sessions_nonce_hash_unique": {
-          "name": "view_as_sessions_nonce_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "nonce_hash"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "view_as_sessions_reason": {
-          "name": "view_as_sessions_reason",
-          "value": "char_length(\"spideryarn\".\"view_as_sessions\".\"reason\") between 1 and 300"
-        },
-        "view_as_sessions_not_self": {
-          "name": "view_as_sessions_not_self",
-          "value": "\"spideryarn\".\"view_as_sessions\".\"actor_id\" <> \"spideryarn\".\"view_as_sessions\".\"subject_id\""
         }
       },
       "isRLSEnabled": false

@@ -601,6 +601,10 @@ describe("2b: no link without the rights tick and the press", () => {
     expect(button("Create the link")?.closest("div.tw\\:rounded-md")?.querySelector("h4")?.textContent).toBe(
       PRIVATE_LINK_CONFIRM_TITLE,
     );
+    /* Plan 261020z: this is AddShareLink's otherwise-uncovered pair. */
+    expect(button("Create the link")?.classList.contains("tone-positive")).toBe(true);
+    expect(button("Create the link")?.getAttribute("data-variant")).toBe("outline");
+    expect(button("Cancel")?.classList.contains("tone-negative")).toBe(true);
     await settle();
     expect(writes).toEqual([]);
   });

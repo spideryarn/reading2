@@ -1011,7 +1011,7 @@ describe("the schema keeps the promises the plan makes", () => {
       const { rows } = await c.query(
         `select conname from pg_constraint
           where connamespace = 'spideryarn'::regnamespace
-            and conname in ('articles_owner_fk','comments_owner_fk','jobs_owner_fk',
+            and conname in ('article_open_times_owner_fk','articles_owner_fk','comments_owner_fk','jobs_owner_fk',
                             'articles_current_revision_fk','reader_profiles_owner_fk',
                             'uploads_owner_fk','feedback_owner_fk',
                             'feedback_addenda_owner_fk',
@@ -1027,6 +1027,9 @@ describe("the schema keeps the promises the plan makes", () => {
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
+        /* drizzle/20261020164021, CASCADE as `reader_arrivals_owner_fk` is:
+           when an account opened articles, worth nothing once it is gone. */
+        "article_open_times_owner_fk",
         "articles_current_revision_fk",
         "articles_owner_fk",
         /* Both owner keys from drizzle/20260902163433. The second matters most:
@@ -1088,7 +1091,7 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for the same reason: the model's topic set is a cache. */
         "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",
-        /* drizzle/20261020185042, appended by hand. CASCADE on both, for
+        /* drizzle/20261020225640, appended by hand. CASCADE on both, for
            `reader_arrivals`' reason: bookkeeping about two accounts. */
         "view_as_sessions_actor_fk",
         "view_as_sessions_subject_fk",

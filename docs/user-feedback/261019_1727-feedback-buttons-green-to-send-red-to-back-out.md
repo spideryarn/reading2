@@ -1,7 +1,7 @@
 ---
 reports: spya-as0et6
 ending: shipped
-comment: Throughout Feedback, the button that sends is green and the one that backs out is red (Send/Cancel, Close, Send addendum/Cancel, Send reply/Defer), shown on /design. Whether it becomes a rule app-wide is a question for you.
+comment: The button that sends is green and the one that backs out is red, in Feedback and now across the app (sharing, Metadata, the admin pages, chat, notes and more). It is a design rule in controls.md.
 ---
 # Feedback's buttons green to send, red to back out
 
@@ -18,10 +18,10 @@ filed 2026-10-19 17:27 UTC from `/admin/users` (#621, `SPIDERYARN-READING2-KE`, 
 >
 > — Greg, 2026-10-19 (`spya-as0et6`, #621)
 
-**Ending: shipped**, on `dev`, for the Feedback dialog and the shared piece; two parts wait on Greg.
+**Ending: shipped**, on `dev`, for the Feedback dialog, the shared piece and its app-wide follow-on.
 
 - **One shared pair, `.tone-positive` and `.tone-negative`**, in
-  [`button-tone.css`](../../src/web/styles/button-tone.css): `--positive` green or `--danger` red on
+  [`button-tone.css`](../../src/web/button-tone.css): `--positive` green or `--danger` red on
   the text and border, no wash, dimmed when it cannot be pressed unless it is working. It replaces
   the thread's four Feedback-only rules (261011h) and `.fb-send`'s own green (261017c). `/design`
   § Controls across modes shows it as *Send and back out*.
@@ -32,9 +32,13 @@ filed 2026-10-19 17:27 UTC from `/admin/users` (#621, `SPIDERYARN-READING2-KE`, 
   dialog shares.
 - **Red is a direction, not a warning.** Write's Cancel keeps its draft; the addendum's Cancel
   discards its own, as before. A button that exists to delete is the solid destructive fill.
-- **Deferred, both waiting on Greg** in question
-  [`q-yvmweg`](questions/q-yvmweg.md): (1) the rule's wording in
-  [controls.md](../project/controls.md), a rule doc; (2) the app's ~16 other send/back-out pairs,
-  queued as `qi-ysxdv97b`.
+- **The follow-on was put to Greg** in question [`q-yvmweg`](questions/q-yvmweg.md): (1) the rule's
+  wording in [controls.md](../project/controls.md), a rule doc; (2) the app's other send/back-out
+  pairs, queued as `qi-ysxdv97b`.
 
 Sentry: this session has no Sentry sign-in; the next feedback sweep marks it resolved.
+
+**Answered, 2026-10-20** (reply `spya-xbrvb9` to `q-yvmweg`): yes to both, *"use your judgment,
+don't over-use it"*. The rule is in [controls.md](../project/controls.md); the rest of the app's
+pairs changed in [261020z](../plans/261020z-green-to-send-red-to-back-out-across-the-app.md), which
+lists the few left alone and why.

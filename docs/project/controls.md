@@ -37,6 +37,12 @@ below, live. The families came from plan
 | says something failed | [`ReadError`](../../src/web/ReadError.tsx) or `.gloss-error`, in `--danger` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
 | is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
 | floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, or a shape of its own with its alpha times `--shadow-strength`, [`tokens.css`](../../src/web/styles/tokens.css) | [`elevation-shadows-soften-in-light`](../../tests/elevation-shadows-soften-in-light.test.ts) |
+| sends what you wrote, or leaves without sending | `.tone-positive` (green) and `.tone-negative` (red), [`button-tone.css`](../../src/web/button-tone.css) | [`feedback-dialog-styles`](../../tests/feedback-dialog-styles.test.ts) |
+
+The pair that ends a form is coloured by what it does: the button that sends what you wrote is
+green, the one that leaves without sending is red. Red is a direction, not a warning: a button
+whose job is to delete something is the solid destructive fill. Buttons that move you or undo stay
+neutral. Greg, 2026-10-20: *"use your judgment, don't over-use it"* (`q-yvmweg`).
 
 Some tests check the shared piece itself; the caller checks hold only the callers they list.
 A new mode needs adding to those checks. "Use your judgment" is meant: Skim's ‹ › is a pager,

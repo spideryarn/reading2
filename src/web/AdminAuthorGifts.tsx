@@ -15,8 +15,14 @@
  * what Greg reads before he presses *Send*: a planted address reaches, at
  * worst, a draft he reads beside the URL it came from (D7).
  *
- * Not a table, unlike the voucher list below it: a gift carries notes that can
- * run to pages and a list of lookups, which a row would squeeze.
+ * Not a table, unlike the voucher list under *Given*: a gift carries notes
+ * that can run to pages and a list of lookups, which a row would squeeze.
+ *
+ * **Since plan 261020ab this is the page's *Drafts* tab**, and drafting is the
+ * page's one *New gift* form, ticked (AdminVouchersPage.tsx § `CreateForm`):
+ * the hook is the page's, so the form's draft lands in this list. **A finished
+ * gift — sent or discarded — is one line, shut**, below the ones still waiting
+ * (Greg, 2026-10-20, spya-vcnmrd: *"At the very least collapse it"*).
  *
  * **Admin-only page**, so a lookup's cost is drawn in dollars
  * (`formatCostNanos`); tests/no-ai-cost-for-readers.test.ts scans copy for a
@@ -26,47 +32,27 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { RefreshCw } from "lucide-react";
 
 import { formatCostNanos } from "../admin.js";
-import {
-  AUTHOR_GIFT_PARAM,
-  type AdminAuthorGift,
-  type AdminAuthorLookup,
-  type AuthorGiftStatus,
-} from "../admin-author-gifts.js";
+import type { AdminAuthorGift, AdminAuthorLookup, AuthorGiftStatus } from "../admin-author-gifts.js";
 import { freeArticles, RECIPIENT_NAME_MAX, cleanRecipientName } from "../admin-vouchers.js";
 import { addressBoxChange } from "../email-address.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
-import {
-  BUTTON,
-  INPUT,
-  Refusal,
-  StarterOwnerLine,
-  StarterSelect,
-  type StarterShelf,
-  TEXTAREA,
-  starterChoices,
-} from "./admin-vouchers-parts.js";
+import { BUTTON, INPUT, Refusal, StarterOwnerLine, TEXTAREA } from "./admin-vouchers-parts.js";
 import { Button } from "./components/ui/button.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
-import {
-  type AuthorGiftPatchInput,
-  lookupPending,
-  type UseAdminAuthorGifts,
-  useAdminAuthorGifts,
-} from "./useAdminAuthorGifts.js";
+import { type AuthorGiftPatchInput, lookupPending, type UseAdminAuthorGifts } from "./useAdminAuthorGifts.js";
 import { useNow } from "./useNow.js";
 import { voiceClass } from "./voice.js";
 
 /** More searches than the prompt allows (D4, D7): flagged on the run. */
 const SEARCHES_ASKED = 3;
 
-/** The element id a gift's card carries, so *Draft a gift* can scroll to one that already existed. */
 /** The gift `?gift=<id>` names, or null. A UUID or nothing, so the address cannot put text in an id. */
-export function giftFromAddress(search: string): string | null {
-  const id = new URLSearchParams(search).get(AUTHOR_GIFT_PARAM);
+export function giftIdOrNull(id: string | null): string | null {
   return id !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
 }
 
+/** The element id a gift's card carries, so *Draft a gift* can scroll to one that already existed. */
 export function authorGiftAnchor(id: string): string {
   return `author-gift-${id}`;
 }
@@ -80,7 +66,7 @@ export function giftStatusWords(gift: Pick<AdminAuthorGift, "status" | "discarde
     case "sending":
       return "Sending didn't finish — press Send again";
     case "sent":
-      return "Sent — its voucher is in the table below";
+      return "Sent — its voucher is under Given";
     case "discarded": {
       const when = gift.discardedAt === null ? undefined : exactly(gift.discardedAt);
       return when ? `Discarded on ${when}` : "Discarded";
@@ -90,6 +76,16 @@ export function giftStatusWords(gift: Pick<AdminAuthorGift, "status" | "discarde
       return never;
     }
   }
+}
+
+/** Sent or discarded: nothing left to do, so the card folds to its line (plan 261020ab). */
+function finished(gift: Pick<AdminAuthorGift, "status">): boolean {
+  return gift.status === "sent" || gift.status === "discarded";
+}
+
+/** How many gifts wait on Greg — drafts and half-sent ones — for the *Drafts* tab's count. */
+export function giftsWaiting(gifts: readonly AdminAuthorGift[] | null): number {
+  return gifts === null ? 0 : gifts.filter((g) => !finished(g)).length;
 }
 
 /** What one lookup came to, in Greg's words. `now` decides whether an unfinished one is still running. */
@@ -135,93 +131,6 @@ function Out({ href, children }: { href: string; children: ReactNode }) {
 function wholeNumber(raw: string): number | null {
   const n = Number(raw);
   return raw.trim() !== "" && Number.isInteger(n) ? n : null;
-}
-
-/* ------------------------------------------------------- Draft a gift -- */
-
-/**
- * **Draft a gift for an author** — D10's fallback: an article imported before
- * this feature, or a tab closed before the add page could ask. The same
- * `POST /api/admin/author-gifts` the add page sends, with the private link's
- * rights tick-box, because the server makes that link if there is none.
- */
-function DraftForm({
-  shelf,
-  ensure,
-  onExisting,
-}: {
-  shelf: StarterShelf;
-  ensure: UseAdminAuthorGifts["ensure"];
-  onExisting: (id: string) => void;
-}) {
-  const [slug, setSlug] = useState("");
-  const [rights, setRights] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-  const choices = useMemo(() => starterChoices(shelf.articles), [shelf.articles]);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (slug === "" || !rights || busy) return;
-    setBusy(true);
-    setDone(null);
-    const answer = await ensure(slug);
-    setBusy(false);
-    if (answer.kind === "refused") {
-      setRefusal(answer.message);
-      return;
-    }
-    setRefusal(null);
-    setSlug("");
-    setRights(false);
-    if (answer.kind === "created") {
-      setDone("Drafted. The lookup for its author is running now; this list updates when it finishes.");
-    } else {
-      setDone("That article already has a gift, so nothing new was made. It is highlighted below.");
-      onExisting(answer.id);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={(e) => void submit(e)}
-      aria-label="Draft a gift for an author"
-      className="tw:mb-4 tw:flex tw:flex-col tw:gap-2 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4 tw:text-xs tw:text-muted-foreground"
-    >
-      <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">Draft a gift for an author</h3>
-      <p className="tw:m-0">
-        Makes the article's private link if it has none, saves a draft, and runs a web lookup for the author and an
-        address, using up to three searches. Nothing is emailed until you press Send on the draft.
-      </p>
-      {refusal && <Refusal message={refusal} />}
-      {done && (
-        <p role="status" className="tw:m-0 tw:text-sm tw:text-foreground">
-          {done}
-        </p>
-      )}
-      <StarterSelect
-        id="author-gift-new-article"
-        label={<span className="tw:text-sm tw:font-medium tw:text-foreground">Article (your articles, newest first)</span>}
-        noneLabel="Choose one…"
-        choices={choices}
-        slug={slug}
-        onChoose={setSlug}
-        reload={shelf.reload}
-        disabled={busy}
-      />
-      {shelf.error && <p className="tw:m-0 tw:text-danger">Couldn’t read your articles. {shelf.error}</p>}
-      <label className="tw:flex tw:items-start tw:gap-2 tw:text-foreground">
-        <input type="checkbox" checked={rights} disabled={busy} onChange={(e) => setRights(e.target.checked)} />
-        <span>{SHARING_RIGHTS_CONFIRM}</span>
-      </label>
-      <div>
-        <Button type="submit" size="sm" disabled={busy || slug === "" || !rights}>
-          {busy ? "Drafting…" : "Draft a gift"}
-        </Button>
-      </div>
-    </form>
-  );
 }
 
 /* ----------------------------------------------------------- one gift -- */
@@ -380,10 +289,10 @@ function Notes({
             className={`${TEXTAREA} tw:w-full`}
           />
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <button type="submit" disabled={busy || movedOn || lookupRunning} className={BUTTON}>
+            <button type="submit" disabled={busy || movedOn || lookupRunning} className={`${BUTTON} tone-positive`}>
               {busy ? "Saving…" : "Save notes"}
             </button>
-            <button type="button" disabled={busy} onClick={() => setEditing(false)} className={BUTTON}>
+            <button type="button" disabled={busy} onClick={() => setEditing(false)} className={`${BUTTON} tone-negative`}>
               Cancel
             </button>
           </div>
@@ -537,10 +446,10 @@ function DraftEditor({
         />
       </label>
       <div className="tw:flex tw:flex-wrap tw:gap-2">
-        <button type="submit" disabled={busy} className={BUTTON}>
+        <button type="submit" disabled={busy} className={`${BUTTON} tone-positive`}>
           {busy ? "Saving…" : "Save"}
         </button>
-        <button type="button" disabled={busy} onClick={done} className={BUTTON}>
+        <button type="button" disabled={busy} onClick={done} className={`${BUTTON} tone-negative`}>
           Cancel
         </button>
       </div>
@@ -548,66 +457,64 @@ function DraftEditor({
   );
 }
 
-/** The article and the status, then what the voucher will carry and where each part came from. */
+/** The article, by its title, and whose it is now. The first thing on a card's line. */
+function GiftTitle({ gift }: { gift: AdminAuthorGift }) {
+  const title = gift.starter.title;
+  return (
+    <span className="tw:text-sm tw:text-foreground">
+      {title === null ? (
+        `${gift.starter.slug} (deleted)`
+      ) : gift.starter.owner === "claimant" || gift.starter.owner === "other" ? (
+        /* Somebody else's now: its address would be a 404 for the
+           administrator, so the title stands without a link (261011n § D3). */
+        <span className={voiceClass("author")}>{title}</span>
+      ) : (
+        <a href={readHref(gift.starter.slug)} className={`${voiceClass("author")} tw:underline`}>
+          {title}
+        </a>
+      )}
+      {gift.starter.owner != null && (
+        <>
+          {" · "}
+          <StarterOwnerLine owner={gift.starter.owner} />
+        </>
+      )}
+    </span>
+  );
+}
+
+/** What the voucher will carry, and where each part came from. */
 function GiftFields({ gift }: { gift: AdminAuthorGift }) {
   const byId = (id: string | null) => (id === null ? null : (gift.lookups.find((l) => l.id === id) ?? null));
   const emailFrom = byId(gift.emailLookupId);
   const nameFrom = byId(gift.nameLookupId);
-  const title = gift.starter.title;
   return (
-    <>
-      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-2">
-        <span className="tw:text-sm tw:text-foreground">
-          {title === null ? (
-            `${gift.starter.slug} (deleted)`
-          ) : gift.starter.owner === "claimant" || gift.starter.owner === "other" ? (
-            /* Somebody else's now: its address would be a 404 for the
-               administrator, so the title stands without a link (261011n § D3). */
-            <span className={voiceClass("author")}>{title}</span>
-          ) : (
-            <a href={readHref(gift.starter.slug)} className={`${voiceClass("author")} tw:underline`}>
-              {title}
-            </a>
-          )}
-          {gift.starter.owner != null && (
-            <>
-              {" · "}
-              <StarterOwnerLine owner={gift.starter.owner} />
-            </>
-          )}
-        </span>
-        <span data-gift-status={gift.status} className="tw:font-medium tw:text-foreground">
-          {giftStatusWords(gift)}
-        </span>
-      </div>
-
-      <dl className="tw:m-0 tw:mt-2 tw:grid tw:grid-cols-[auto_1fr] tw:gap-x-3 tw:gap-y-1">
-        <dt>Address</dt>
-        <dd className="tw:m-0 tw:break-words tw:text-foreground">
-          {gift.email ?? <span className="tw:text-ink-faint">none yet</span>}
-          <Provenance value={gift.email} lookup={emailFrom} sourceUrl={emailFrom?.emailSourceUrl ?? null} />
-        </dd>
-        <dt>Name</dt>
-        <dd className="tw:m-0 tw:break-words tw:text-foreground">
-          {gift.recipientName ?? <span className="tw:text-ink-faint">none yet</span>}
-          <Provenance value={gift.recipientName} lookup={nameFrom} sourceUrl={nameFrom?.authorSourceUrl ?? null} />
-        </dd>
-        <dt>Gift</dt>
-        <dd className="tw:m-0 tw:text-foreground">{freeArticles(gift.articles)}</dd>
-        <dt>Note to them</dt>
-        <dd className="tw:m-0 tw:whitespace-pre-wrap tw:break-words tw:text-foreground">
-          {gift.recipientNote ?? <span className="tw:text-ink-faint">none</span>}
-        </dd>
-      </dl>
-    </>
+    <dl className="tw:m-0 tw:mt-2 tw:grid tw:grid-cols-[auto_1fr] tw:gap-x-3 tw:gap-y-1">
+      <dt>Address</dt>
+      <dd className="tw:m-0 tw:break-words tw:text-foreground">
+        {gift.email ?? <span className="tw:text-ink-faint">none yet</span>}
+        <Provenance value={gift.email} lookup={emailFrom} sourceUrl={emailFrom?.emailSourceUrl ?? null} />
+      </dd>
+      <dt>Name</dt>
+      <dd className="tw:m-0 tw:break-words tw:text-foreground">
+        {gift.recipientName ?? <span className="tw:text-ink-faint">none yet</span>}
+        <Provenance value={gift.recipientName} lookup={nameFrom} sourceUrl={nameFrom?.authorSourceUrl ?? null} />
+      </dd>
+      <dt>Gift</dt>
+      <dd className="tw:m-0 tw:text-foreground">{freeArticles(gift.articles)}</dd>
+      <dt>Note to them</dt>
+      <dd className="tw:m-0 tw:whitespace-pre-wrap tw:break-words tw:text-foreground">
+        {gift.recipientNote ?? <span className="tw:text-ink-faint">none</span>}
+      </dd>
+    </dl>
   );
 }
 
 /**
- * What can be done to a gift in its status: Send on a draft or a half-sent one
- * (held back, with the reason, until there is an address); Edit, Look up again
- * and Discard on a draft; Restore on a discarded one. A sent gift has only its
- * notes, below.
+ * What can be done to a draft or a half-sent gift: Send (held back, with the
+ * reason, until there is an address); Edit, Look up again and Discard on a
+ * draft. A finished gift has none of these: Restore, on a discarded one, is on
+ * its card's line, so it is reachable while the card is shut (plan 261020ab).
  */
 function GiftActions({
   gift,
@@ -615,6 +522,7 @@ function GiftActions({
   running,
   onSend,
   onEdit,
+  onDiscard,
   attempt,
   hooks,
 }: {
@@ -623,8 +531,9 @@ function GiftActions({
   running: boolean;
   onSend: () => void;
   onEdit: () => void;
+  onDiscard: () => void;
   attempt: (run: () => Promise<string | null>) => void;
-  hooks: Pick<UseAdminAuthorGifts, "patch" | "lookUpAgain">;
+  hooks: Pick<UseAdminAuthorGifts, "lookUpAgain">;
 }) {
   const draft = gift.status === "draft";
   const canSend = draft || gift.status === "sending";
@@ -635,25 +544,22 @@ function GiftActions({
       : running
         ? "Send waits for the lookup to finish, so you can review what it found first."
         : null;
+  if (!canSend) return null;
   return (
     <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-      {canSend && (
-        <>
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy || sendHeld !== null}
-            aria-describedby={sendHeld === null ? undefined : sendHeldId}
-            onClick={onSend}
-          >
-            Send
-          </Button>
-          {sendHeld !== null && (
-            <span id={sendHeldId} className="tw:text-ink-faint">
-              {sendHeld}
-            </span>
-          )}
-        </>
+      <Button
+        type="button"
+        size="sm"
+        disabled={busy || sendHeld !== null}
+        aria-describedby={sendHeld === null ? undefined : sendHeldId}
+        onClick={onSend}
+      >
+        Send
+      </Button>
+      {sendHeld !== null && (
+        <span id={sendHeldId} className="tw:text-ink-faint">
+          {sendHeld}
+        </span>
       )}
       {draft && (
         <>
@@ -669,25 +575,10 @@ function GiftActions({
           >
             {running ? "Looking…" : "Look up again"}
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => attempt(() => hooks.patch(gift.id, { discarded: true }))}
-            className={BUTTON}
-          >
+          <button type="button" disabled={busy} onClick={onDiscard} className={BUTTON}>
             Discard
           </button>
         </>
-      )}
-      {gift.status === "discarded" && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => attempt(() => hooks.patch(gift.id, { discarded: false }))}
-          className={BUTTON}
-        >
-          Restore
-        </button>
       )}
     </div>
   );
@@ -697,13 +588,14 @@ function GiftCard({
   gift,
   hooks,
   now,
-  highlighted,
+  pointer,
   onSent,
 }: {
   gift: AdminAuthorGift;
   hooks: Pick<UseAdminAuthorGifts, "patch" | "send" | "lookUpAgain">;
   now: number;
-  highlighted: boolean;
+  /** A fresh object each time this gift is pointed at, so an old fold choice cannot hide a new arrival. */
+  pointer: GiftPointer | null;
   onSent: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -718,10 +610,21 @@ function GiftCard({
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  /* **Whether a finished gift is open** (plan 261020ab, P1-03 and P2-02 of its
+     review): what the person chose with Show or Hide in this pointing context.
+     A fresh pointer supersedes an earlier Hide, but Hide still works after the
+     arrival; a draft or half-sent gift is always open. Discard records Hide in
+     the current context, so a highlighted card still folds at once. */
+  const [foldChoice, setFoldChoice] = useState<{ readonly pointer: GiftPointer | null; readonly open: boolean } | null>(null);
   const draft = gift.status === "draft";
   const canSend = gift.status === "draft" || gift.status === "sending";
+  const highlighted = pointer !== null;
+  const chosenOpen = foldChoice?.pointer === pointer ? foldChoice.open : null;
+  const open = !finished(gift) || (chosenOpen ?? highlighted);
   const running = gift.lookups.some((l) => lookupPending(l, now));
   const title = gift.starter.title;
+  const shown = canSend && confirming ? confirming : gift;
+  const bodyId = `${authorGiftAnchor(gift.id)}-body`;
 
   /* A gift sent or discarded elsewhere no longer has anything to confirm.
      Restoring it later must require opening a fresh confirmation. */
@@ -753,8 +656,8 @@ function GiftCard({
     setRefusal(null);
     setSaid(
       answer.email === "replayed"
-        ? "It had already been sent, so nothing new went. Its voucher is in the table below."
-        : "Sent. The gift email is on its way; its voucher is in the table below.",
+        ? "It had already been sent, so nothing new went. Its voucher is under Given."
+        : "Sent. The gift email is on its way; its voucher is under Given.",
     );
     onSent();
   }
@@ -767,7 +670,40 @@ function GiftCard({
         highlighted ? "tw:border-highlight-text tw:ring-2 tw:ring-highlight-text/25" : "tw:border-border"
       }`}
     >
-      <GiftFields gift={canSend && confirming ? confirming : gift} />
+      {/* **The card's line**: the article, where it has got to, and — on a
+          finished gift — Show/Hide and Restore. What the last action said
+          stays under it, outside the fold, so a Send's *Sent* or a Discard's
+          refusal is seen whether the card is open or shut (plan 261020ab,
+          P1-03). */}
+      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-2">
+        <GiftTitle gift={shown} />
+        <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          <span data-gift-status={shown.status} className="tw:font-medium tw:text-foreground">
+            {giftStatusWords(shown)}
+          </span>
+          {finished(gift) && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              onClick={() => setFoldChoice({ pointer, open: !open })}
+              className={BUTTON}
+            >
+              {open ? "Hide" : "Show"}
+            </button>
+          )}
+          {gift.status === "discarded" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void attempt(() => hooks.patch(gift.id, { discarded: false }))}
+              className={BUTTON}
+            >
+              Restore
+            </button>
+          )}
+        </span>
+      </div>
       {refusal && (
         <p role="alert" className="tw:m-0 tw:mt-2 tw:text-danger">
           {refusal}
@@ -779,80 +715,92 @@ function GiftCard({
         </p>
       )}
 
-      {editing && draft ? (
-        <DraftEditor gift={gift} patch={hooks.patch} done={() => setEditing(false)} />
-      ) : confirming && canSend && confirming.email !== null ? (
-        <div className="tw:mt-2 tw:rounded-md tw:border tw:border-border tw:p-3">
-          <p className="tw:m-0 tw:mb-2 tw:text-foreground">
-            Send the gift email to <strong>{confirming.email}</strong>? It gives {freeArticles(confirming.articles)}
-            {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
-            real email and cannot be taken back.
-          </p>
-          {confirming.starter.title !== null && (
-            /* What the claim does when they sign in (plan 261011n § D3). */
+      {/* Hidden rather than unmounted, so an open notes editor survives a fold. */}
+      <div id={bodyId} hidden={!open}>
+        <GiftFields gift={shown} />
+
+        {editing && draft ? (
+          <DraftEditor gift={gift} patch={hooks.patch} done={() => setEditing(false)} />
+        ) : confirming && canSend && confirming.email !== null ? (
+          <div className="tw:mt-2 tw:rounded-md tw:border tw:border-border tw:p-3">
             <p className="tw:m-0 tw:mb-2 tw:text-foreground">
-              When they sign in, a private article with none of your notes on it becomes theirs.
+              Send the gift email to <strong>{confirming.email}</strong>? It gives {freeArticles(confirming.articles)}
+              {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
+              real email and cannot be taken back.
             </p>
-          )}
-          {needsRights && (
-            <>
+            {confirming.starter.title !== null && (
+              /* What the claim does when they sign in (plan 261011n § D3). */
               <p className="tw:m-0 tw:mb-2 tw:text-foreground">
-                This article is private and has no private link yet, so Send makes one: anyone with the link can
-                read it.
+                When they sign in, a private article with none of your notes on it becomes theirs.
               </p>
-              <label className="tw:mb-2 tw:flex tw:items-start tw:gap-2 tw:text-foreground">
-                <input type="checkbox" checked={rights} disabled={busy} onChange={(e) => setRights(e.target.checked)} />
-                <span>{SHARING_RIGHTS_CONFIRM}</span>
-              </label>
-            </>
-          )}
-          <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy || running || (needsRights && !rights)}
-              onClick={() => void sendNow()}
-            >
-              {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(null)}>
-              Cancel
-            </Button>
+            )}
+            {needsRights && (
+              <>
+                <p className="tw:m-0 tw:mb-2 tw:text-foreground">
+                  This article is private and has no private link yet, so Send makes one: anyone with the link can
+                  read it.
+                </p>
+                <label className="tw:mb-2 tw:flex tw:items-start tw:gap-2 tw:text-foreground">
+                  <input type="checkbox" checked={rights} disabled={busy} onChange={(e) => setRights(e.target.checked)} />
+                  <span>{SHARING_RIGHTS_CONFIRM}</span>
+                </label>
+              </>
+            )}
+            <div className="tw:flex tw:flex-wrap tw:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="tone-positive"
+                disabled={busy || running || (needsRights && !rights)}
+                onClick={() => void sendNow()}
+              >
+                {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="tone-negative" disabled={busy} onClick={() => setConfirming(null)}>
+                Cancel
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <GiftActions
-          gift={gift}
-          busy={busy}
-          running={running}
-          onSend={() => {
-            setRefusal(null);
-            /* A fresh confirmation starts unticked: a tick belongs to the one it was given in. */
-            setRights(false);
-            setConfirming(gift);
-          }}
-          onEdit={() => {
-            setRefusal(null);
-            setEditing(true);
-          }}
-          attempt={(run) => void attempt(run)}
-          hooks={hooks}
-        />
-      )}
-
-      <Notes gift={gift} patch={hooks.patch} lookupRunning={running} />
-
-      <div className="tw:mt-3">
-        <span className="tw:text-sm tw:font-medium tw:text-foreground">Lookups</span>
-        {gift.lookups.length === 0 ? (
-          <p className="tw:m-0 tw:mt-1 tw:text-ink-faint">None yet.</p>
         ) : (
-          <ul className="tw:m-0 tw:mt-1 tw:list-none tw:p-0">
-            {gift.lookups.map((l) => (
-              <LookupLine key={l.id} lookup={l} gift={gift} now={now} />
-            ))}
-          </ul>
+          <GiftActions
+            gift={gift}
+            busy={busy}
+            running={running}
+            onSend={() => {
+              setRefusal(null);
+              /* A fresh confirmation starts unticked: a tick belongs to the one it was given in. */
+              setRights(false);
+              setConfirming(gift);
+            }}
+            onEdit={() => {
+              setRefusal(null);
+              setEditing(true);
+            }}
+            onDiscard={() => {
+              /* Shut as soon as it is discarded — the point of #663. */
+              setFoldChoice({ pointer, open: false });
+              void attempt(() => hooks.patch(gift.id, { discarded: true }));
+            }}
+            attempt={(run) => void attempt(run)}
+            hooks={hooks}
+          />
         )}
+
+        <Notes gift={gift} patch={hooks.patch} lookupRunning={running} />
+
+        <div className="tw:mt-3">
+          <span className="tw:text-sm tw:font-medium tw:text-foreground">Lookups</span>
+          {gift.lookups.length === 0 ? (
+            <p className="tw:m-0 tw:mt-1 tw:text-ink-faint">None yet.</p>
+          ) : (
+            <ul className="tw:m-0 tw:mt-1 tw:list-none tw:p-0">
+              {gift.lookups.map((l) => (
+                <LookupLine key={l.id} lookup={l} gift={gift} now={now} />
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </li>
   );
@@ -861,28 +809,56 @@ function GiftCard({
 /* ------------------------------------------------------------ section -- */
 
 /**
- * The section: *Draft a gift* (when the shelf is readable), then every gift,
- * newest first. `onVoucherMade` re-reads the voucher table after a *Send*.
+ * The gift the page points at — from `?gift=<id>`, or the one *Draft a gift*
+ * just made or found. A fresh object each time it is pointed at, so pointing
+ * at the same gift twice scrolls to it twice.
  */
-export function AuthorGifts({ shelf, onVoucherMade }: { shelf: StarterShelf | null; onVoucherMade: () => void }) {
-  const { gifts, error, loading, watching, reload, ensure, lookUpAgain, patch, send } = useAdminAuthorGifts();
+export type GiftPointer = { readonly id: string };
+
+/**
+ * The *Drafts* tab: every gift, the ones still waiting first (newest first, as
+ * the server sends them), then the finished ones, folded. `gifts` is the
+ * page's one `useAdminAuthorGifts` (P1-01 of plan 261020ab's review), shared
+ * with the *New gift* form; `notice` is what that form's last draft came to,
+ * said here because drafting brings you here. `onVoucherMade` re-reads the
+ * voucher table after a *Send*.
+ */
+export function AuthorGifts({
+  gifts: list,
+  pointer,
+  notice,
+  active,
+  onVoucherMade,
+}: {
+  gifts: UseAdminAuthorGifts;
+  pointer: GiftPointer | null;
+  notice: string | null;
+  /** Whether the mounted Drafts panel is the visible tab. */
+  active: boolean;
+  onVoucherMade: () => void;
+}) {
+  const { gifts, error, loading, watching, reload, lookUpAgain, patch, send } = list;
   /* Re-render each minute, so a lookup past the stale limit says it did not finish. */
   const now = useNow();
-  /* `?gift=<id>` opens the page on that card (plan 261011n § D1): the address
-     MCP's `draft_author_gift` answers, for a harness to open. */
-  const [highlight, setHighlight] = useState<string | null>(() => giftFromAddress(location.search));
   const hooks = useMemo(() => ({ patch, send, lookUpAgain }), [patch, send, lookUpAgain]);
-  const scrolled = useRef<string | null>(null);
+  const ordered = useMemo(
+    () => (gifts === null ? null : [...gifts.filter((g) => !finished(g)), ...gifts.filter(finished)]),
+    [gifts],
+  );
+  const scrolled = useRef<GiftPointer | null>(null);
 
-  /* Scroll to the gift *Draft a gift* found already existing, once it is drawn. */
+  /* Scroll to the gift pointed at, once it is drawn. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `gifts` is the trigger, not an input — the card may only be drawn by the read after the write, and this has to look again then.
   useEffect(() => {
-    if (highlight === null || scrolled.current === highlight) return;
-    const el = document.getElementById(authorGiftAnchor(highlight));
+    /* `hidden` panels stay mounted. Scrolling one does nothing useful in the
+       browser, and recording it here would consume the arrival before the
+       person opens Drafts. */
+    if (!active || pointer === null || scrolled.current === pointer) return;
+    const el = document.getElementById(authorGiftAnchor(pointer.id));
     if (!el) return;
-    scrolled.current = highlight;
+    scrolled.current = pointer;
     el.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  }, [highlight, gifts]);
+  }, [active, pointer, gifts]);
 
   return (
     <section aria-label="Author gifts" className="tw:mb-8">
@@ -902,32 +878,28 @@ export function AuthorGifts({ shelf, onVoucherMade }: { shelf: StarterShelf | nu
         </button>
       </div>
       <p className="tw:m-0 tw:mb-3 tw:text-xs tw:text-muted-foreground">
-        Drafts of a gift voucher for the author of one of your articles. A lookup fills in what it can find; nothing is
-        emailed until you press Send. Once Send succeeds, it creates a voucher in the list below, with its article as the starter.
+        Drafts of a gift voucher for the author of one of your articles, made on Give with its box ticked. A lookup
+        fills in what it can find; nothing is emailed until you press Send. Once Send succeeds, it creates a voucher
+        under Given, with its article as the starter. Sent and discarded ones are folded to a line at the end.
         {watching && " A lookup is running, so this list is checked every few seconds."}
       </p>
-      {shelf !== null && (
-        <DraftForm
-          shelf={shelf}
-          ensure={ensure}
-          onExisting={(id) => {
-            scrolled.current = null;
-            setHighlight(id);
-          }}
-        />
+      {notice && (
+        <p role="status" className="tw:m-0 tw:mb-3 tw:text-sm tw:text-foreground">
+          {notice}
+        </p>
       )}
       {error && <Refusal message={gifts ? `Refresh failed, so this is the previous list. ${error}` : error} />}
-      {gifts === null ? null : gifts.length === 0 ? (
+      {ordered === null ? null : ordered.length === 0 ? (
         <p className="tw:text-sm tw:text-muted-foreground">No author gifts yet.</p>
       ) : (
         <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
-          {gifts.map((g) => (
+          {ordered.map((g) => (
             <GiftCard
               key={g.id}
               gift={g}
               hooks={hooks}
               now={now}
-              highlighted={highlight === g.id}
+              pointer={pointer?.id === g.id ? pointer : null}
               onSent={onVoucherMade}
             />
           ))}

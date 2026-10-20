@@ -12,8 +12,9 @@
  * - whose a claimed gift's starter is now (`StarterOwnerLine`).
  *
  * The voucher form wraps `StarterSelect` in its own status line and import
- * field (AdminVouchersPage.tsx § `StarterPicker`); the author gift's form wraps
- * it in the private link's rights tick-box.
+ * field (AdminVouchersPage.tsx § `StarterPicker`); the same form, ticked for
+ * an author gift, wraps it in the private link's rights tick-box
+ * (AdminVouchersPage.tsx § `DraftFields`, plan 261020ab).
  */
 import { useCallback, useMemo, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";

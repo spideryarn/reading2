@@ -191,6 +191,9 @@ async function rewrite(which: number, text: string): Promise<void> {
   await act(async () => type(box as HTMLTextAreaElement, text));
   const ask = host.querySelector<HTMLButtonElement>('button[data-tip="Ask again (Enter)"]');
   expect(ask, "Ask again is offered").not.toBeNull();
+  /* Plan 261020z: the tick is green, the cross red. */
+  expect(ask?.classList.contains("tone-positive")).toBe(true);
+  expect(host.querySelector('.chat-turn.editing button[aria-label="Cancel"]')?.classList.contains("tone-negative")).toBe(true);
   await act(async () => ask?.click());
   await settle();
 }

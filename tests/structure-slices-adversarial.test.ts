@@ -44,6 +44,28 @@ beforeEach(() => { calls = []; respond = good; });
 afterEach(() => { vi.useRealTimers(); });
 
 describe("stage E adversarial regressions", () => {
+  it("resolves block numbers against each slice's own zero-based array", async () => {
+    respond = (call) => {
+      if (call.root) return ROOT_ANSWER;
+      const answer = JSON.parse(sectionsAnswer(call.ids, 3)) as { root: unknown };
+      const numberStarts = (node: unknown): void => {
+        const children = (node as { children?: { start: string | number; children?: unknown[] }[] }).children;
+        if (!Array.isArray(children)) return;
+        for (const child of children) {
+          const at = call.ids.indexOf(String(child.start));
+          if (at < 0) throw new Error(`the fake answer named a block outside its slice: ${String(child.start)}`);
+          child.start = at;
+          numberStarts(child);
+        }
+      };
+      numberStarts(answer.root);
+      return JSON.stringify(answer);
+    };
+    const out = await run();
+    expect(out.ok).toBe(true);
+    expect(calls.some((call) => !call.root && call.ids[0] !== body[0]!.id)).toBe(true);
+  });
+
   it("rejects promoted overlaps, gaps, and starts outside the supplied slice", () => {
     const make = (ranges: [number, number][]) => ({ title: "Root", range: [body[0]!.id, body[5]!.id] as [string, string],
       children: ranges.map(([lo, hi]) => ({ title: "Section", gist: "A claim.", range: [body[lo]!.id, body[hi]!.id] as [string, string] })) });

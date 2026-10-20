@@ -1454,8 +1454,15 @@
     {
       "idx": 207,
       "version": "7",
-      "when": 1792522242987,
-      "tag": "20261020185042_view_as_sessions",
+      "when": 1792514421989,
+      "tag": "20261020164021_article_open_times",
+      "breakpoints": true
+    },
+    {
+      "idx": 208,
+      "version": "7",
+      "when": 1792537000398,
+      "tag": "20261020225640_view_as_sessions",
       "breakpoints": true
     }
   ]

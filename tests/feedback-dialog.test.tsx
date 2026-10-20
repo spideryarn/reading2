@@ -217,19 +217,15 @@ function ok(status: number): () => Promise<Response> {
 }
 
 /**
- * A Feedback action gets exactly one tone and no Tailwind utility alongside
- * it. The latter is a cascade rule, not taste: utilities are in the higher
- * layer and would beat button-tone.css regardless of specificity.
+ * A Feedback action gets exactly one tone. (A `tw:` utility beside it no longer
+ * matters: button-tone.css is in the `tone` layer, above the utilities, since
+ * plan 261020z.)
  */
 function expectTone(button: HTMLButtonElement, tone: "tone-positive" | "tone-negative"): void {
   expect(
     [...button.classList].filter((name) => name.startsWith("tone-")),
     button.textContent ?? tone,
   ).toEqual([tone]);
-  expect(
-    [...button.classList].filter((name) => name.startsWith("tw:")),
-    `${button.textContent ?? tone}: Tailwind utilities outrank button-tone.css`,
-  ).toEqual([]);
 }
 
 function show(open: boolean) {

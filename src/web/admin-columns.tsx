@@ -330,15 +330,17 @@ function Ingests({ user }: { user: AdminUser }) {
 
 /**
  * **Active days, with what it can and cannot see on hover.** The caveat is on
- * the cell rather than only in a doc because the number undercounts in exactly
- * the direction Greg's question cares about — days spent only reading — and a
- * bare count would read as a measurement it is not. `activitySources` in
+ * the cell rather than only in a doc because, before article opens were
+ * recorded (plan 261020y), the number undercounts in exactly the direction
+ * Greg's question cares about — days spent only reading — and a bare count
+ * would read as a measurement it is not. `activitySources` in
  * src/store/pg-admin.ts is the list the last paragraph describes.
  */
 function ActiveDays({ user, now }: { user: AdminUser; now: number }) {
   const what =
-    "Counted from AI features they used, articles added, comments, and each article's latest open. " +
-    "A day spent only reading is missed unless it was an article's latest open.";
+    "Counted from AI features they used, articles added, comments, and articles opened " +
+    "(recorded at most once per half hour since late October 2026). " +
+    "Before then, a day spent only reading is missed unless it was an article's latest open.";
   if (user.activeDays === 0) {
     const none = `No recorded activity\n\n${what}`;
     return (

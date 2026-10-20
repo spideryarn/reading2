@@ -1,10 +1,11 @@
 ---
 id: q-yvmweg
 report: spya-as0et6
-status: open
+status: answered
 asked: 2026-10-20
 title: Should green-to-send, red-to-back-out become a written rule, and spread beyond Feedback?
-refs: SPIDERYARN-READING2-KE · qi-d9zvk6y2 · docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md · docs/user-feedback/261019_1727-feedback-buttons-green-to-send-red-to-back-out.md · docs/project/controls.md
+refs: SPIDERYARN-READING2-KE · qi-d9zvk6y2 · qi-ysxdv97b · docs/plans/261020f-feedback-buttons-coloured-positive-and-negative.md · docs/plans/261020z-green-to-send-red-to-back-out-across-the-app.md · docs/user-feedback/261019_1727-feedback-buttons-green-to-send-red-to-back-out.md · docs/project/controls.md
+acted: spya-xbrvb9
 ---
 The Feedback dialog's buttons are now green to send and red to back out (Send, Send addendum, Send reply green; Cancel, Close, Defer for now red). Two things are left for you.
 
@@ -33,3 +34,12 @@ The wording I would add to controls.md (question 1A), as a new row in the table:
 and under the table:
 
   The pair that ends a form is coloured by what it does: the button that sends what you wrote is green, the one that leaves or puts off without sending is red. Red here is a direction, not a warning: a button whose job is to delete something is the solid destructive fill. Buttons that move you (Previous, Next) or undo (Bring back) stay neutral.
+
+## Greg's answer, 2026-10-20 (in the Feedback dialog, reply `spya-xbrvb9`)
+
+> 1 yes, but use your judgment, don't over-use it, update design rules minimally
+>
+> 2 A yes these all sound like they should change
+
+Acted on in plan 261020z: the rule is in controls.md, trimmed; the other pairs are green and red,
+and the few left alone are listed in the plan with why.

@@ -1,0 +1,65 @@
+/* button-tone.css — **green to send, red to leave without sending.** The pair
+   of buttons that ends a form: the one that sends what you wrote is
+   `.tone-positive`, the one that backs out is `.tone-negative`. Greg,
+   2026-10-19 (`spya-as0et6`): "color the buttons red and green, and for close
+   as well, just so it's easier to see what's … effectively a cancel and what's
+   a submit … update our design system". First drawn as the Feedback thread's
+   Send reply and Defer for now (261011h), shared in 261020f, and app-wide
+   since 261020z, where Greg's answer added: "use your judgment, don't
+   over-use it". Which pairs take it, and which do not: controls.md.
+
+   **What red means here is narrow**: leave without sending. It is a direction
+   cue, not a promise about whether that particular form retains its draft:
+   Feedback's Write Cancel keeps the Write draft; the addendum box's Cancel
+   discards its local addendum. A dedicated destructive act uses the
+   `--destructive` fill (shadcn's destructive Button). The words carry the
+   meaning and the colour is a shortcut, as colour-scales.md asks of a
+   red/green pair.
+
+   **Colour only**: the text and the border take it, at rest and on hover.
+   Shape, size, padding and the family's resting background stay its own. A
+   tint of the same hue takes the light theme under the 4.5:1 that
+   tests/appearance-palette.test.ts holds both tokens to (GPT Sol, 261011h),
+   and the hover washes on shadcn's outline/ghost buttons and Chat's icon
+   buttons take red under 4.5:1 too, so those two families suppress their wash
+   while toned (Sol, 261020z). Do not suppress every family's hover
+   generically: Annotate's Save rests on `--page`, and turning only its hover
+   transparent makes the button's face flash away under the pointer.
+
+   **Its own layer, `tone`, after `utilities`** — imported from tailwind.css,
+   not styles.css, and so it lives beside that file rather than in styles/. In
+   `@layer app` it lost to every `tw:` utility, so a shadcn `Button`
+   (`tw:text-foreground`) or an admin `BUTTON` string painted over it while
+   the class sat there doing nothing. A later layer beats an earlier one
+   whatever either selector weighs, so one plain class answers every family's
+   rest, hover and focus colour. Plan 261020z; tailwind.css's header. */
+
+.tone-positive {
+  color: var(--positive);
+  border-color: currentColor;
+}
+.tone-negative {
+  color: var(--danger);
+  border-color: currentColor;
+}
+[data-slot="button"][data-variant="outline"].tone-positive:hover,
+[data-slot="button"][data-variant="outline"].tone-negative:hover,
+[data-slot="button"][data-variant="ghost"].tone-positive:hover,
+[data-slot="button"][data-variant="ghost"].tone-negative:hover,
+.chat-icon.tone-positive:hover,
+.chat-icon.tone-negative:hover {
+  background-color: transparent;
+}
+/* **Coloured and unpressable reads as pressable**, so it dims — unless it is
+   working (a spinner and a word that change), which is not "cannot be
+   pressed" (plan 261019c). */
+.tone-positive:disabled,
+.tone-negative:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tone-positive[data-working]:disabled,
+.tone-negative[data-working]:disabled {
+  opacity: 1;
+  cursor: progress;
+}

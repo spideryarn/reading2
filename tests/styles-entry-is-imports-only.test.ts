@@ -240,12 +240,8 @@ const MANIFEST = [
   "reading-comfort.css",
   /* The bar a view-as tab draws, and the `--safe-top` it adds. Its own
      selectors (`.view-as-bar`, `:root[data-view-as]`) are named nowhere
-     else, so its place only has to be before the tone sheet. Plan 261019n
-     § Part 3. */
+     else, so its place in this list is free. Plan 261019n § Part 3. */
   "view-as.css",
-  /* Last so the shared green-to-send / red-to-back-out tone wins over the
-     shape-owning family sheets at equal specificity. Plan 261020f. */
-  "button-tone.css",
 ];
 
 /**
@@ -329,6 +325,29 @@ describe("the stylesheet entry point is an import manifest", () => {
       "every .css under src/web/styles/ must be named by MANIFEST exactly once — an " +
         "unimported sheet is dead, and an import with no file behind it fails the build",
     ).toEqual(present);
+  });
+});
+
+/**
+ * **tailwind.css's own local imports: exactly two, each in its own layer.**
+ *
+ * `styles.css` into `app`, and `button-tone.css` into `tone`, the one layer
+ * declared after `utilities` (plan 261020z). A rule in `tone` beats every `tw:`
+ * utility on whatever it matches, so a third sheet slipped in there, or `tone`
+ * moved before `utilities`, would change the whole app's cascade from one line.
+ */
+describe("tailwind.css layers the reading view under the utilities, and the tone over them", () => {
+  const tailwind = readFileSync("src/web/tailwind.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("declares the layers in the order the cascade needs", () => {
+    expect(tailwind.match(/^@layer [^{;]+;/gm)).toEqual(["@layer theme, base, app, utilities, tone;"]);
+  });
+
+  it("imports exactly styles.css into app and button-tone.css into tone", () => {
+    expect(tailwind.match(/^@import "\.[^"]*"[^;]*;/gm)).toEqual([
+      '@import "./styles.css" layer(app);',
+      '@import "./button-tone.css" layer(tone);',
+    ]);
   });
 });
 

@@ -352,6 +352,11 @@ describe("turning it on", () => {
       (b.textContent ?? "").includes("Share it"),
     );
     expect(share?.disabled).toBe(true);
+    /* Plan 261020z: the send is green and outline, the back-out red. */
+    expect(share?.classList.contains("tone-positive")).toBe(true);
+    expect(share?.getAttribute("data-variant")).toBe("outline");
+    const back = [...host.querySelectorAll("button")].find((b) => (b.textContent ?? "").trim() === "Cancel");
+    expect(back?.classList.contains("tone-negative")).toBe(true);
     // And the reason is on the page rather than in a tooltip.
     expect(host.textContent).toContain(SHARING_RIGHTS_CONFIRM);
     /* And the reason is an affirmation of a right to share, which is what

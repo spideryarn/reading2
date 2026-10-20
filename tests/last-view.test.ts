@@ -681,6 +681,11 @@ describe("the two lists cover every parameter the client writes", () => {
     "scope",
     "outcome",
     "day",
+    /* `/admin/vouchers` (plan 261020ab): which tab, and the gift MCP's link
+       points at. `gift` is read through `AUTHOR_GIFT_PARAM`, which the scan
+       below cannot see; listed so a later literal `"gift"` is not news. */
+    "tab",
+    "gift",
   ]);
 
   function clientFiles(dir: string): string[] {
