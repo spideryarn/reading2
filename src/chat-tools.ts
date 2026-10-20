@@ -2406,9 +2406,10 @@ async function readReaderNotes(
 ): Promise<ToolOutcome> {
   const label = describeCall("reader_notes", args);
   const wanted = typeof args.thread === "string" ? args.thread.trim() : "";
+  const hasBefore = Object.hasOwn(args, "before");
   /* `before` is a place in one conversation. Without one it would quietly
      become the notes and the list, which is not what was asked for. */
-  if (wanted === "" && args.before !== undefined && args.before !== null) {
+  if (wanted === "" && hasBefore) {
     return {
       label,
       detail: "no conversation named",
@@ -2451,7 +2452,7 @@ async function readReaderNotes(
        never a quiet fall back to the newest page. */
     const raw = args.before;
     const before =
-      raw === undefined || raw === null
+      !hasBefore
         ? undefined
         : typeof raw === "number"
           ? raw

@@ -160,6 +160,16 @@ conversation. Each answer that opened one still built on it ("Here are different
 fixtures are short, so no answer here needed `before`; the paging is covered by the tests, not
 by this eval.
 
+## Code review
+
+GPT Sol ([findings](261020k-code-review-findings-sol.md), [answer](261020k-code-review-sol.md))
+found no off-by-one, budget breach or leak, and fixed two things: an explicit `before: null` now
+gets the same sentence as any other unusable cursor, rather than reading as absent; and the prompts
+no longer say "keep calling until exchange 1" when a turn has only three tool rounds. Its prompt
+wording had the model put the raw `before` number in its reply for the next turn; that was cut back
+to *tell them you have not read the start of it*, because the number is our jargon in front of a
+reader and no conversation on production needs a second page yet.
+
 ## Deferred
 
 Nothing from this report.
