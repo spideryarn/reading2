@@ -1552,7 +1552,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>
-          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
+          <button type="button" className="fb-cancel tone-negative tap-target" onClick={onClose}>
             Close
           </button>
           {/* With a thread showing, Previous and Next again, where the reader
@@ -1569,12 +1569,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
         </div>
 
         <div className="fb-actions" hidden={view !== "write"}>
-          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
+          <button type="button" className="fb-cancel tone-negative tap-target" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="fb-send tap-target"
+            className="fb-send tone-positive tap-target"
             /* **Live while the microphone is involved**: pressing it then stops
                the microphone and sends once the words land (`send`). Plan
                261010f; it used to be disabled here while still reading Send. */

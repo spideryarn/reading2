@@ -603,6 +603,9 @@ function run(cwd: string, args: string[], timeout?: number): Ran {
     cwd,
     encoding: "utf8",
     env: gitEnv(),
+    /* `ls-files -v` passed spawnSync's 1 MiB default on 2026-10-20, and every
+       check then refused to clear a tree for the overflow (ENOBUFS). */
+    maxBuffer: 64 * 1024 * 1024,
     ...(timeout === undefined ? {} : { timeout }),
   });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
