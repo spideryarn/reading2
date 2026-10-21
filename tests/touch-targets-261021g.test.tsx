@@ -12,7 +12,7 @@
  *    between them opened;
  *  - the masthead's sharing mark, Archive and the title's pencil;
  *  - the facts line's controls, drawn 40px tall rather than haloed (Sol, R4);
- *  - the shelf card's *Tag* and its date line, haloed;
+ *  - the shelf card's *Tag*, haloed with clearance, and its drawn date line;
  *  - Quiz's *Only what I've read* label, its share pie, and its steppers;
  *  - *Dictate*, the References stub, Glossary's Hide, the footer's links;
  *  - the bottom dock's mode buttons, which came out at 39.4px.
@@ -27,7 +27,7 @@
  * This reads text and compiles class names; the Sonnet browser pass at 390
  * reads computed sizes and is the real check (plan § Done looks like).
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -71,13 +71,45 @@ function blocks(css: string, query: "any-pointer: coarse" | "pointer: coarse"): 
   return out.join("\n");
 }
 
-/** The declarations of the first rule whose selector list names `selector`. */
+/** Every media block whose prelude has either coarse-pointer feature, including comma queries. */
+function coarsePointerBlocks(css: string): string {
+  const out: string[] = [];
+  for (const m of css.matchAll(/@media\s*([^{}]+)\{/g)) {
+    if (!/\(\s*(?:any-)?pointer\s*:\s*coarse\s*\)/.test(m[1] ?? "")) continue;
+    let depth = 1;
+    let i = m.index + m[0].length;
+    const start = i;
+    while (i < css.length && depth > 0) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}") depth--;
+      i++;
+    }
+    out.push(css.slice(start, i - 1));
+  }
+  return out.join("\n");
+}
+
+/**
+ * The exact selector's declarations folded in source order. Later declarations
+ * of one property replace that property without hiding unrelated ones from an
+ * earlier grouped rule.
+ */
 function declsFor(css: string, selector: string): string | undefined {
+  const declarations = new Map<string, string>();
   for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const list = (m[1] ?? "").split(",").map((s) => s.trim());
-    if (list.includes(selector)) return m[2] ?? "";
+    if (!list.includes(selector)) continue;
+    for (const declaration of (m[2] ?? "").split(";")) {
+      const colon = declaration.indexOf(":");
+      if (colon < 0) continue;
+      const property = declaration.slice(0, colon).trim();
+      const value = declaration.slice(colon + 1).trim();
+      if (property && value) declarations.set(property, value);
+    }
   }
-  return undefined;
+  return declarations.size > 0
+    ? [...declarations].map(([property, value]) => `${property}: ${value};`).join(" ")
+    : undefined;
 }
 
 const css = readerCssNoComments();
@@ -225,6 +257,7 @@ describe("drawn 40px tall under a finger", () => {
     expect(out).toContain("@media (any-pointer: coarse)");
     expect(out).toMatch(/width:\s*40px/);
     expect(out).toMatch(/height:\s*40px/);
+    expect(declsFor(css, ".quiz-step")).toMatch(/gap:\s*0\.5rem/);
   });
 
   it("Dictate is 40 × 40", () => {
@@ -257,6 +290,7 @@ describe("drawn 40px tall under a finger", () => {
     for (const a of links) {
       expect(a.className).toContain("tw:any-pointer-coarse:inline-flex");
       expectCoarse40(a.className, "min-h-", ["min-height"]);
+      expectCoarse40(a.className, "min-w-", ["min-width"]);
     }
     await act(async () => root.unmount());
     host.remove();
@@ -264,30 +298,42 @@ describe("drawn 40px tall under a finger", () => {
 });
 
 describe("haloed under a finger", () => {
-  /* The nearest pressable control is 55px away (plan § Stage 2), so the halo
-     has its room, and the card's layout does not move. */
-  it("the shelf card's Tag button and its date line carry .tap-target", () => {
+  /* The Tag's 1.5rem box reserves enough overhang to make 40px at every
+     supported root. The bottom date row is already 40px tall, so its control
+     is drawn instead. */
+  it("the shelf card's Tag halo has 40px clearance, and its date line is a drawn 40px target", () => {
     const tag = /<button[\s\S]*?aria-label=\{tags\.length[\s\S]*?className=\{`([^`]*)`/.exec(
       source("src/web/ShelfTags.tsx"),
     )?.[1];
     expect(tag, "could not find the Tag button's class").toBeDefined();
     expect(tag?.split(/\s+/)).toContain("tap-target");
+    const clearance = "tw:any-pointer-coarse:my-[calc((40px-1.5rem)/2)]";
+    expect(tag?.split(/\s+/)).toContain(clearance);
+    const clearanceCss = compile([clearance])[0] ?? "";
+    expect(clearanceCss).toContain("@media (any-pointer: coarse)");
+    expect(clearanceCss).toMatch(/margin-block:\s*calc\(\(40px - 1\.5rem\) \/ 2\)/);
+    for (const rootPx of [12, 15.36, 16, 20]) {
+      const margin = (40 - 1.5 * rootPx) / 2;
+      expect(1.5 * rootPx + 2 * margin, `at a ${rootPx}px root`).toBe(40);
+    }
     const date = /aria-label=\{`\$\{note\} — details of[^`]*`\}\s*className="([^"]*)"/.exec(
       source("src/web/ShelfEntry.tsx"),
     )?.[1];
     expect(date, "could not find the date line's class").toBeDefined();
-    expect(date?.split(/\s+/)).toContain("tap-target");
+    expect(date?.split(/\s+/)).not.toContain("tap-target");
+    expectCoarse40(date ?? "", "min-h-", ["min-height"]);
   });
 });
 
 describe("the bottom dock", () => {
-  /* Its own query, `pointer: coarse`, for touch.md's reason. A mode button is
-     the bar less its top hairline, its frame's two 1px edges and the mode
-     row's 0.3rem margins; at a 16px root `3.25rem` left 39.4px. */
+  /* The dock is `pointer: coarse` on purpose (touch.md § How big a thing has to
+     be: bulk chrome, not for a hybrid's fine pointer). A mode button is the bar less its top hairline, its
+     frame's two 1px edges and the mode row's 0.3rem margins; at a 16px root
+     `3.25rem` left 39.4px. */
   it("leaves a framed mode button at least 40px tall at every root the app supports", () => {
-    const bar = declsFor(blocks(css, "pointer: coarse"), ":root");
+    const bar = blocks(css, "pointer: coarse");
     const m = /--dock-h:\s*max\(\s*([\d.]+)rem\s*,\s*calc\(\s*([\d.]+)px\s*\+\s*([\d.]+)rem\s*\)\s*\)/.exec(bar ?? "");
-    expect(m, `--dock-h is not max(Nrem, calc(Npx + Nrem)): ${bar}`).not.toBeNull();
+    expect(m, "no --dock-h of the form max(Nrem, calc(Npx + Nrem)) under pointer: coarse").not.toBeNull();
     /* The two parts the sum assumes: the row's vertical margin, and the frame's 1px edge. */
     const margin = /margin:\s*([\d.]+)rem\s/.exec(declsFor(css, ".dock-modes") ?? "");
     expect(margin, "the mode row's margin moved; recheck the sum").not.toBeNull();
@@ -309,20 +355,95 @@ describe("the bottom dock", () => {
 describe("the browser pass's stragglers", () => {
   it("are 40 under a finger", () => {
     const coarse = blocks(readerCssNoComments(), "any-pointer: coarse");
-    expect(declsFor(coarse, ".chat-send.quiz-go")).toMatch(/height:\s*max\(\s*40px/);
+    const answer = declsFor(coarse, ".quiz-actions .chat-send");
+    expect(answer).toMatch(/width:\s*max\(\s*40px/);
+    expect(answer).toMatch(/height:\s*max\(\s*40px/);
     expect(declsFor(coarse, ".srch-icon")).toMatch(/min-width:\s*40px/);
+    expect(declsFor(coarse, ".srch-icon")).toMatch(/min-height:\s*40px/);
     expect(declsFor(coarse, ".prof-mic")).toMatch(/flex:\s*none/);
-    for (const file of ["src/web/Metadata.tsx", "src/web/AccountSection.tsx", "src/web/PageContents.tsx"]) {
-      expect(source(file), file).toContain("tw:any-pointer-coarse:min-h-[40px]");
+    const metadata = /const QUIET_BUTTON\s*=\s*"([^"]+)"/.exec(source("src/web/Metadata.tsx"))?.[1] ?? "";
+    expectCoarse40(metadata, "min-h-", ["min-height"]);
+    const signOut = /onClick=\{\(\) => void out\(\)\}[\s\S]*?className="([^"]+)"/.exec(
+      source("src/web/AccountSection.tsx"),
+    )?.[1] ?? "";
+    expectCoarse40(signOut, "min-h-", ["min-height"]);
+    const contents = /aria-controls=\{listId\}[\s\S]*?className="([^"]+)"/.exec(
+      source("src/web/PageContents.tsx"),
+    )?.[1] ?? "";
+    expectCoarse40(contents, "min-h-", ["min-height"]);
+  });
+
+  it("keeps the converted legacy floors on any available coarse pointer", () => {
+    const coarse = blocks(readerCssNoComments(), "any-pointer: coarse");
+    for (const selector of [
+      ".origin-chat",
+      ".srch-sort-btn",
+      ".gloss-sort-btn",
+      ".rcp-check-send",
+      ".rcp-dig",
+      ".investigate-send",
+      ".investigate-q",
+      ".investigate-yours-line",
+      ".investigate-yours-more",
+      ".mention-picker-row",
+    ]) {
+      expect(declsFor(coarse, selector), selector).toMatch(/min-height:\s*max\(\s*40px\s*,\s*2\.5rem\s*\)/);
     }
+    const receptionMore = declsFor(coarse, ".rcp-item > .rcp-more");
+    expect(receptionMore).toMatch(/min-width:\s*max\(\s*40px\s*,\s*2\.25rem\s*\)/);
+    expect(receptionMore).toMatch(/min-height:\s*max\(\s*40px\s*,\s*2\.25rem\s*\)/);
+    expect(declsFor(coarse, ".rcp-section-head")).toMatch(
+      /min-height:\s*max\(\s*40px\s*,\s*var\(--control-h-lg\)\s*\)/,
+    );
   });
 });
 
 describe("no bare 2.5rem finger floor", () => {
+  function bareCssFloors(input: string): string[] {
+    const out: string[] = [];
+    for (const m of input.matchAll(
+      /(?:^|[;{\s])((?:(?:min-)?(?:height|width|block-size|inline-size)|--[\w-]+)\s*:\s*([^;}]+))(?=\s*[;}])/g,
+    )) {
+      const value = (m[2] ?? "").replace(/\s*!important\s*$/, "").trim();
+      if (/^(?:2\.50*rem|calc\(\s*2\.50*rem\s*\))$/.test(value)) out.push((m[1] ?? "").trim());
+    }
+    return out;
+  }
+
+  /* The same mistake in Tailwind: `size-10`, `min-h-10` and friends are 2.5rem.
+     Sol's stage-2 review (C7) found eleven behind a coarse-pointer variant. */
+  it("is in any component's coarse-pointer Tailwind class", () => {
+    const dir = path.join(ROOT, "src/web");
+    const hits: string[] = [];
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (p.endsWith(".tsx")) {
+          for (const m of readFileSync(p, "utf8").matchAll(/pointer-coarse:(?:[\w@\[\]&_:(),-]*:)?(?:size|min-h|min-w|h|w)-10\b/g)) {
+            hits.push(`${path.relative(ROOT, p)}: ${m[0]}`);
+          }
+        }
+      }
+    };
+    walk(dir);
+    expect(hits).toEqual([]);
+  });
+
   it("is in any coarse-pointer block", () => {
     const css = readerCssNoComments();
-    const coarse = `${blocks(css, "any-pointer: coarse")}\n${blocks(css, "pointer: coarse")}`;
-    const bare = [...coarse.matchAll(/(?:^|[;{\s])((?:min-)?(?:height|width)\s*:\s*2\.5rem)\s*[;}]/g)].map((m) => m[1]);
-    expect(bare).toEqual([]);
+    expect(bareCssFloors(coarsePointerBlocks(css))).toEqual([]);
+  });
+
+  it("recognises variables, logical dimensions, !important, and calc", () => {
+    expect(
+      bareCssFloors(
+        "a { min-block-size: 2.5rem !important; inline-size: 2.500rem; --target-h: calc(2.5rem) }",
+      ),
+    ).toEqual([
+      "min-block-size: 2.5rem !important",
+      "inline-size: 2.500rem",
+      "--target-h: calc(2.5rem)",
+    ]);
   });
 });

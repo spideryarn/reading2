@@ -79,11 +79,10 @@ export function ShelfTags({
                Actions). With tags, always — it is how you change them.
 
                **`tap-target`, a 40px halo under a finger, drawn the same 24px**
-               (plan 261021g § Stage 2): the nearest thing to press is 55px
-               away, so the halo has its room, and a drawn 40px pill would
-               make every card's tag line 16px taller. The date line under it
-               does the same (ShelfEntry.tsx). */
-            className={`tap-target tw:relative tw:inline-flex tw:h-6 tw:items-center tw:gap-0.5 tw:rounded-full tw:border tw:border-dashed tw:border-border tw:bg-transparent tw:px-1.5 tw:text-xs tw:text-muted-foreground tw:transition-[color,border-color,opacity] tw:hover:border-highlight/60 tw:hover:text-foreground tw:data-[state=open]:border-highlight/60 tw:data-[state=open]:opacity-100 ${tags.length ? "" : "tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:focus-visible:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"}`}
+               (plan 261021g § Stage 2). The block margin reserves exactly the
+               halo's overhang above and below at every supported root size;
+               without it the halo reached into the title link. */
+            className={`tap-target tw:relative tw:inline-flex tw:h-6 tw:any-pointer-coarse:my-[calc((40px-1.5rem)/2)] tw:items-center tw:gap-0.5 tw:rounded-full tw:border tw:border-dashed tw:border-border tw:bg-transparent tw:px-1.5 tw:text-xs tw:text-muted-foreground tw:transition-[color,border-color,opacity] tw:hover:border-highlight/60 tw:hover:text-foreground tw:data-[state=open]:border-highlight/60 tw:data-[state=open]:opacity-100 ${tags.length ? "" : "tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:focus-visible:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"}`}
           >
             {tags.length ? <Tag size={11} aria-hidden="true" /> : <Plus size={11} aria-hidden="true" />}
             <span>{tags.length ? "Edit" : "Tag"}</span>

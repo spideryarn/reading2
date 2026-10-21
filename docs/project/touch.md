@@ -415,10 +415,12 @@ The bottom bar's buttons are **52px tall and at least 44px wide on a coarse poin
 roughly 35 × 30. [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § **a coarse pointer** — and three things about it are worth carrying
 to anything else that has to be pressed with a thumb:
 
-- **`pointer: coarse`, not `any-pointer: coarse`.** Everything else in this file keys on
-  `any-pointer`, correctly: a gesture rule has to apply to a finger on a hybrid machine. A *size*
-  rule must not, or an iPad with a trackpad and a laptop with a touchscreen get finger-sized chrome
-  they will never touch.
+- **`pointer: coarse`, not `any-pointer: coarse`, for the bar.** Everything else in this file keys
+  on `any-pointer`, correctly: a gesture rule has to apply to a finger on a hybrid machine. The
+  dock's bulk sizing must not, or an iPad with a trackpad and a laptop with a touchscreen get
+  finger-sized chrome they will never touch. **A single target's 40px floor is the exception, and
+  it uses `any-pointer`** (plans 261021c and 261021g): it costs a hybrid a few pixels round one
+  control, not a bigger bar, and a finger that is there may well use it.
 - **Height was the affordable axis, and only because the bar learnt to leave.** The bar now slides
   off the bottom while you scroll forwards, on the same `data-bars="hidden"` switch the top bars have
   used since [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md). Before that, 12px of bar was

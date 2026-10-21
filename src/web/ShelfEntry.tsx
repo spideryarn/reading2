@@ -407,15 +407,14 @@ export function ShelfCard({
               `focus-within` border says focus is somewhere in this card; this
               says where (plan 261007a § K3).
 
-              **`tap-target` under a finger**: an 18px line of text, so a 40px
-              halo round it rather than a 40px box, which would move the row
-              (plan 261021g § Stage 2). It is 98px wide, so the halo reaches
-              only up and down, 11px each way, and the measuring pass at 390
-              found nothing else to press within 55px. */}
+              **40px under a finger**: the bottom row already holds a 40px
+              action control, so drawing this button at the same minimum height
+              moves nothing and avoids an invisible halo over the card link
+              behind it (plan 261021g § Stage 2). */}
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tap-target tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
+            className="tw:relative tw:cursor-help tw:any-pointer-coarse:inline-flex tw:any-pointer-coarse:min-h-[40px] tw:any-pointer-coarse:items-center tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
           >
             {note}
           </button>

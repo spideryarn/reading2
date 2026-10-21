@@ -146,7 +146,7 @@
      full strength when the pointer is on its paragraph or the keyboard is on
      the button. Where nothing can hover there is no "until", so it is drawn
      at a strength a finger can find. Its size on a coarse pointer is at the
-     call site (`tw:pointer-coarse:size-10`), where the utilities layer wins. */
+     call site (`tw:pointer-coarse:size-[40px]`), where the utilities layer wins. */
 .simple-ask {
   margin-left: auto;
   margin-block: -0.25rem;

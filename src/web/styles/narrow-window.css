@@ -956,6 +956,21 @@
   }
 }
 
+/* **Target floors follow every available finger.** The dock above stays on the
+   primary pointer, as touch.md § How big a thing has to be says: it is bulk
+   chrome, and a touchscreen laptop should not get a finger-sized bar it will
+   never touch. These are only the minimum box a finger can press, so they
+   follow 261021c's `any-pointer` (plan 261021g, GPT Sol's C3). The overlapping
+   `pointer: coarse` declarations above keep their older behaviour; this later
+   block supplies the hybrid case. */
+@media (any-pointer: coarse) {
+  .gloss-sort-btn { min-height: max(40px, 2.5rem); }
+  .prof-badge.icon-only {
+    min-width: max(40px, 2.5rem);
+    min-height: max(40px, 2.5rem);
+  }
+}
+
 /* **The band's corner, for a finger: 40px, both buttons alike.** It was 32px
    (2rem) from 2026-10-02, on the reasoning that a corner has no neighbour to
    hit by mistake; but the (i) and the owner's badge are each other's

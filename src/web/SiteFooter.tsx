@@ -295,7 +295,7 @@ const LINKS: readonly {
  * the box's own 10px above and below is now the space between wrapped rows.
  */
 const LINK_CLASS =
-  "tw:text-sm tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:text-foreground tw:any-pointer-coarse:inline-flex tw:any-pointer-coarse:items-center tw:any-pointer-coarse:min-h-[40px]";
+  "tw:text-sm tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:text-foreground tw:any-pointer-coarse:inline-flex tw:any-pointer-coarse:min-h-[40px] tw:any-pointer-coarse:min-w-[40px] tw:any-pointer-coarse:items-center tw:any-pointer-coarse:justify-center";
 
 /**
  * **One measure, and it used to be two.**

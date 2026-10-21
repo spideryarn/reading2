@@ -347,7 +347,7 @@ function Paragraph({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className="simple-ask tw:pointer-coarse:size-10"
+              className="simple-ask tw:pointer-coarse:size-[40px]"
               aria-label={SIMPLE_ASK_CHAT}
               onClick={() => onAskChat(paragraph.text)}
             >

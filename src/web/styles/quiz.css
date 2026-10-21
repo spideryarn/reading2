@@ -155,7 +155,10 @@
 /* **40 under a finger**, as chat's own Send is (mode-band.css § the composer,
    plan 261021c): Answer sat at 36 beside a 40px microphone (plan 261021g). */
 @media (any-pointer: coarse) {
-  .chat-send.quiz-go { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
+  /* The answer button loses `.quiz-go` after a mark but remains pressable: it
+     can submit an edited answer. Size the row's Send-shaped button, not the
+     transient fill class. */
+  .quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
 }
 
 .quiz-actions {

@@ -328,7 +328,7 @@
 /* A saved search's icons were 29 wide at a 31px pitch under a finger; the
    row is already 47 tall (plan 261021g). */
 @media (any-pointer: coarse) {
-  .srch-icon { min-width: 40px; }
+  .srch-icon { min-width: 40px; min-height: 40px; }
 }
 .srch-icon.danger:hover { color: var(--destructive); }
 /* The warning sign on a search that failed in a way running it again cannot fix.
@@ -632,7 +632,7 @@
    (narrow-window.css § a coarse pointer argues the number and `min-height`
    over padding). Here and not there because this sheet owns the class. The
    buttons were 22px tall on a phone. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .srch-sort-btn {
     display: inline-flex;
     align-items: center;

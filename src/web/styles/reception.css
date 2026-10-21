@@ -178,7 +178,7 @@
    height it adds, so a claim's heading is no taller for having it. Quiet until
    the pointer is on the claim or the keyboard is on the button; where nothing
    can hover it is drawn at a strength a finger can find. Its size on a coarse
-   pointer is at the call site (`tw:pointer-coarse:size-10`). */
+   pointer is at the call site (`tw:pointer-coarse:size-[40px]`). */
 .rcp-claim-check {
   align-self: center;
   margin-block: -0.25rem;
@@ -292,7 +292,7 @@
 .rcp-check-earlier { margin-top: 1.25rem; padding-top: 0.5rem; border-top: 1px solid var(--rule); }
 .rcp-check-earlier-head { margin: 0; }
 .rcp-own-label { color: var(--ink-faint); font-family: var(--font-ui); font-size: max(var(--text-min), 0.78rem); }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .rcp-check-send,
   .rcp-dig { min-height: max(40px, 2.5rem); }
 }
@@ -392,7 +392,7 @@
   color: var(--ink-faint);
   font-size: max(var(--text-min), 0.78rem);
 }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .investigate-send,
   .investigate-q,
   .investigate-yours-line,
@@ -720,8 +720,13 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 .rcp-item > .rcp-more { margin: 0; padding: 0.15rem 0.1rem 0 0; }
 .rcp-more svg { transition: transform 120ms ease; }
 .rcp-item > .rcp-more[aria-expanded="true"] svg { transform: rotate(90deg); }
-@media (pointer: coarse) {
-  .rcp-item > .rcp-more { min-width: 2.25rem; min-height: 2.25rem; justify-content: center; padding: 0; }
+@media (any-pointer: coarse) {
+  .rcp-item > .rcp-more {
+    min-width: max(40px, 2.25rem);
+    min-height: max(40px, 2.25rem);
+    justify-content: center;
+    padding: 0;
+  }
 }
 /* What the toggle opens. `hidden` does the hiding — this is only its spacing. */
 .rcp-detail { margin: 0.15rem 0 0; }
@@ -1056,8 +1061,8 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 }
 .rcp-section[open] > .rcp-section-head::before { content: "▾"; }
 .rcp-section-head:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-@media (pointer: coarse) {
-  .rcp-section-head { min-height: var(--control-h-lg); align-content: center; }
+@media (any-pointer: coarse) {
+  .rcp-section-head { min-height: max(40px, var(--control-h-lg)); align-content: center; }
 }
 .rcp-section-label {
   display: flex;

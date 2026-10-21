@@ -411,7 +411,7 @@ export const FEEDBACK_SHAPE = {
        either way, because the row is `items-baseline` and the glyph is shorter
        than the line box. The horizontal 6px did.
 
-       **And `pointer-coarse:min-h-10` is what `p-0` then owes a finger.** The
+       **And `pointer-coarse:min-h-[40px]` is what `p-0` then owes a finger.** The
        corner button this replaces was 38x44 on a phone; the row's natural
        height is 16. 2.5rem is the floor the dock has had since 2026-08-28 on
        Greg's own ask, and `pointer` rather than `any-pointer` is the
@@ -421,7 +421,7 @@ export const FEEDBACK_SHAPE = {
        reason that file gives about the two order rows: a floor given to one
        control in a row is a bug report about the one beside it. GPT Sol, P2. */
     button:
-      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-xs tw:text-ink-faint tw:pointer-coarse:min-h-10 tw:hover:text-highlight-text",
+      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-xs tw:text-ink-faint tw:pointer-coarse:min-h-[40px] tw:hover:text-highlight-text",
     word: "",
     icon: 13,
     /* Downwards, like the `Profile` and `Admin` cards it shares a
@@ -454,7 +454,7 @@ export const FEEDBACK_SHAPE = {
   nav: {
     hook: "fb-nav",
     button:
-      "fb-nav tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-sm tw:text-muted-foreground tw:transition-colors tw:pointer-coarse:min-h-10 tw:hover:text-foreground",
+      "fb-nav tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-sm tw:text-muted-foreground tw:transition-colors tw:pointer-coarse:min-h-[40px] tw:hover:text-foreground",
     word: "tw:hidden tw:sm:inline",
     icon: 14,
     /* Downwards and kept there, the masthead's settings and reasons: the top

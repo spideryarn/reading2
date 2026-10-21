@@ -1437,6 +1437,9 @@ svg.band-waiting-ghost { flex: none; }
   cursor: pointer;
 }
 .mention-picker-row.active { background: var(--highlight-wash); }
+@media (any-pointer: coarse) {
+  .mention-picker-row { min-height: max(40px, 2.5rem); }
+}
 .mention-picker-title {
   font-size: 0.9rem;
   color: var(--ink);

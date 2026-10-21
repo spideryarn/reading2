@@ -211,3 +211,36 @@ Greg), the shelf's sort and topic chips, `.skim-where`, `.fold-toggle`, `.zoom-b
 built after all), footnote-card links, Structure's rows, and the threshold slider. Also small
 labels the pass noticed but that the plan never listed: `.gloss-gate-label`, `.quiz-disclose`
 and `.srch-thorough`, each about 20px tall.
+
+## Code review (GPT Sol, round 1 of each stage)
+
+**Stage 1**: [prompt](261021g-phone-sizes-part-two-code-review-1-prompt.md),
+[answer](261021g-phone-sizes-part-two-code-review-1-sol.md). Exit 0, *ship with fixes applied*:
+C1, the padding shorthand order (above), and C2, a test that pins the shape and the source order.
+
+**Stage 2**: [prompt](261021g-phone-sizes-part-two-code-review-2-prompt.md),
+[answer](261021g-phone-sizes-part-two-code-review-2-sol.md). Exit 0. Its verdict, *do not ship*,
+was on the candidate before its fixes. The reviewer fixed C1–C6 in the tree, and they were read
+and kept, bar one part of C3:
+
+- **C1 (P1)** Quiz's *Answer* loses `.quiz-go` once marked but can still be pressed, so the rule is
+  now `.quiz-actions .chat-send`.
+- **C2 (P1)** Footer links and Search's icons got their other axis too.
+- **C3 (P1)** Origin-chat, Search's sort and Reception's floors moved from `pointer` to
+  `any-pointer`, matching 261021c. **Overruled for the dock.** Sol had moved the dock's
+  `--dock-h` and `.dock-btn` too. touch.md § How big a thing has to be keeps the bar on
+  `pointer: coarse` on purpose: it is bulk chrome, and a touchscreen laptop would get a bigger bar
+  it never touches. So the dock stays where it was, with its 40px sum. touch.md now says that a
+  single target's floor is the `any-pointer` exception (Sol's C8, which it left unedited believing
+  touch.md needed Greg's approval; it is not one of the rule docs CLAUDE.md names).
+- **C4 (P1)** The Tag halo reached into the card's stretched title link; the measuring pass's
+  "55px" was to the next *button*. The pill now reserves its overhang with a block margin, and the
+  date is drawn at 40 in a row that is already 40 tall.
+- **C5 (P1)** The mention picker's rows and Reception's expanders and section heads, at 40.
+- **C6 (P2)** The test's declaration folding was hardened.
+- **C7 (P1, reported)** Eleven Tailwind classes in seven components wrote the finger size as
+  `size-10` or `min-h-10` (2.5rem). They are now `[40px]`, and the guard scans `src/web/**/*.tsx`
+  for the pattern; it was shown red first.
+
+**After the review**, the browser re-measure found the Metadata page's second *Archive*, the one in
+its Archive section, still at 34. It is a copy of `QUIET_BUTTON`'s classes, and is now floored too.

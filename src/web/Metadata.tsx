@@ -3053,7 +3053,7 @@ function ArchiveArticle({
         type="button"
         onClick={() => void set(!archived)}
         disabled={busy}
-        className={`tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
+        className={`tw:inline-flex tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
           archived
             ? "tw:text-highlight-text tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
             : /* Quiet at rest and tinted on hover — the shelf's own Archive
