@@ -6800,6 +6800,68 @@ export const feedbackQuestionDeferrals = spideryarn.table(
 );
 
 /**
+ * **The questions an agent has put to an admin, as the dialog serves them** —
+ * one row a question, written only by `scripts/feedback-questions.ts
+ * --publish`, read by the admin's *Needs a decision* and by the routes that
+ * take a reply or a deferral. docs/plans/261021h-agent-questions-reach-needs-a-decision-without-a-deploy.md.
+ *
+ * > I guess I had assumed that the Needs Input sections are being stored and
+ * > surfaced from the database. […] that way then you can always be sure that
+ * > anything you've submitted there is going to be live to me immediately.
+ * >
+ * > — Greg, 2026-10-21
+ *
+ * **A published copy of a file**, `docs/user-feedback/questions/q-….md`, which
+ * stays the one place a question is written: nobody edits a row, and publishing
+ * overwrites it from the file. `refs:` is never here, because it is for agents
+ * and nothing in this table may be unfit for a browser. No owner: a question is
+ * asked of every admin. The checks repeat the file's rules
+ * (src/feedback-question-values.ts) so a row written any other way cannot be
+ * bigger or stranger than a file could be; Postgres counts code points where
+ * the file's rule counts UTF-16 units, so a file within its limit always fits.
+ */
+export const feedbackQuestions = spideryarn.table(
+  "feedback_questions",
+  {
+    /** `q-k3m9qt`, the file's name. */
+    id: text("id").primaryKey(),
+    /** One line, at most `MAX_FEEDBACK_QUESTION_TITLE_CHARS`. */
+    title: text("title").notNull(),
+    /** The `spya-` id of the report it is about, or null (`report: none`). */
+    report: text("report"),
+    /** `repeats:`, the reports folded into `report`'s note. Empty when `report` is null. */
+    repeats: text("repeats").array().notNull().default(sql`'{}'::text[]`),
+    /** `yyyy-mm-dd`, the file's `asked:`. Text, as the file has it: it is shown, never compared. */
+    asked: text("asked").notNull(),
+    /** Plain text, at most `MAX_FEEDBACK_QUESTION_BODY_CHARS`. Never rendered as markup. */
+    body: text("body").notNull(),
+    /** `open` or `answered`. Publishing never moves an answered row back to open. */
+    status: text("status").notNull(),
+    /** `acted:`, the replies an agent has acted on. Publishing never drops one. */
+    acted: text("acted").array().notNull().default(sql`'{}'::text[]`),
+    /** When it was first published. */
+    createdAt: createdAt(),
+    /** When a publish last changed it. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "feedback_questions_id_format",
+      sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX.replace(ID_PREFIX, "q-")}'`)}`,
+    ),
+    check(
+      "feedback_questions_report_format",
+      sql`${t.report} is null or ${t.report} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    check("feedback_questions_repeats_need_report", sql`${t.report} is not null or cardinality(${t.repeats}) = 0`),
+    check("feedback_questions_title_shape", sql`length(btrim(${t.title})) > 0 and length(${t.title}) <= 120`),
+    check("feedback_questions_body_shape", sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 6000`),
+    check("feedback_questions_asked_format", sql`${t.asked} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`),
+    check("feedback_questions_status", sql`${t.status} in ('open', 'answered')`),
+  ],
+);
+
+/**
  * **More words an admin added to one of their own earlier reports** — one row
  * an addendum, written only by `POST /api/admin/feedback/addenda`, read by the
  * admin's Earlier tab (under the report's own words) and by
