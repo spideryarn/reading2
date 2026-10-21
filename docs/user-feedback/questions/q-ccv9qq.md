@@ -1,10 +1,11 @@
 ---
 id: q-ccv9qq
 report: spya-wc4vku
-status: open
+status: answered
 asked: 2026-10-20
 title: Add a rule to controls.md that any box for more than a few words of the reader's writing gets a microphone?
 refs: spya-wc4vku · SPIDERYARN-READING2-MQ · qi-syvf7st3 · qi-d44n9rhc (the five boxes) · docs/user-feedback/261019_2154-a-microphone-on-the-add-page-and-on-every-prose-box-by-default.md · docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md · docs/plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md · docs/project/controls.md · docs/project/dictation.md · tests/prose-boxes-have-a-microphone.test.ts
+acted: spya-xd63nn
 ---
 The add page's two boxes now have a microphone, and a test fails if anyone adds a new text box without one, unless they give a reason. One part is left for you: may I add one line to controls.md, the design rules page, saying so?
 
@@ -31,3 +32,15 @@ What is built and on dev:
 Why ask you: controls.md is a rules page, and rule wording goes to you before it is edited. Nothing in controls.md has changed.
 
 What would decide it: whether you want the rule where people look when they design a control (A), wider than a test can check (B), or only where the dictation work is described (C).
+
+Greg's reply, 2026-10-20 21:43 UTC (spya-xd63nn, in the Feedback dialog):
+
+> Yes, but keep it a minimal update. And just to be clear, we obviously don't want the URL to, for
+> when importing an article from the homepage to have a voice button, because that wouldn't make
+> sense. And not so we need a voice button for, like, the search bar on the homepage. So use your
+> judgment a little bit.
+
+Acted on, 2026-10-21 (queue item qi-d44n9rhc, plan
+[261021e](../../plans/261021e-microphone-on-the-five-remaining-prose-boxes.md)): option A's row is in
+controls.md, saying a URL, a search or a title box gets none. Four of the five queued boxes now
+have a microphone; rewriting a chat question is exempted, with its reason in the test.

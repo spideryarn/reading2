@@ -1,0 +1,9 @@
+You are reviewing a plan, read-only. Plan: docs/plans/261021e-microphone-on-the-five-remaining-prose-boxes.md.
+
+Context: Spideryarn, a reading app. Greg asked that every box for more than a few words of the reader's prose gets a dictation microphone (not URL or search boxes). Five textareas remain without one; the plan adds it to each and adds one row to docs/project/controls.md.
+
+Read: the plan; docs/project/dictation.md § "Adding it to a box" and § "A page that leaves by itself"; src/web/useDictationField.ts; tests/prose-boxes-have-a-microphone.test.ts; and the five components: src/web/SkimPurpose.tsx (PurposeLine), src/web/CriteriaPanel.tsx (NewCriterion), src/web/CandidatesPanel.tsx (Composer), src/web/ChatPanel.tsx (EditQuestion, and the Composer there as the worked example of a sending box), src/web/CommentDialog.tsx (CommentBody and the follow-up box's dictation as the worked example). Also src/web/dictation-keep.ts and src/web/dictation-report.ts.
+
+Find what the plan gets wrong or misses, per box: lost words (unmount, blur-commit, a component that stays mounted while the box disappears), a send that runs while the mic is armed or the transcript is in flight, keeper names that collide or that carry words into the wrong box, the commit-on-blur interaction in CommentBody (including Escape restoring stored words, the dialog's own close path, and the `onTyped` / pristine-highlight logic), the chat-rewrite modality gap, and whether any of the five should instead be exempted. Also check the controls.md row wording is minimal and makes clear URL and search boxes get no microphone.
+
+Answer as a numbered list of findings, each with severity (P1 must fix / P2 should / P3 nit), the file and line it concerns, and a concrete fix. End with a one-line verdict. Do not edit any files.

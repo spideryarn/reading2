@@ -1,0 +1,1908 @@
+diff --git a/docs/project/controls.md b/docs/project/controls.md
+index 1cc8d9bbe..3dfb4af52 100644
+--- a/docs/project/controls.md
++++ b/docs/project/controls.md
+@@ -21,6 +21,13 @@ the reason turned out to be one line of CSS rather than taste.
+ >
+ > — Greg, 2026-10-07
+ 
++> Yes, but keep it a minimal update. And just to be clear, we obviously don't want the URL to, for
++> when importing an article from the homepage to have a voice button, because that wouldn't make
++> sense. And not so we need a voice button for, like, the search bar on the homepage. So use your
++> judgment a little bit.
++>
++> — Greg, 2026-10-20 (`q-ccv9qq`, on a microphone for every prose box)
++
+ **The aim:** a control that does the same job looks the same in every mode, so reuse the shared
+ piece rather than drawing a new one. **Orange marks the mode; a part within it is marked
+ neutrally.** Look at `/design` § Controls across modes before drawing one; it shows each piece
+@@ -38,6 +45,7 @@ below, live. The families came from plan
+ | is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
+ | floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, or a shape of its own with its alpha times `--shadow-strength`, [`tokens.css`](../../src/web/styles/tokens.css) | [`elevation-shadows-soften-in-light`](../../tests/elevation-shadows-soften-in-light.test.ts) |
+ | sends what you wrote, or leaves without sending | `.tone-positive` (green) and `.tone-negative` (red), [`button-tone.css`](../../src/web/button-tone.css) | [`feedback-dialog-styles`](../../tests/feedback-dialog-styles.test.ts) |
++| takes more than a few words of the reader's writing (not a URL, a search or a title) | a microphone: `DictationButton` and `DictationStrip`, through `useDictationField` ([dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box)) | [`prose-boxes-have-a-microphone`](../../tests/prose-boxes-have-a-microphone.test.ts) (every textarea, or its component listed with why) |
+ 
+ The pair that ends a form is coloured by what it does: the button that sends what you wrote is
+ green, the one that leaves without sending is red. Red is a direction, not a warning: a button
+diff --git a/docs/project/dictation.md b/docs/project/dictation.md
+index b5c93b65a..851615471 100644
+--- a/docs/project/dictation.md
++++ b/docs/project/dictation.md
+@@ -28,9 +28,10 @@ Up: [reading-view-overview.md](reading-view-overview.md)
+ - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
+ 
+ A microphone button beside a text box. Press it, talk, press it again, and your words are in the
+-box. It is on thirteen boxes today — both profile boxes, the add page's two (*Why are you reading
+-this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up, the
+-annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
++box. It is on seventeen boxes today — both profile boxes, the add page's two (*Why are you reading
++this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up and
++the comment's own note, the annotate box, Skim's *What are you skimming for?*, Referee's new
++criterion, the box that scopes the Candidates search, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
+ ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
+ ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
+ the note under an Illustrated picture
+@@ -38,7 +39,7 @@ the note under an Illustrated picture
+ ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
+ box at the top of every Help page
+ ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
+-fourteenth is three lines. **A box for more than a few words of the reader's prose gets one by
++eighteenth is three lines. **A box for more than a few words of the reader's prose gets one by
+ default** (Greg, 2026-10-19, `spya-wc4vku`), and
+ [`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
+ fails on a new `<textarea>` without one unless its component is listed there with the reason.
+@@ -487,7 +488,10 @@ const dictate = useDictationField({
+ keeps score of which `onChange` ran, the hook's or the textarea's, and sends `typed`, `dictated`
+ or `mixed` with the question ([`composer-modality.ts`](../../src/web/composer-modality.ts), plan
+ [261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). The command bar's
+-*Ask the guide* row does not yet, and its questions are stored unrecorded.
++*Ask the guide* row does not yet, and its questions are stored unrecorded. Rewriting a question
++already asked has no microphone for this reason: `withEdit` (src/chat.ts) keeps the original
++question's modality, so a voice rewrite would be stored as typed (plan
++[261021e](../plans/261021e-microphone-on-the-five-remaining-prose-boxes.md)).
+ 
+ `transcribe` comes from `useReaderTranscriber` in
+ [`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
+@@ -779,8 +783,9 @@ passed over, and GPT Sol's review.
+   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
+   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
+   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
+-  `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+-  `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
++  `:draft:<block>`), `comment:<id>`, `comment-note:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
++  `quiz:<slug>:<question>`, `commands:<slug>`, `skim:purpose:<slug>`,
++  `referee:criterion:<slug>`, `candidates:<slug>`, `profile:<field>` for About you and
+   `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
+   `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,
+   which is empty for every upload) and `add:about-you`. **The name is the partition, so it
+diff --git a/src/web/CandidatesPanel.tsx b/src/web/CandidatesPanel.tsx
+index 991b59902..fc27f01c5 100644
+--- a/src/web/CandidatesPanel.tsx
++++ b/src/web/CandidatesPanel.tsx
+@@ -87,6 +87,11 @@ import { hostOf } from "../urls.js";
+ import { useChat } from "./useChat.js";
+ import { putKeyboardAway } from "./useVisualViewport.js";
+ import { useRenderCount } from "./perf.js";
++import { DictationButton, DictationStrip } from "./DictationStrip.js";
++import { keepDictation } from "./dictation-keep.js";
++import { dictationReporter } from "./dictation-report.js";
++import { useReaderTranscriber } from "./dictation-upload.js";
++import { useDictationField } from "./useDictationField.js";
+ 
+ /**
+  * The band: the thread, the fetch that belongs to it, and the opening turn.
+@@ -225,6 +230,7 @@ export function CandidatesBand({
+ 
+   return (
+     <CandidatesPanel
++      slug={slug}
+       thread={thread}
+       loaded={loaded}
+       loadFailed={loadFailed}
+@@ -267,6 +273,7 @@ function firstCandidatesThread(threads: ChatThread[]): ChatThread | null {
+  * router and no fetch — the seam every other referee panel already has.
+  */
+ export function CandidatesPanel({
++  slug,
+   thread,
+   loaded,
+   loadFailed,
+@@ -279,6 +286,8 @@ export function CandidatesPanel({
+   onReload,
+   onJump,
+ }: {
++  /** The article, for the scope box's dictation (its vocabulary and its keeper). */
++  slug: string;
+   thread: ChatThread | null;
+   loaded: boolean;
+   loadFailed: boolean;
+@@ -378,7 +387,7 @@ export function CandidatesPanel({
+         ))}
+       </ol>
+ 
+-      <Composer busy={busy} disabled={!thread} onAsk={onAsk} />
++      <Composer slug={slug} busy={busy} disabled={!thread} onAsk={onAsk} />
+     </div>
+   );
+ }
+@@ -830,19 +839,36 @@ function Tools({ tools }: { tools: ChatMessage }) {
+ 
+ /** Where the editor scopes the search. */
+ function Composer({
++  slug,
+   busy,
+   disabled,
+   onAsk,
+ }: {
++  slug: string;
+   busy: boolean;
+   disabled: boolean;
+   onAsk(question: string): void;
+ }) {
+   const [text, setText] = useState("");
+   const box = useRef<HTMLTextAreaElement>(null);
++  const dictate = useDictationField({
++    value: text,
++    onChange: setText,
++    box,
++    context: { kind: "article", slug },
++    transcribe: useReaderTranscriber(),
++    report: dictationReporter("candidates"),
++    keep: keepDictation(`candidates:${slug}`),
++    /* A double press on Stop asks once the words are in. */
++    onDone: () => send(),
++  });
+   const send = () => {
++    /* **Not while the microphone is involved** — `dictate.busy` is both
++       halves, recording and the transcript on its way. Either would send the
++       recogniser's rough guess, or on Safari and Firefox nothing that was said
++       (dictation.md § Adding it to a box). Enter and Ask both come here. */
+     const question = text.trim();
+-    if (question === "" || busy || disabled) return;
++    if (question === "" || busy || disabled || dictate.busy) return;
+     setText("");
+     onAsk(question);
+     /* The search has started and its answer arrives under the keys
+@@ -859,6 +885,9 @@ function Composer({
+         enterKeyHint="send"
+         value={text}
+         placeholder="Scope the search — a method, a subfield, people to leave out…"
++        /* `readOnly`, not `disabled`, while the transcript is on its way —
++           useDictationField.ts says why. */
++        readOnly={dictate.readOnly}
+         onChange={(e) => setText(e.target.value)}
+         onKeyDown={(e) => {
+           /* Enter sends, Shift+Enter is a newline — chat's own arrangement, so a
+@@ -872,16 +901,27 @@ function Composer({
+           if (isHeldSendEnter(e)) e.preventDefault();
+         }}
+       />
+-      <Button
+-        type="button"
+-        variant="outline"
+-        size="sm"
+-        className="cnd-send"
+-        disabled={busy || disabled || text.trim() === ""}
+-        onClick={send}
+-      >
+-        <SendHorizontal size={13} aria-hidden /> Ask
+-      </Button>
++      {/* One row: the composer is a flex column, and the microphone as its own
++          child would be stretched to the column's width. */}
++      <div className="cnd-actions">
++        <Button
++          type="button"
++          variant="outline"
++          size="sm"
++          className="cnd-send"
++          disabled={busy || disabled || dictate.busy || text.trim() === ""}
++          onClick={send}
++        >
++          <SendHorizontal size={13} aria-hidden /> Ask
++        </Button>{" "}
++        <DictationButton
++          dictation={dictate.dictation}
++          toggle={dictate.toggle}
++          sendingAfter={dictate.sendingAfter}
++          doubleStop={dictate.doubleStop}
++        />
++      </div>
++      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+     </div>
+   );
+ }
+diff --git a/src/web/CommentDialog.tsx b/src/web/CommentDialog.tsx
+index 236638063..c9b33acda 100644
+--- a/src/web/CommentDialog.tsx
++++ b/src/web/CommentDialog.tsx
+@@ -30,7 +30,7 @@ import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
+ import { Tooltip } from "./Tooltip.js";
+ import { parseRoute } from "./router.js";
+ import { keepDictation } from "./dictation-keep.js";
+-import { useReaderTranscriber } from "./dictation-upload.js";
++import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
+ import { useDictationField } from "./useDictationField.js";
+ import { useEscapeToClose } from "./useEscapeToClose.js";
+ import { useCopy } from "./useCopy.js";
+@@ -207,12 +207,15 @@ export function CommentDialog({
+      string comparison, and because a reader who navigates while the dialog is
+      open should not have a stale slug in the next request. */
+   const route = parseRoute(location.pathname);
++  /* Shared with the note box (`CommentBody`), which is about the same passage. */
++  const dictationContext: DictationContext =
++    route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" };
+   const transcribe = useReaderTranscriber();
+   const dictate = useDictationField({
+     value: followUp,
+     onChange: setFollowUp,
+     box: followUpBox,
+-    context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
++    context: dictationContext,
+     transcribe,
+     report: dictationReporter("comment"),
+     /* One box per comment, as the follow-up itself is. */
+@@ -685,6 +688,8 @@ export function CommentDialog({
+       {own ? (
+         <CommentBody
+           key={comment.id}
++          commentId={comment.id}
++          context={dictationContext}
+           body={comment.body ?? ""}
+           onSave={(next) => {
+             touch();
+@@ -1100,6 +1105,12 @@ function hostOf(url: string): string {
+  * committing there is what keeps the words. ⌘/Ctrl+Enter commits too, for the
+  * reader who wants to say "done" with the keyboard.
+  *
++ * **Except while a dictation is busy** (plan 261021e). Then blur and
++ * ⌘/Ctrl+Enter save nothing, Escape is contained, and the dictation's own end
++ * saves the transcript. Closing, stepping or deleting mid-dictation unmounts
++ * the box and aborts it: the rough words are not saved, and the keeper offers
++ * the recording back next time this note is opened.
++ *
+  * **Keyed on the comment id by the caller**, so stepping between comments
+  * remounts this and cannot carry one reader's half-edited note onto another
+  * passage — the same bug the follow-up box below fixed once already.
+@@ -1108,16 +1119,31 @@ function hostOf(url: string): string {
+  * bare bookmark again, and `""` is not a value the store may hold.
+  */
+ function CommentBody({
++  commentId,
++  context,
+   body,
+   onSave,
+   onTyped,
+ }: {
++  commentId: string;
++  /** Where a dictation into the note is going — the dialog's own. */
++  context: DictationContext;
+   body: string;
+   onSave(next: string | null): void;
+   /** The reader changed the text, committed or not — the fresh box's `touch`. */
+   onTyped(): void;
+ }) {
+-  const [draft, setDraft] = useState(body);
++  const [draft, setDraftState] = useState(body);
++  /* **The draft as of now, not as of the last render.** The dictation's own
++     commit runs from its `onEnd`, in the same turn as the transcript landed,
++     before React has rendered the new words; a `commit` reading this render's
++     `draft` would save the rough guesses it replaced. Both typed and dictated
++     changes go through `setDraft`, so this is never behind either. */
++  const draftNow = useRef(body);
++  const setDraft = (next: string) => {
++    draftNow.current = next;
++    setDraftState(next);
++  };
+   /* What is actually stored, so a commit that changes nothing sends nothing. A
+      PATCH per blur would rewrite `updatedAt` every time the reader clicked
+      through a comment, and "edited just now" on a note they only looked at is a
+@@ -1125,45 +1151,97 @@ function CommentBody({
+   const saved = useRef(body);
+ 
+   const commit = () => {
+-    const next = draft.trim();
++    const next = draftNow.current.trim();
+     if (next === saved.current) return;
+     saved.current = next;
+     onSave(next === "" ? null : next);
+   };
+ 
++  const box = useRef<HTMLTextAreaElement>(null);
++  const dictate = useDictationField({
++    value: draft,
++    onChange: (next) => {
++      setDraft(next);
++      onTyped();
++    },
++    box,
++    context,
++    transcribe: useReaderTranscriber(),
++    report: dictationReporter("comment"),
++    /* Its own keeper, apart from the follow-up box's `comment:<id>`: a
++       recording offered back belongs in the box it was spoken into. */
++    keep: keepDictation(`comment-note:${commentId}`),
++    /* The end of a dictation saves the words once they have landed — the
++       blur that pressing Stop caused was refused below. */
++    onCommit: commit,
++  });
++
+   return (
+-    <textarea
+-      className="cmt-note"
+-      value={draft}
+-      onChange={(e) => {
+-        setDraft(e.target.value);
+-        onTyped();
+-      }}
+-      onBlur={commit}
++    /* **Escape is contained here while a dictation is busy**, from the box and
++       from its microphone alike: the dialog closes from a bubble-phase window
++       listener (`useEscapeToClose`), and closing unmounts this box, which
++       aborts the dictation. Stopped on the way up, so it never reaches
++       `window`. Plan 261021e § After GPT Sol's plan review, "Comment note". */
++    /* biome-ignore lint/a11y/noStaticElementInteractions: not a control — it only stops an Escape from its own textarea and microphone on the way up */
++    <div
++      className="cmt-note-field"
+       onKeyDown={(e) => {
+-        // A changed note contains Escape, including the input method's key.
+-        if (e.key === "Escape" && draft !== saved.current) e.stopPropagation();
+-        /* A key an input method is using is not ours: its Escape dismisses a
+-           candidate list and must not put the stored words back. */
+-        if (isImeComposing(e)) return;
+-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+-          e.preventDefault();
+-          commit();
+-          return;
+-        }
+-        /* Escape closes the dialog from a window listener, which would throw
+-           away an uncommitted edit without warning. The first Escape puts the
+-           stored words back; the second closes the panel. */
+-        if (e.key === "Escape" && draft !== saved.current) {
+-          setDraft(saved.current);
+-        }
++        if (e.key === "Escape" && dictate.busy) e.stopPropagation();
+       }}
+-      /* **Says the box is free**, beside the follow-up box that says it is
+-         the AI's: Greg, SPIDERYARN-READING2-9C, *"make a small UI tweak that
+-         will make that clear to the user."* Plan 261002j. */
+-      placeholder="Add a comment. It’s yours: the AI doesn’t reply"
+-      aria-label="Your comment on this passage"
+-      rows={2}
+-    />
++    >
++      <div className="cmt-note-row">
++        <textarea
++          ref={box}
++          className="cmt-note"
++          value={draft}
++          readOnly={dictate.readOnly}
++          onChange={(e) => {
++            setDraft(e.target.value);
++            onTyped();
++          }}
++          /* **Not while busy.** Pressing Stop moves the focus out of the box,
++             and a commit then would PATCH Chromium's rough live words and race
++             the transcript; the hook's `onCommit` saves once they land. */
++          onBlur={() => {
++            if (dictate.busy) return;
++            commit();
++          }}
++          onKeyDown={(e) => {
++            /* While busy the wrapper above contains Escape, and nothing here
++               may put the stored words back over a dictation in progress. */
++            if (dictate.busy) {
++              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.preventDefault();
++              return;
++            }
++            // A changed note contains Escape, including the input method's key.
++            if (e.key === "Escape" && draft !== saved.current) e.stopPropagation();
++            /* A key an input method is using is not ours: its Escape dismisses a
++               candidate list and must not put the stored words back. */
++            if (isImeComposing(e)) return;
++            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
++              e.preventDefault();
++              commit();
++              return;
++            }
++            /* Escape closes the dialog from a window listener, which would throw
++               away an uncommitted edit without warning. The first Escape puts the
++               stored words back; the second closes the panel. */
++            if (e.key === "Escape" && draft !== saved.current) {
++              setDraft(saved.current);
++            }
++          }}
++          /* **Says the box is free**, beside the follow-up box that says it is
++             the AI's: Greg, SPIDERYARN-READING2-9C, *"make a small UI tweak that
++             will make that clear to the user."* Plan 261002j. */
++          placeholder="Add a comment. It’s yours: the AI doesn’t reply"
++          aria-label="Your comment on this passage"
++          rows={2}
++        />
++        {dictate.dictation.supported && (
++          <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
++        )}
++      </div>
++      <DictationStrip dictation={dictate.dictation} />
++    </div>
+   );
+ }
+diff --git a/src/web/CriteriaPanel.tsx b/src/web/CriteriaPanel.tsx
+index 71c8b21b1..9c777cc90 100644
+--- a/src/web/CriteriaPanel.tsx
++++ b/src/web/CriteriaPanel.tsx
+@@ -136,6 +136,11 @@ import {
+   valenceWords,
+ } from "./valence.js";
+ import { BandWaiting } from "./BandWaiting.js";
++import { DictationButton, DictationStrip } from "./DictationStrip.js";
++import { keepDictation } from "./dictation-keep.js";
++import { dictationReporter } from "./dictation-report.js";
++import { useReaderTranscriber } from "./dictation-upload.js";
++import { useDictationField } from "./useDictationField.js";
+ 
+ /** One starter: what pressing it puts in the form. Nothing runs from a press. */
+ interface CriterionStarter {
+@@ -387,6 +392,7 @@ export function CriteriaBand({
+ 
+   return (
+     <CriteriaView
++      slug={slug}
+       api={api}
+       slots={slots}
+       active={on}
+@@ -424,6 +430,7 @@ export function CriteriaBand({
+  * on the day one wants to.
+  */
+ function CriteriaView({
++  slug,
+   api,
+   slots,
+   active,
+@@ -435,6 +442,7 @@ function CriteriaView({
+   onOpenKey,
+   onShow,
+ }: {
++  slug: string;
+   api: ReturnType<typeof useCriteria>;
+   slots: Map<string, number>;
+   active: string[];
+@@ -458,6 +466,7 @@ function CriteriaView({
+   return (
+     <div className="crit">
+       <NewCriterion
++        slug={slug}
+         scale={scale}
+         loaded={api.loaded}
+         hasOwn={api.loaded && api.startersUnlocked}
+@@ -673,11 +682,14 @@ const MIXED_SIGN = "±";
+  * they were halfway through asking.
+  */
+ function NewCriterion({
++  slug,
+   scale,
+   loaded,
+   hasOwn,
+   onAsk,
+ }: {
++  /** The article: where a dictation's vocabulary comes from, and what its keeper is named for. */
++  slug: string;
+   /**
+    * **The mode's ramp, written into the new row** — `?refscale=`.
+    *
+@@ -735,28 +747,66 @@ function NewCriterion({
+     text.trim() !== "" &&
+     (kind !== "diverging" || (against.trim() !== "" && favour.trim() !== ""));
+ 
++  /* **The one submit path** — the form's (the Run press, and Enter in a pole)
++     and a double press on Stop alike. Refused while the microphone is
++     involved, both halves of it: `busy` is `armed` or the transcript on its
++     way, and running either would save the recogniser's rough guess, or on
++     Safari and Firefox nothing that was said (dictation.md § Adding it to a
++     box). Plan 261021e § Stage 2, item 2. */
++  const submit = () => {
++    if (!ready || dictate.busy) return;
++    onAsk(text.trim(), config);
++    setText("");
++  };
++
++  const box = useRef<HTMLTextAreaElement>(null);
++  const dictate = useDictationField({
++    value: text,
++    onChange: setText,
++    box,
++    context: { kind: "article", slug },
++    transcribe: useReaderTranscriber(),
++    report: dictationReporter("referee"),
++    keep: keepDictation(`referee:criterion:${slug}`),
++    /* A double press on Stop runs the criterion once the words are in. */
++    onDone: () => submit(),
++  });
++  /* Run's dead look and the submit's refusal are one condition. */
++  const canRun = ready && !dictate.busy;
++
+   return (
+     <form
+       className="crit-new"
+       onSubmit={(e) => {
+         e.preventDefault();
+-        if (!ready) return;
+-        onAsk(text.trim(), config);
+-        setText("");
++        submit();
+       }}
+     >
+-      <label className="crit-label" htmlFor="crit-text">
+-        What are you judging this paper against?
+-      </label>
++      <div className="crit-label-row">
++        <label className="crit-label" htmlFor="crit-text">
++          What are you judging this paper against?
++        </label>{" "}
++        <DictationButton
++          dictation={dictate.dictation}
++          toggle={dictate.toggle}
++          sendingAfter={dictate.sendingAfter}
++          doubleStop={dictate.doubleStop}
++        />
++      </div>
+       <textarea
++        ref={box}
+         id="crit-text"
+         className="crit-text"
+         rows={2}
+         value={text}
+         maxLength={500}
+         placeholder="Are the controls adequate?"
++        /* `readOnly`, not `disabled`, while the transcript is on its way —
++           useDictationField.ts says why. */
++        readOnly={dictate.readOnly}
+         onChange={(e) => setText(e.target.value)}
+       />
++      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+ 
+       {/* The part-switcher every mode shares (mode-band.css § the
+           part-switcher): a choice of one kind, not an action. */}
+@@ -863,7 +913,16 @@ function NewCriterion({
+                       <button
+                         type="button"
+                         className="crit-preset"
++                        /* **Off while a dictation is in progress.** The press
++                           replaces the box, and the words on their way would
++                           then be refused by, or spliced into, a sentence that
++                           is no longer the one being dictated into (plan
++                           261021e, Sol's F4). Native `disabled`: the card
++                           explains the press, and there is none to make until
++                           the words land. */
++                        disabled={dictate.busy}
+                         onClick={() => {
++                          if (dictate.busy) return;
+                           setText(p.criterion);
+                           setKind(p.kind);
+                           setAgainst(p.poles?.against ?? "");
+@@ -906,7 +965,7 @@ function NewCriterion({
+ 
+             **`aria-disabled` on its own does not stop an activation**, so the
+             inertness is elsewhere and has to stay there: the `onSubmit` above
+-            returns on `!ready` before it calls `onAsk`, which catches the click,
++            returns on `!ready` (and on a dictation in progress) before it calls `onAsk`, which catches the click,
+             the Enter and the Space alike because all three arrive here as a
+             submit. `onClick` is *not* where that guard goes — Enter in a text
+             field submits a form without ever pressing the button.
+@@ -916,7 +975,7 @@ function NewCriterion({
+             `pointer-events: none`, which would take the card away again.
+             Shadcn's outline button since plan 261007h § F3, the run button
+             every mode shares; `.crit-run` stays as a hook. */}
+-        <Button type="submit" variant="outline" size="sm" className="crit-run" aria-disabled={!ready}>
++        <Button type="submit" variant="outline" size="sm" className="crit-run" aria-disabled={!canRun}>
+           Run this criterion
+         </Button>
+       </Tooltip>
+diff --git a/src/web/SkimPurpose.tsx b/src/web/SkimPurpose.tsx
+index 3acda9b9d..d610caf42 100644
+--- a/src/web/SkimPurpose.tsx
++++ b/src/web/SkimPurpose.tsx
+@@ -24,16 +24,24 @@
+  * not de-duplicate against it — two paid routes. The caller mounts this only
+  * when a route is ready. And never when the purpose could not be read: a reader
+  * told "you have not said" types over the sentence they already wrote.
++ *
++ * **With a microphone**, in `PurposeAsk` below: the add page's box writes the
++ * same purpose and has one. docs/plans/261021e-microphone-on-the-five-remaining-prose-boxes.md.
+  */
+-import { useEffect, useRef, useState } from "react";
++import { useEffect, useLayoutEffect, useRef, useState } from "react";
+ import { Route } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { MAX_PURPOSE_CHARS } from "../types.js";
++import { DictationButton, DictationStrip } from "./DictationStrip.js";
++import { keepDictation } from "./dictation-keep.js";
++import { dictationReporter } from "./dictation-report.js";
++import { useReaderTranscriber } from "./dictation-upload.js";
+ import { describeFetchFailure } from "./lib/describe-failure.js";
+ import { savePurpose, storedPurpose, usePurpose } from "./purpose.js";
+ import { profileSaved } from "./profile-saved.js";
+ import { Tooltip } from "./Tooltip.js";
+ import type { UseSkim } from "./useSkim.js";
++import { useDictationField } from "./useDictationField.js";
+ 
+ interface Props {
+   owner: UseSkim;
+@@ -50,6 +58,11 @@ export function PurposeLine({ owner, bannerUp }: Props) {
+   const [editing, setEditing] = useState(false);
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string | null>(null);
++  /* **The hold** (plan 261021e, Sol's F1). `PurposeAsk` says when its
++     microphone is busy, and while it is nothing here takes the box away: a
++     banner arriving would unmount it, and unmounting aborts the dictation.
++     `false` again when the box goes, since its dictation went with it. */
++  const [dictating, setDictating] = useState(false);
+   /* State disables the visible control; the ref closes the smaller gap before
+      React re-renders, when two clicks could otherwise send two PATCHes and call
+      `ensure()` twice. */
+@@ -70,7 +83,9 @@ export function PurposeLine({ owner, bannerUp }: Props) {
+   /* A route being planned, or a forced one whose result is not read yet:
+      another request now would race it (GPT Sol, plan review F6). */
+   const planningElsewhere = owner.starting || owner.job !== null || owner.rewriting;
+-  if (set && (!editing || bannerUp)) {
++  /* A banner waits for a dictation to end before it takes the box (the hold). */
++  const bannerTakesBox = bannerUp && !dictating;
++  if (set && (!editing || bannerTakesBox)) {
+     return (
+       <div className="skim-purpose">
+         <Tooltip content={<p>{purpose}</p>} placement="bottom" className="skim-purpose-tip">
+@@ -103,16 +118,19 @@ export function PurposeLine({ owner, bannerUp }: Props) {
+     );
+   }
+ 
+-  /* The box waits under a banner, whose own button re-plans. */
+-  if (bannerUp) return null;
++  /* The box waits under a banner, whose own button re-plans — unless it is
++     being dictated into (the hold). */
++  if (bannerTakesBox) return null;
+ 
+   const busy = saving || planningElsewhere;
+   const text = draft.trim();
+   /* Saving the sentence already saved would re-plan nothing and say it had. */
+   const unchanged = set && text === purpose;
+   const plan = async () => {
+-    /* Never an empty draft: `savePurpose(slug, null)` erases (plan F1). */
+-    if (text === "" || unchanged || busy || planning.current) return;
++    /* Never an empty draft: `savePurpose(slug, null)` erases (plan F1). Never
++       under a banner, which the hold can leave the box above; its own button
++       re-plans. A busy microphone is refused in `PurposeAsk`. */
++    if (text === "" || unchanged || busy || bannerUp || planning.current) return;
+     planning.current = true;
+     setSaving(true);
+     setError(null);
+@@ -159,33 +177,135 @@ export function PurposeLine({ owner, bannerUp }: Props) {
+     planning.current = false;
+   };
+ 
++  return (
++    <PurposeAsk
++      slug={owner.slug}
++      draft={draft}
++      setDraft={setDraft}
++      canPlan={!busy && !bannerUp && text !== "" && !unchanged}
++      plan={() => void plan()}
++      micOff={busy}
++      cancel={editing ? () => setEditing(false) : null}
++      saving={saving}
++      error={error}
++      onBusyChange={setDictating}
++    />
++  );
++}
++
++/**
++ * **The box, its microphone, and *Plan the route for this*.** Its own
++ * component rather than more of `PurposeLine`, which stays mounted when the
++ * box goes (Cancel, a save, a banner): a dictation hook there would keep
++ * recording behind a box that is gone. Here the box going unmounts the hook,
++ * which aborts. dictation.md § Adding it to a box; plan
++ * docs/plans/261021e-microphone-on-the-five-remaining-prose-boxes.md § Stage 2.
++ *
++ * While the microphone is busy (on, or its words on their way) *Plan* and
++ * *Cancel* are refused and disabled — the first would plan from the live
++ * guesses, the second would unmount mid-sentence — and `busy` goes up to
++ * `PurposeLine` so that a banner does not take the box (the add page's hold,
++ * dictation.md § A page that leaves by itself). A double press on Stop plans
++ * once the words have landed.
++ */
++function PurposeAsk({
++  slug,
++  draft,
++  setDraft,
++  canPlan,
++  plan,
++  micOff,
++  cancel,
++  saving,
++  error,
++  onBusyChange,
++}: {
++  slug: string;
++  draft: string;
++  setDraft: (value: string) => void;
++  /** Everything but the microphone allows *Plan* now. */
++  canPlan: boolean;
++  /** `PurposeLine`'s plan, with its own refusals. */
++  plan: () => void;
++  /** A save or a route is in flight: no new dictation. Stopping one always works. */
++  micOff: boolean;
++  /** *Cancel*, when the box is open over a saved purpose. */
++  cancel: (() => void) | null;
++  saving: boolean;
++  error: string | null;
++  onBusyChange: (busy: boolean) => void;
++}) {
++  const box = useRef<HTMLTextAreaElement>(null);
++  const transcribe = useReaderTranscriber();
++  /* The hook calls `onDone` from an effect on the render after the words
++     land, so this sees that render's `busy`, false by then. */
++  const send = (): void => {
++    if (dictate.busy) return;
++    plan();
++  };
++  const dictate = useDictationField({
++    value: draft,
++    onChange: setDraft,
++    box,
++    context: { kind: "article", slug },
++    transcribe,
++    report: dictationReporter("skim"),
++    keep: keepDictation(`skim:purpose:${slug}`),
++    onDone: send,
++  });
++  /* A layout effect, so `PurposeLine` holds the box before a banner's render
++     can be painted without it (AddPage.tsx § `useBusyDictation`). */
++  const tell = useRef(onBusyChange);
++  tell.current = onBusyChange;
++  useLayoutEffect(() => {
++    tell.current(dictate.busy);
++  }, [dictate.busy]);
++  /* A box that has gone is not busy: its dictation was aborted with it. */
++  useLayoutEffect(() => () => tell.current(false), []);
++
+   return (
+     <div className="skim-purpose skim-purpose-ask">
+-      <label className="skim-purpose-q" htmlFor="skim-purpose-input">
+-        What are you skimming for?
+-      </label>
++      <div className="skim-purpose-head">
++        <label className="skim-purpose-q" htmlFor="skim-purpose-input">
++          What are you skimming for?
++        </label>
++        {dictate.dictation.supported && (
++          <DictationButton
++            dictation={dictate.dictation}
++            toggle={dictate.toggle}
++            /* Only while idle: switched off mid-dictation it would be a Stop
++               that cannot stop. */
++            disabled={micOff && !dictate.busy}
++            sendingAfter={dictate.sendingAfter}
++            doubleStop={dictate.doubleStop}
++          />
++        )}
++      </div>
+       <textarea
+         id="skim-purpose-input"
++        ref={box}
+         className="skim-purpose-input"
+         rows={2}
+         maxLength={MAX_PURPOSE_CHARS}
+         placeholder="e.g. how they handled missing data"
+         value={draft}
++        readOnly={dictate.readOnly}
+         onChange={(e) => setDraft(e.target.value)}
+       />
++      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+       <div className="skim-purpose-foot">
+         <Button
+           type="button"
+           variant="outline"
+           size="sm"
+-          disabled={busy || text === "" || unchanged}
+-          onClick={() => void plan()}
++          disabled={!canPlan || dictate.busy}
++          onClick={send}
+         >
+           <Route size={13} />
+           Plan the route for this
+         </Button>
+-        {editing && (
+-          <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => setEditing(false)}>
++        {cancel !== null && (
++          <Button type="button" variant="ghost" size="sm" disabled={saving || dictate.busy} onClick={cancel}>
+             Cancel
+           </Button>
+         )}
+diff --git a/src/web/dictation-report.ts b/src/web/dictation-report.ts
+index ceedcfe1c..44fb4a1a7 100644
+--- a/src/web/dictation-report.ts
++++ b/src/web/dictation-report.ts
+@@ -50,6 +50,7 @@ const NOT_FAILURES = new Set([
+ export type DictationSurface =
+   | "add"
+   | "annotate"
++  | "candidates"
+   | "chat"
+   | "command-bar"
+   | "comment"
+@@ -58,7 +59,9 @@ export type DictationSurface =
+   | "help"
+   | "illustrated"
+   | "profile"
+-  | "quiz";
++  | "quiz"
++  | "referee"
++  | "skim";
+ 
+ /** The browser's engine and form, coarsely, from a closed set. */
+ export function browserTags(ua: string): { browser_engine: string; browser_mobile: string } {
+diff --git a/src/web/styles/annotations.css b/src/web/styles/annotations.css
+index d06814162..43f5f66d5 100644
+--- a/src/web/styles/annotations.css
++++ b/src/web/styles/annotations.css
+@@ -1212,6 +1212,15 @@ td.text.has-hit[data-hues="8"] {
+   resize: vertical;
+ }
+ .cmt-note::placeholder { color: var(--ink-faint); }
++/* The note and its microphone, side by side; the box keeps its own vertical
++   spacing on the row (plan 261021e). */
++.cmt-note-row {
++  display: flex;
++  align-items: flex-start;
++  gap: 0.4rem;
++  margin: 0.55rem 0 0.6rem;
++}
++.cmt-note-row .cmt-note { flex: 1; min-width: 0; margin: 0; }
+ .cmt-note:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+ 
+ .cmt-open-thread {
+diff --git a/src/web/styles/referee.css b/src/web/styles/referee.css
+index 56a5c70e5..6ea88ae9f 100644
+--- a/src/web/styles/referee.css
++++ b/src/web/styles/referee.css
+@@ -386,6 +386,8 @@
+ 
+ .crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
+ .crit-label { font-size: max(var(--text-min), 0.83rem); color: var(--ink-faint); }
++/* The question and its microphone on one row, as Skim's purpose box (plan 261021e). */
++.crit-label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+ /* The poles' two inputs and the criterion box. There was a scale `<select>` in
+    here until 2026-09-02, when the ramp became a property of the mode
+    (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
+@@ -428,6 +430,9 @@
+   cursor: pointer;
+ }
+ .crit-preset:hover { color: var(--ink); border-color: var(--rule-strong); }
++/* Refused while the criterion box is dictating: a starter would replace its words. */
++.crit-preset:disabled { opacity: 0.4; cursor: default; }
++.crit-preset:disabled:hover { color: var(--ink-faint); border-color: var(--rule); }
+ 
+ /* *Run this criterion*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+    the class is a hook, and only where it sits is here.
+@@ -926,6 +931,8 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
+ .cnd-stop:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+ 
+ .cnd-composer { display: flex; flex-direction: column; gap: 0.25rem; }
++/* Ask and the microphone, under the box (plan 261021e). */
++.cnd-actions { display: flex; align-items: center; gap: 0.5rem; }
+ /* The box's border, corner, ground, padding and focus are every band's text
+    box's: mode-band.css § text boxes in the bands. */
+ .cnd-box {
+diff --git a/src/web/styles/skim.css b/src/web/styles/skim.css
+index 47fe188a4..4d9cffb3b 100644
+--- a/src/web/styles/skim.css
++++ b/src/web/styles/skim.css
+@@ -352,6 +352,8 @@
+ .skim-purpose-tip p { margin: 0; max-width: 24em; }
+ .skim-purpose-ask { flex-direction: column; align-items: stretch; gap: 0.3rem; }
+ .skim-purpose-q { color: var(--ink-soft); }
++/* The question and its microphone on one row, as the add page's box has them. */
++.skim-purpose-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+ /* Its border, corner, ground, padding and focus are every band's text box's:
+    mode-band.css § text boxes in the bands. (A 5px corner, the raised ground
+    and a border-colour focus until 2026-10-07.) */
+diff --git a/tests/comment-note-dictation.test.tsx b/tests/comment-note-dictation.test.tsx
+new file mode 100644
+index 000000000..180f9bb25
+--- /dev/null
++++ b/tests/comment-note-dictation.test.tsx
+@@ -0,0 +1,258 @@
++// @vitest-environment jsdom
++/**
++ * **A comment's note box takes dictation** — plan
++ * docs/plans/261021e-microphone-on-the-five-remaining-prose-boxes.md, Stage 2
++ * item 5 and § After GPT Sol's plan review, "Comment note".
++ *
++ * The note commits on blur, and pressing Stop moves the focus out of it, so a
++ * blur-commit while busy would save Chromium's rough live words and race the
++ * transcript. What is pinned:
++ *
++ *  - the note has a microphone of its own;
++ *  - a blur while armed, or while the words are on their way, saves nothing;
++ *  - the end of a dictation saves the final words, once;
++ *  - Escape while busy neither puts the stored words back nor closes the
++ *    dialog, from the box or from its microphone;
++ *  - a dictated change counts as typing (`onTyped`).
++ *
++ * `useDictation` is stubbed per box, keyed by the keeper's box name, as
++ * tests/add-page-dictation.test.tsx does: the follow-up box calls it too.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { ClientComment } from "../src/web/useComments.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++interface MicOptions {
++  onText(text: string): void;
++  onTranscript(text: string): boolean | undefined;
++  onEnd(): void;
++}
++const mic = vi.hoisted(() => ({
++  state: new Map<string, { armed: boolean; transcribing: boolean }>(),
++  options: new Map<string, unknown>(),
++}));
++vi.mock("../src/web/useDictation.js", () => ({
++  useDictation: (options: { keep?: { box: string } }) => {
++    const name = options.keep?.box ?? "(no keeper)";
++    mic.options.set(name, options);
++    const s = mic.state.get(name) ?? { armed: false, transcribing: false };
++    return {
++      supported: true,
++      phase: s.armed ? "listening" : s.transcribing ? "transcribing" : "idle",
++      armed: s.armed,
++      transcribing: s.transcribing,
++      liveText: true,
++      interim: "",
++      level: { current: 0 },
++      meter: "none",
++      quiet: false,
++      error: null,
++      startedAt: null,
++      endsAt: null,
++      deviceLabel: null,
++      deviceId: null,
++      deviceUnavailable: false,
++      recording: null,
++      keptOnDevice: false,
++      canRetry: false,
++      toggle() {
++        mic.state.set(name, { armed: !s.armed, transcribing: false });
++        return undefined;
++      },
++      dismiss() {},
++      chooseDevice() {},
++      clearRecording() {},
++      retry() {},
++    };
++  },
++}));
++vi.mock("../src/web/dictation-upload.js", () => ({
++  useReaderTranscriber: () => async () => {
++    throw new Error("not called");
++  },
++}));
++
++const { CommentDialog } = await import("../src/web/CommentDialog.js");
++
++const COMMENT: ClientComment = {
++  id: "spya-p7w2dn",
++  blockId: "spya-k3m9qt",
++  quote: "a science of bumps",
++  start: 0,
++  createdAt: "2026-09-05T10:00:00.000Z",
++  body: "stored words",
++  status: "none",
++};
++const NOTE = `comment-note:${COMMENT.id}`;
++
++let container: HTMLDivElement;
++let root: Root;
++let edits: Array<string | null>;
++let closes: number;
++let touches: number;
++
++beforeEach(() => {
++  mic.state.clear();
++  mic.options.clear();
++  edits = [];
++  closes = 0;
++  touches = 0;
++  container = document.createElement("div");
++  document.body.appendChild(container);
++  root = createRoot(container);
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  container.remove();
++});
++
++async function draw(): Promise<void> {
++  await act(async () => {
++    root.render(
++      createElement(CommentDialog, {
++        comment: COMMENT,
++        position: 1,
++        total: 1,
++        hasPrev: false,
++        hasNext: false,
++        onPrev: () => {},
++        onNext: () => {},
++        onClose: () => {
++          closes += 1;
++        },
++        access: {
++          kind: "owner" as const,
++          placing: false,
++          pending: 0,
++          onDelete: () => {},
++          onRetry: () => {},
++          onDiscuss: () => {},
++          onEdit: (next: string | null) => {
++            edits.push(next);
++          },
++          onPlace: () => {},
++          onRecolour: () => {},
++          onTouched: () => {
++            touches += 1;
++          },
++          error: null,
++        },
++      }),
++    );
++  });
++}
++
++const note = () => container.querySelector<HTMLTextAreaElement>("textarea.cmt-note")!;
++const noteMic = () => container.querySelector<HTMLButtonElement>(".cmt-note-field button")!;
++const options = () => mic.options.get(NOTE) as MicOptions;
++
++/** Put the note's microphone in a phase, and redraw. */
++async function phase(armed: boolean, transcribing: boolean): Promise<void> {
++  mic.state.set(NOTE, { armed, transcribing });
++  await draw();
++}
++
++/** The reader puts the caret at the end of the note and presses the microphone. */
++async function start(): Promise<void> {
++  await act(async () => {
++    const el = note();
++    el.focus();
++    el.setSelectionRange(el.value.length, el.value.length);
++  });
++  await act(async () => noteMic().click());
++  await draw();
++  expect(mic.state.get(NOTE)?.armed).toBe(true);
++}
++
++async function key(el: Element, k: string, extra: KeyboardEventInit = {}): Promise<void> {
++  await act(async () => {
++    el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, ...extra }));
++  });
++}
++
++describe("the comment note's microphone (261021e)", () => {
++  it("has a microphone of its own, kept per comment", async () => {
++    await draw();
++    expect(noteMic()).not.toBeNull();
++    expect(mic.options.has(NOTE)).toBe(true);
++  });
++
++  it("does not save on a blur while armed, nor while the words are on their way", async () => {
++    await draw();
++    await start();
++    await act(async () => options().onText("rough live guess"));
++    expect(note().value).toBe("stored words rough live guess");
++    await act(async () => note().blur());
++    expect(edits).toEqual([]);
++
++    await phase(false, true);
++    await act(async () => note().focus());
++    await act(async () => note().blur());
++    expect(edits).toEqual([]);
++  });
++
++  it("saves the final words once, when the dictation ends", async () => {
++    await draw();
++    await start();
++    await act(async () => options().onText("rough live guess"));
++    await phase(false, true);
++    /* The transcript and the ending in one turn, as the hook delivers them:
++       no render in between, so the commit must read the words that just
++       landed rather than its render's draft. */
++    mic.state.set(NOTE, { armed: false, transcribing: false });
++    await act(async () => {
++      options().onTranscript("the final words");
++      options().onEnd();
++    });
++    await draw();
++    expect(edits).toEqual(["stored words the final words"]);
++    /* A later blur has nothing new to save. */
++    await act(async () => note().focus());
++    await act(async () => note().blur());
++    expect(edits).toEqual(["stored words the final words"]);
++  });
++
++  it("refuses ⌘/Ctrl+Enter while busy", async () => {
++    await draw();
++    await start();
++    await act(async () => options().onText("rough"));
++    await key(note(), "Enter", { metaKey: true });
++    expect(edits).toEqual([]);
++  });
++
++  it("contains Escape while busy: no restore, no close — from the box or its microphone", async () => {
++    await draw();
++    await start();
++    await act(async () => options().onText("rough"));
++    await key(note(), "Escape");
++    expect(note().value).toBe("stored words rough");
++    expect(closes).toBe(0);
++    await key(noteMic(), "Escape");
++    expect(closes).toBe(0);
++
++    await phase(false, true);
++    await key(note(), "Escape");
++    await key(noteMic(), "Escape");
++    expect(note().value).toBe("stored words rough");
++    expect(closes).toBe(0);
++  });
++
++  it("still closes on Escape from an idle microphone", async () => {
++    await draw();
++    await key(noteMic(), "Escape");
++    expect(closes).toBe(1);
++  });
++
++  it("counts a dictated change as typing", async () => {
++    await draw();
++    await start();
++    const before = touches;
++    await act(async () => options().onText("spoken"));
++    expect(touches).toBeGreaterThan(before);
++  });
++});
+diff --git a/tests/prose-boxes-have-a-microphone.test.ts b/tests/prose-boxes-have-a-microphone.test.ts
+index b529fd7ad..465ca89f9 100644
+--- a/tests/prose-boxes-have-a-microphone.test.ts
++++ b/tests/prose-boxes-have-a-microphone.test.ts
+@@ -43,14 +43,12 @@ const WITHOUT: Record<string, string> = {
+   "src/web/AdminVouchersPage.tsx#VoucherRow": "admin only: a short note sent with a voucher",
+   "src/web/AdminAuthorGifts.tsx#Notes": "admin only: notes on an author gift",
+   "src/web/AdminAuthorGifts.tsx#DraftEditor": "admin only: the draft of an author gift's email",
+-  /* Prose boxes a reader writes in, without a microphone yet. Queued as the
+-     sweep in plan 261020r § Stage 5; each has its own send and unmount to
+-     check, so each is a change of its own. Delete the line when it lands. */
+-  "src/web/SkimPurpose.tsx#PurposeLine": "not yet: queued (Skim's own purpose box)",
+-  "src/web/CriteriaPanel.tsx#NewCriterion": "not yet: queued (Referee's new-criterion box)",
+-  "src/web/CandidatesPanel.tsx#Composer": "not yet: queued (scoping the candidates search)",
+-  "src/web/ChatPanel.tsx#EditQuestion": "not yet: queued (rewriting a question already asked)",
+-  "src/web/CommentDialog.tsx#CommentBody": "not yet: queued (editing a comment's note)",
++  /* GPT Sol's plan review of 261021e, F5-F6. A voice rewrite would need a
++     keeper name that survives the question's client-to-server id swap, and a
++     modality carried through the edit route (`withEdit` in src/chat.ts keeps
++     the original question's), or it stores the wrong one. */
++  "src/web/ChatPanel.tsx#EditQuestion":
++    "a rewrite is mostly a fix to words already there, and the composer one box below has the microphone; a voice rewrite would be stored with the original question's modality (plan 261021e)",
+ };
+ 
+ function tsxFiles(dir: string): string[] {
+@@ -169,6 +167,10 @@ describe("prose boxes have a microphone", () => {
+         "src/web/AddPage.tsx#AboutYouBox",
+         "src/web/ProfileBox.tsx#ProfileBox",
+         "src/web/FeedbackSendBox.tsx#FeedbackSendBox",
++        "src/web/SkimPurpose.tsx#PurposeAsk",
++        "src/web/CriteriaPanel.tsx#NewCriterion",
++        "src/web/CandidatesPanel.tsx#Composer",
++        "src/web/CommentDialog.tsx#CommentBody",
+       ]),
+     );
+   });
+diff --git a/tests/referee-candidates-dictation.test.tsx b/tests/referee-candidates-dictation.test.tsx
+new file mode 100644
+index 000000000..ec290c10a
+--- /dev/null
++++ b/tests/referee-candidates-dictation.test.tsx
+@@ -0,0 +1,352 @@
++// @vitest-environment jsdom
++/**
++ * **Referee's criterion box and Candidates' scope box take dictation**, and
++ * neither sends while the microphone is involved — plan
++ * docs/plans/261021e-microphone-on-the-five-remaining-prose-boxes.md § Stage 2,
++ * items 2 and 3, and § After GPT Sol's plan review (F4, F7).
++ *
++ * "Involved" is two moments, `armed` (recording) and `transcribing` (the
++ * words on their way), and each box is pressed in both, by every way it has
++ * of sending: Run (a form submit) for a criterion, Enter and Ask for a scope.
++ * A starter criterion replaces the box, so it refuses too.
++ *
++ * `useDictation` is stubbed, keyed on the keeper's name, the way
++ * tests/add-page-dictation.test.tsx does it; `useDictationField`, the button
++ * and the strip are the real ones, so "the microphone is there" is the real
++ * button drawn by the real wiring.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { NuqsAdapter } from "nuqs/adapters/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { Block, BlockId, ChatThread } from "../src/types.js";
++
++/* ------------------------------------------------------------- the mocks -- */
++
++const mic = vi.hoisted(() => ({
++  state: new Map<string, { armed: boolean; transcribing: boolean }>(),
++}));
++vi.mock("../src/web/useDictation.js", () => ({
++  useDictation: (options: { keep?: { box: string } }) => {
++    const name = options.keep?.box ?? "(no keeper)";
++    const s = mic.state.get(name) ?? { armed: false, transcribing: false };
++    return {
++      supported: true,
++      phase: s.armed ? "listening" : s.transcribing ? "transcribing" : "idle",
++      armed: s.armed,
++      transcribing: s.transcribing,
++      liveText: true,
++      interim: "",
++      level: { current: 0 },
++      meter: "none",
++      quiet: false,
++      error: null,
++      startedAt: null,
++      endsAt: null,
++      deviceLabel: null,
++      deviceId: null,
++      deviceUnavailable: false,
++      recording: null,
++      keptOnDevice: false,
++      canRetry: false,
++      toggle() {
++        return undefined;
++      },
++      dismiss() {},
++      chooseDevice() {},
++      clearRecording() {},
++      retry() {},
++    };
++  },
++}));
++vi.mock("../src/web/dictation-upload.js", () => ({
++  useReaderTranscriber: () => async () => {
++    throw new Error("not called");
++  },
++}));
++
++let answer: (url: string, init: RequestInit) => Promise<Response> = () =>
++  Promise.resolve(json({ criteria: [] }));
++const calls: { url: string; method: string }[] = [];
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
++    "../src/web/lib/api.js",
++  );
++  const apiFetch = (url: string, init: RequestInit = {}) => {
++    calls.push({ url, method: (init.method ?? "GET").toUpperCase() });
++    return answer(url, init);
++  };
++  return {
++    ...real,
++    apiFetch,
++    fetchOk: async (url: string, init: RequestInit = {}) => {
++      const r = await apiFetch(url, init);
++      if (!r.ok) throw await real.failure(r);
++      return r;
++    },
++  };
++});
++
++const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
++const { CandidatesPanel } = await import("../src/web/CandidatesPanel.js");
++
++/* ----------------------------------------------------------- the harness -- */
++
++const SLUG = "a-paper";
++const BLOCK = "spya-k3m9qt" as BlockId;
++const BLOCKS: Block[] = [
++  {
++    id: BLOCK,
++    tag: "p",
++    kind: "text",
++    text: "Thirty-one participants in each arm, with no unexposed comparison group.",
++    words: 11,
++    html: "<p>Thirty-one participants in each arm, with no unexposed comparison group.</p>",
++    gistable: true,
++  },
++];
++/** A criterion of the referee's own, so the starters are drawn. */
++const OWN = {
++  id: "spya-crt2aa",
++  criterion: "Is the exposure measured the same way in both arms?",
++  config: { kind: "single" },
++  createdAt: "2026-10-11T09:00:00.000Z",
++  status: "done",
++  results: [],
++};
++
++let host: HTMLDivElement;
++let root: Root;
++
++function json(body: unknown, status = 200): Response {
++  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
++}
++
++async function flush(times = 4): Promise<void> {
++  for (let i = 0; i < times; i++) {
++    await act(async () => {
++      await new Promise((r) => setTimeout(r, 0));
++    });
++  }
++}
++
++function type(el: HTMLTextAreaElement, text: string): void {
++  act(() => {
++    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set?.call(el, text);
++    el.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++}
++
++function press(el: Element, key: string): void {
++  act(() => {
++    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
++  });
++}
++
++beforeEach(() => {
++  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  mic.state.clear();
++  answer = () => Promise.resolve(json({ criteria: [OWN] }));
++  calls.length = 0;
++  sessionStorage.clear();
++  history.replaceState(null, "", `/read/${SLUG}`);
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++const PHASES = [
++  ["recording", { armed: true, transcribing: false }],
++  ["transcribing", { armed: false, transcribing: true }],
++] as const;
++
++/* ------------------------------------------------ the criterion box -- */
++
++describe("Referee's criterion box", () => {
++  const KEEPER = `referee:criterion:${SLUG}`;
++
++  function paint(): void {
++    act(() => {
++      root.render(
++        createElement(
++          NuqsAdapter,
++          null,
++          createElement(CriteriaBand, {
++            slug: SLUG,
++            blocks: BLOCKS,
++            comments: [],
++            onJump: () => {},
++            onFound: () => {},
++            openKey: null,
++            onOpenKey: () => {},
++          }),
++        ),
++      );
++    });
++  }
++
++  const box = () => {
++    const b = host.querySelector<HTMLTextAreaElement>("#crit-text");
++    if (!b) throw new Error("criterion box did not render");
++    return b;
++  };
++  const run = () => {
++    const b = host.querySelector<HTMLButtonElement>(".crit-run");
++    if (!b) throw new Error("no Run button");
++    return b;
++  };
++  const writes = () => calls.filter((c) => c.method !== "GET");
++
++  /** Typed while idle, then the microphone goes into `phase`. */
++  async function typedThen(phase: { armed: boolean; transcribing: boolean } | null): Promise<void> {
++    paint();
++    await flush();
++    type(box(), "Are the arms comparable at baseline?");
++    if (phase) {
++      mic.state.set(KEEPER, phase);
++      paint();
++    }
++  }
++
++  it("has a microphone, beside the box and not on the poles", async () => {
++    paint();
++    await flush();
++    const form = host.querySelector(".crit-new");
++    expect(form?.querySelectorAll("button.prof-mic")).toHaveLength(1);
++  });
++
++  it("runs when idle (the control the refusals below are measured against)", async () => {
++    await typedThen(null);
++    expect(run().getAttribute("aria-disabled")).toBe("false");
++    act(() => run().click());
++    await flush();
++    expect(writes()).toHaveLength(1);
++  });
++
++  it("is read-only while the words are on its way", async () => {
++    await typedThen({ armed: false, transcribing: true });
++    expect(box().readOnly).toBe(true);
++  });
++
++  for (const [name, phase] of PHASES) {
++    it(`does not run while ${name}, and Run says so`, async () => {
++      await typedThen(phase);
++      expect(run().getAttribute("aria-disabled")).toBe("true");
++      act(() => run().click());
++      await flush();
++      expect(writes(), `a criterion ran while ${name}`).toEqual([]);
++      expect(box().value).toBe("Are the arms comparable at baseline?");
++    });
++
++    it(`does not run from a form submit while ${name}`, async () => {
++      await typedThen(phase);
++      const form = host.querySelector<HTMLFormElement>(".crit-new");
++      act(() => form?.requestSubmit());
++      await flush();
++      expect(writes()).toEqual([]);
++    });
++
++    it(`a starter does not replace the words while ${name}`, async () => {
++      await typedThen(phase);
++      const starter = host.querySelector<HTMLButtonElement>(".crit-preset");
++      expect(starter, "no starter drawn").not.toBeNull();
++      expect(starter?.disabled).toBe(true);
++      act(() => starter?.click());
++      expect(box().value).toBe("Are the arms comparable at baseline?");
++    });
++  }
++});
++
++/* ------------------------------------------------ the Candidates scope box -- */
++
++describe("Candidates' scope box", () => {
++  const KEEPER = `candidates:${SLUG}`;
++  const asked: string[] = [];
++  const THREAD: ChatThread = {
++    id: "spya-thr3bb",
++    title: "Candidates",
++    createdAt: "2026-09-29T00:00:00.000Z",
++    updatedAt: "2026-09-29T00:00:00.000Z",
++    kind: "candidates",
++    messages: [],
++  };
++
++  function paint(): void {
++    act(() => {
++      root.render(
++        createElement(CandidatesPanel, {
++          slug: SLUG,
++          thread: THREAD,
++          loaded: true,
++          loadFailed: false,
++          onReload: () => {},
++          blocks: BLOCKS,
++          error: null,
++          onAsk: (q: string) => asked.push(q),
++          onStop: () => {},
++          onStart: () => {},
++          onJump: () => {},
++        }),
++      );
++    });
++  }
++
++  const box = () => {
++    const b = host.querySelector<HTMLTextAreaElement>("textarea.cnd-box");
++    if (!b) throw new Error("no Candidates box");
++    return b;
++  };
++  const ask = () => {
++    const b = host.querySelector<HTMLButtonElement>(".cnd-send");
++    if (!b) throw new Error("no Ask button");
++    return b;
++  };
++
++  function typedThen(phase: { armed: boolean; transcribing: boolean } | null): void {
++    asked.length = 0;
++    paint();
++    type(box(), "Leave out the authors' own lab");
++    if (phase) {
++      mic.state.set(KEEPER, phase);
++      paint();
++    }
++  }
++
++  it("has a microphone", () => {
++    paint();
++    expect(host.querySelectorAll(".cnd-composer button.prof-mic")).toHaveLength(1);
++  });
++
++  it("asks on Enter when idle (the control)", () => {
++    typedThen(null);
++    press(box(), "Enter");
++    expect(asked).toEqual(["Leave out the authors' own lab"]);
++  });
++
++  it("is read-only while the words are on their way", () => {
++    typedThen({ armed: false, transcribing: true });
++    expect(box().readOnly).toBe(true);
++  });
++
++  for (const [name, phase] of PHASES) {
++    it(`does not ask on Enter while ${name}`, () => {
++      typedThen(phase);
++      press(box(), "Enter");
++      expect(asked, `a scope was sent while ${name}`).toEqual([]);
++      expect(box().value).toBe("Leave out the authors' own lab");
++    });
++
++    it(`disables Ask while ${name}`, () => {
++      typedThen(phase);
++      expect(ask().disabled).toBe(true);
++      act(() => ask().click());
++      expect(asked).toEqual([]);
++    });
++  }
++});
+diff --git a/tests/referee-candidates-panel.test.tsx b/tests/referee-candidates-panel.test.tsx
+index 722091522..3f849c26c 100644
+--- a/tests/referee-candidates-panel.test.tsx
++++ b/tests/referee-candidates-panel.test.tsx
+@@ -112,6 +112,7 @@ function paint(t: ChatThread | null, byline?: string, loadFailed = false) {
+   act(() => {
+     root.render(
+       createElement(CandidatesPanel, {
++        slug: "a-paper",
+         thread: t,
+         loaded: true,
+         loadFailed,
+diff --git a/tests/referee-tooltips.test.tsx b/tests/referee-tooltips.test.tsx
+index 74b35bb30..e3d108aca 100644
+--- a/tests/referee-tooltips.test.tsx
++++ b/tests/referee-tooltips.test.tsx
+@@ -829,6 +829,7 @@ describe("Candidates explains the press before it is pressed", () => {
+     act(() => {
+       root.render(
+         createElement(CandidatesPanel, {
++          slug: "a-paper",
+           thread: null,
+           loaded: true,
+           loadFailed: false,
+diff --git a/tests/skim-purpose-dictation.test.tsx b/tests/skim-purpose-dictation.test.tsx
+new file mode 100644
+index 000000000..a8ab47ff0
+--- /dev/null
++++ b/tests/skim-purpose-dictation.test.tsx
+@@ -0,0 +1,301 @@
++// @vitest-environment jsdom
++/**
++ * **Skim's *What are you skimming for?* box takes dictation** — `PurposeAsk`
++ * in src/web/SkimPurpose.tsx, plan
++ * docs/plans/261021e-microphone-on-the-five-remaining-prose-boxes.md § Stage 2
++ * and Sol's F1/F8.
++ *
++ * What is pinned:
++ *
++ *  - the box has a microphone, kept as `skim:purpose:<slug>`;
++ *  - *Plan the route for this* is disabled, and its handler refuses, while the
++ *    microphone is on and again while its words are on their way;
++ *  - a banner arriving mid-dictation does not take the box (unmounting would
++ *    abort the dictation), and once the microphone is idle it does;
++ *  - the microphone cannot start while a save is in flight, or a route is.
++ *
++ * `useDictation` is stubbed as tests/add-page-dictation.test.tsx does; the
++ * purpose read and save are stubbed so `PurposeLine` renders on its own.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { UseSkim } from "../src/web/useSkim.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/* ---------- the microphone ---------- */
++
++interface MicOptions {
++  onText(text: string): void;
++  onTranscript(text: string): boolean | undefined;
++  onEnd(): void;
++  keep?: { box: string };
++}
++const mic = vi.hoisted(() => ({
++  state: { armed: false, transcribing: false },
++  options: null as unknown,
++  boxes: [] as string[],
++}));
++vi.mock("../src/web/useDictation.js", () => ({
++  useDictation: (options: { keep?: { box: string } }) => {
++    mic.options = options;
++    mic.boxes.push(options.keep?.box ?? "(no keeper)");
++    const s = mic.state;
++    return {
++      supported: true,
++      phase: s.armed ? "listening" : s.transcribing ? "transcribing" : "idle",
++      armed: s.armed,
++      transcribing: s.transcribing,
++      liveText: true,
++      interim: "",
++      level: { current: 0 },
++      meter: "none",
++      quiet: false,
++      error: null,
++      startedAt: null,
++      endsAt: null,
++      deviceLabel: null,
++      deviceId: null,
++      deviceUnavailable: false,
++      recording: null,
++      keptOnDevice: false,
++      canRetry: false,
++      toggle() {
++        mic.state = { armed: !s.armed, transcribing: false };
++        return undefined;
++      },
++      dismiss() {},
++      chooseDevice() {},
++      clearRecording() {},
++      retry() {},
++    };
++  },
++}));
++vi.mock("../src/web/DictationStrip.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/DictationStrip.js")>()),
++  DictationStrip: () => null,
++}));
++vi.mock("../src/web/dictation-upload.js", () => ({
++  useReaderTranscriber: () => async () => {
++    throw new Error("not called");
++  },
++}));
++
++/* ---------- the purpose ---------- */
++
++const saves: string[] = [];
++let saveReply: Promise<string | null> | null = null;
++vi.mock("../src/web/purpose.js", () => ({
++  usePurpose: () => ({ state: "ready", purpose: null, purposeFailed: false, profile: null }),
++  savePurpose: async (_slug: string, text: string) => {
++    saves.push(text);
++    return saveReply ?? text;
++  },
++  storedPurpose: async () => null,
++}));
++
++const { PurposeLine } = await import("../src/web/SkimPurpose.js");
++
++/* ---------- the harness ---------- */
++
++let ensured = 0;
++function owner(over: Partial<UseSkim> = {}): UseSkim {
++  return {
++    status: "ready",
++    skim: null,
++    stale: false,
++    outdated: false,
++    profileChanged: false,
++    profileNoticeDismissed: false,
++    dismissFailed: null,
++    dismissProfileNotice: async () => {},
++    notOnRoute: 0,
++    slug: "a-route",
++    error: null,
++    job: null,
++    failed: null,
++    stalled: false,
++    starting: false,
++    automatic: false,
++    quotesFirst: false,
++    ideasFirst: false,
++    retryRead: async () => {},
++    ensure: async () => {
++      ensured += 1;
++    },
++    regenerate: async () => {},
++    rewriting: false,
++    refresh: async () => {},
++    cancel: () => {},
++    ...over,
++  } as UseSkim;
++}
++
++let host: HTMLDivElement;
++let root: Root;
++let props: { owner: UseSkim; bannerUp: boolean };
++
++function render(next: Partial<typeof props> = {}): void {
++  props = { ...props, ...next };
++  act(() => root.render(createElement(PurposeLine, props)));
++}
++async function settle(): Promise<void> {
++  for (let i = 0; i < 3; i++) await act(async () => {});
++}
++
++const box = () => host.querySelector<HTMLTextAreaElement>("#skim-purpose-input");
++const micButton = () => host.querySelector<HTMLButtonElement>(".skim-purpose-ask button.prof-mic");
++const planButton = (): HTMLButtonElement | undefined =>
++  [...host.querySelectorAll<HTMLButtonElement>("button")].find(
++    (b) => b.textContent?.trim() === "Plan the route for this",
++  );
++/** The button's own handler, past `disabled` (tests/add-page-dictation.test.tsx § forceClick). */
++function forceClick(el: Element | undefined): void {
++  if (!el) throw new Error("nothing to click");
++  const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
++  const p = key ? (el as unknown as Record<string, { onClick?: () => void }>)[key] : undefined;
++  if (!p?.onClick) throw new Error("no onClick on the element");
++  act(() => p.onClick?.());
++}
++function type(value: string): void {
++  const el = box();
++  if (!el) throw new Error("no box");
++  act(() => {
++    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
++    el.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++}
++function setMic(state: "armed" | "transcribing" | "idle"): void {
++  mic.state = { armed: state === "armed", transcribing: state === "transcribing" };
++  render();
++}
++async function end(transcript?: string): Promise<void> {
++  const o = mic.options as MicOptions;
++  act(() => {
++    if (transcript !== undefined) o.onTranscript(transcript);
++    mic.state = { armed: false, transcribing: false };
++    o.onEnd();
++  });
++  render();
++  await settle();
++}
++
++beforeEach(async () => {
++  mic.state = { armed: false, transcribing: false };
++  mic.options = null;
++  mic.boxes.length = 0;
++  saves.length = 0;
++  saveReply = null;
++  ensured = 0;
++  host = document.createElement("div");
++  document.body.appendChild(host);
++  root = createRoot(host);
++  props = { owner: owner(), bannerUp: false };
++  render();
++  await settle();
++});
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++describe("Skim's purpose box takes dictation", () => {
++  it("has a microphone, kept per article", () => {
++    expect(box()).not.toBeNull();
++    expect(micButton()).not.toBeNull();
++    expect(mic.boxes).toContain("skim:purpose:a-route");
++  });
++
++  for (const state of ["armed", "transcribing"] as const) {
++    it(`refuses Plan while ${state}`, async () => {
++      type("how they handled missing data");
++      expect(planButton()?.disabled).toBe(false);
++      setMic(state);
++      expect(planButton()?.disabled).toBe(true);
++      forceClick(planButton());
++      forceClick(planButton());
++      await settle();
++      expect(saves).toEqual([]);
++      expect(ensured).toBe(0);
++    });
++  }
++
++  it("lets Plan go once the words have landed", async () => {
++    setMic("armed");
++    await end("how they handled missing data");
++    expect(planButton()?.disabled).toBe(false);
++    forceClick(planButton());
++    await settle();
++    expect(saves).toEqual(["how they handled missing data"]);
++  });
++
++  it("keeps the box under a banner that arrives mid-dictation, and gives it up once idle", async () => {
++    type("how they");
++    setMic("armed");
++    render({ bannerUp: true });
++    await settle();
++    expect(box()).not.toBeNull();
++    expect(planButton()?.disabled).toBe(true);
++    await end("how they handled missing data");
++    expect(box()).toBeNull();
++    expect(saves).toEqual([]);
++  });
++
++  it("refuses Plan under a banner even when the box is held and the microphone has just stopped", async () => {
++    type("how they");
++    setMic("armed");
++    render({ bannerUp: true });
++    await settle();
++    /* Words on their way: still held, still refused. */
++    setMic("transcribing");
++    expect(box()).not.toBeNull();
++    forceClick(planButton());
++    await settle();
++    expect(saves).toEqual([]);
++  });
++
++  /** A double press on Stop: the field's own path to *Plan*, past the button. */
++  async function doublePressThenLand(transcript: string): Promise<void> {
++    const m = micButton();
++    if (!m) throw new Error("no microphone");
++    act(() => m.click());
++    act(() => m.click());
++    await end(transcript);
++  }
++
++  it("plans once the words land after a double press on Stop", async () => {
++    setMic("armed");
++    await doublePressThenLand("how they handled missing data");
++    expect(saves).toEqual(["how they handled missing data"]);
++  });
++
++  it("does not plan from a double press on Stop under a banner that arrived mid-dictation", async () => {
++    setMic("armed");
++    render({ bannerUp: true });
++    await settle();
++    await doublePressThenLand("how they handled missing data");
++    expect(saves).toEqual([]);
++    expect(box()).toBeNull();
++  });
++
++  it("will not start the microphone while a save is in flight", async () => {
++    type("how they handled missing data");
++    expect(micButton()?.disabled).toBe(false);
++    let answer: (v: string | null) => void = () => {};
++    saveReply = new Promise((r) => {
++      answer = r;
++    });
++    forceClick(planButton());
++    await settle();
++    expect(saves).toHaveLength(1);
++    expect(micButton()?.disabled).toBe(true);
++    await act(async () => answer("how they handled missing data"));
++    await settle();
++  });
++
++  it("will not start the microphone while a route is being planned elsewhere", async () => {
++    render({ owner: owner({ starting: true }) });
++    expect(micButton()?.disabled).toBe(true);
++  });
++});
+diff --git a/tests/the-enter-key-really-sends.test.tsx b/tests/the-enter-key-really-sends.test.tsx
+index b80d5da7c..d43db5d06 100644
+--- a/tests/the-enter-key-really-sends.test.tsx
++++ b/tests/the-enter-key-really-sends.test.tsx
+@@ -434,6 +434,7 @@ describe("the Candidates box", () => {
+     act(() => {
+       root.render(
+         createElement(CandidatesPanel, {
++          slug: "a-paper",
+           thread: {
+             id: "spya-thr3bb",
+             title: "Candidates",

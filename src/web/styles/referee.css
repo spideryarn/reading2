@@ -386,6 +386,8 @@
 
 .crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
 .crit-label { font-size: max(var(--text-min), 0.83rem); color: var(--ink-faint); }
+/* The question and its microphone on one row, as Skim's purpose box (plan 261021e). */
+.crit-label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 /* The poles' two inputs and the criterion box. There was a scale `<select>` in
    here until 2026-09-02, when the ramp became a property of the mode
    (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
@@ -428,6 +430,9 @@
   cursor: pointer;
 }
 .crit-preset:hover { color: var(--ink); border-color: var(--rule-strong); }
+/* Refused while the criterion box is dictating: a starter would replace its words. */
+.crit-preset:disabled { opacity: 0.4; cursor: default; }
+.crit-preset:disabled:hover { color: var(--ink-faint); border-color: var(--rule); }
 
 /* *Run this criterion*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
    the class is a hook, and only where it sits is here.
@@ -926,6 +931,8 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 .cnd-stop:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cnd-composer { display: flex; flex-direction: column; gap: 0.25rem; }
+/* Ask and the microphone, under the box (plan 261021e). */
+.cnd-actions { display: flex; align-items: center; gap: 0.5rem; }
 /* The box's border, corner, ground, padding and focus are every band's text
    box's: mode-band.css § text boxes in the bands. */
 .cnd-box {
