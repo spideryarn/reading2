@@ -252,9 +252,9 @@ describe("the cache", () => {
       return scanRawSource(input);
     };
     const marker = {
-      actorId: "11111111-1111-4111-8111-111111111111" as OwnerId,
-      subjectId: "22222222-2222-4222-8222-222222222222" as OwnerId,
-      sessionId: "33333333-3333-4333-8333-333333333333",
+      actorId: "5ca11ed0-0001-4c0e-8a5e-000000000001" as OwnerId,
+      subjectId: "5ca11ed0-0002-4c0e-8a5e-000000000002" as OwnerId,
+      sessionId: "5ca11ed0-0003-4c0e-8a5e-000000000003",
     };
 
     await runViewingAs(marker, () => scanArticleSource("paper", source.read, counted));
