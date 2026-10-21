@@ -199,8 +199,10 @@ for that.
   (Investigate never makes it). **About the works it cites** asks about the three works Bibliography says
   the piece leans on most. These are the same conversations as the chat icon in Claims and
   Bibliography: one already started shows its short summary instead, and opens it again.
-- Or type your own question in the box at the top and press **Ask in chat**. **Your questions**
-  lists every conversation started here, newest first; press one to open it again.
+- Or type your own question in the box at the top and press **Ask in chat**. **Your questions**,
+  under the box, lists every conversation started here, newest first; press one to open it again.
+- Coming back to Investigate opens your newest of those conversations beside it, so you carry on
+  where you left off. Close it to see the questions; it stays closed until you next come back.
 - Only whoever added the article has Investigate: visitors to a shared article have no chat.
 
 ![The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work](../images/mode-sources-claims.png "Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.")

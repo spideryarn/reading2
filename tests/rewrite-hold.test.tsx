@@ -299,7 +299,7 @@ function SourcesOuter({ show }: { show: boolean }) {
         publishedAt: undefined,
         articleTitle: "A piece",
         claimChats: { summaries: [], onCheck: noop, onOpen: noop },
-        investigateChats: { summaries: [], onQuestion: noop, onCheck: noop, onAskWork: noop, onOpen: noop },
+        investigateChats: { summaries: [], loaded: true, occupied: false, onQuestion: noop, onCheck: noop, onAskWork: noop, onOpen: noop },
         citeFocus: null,
         onCiteFocusTaken: noop,
         claimFocus: null,

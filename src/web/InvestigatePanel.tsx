@@ -14,15 +14,19 @@
  * ```
  *  ┌ … │ Reception │ Claims │ Investigate ┐                                  (i)
  *  │ [ Ask about this piece and what others say…   ] [💬 Ask in chat]
+ *  │ YOUR QUESTIONS                    ← every chat started here, newest first
+ *  │  💬 “replication attempts”                                       2
  *  │ SUGGESTED
  *  │  💬 How has this piece been received, and by whom?
  *  │ ABOUT ITS CLAIMS                  ← only when Claims' list has been made
  *  │  💬 Is “a starter needs cool water” borne out?     (or its chat's mark)
  *  │ ABOUT THE WORKS IT CITES          ← the three it leans on most
  *  │  💬 How has “Starter hydration” (Smith et al. 2019) held up? (or its chat's mark)
- *  │ YOUR QUESTIONS                    ← every chat started here, newest first
- *  │  💬 “replication attempts”                                       2
  * ```
+ *
+ * **Arriving opens the newest of *Your questions* beside Sources** (plan
+ * 261021b, § `useReopenNewest` below), so coming back to Investigate shows the
+ * conversation rather than only the launcher.
  *
  * **A press sends.** Every row and the box hand a question to Chat
  * (Reader.tsx § `handToChat`), which opens on a fresh conversation and asks
@@ -58,7 +62,7 @@
  * it (docs/project/mode.md): what a press does is in each control's tooltip.
  */
 import { MessagesSquare } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { CitedWork, ClaimOrigin, ListedClaim, ThreadSummary } from "../types.js";
 import { MAX_LENS_CHARS } from "../types.js";
 import { MODE_LABEL } from "../title-text.js";
@@ -79,6 +83,19 @@ import { itemOrigin } from "./chat-handoff.js";
  */
 export interface SourcesInvestigateChats {
   summaries: readonly ThreadSummary[];
+  /**
+   * Whether `summaries` has answered at least once (useChatAnchors.ts §
+   * `loaded`). Until it has, an empty list means "not known yet", and the
+   * arrival below waits rather than deciding there is nothing to open.
+   */
+  loaded: boolean;
+  /**
+   * Whether something already holds the place beside the mode: a `?thread=`
+   * (a conversation shown there, or Chat's state still carried across while
+   * no dialog draws it), an unsent passage chat, an open note, or an annotation
+   * in progress. The arrival never opens over any of them.
+   */
+  occupied: boolean;
   /** Hand this question to Chat and send it, stored as a `reception` lens (Reader.tsx § `askSourcesQuestion`). */
   onQuestion(question: string): void;
   /** Claims' sender: start this claim's chat, or reopen it (Reader.tsx § `checkClaim`). */
@@ -160,6 +177,7 @@ export function InvestigatePanel({
 }) {
   const shownClaims = investigateClaims(claims);
   const shownWorks = investigateWorks(works);
+  useReopenNewest(chats);
   return (
     <ModeSurface
       label={MODE_LABEL.sources}
@@ -170,6 +188,9 @@ export function InvestigatePanel({
     >
       <QuestionBox onQuestion={chats.onQuestion} />
       <div className="tl-scroll investigate-scroll">
+        {/* The reader's own conversations before ours (plan 261021b). */}
+        <YourQuestions chats={chats} />
+
         <section className="investigate-section" aria-labelledby="investigate-suggested-head">
           <h3 id="investigate-suggested-head" className="rcp-group-head investigate-head">
             {SOURCES_INVESTIGATE_SUGGESTED_HEAD}
@@ -255,11 +276,46 @@ export function InvestigatePanel({
             </ul>
           </section>
         )}
-
-        <YourQuestions chats={chats} />
       </div>
     </ModeSurface>
   );
+}
+
+/**
+ * **Arriving on Investigate takes you back to your conversation.** Greg,
+ * 2026-10-20 (spya-nhwy3d): *"I started an investigate chat … and I can see
+ * it listed in the chat threads, but when I go to investigate, it just shows
+ * me an empty thing."* So the newest chat under *Your questions* opens beside
+ * Sources, where its line would open it (`onOpen`). Plan
+ * docs/plans/261021b-investigate-takes-you-back-to-your-conversation.md.
+ *
+ * - **Once per visit**, a visit being one mount of this panel (the chip, a
+ *   link, Back, the way back from Chat): closing the dialog keeps it closed
+ *   until the reader leaves Investigate and comes back.
+ * - **Only once the summaries have answered**, so a cold load waits and then
+ *   opens rather than deciding on a list that has not arrived.
+ * - **Never over anything already there** (`occupied`): any `?thread=`,
+ *   including the one the reader came back from (Reader.tsx § `openOrigin`
+ *   keeps it for a lens) and one Chat carries that no dialog draws; an
+ *   unsent passage chat, whose words live only in the dialog; a note; or an
+ *   annotation in progress. Any of these decides the visit at once, before
+ *   the summaries arrive (GPT Sol's F1 and F2 on the plan; built-code review).
+ * - It opens a stored conversation and sends nothing.
+ */
+function useReopenNewest(chats: SourcesInvestigateChats): void {
+  const decided = useRef(false);
+  const { loaded, occupied, summaries, onOpen } = chats;
+  useEffect(() => {
+    if (decided.current) return;
+    if (occupied) {
+      decided.current = true;
+      return;
+    }
+    if (!loaded) return;
+    decided.current = true;
+    const newest = lensThreads(summaries)[0];
+    if (newest) onOpen(newest.id);
+  }, [loaded, occupied, summaries, onOpen]);
 }
 
 /** The (i)'s paragraph: where the questions come from, and what a press costs. */

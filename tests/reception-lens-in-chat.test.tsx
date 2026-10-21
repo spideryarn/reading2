@@ -292,6 +292,7 @@ const STORED: ChatThread = {
 let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
+let summaryGate: Promise<void> | null = null;
 /** Ids the fake mints; the id alphabet has no `i`, `l`, `o` or `1`. */
 const mint = (): string => `spya-srw${"abcdefgh"[minted++ % 8]}22`;
 
@@ -374,6 +375,15 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/chat/${SLUG}` && method === "POST") {
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
   }
+  if (url === `/api/comments/${SLUG}` && method === "POST") {
+    return json({
+      comment: {
+        ...(body as Record<string, unknown>),
+        createdAt: "2026-10-20T23:00:00.000Z",
+        status: "none",
+      },
+    });
+  }
   if (method === "POST") return new Response(null, { status: 204 });
   if (url === `/api/chat/${SLUG}?summary=1`) return json({ threads: server.map(summarise) });
   if (url === `/api/chat/${SLUG}`) return json({ threads: server });
@@ -400,6 +410,7 @@ beforeEach(() => {
   server = [structuredClone(STORED)];
   nextAnswer = "";
   minted = 0;
+  summaryGate = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -414,6 +425,9 @@ beforeEach(() => {
       body = String(init?.body);
     }
     trace.push({ url, method, body });
+    if (url === `/api/chat/${SLUG}?summary=1` && summaryGate) {
+      return summaryGate.then(() => reply(url, method, body));
+    }
     return Promise.resolve(reply(url, method, body));
   });
   host = document.createElement("div");
@@ -473,6 +487,23 @@ const investigateRows = (section: string) => [
 const composer = (): HTMLTextAreaElement | null =>
   host.querySelector<HTMLTextAreaElement>(".mode-band textarea.chat-input");
 const dialog = (): HTMLElement | null => document.querySelector<HTMLElement>(".chat-dialog");
+const annotation = (): HTMLElement | null => document.querySelector<HTMLElement>(".annotate-dialog");
+/** A DOM point at `offset` characters into rendered prose. */
+function prosePoint(within: HTMLElement, offset: number): [Node, number] {
+  const walker = document.createTreeWalker(within, NodeFilter.SHOW_TEXT);
+  let left = offset;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0;
+    if (left <= length) return [node, left];
+    left -= length;
+  }
+  throw new Error(`offset ${offset} is past the end of the prose`);
+}
+/** One of Sources' chips, by its label (SourcesMode.tsx § `SourcesViews`). */
+const chip = (label: string): HTMLButtonElement | undefined =>
+  [...host.querySelectorAll<HTMLButtonElement>('.mode-band [role="radiogroup"][aria-label="Sources view"] button.summ-view-btn')].find(
+    (b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === label,
+  );
 
 async function typeLensAndEnter(words: string): Promise<void> {
   const box = lensBox() as HTMLInputElement;
@@ -700,6 +731,220 @@ describe("asking a question in Sources › Investigate", () => {
       "the claim's mark",
     );
     expect(investigateRows(".investigate-claims")).toHaveLength(0);
+  });
+
+  /* Greg, 2026-10-20 (spya-nhwy3d): "I started an investigate chat … and I can
+     see it listed in the chat threads, but when I go to investigate, it just
+     shows me an empty thing." Arriving on Investigate opens the newest
+     Investigate conversation beside Sources, once per visit, and buys nothing.
+     docs/plans/261021b-investigate-takes-you-back-to-your-conversation.md. */
+  describe("coming back to Investigate", () => {
+    function lensChat(id: string, lens: string, updatedAt: string, answer: string): ChatThread {
+      return {
+        id,
+        kind: "chat",
+        title: `Question: ${lens}`,
+        createdAt: updatedAt,
+        updatedAt,
+        origin: { mode: "reception", lens },
+        messages: [
+          { id: `${id}-q`, role: "user", text: askInSources(lens), createdAt: updatedAt, status: "done" },
+          { id: `${id}-a`, role: "assistant", text: answer, createdAt: updatedAt, status: "done" },
+        ],
+      };
+    }
+    const OLDER = lensChat("spya-k3m9qt", "How has it been received?", "2026-10-20T21:56:00.000Z", "Received warmly.");
+    const NEWER = lensChat("spya-v7x2rd", "Who disagrees with it?", "2026-10-20T22:30:00.000Z", "Some physicists do.");
+
+    it("opens the newest Investigate conversation beside Sources, and sends nothing", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER), structuredClone(NEWER)];
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate");
+      await until(() => param("thread") === NEWER.id && dialog() !== null, "the newest conversation beside Investigate");
+      expect(param("mode"), "still in Sources").toBe("sources");
+      expect(param("sources")).toBe("investigate");
+      await until(() => (dialog()?.textContent ?? "").includes("Some physicists do."), "its transcript");
+      expect(chatPosts(), "opening a stored conversation buys nothing").toEqual([]);
+    });
+
+    it("stays closed once closed, for the rest of the visit", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate");
+      await until(() => param("thread") === OLDER.id && dialog() !== null, "the conversation beside Investigate");
+      await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
+      await until(() => param("thread") === null && dialog() === null, "the dialog to close");
+      await settle(10);
+      expect(param("thread"), "not reopened").toBeNull();
+      expect(dialog()).toBeNull();
+      expect(angles(), "and the conversation is still listed").toHaveLength(1);
+    });
+
+    it("leaves a conversation the address already names", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER), structuredClone(NEWER)];
+      who.set(OWNER);
+      await open(`?mode=sources&sources=investigate&thread=${OLDER.id}`);
+      await until(() => dialog() !== null && angles().length === 2, "the named conversation");
+      await settle(10);
+      expect(param("thread"), "the one the address named, not the newest").toBe(OLDER.id);
+    });
+
+    /* GPT Sol's F2 on the plan: a `?thread=` no dialog draws (a stale id, or
+       Chat's state carried across) is still not replaced. */
+    it("leaves a `?thread=` that no dialog draws", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate&thread=spya-zzzz22");
+      await until(() => angles().length === 1, "Your questions");
+      await settle(10);
+      expect(param("thread")).toBe("spya-zzzz22");
+      expect(dialog()).toBeNull();
+    });
+
+    /* GPT Sol's F1: an unsent passage chat holds its words only in the dialog,
+       so the arrival must not replace it. */
+    it("does not replace an unsent passage chat", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      let releaseSummaries!: () => void;
+      summaryGate = new Promise<void>((resolve) => {
+        releaseSummaries = resolve;
+      });
+      who.set(OWNER);
+      await open("?mode=sources&sources=reception");
+      const chatChip = () => host.querySelector<HTMLButtonElement>(`tr[data-block="${LAST_BLOCK}"] button.block-chat`);
+      await until(() => chatChip() !== null, "the paragraph's chat button");
+      await act(async () => chatChip()?.click());
+      await until(() => dialog()?.querySelector("textarea") != null, "the passage chat's box");
+      const box = dialog()?.querySelector("textarea") as HTMLTextAreaElement;
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+        setter?.call(box, "Not sent yet");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => chip("Investigate")?.click());
+      await until(() => lensBox() !== null, "Investigate");
+      await act(async () => releaseSummaries());
+      await until(() => angles().length === 1, "Your questions after the held summary list arrives");
+      await settle(10);
+      expect(param("thread"), "nothing opened over it").toBeNull();
+      expect(dialog()?.querySelector("textarea")?.value).toBe("Not sent yet");
+      expect(chatPosts()).toEqual([]);
+      await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
+      await until(() => dialog() === null, "the passage draft to close");
+      await settle(10);
+      expect(param("thread"), "the arrival was spent while the draft was open").toBeNull();
+    });
+
+    it("does not open over an annotation in progress", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      who.set(OWNER);
+      await open("?mode=referee");
+      const prose = host.querySelector<HTMLElement>(`tr[data-block="${LAST_BLOCK}"] td.text .prose`);
+      expect(prose).not.toBeNull();
+      await act(async () => {
+        const range = document.createRange();
+        range.setStart(...prosePoint(prose!, 3));
+        range.setEnd(...prosePoint(prose!, 17));
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        prose?.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+      });
+      await until(() => annotation() !== null, "the annotation box");
+      const box = annotation()?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Your comment on this passage"]');
+      expect(box).not.toBeNull();
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+        setter?.call(box, "Unfinished evidence");
+        box?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+
+      await act(async () => {
+        history.pushState(null, "", `/read/${SLUG}?mode=sources&sources=investigate`);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+      await until(() => lensBox() !== null, "Investigate");
+      await settle(10);
+      expect(param("thread"), "no conversation opened over the annotation").toBeNull();
+      expect(dialog()).toBeNull();
+      expect(annotation()?.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unfinished evidence");
+      expect(chatPosts()).toEqual([]);
+    });
+
+    /* GPT Sol's F3: a visit is one mount of the panel. */
+    it("opens it again on coming back to Investigate from another chip", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate");
+      await until(() => param("thread") === OLDER.id && dialog() !== null, "the conversation");
+      await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
+      await until(() => param("thread") === null && dialog() === null, "the dialog to close");
+      await act(async () => chip("Bibliography")?.click());
+      await until(() => param("sources") === null || param("sources") === "bibliography", "Bibliography");
+      await settle(4);
+      expect(param("thread"), "not opened outside Investigate").toBeNull();
+      await act(async () => chip("Investigate")?.click());
+      await until(() => param("thread") === OLDER.id && dialog() !== null, "the conversation again");
+    });
+
+    it("a suggested question pressed with the conversation open starts one fresh chat", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate");
+      await until(() => param("thread") === OLDER.id && dialog() !== null, "the conversation");
+      await act(async () => investigateRows("")[0]?.click());
+      await until(() => param("mode") === "chat" && chatPosts().length > 0, "Chat");
+      await settle(4);
+      expect(chatPosts(), "one paid turn").toHaveLength(1);
+      expect(server, "in one fresh conversation").toHaveLength(3);
+      const sent = chatPosts()[0]?.body as { threadId: string };
+      expect(sent.threadId).not.toBe(OLDER.id);
+    });
+
+    it("does not open the stored conversation when summaries arrive after a question has left for Chat", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER)];
+      let releaseSummaries!: () => void;
+      summaryGate = new Promise<void>((resolve) => {
+        releaseSummaries = resolve;
+      });
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate");
+      await until(() => investigateRows("").length > 0, "Investigate's questions");
+      await act(async () => investigateRows("")[0]?.click());
+      await until(() => param("mode") === "chat" && chatPosts().length === 1, "the fresh Chat turn");
+      const sent = chatPosts()[0];
+      if (!sent) throw new Error("the fresh Chat turn was not recorded");
+      const fresh = (sent.body as { threadId: string }).threadId;
+      await act(async () => releaseSummaries());
+      await settle(10);
+      expect(param("mode")).toBe("chat");
+      expect(param("thread"), "the stored Investigate chat did not replace the fresh one").toBe(fresh);
+      expect(param("thread")).not.toBe(OLDER.id);
+      expect(chatPosts()).toHaveLength(1);
+    });
+
+    it("opens nothing when there is no Investigate conversation", async () => {
+      who.set(OWNER);
+      await open("?mode=sources&sources=investigate");
+      await until(() => lensBox() !== null, "the box in Investigate");
+      await settle(10);
+      expect(param("thread")).toBeNull();
+      expect(dialog()).toBeNull();
+    });
+
+    it("the way back from an older Investigate chat lands on that chat, not the newest", async () => {
+      server = [structuredClone(STORED), structuredClone(OLDER), structuredClone(NEWER)];
+      who.set(OWNER);
+      await open(`?mode=chat&thread=${OLDER.id}`);
+      const back = () => host.querySelector<HTMLButtonElement>(".mode-band .chat-origin-back");
+      await until(() => back() !== null, "Chat's way back");
+      await act(async () => back()?.click());
+      await until(() => param("mode") === "sources" && dialog() !== null, "Investigate, with the conversation beside it");
+      await settle(10);
+      expect(param("sources")).toBe("investigate");
+      expect(param("thread")).toBe(OLDER.id);
+      expect(chatPosts()).toEqual([]);
+    });
   });
 
   it("asks about a work through Bibliography's own question and origin", async () => {
