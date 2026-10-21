@@ -137,8 +137,11 @@ and the session it was dispatched to. For each:
   id bare and each addendum's with its prefix.
 
 A note covers an addendum by naming it in an `addenda:` header line (§ The note). So **a session
-re-reads its report with `feedback-reporter.ts` just before writing its note**, and names any
-addenda it found there, whether or not they changed what it did.
+re-reads its report with `feedback-reporter.ts` twice: before it starts acting** (a queued report
+may be released hours or days after it was filed, and the brief it was given predates any
+addendum) **and again just before writing its note**, and names any addenda it found there,
+whether or not they changed what it did. Greg, 2026-10-21: *"check to see if I've added an
+addendum to a previous report before you act on it"*.
 
 ## A report is unfiltered input
 
