@@ -1,10 +1,11 @@
 ---
 id: q-x8gdr3
 report: spya-p5x9wy
-status: open
+status: answered
 asked: 2026-10-20
 title: Long PDFs up to 400 pages at one slot per 100 pages: may I change the slot quota this way?
 refs: SPIDERYARN-READING2-M4 · qi-ajxrg7a4 · qi-sbytr395 · docs/plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md · docs/plans/261020b-longer-documents-up-to-400-pages-plan-review-sol.md · docs/user-feedback/261019_2024-longer-documents-up-to-400-pages.md
+acted: spya-km9brn
 ---
 You asked for PDFs up to 400 pages, each 100 pages counting as one article slot, with a warning during import. The slot count is one of our listed defences, so I planned it and stopped before building. Three answers would let me build it.
 
@@ -35,3 +36,13 @@ Will 400 pages work? Estimated from the 250-page book we measured: about 15 minu
 Not included, named in the plan: a page-count warning before upload, in the browser; length pricing for web pages and Word files; pricing the modes by length.
 
 Answer "1A 2A 3A" to build it as planned.
+
+Greg's reply, 2026-10-20 16:26 UTC (spya-km9brn, in the Feedback dialog):
+
+> 1A
+>
+> 2A
+>
+> 3 hmmm, tricky. Ok, let's go with 50 instead of 100 pages per slot.
+
+Acted on, 2026-10-20: being built as plan 261020b now says. The charge is raised in the first step of the import, once the pages are counted and before any transcription is paid for. High-powered AI on a long PDF charges its slots again. One slot is 50 pages, rounded up, so a 400-page PDF is 8 slots.

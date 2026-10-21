@@ -1,0 +1,133 @@
+{
+  "what": "Plan 261020b stage 1: real PDFs at 400 pages through the real pipeline on the local stack, MAX_PAGES lifted to 400 for the run only (never committed)",
+  "date": "2026-10-20",
+  "machine": "the Hetzner box",
+  "database": "postgresql://…@127.0.0.1:54362/postgres (local Supabase; read off .env.local and every script's Target: line)",
+  "owner": "f4d08b58-5573-4811-9887-e26c114fb324",
+  "code": { "head": "e97877409ec2cbb45f6d958929154e1e8fe1e906", "workingTree": "clean except src/uploads.ts MAX_PAGES 250 -> 400, reverted after the runs" },
+  "concurrency": "l400-codev2 and l400-pdlt ran at the same time (17:35-17:45); every other run was alone",
+  "spend": {
+    "approvedUsd": "10-15",
+    "totalUsd": 12.375,
+    "calls": 1677,
+    "callsNotOk": 29,
+    "query": "select round(sum(coalesce(credits_used_nanos,0)+coalesce(byok_upstream_nanos,0)+coalesce(computed_cost_nanos,0))/1e9,4) from spideryarn.ai_calls where article_slug like 'l400%' or article_slug like 'l250-%'",
+    "note": "the 29 not-ok calls are aborted by our clock at a window's end and carry no price"
+  },
+  "documents": {
+    "codev2": {
+      "title": "Lawrence Lessig, Code: Version 2.0 (CC BY-SA 2.5)",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Code_v2.pdf",
+      "sourcePages": 424, "cut": "pages 1-400 with pdf-lib",
+      "fileMB": 3.93, "words": 176150, "plannedChunks": 68
+    },
+    "pdlt": {
+      "title": "Roberts, Yaida, Hanin, The Principles of Deep Learning Theory (arXiv 2106.10165)",
+      "sourceUrl": "https://arxiv.org/pdf/2106.10165",
+      "sourcePages": 471, "cuts": { "400": { "fileMB": 2.37, "words": 174761, "plannedChunks": 68 }, "250": { "fileMB": 1.75, "words": 107594, "plannedChunks": 43 } },
+      "kind": "a maths-heavy book: about 67 short lines a page in the text layer, against about 6 for Code v2"
+    },
+    "wassa": {
+      "title": "Proceedings of the 13th Workshop on Computational Approaches to Subjectivity, Sentiment, & Social Media Analysis (WASSA 2023), ACL Anthology (CC BY 4.0)",
+      "sourceUrl": "https://aclanthology.org/2023.wassa-1.pdf",
+      "sourcePages": 638,
+      "cuts": {
+        "pages 1-400": { "fileMB": 16.8, "words": 229701, "plannedChunks": 88 },
+        "pages 29-428": { "fileMB": 17.55, "words": 233551, "plannedChunks": 88, "why": "page 28 of the first cut failed transcription twice in the same way" }
+      },
+      "kind": "dense two-column papers: about 580 words a page"
+    }
+  },
+  "runs": [
+    {
+      "slug": "l400-codev2-spya-taajn3", "job": "spya-crqnzc", "result": "published",
+      "ingestWallSeconds": 608,
+      "steps": {
+        "fetch": { "s": 3.8 },
+        "extract": { "s": 502.5, "usd": 0.4058, "calls": 129, "chunks": 68, "chunksCheckpointed": 50, "retries": 28, "recall": 0.996, "longestCallS": 465, "callsOver300s": 12, "windows": 1 },
+        "blocks": { "s": 16.9, "blocks": 2702, "then": "claim handed back, 216.7 s left" },
+        "structure": { "s": 37.8, "usd": 0.6489, "source": "model, one whole-document call (no slices, no headings fallback)", "sections": 34 },
+        "assets": { "s": 31.3, "usd": 0.0135 },
+        "matter": { "usd": 0.0018 },
+        "labels": { "s": 153.3, "usd": 1.3847, "batches": 21, "paragraphsLabelled": 2200, "insideBudget": "yes, 153 s of 700" }
+      },
+      "usd": 2.4562,
+      "response": { "beforeLabelsBytes": 2880849, "afterLabelsBytes": 3108838, "afterLabelsGzipBytes": 640602, "fractionOf4_5MB": 0.691, "loadMs": 6067 }
+    },
+    {
+      "slug": "l400-pdlt-spya-xv4xfs", "job": "spya-yf3y8k", "result": "error [jb-gone] after three extract windows",
+      "ingestWallSeconds": 2221,
+      "steps": {
+        "extract": {
+          "windows": [
+            { "s": 740.0, "end": "deadline", "chunkCheckpointsFoundAtStart": 0 },
+            { "s": 740.1, "end": "deadline", "chunkCheckpointsFoundAtStart": 1 },
+            { "s": 740.1, "end": "deadline, budget spent", "chunkCheckpointsFoundAtStart": 1, "chunksAtEnd": "63/68" }
+          ],
+          "usd": 1.9372, "calls": 510, "longestCallS": 727, "callsOver300s": 29, "avgOutputTokens": 7359
+        }
+      },
+      "usd": 1.9372,
+      "readerSentence": "This stopped part-way through, and whatever was running it did not come back. The steps that finished are kept, so trying again picks up where it left off rather than starting over. [jb-gone]"
+    },
+    {
+      "slug": "l250-pdlt-spya-kzdjm5", "job": "spya-daaqu0", "result": "published (control at today's cap)",
+      "ingestWallSeconds": 2342,
+      "steps": {
+        "extract": {
+          "windows": [
+            { "s": 740.0, "end": "deadline", "chunkCheckpointsFoundAtStart": 0 },
+            { "s": 740.1, "end": "deadline", "chunkCheckpointsFoundAtStart": 1 },
+            { "s": 716.3, "end": "done, 23.6 s left", "chunkCheckpointsFoundAtStart": 2 }
+          ],
+          "usd": 1.2266, "calls": 343
+        },
+        "blocks": { "s": 16.0, "blocks": 2680 },
+        "structure": { "s": 93.3, "usd": 1.5661, "source": "model, whole document", "sections": 61 },
+        "assets": { "s": 35.4, "usd": 0.0135 },
+        "labels": "not run; the queued matter and labels successors were cancelled"
+      },
+      "usd": 2.8083,
+      "response": { "noLabelsBytes": 2262159 }
+    },
+    {
+      "slug": "l400-wassa-spya-nf99wj", "jobs": ["spya-a7zfmn", "spya-n6pge9 (retryJob, as Try again)"], "result": "error [ai-pdf-incomplete] twice, page 28",
+      "steps": {
+        "extract": {
+          "first": { "s": 370.6, "usd": 0.638, "chunksCheckpointed": 37 },
+          "retry": { "s": 201.2, "usd": 0.355, "chunkCheckpointsFoundAtStart": 37, "sameFailure": true },
+          "developerSentence": "The PDF reader could not establish source-page integrity for pages 28 after 2 single-page attempts. [ai-pdf-incomplete]",
+          "readerSentence": "... Trying again may produce a usable reading. [ai-pdf-incomplete]"
+        }
+      },
+      "usd": 0.9928
+    },
+    {
+      "slug": "l400b-wassa-p29-spya-t7mx34", "job": "spya-vzxg2d", "result": "published; labels failed",
+      "ingestWallSeconds": 1689,
+      "steps": {
+        "fetch": { "s": 3.9 },
+        "extract": {
+          "windows": [
+            { "s": 740.0, "end": "deadline (fan-out finished at about 655 s; the cross-chunk pass ran out)", "chunkCheckpointsFoundAtStart": 0 },
+            { "s": 734.7, "end": "done, 5.2 s left", "chunkCheckpointsFoundAtStart": 44 }
+          ],
+          "usd": 0.9964, "calls": 271, "chunks": 88, "retries": 42, "recall": 0.969, "qualityNotes": 89, "longestCallS": 595
+        },
+        "blocks": { "s": 42.8, "blocks": 3911 },
+        "structure": { "s": 67.9, "usd": 1.235, "source": "slices: 4, no refill, no re-ask", "sections": 258 },
+        "assets": { "s": 97.6, "usd": 0.0146 },
+        "matter": { "usd": 0.0019 },
+        "labels": {
+          "s": 182.7, "usd": 1.8809, "result": "error [jb-step-again]",
+          "developerSentence": "The nav labels for one section failed twice. First attempt: Nav labels: this call asked for 38 labels and got 39, and paragraph 39 was not asked for.",
+          "retry": { "job": "spya-hjugun", "s": 19.8, "usd": 0.0515, "sameFailure": true },
+          "insideBudget": "the failure was not time: 183 s of 700"
+        }
+      },
+      "usd": 4.1804,
+      "response": { "noLabelsBytes": 3710594, "noLabelsGzipBytes": 676334, "fractionOf4_5MB": 0.824, "estimatedWithLabelsBytes": "about 3.96 MB (codev2's 104 bytes a label x about 2,400 paragraphs)", "loadMs": 11982 }
+    }
+  ],
+  "cliTrap": "npm run labels after an ingest waited 'busy' for ten minutes and gave up: the ingest queues a matter job and a labels job as successors, the CLI's labels request is handed the queued labels job, and that one waits behind the matter job, which nothing drives. Driving the matter job by its id (advanceJob) cleared it."
+}

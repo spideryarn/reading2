@@ -188,7 +188,18 @@ async function givenArticle(
      returning id`,
     [owner, `${PREFIX}${name}`, visibility],
   );
-  return rows[0]!.id;
+  const id = rows[0]!.id;
+  /* **Published**, as every article on a shelf is. Since plan 261020b (Sol's
+     C3-F1) an article with no charged ingest *and* no published revision is an
+     import that died before it published, and High-powered waits for its
+     Retry; these fixtures stand for articles added before billing, which did
+     publish. */
+  const { rows: revision } = await pool.query<{ id: string }>(
+    `insert into spideryarn.article_revisions (article_id, status) values ($1, 'published') returning id`,
+    [id],
+  );
+  await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [id, revision[0]!.id]);
+  return id;
 }
 
 /** A settled ingest row pointing at `articleId` — what a successful job leaves. */

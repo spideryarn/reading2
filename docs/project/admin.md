@@ -653,6 +653,9 @@ article* there, which needs nothing from these pages
 Added 2026-09-03 beside spend, because "who is paying" and "who is expensive" are two halves of one
 question. **Plan** is the tier id or `free`, with Stripe's own status underneath; **Ingests** is
 `4 / 20` against the allowance. [billing.md](billing.md) is where the quota itself is explained.
+Since plan 261020b the cell is **priced from slot sums and printed from counts**: a long PDF is one
+article added and up to eight slots of the allowance
+([billing.md § A long document costs a slot per 50 pages](billing.md#a-long-document-costs-a-slot-per-50-pages)).
 
 Three things keep them honest, and each is a way the column could have been quietly wrong:
 

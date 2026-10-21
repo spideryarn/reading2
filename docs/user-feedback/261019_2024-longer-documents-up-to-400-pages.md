@@ -1,9 +1,9 @@
 ---
 reports: spya-p5x9wy
-ending: awaiting
-comment: Planned, not built: charging one slot per 100 pages changes the slot quota, which is a defence, so it is three questions for you first (the charge, High-powered on long PDFs, and the price per 100 pages).
+ending: shipped
+comment: Shipped: a long PDF costs one article per 50 pages, charged before any transcription, with a warning on import. The cap stays 250 pages for now, because a 400-page maths book failed to import. Raising it to 400 is queued.
 ---
-# Longer documents, up to 400 pages, at one slot per 100 pages
+# Longer documents, up to 400 pages, at one slot per 50 pages
 
 Report `spya-p5x9wy` (#639, SPIDERYARN-READING2-M4), a suggestion, from Greg (`feedback-reporter.ts`
 exit 0, no addenda when re-read before this note). Queue item `qi-ajxrg7a4`.
@@ -18,9 +18,17 @@ exit 0, no addenda when re-read before this note). Queue item `qi-ajxrg7a4`.
 > Probably it should warn the user during the import process that multiple slots are being used for
 > long articles. But don't block - just let them know during the import process.
 
-**Awaiting Greg**: question [q-x8gdr3](questions/q-x8gdr3.md). The slot quota is a defence
-([security-map.md](../project/security-map.md)), so the change was planned and reviewed, and nothing
-was built. The page count is only known a few seconds into an import, so the plan reprices the
-reservation there, before transcription, fenced on the job's claim. GPT Sol's plan review found ten
-gaps, all taken. The 400-page cap waits on measuring the article response size (`qi-sbytr395`).
+**Shipped**, after Greg answered question [q-x8gdr3](questions/q-x8gdr3.md) on 2026-10-20 (1A, 2A,
+and 50 pages a slot rather than 100). A PDF costs one slot per 50 pages, rounded up. The charge is
+raised in stage 1 once the pages are counted, before any transcription is paid for, under the
+billing → job → ingest-row lock order. High-powered AI charges the article's slots again, and a free
+Rebuild may not turn a short article into a long one. The import shows the warning and does not block.
+GPT Sol reviewed the plan three times and the code once. The review found a P0 (High-powered AI
+switched on during an import charged one slot), and its fix is in.
+
+**The cap stays 250 pages for now (1–5 slots), not 400.** The measurement
+([261020e](../investigations/261020e-four-hundred-page-imports-measured.md)) found that an ordinary
+400-page book imports, but a 400-page maths book does not. The ledger already allows 8 slots.
+Raising the cap waits on the extract fixes queued in
+[overseer-queue.md](../project/overseer-queue.md) (and `qi-sbytr395`).
 Plan: [261020b](../plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md).

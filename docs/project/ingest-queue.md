@@ -196,6 +196,16 @@ The record takes a static reason and the job takes the sentence with the number 
 [content-extraction.md](content-extraction.md) and
 [260903k](../plans/260903k-pdf-page-cap-refused-with-no-reason-given.md) § Stage 4.
 
+**And the same count prices it, still before the promotion — for a pasted PDF too, before
+`writeRaw`.** One slot per 50 pages: `priceTheDocument` in [`src/pipeline.ts`](../../src/pipeline.ts)
+reprices the job's one-slot reservation, so a document whose slots are not there fails in stage 1,
+before any transcription is paid for, with `[pay-pages]`. Unlike the page cap this leaves the upload
+`claimed`, not `rejected`, because it is about the allowance and not the file: Retry promotes it once
+the allowance grows. A PDF that fits and is over 50 pages carries on, and the fetch step's stored
+detail ends with the warning Greg asked for (*This PDF is 150 pages, so it uses 3 of your articles*),
+which the job card shows. The rules, the race and the re-run rule are
+[billing.md § A long document costs a slot per 50 pages](billing.md#a-long-document-costs-a-slot-per-50-pages).
+
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
 prove two addresses are one piece. An upload has no address, so there is nothing that could make
 two of them one article — two files called `paper.pdf` get two, per
@@ -425,9 +435,10 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
   padding for exactly that reason**, because a title that promises more target than exists sends a
   near-miss through to the browser, which opens the PDF over the page. Measured before and after in
   [260903g](../plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md#stage-3-the-two-layout-jobs).
-- **Both caps are stated before the file is chosen** — *PDF, up to 50 MB and 250 pages* — from
+- **Both caps are stated before the file is chosen**, with what a long PDF costs — *… up to 50 MB.
+  PDFs up to 250 pages; every 50 pages counts as one article.* — from
   `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), which builds the sentence out of
-  `MAX_UPLOAD_BYTES` and `MAX_PAGES`, so it cannot promise a limit that is not the one enforced. It
+  `MAX_UPLOAD_BYTES`, `MAX_PAGES` and `PAGES_PER_SLOT`, so it cannot promise a limit that is not the one enforced. It
   sits in the slot the chosen-file row takes, so it costs no height once a reader has acted on it.
   The **page** cap is the reason this exists: a file manager shows you a size and never a page
   count, so until 2026-09-04 the only way to discover it was to upload a book and be refused at the

@@ -1116,6 +1116,9 @@ const REVISION_READ_POLICY: Record<
      want a grant here the day something serves it, which is exactly what this
      map is for. */
   rawByteCount: {},
+  /* Stage 1's page count of the stored PDF (plan 261020b). Read by the
+     pipeline through the artefact store, never by a revision read. */
+  rawPages: {},
   /* **The grant this map's own note predicted.** It said `rawFilename` is
      reader-facing — *"it is what an uploaded PDF should download as"* — and
      *"will want a grant here the day something serves it, which is exactly what

@@ -246,8 +246,8 @@ describe("the High-powered AI switch", () => {
     session.user = { id: "5e1d6c0a-7b2f-4e39-9a4d-3c8f2b1e6a70" };
     await open();
     expect(box()).toBeTruthy();
-    expect(words()).toContain("counts as one more article against your allowance");
-    expect(words()).toContain("half of one while the article is shared publicly");
+    expect(words()).toContain("at the same number of slots");
+    expect(words()).toContain("half as much while it is shared publicly");
     expect(words()).toContain("doesn't give it back");
     expect(words()).not.toContain("Administrator: no charge");
     /* Greg, 2026-09-30: no regular user is told what AI processing costs. The
@@ -257,7 +257,7 @@ describe("the High-powered AI switch", () => {
 
   it("sends a reader's press to the owner route, and shows a refusal beside the unticked box", async () => {
     session.user = { id: "5e1d6c0a-7b2f-4e39-9a4d-3c8f2b1e6a70" };
-    putAnswer = () => json({ error: "Switching on High-powered AI counts as one more article against your allowance — half of one if the article is shared publicly — and there is not that much left. [pay-high-power]" }, 402);
+    putAnswer = () => json({ error: "Switching on High-powered AI counts the article against your allowance again, at the same number of slots — half as much if it is shared publicly — and there is not that much left. [pay-high-power]" }, 402);
     await open();
     await click(box());
     expect(puts).toEqual([{ url: `PUT /api/article/${SLUG}/high-power`, body: { on: true } }]);

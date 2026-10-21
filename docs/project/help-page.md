@@ -58,10 +58,14 @@ mode's body is `## In short`, required, then up to two more, `## When to use it`
 in that order (`help-markdown.tsx` § `helpModeSections`, the one parser the page and the corpus
 share). Links are site paths
 (`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
-HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Four tokens stand for facts kept in code — `{{experimental-modes}}`,
-`{{public-shelf-label}}`, `{{whats-new-label}}` and `{{modes-table}}` — and `help-markdown.tsx` §
+HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Six tokens stand for facts kept in code — `{{experimental-modes}}`,
+`{{public-shelf-label}}`, `{{whats-new-label}}`, `{{max-pdf-pages}}`, `{{pages-per-article}}` and
+`{{modes-table}}` — and `help-markdown.tsx` §
 `expandHelpTokens` gives the plain text with them filled in, for anything that wants to read Help
-rather than draw it.
+rather than draw it. **A limit a reader can hit is a token, not a typed number**: the PDF page cap
+and the pages one article buys ([billing.md § A long document costs a slot per 50
+pages](billing.md#a-long-document-costs-a-slot-per-50-pages)) come from `src/uploads.ts`, so raising
+`MAX_PAGES` cannot leave `/help/plans` and `/help/adding-articles` promising the old one.
 
 The groups: Start here · Ways to read (the four guides: your first article, studying a topic,
 reviewing a paper, reading in your own field) · Reading an article · The modes · Your shelf and your

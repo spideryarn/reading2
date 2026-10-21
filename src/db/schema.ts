@@ -896,6 +896,18 @@ export const articleRevisions = spideryarn.table(
      */
     rawByteCount: integer("raw_byte_count"),
     /**
+     * **How many pages the stored PDF has, as stage 1 counted it** —
+     * `RawManifest.pages`. A fact about the raw source, owned by the raw write
+     * and carried with it, which is what lets a re-run that fetches again
+     * compare against the document it replaces, and stage 2 ask whether a long
+     * PDF was priced (plan 261020b, rule 4 and the assertion).
+     *
+     * **Not `pages` below**, which is stage 2's metadata about the
+     * transcription. Null for anything that is not a PDF and for every
+     * revision written before 2026-10-20 — the grandfathered case.
+     */
+    rawPages: integer("raw_pages"),
+    /**
      * **The reader's own name for an uploaded file** — `RawManifest.filename`.
      *
      * Not `RawManifest.file`, which is `raw.html` or `raw.pdf` and is derived
@@ -1550,6 +1562,7 @@ export const articleRevisions = spideryarn.table(
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    check("article_revisions_raw_pages", sql`${t.rawPages} is null or ${t.rawPages} > 0`),
     /* The five levels of `DifficultyLevel` (src/reading-time.ts). A null level
        is NULL here and passes, which is wanted: most rows are unrated. */
     check("article_revisions_reading_language", sql`${t.readingLanguage} between 1 and 5`),
@@ -7704,12 +7717,12 @@ export const ingestEvents = spideryarn.table(
      * authors and abstract read, at a hundredth of an ingest whatever its
      * visibility (`supersededBy` below).
      *
-     * An upgrade is one more article's worth, priced exactly like an ingest of
-     * the same article (200 points private, 100 public, live; frozen on delete),
+     * An upgrade costs the article's slots again, priced exactly like the ingest
+     * of the same article (200 points private, 100 public, live; frozen on delete),
      * so the article costs double — Greg, 2026-09-30: *"it should double the
      * processing cost per-article"*. It is inserted already settled, in the
      * transaction that switches the article on, and never refunded
-     * (`chargeHighPower`, src/store/pg-billing.ts).
+     * (`switchOnHighPower`, src/store/pg-billing.ts).
      *
      * **The wall adds both kinds; every sentence that says "added" counts only
      * ingests.** `Usage` in pg-billing.ts splits them, which is what stops one
@@ -7841,8 +7854,31 @@ export const ingestEvents = spideryarn.table(
      * support conversation about "which article was that" has an answer.
      */
     slug: text("slug"),
+    /**
+     * **How many articles' worth this row is** — 1 for everything but a long
+     * PDF, which costs one slot per 50 pages, rounded up (`slotsForPages` in
+     * src/uploads.ts; Greg, 2026-10-20). Every price the usage query puts on an
+     * `'ingest'` or `'high_power'` row is multiplied by it; a `'minimal'` row is
+     * priced by its kind and its `slots` means nothing.
+     *
+     * An ingest is reserved at 1 at the route and **repriced in stage 1** once
+     * the pages are counted, before anything paid runs (`priceFetchedPdf`).
+     * Every row written before 2026-10-20 is 1, which grandfathers it by name —
+     * docs/plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md.
+     */
+    slots: smallint("slots").notNull().default(1),
+    /**
+     * **The PDF's page count**, once stage 1 has counted it — the fact `slots`
+     * came from, and the one *Read this* needs from a minimal row because it
+     * never fetches again. Null for anything that is not a PDF and for every
+     * row written before 2026-10-20.
+     */
+    pages: integer("pages"),
   },
   (t) => [
+    /* A long PDF is at most eight slots: 400 pages at 50 a slot. */
+    check("ingest_events_slots", sql`${t.slots} between 1 and 8`),
+    check("ingest_events_pages", sql`${t.pages} is null or ${t.pages} > 0`),
     /* A reservation settles once, and only one way. `num_nonnulls` rather than
        a pair of `is null` disjunctions because it says the rule rather than
        encoding it — GPT Sol, 2026-09-02. In the database rather than in

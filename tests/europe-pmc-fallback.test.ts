@@ -209,6 +209,26 @@ describe("a pasted Europe PMC address", () => {
     expect(product.parts.raw).toMatchObject({ url: ARTICLE, requestedUrl: XML, kind: "html" });
   });
 
+  /* A page built from Europe PMC's JATS is a web page, so it stays one slot
+     and is never priced by pages (plan 261020b). */
+  it("is not priced by pages: the JATS page stays one slot", async () => {
+    scripted({ [XML]: xml(FIXTURE) });
+    const asked: number[] = [];
+    const product = await STEPS.fetch.run(
+      {
+        ...ctx(ARTICLE),
+        priceFetchedPdf: async (pages: number) => {
+          asked.push(pages);
+          return { kind: "priced", slots: 1, pages };
+        },
+      },
+      memoryArtefacts(),
+      nullCheckpointStore(),
+    );
+    expect(asked).toEqual([]);
+    expect(product.parts.raw?.pages).toBeUndefined();
+  });
+
   it("says the paper is not there when Europe PMC has no full text for it", async () => {
     scripted({ [XML]: status(404) });
     const err = await failureOf(STEPS.fetch.run(ctx(ARTICLE), memoryArtefacts(), nullCheckpointStore()));

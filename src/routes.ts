@@ -11553,8 +11553,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    *
    * A sub-resource of the article like `visibility` above, and owner-scoped the
    * same way: another owner's slug is a 404. **Switching on charges**, once per
-   * article and never refunded — one more article's worth against the allowance,
-   * half while it is public (`chargeAndSwitchOnHighPower`, src/billing/admission.ts):
+   * article and never refunded — the article's slot count again against the
+   * allowance, half while it is public (`chargeAndSwitchOnHighPower`,
+   * src/billing/admission.ts):
    * a 402 when it does not fit, a 503 when the plan cannot be confirmed. The
    * administrator is exempt as with ingests, and **switching off charges and
    * refunds nothing**, so both go to the uncharged store method. It moved here
