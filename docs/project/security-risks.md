@@ -82,7 +82,7 @@ carrying R8. A qualification beside an id wins over those words.
 | [R28](#r28) | An uploaded file can say it was saved from any address, and a shared article then shows "Saved from" that site | Low | accepted | none | — |
 | [R29](#r29) | A hostile article can have the guide write what it holds, About you included, into a web address it then opens | Medium | accepted | none | — |
 | [R30](#r30) | A hostile article can have the guide start one mode's generation, without a press, once a conversation | Low | accepted | none | — |
-| [R31](#r31) | Anybody holding a private link can inflate its signed-out open count, and make one cheap write per request | Low | proposed | throttled in SQL; no request limit | a Vercel firewall rule: ~15 min of Greg's |
+| [R31](#r31) | Anybody holding a private link can inflate its signed-out open count, and make one cheap write per request | Low | accepted | throttled in SQL; no request limit | a Vercel firewall rule: ~15 min of Greg's |
 
 ## Accepted
 
@@ -475,7 +475,8 @@ request is still one indexed write, comparable to the reads every public route a
 key-holder repeat, and there is no per-address request limit in this app to reuse. GPT Sol's F2
 on the plan asked for one. **Fix, if wanted:** a Vercel firewall rate-limit rule on that one path,
 which is infrastructure an agent here may not change. About fifteen minutes of Greg's. Decision:
-**proposed**, not yet seen by Greg.
+**accepted**, Greg, 2026-10-21, reply `spya-ewzccp` to
+[q-wfdr7j](../user-feedback/questions/q-wfdr7j.md): *"A"* (accept it as a low risk; no firewall rule).
 
 ## From security.md's known gaps
 

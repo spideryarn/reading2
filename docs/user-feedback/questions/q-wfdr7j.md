@@ -1,10 +1,11 @@
 ---
 id: q-wfdr7j
 report: none
-status: open
+status: answered
 asked: 2026-10-21
 title: Anyone with a private link can push up its "opened while signed out" count. Accept that, or add a firewall rule?
 refs: R31 · docs/project/security-risks.md · plan 261021d (private-link opens) · fbcf30ac · decisions file item 86
+acted: spya-ewzccp
 ---
 The owner of a private link now sees how many times it was opened, including by people who were not signed in. Anyone holding the link could open it over and over and push that signed-out count up, by up to about 43,000 a day.
 
@@ -16,3 +17,8 @@ Recommendation: A.
 Details
 
 Signed-in opens are counted once per reader, so they cannot be inflated this way; only the signed-out tally can. The risk is recorded as R31 in the security register.
+
+Greg replied on 2026-10-21 (spya-ewzccp):
+> A
+
+Accepted as a low risk, with no firewall rule. R31 in security-risks.md now says accepted.

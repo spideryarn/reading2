@@ -1,10 +1,11 @@
 ---
 id: q-trk64h
 report: spya-s902kr
-status: open
+status: answered
 asked: 2026-10-21
 title: Should gifting an article already made on Sonnet remake its main modes on Opus?
 refs: spya-s902kr · docs/plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md · docs/user-feedback/261021_1542-gift-articles-on-opus-and-with-their-main-modes.md
+acted: spya-aabr88
 ---
 When you gift an article that was imported on the normal model (Sonnet), should the High-powered AI box redo its main modes on Opus, or only use Opus for whatever is still to be made?
 
@@ -23,3 +24,8 @@ The catch is in option A. Switching High-powered AI on changes the model for wha
 Costs, from the last three weeks of real imports (median per article): the import itself is about $0.36 on Sonnet and $0.55 on Opus; the main modes about $1.03 on Sonnet and $1.77 on Opus. So a gift imported on Sonnet is about $1.40 today; B makes it about $2.90; an article imported on Opus from the start is about $2.30.
 
 What would decide it: how often you gift an article you imported before you decided to gift it. If it's usually "import it for the author" from the start, A plus ticking at import is enough. If you pick from your existing shelf, B is what the box should mean.
+
+Greg replied on 2026-10-21 (spya-aabr88):
+> Okay, if it's an article that we'd already generated, it's fine to leave it as is. We just care about the ones going forward.
+
+Nothing to build: modes already made on Sonnet stay as they are, and ticking the box applies Opus to whatever is made from then on, as shipped in plan 261021j.
