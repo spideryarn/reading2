@@ -396,6 +396,19 @@
 }
 .return-chip-go:hover { color: var(--ink); }
 
+/* The ⌫ that says Backspace presses it (ReturnChip.tsx § `isWayBackKey`).
+   Fainter than the words, so it reads as a hint rather than part of the
+   sentence; gone on touch-first devices, where a hardware keyboard is uncommon. */
+.return-chip-key {
+  margin-left: 0.4em;
+  font: inherit;
+  font-size: 0.85em;
+  color: var(--ink-faint);
+}
+@media (pointer: coarse) {
+  .return-chip-key { display: none; }
+}
+
 .return-chip-close {
   flex: none;
   width: 2rem;

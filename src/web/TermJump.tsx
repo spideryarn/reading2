@@ -43,7 +43,7 @@ import type { BlockId, GlossaryEntry } from "../types.js";
 import { measureRow } from "./keynav.js";
 /* Typing somewhere? Then a g is a letter. This file's stricter version, which
    honours a contenteditable host, is now the one every shortcut shares. */
-import { isTyping } from "./key-chord.js";
+import { isAppSurfaceOpen, isPlainKey } from "./key-chord.js";
 
 /** The key. Lower-case only: Shift+G, ⌘G and the rest belong to somebody else. */
 export const TERM_JUMP_KEY = "g";
@@ -122,14 +122,7 @@ export function nextTerm(ids: readonly string[], current: string | null): string
 
 /** A plain g, pressed where a g is not a letter and no modal owns the keys. */
 function isOurKey(e: KeyboardEvent): boolean {
-  if (e.key !== TERM_JUMP_KEY) return false;
-  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return false;
-  /* During IME composition some browsers still expose the physical letter;
-     keyCode 229 is the older composition sentinel used by the same engines. */
-  if (e.isComposing || e.keyCode === 229) return false;
-  if (e.defaultPrevented || isTyping(e.target)) return false;
-  /* A native modal owns the keyboard; the article is inert behind it. */
-  return document.querySelector("dialog[open]") === null;
+  return isPlainKey(e, TERM_JUMP_KEY);
 }
 
 function proseLinks(row: Element): HTMLElement[] {
@@ -187,7 +180,7 @@ function startingPoint(
   /* A modeless dialog does not make the page inert, so focus can fall back to
      body while Chat, Comment, a drawer or a hover card is still in front. Body
      is not evidence that the reader means the article in that state. */
-  if (nothing && document.querySelector('[role="dialog"]') !== null) return null;
+  if (nothing && isAppSurfaceOpen('[role="dialog"]')) return null;
   /* With a covering band the table still exists and still has geometry, but it
      is not what the reader can see. Do not infer an origin through it. */
   if (nothing && document.querySelector(".reader.band-covers .mode-band") !== null) return null;
