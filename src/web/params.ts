@@ -1835,6 +1835,16 @@ export const ADMIN_ARTICLES_DEFAULT_BY = ["added"];
 export const adminArticlesByParam = byParam(ADMIN_ARTICLES_DEFAULT_BY);
 
 /**
+ * The *Given* table's default sort on `/admin/vouchers`: **created most
+ * recently, first** — the order the server sends and the table had before it
+ * could be sorted. Here for `ADMIN_DEFAULT_BY`'s reason above.
+ */
+export const ADMIN_VOUCHERS_DEFAULT_BY = ["created"];
+
+/** What the *Given* table is sorted by — `?tab=given&by=status`. */
+export const adminVouchersByParam = byParam(ADMIN_VOUCHERS_DEFAULT_BY);
+
+/**
  * Cards or the dense table — `view=table`.
  *
  * `push`, because switching how the whole shelf is painted is a thing Back

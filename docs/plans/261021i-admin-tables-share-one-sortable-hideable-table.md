@@ -189,3 +189,14 @@ code, but it is exactly the "different from /users" Greg reported, kept, with a 
   drawn page). C4, reported not fixed and wider than this job: tests/eager-client-graph.test.ts
   names only `AdminPage.tsx` and `DesignPage.tsx` as lazy admin roots, so a newer admin page's
   private import could reach the eager graph unnoticed. Not taken here; queued in the debrief.
+- 2026-10-21: **Stage 2 built** (Opus). `renderRow?: (row, dress: RowDress)` on `DataTable`, where
+  `RowDress` carries the `<tr>` props as well as `cellClass` (a held cell's hover tint needs the
+  row's `tw:group`); one `dressFor` builds both, and the default row is drawn from it with its class
+  strings unchanged. `src/web/admin-vouchers-columns.tsx` holds `VOUCHER_COLUMN_IDS` and the typed
+  columns; `VoucherRow` keeps its state and draws its visible cells through a
+  `Record<VoucherColumnId, …>`. Differences: the voucher cells' own look (normal size, wrapping,
+  greyed when revoked) sits on an inner `<div>`, because putting it on the `<td>` beside the shared
+  `text-xs` would leave the winner to stylesheet order; Status ranks revoked 0, waiting 1, claimed 2
+  and first click is descending (claimed first, revoked at the foot), ties newest first under that
+  arrow. Mutation-proven: index keys fail both identity tests, revoked losing fails Status, a blank
+  note not missing fails the sink test, a hideable Actions fails the menu test. Full suite green.

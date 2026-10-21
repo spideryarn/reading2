@@ -63,7 +63,7 @@
  * attribute to every sorted header is not what WAI-ARIA asks for. Only the
  * first key carries it; the rest say where they are through the chip ordinal.
  */
-import { useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useMemo, useRef, useState } from "react";
 import {
   type Column,
   type ColumnDef,
@@ -626,6 +626,26 @@ export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
 /* ------------------------------------------------------------ the table --- */
 
 /**
+ * What a row wears, handed to `renderRow` so a page-drawn row is dressed
+ * exactly as the default one: the same padding, the fixed-or-fluid width
+ * rule, the numeric alignment, the held first column and the marked row's
+ * tint. A cell that needs more appends its own classes; one that needs a
+ * different voice (`FIXED_CELL` is one quiet line) sets it on an element
+ * inside, since two utilities for one property on one element are ordered by
+ * Tailwind's stylesheet, not by the class string.
+ */
+export interface RowDress {
+  /** For the `<tr>`: its `data-row-id` (what `markedRowId` scrolls to), `aria-current` and classes. */
+  readonly rowProps: {
+    readonly "data-row-id": string;
+    readonly "aria-current": "true" | undefined;
+    readonly className: string;
+  };
+  /** The classes the default `<td>` of column `columnId` wears in this row. */
+  readonly cellClass: (columnId: string) => string;
+}
+
+/**
  * The rows, dense, one column each.
  *
  * `rows` is passed rather than read off the table, because the caller may have
@@ -650,6 +670,7 @@ export function DataTable<T>({
   sidewaysCue = false,
   markedRowId = null,
   pinFirst = false,
+  renderRow,
 }: {
   table: Table<T>;
   rows: Row<T>[];
@@ -675,8 +696,52 @@ export function DataTable<T>({
    * Off unless asked for: the admin tables ask, the shelf does not (plan 261019o).
    */
   pinFirst?: boolean;
+  /**
+   * **Draw a row yourself**, for a row whose cells share state — the one on
+   * `/admin/vouchers` that turns into a form, where the edit state, the focus
+   * refs and the form id belong to the row, not to any one cell (plan 261021i
+   * § Stage 2). Given it, the body calls `renderRow(row, dress)` instead of
+   * drawing its own `<tr>`; the headers, sorting, hiding and the held column
+   * are unchanged.
+   *
+   * `dress` is what the default row wears, so the two cannot drift: spread
+   * `rowProps` onto the `<tr>`, give each `<td>` `cellClass(column.id)`, and
+   * draw `row.getVisibleCells()` in order, or the cells stop lining up with
+   * the headers. **The key is ours, not the caller's**: each result is
+   * wrapped in a `<Fragment key={row.id}>`, so a re-sort moves a half-edited
+   * row's state with its row rather than leaving it at the old position to
+   * save over somebody else's (Sol F2).
+   */
+  renderRow?: (row: Row<T>, dress: RowDress) => ReactNode;
 }) {
   const pinnedId = pinFirst ? (table.getVisibleLeafColumns()[0]?.id ?? null) : null;
+  /* One function for the default row and `renderRow`'s alike — see `RowDress`. */
+  const dressFor = (row: Row<T>): RowDress => {
+    const marked = row.id === markedRowId;
+    return {
+      rowProps: {
+        "data-row-id": row.id,
+        "aria-current": marked ? "true" : undefined,
+        className: `tw:group tw:border-b tw:border-border/60 tw:last:border-0 ${
+          marked ? MARKED_BG : "tw:hover:bg-card"
+        }`,
+      },
+      cellClass: (columnId) => {
+        const meta = table.getColumn(columnId)?.columnDef.meta;
+        /* A held cell is opaque, so the row's own tint has to be
+           repeated on it or the hover and the mark stop at it. */
+        const pin =
+          columnId !== pinnedId
+            ? ""
+            : `${marked ? `${PINNED_AT_LEFT} ${MARKED_BG}` : `${PINNED} tw:group-hover:bg-card`} ${
+                meta?.fluid ? PINNED_FLUID_FLOOR : ""
+              }`;
+        return `${CELL_X} tw:py-2 ${
+          meta?.fluid ? FLUID_CELL : FIXED_CELL
+        } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""} ${pin}`;
+      },
+    };
+  };
   const drawn = (
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>
@@ -695,38 +760,19 @@ export function DataTable<T>({
           ))}
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              data-row-id={row.id}
-              aria-current={row.id === markedRowId ? "true" : undefined}
-              className={`tw:group tw:border-b tw:border-border/60 tw:last:border-0 ${
-                row.id === markedRowId ? MARKED_BG : "tw:hover:bg-card"
-              }`}
-            >
-              {row.getVisibleCells().map((cell) => {
-                const meta = cell.column.columnDef.meta;
-                /* A held cell is opaque, so the row's own tint has to be
-                   repeated on it or the hover and the mark stop at it. */
-                const pin =
-                  cell.column.id !== pinnedId
-                    ? ""
-                    : `${row.id === markedRowId ? `${PINNED_AT_LEFT} ${MARKED_BG}` : `${PINNED} tw:group-hover:bg-card`} ${
-                        meta?.fluid ? PINNED_FLUID_FLOOR : ""
-                      }`;
-                return (
-                  <td
-                    key={cell.id}
-                    className={`${CELL_X} tw:py-2 ${
-                      meta?.fluid ? FLUID_CELL : FIXED_CELL
-                    } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""} ${pin}`}
-                  >
+          {rows.map((row) => {
+            const dress = dressFor(row);
+            if (renderRow) return <Fragment key={row.id}>{renderRow(row, dress)}</Fragment>;
+            return (
+              <tr key={row.id} {...dress.rowProps}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className={dress.cellClass(cell.column.id)}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
-                );
-              })}
-            </tr>
-          ))}
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
   );

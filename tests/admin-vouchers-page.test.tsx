@@ -325,7 +325,7 @@ describe("/admin/vouchers", () => {
   /* Plan 261006h: the arrow keys scroll whatever has focus. jsdom lays nothing
      out, so the two widths are stand-ins. */
   for (const [what, content, expected] of [
-    ["makes the table's box a named tab stop when the table is wider than it", 900, { tabindex: "0", role: "region", name: "Every gift voucher, newest first" }],
+    ["makes the table's box a named tab stop when the table is wider than it", 900, { tabindex: "0", role: "region", name: "Every gift voucher" }],
     ["does not make the table's box a tab stop when the table fits", 360, { tabindex: null, role: null, name: null }],
   ] as const) {
     it(what, async () => {
@@ -1641,4 +1641,215 @@ describe("the link from each account to /admin/users", () => {
     expect(idle.Opened).toBe("never");
     expect(idle["Last sign-in"]).toBe("never");
   });
+});
+
+/**
+ * The *Given* table on `DataTable`, with a row the page draws itself — plan
+ * 261021i § Stage 2. What is pinned: a header sorts and says so in the
+ * address beside `?tab=`; Status ranks revoked lowest whatever else is true;
+ * an empty note sinks under either arrow; a hidden column stays hidden; Email
+ * and Actions cannot be hidden; and — the one that matters (Sol F2) — a
+ * half-made edit stays with its voucher when a re-sort moves the row.
+ */
+describe("sorting and hiding the Given table", () => {
+  /** A real round-trip store: Node's own `localStorage` shadows jsdom's here (admin-page.test.tsx). */
+  let stored: Map<string, string>;
+  beforeEach(() => {
+    stored = new Map();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => void stored.set(key, value),
+        removeItem: (key: string) => void stored.delete(key),
+        clear: () => stored.clear(),
+        key: () => null,
+        length: 0,
+      },
+    });
+  });
+
+  const headerButton = (name: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>("thead button")].find((b) =>
+      b.getAttribute("aria-label")?.startsWith(name),
+    );
+  const headers = () => [...host.querySelectorAll("thead th")].map((th) => th.textContent?.trim() ?? "");
+  /** Each row by the address in its first cell. */
+  const order = () =>
+    [...host.querySelectorAll("tbody tr")].map(
+      (tr) => tr.querySelector("td")?.textContent?.match(/^[a-z-]+@example\.test/)?.[0],
+    );
+  const query = () => new URLSearchParams(location.search);
+  async function click(el: HTMLElement | undefined) {
+    if (!el) throw new Error("nothing to click");
+    await act(async () => el.click());
+    await settle();
+  }
+  async function remount() {
+    act(() => root.unmount());
+    host.remove();
+    await mount();
+  }
+  async function hideFromMenu(label: string): Promise<(string | undefined)[]> {
+    const trigger = [...host.querySelectorAll("button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith("Columns"),
+    );
+    if (!trigger) throw new Error("no Columns menu");
+    const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(press, "pointerType", { value: "mouse" });
+    act(() => trigger.dispatchEvent(press));
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')];
+    const labels = items.map((item) => item.textContent?.trim());
+    const item = items.find((i) => i.textContent?.trim() === label);
+    if (!item) throw new Error(`no ${label} in the Columns menu`);
+    act(() => item.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await settle();
+    return labels;
+  }
+  async function typeInto(el: HTMLInputElement | null | undefined, value: string) {
+    if (!el) throw new Error("no field");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("is newest first by default, under the headers it always had and an order-neutral caption", async () => {
+    await mount();
+    expect(order()).toEqual(["waiting@example.test", "claimed@example.test", "revoked@example.test"]);
+    expect(host.querySelector("caption")?.textContent).toBe("Every gift voucher");
+    expect(headerButton("Created")?.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+    expect(headers()).toEqual([
+      "Email",
+      "Articles",
+      "Note to them",
+      "Private note",
+      "Created",
+      "Status",
+      "Claimant's free usage",
+      "Actions",
+    ]);
+  });
+
+  it("sorts from a header, writes ?by= beside ?tab=given, and reads both back on a reload", async () => {
+    await mount();
+    await click(headerButton("Email"));
+    expect(order()).toEqual(["claimed@example.test", "revoked@example.test", "waiting@example.test"]);
+    expect(query().get("by")).toBe("email");
+    expect(query().get("tab")).toBe("given");
+    await click(headerButton("Email"));
+    expect(query().get("dir")).toBe("desc");
+    expect(query().get("tab")).toBe("given");
+
+    await remount();
+    expect(order()).toEqual(["waiting@example.test", "revoked@example.test", "claimed@example.test"]);
+    expect(host.querySelector("table")?.closest("[hidden]")).toBeNull();
+  });
+
+  it("keeps the sort when the tab changes, and the tab when the sort does", async () => {
+    history.replaceState(null, "", "/admin/vouchers?tab=given&by=articles&dir=asc");
+    await mount();
+    expect(order()).toEqual(["revoked@example.test", "claimed@example.test", "waiting@example.test"]);
+    const tab = (name: string) =>
+      [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.startsWith(name));
+    await click(tab("Give"));
+    expect(query().get("tab")).toBeNull();
+    expect(query().get("by")).toBe("articles");
+    expect(query().get("dir")).toBe("asc");
+    await click(tab("Given"));
+    expect(query().get("tab")).toBe("given");
+    expect(order()).toEqual(["revoked@example.test", "claimed@example.test", "waiting@example.test"]);
+  });
+
+  it("ranks Status as it is drawn: claimed, then waiting, then revoked — revoked even when it was claimed", async () => {
+    listAnswer = [
+      ...VOUCHERS,
+      {
+        ...VOUCHERS[1],
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+        email: "claimed-then-revoked@example.test",
+        createdAt: "2026-09-15T10:00:00Z",
+        revokedAt: "2026-09-25T10:00:00Z",
+      },
+    ];
+    await mount();
+    await click(headerButton("Status"));
+    expect(query().get("by")).toBe("status");
+    /* Equal statuses newest first: the two revoked ones. */
+    expect(order()).toEqual([
+      "claimed@example.test",
+      "waiting@example.test",
+      "claimed-then-revoked@example.test",
+      "revoked@example.test",
+    ]);
+    await click(headerButton("Status"));
+    expect(order()).toEqual([
+      "revoked@example.test",
+      "claimed-then-revoked@example.test",
+      "waiting@example.test",
+      "claimed@example.test",
+    ]);
+  });
+
+  it("sinks a voucher with no note, or a blank one, under either arrow", async () => {
+    listAnswer = [VOUCHERS[0], { ...VOUCHERS[1], note: "   " }, { ...VOUCHERS[2], note: "zebra crossing" }];
+    await mount();
+    await click(headerButton("Private note"));
+    expect(order()).toEqual(["waiting@example.test", "revoked@example.test", "claimed@example.test"]);
+    await click(headerButton("Private note"));
+    expect(order()).toEqual(["revoked@example.test", "waiting@example.test", "claimed@example.test"]);
+
+    /* Only the waiting voucher has a note to them: first under either arrow. */
+    await click(headerButton("Note to them"));
+    expect(order()[0]).toBe("waiting@example.test");
+    await click(headerButton("Note to them"));
+    expect(query().get("dir")).toBe("desc");
+    expect(order()[0]).toBe("waiting@example.test");
+  });
+
+  it("hides a column from the Columns menu, never offers Email or Actions, and remembers it across a reload", async () => {
+    await mount();
+    const labels = await hideFromMenu("Claimant's free usage");
+    expect(labels).toEqual(["Articles", "Note to them", "Private note", "Created", "Status", "Claimant's free usage"]);
+    expect(headers()).not.toContain("Claimant's free usage");
+    expect(JSON.parse(stored.get("spya.admin.vouchers.hiddenColumns") ?? "null")).toEqual(["usage"]);
+    await remount();
+    expect(headers()).not.toContain("Claimant's free usage");
+    /* Every row draws exactly the visible columns — what would catch a column
+       id the row has no drawer for. */
+    const rows = [...host.querySelectorAll("tbody tr")];
+    expect(rows).toHaveLength(3);
+    for (const tr of rows) expect(tr.children).toHaveLength(headers().length);
+    expect(rowFor("claimed@example.test")?.textContent).not.toContain("free allowance");
+  });
+
+  /* Sol F2: the row's edit state must travel with its voucher. Keyed by
+     position, the half-made edit would stay on the top row and save itself
+     over whichever voucher had moved there. */
+  for (const hidden of [null, "Note to them"] as const) {
+    it(`keeps a half-made edit with its voucher when a re-sort moves the row${hidden ? `, with ${hidden} hidden` : ""}`, async () => {
+      await mount();
+      if (hidden) await hideFromMenu(hidden);
+      const waiting = rowFor("waiting@example.test");
+      expect(order()[0]).toBe("waiting@example.test");
+      await act(async () => buttonIn(waiting, "Edit")?.click());
+      await typeInto(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]'), "edited mid-sort");
+
+      await click(headerButton("Email"));
+      /* Moved from first to last, and still being edited. */
+      const drawn = [...host.querySelectorAll("tbody tr")];
+      expect(drawn.indexOf(waiting as HTMLTableRowElement)).toBe(2);
+      expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]')?.value).toBe(
+        "edited mid-sort",
+      );
+
+      await act(async () => buttonIn(waiting, "Save")?.click());
+      await settle();
+      expect(calls.filter((c) => c.method === "PATCH")).toEqual([
+        { method: "PATCH", url: `/api/admin/vouchers/${WAITING}`, body: { note: "edited mid-sort" } },
+      ]);
+    });
+  }
 });

@@ -18,9 +18,13 @@
  * add page and the article's sharing card rather than a copy of either. This
  * page never asks for, holds or shows a private link's key.
  *
- * A plain table rather than `DataTable`: there are few vouchers, one order
- * (newest first, the server's), and a row that turns into a form, which a
- * TanStack cell renderer would make harder to read rather than easier.
+ * **The *Given* table is a `DataTable`** since plan 261021i — sorted from its
+ * headers and chips with the sort in `?by=&dir=` beside `?tab=`, columns
+ * hidden from the Columns menu — **with a row the page draws itself**
+ * (`renderRow`). It was a plain table until then, because a row that turns
+ * into a form keeps its state in the row, and TanStack's cell renderers draw
+ * each cell on its own; `renderRow` hands the row back to the page while the
+ * headers, sorting and hiding stay `DataTable`'s.
  *
  * **Three tabs since plan 261020ab** — Greg, 2026-10-20 (spya-vyddks): *"This
  * page is now quite long and messy. Perhaps add tabs at the top to divide
@@ -42,6 +46,8 @@ import {
 } from "react";
 import { RefreshCw } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+
+import type { Row } from "@tanstack/react-table";
 
 import type { AdminUser } from "../admin.js";
 import { AUTHOR_GIFT_PARAM } from "../admin-author-gifts.js";
@@ -72,13 +78,21 @@ import {
   useStarterShelf,
 } from "./admin-vouchers-parts.js";
 import { Shell } from "./AdminPage.js";
+import {
+  ADMIN_VOUCHERS_CHIP_ORDER,
+  isVoucherColumnId,
+  VOUCHER_COLUMNS,
+  type VoucherColumnId,
+} from "./admin-vouchers-columns.js";
 import { Button } from "./components/ui/button.js";
-import { PINNED } from "./lib/DataTable.js";
+import { ColumnsMenu, DataTable, type RowDress, SortChips } from "./lib/DataTable.js";
 import { SignedInReader } from "./lib/made-for.js";
-import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
+import { useUrlSortedTable } from "./lib/useUrlSortedTable.js";
+import { adminVouchersByParam } from "./params.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { exactly } from "./relative-time.js";
 import { ADMIN_HREF, addHref, readHref } from "./router.js";
+import type { HiddenColumnKeys } from "./shelf-hidden-columns.js";
 import {
   type AdminVoucherRow,
   type CreateAnswer,
@@ -93,11 +107,21 @@ import { type UseAdminUsers, useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
 
-/** The table's name: its caption, and its scroll box's while it scrolls. */
-const CAPTION = "Every gift voucher, newest first";
+/**
+ * The table's name: its caption, and its scroll box's while it scrolls.
+ * Order-neutral, since the reader chooses the order now (it said "newest
+ * first" until plan 261021i).
+ */
+const CAPTION = "Every gift voucher";
 
-const CELL = "tw:px-3 tw:py-2 tw:align-top tw:first:pl-4 tw:last:pr-4";
-const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-medium tw:text-muted-foreground`;
+/** Where the *Given* table's hidden columns are remembered — the users table's mechanism, under keys of its own. */
+export const ADMIN_VOUCHERS_COLUMN_KEYS: HiddenColumnKeys = {
+  hidden: "spya.admin.vouchers.hiddenColumns",
+  shown: "spya.admin.vouchers.shownColumns",
+};
+
+/** Module scope — lib/useUrlSortedTable.ts § The identity contract. */
+const voucherId = (v: AdminVoucherRow) => v.id;
 
 /** The default a new voucher offers: Greg's own example, *"e.g. 20 free articles"*. */
 const DEFAULT_ARTICLES = 20;
@@ -1040,19 +1064,47 @@ export function accountForVoucher(
   return only ? { id: only.id, usage: { kind: "loaded", user: only } } : null;
 }
 
+/**
+ * Each cell's classes beyond what `DataTable` dresses it in. The `min-w-*` on
+ * the wordy columns are what make the table scroll in its box rather than
+ * squeezing an address to two characters a line (plan 261001m); the Email
+ * column is narrower on a phone, where it is held and cannot be scrolled past
+ * (plan 261019o).
+ */
+const CELL_EXTRA: Record<VoucherColumnId, string> = {
+  email: "tw:min-w-40 tw:sm:min-w-48 tw:break-all",
+  articles: "",
+  recipientNote: "tw:min-w-48",
+  note: "tw:min-w-32",
+  created: "",
+  status: "tw:min-w-48",
+  usage: "tw:min-w-56",
+  actions: "",
+};
+
+/**
+ * **One voucher's row, drawn by the page rather than by `DataTable`**
+ * (`renderRow`, plan 261021i § Stage 2): it turns into a form, and the edit
+ * state, the focus refs and the form id are the row's, not any one cell's.
+ * `DataTable` keys it by the voucher's id, so a re-sort carries a half-made
+ * edit with its voucher.
+ */
 function VoucherRow({
-  voucher,
+  row,
+  dress,
   update,
   retry,
   now,
   account,
 }: {
-  voucher: AdminVoucherRow;
+  row: Row<AdminVoucherRow>;
+  dress: RowDress;
   update: UseAdminVouchers["update"];
   retry: UseAdminVouchers["retry"];
   now: number;
   account: RowAccount | null;
 }) {
+  const voucher = row.original;
   const [editing, setEditing] = useState(false);
   const [articles, setArticles] = useState(String(voucher.articles));
   const [note, setNote] = useState(voucher.note ?? "");
@@ -1131,18 +1183,20 @@ function VoucherRow({
     if (await send(patch)) setEditing(false);
   }
 
-  return (
-    <tr className={`tw:border-b tw:border-border/60 tw:last:border-0 ${revoked ? "tw:text-muted-foreground" : ""}`}>
-      {/* Held at the left while the notes and statuses scroll (plan 261019o),
-          and narrower on a phone, where it cannot be scrolled past. */}
-      <td className={`${CELL} ${PINNED} tw:min-w-40 tw:sm:min-w-48 tw:break-all`}>
+  const formId = `voucher-${voucher.id}`;
+  /* One drawer per column, built here so they close over the row's state.
+     A `Record` over the ids, so a column added to `VOUCHER_COLUMN_IDS` and
+     not drawn here is a compile error (admin-vouchers-columns.tsx). */
+  const cells: Record<VoucherColumnId, () => ReactNode> = {
+    email: () => (
+      <>
         {editing && unclaimed ? (
           <input
             ref={firstField}
             type="email"
             aria-label="Email address"
             enterKeyHint="done"
-            form={`voucher-${voucher.id}`}
+            form={formId}
             value={email}
             onChange={(e) => {
               /* `Name <a@b>` pasted keeps the address and fills an empty name (plan 261011k). */
@@ -1167,7 +1221,7 @@ function VoucherRow({
             aria-label="Their name"
             enterKeyHint="done"
             autoComplete="off"
-            form={`voucher-${voucher.id}`}
+            form={formId}
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
             className={`${INPUT} tw:mt-1 tw:block tw:w-36 tw:sm:w-56`}
@@ -1178,75 +1232,78 @@ function VoucherRow({
           )
         )}
         <StarterLine starter={voucher.starter} />
-      </td>
-      <td className={`${CELL} tw:text-right tw:tabular-nums`}>
-        {editing ? (
-          <input
-            ref={unclaimed ? undefined : firstField}
-            type="number"
-            aria-label="Articles"
-            enterKeyHint="done"
-            form={`voucher-${voucher.id}`}
-            min={1}
-            max={1000}
-            step={1}
-            value={articles}
-            onChange={(e) => setArticles(e.target.value)}
-            className={`${INPUT} tw:w-20`}
+      </>
+    ),
+    articles: () =>
+      editing ? (
+        <input
+          ref={unclaimed ? undefined : firstField}
+          type="number"
+          aria-label="Articles"
+          enterKeyHint="done"
+          form={formId}
+          min={1}
+          max={1000}
+          step={1}
+          value={articles}
+          onChange={(e) => setArticles(e.target.value)}
+          className={`${INPUT} tw:w-20`}
+        />
+      ) : (
+        voucher.articles
+      ),
+    recipientNote: () =>
+      editing ? (
+        <>
+          <textarea
+            aria-label="Note to them"
+            form={formId}
+            rows={3}
+            value={recipientNote}
+            onChange={(e) => setRecipientNote(e.target.value)}
+            className={`${TEXTAREA} tw:w-56`}
           />
-        ) : (
-          voucher.articles
-        )}
-      </td>
-      <td className={`${CELL} tw:min-w-48`}>
-        {editing ? (
-          <>
-            <textarea
-              aria-label="Note to them"
-              form={`voucher-${voucher.id}`}
-              rows={3}
-              value={recipientNote}
-              onChange={(e) => setRecipientNote(e.target.value)}
-              className={`${TEXTAREA} tw:w-56`}
-            />
-            {/* The email is frozen when it is queued (plan 261001p), so an
-                edit here changes what a later email to a new address says,
-                and nothing already sent or waiting. */}
-            <p className="tw:m-0 tw:mt-1 tw:max-w-56 tw:text-xs tw:text-muted-foreground">
-              Changing it does not resend the email. A new address would get the new note. The same
-              goes for their name.
-            </p>
-          </>
-        ) : (
-          <span className="tw:whitespace-pre-wrap tw:break-words">{voucher.recipientNote ?? ""}</span>
-        )}
-      </td>
-      <td className={`${CELL} tw:min-w-32`}>
-        {editing ? (
-          <input
-            type="text"
-            aria-label="Private note"
-            enterKeyHint="done"
-            form={`voucher-${voucher.id}`}
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className={`${INPUT} tw:w-48`}
-          />
-        ) : (
-          <span className="tw:text-muted-foreground">{voucher.note ?? ""}</span>
-        )}
-      </td>
-      <td className={`${CELL} tw:whitespace-nowrap`}>{readableDate(voucher.createdAt) ?? "—"}</td>
-      <td className={`${CELL} tw:min-w-48`}>
+          {/* The email is frozen when it is queued (plan 261001p), so an
+              edit here changes what a later email to a new address says,
+              and nothing already sent or waiting. */}
+          <p className="tw:m-0 tw:mt-1 tw:max-w-56 tw:text-xs tw:text-muted-foreground">
+            Changing it does not resend the email. A new address would get the new note. The same
+            goes for their name.
+          </p>
+        </>
+      ) : (
+        <span className="tw:whitespace-pre-wrap tw:break-words">{voucher.recipientNote ?? ""}</span>
+      ),
+    note: () =>
+      editing ? (
+        <input
+          type="text"
+          aria-label="Private note"
+          enterKeyHint="done"
+          form={formId}
+          maxLength={500}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className={`${INPUT} tw:w-48`}
+        />
+      ) : (
+        <span className="tw:text-muted-foreground">{voucher.note ?? ""}</span>
+      ),
+    created: () => readableDate(voucher.createdAt) ?? "—",
+    status: () => (
+      <>
         <Status v={voucher} account={account} now={now} />
         {voucher.emails.gift && <EmailLine label="Email to them" email={voucher.emails.gift} now={now} retry={retry} />}
         {voucher.emails.claimed && (
           <EmailLine label="Email to you" email={voucher.emails.claimed} now={now} retry={retry} />
         )}
-      </td>
-      <td className={`${CELL} tw:min-w-56`}>{usage(voucher)}</td>
-      <td className={CELL}>
+      </>
+    ),
+    usage: () => usage(voucher),
+    /* **The form is here, and every input above reaches it by `form=`** —
+       which is why this column cannot be hidden. */
+    actions: () => (
+      <>
         {refusal && (
           <p role="alert" className="tw:m-0 tw:mb-2 tw:text-xs tw:text-danger">
             {refusal}
@@ -1258,11 +1315,7 @@ function VoucherRow({
           </p>
         )}
         {editing ? (
-          <form
-            id={`voucher-${voucher.id}`}
-            onSubmit={(e) => void save(e)}
-            className="tw:flex tw:flex-wrap tw:gap-2"
-          >
+          <form id={formId} onSubmit={(e) => void save(e)} className="tw:flex tw:flex-wrap tw:gap-2">
             <button type="submit" disabled={busy} className={`${BUTTON} tone-positive`}>
               {busy ? "Saving…" : "Save"}
             </button>
@@ -1285,7 +1338,33 @@ function VoucherRow({
             </button>
           </div>
         )}
-      </td>
+      </>
+    ),
+  };
+
+  /* `DataTable`'s cell is one quiet line (`FIXED_CELL`); this table's cells
+     are the ordinary size and wrap, and a revoked voucher is greyed. Said on
+     an element inside the cell, because two utilities for one property on one
+     element are ordered by Tailwind's stylesheet, not by the class string
+     (DataTable.tsx § `RowDress`). Created keeps the cell's single line. */
+  const voice = (id: VoucherColumnId) =>
+    `tw:text-sm ${revoked ? "tw:text-muted-foreground" : "tw:text-foreground"} ${
+      id === "created" ? "" : "tw:whitespace-normal"
+    }`;
+
+  return (
+    <tr {...dress.rowProps}>
+      {row.getVisibleCells().map((cell) => {
+        const id = cell.column.id;
+        /* Unreachable while the definitions are typed by the same tuple; a
+           test counts the cells against the headers in case it ever is not. */
+        if (!isVoucherColumnId(id)) return null;
+        return (
+          <td key={cell.id} className={`${dress.cellClass(id)} tw:align-top ${CELL_EXTRA[id]}`}>
+            <div className={voice(id)}>{cells[id]()}</div>
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -1477,6 +1556,18 @@ export function AdminVouchersPage() {
 
   const waiting = giftsWaiting(gifts.gifts);
 
+  /* `?by=&dir=` beside `?tab=` and `?gift=`: each key is its own `useQueryState`,
+     so a sort leaves the tab alone and a tab chosen by hand leaves the sort.
+     Read on every tab, drawn only on Given. `vouchers` is the hook's state, so
+     its identity holds between reads (the identity contract). */
+  const { table, rows } = useUrlSortedTable({
+    data: vouchers,
+    columns: VOUCHER_COLUMNS,
+    rowId: voucherId,
+    byParam: adminVouchersByParam,
+    hiddenColumnKeys: ADMIN_VOUCHERS_COLUMN_KEYS,
+  });
+
   return (
     <Shell title="Gift vouchers" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
       <VoucherTabs
@@ -1554,67 +1645,52 @@ export function AdminVouchersPage() {
           <span className="tw:text-xs tw:text-muted-foreground">
             {vouchers === null ? "" : vouchers.length === 1 ? "1 voucher" : `${vouchers.length} vouchers`}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              void reload();
-              void accounts.reload();
-            }}
-            disabled={loading || accounts.loading}
-            aria-label="Refresh the vouchers"
-            data-tip="Refresh the vouchers and their accounts"
-            data-tip-describes="off"
-            className={BUTTON}
-          >
-            <RefreshCw size={12} />
-            {loading || accounts.loading ? "Loading…" : "Refresh"}
-          </button>
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+            {/* Always drawn, like /admin/users': it is the only way back to a
+                hidden column. */}
+            <ColumnsMenu table={table} />
+            <button
+              type="button"
+              onClick={() => {
+                void reload();
+                void accounts.reload();
+              }}
+              disabled={loading || accounts.loading}
+              aria-label="Refresh the vouchers"
+              data-tip="Refresh the vouchers and their accounts"
+              data-tip-describes="off"
+              className={BUTTON}
+            >
+              <RefreshCw size={12} />
+              {loading || accounts.loading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
         </div>
+        {vouchers !== null && vouchers.length > 0 && (
+          <div className="tw:mb-3">
+            <SortChips table={table} order={ADMIN_VOUCHERS_CHIP_ORDER} />
+          </div>
+        )}
 
         {vouchers === null ? null : vouchers.length === 0 ? (
           <p className="tw:text-sm tw:text-muted-foreground">No vouchers yet.</p>
         ) : (
-          /* `relative` because the caption and the Actions header are `sr-only`,
-             which is `position: absolute`: with no positioned ancestor they were
-             laid out against the table's full width rather than clipped by this
-             box, and the whole page scrolled sideways by 336px at 390. The same
-             bug and fix as DataTable.tsx § the scroll box. The `min-w-*` on the
-             wordy columns are what make the table scroll in here rather than
-             squeezing an address to two characters a line. Plan 261001m.
-
-             The shared box without its shade, so it is measured and takes
-             keyboard focus while the table is wider than it (plan 261006h). */
-          <SidewaysScrollBox label={CAPTION} cue={false}>
-            <table className="tw:w-full tw:border-collapse tw:text-sm">
-              <caption className="tw:sr-only">{CAPTION}</caption>
-              <thead>
-                <tr className="tw:border-b tw:border-border">
-                  <th className={`${HEAD} ${PINNED}`}>Email</th>
-                  <th className={`${HEAD} tw:text-right`}>Articles</th>
-                  <th className={HEAD}>Note to them</th>
-                  <th className={HEAD}>Private note</th>
-                  <th className={HEAD}>Created</th>
-                  <th className={HEAD}>Status</th>
-                  <th className={HEAD}>Claimant's free usage</th>
-                  <th className={HEAD}>
-                    <span className="tw:sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {vouchers.map((v) => (
-                  <VoucherRow
-                    key={v.id}
-                    voucher={v}
-                    update={update}
-                    retry={retry}
-                    now={now}
-                    account={accountForVoucher(v, accounts)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </SidewaysScrollBox>
+          <DataTable
+            table={table}
+            rows={rows}
+            caption={CAPTION}
+            pinFirst
+            renderRow={(row, dress) => (
+              <VoucherRow
+                row={row}
+                dress={dress}
+                update={update}
+                retry={retry}
+                now={now}
+                account={accountForVoucher(row.original, accounts)}
+              />
+            )}
+          />
         )}
       </TabPanel>
     </Shell>

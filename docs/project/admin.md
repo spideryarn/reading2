@@ -987,7 +987,13 @@ no link, *Make one on its page* to its Access & sharing card. Create waits while
 could not be linked, and the page never asks for the key
 ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md); the table shows the
 starter's title under the address, and a readdress whose new email had to go without it says so) — over
-a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
+the *Given* table. Since 2026-10-21 that is a [`DataTable`](../../src/web/lib/DataTable.tsx) whose
+rows the page draws itself (`renderRow`), because each row turns into a form and keeps its state in
+the row: every column but the claimant's usage and Actions sorts from its header or a chip, newest
+first by default, the sort in `?by=&dir=` beside `?tab=`; Status ranks claimed, waiting, then
+revoked (a revoked claim counts as revoked); any column but Email and Actions can be hidden — Actions
+holds the edit form the other cells' inputs belong to
+([261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md)). Each
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
 Edit offers the address only while the voucher waits, and a save sends only the fields that changed.

@@ -216,11 +216,15 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
   the URL. `pinFirst` holds its first column while it scrolls sideways; a hand-drawn table puts
-  `PINNED` from the same file on its first `<th>` and `<td>`s, as every `/admin` table does
-  ([261019o](../plans/261019o-admin-tables-freeze-the-first-column.md)).
+  `PINNED` from the same file on its first `<th>` and `<td>`s, as `/admin/costs`' do
+  ([261019o](../plans/261019o-admin-tables-freeze-the-first-column.md)). `renderRow` lets a page
+  draw its own `<tr>` — for a row whose cells share state, like `/admin/vouchers`' that turns into
+  a form — dressed by the same `cellClass` as the default row and keyed by `DataTable`, so a
+  re-sort carries the row's state with it
+  ([261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md)).
 - **`src/web/lib/useUrlSortedTable.ts` § `useUrlSortedTable`** — the wiring around it for a page:
   `?by=&dir=` both ways, hidden columns remembered under the page's keys, missing primary keys
-  sunk. `/admin/users` and `/admin/articles` use it; a new `?by=` parser comes from
+  sunk. `/admin/users`, `/admin/articles` and `/admin/vouchers` use it; a new `?by=` parser comes from
   `params.ts` § `byParam`. Its identity contract (memoised `data` and `columns`, a module-scope
   `rowId`) is the render-loop rule — [261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md).
 - **`src/web/lib/SidewaysScrollBox.tsx` § `SidewaysScrollBox`, `useScrollBox`** — the box a wide
