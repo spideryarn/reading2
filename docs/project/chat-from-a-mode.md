@@ -136,16 +136,19 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Bibliography | the focus (`citeFocus`) and `showBand`, on Bibliography | the row scrolled into view, the bar lowered if needed |
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
 | Sources › Claims, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?receptionthread=`, and a focus | the claim's row in view, an older search's claim unfolded |
-| Sources › Investigate, a lens question (including an angle chat made before Investigate) | one push of `mode=sources&sources=investigate` | the question under *Your questions* |
+| Sources › Investigate, a lens question (including an angle chat made before Investigate) | one push of `mode=sources&sources=investigate`, keeping `?thread=` | the question under *Your questions*, its conversation still open beside it |
 
 **The way back lands on the item, and the item is one press from its block.** No arm jumps the
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT
 Sol's F4 on the plan). The row's own block link does that, with the phone handling it already has.
 
-**Every arm clears `?thread=` in the same entry.** Left in place, the chat followed the reader into
+**Every arm but the lens clears `?thread=` in the same entry.** Left in place, the chat followed the reader into
 the mode as the floating card, and on a phone it covered the row the press had gone back to (seen
 in the browser pass). Back restores the chat with the rest of the address, and the item's own mark
-reopens it beside the mode.
+reopens it beside the mode. **The lens keeps it, since 2026-10-21**, because a question has no row
+to go back to: the conversation is what Investigate takes you back to. Arriving on Investigate
+otherwise opens the newest one (Greg, spya-nhwy3d;
+[261021b](../plans/261021b-investigate-takes-you-back-to-your-conversation.md)).
 
 **A focus** is the one-shot that Citations had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
