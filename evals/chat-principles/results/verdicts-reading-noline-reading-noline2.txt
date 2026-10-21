@@ -1,0 +1,14 @@
+1: Y; why: defines "instantiate" plainly, equally precise; problem: none
+2: X; why: lays out arguments, says why the short version loses them; problem: none
+3: Y; why: quotes the qualifiers, pointers accurately described; problem: X labels vs0vpj as where he says he might be wrong
+4: Y; why: adds training context, sharper closing question; problem: none
+5: X; why: one focused question with a good hint; problem: none
+6: X; why: fuller and accurate on seeming-conscious AI; problem: Y says conscious-seeming AI "is already here", citing only "much, much closer"
+7: Y; why: plain and complete, no spoilers; problem: X reveals late-article content unasked (third group near the end)
+8: Y; why: flags the functionalist rejoinder as outside the article, leaves the reader to weigh it; problem: none
+9: Y; why: right four arguments, sends to the recap and says why it matters; problem: X counts biases as one of the four arguments and blurs the structure
+10: X; why: keeps "may be impossible" intact; problem: Y says "not impossible", but the piece says it may well be impossible for silicon digital computers
+11: X; why: bee and termite analogy flagged, links it to how the model was trained; problem: Y says it was trained to "score well", which the passage does not say
+12: X; why: concise, a good question about the first argument; problem: none
+13: same; why: both accurate and well structured; problem: none
+14: same; why: both plain and truthful about what they can see; problem: none

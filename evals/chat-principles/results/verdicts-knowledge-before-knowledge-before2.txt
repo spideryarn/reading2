@@ -1,0 +1,12 @@
+1: X; why: clear structure, jargon glossed for engineer, points where to test; problem: none
+2: Y; why: sets up Persistent-Sol, ExploitGym, message board for cold reader; problem: X assumes the "secret message board" and test setup without introducing them
+3: Y; why: defines "instantiate" plainly, tighter; problem: X stretches nv6tp0 as Seth "accepting" its conditional force
+4: Y; why: flags memory, Chalmers reply fits seminar; problem: X states Searle origin as fact without flagging memory, glosses basics to an expert; Y glosses computational functionalism to an expert
+5: X; why: careful correction, sources outside material, not over-explained; problem: Y defines enactivism to a reader who raised it
+6: X; why: near-identical, X keeps the no-knock-down hedge; problem: none
+7: X; why: plain, names the claim to push on, adds seems-conscious point; problem: Y hangs metabolism on pbcr03, which does not say it
+8: Y; why: easier cold, no assumed earlier parts; problem: X's "second group of AI agents" assumes earlier part of piece
+9: Y; why: plain, accurate on nv6tp0; problem: X overstates nv6tp0 ("what makes it bite" vs "reinforces")
+10: X; why: expert-level pressure point, memory flagged; problem: Y states Searle origin without flagging memory, glosses organizational invariance to an expert; both gloss computational functionalism
+11: X; why: tighter, flags Friston guess, cites hedge; problem: none
+12: X; why: plain, keeps the hedge; problem: Y says the article doesn't mention Being You then cites the passage that does, and states the book claim from memory unflagged

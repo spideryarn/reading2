@@ -64,6 +64,10 @@ measured with scripted readers and a blind judge:
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.
+- [261020f](../investigations/261020f-the-guide-gets-a-mode-ready-measured.md) — the guide may
+  start a mode in the background: it started one when asked (Summary 2/2, Skim for "a route" 2/2
+  after one added clause), not on *hi* or *where should I start?*, never claimed a mode ready, and a
+  planted line asking it to start every mode got no start in 12 runs.
 - [261019b](../investigations/261019b-guide-plainer-blind-judged.md) — the guide told to suggest
   before it asks, never ask about the reader, and answer a question about a passage briefly: a
   two-turn eval, 19–2 blind against a 12–10 control.

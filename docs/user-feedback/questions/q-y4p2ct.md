@@ -1,10 +1,11 @@
 ---
 id: q-y4p2ct
 report: spya-yt2v73
-status: open
+status: answered
 asked: 2026-10-19
 title: May the guide start making a mode in the background, without you pressing anything?
 refs: qi-g6ryjr9y · docs/plans/261019p-guide-chat-plainer.md § Stage 2 · docs/user-feedback/261019_1944-guide-chat-plainer-less-nagging.md · SPIDERYARN-READING2-M3
+acted: spya-tgeg6v
 ---
 You asked for the guide to get modes ready in the background, so they are made by the time the reader opens them, but never to switch to them. Today nothing the guide suggests runs until the reader presses its button, and that rule is written down as one of our defences. So I have built the rest of your three reports and stopped here.
 
@@ -27,3 +28,13 @@ What A would look like in use. The reader says "I'm deciding whether to cite thi
 The Skim route "based on what they're saying". Skim already reads the reader's saved reason for reading when it plans a route, and the guide already saves a reason the reader types. So under A, "prepare Skim" after their reason is saved gives a route shaped by what they said. One catch: it must not start in the same turn as a new reason is offered, or it would be planned from the old one and immediately go out of date. A route steered by something narrower than their reason ("just the methods") would be new work in Skim itself, and I have left it out for now.
 
 What would decide it: whether you are comfortable with the guide spending a little money on its own judgement (A), or want every spend to stay behind a press (B or C).
+
+## Greg's answer, 2026-10-20 16:23 UTC (in the Feedback dialog, reply `spya-tgeg6v`)
+
+> Maybe we make it an option, so the Guide has the option to do A, but there's a minimal explanation in the prompt that this incurs expense, so if it's not confident that the user will want it, it just does B
+>
+> Perhaps for important/common modes (e.g. Structure, Summary, etc), the threshold is lower, i.e. the Guide is more willing to kick them off?
+>
+> Use your judgment - let's not make this tooo complicated.
+
+Acted on 2026-10-20: both, as one new kind of next step, docs/plans/261019p-guide-chat-plainer.md § Stage 2b. The guide offers "Get Skim ready" (B); when it is confident, it marks it to start at once and the page presses it for the reader, once a conversation, only after a message they typed (A). The prompt says it costs money and to start one more readily for Summary and Skim. Structure needs nothing: it is the outline, always there. A "plan me a route" now starts Skim, planned around their saved reason. Accepted as risk R30.

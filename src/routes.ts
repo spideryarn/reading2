@@ -436,6 +436,7 @@ import { errorFields, log, since } from "./log.js";
 import { type CitedCandidate, withCitedInSpideryarn } from "./cited-in-spideryarn.js";
 import { authoredSentence, sayToReader } from "./reader-sentence.js";
 import { otherConversationsSection, readerNotesDigest } from "./reader-notes.js";
+import { readingSoFarLine } from "./reading-so-far.js";
 import { gistOf, type ChatGistGateway } from "./chat-gist.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
@@ -446,6 +447,8 @@ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
+import { prepareMode } from "./prepare-mode.js";
+import { MODE_PREPARATION_ALREADY_CLAIMED, preparable } from "./preparable-modes.js";
 import { parseStaleNoticeDismissal, type StaleNoticesResponse } from "./stale-notice.js";
 import {
   type ArticleStage,
@@ -3205,6 +3208,33 @@ async function exploreNotes(
 }
 
 /**
+ * **How much of the piece the reader has read, as the line a chat turn is
+ * told** — `readingSoFarLine` in src/reading-so-far.ts, plan
+ * docs/plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md.
+ *
+ * `exploreNotes`' rules: the store answers for the signed-in owner only, and
+ * a failed read costs the line, not the turn — and sends no line rather than
+ * "little or none", since a failed read is not a reader who has read nothing.
+ * Logged: the slug alone, never the share.
+ */
+async function chatReadingSoFar(slug: string, blocks: readonly Block[]): Promise<string | null> {
+  try {
+    return readingSoFarLine(await readingTimeStore.read(slug), blocks);
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "chat: could not read the reader's reading time; answering without it",
+    );
+    return null;
+  }
+}
+
+/**
  * **The reader's other conversations on this article, for a typed Chat turn**
  * — `otherConversationsSection` in src/reader-notes.ts, plan
  * docs/plans/261008e-chat-knows-the-reader-s-other-conversations.md. `null`
@@ -4017,6 +4047,13 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     /* Read once for the whole turn: the joined string for the prompt, and its
        fields for a guide's offers (`saved` below). */
     const profileParts = wantsProfile ? await resolveProfileParts(slug) : null;
+    /* **How much of the piece they have read**, for every kind but candidates
+       — Greg's answer to q-rwkq2e, plan 261020ac. Gated on the stored kind,
+       not on `wantsProfile`, which is about different data (GPT Sol's plan
+       review, F6). Once per turn, so every tool round sends the same line. A
+       read that fails sends no line rather than "little or none": a failed
+       read and nothing read are different facts. */
+    const reading = thread.kind === "candidates" ? null : await chatReadingSoFar(slug, article.blocks);
     for await (const event of converse({
       power: powerOf(article),
       meta: article.meta,
@@ -4041,6 +4078,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
       profile: profileParts === null ? null : renderProfile(profileParts),
+      reading,
       /* **And the same read, field by field, on a guide turn**: what
          `offer_to_save` records as an offer's basis, so a card pressed after
          the words changed saves nothing (plan 261009q). A shelf that could
@@ -12205,6 +12243,43 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       res.statusCode = 204;
       res.end();
+    },
+  },
+
+  /* **Get a mode ready without opening it** — the guide's `prepare` step,
+     pressed by the reader (*Get Skim ready*) or, for a step the guide marked
+     `now`, by the page itself, once (plan 261019p § Stage 2b, Greg's reply to
+     q-y4p2ct). Body `{ mode, threadId, now }`. `now: true` first claims the
+     guide thread's one automatic start, atomically, and a second is a 409: two
+     tabs, a retry or an edit cannot pass it (GPT Sol's F3 on the plan). Then
+     `prepareMode`, which starts the band's own job through `enqueue` (owner
+     scope, minimal papers, an identical job handed back) or answers that the
+     mode is made. Answers `{ status: "ready" }` or `{ status: "started", job }`;
+     the page hands the job to its engine, which is all that drives one on
+     Vercel. Free in slots, like any re-run on an article on the shelf. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/guide-prepare\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const { mode, threadId, now } = ((await readBody(req)) ?? {}) as Record<string, unknown>;
+      if (typeof mode !== "string" || preparable(mode) === undefined) {
+        throw httpError(400, "Expected { mode } naming a mode that can be prepared.");
+      }
+      if (now === true) {
+        if (typeof threadId !== "string") throw httpError(400, "Expected { threadId } with now.");
+        if (!(await chatStore.claimModePreparation(at, threadId))) {
+          throw httpError(409, MODE_PREPARATION_ALREADY_CLAIMED);
+        }
+      }
+      const prepared = await prepareMode(at, mode, await resolveProfile(at));
+      send(
+        res,
+        prepared.status === "started" ? 202 : 200,
+        prepared.status === "started" ? { status: "started", job: publicJob(prepared.job) } : prepared,
+      );
     },
   },
 

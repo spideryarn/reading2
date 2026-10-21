@@ -217,14 +217,25 @@ export function PrivacyPage() {
               then the bullet said "with experimental features on", which was
               when it was kept. There is no control yet to turn it off or erase
               it, and the bullet promises none.
+              **Since 2026-10-20 a chat is told roughly how much of the article
+              has been read** — one coarse phrase from these totals, never which
+              parts (Greg's answer to q-rwkq2e; src/reading-so-far.ts). "When
+              you chat", not a list of the four kinds or the failed-read case:
+              Greg, 2026-10-01, wanted the page free of which-mode detail, and
+              Candidates (a find-reviewers tool, not a chat about your reading)
+              and a turn with no figure make it no less true. The precise list
+              is docs/project/privacy.md § Reading time. Anything finer sent to
+              a model rewrites this sentence first.
               docs/project/privacy.md § Reading time. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
             articles</strong> — a running total of the seconds each
             passage has been on your screen. Some of Spideryarn’s features use it — to show you
             where you have been, for example. We keep the totals, not a history of which passages
-            you read when (our ordinary server logs do show when an update arrived). It is not shown
-            to anybody reading an article you have shared, and it goes when the article does.
+            you read when (our ordinary server logs do show when an update arrived). When you chat
+            about one of your articles, the AI model is told roughly how much of it you have read —
+            “about a quarter”, say — and nothing about which parts. It is not shown to anybody
+            reading an article you have shared, and it goes when the article does.
           </li>
           {/* **Since 2026-10-20**: `article_open_times`, so that Active days on
               /admin/users counts a day spent only reading — Greg's answer to
@@ -539,7 +550,8 @@ export function PrivacyPage() {
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5-5</code> (<code>claude-sonnet-5</code>{" "}
           until 9 October 2026) for most of the reading
-          aids, chat and search, and for the guide in Chat, which is also told roughly how many other
+          aids, chat and search (a chat about one of your articles is also told roughly how much of
+          it you have read), and for the guide in Chat, which is also told roughly how many other
           articles you have opened here (none, a few, or many), and Opus or a similar frontier model in its place on an article
           switched to High-powered AI; <code>gpt-6-luna</code> (<code>gpt-5.6-luna</code> until 9 October 2026, and
           still to check a summary’s paragraphs against the passages they cite)

@@ -46,6 +46,11 @@ const SHARED = new Set([
      two cannot disagree. Imports only types. See src/next-steps.ts and plan
      261009u. */
   "next-steps.js",
+  /* The fixed list of modes the guide may get ready, with their display
+     names: next-steps.js checks a prepare step against it, and the page draws
+     the button from it. Imports only types. See src/preparable-modes.ts and
+     plan 261019p § Stage 2b. */
+  "preparable-modes.js",
   /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
      the server applies to the model's answer and the panel applies again to
      the stored one, so the two cannot drift. Imports `types.js` and `ids.js`

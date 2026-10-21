@@ -568,6 +568,10 @@ the conversation went. Two pieces fix that:
   (Explore) or have no tool to open a conversation with. The rows share `THREADS_CHARS`, raised to
   5,000 for the longer rows; with the sentences around them the section is under 6,000 characters,
   a few hundred tokens for a reader with a handful of conversations.
+- **READING SO FAR**, in the final user message of every kind but Candidates: one coarse phrase
+  for how much of the piece the owner has read, with its rule beside it (pitch silently; not the
+  reader saying they read it; asked, say plainly what you are told).
+  [reading-time.md § Who else reads it](reading-time.md#who-else-reads-it).
 
 The prompt's bullet asks for a narrow trigger: open a conversation that took up the same question,
 claim, passage or objection, not one on a nearby topic, and add to it rather than repeat it.
@@ -1339,16 +1343,18 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   give brief answers"*), and Chat and Explore offer About you too, press only
   ([§ Chat and Explore offer to keep an instruction](#chat-and-explore-offer-to-keep-an-instruction-in-about-you)).
 - **Its next steps**, since 2026-10-09: a second tool of its own, **`offer_next_steps`**, which runs
-  nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
+  nothing during the tool call ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
   the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
   reader can send next), `chat` (a question about what the piece says, for a fresh Chat; at most
   one, since 2026-10-12), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
-  search), `share` or `archive`; [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
+  search), `prepare` (a fixed-list mode to make in the background), `share` or `archive`;
+  [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
   server and again on the page, and they ride on the run (`ToolRun.steps`). The page draws the
   latest settled answer's as a row of buttons
   ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)) under a visible *Next steps* heading,
-  **never pressed by the guide**: an ask sends exactly the words on it; *Ask in Chat*, drawn first
+  ordinarily pressed by the reader; the `prepare` exception is below. An ask sends exactly the
+  words on it; *Ask in Chat*, drawn first
   and the one orange button, starts a fresh Chat with exactly its words as the first question,
   through the list box's `onSendNew`, and leaves the guide as it was. Greg, 2026-10-12
   (`spya-es283p`), asked for it, prominent: *"when I watch people using the guide, they often
@@ -1360,7 +1366,8 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   sentence of what kind of piece it is and Summary as a map, never its argument
   ([261019p](../plans/261019p-guide-chat-plainer.md); Greg, `spya-yt2v73`: *"I think maybe they'll
   just get confused/frustrated if the initial chat is weak/limited"*). The chat step's words are
-  the reader's question copied exactly, changed only where it would not stand on its own; a mode is the chip `chipFor` would make; a search is a box the
+  the reader's question copied exactly, changed only where it would not stand on its own; a mode is the chip `chipFor` would make; a **prepare** step
+  (since 2026-10-20, below) is *Get Skim ready*; a search is a box the
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
@@ -1372,6 +1379,37 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   with a tail like *"I'm done with my answer above."*
   ([261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md)). Typed
   only, like `offer_to_save`.
+- **It can get a mode ready in the background**, since 2026-10-20: a seventh step kind,
+  `prepare`, for a mode on a fixed list (`PREPARABLE` in
+  [`src/preparable-modes.ts`](../../src/preparable-modes.ts): Summary's Brief, Fuller and Thread,
+  Glossary, Quotes, Ideas, Skim, Learn's Quiz), which starts the job that mode's own band would
+  start and never opens it
+  ([261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build)).
+
+  > Maybe we make it an option, so the Guide has the option to do A, but there's a minimal
+  > explanation in the prompt that this incurs expense, so if it's not confident that the user
+  > will want it, it just does B
+  >
+  > — Greg, 2026-10-20 (reply `spya-tgeg6v` to q-y4p2ct)
+
+  So the step carries `now`. **`now: false` is a button** the reader presses (*Get Skim ready*);
+  **`now: true` is the one exception to "the reader presses every one"**: the page presses it
+  itself, once, on an answer this tab watched being written, and the button shows what it
+  started. The server keeps `now` only on a typed turn and when no earlier answer in the
+  conversation carried one, and drops any Skim step beside an offer of the reason (its save
+  lands after the answer, so the route would be planned on the old one); the page drops that
+  pair too, whichever order the model wrote them. The press posts `POST /api/guide-prepare/<slug>`,
+  where a `now` press first claims the thread's one automatic start
+  (`chat_threads.mode_prepared_at`, atomic: two tabs, a retry or an edit cannot make a second),
+  and then `prepareMode` ([`src/prepare-mode.ts`](../../src/prepare-mode.ts)) finds the mode
+  made and starts nothing, or queues the band's own job through `enqueue`. A Skim route made for
+  another profile, its notice not dismissed, is planned again, which is Greg's *"generate a
+  Skim-route based on what they're saying"*. A failed start still spends the claim: it fails
+  closed, and the button remains. Most of the list is already made on import
+  (`AUTO_MODE_STEPS`), so on most articles a press finds it made and spends nothing. The prompt
+  says it costs money, to start one only when confident, more readily Summary and Skim, and never
+  to say a mode is ready. The eval is `evals/guide/prepare.ts`; the risk is
+  [R30](security-risks.md#r30).
 - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
   2026-10-09 it asks in the conversation rather than in a box
@@ -1402,7 +1440,8 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   the same in a voice's terms (`SPOKEN_GUIDE`, [live-conversation.md](live-conversation.md)).
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), and **the reader presses every one**: the guide never opens a mode or moves
-  the reader itself. Its prompt prints every mode as *Button* (`modeWordsSection` in
+  the reader itself. (The one press the page makes for it is a `prepare` step marked `now`, above,
+  which starts a mode's generation and opens nothing.) Its prompt prints every mode as *Button* (`modeWordsSection` in
   [`src/guide.ts`](../../src/guide.ts)) and tells it to offer the next step with its button, say
   what pressing it will do, and never say it has opened or done anything.
 

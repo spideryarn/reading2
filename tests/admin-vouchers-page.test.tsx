@@ -10,6 +10,7 @@
  * only while a voucher waits; and a refusal from the server reaches the page in
  * its own words.
  */
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
@@ -35,6 +36,10 @@ const { SignedInReader } = await import("../src/web/lib/made-for.js");
 const { accountUsageFacts } = await import("../src/web/AdminUserCard.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/* The tab is in the address through nuqs (plan 261020ab): mounted under the
+   adapter the app has, as tests/admin-page.test.tsx says why. */
+enableHistorySync();
 
 const WAITING = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const CLAIMED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
@@ -177,6 +182,9 @@ beforeEach(() => {
   listAnswer = VOUCHERS;
   shelfAnswer = SHELF;
   usersAnswer = { status: 200, body: { users: [CLAIMANT] } };
+  /* Most of this file is about the table, which is on the Given tab (plan
+     261020ab); the form's describes below open on Give instead. */
+  history.replaceState(null, "", "/admin/vouchers?tab=given");
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -218,9 +226,11 @@ async function mount() {
   /* Signed in, as App draws every admin page: the starter picker reads this reader's shelf. */
   await act(async () =>
     root.render(
-      <SignedInReader.Provider value="reader-1">
-        <AdminVouchersPage />
-      </SignedInReader.Provider>,
+      <NuqsAdapter>
+        <SignedInReader.Provider value="reader-1">
+          <AdminVouchersPage />
+        </SignedInReader.Provider>
+      </NuqsAdapter>,
     ),
   );
   for (let i = 0; i < 50 && !host.querySelector("tbody tr"); i++) {
@@ -249,11 +259,14 @@ const buttonIn = (el: Element | undefined, label: string) =>
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  history.replaceState(null, "", "/");
 });
 
 describe("/admin/vouchers", () => {
   it("draws one row per voucher, each with its status", async () => {
     await mount();
+    /* `?tab=given`, from beforeEach: the table is on screen, not just in the page. */
+    expect(host.querySelector("table")?.closest("[hidden]")).toBeNull();
     expect(host.querySelectorAll("tbody tr")).toHaveLength(3);
     expect(rowFor("waiting@example.test")?.textContent).toContain("Waiting for sign-up");
     expect(rowFor("waiting@example.test")?.textContent).toContain("met at the conference");
@@ -263,6 +276,23 @@ describe("/admin/vouchers", () => {
     expect(claimed).toMatch(/4 added.*free allowance 13.*9 further private articles/);
     expect(claimed).not.toContain("used of");
     expect(rowFor("revoked@example.test")?.textContent).toContain("Revoked");
+  });
+
+  /* Plan 261020ab (spya-vyddks): the table is its own tab, Given, and the
+     explanation of what a voucher is sits on Give, above the form. */
+  it("puts the table, its count and Refresh under Given, and the explanation and form under Give", async () => {
+    await mount();
+    const panel = (name: string) => {
+      const tab = [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent?.startsWith(name));
+      return host.querySelector(`#${tab?.getAttribute("aria-controls")}`);
+    };
+    expect(panel("Given")?.querySelector("table")).not.toBeNull();
+    expect(panel("Given")?.textContent).toContain("3 vouchers");
+    expect(panel("Given")?.querySelector('[aria-label="Refresh the vouchers"]')).not.toBeNull();
+    expect(panel("Give")?.textContent).toContain("A voucher adds articles");
+    expect(panel("Give")?.querySelector('form[aria-label="New gift"]')).not.toBeNull();
+    expect(panel("Give")?.textContent).not.toMatch(/list at the bottom|table below/);
+    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Give", "Drafts", "Given3"]);
   });
 
   /**
@@ -673,7 +703,9 @@ describe("/admin/vouchers", () => {
   });
 
   describe("creating one", () => {
-    const form = () => host.querySelector('form[aria-label="New gift voucher"]') as HTMLFormElement;
+    /* The form is on Give, the tab the page opens on. */
+    beforeEach(() => history.replaceState(null, "", "/admin/vouchers"));
+    const form = () => host.querySelector('form[aria-label="New gift"]') as HTMLFormElement;
 
     async function fill(email: string) {
       const input = host.querySelector("#voucher-new-email") as HTMLInputElement;
@@ -1091,7 +1123,8 @@ describe("/admin/vouchers", () => {
    * no screen.
    */
   describe("its starter article", () => {
-    const form = () => host.querySelector('form[aria-label="New gift voucher"]') as HTMLFormElement;
+    beforeEach(() => history.replaceState(null, "", "/admin/vouchers"));
+    const form = () => host.querySelector('form[aria-label="New gift"]') as HTMLFormElement;
     const picker = () => host.querySelector("#voucher-new-starter") as HTMLSelectElement;
     const statusLine = () => host.querySelector("#voucher-new-starter-status");
     const createButton = () => form().querySelector('button[type="submit"]') as HTMLButtonElement;
