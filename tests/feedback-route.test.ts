@@ -1172,6 +1172,11 @@ describe("questions for the admin, and replies to them", () => {
     expect((await get(`${EARLIER}?questions=4`)).status).toBe(200);
   });
 
+  it.each(["2026-99-99", "2026-02-30"])("refuses a published row whose asked day is impossible: %s", async (asked) => {
+    publishedAnswer = [{ ...PUBLISHED_QUESTIONS[1]!, asked }];
+    expect((await get(`${EARLIER}?questions=4`)).status).toBe(500);
+  });
+
   it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {
     linkedAnswer = [{ id: "spya-wa2t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?" }];
     newestAnswer = [

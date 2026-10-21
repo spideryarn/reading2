@@ -154,8 +154,8 @@ export type PublishWhich = { all: true } | { ids: readonly string[] };
 
 /**
  * **`--publish`.** Returns the exit code: 0 published or already so, 1 when a
- * question was refused (the others are still written), 2 when nothing could be
- * written. Lines go to `out`; no question's words are printed.
+ * question was refused (the others are still written), 2 when publishing could
+ * not be confirmed. Lines go to `out`; no question's words are printed.
  */
 export async function runPublish(
   connect: () => { client: PublishClient; target: string },
@@ -166,7 +166,9 @@ export async function runPublish(
   const { questions, problems } = compileQuestions(files);
   if (problems.length > 0) {
     out(`${problems.length} question file(s) do not parse, so nothing is published:`);
-    for (const problem of problems) out(`  ${problem}`);
+    /* Parser diagnostics can quote malformed header values, including a
+       credential pasted into the wrong field. Name the file, not its words. */
+    for (const problem of problems) out(`  ${JSON.stringify(problem.split(": ", 1)[0])}: does not parse (file contents withheld)`);
     return 2;
   }
   const chosen = "all" in which ? questions : questions.filter((question) => which.ids.includes(question.id));
@@ -199,11 +201,11 @@ export async function runPublish(
     try {
       const locked = await client.query<StoredQuestion>(LOCK_ROWS_SQL, [rows.map((row) => row.id)]);
       steps = planPublish(rows, locked.rows.map(fromStored));
-      for (const step of steps) {
+      for (const [index, step] of steps.entries()) {
         if (step.kind !== "insert" && step.kind !== "update") continue;
         const row = rows.find((one) => one.id === step.id);
-        if (row === undefined) continue;
-        await client.query(PUBLISH_SQL, [
+        if (row === undefined) throw new Error("planned question has no file");
+        const written = await client.query(PUBLISH_SQL, [
           row.id,
           row.title,
           row.report,
@@ -213,6 +215,13 @@ export async function runPublish(
           row.status,
           [...row.acted],
         ]);
+        /* An absent id cannot be locked: a concurrent insert may have made
+           the SQL refuse this older file after the plan was built. */
+        if (written.rowCount === 0) {
+          steps[index] = { id: row.id, kind: "refused", why: "the published row is newer than this file" };
+        } else if (written.rowCount !== 1) {
+          throw new Error("publishing did not confirm one written row");
+        }
       }
       await client.query("commit");
     } catch (error) {
@@ -238,7 +247,8 @@ export async function runPublish(
     /* A driver's message can carry the connection string; the code cannot. */
     const code = (error as { code?: unknown } | null)?.code;
     const safeCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? ` [${code}]` : "";
-    out(`publishing failed${safeCode}, and nothing was written (other database details withheld)`);
+    /* COMMIT may have succeeded before its acknowledgement was lost. */
+    out(`publishing failed${safeCode} (other database details withheld); confirm with --answers before retrying`);
     return 2;
   } finally {
     await client.end().catch(() => undefined);

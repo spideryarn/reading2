@@ -66,6 +66,7 @@ import {
   FEEDBACK_QUESTION_STATUSES,
   type FeedbackQuestionStatus,
   type PublishedFeedbackQuestion,
+  isCalendarDay,
   isFeedbackQuestionId,
   MAX_FEEDBACK_QUESTION_BODY_CHARS,
   MAX_FEEDBACK_QUESTION_TITLE_CHARS,
@@ -347,13 +348,6 @@ export interface QuestionFile extends CompiledFeedbackQuestion {
   refs?: string;
   /** The ids of Greg's answers an agent has already acted on (`feedback-questions.ts --answers`). */
   acted: string[];
-}
-
-/** A real calendar day written `yyyy-mm-dd`. */
-function isCalendarDay(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 /**

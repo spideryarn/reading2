@@ -69,15 +69,17 @@ describe("planPublish — what a publish would do, with no I/O", () => {
 });
 
 describe("runPublish — the statements it may issue", () => {
-  function fake(rows: unknown[] = [], deployed = true) {
+  function fake(rows: unknown[] = [], deployed = true, written = 1, failsAt?: string) {
     const statements: string[] = [];
     const client: PublishClient = {
-      connect: async () => undefined,
+      connect: async () => client as pg.Client,
       end: async () => undefined,
       query: (async (sql: string) => {
         statements.push(sql);
+        if (sql === failsAt) throw new Error("password=hunter2 connection lost");
         if (sql === QUESTIONS_DEPLOYED_SQL) return { rows: [{ deployed }] };
         if (sql === LOCK_ROWS_SQL) return { rows };
+        if (sql === PUBLISH_SQL) return { rows: [], rowCount: written };
         return { rows: [] };
       }) as unknown as PublishClient["query"],
     };
@@ -124,6 +126,38 @@ describe("runPublish — the statements it may issue", () => {
     expect(code).toBe(1);
     expect(db.statements.filter((sql) => sql === PUBLISH_SQL)).toHaveLength(1);
     expect(lines.join("\n")).toContain("q-aaaaaa  ·  refused: the published row is answered");
+  });
+
+  it("reports a refusal when a concurrent insert makes SQL refuse the planned write", async () => {
+    /* FOR UPDATE found no row; another publisher inserted an answered one
+       before this upsert, so the SQL's never-backwards guard writes zero. */
+    const db = fake([], true, 0);
+    const lines: string[] = [];
+    expect(await runPublish(db.connect, [file(question("q-aaaaaa"))], { all: true }, (line) => lines.push(line))).toBe(1);
+    expect(db.statements).toEqual([QUESTIONS_DEPLOYED_SQL, "begin", LOCK_ROWS_SQL, PUBLISH_SQL, "commit"]);
+    expect(lines.join("\n")).toContain("0 published new, 0 updated, 0 already so, 1 refused");
+    expect(lines.join("\n")).toContain("q-aaaaaa  ·  refused:");
+  });
+
+  it("withholds malformed file contents and writes nothing, even with a valid file selected", async () => {
+    const db = fake();
+    const lines: string[] = [];
+    const broken = file(question("q-bbbbbb"));
+    broken.text = broken.text.replace("status: open", "status: password=hunter2");
+    expect(await runPublish(db.connect, [file(question("q-aaaaaa")), broken], { ids: ["q-aaaaaa"] }, (line) => lines.push(line))).toBe(2);
+    expect(db.statements).toEqual([]);
+    expect(lines.join("\n")).not.toContain("hunter2");
+    expect(lines.join("\n")).toContain("q-bbbbbb.md");
+  });
+
+  it("does not claim nothing was written when COMMIT's acknowledgement is lost", async () => {
+    const db = fake([], true, 1, "commit");
+    const lines: string[] = [];
+    expect(await runPublish(db.connect, [file(question("q-aaaaaa"))], { all: true }, (line) => lines.push(line))).toBe(2);
+    expect(db.statements).toEqual([QUESTIONS_DEPLOYED_SQL, "begin", LOCK_ROWS_SQL, PUBLISH_SQL, "commit", "rollback"]);
+    expect(lines.join("\n")).not.toContain("nothing was written");
+    expect(lines.join("\n")).not.toContain("hunter2");
+    expect(lines.join("\n")).toContain("--answers");
   });
 
   /* Sol's F6: --local reaches a local database or nothing. */

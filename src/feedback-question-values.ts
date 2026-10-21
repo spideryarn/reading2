@@ -1,13 +1,12 @@
 /**
  * **What a question for Greg may look like**: the rules its file, the server
- * and the dialog all hold it to. An import-light leaf (only src/ids.ts), for
- * the reason src/feedback-ending-values.ts is one: the compiler
- * (scripts/feedback-endings.ts) must run when its generated output is missing,
- * and the dialog may import this but never the generated list.
+ * and the dialog all hold it to. An import-light leaf (only src/ids.ts), so
+ * scripts/feedback-endings.ts can check the files without loading the store,
+ * and the dialog may import the rules without importing the server's reads.
  *
  * A question is a file under docs/user-feedback/questions/, named for its id,
- * written by an agent and shown to an admin in the Feedback dialog's Earlier tab once the
- * commit carrying it is deployed. docs/project/feedback-reports.md § Asking
+ * written by an agent and shown to an admin in the Feedback dialog's Earlier tab once
+ * published to the database. docs/project/feedback-reports.md § Asking
  * Greg a question, and acting on his answer.
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */
@@ -144,6 +143,13 @@ export interface PublishedFeedbackQuestion extends CompiledFeedbackQuestion {
 
 type Ordered = Pick<CompiledFeedbackQuestion, "asked" | "id">;
 
+/** A real calendar day written `yyyy-mm-dd`, for both a file and a published row. */
+export function isCalendarDay(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 /** Oldest asked first, the id breaking a tie: the order they were asked in, and stable under a new one. */
 export function byAsked(a: Ordered, b: Ordered): number {
   if (a.asked !== b.asked) return a.asked < b.asked ? -1 : 1;
@@ -170,7 +176,7 @@ export function publishedQuestionProblem(row: PublishedFeedbackQuestion): string
   ) {
     return "repeats are not distinct report ids other than its own";
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.asked)) return "asked is not yyyy-mm-dd";
+  if (!isCalendarDay(row.asked)) return "asked is not a calendar day written yyyy-mm-dd";
   if (row.body.trim() === "" || row.body.length > MAX_FEEDBACK_QUESTION_BODY_CHARS) return "body is blank or too long";
   if (row.body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) return "body splits twice";
   if (!FEEDBACK_QUESTION_STATUSES.includes(row.status)) return "status is neither open nor answered";

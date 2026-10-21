@@ -519,7 +519,8 @@ and for the history of what he answered.
 > — Greg, 2026-10-06 (`spya-sshjd2`)
 
 A question is **one file**, `docs/user-feedback/questions/q-xxxxxx.md`, and the file is the only
-live record of it. What the dialog does with it is in
+place it is written; what Greg sees is the file's published copy, a row in production's
+`feedback_questions`. What the dialog does with it is in
 [feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07).
 
 **To ask.** `npx tsx scripts/feedback-questions.ts --new "<title>"` prints a fresh path and a header
@@ -573,12 +574,18 @@ What the report asked and when, what was done, what each option means, and what 
   Below it, shut in the dialog until he opens it: the background that ask-me-questions.md puts
   first, written for someone who has forgotten the report and never read the code. At most one
   such line (the compiler refuses a second); a body without one is shown whole.
-- Run `npx tsx scripts/feedback-endings.ts` and commit what it changes with the file. A file that
-  does not parse fails that command and `tests/feedback-endings.test.ts`; it is never skipped.
+- A file that does not parse fails `npx tsx scripts/feedback-endings.ts`,
+  `tests/feedback-endings.test.ts` and the publish below; it is never skipped.
 
-**It reaches Greg only after a deploy.** The open questions are compiled into the server, so one
-appears in the dialog once the commit carrying it is deployed, typically within hours. Something
-that cannot wait that long is not for this channel.
+**To put it in front of Greg: publish it.** `npx tsx scripts/feedback-questions.ts --publish
+q-xxxxxx` writes the file's row to production (`--all` for every file; `--local` for the local
+database, to test). It is in *Needs a decision* the next time he opens the Feedback dialog, on his
+phone or anywhere, **with no deploy**, so it is the channel for something blocking the deploy too.
+Read its `Target:` line. Exit 0 is published (or already so); 1 is a question **refused** because
+the row is newer than this file (an answered row is never reopened, an `acted:` id never dropped:
+ask again in a new file); 2 is nothing written. Then commit the file and push it to `dev`, so the
+file and the row agree. **Publish again after every change to the file** — acting on a reply,
+marking it answered, rewriting the short part — because the dialog shows the row, not the file.
 
 **To read his replies.** `npx tsx scripts/feedback-questions.ts --answers` reads production
 read-only and prints every reply of an administrator's that no question file records as acted on,
@@ -588,7 +595,11 @@ tab opened earlier. Exit 0 always prints a `Target:` line and a summary, also wh
 creates the replies table it says so and exits 0. It then prints the questions Greg has **deferred**
 (*Defer for now* in the dialog, since 2026-10-08): not now, do not chase; each stays `open`, and
 there is nothing to act on. The same provenance rule holds, and the same "not deployed yet" line
-before the deploy that creates that table.
+before the deploy that creates that table. **Last, it compares the files with what Greg sees**:
+each file not published, each published row that differs from its file, and each row with no file
+in this checkout. Publish what the files say (`--publish <id>`); a row with no file is somebody
+else's question not yet on `dev`, or one whose file was lost. `--answers --local` reads the local
+database instead, and accepts only a local stack's rows.
 
 **The plain listing** (`npx tsx scripts/feedback-questions.ts`) also names any report whose note
 says `awaiting` with no open question asking about it, as its `report` or in its `repeats`: Greg
@@ -613,8 +624,8 @@ edit a defence. Then, in the question file, in one commit with the work or the d
    follow-up is materially a different question, set this one answered and ask that in a new file
    (Greg approved this wording on 2026-10-11, reply `spya-evextp` to `q-jpy4xv`);
 4. update the report's note (`ending:` and `comment:`) if the answer changes how the report ended;
-5. run `npx tsx scripts/feedback-endings.ts`. An answered question leaves the dialog at the next
-   deploy.
+5. publish it again (`--publish q-xxxxxx`). An answered question leaves the dialog the next time
+   it opens.
 
 ## The note, in `docs/user-feedback/`
 
@@ -662,9 +673,9 @@ Then run `npx tsx scripts/feedback-endings.ts` and commit what it changes with
 the note. `feedback.md` § Shipped or not.
 
 **A commit hook usually does that for you.** On the house commit recipe, a commit that carries
-anything under `docs/user-feedback/` gets `scripts/feedback-endings.ts` run, and whichever of
-`src/feedback-endings.generated.ts` and `src/feedback-questions.generated.ts` changed added to the
-same commit ([`regenerate-commit-generated.sh`](../../.claude/hooks/regenerate-commit-generated.sh),
+anything under `docs/user-feedback/` gets `scripts/feedback-endings.ts` run, and
+`src/feedback-endings.generated.ts` added to the same commit if it changed (the questions are
+published, not compiled, since 2026-10-21) ([`regenerate-commit-generated.sh`](../../.claude/hooks/regenerate-commit-generated.sh),
 [261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). It stays out of a bare
 `git commit`, a command with anything after the commit (`&& git push`), a commit while another note
 is changed and not in it, and a header that does not parse; `tests/feedback-endings.test.ts` is the
