@@ -83,13 +83,18 @@ blocking things go out this way.
 
 ## Rollout order (production)
 
-1. The migration (additive: one new table). Applied to production under Greg's standing permission.
-2. `--publish --all` to production — harmless before the code deploys, because the running build
-   does not read the table.
-3. The Overseer deploys. From then on the dialog reads the rows.
+As done, which differs from the first draft:
 
-Between 2 and 3, a question file edited on `dev` should still be published as well; nothing breaks if
-it is not.
+1. The Overseer deploys. `npm run deploy` applies the pending migration,
+   `20261021155353_feedback_questions` (additive: one new table), before the code goes live.
+2. **Straight after**, the Overseer runs `npx tsx scripts/feedback-questions.ts --publish --all`
+   against production, reading its `Target:` line. Until it does, *Needs a decision* is empty.
+3. From then on, an agent publishes each question it writes or changes with `--publish q-…`.
+
+The first draft had this worktree migrate production by hand first. That was passed over: from
+here `db:migrate` would also have applied another agent's migration then pending on `dev`
+(`view_as_sessions`), and the deploy applies migrations itself, so the only cost is a gap of a
+minute or two with an empty list.
 
 ## Stages
 
@@ -134,3 +139,25 @@ Seven findings; none changes the shape. What each became:
   and a malformed one is a 500 with a log line, never a quietly shorter inbox. Postgres counts code
   points where JavaScript counts UTF-16 units, so a file within the JS limit is always within the
   table's.
+
+### What landed (2026-10-21)
+
+- **Stages 1–3** committed as `f314693c0`, `3b1e94bbb`, `3bb4e28e5`, and the `--answers --local`
+  wording fix as `e1c3a3bf3`.
+- **GPT Sol's code review** ([261021h-code-review-sol.md](261021h-code-review-sol.md)), five
+  findings, all fixed in stage 3: a concurrent insert the SQL refused while the script said
+  published (now `rowCount` is checked and it is a refusal, exit 1); a parse error that could echo
+  a file's contents (now only the file is named); a lost `COMMIT` acknowledgement reported as
+  "nothing was written" (now it says to confirm with `--answers`); a mock's type; impossible dates
+  on a row. Sol's sandbox could not reach Postgres, so the round trip was run here: green, and red
+  with the SQL guard removed.
+- **End to end, locally.** A `report: none` question (`q-s0nyvr`, with an HTML tag in its body)
+  published with `--publish --all --local` (80 rows, exit 0). In the browser (Playwright, a Sonnet
+  subagent): shown in *Needs a decision* with no report block, the tag drawn as text, *Details*
+  shut, a reply sent, the thread moved to being considered, no console errors. `--answers --local`
+  then printed that reply and "every question file is published as it stands". The test question
+  and its reply were removed afterwards.
+- **Report `spya-yf6vmy`** rode along, because it is the same control: the shortcut is now drawn
+  at once, with a spinner where its number goes while the read is slow
+  ([the note](../user-feedback/261021_1548-a-spinner-while-needs-a-decision-loads.md)).
+
