@@ -45,12 +45,13 @@ import { NotWhileViewingAs } from "./ViewAsBar.js";
 import { useViewAsState } from "./view-as-session.js";
 
 /**
- * **The three routes whose code is not in the reader's initial download.**
- * `LazyPage.tsx`
- * has the reasoning; these are the six loaders it takes.
+ * **The routes whose code is not in the reader's initial download** — the
+ * admin pages, `/design`, `/changelog` and `/help`. `LazyPage.tsx` has the
+ * reasoning; these are the loaders it takes. `tests/eager-client-graph.test.ts`
+ * reads them from the graph, so a new one is walked without being listed there.
  *
  * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
- * because `React.lazy` reads `module.default` and neither page has one — the
+ * because `React.lazy` reads `module.default` and no page has one — the
  * bare form would send every visit to the failure surface. And **module
  * scope**, because a loader's identity is a `useMemo` dependency: an inline
  * arrow would build a new lazy type, and start a new fetch, on every render.
