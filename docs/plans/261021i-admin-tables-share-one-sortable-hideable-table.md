@@ -167,3 +167,13 @@ code, but it is exactly the "different from /users" Greg reported, kept, with a 
   hook's identity contract, F6 all three costs tables named, F7 the docs, F8 the research doc's
   slips corrected. The two P1 fixes are not in round 1's snapshot; their check is the code
   review's, which sees them as code with the tests named above, rather than a second plan round.
+- 2026-10-21: **Stage 1 built** (Opus). `src/web/lib/useUrlSortedTable.ts` (the default sort is read
+  off `byParam.defaultValue`, so it lives in one place), `byParam(defaults)` in params.ts making all
+  three parsers, `src/web/admin-articles-columns.tsx` (ids `title`, `owner`, `added`, `visibility`,
+  `read`, `cost`, `actions`), the page on `DataTable`, `/admin/users` on the hook with its test file
+  unedited and green (30/30). Differences from the plan: rows with no priced call also tie-break on
+  the date, so the dashes read newest first too; the cost tiebreak inside the `sortingFn` means a
+  shift-clicked second key never decides between equal costs (accepted, commented); chips on their
+  own row; every column but Article now single-line `text-xs`, as on `/admin/users`;
+  `tests/view-as-admin-buttons.test.tsx` mounts this page and needed a `NuqsAdapter`. New tests were
+  shown red by mutation (no sink, no tiebreak, the F1 rule wrong). Full suite green.

@@ -13,6 +13,7 @@
  */
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { NuqsAdapter } from "nuqs/adapters/react";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -96,7 +97,9 @@ async function mount(node: ReactNode) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(node));
+  /* `/admin/articles` keeps its sort in the address through nuqs (plan 261021i),
+     which needs its adapter above it, as main.tsx gives the app. */
+  await act(async () => root.render(<NuqsAdapter>{node}</NuqsAdapter>));
   await settle();
 }
 

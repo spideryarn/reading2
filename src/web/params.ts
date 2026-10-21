@@ -1717,7 +1717,9 @@ export const libraryQueryParam = createParser<string>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /**
- * Which keys the shelf is ordered by, coarsest first — `by=length,title`.
+ * **A `?by=` parser, for one sortable table with its own default.**
+ *
+ * Which keys a table is ordered by, coarsest first — `by=length,title`.
  *
  * **A list rather than one value**, because since the move to TanStack Table a
  * shift-click adds a second key, and a compound order that the URL cannot carry
@@ -1726,23 +1728,38 @@ export const libraryQueryParam = createParser<string>({
  *
  * The vocabulary is validated against the columns themselves rather than a list
  * repeated here — `sortingFromUrl` drops any id the table does not have, so a
- * mangled link degrades to the ordinary homepage rather than to an empty sort
+ * mangled link degrades to the ordinary page rather than to an empty sort
  * that looks deliberate. This parser only has to get the *shape* right.
  *
  * `eq` is written out because `===` on two arrays is always false, and without
  * it nuqs never recognises the default and stamps `?by=added&dir=desc` onto
  * every link to the homepage.
+ *
+ * **One factory, because the default is the only page-specific half.** The
+ * shelf's and the admin users list's were two copies of the same eleven lines
+ * until 2026-10-21, and `/admin/articles` would have been the third (plan
+ * 261021i § Stage 1). The default sits beside each call, in this eager file,
+ * as a bare constant — never imported from a column module, for the reason
+ * `ADMIN_DEFAULT_BY` gives below.
  */
-export const libraryByParam = createParser<string[]>({
-  parse: (v) => {
-    const ids = v.split(",").filter((s) => s !== "");
-    return ids.length ? ids : null;
-  },
-  serialize: (v) => v.join(","),
-  eq: sameList,
-})
-  .withDefault(DEFAULT_BY)
-  .withOptions({ history: "push" });
+export function byParam(defaults: string[]) {
+  return createParser<string[]>({
+    parse: (v) => {
+      const ids = v.split(",").filter((s) => s !== "");
+      return ids.length ? ids : null;
+    },
+    serialize: (v) => v.join(","),
+    eq: sameList,
+  })
+    .withDefault(defaults)
+    .withOptions({ history: "push" });
+}
+
+/** What `byParam` makes — the shape lib/useUrlSortedTable.ts takes. */
+export type ByParam = ReturnType<typeof byParam>;
+
+/** The shelf's — what you last opened, first (library-columns.tsx § DEFAULT_BY). */
+export const libraryByParam = byParam(DEFAULT_BY);
 
 /**
  * Which way round each key goes — `dir=desc,asc`, paired with `by` by position.
@@ -1762,8 +1779,8 @@ export const libraryByParam = createParser<string[]>({
  * out itself when `isAllNatural` says it would add nothing. Found by a
  * cross-family review, 2026-08-26.
  *
- * **Named for the job rather than for the shelf**, and read by both pages that
- * have a sortable table — the shelf and the admin users list. There is nothing
+ * **Named for the job rather than for the shelf**, and read by every page that
+ * has a sortable table — the shelf and the admin lists. There is nothing
  * page-specific in it: unlike `by`, whose default names a column, this one is
  * the same three lines whatever the columns are, and two copies of it would be
  * two places for the paragraph above to be forgotten. It was `libraryDirParam`
@@ -1803,25 +1820,19 @@ export const sortDirParam = createParser<("asc" | "desc")[]>({
  */
 export const ADMIN_DEFAULT_BY = ["signedUp"];
 
+/** What the admin users table is sorted by — `?by=signedUp`. */
+export const adminByParam = byParam(ADMIN_DEFAULT_BY);
+
 /**
- * What the admin users table is sorted by — `?by=signedUp`.
- *
- * Its own parser rather than `libraryByParam` because the *default* is the
- * page-specific half: the shelf rests on what you last opened, and a list of
- * accounts rests on who arrived most recently. Everything else about the two —
- * the comma-separated shape, the `eq`, the `push` history — is identical, and
- * the direction parser above is genuinely shared.
+ * The admin articles table's default sort: **added most recently, first** —
+ * the order the page had before it could be sorted at all, and the same
+ * "what arrived" question as the users list. Here, not beside its columns,
+ * for `ADMIN_DEFAULT_BY`'s reason above.
  */
-export const adminByParam = createParser<string[]>({
-  parse: (v) => {
-    const ids = v.split(",").filter((s) => s !== "");
-    return ids.length ? ids : null;
-  },
-  serialize: (v) => v.join(","),
-  eq: sameList,
-})
-  .withDefault(ADMIN_DEFAULT_BY)
-  .withOptions({ history: "push" });
+export const ADMIN_ARTICLES_DEFAULT_BY = ["added"];
+
+/** What the admin articles table is sorted by — `?by=cost`. */
+export const adminArticlesByParam = byParam(ADMIN_ARTICLES_DEFAULT_BY);
 
 /**
  * Cards or the dense table — `view=table`.
