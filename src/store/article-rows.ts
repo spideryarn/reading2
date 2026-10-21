@@ -503,6 +503,36 @@ export const ARTICLE_TABLE_COVERAGE = {
         "because a zip gets forwarded and the key opens the article.",
     },
   },
+  private_link_openers: {
+    rollback: {
+      exported: false,
+      why:
+        "Which signed-in accounts opened the article's private link, and when " +
+        "(plan 261021d). The filesystem store has no sharing of any kind, so a " +
+        "rollback to data/ has nothing that could read it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "Other readers' account ids, recorded for the administrator alone; the " +
+        "owner is not shown who opened their link, so their export does not " +
+        "carry it either (plan 261021d § 5).",
+    },
+  },
+  private_link_signed_out_opens: {
+    rollback: {
+      exported: false,
+      why:
+        "A count of signed-out opens of the private link (plan 261021d). The " +
+        "filesystem store has no sharing of any kind.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "An approximate count kept for the administrator alone, which the owner " +
+        "is not shown; their export does not carry it either (plan 261021d § 5).",
+    },
+  },
   article_visibility_changes: {
     rollback: {
       exported: false,

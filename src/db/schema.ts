@@ -605,6 +605,67 @@ export const articleShareLinkEvents = spideryarn.table(
 );
 
 /**
+ * **Who opened a private link, among the signed-in** — one row per article
+ * and account, with how many times and when first and last. Greg, 2026-10-20
+ * (reply `spya-xug3kf` to q-agbc89): *"I'm interested to know and store which
+ * users open which articles."* Seen only by the administrator
+ * (`GET /api/admin/articles/:slug/access`); the owner is not shown it.
+ *
+ * Written by `POST /api/private-link-opens/:slug?key=`, from the visitor's
+ * page, only when the key matches and the article is private
+ * (src/store/pg-private-link-openers.ts). Never reachable from the public
+ * namespace: tests/public-imports.test.ts forbids this table there.
+ *
+ * Both keys cascade: a record of an open is worth nothing once the article or
+ * the account is gone. `reader_id`'s key to `auth.users` is by hand in the
+ * migration, as every owner key. Not exported with the article — the openers
+ * are not the owner's to take away — and kept with the article on a transfer.
+ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md.
+ */
+export const privateLinkOpeners = spideryarn.table(
+  "private_link_openers",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `auth.users(id)`, ON DELETE CASCADE, by hand in the migration. */
+    readerId: uuid("reader_id").notNull(),
+    opens: integer("opens").notNull().default(1),
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }).notNull().defaultNow(),
+    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.readerId] }),
+    check("private_link_openers_opens", sql`${t.opens} >= 1`),
+  ],
+);
+
+/**
+ * **How often a private link was opened by somebody signed out** — one row per
+ * article, a count and when first and last. The other half of Greg's 2C: the
+ * signed-out cannot be told apart, so they are counted, not recorded.
+ *
+ * The one table the public namespace may write
+ * (`POST /api/public/private-link-opened/:slug?key=`,
+ * src/store/private-link-signed-out-opens.ts). Anybody holding the link can
+ * call that, so the count is **approximate and inflatable**: the upsert adds
+ * at most one per article per two seconds and saturates rather than
+ * overflowing. docs/project/security-risks.md § R31.
+ */
+export const privateLinkSignedOutOpens = spideryarn.table(
+  "private_link_signed_out_opens",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    opens: integer("opens").notNull().default(1),
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }).notNull().defaultNow(),
+    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("private_link_signed_out_opens_opens", sql`${t.opens} >= 1`)],
+);
+
+/**
  * **The reader's own tags on an article** — one row per (article, tag).
  *
  * Reader state, so keyed on `articles` and not on a revision: a re-extraction

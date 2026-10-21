@@ -28,9 +28,10 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on thirteen boxes today — both profile boxes, the add page's two (*Why are you reading
-this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up, the
-annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
+box. It is on seventeen boxes today — both profile boxes, the add page's two (*Why are you reading
+this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up and
+the comment's own note, the annotate box, Skim's *What are you skimming for?*, Referee's new
+criterion, the box that scopes the Candidates search, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
 ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
 the note under an Illustrated picture
@@ -38,7 +39,7 @@ the note under an Illustrated picture
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
 box at the top of every Help page
 ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
-fourteenth is three lines. **A box for more than a few words of the reader's prose gets one by
+eighteenth is three lines. **A box for more than a few words of the reader's prose gets one by
 default** (Greg, 2026-10-19, `spya-wc4vku`), and
 [`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
 fails on a new `<textarea>` without one unless its component is listed there with the reason.
@@ -487,7 +488,10 @@ const dictate = useDictationField({
 keeps score of which `onChange` ran, the hook's or the textarea's, and sends `typed`, `dictated`
 or `mixed` with the question ([`composer-modality.ts`](../../src/web/composer-modality.ts), plan
 [261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). The command bar's
-*Ask the guide* row does not yet, and its questions are stored unrecorded.
+*Ask the guide* row does not yet, and its questions are stored unrecorded. Rewriting a question
+already asked has no microphone for this reason: `withEdit` (src/chat.ts) keeps the original
+question's modality, so a voice rewrite would be stored as typed (plan
+[261021e](../plans/261021e-microphone-on-the-five-remaining-prose-boxes.md)).
 
 `transcribe` comes from `useReaderTranscriber` in
 [`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
@@ -779,8 +783,9 @@ passed over, and GPT Sol's review.
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
-  `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
-  `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
+  `:draft:<block>`), `comment:<id>`, `comment-note:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+  `quiz:<slug>:<question>`, `commands:<slug>`, `skim:purpose:<slug>`,
+  `referee:criterion:<slug>`, `candidates:<slug>`, `profile:<field>` for About you and
   `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
   `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,
   which is empty for every upload) and `add:about-you`. **The name is the partition, so it

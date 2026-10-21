@@ -68,7 +68,7 @@
   margin: 0 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;
@@ -117,7 +117,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 3px;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: max(var(--text-min), 0.7rem);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -126,7 +126,7 @@
    arrived — see LinkCard, `titled`. */
 .prose-card-trail {
   color: var(--ink-faint);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   overflow-wrap: anywhere;
 }
 /* `arXiv 2212.13345`. Monospace because it is an identifier meant to be copied
@@ -139,14 +139,14 @@
   margin: 0 0 0.25rem;
   color: var(--ink-soft);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   overflow-wrap: anywhere;
 }
 .prose-card-cite-label {
   flex: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   font-weight: 600;
   letter-spacing: 0.03em;
 }
@@ -214,7 +214,7 @@
   margin: 0.15rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
 }
 /* The wait, and only ever where there is nothing else yet. `.cmt-spinner` is
    the house animation — see docs/project/icons.md. */
@@ -223,7 +223,7 @@
   align-items: center;
   gap: 0.3rem;
   color: var(--ink-faint);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
 }
 .prose-card-waiting svg { flex: none; }
 /* The queue said no — a quota refusal with its way out beside it, or an ingest
@@ -233,7 +233,7 @@
 .prose-card-refused {
   margin-top: 0.35rem;
   color: var(--danger);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   overflow-wrap: break-word;
 }
 /* The address itself. On an external card it sits above the foot, deliberately
@@ -244,7 +244,7 @@
   margin-top: 0.35rem;
   color: var(--ink-faint);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   line-height: 1.35;
   overflow-wrap: anywhere;
   /* Three lines is enough to recognise any URL and to read most of them whole;
@@ -278,7 +278,7 @@
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
   font-family: var(--font-ui);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
 }
 /* The card's two ways out: "open in a new tab" on a link, and "Open in Glossary"
    on a term.
@@ -348,7 +348,7 @@
   gap: 0.2rem;
   margin: 0.15rem 0 0.35rem;
   font-family: var(--font-ui);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
 }
 .prose-card-score {
   display: grid;
@@ -452,7 +452,7 @@
 .prose-card-cite-by {
   margin: -0.2rem 0 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
 }
 
 /* "In your library" on the card (plan 261001i): the band's `.cite-here`
@@ -468,7 +468,7 @@
 .prose-card-cite-source,
 .prose-card-cite-where {
   color: var(--ink-faint);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
 }
 .prose-card-cite-foot .prose-card-cite-where { margin-left: auto; }
 
@@ -496,7 +496,7 @@
   padding: 0.4rem 0.25rem;
   text-align: center;
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -522,6 +522,18 @@
     min-height: 40px;
     padding: 0;
   }
+  /* The card's ways out and its actions, ~30px for everyone above, reach the
+     house finger floor where there is a finger (plan 261021c: at 390 *Hide*,
+     *Open* and *Check* were 30 tall and the icon-only *Ask about this* 12 × 25).
+     controls.md § The numbers. */
+  .prose-card-link,
+  .prose-card-open,
+  .prose-card-act,
+  .prose-card-cite-check {
+    min-width: 40px;
+    min-height: 40px;
+    justify-content: center;
+  }
 }
 /* Under `why`: what differs from the band's list-wide default — a page found,
    an extract read, or the work read. A plain unread card has no line or wrapper
@@ -530,7 +542,7 @@
   margin: 0.2rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   line-height: 1.35;
 }
 
@@ -541,7 +553,7 @@
 .prose-card-cite-does { margin-top: 0.2rem; }
 .prose-card-cite-does-label {
   color: var(--ink-faint);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
 }
 .prose-card-cite-quote { margin: 0.3rem 0 0; }
 .prose-card-cite-quote blockquote {
@@ -557,5 +569,5 @@
   margin: 0.1rem 0 0 0.5rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
 }

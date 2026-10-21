@@ -482,7 +482,7 @@
 /* ---- an eyebrow: the small orange word above a heading ---- */
 .site-eyebrow {
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: max(var(--text-min), 0.7rem);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -504,7 +504,7 @@
   border: 1px solid var(--site-hairline-strong);
   border-radius: 999px;
   font-family: var(--font-ui);
-  font-size: 0.62rem;
+  font-size: max(var(--text-min), 0.62rem);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;

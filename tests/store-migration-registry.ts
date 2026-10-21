@@ -3679,6 +3679,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* The owner's article read of `article_revisions.matter`, and the
      publication that queues the `matter` successor (plan 261018a). */
   "tests/matter-step-pg.test.ts": "private-postgres",
+  /* Who opened a private link, and the admin's read of it (plan 261021d). */
+  "tests/private-link-opens-pg.test.ts": "private-postgres",
 };
 
 /**

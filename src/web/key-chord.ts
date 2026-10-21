@@ -56,6 +56,44 @@ export function isModChord(e: KeyboardEvent, key: string): boolean {
 }
 
 /**
+ * **One unmodified key, pressed where it is not a character and no modal owns
+ * the keys** — the guard the one-key shortcuts share: G (TermJump.tsx), `/`
+ * (DockQuickSearch.tsx) and Backspace on the way-back chip (ReturnChip.tsx).
+ * keyboard.md § G lists the rules and their reasons.
+ *
+ *  - **No Ctrl, ⌘ or Alt**, and no Shift unless `shift` allows it — `/` does,
+ *    because some layouts need Shift to type it at all.
+ *  - **Not on auto-repeat, not during IME composition.**
+ *  - **Not once another handler has `preventDefault`ed it, and not while
+ *    typing** — the key is the text box's.
+ *  - **Not over an open native `<dialog>`**: the article is inert behind it.
+ *
+ * Which focused controls and modeless surfaces a key yields to is the caller's
+ * policy: G and Backspace answer it differently, and say why.
+ */
+export function isPlainKey(e: KeyboardEvent, key: string, { shift = false } = {}): boolean {
+  if (e.key !== key) return false;
+  if (e.altKey || e.ctrlKey || e.metaKey || (e.shiftKey && !shift) || e.repeat) return false;
+  if (isImeComposing(e)) return false;
+  if (e.defaultPrevented || isTyping(e.target)) return false;
+  return !isAppSurfaceOpen("dialog[open]");
+}
+
+/**
+ * **Is one of the app's own surfaces matching `selector` on the page?** The
+ * article's prose is left out: it is a stranger's markup, and both
+ * `<dialog open>` and `role="dialog"` survive the sanitiser, so asking the
+ * whole document would let one article switch off every one-key shortcut for
+ * as long as it is open (GPT Sol, 261020u build review).
+ */
+export function isAppSurfaceOpen(selector: string): boolean {
+  for (const el of document.querySelectorAll(selector)) {
+    if (el.closest(".prose") === null) return true;
+  }
+  return false;
+}
+
+/**
  * **⌘⌥ + key on a Mac, Ctrl+Alt + key everywhere else** — `isModChord`'s
  * sibling for the one chord that wants Alt: ⌘⌥T, fold or unfold every section
  * (fold.ts; Greg, spya-skqwg8). A sibling rather than a flag on that one,

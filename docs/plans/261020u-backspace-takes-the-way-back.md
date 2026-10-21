@@ -9,7 +9,7 @@ problem, not the implementation
 > Please could you make a keyboard shortcut for the "back to X" overlay? Please use backspace as the
 > keyboard shortcut.
 
-**Status: awaiting Greg. Nothing is built.** This is a new single-key shortcut in the reading view,
+**Status: Greg chose A on 2026-10-20 — being built; see § Greg's answer, and the build.** (Until then: awaiting Greg.) This is a new single-key shortcut in the reading view,
 which is a product call about the keyboard scheme rather than a fix, and Greg's rule since
 2026-10-19 is that a reader's suggestion in doubt goes to him first:
 
@@ -107,3 +107,63 @@ whichever way-back pill is showing?
    from either chip button it returns; held and fading chip both still take it.
 4. keyboard.md gains a section, the chip its ⌫ and `aria-keyshortcuts`, and `/help` a line if it
    lists keys ([help-page.md](../project/help-page.md)).
+
+## Greg's answer, and the build
+
+> A. And use your judgement
+>
+> — Greg, 2026-10-20 21:46 UTC (reply spya-dzfvs2 to q-f8yb5s)
+
+Queue item `qi-6a56cdns`. The judgement calls, each the simpler side unless it would break the
+reporter's own case:
+
+- **Section chip only.** The phone's *back to ⟨mode⟩* pill does not take Backspace, as the question
+  suggested: a hardware keyboard on a phone is rare, and one key keeps one meaning.
+- **The focus rule is looser than G's, on purpose.** G refuses focus on any control that is not its
+  own, because a focused control may give a letter its own meaning. Backspace has no meaning on a
+  button, a link or a tree item (the WAI-ARIA tree pattern assigns it none). And the reporter's case
+  is exactly that: Enter on a section in Structure leaves focus on Structure's `role="tree"` (a
+  click leaves it on the page, measured in Chrome), so G's rule would make the key dead in the one
+  place it was asked for. So it acts with focus on the page, on either chip button (where it
+  presses the return, never the ×), or on any plain control; it refuses inside a text box
+  (`isTyping`), inside a `[role=listbox|combobox|menu|menubar|grid|slider|spinbutton|textbox|searchbox]`
+  (a widget may use it, as `TagEditor` does), and inside or behind any open dialog —
+  `dialog[open]`, or any `[role="dialog"]` on the page: Chat, Comment, Annotate, the Dock drawer,
+  the profile and search popovers, a prose hover card.
+- **The plain-key guard is extracted, not written a third time**: `isPlainKey(e, key, {shift})` in
+  `key-chord.ts` — the key, no Ctrl/⌘/Alt, no Shift unless allowed, no repeat, no IME composition,
+  not `defaultPrevented`, not typing, no `dialog[open]`. G and `/` move onto it; their own extra
+  rules (G's focus rule, `/`'s Shift) stay theirs.
+- **It `preventDefault`s only when it acts.** With no chip there is no listener, and the key is
+  whatever the browser makes it.
+- **The ⌫ hint** is a small `<span>` inside the return button, `aria-hidden` (the button carries
+  `aria-keyshortcuts="Backspace"` instead), hidden on a coarse pointer, where a hardware keyboard
+  is uncommon.
+- **Safari on a Mac — not measured from here.** This build runs on the Linux box, and Playwright's
+  WebKit is not Safari. What I believe, not measured: Safari 12 (2018) turned Backspace-as-Back off
+  by default behind a hidden preference, although WebKit's engine default is still on. It does not change the
+  design: while the chip shows the handler `preventDefault`s, so Safari's Back never runs; after it
+  has gone, the key is whatever Safari makes it. Left for a check on Greg's Mac, not a blocker.
+
+Tests that went red first, in `tests/return-chip.test.tsx` § Backspace presses the chip (beside
+the chip's other tests, to share its harness): the key presses the chip; from either chip button it
+returns; from the tree it returns; nothing in an input, `type=search`, a textarea, a nested
+contenteditable; nothing with a modifier, on repeat, during composition, after `defaultPrevented`;
+nothing with a `role="dialog"` or `dialog[open]` on the page, or with focus in a listbox; nothing
+with no chip; a held chip and a fading chip both take it. G's and `/`'s existing suites stay green
+on the shared guard.
+
+### What the reviews and the browser changed
+
+- **GPT Sol on the build plan** ([261020u-build-review-sol.md](261020u-build-review-sol.md),
+  proceed with changes): `<dialog open>` and `role="dialog"` both survive the sanitiser, so a
+  document-wide check let an article's own markup switch off Backspace — and, already, G and `/`.
+  All three now ask `isAppSurfaceOpen`, which ignores `.prose`. Also added: `textbox` and
+  `searchbox` to the refusals, and tests for every role, `keyCode` 229, prose-owned dialogs, and
+  `defaultPrevented` left alone on every refusal.
+- **Chrome at 1280px** (Playwright, a Sonnet subagent, `noema-mythology-of-conscious-ai`): a
+  click on a Structure row leaves focus on `BODY`; Backspace then put `?at=` back on the exact
+  origin block with `?mode=structure` kept, and the chip showed the earlier journey. Backspace in
+  the quick-search box and with Chat open (focus in its textarea, then on its Close) did nothing.
+  The ⌫ reads as a faint hint and is not clipped. No console errors. Not checked in a browser: the
+  drawer and hover-card cases (covered by the jsdom tests), and Safari.

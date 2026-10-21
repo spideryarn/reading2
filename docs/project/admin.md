@@ -28,7 +28,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
 - [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
 - [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
-- [§ Whose article it is](#whose-article-it-is-on-a-visitors-details-page) — the owner's address, for a public article only
+- [§ Whose article it is](#whose-article-it-is-on-its-details-page) — the owner's address and who opened its private link, for an article the admin can already read
 - [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
 - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
   - [Engagement](#engagement-active-days-reading-time-failed-imports) — active days, reading time, failed imports, and the columns that start hidden
@@ -310,6 +310,24 @@ kind of rule that gets eroded a column at a time by people who never saw it.
 
 Email addresses are shown, because a list of accounts that cannot name them is not a list of
 accounts.
+
+### The third clause, added 2026-10-21: an article the administrator can already read
+
+On the details page of an article the administrator can already open — their own, a public one,
+or a private one whose link they hold — they are told **whose it is** and **who opened its private
+link**. Greg chose both when asked (question q-agbc89, options 1B and 2C):
+
+> As an admin, I want to be able to see anything. Because after all, I've got access to the
+> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
+> which users open which articles.
+>
+> — Greg, 2026-10-20 (reply `spya-xug3kf`)
+
+His reply is the authority for exactly that, and nothing wider. The identifier is still not
+followed into an article: the route takes a slug and, for somebody else's private article, the
+link's key, and without the key it answers the same 404 as no article, so it cannot be used to
+learn whose a slug is. It returns addresses, counts and dates, never a title, slug or key.
+§ [Whose article it is](#whose-article-it-is-on-its-details-page) is the route.
 
 ## The accounts come from the Auth service, not from a query
 
@@ -644,17 +662,43 @@ that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by o
 ([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
 administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
 
-## Whose article it is, on a visitor's details page
+## Whose article it is, on its details page
 
-Since 2026-10-20 (`spya-cf30ac`), the administrator reading somebody else's **public** article sees
-a line under *Access* on its details page: whose it is, by address. It is not a new route: the page
-reads `GET /api/admin/articles` and finds the row by slug, and that list carries a slug only for the
-administrator's own and public articles. So a **private-link** article cannot be matched, and the
-line says its owner is not shown. Holding the key lets you read it; it does not tell you whose it
-is, and changing that is a widening of § What it deliberately does not show, put to Greg as
-question `q-agbc89`. Every reader also gets *You own this article* or *You don't own this
-article* there, which needs nothing from these pages
-([261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md)).
+Since 2026-10-20 (`spya-cf30ac`, [261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md))
+every reader gets *You own this article* or *You don't own this article* on the details page, which
+needs nothing from these pages. Since 2026-10-21
+([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)) the
+administrator also gets, from one route:
+
+```
+GET /api/admin/articles/:slug/access[?key=<the private link's key>]
+  → { ownerId, ownerEmail, emailsAvailable, mine, privateLink,
+      openers: [{ readerId, email, opens, firstOpenedAt, lastOpenedAt }],
+      signedOut: { opens, firstOpenedAt, lastOpenedAt } | null }
+```
+
+- **On a visitor's page** (somebody else's article): *Admin: it belongs to &lt;address&gt;*, for a
+  public article and, since this route, for one read through its private link, asked with the
+  address's key. Then who opened its private link, when a link is on or any open is recorded.
+- **On the owner's card**, when the owner is the administrator: who opened its private link. A
+  non-admin owner is not shown who opened their link; that is a separate decision nobody has made.
+
+**It answers only for an article the administrator can already read**: `ownedSlug` *or*
+`publicAccessWhere(slug, accessFor(key))`, the same predicate a visitor's read uses
+(`articleAccessForAdmin` in
+[`src/store/pg-private-link-openers.ts`](../../src/store/pg-private-link-openers.ts)). Somebody
+else's private article without its key, with a wrong one, or after its link is turned off, is the
+404 an unknown slug gets. Under the namespace gate, so every other account is a 403 with or
+without a key. `share_token` is never selected; `privateLink` is `share_token_at is not null`.
+Addresses come from the same Auth listing `/api/admin/articles` uses, and a failed listing costs
+the addresses, not the answer.
+
+Who opened it is recorded by the visitor's page: a signed-in visitor's account in
+`private_link_openers`, a signed-out visitor only as a count in `private_link_signed_out_opens`
+([privacy.md § Who opens one](privacy.md#who-opens-one-since-2026-10-21)). The signed-out count is
+approximate ([security-risks.md § R31](security-risks.md#r31)) and the page says *roughly*.
+Neither is counted in Active days. Tests: `tests/private-link-opens-pg.test.ts` (the route and both
+writes, against Postgres) and `tests/article-ownership.test.tsx` (the lines).
 
 ## The plan and ingest columns
 

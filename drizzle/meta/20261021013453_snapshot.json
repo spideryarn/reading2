@@ -1,5 +1,5 @@
 {
-  "id": "17a97a19-01b8-4a39-9e47-52bc637bb614",
+  "id": "d8c23c7b-cc4d-41e7-aced-bfff4778691b",
   "prevId": "e5f7dbc9-b0cd-4461-a557-512e389f8c77",
   "version": "7",
   "dialect": "postgresql",
@@ -6896,6 +6896,140 @@
       },
       "isRLSEnabled": false
     },
+    "spideryarn.private_link_openers": {
+      "name": "private_link_openers",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reader_id": {
+          "name": "reader_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opens": {
+          "name": "opens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "first_opened_at": {
+          "name": "first_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_opened_at": {
+          "name": "last_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "private_link_openers_article_id_articles_id_fk": {
+          "name": "private_link_openers_article_id_articles_id_fk",
+          "tableFrom": "private_link_openers",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "private_link_openers_article_id_reader_id_pk": {
+          "name": "private_link_openers_article_id_reader_id_pk",
+          "columns": [
+            "article_id",
+            "reader_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "private_link_openers_opens": {
+          "name": "private_link_openers_opens",
+          "value": "\"spideryarn\".\"private_link_openers\".\"opens\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.private_link_signed_out_opens": {
+      "name": "private_link_signed_out_opens",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "opens": {
+          "name": "opens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "first_opened_at": {
+          "name": "first_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_opened_at": {
+          "name": "last_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "private_link_signed_out_opens_article_id_articles_id_fk": {
+          "name": "private_link_signed_out_opens_article_id_articles_id_fk",
+          "tableFrom": "private_link_signed_out_opens",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "private_link_signed_out_opens_opens": {
+          "name": "private_link_signed_out_opens_opens",
+          "value": "\"spideryarn\".\"private_link_signed_out_opens\".\"opens\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "spideryarn.queue_state": {
       "name": "queue_state",
       "schema": "spideryarn",
@@ -9413,86 +9547,6 @@
         "uploads_rejected_has_reason": {
           "name": "uploads_rejected_has_reason",
           "value": "\"spideryarn\".\"uploads\".\"status\" <> 'rejected' or \"spideryarn\".\"uploads\".\"reason\" is not null"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.view_as_sessions": {
-      "name": "view_as_sessions",
-      "schema": "spideryarn",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "nonce_hash": {
-          "name": "nonce_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_id": {
-          "name": "actor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "subject_id": {
-          "name": "subject_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "view_as_sessions_nonce_hash_unique": {
-          "name": "view_as_sessions_nonce_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "nonce_hash"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "view_as_sessions_reason": {
-          "name": "view_as_sessions_reason",
-          "value": "char_length(\"spideryarn\".\"view_as_sessions\".\"reason\") between 1 and 300"
-        },
-        "view_as_sessions_not_self": {
-          "name": "view_as_sessions_not_self",
-          "value": "\"spideryarn\".\"view_as_sessions\".\"actor_id\" <> \"spideryarn\".\"view_as_sessions\".\"subject_id\""
         }
       },
       "isRLSEnabled": false

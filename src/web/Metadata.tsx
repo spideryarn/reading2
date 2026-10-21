@@ -298,7 +298,7 @@ import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
 import { viewAsNonce } from "./lib/view-as.js";
 import { useViewAsSubject } from "./view-as-session.js";
-import { Ownership } from "./Ownership.js";
+import { AdminLinkOpens, Ownership } from "./Ownership.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
@@ -1186,7 +1186,7 @@ export function Metadata({
                 sure they never see it. */}
             <div className="tw:mt-4 tw:border-t tw:border-border tw:pt-3">
               <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3">
-                <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
+                <span className="tw:text-[length:max(var(--text-min),0.7rem)] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
                   About you
                 </span>
                 <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight-text">
@@ -1355,6 +1355,13 @@ export function Metadata({
                 ? (user.email ?? null)
                 : null
           }
+          ownerId={
+            viewAsNonce() !== null
+              ? (viewAsSubject?.subjectId ?? null)
+              : readerId != null && user?.id === readerId
+                ? readerId
+                : null
+          }
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
              false for ever if it fails — so a failed metadata check removed the
              whole section rather than showing its "we could not check" state.
@@ -1419,7 +1426,8 @@ export function Metadata({
             for admin users, can you include a section that shows cost
             estimates"*. Beside the technical details it is one of, and above
             the controls. docs/plans/260930f-article-cost-on-the-metadata-page.md. */}
-        {isAdmin(user?.id) && <CostSection slug={slug} />}
+        {/* Not while viewing as a reader: it is the administrator's, and its route is refused there. */}
+        {isAdmin(user?.id) && viewAsNonce() === null && <CostSection slug={slug} />}
 
         {/* -------------------------------------------------- 9⅓. export it --
             Under the machinery since 2026-10-01 — Greg (SPIDERYARN-READING2-7H):
@@ -1554,6 +1562,7 @@ function SharingSection({
   slug,
   title,
   ownerEmail,
+  ownerId,
   offer,
   sharing,
   checking,
@@ -1563,6 +1572,8 @@ function SharingSection({
   slug: string;
   title: string;
   ownerEmail: string | null;
+  /** The signed-in owner's id, under the same guard as `ownerEmail`; for the administrator's openers line. */
+  ownerId: string | null;
   /** Straight through to the card — see `Metadata`'s prop of the same name. */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
   onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
@@ -1579,7 +1590,7 @@ function SharingSection({
   checking: boolean;
 }) {
   if (!offer) return null;
-  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} ownerId={ownerId} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
 }
 
 /**
@@ -1596,6 +1607,7 @@ function SharingCard({
   slug,
   title,
   ownerEmail,
+  ownerId,
   sharing,
   checking,
   onVisibility,
@@ -1604,6 +1616,7 @@ function SharingCard({
   slug: string;
   title: string;
   ownerEmail: string | null;
+  ownerId: string | null;
   sharing: ArticleSharing | undefined;
   checking: boolean;
   onVisibility: (slug: string, visibility: Visibility | null) => void;
@@ -1648,6 +1661,9 @@ function SharingCard({
             (Ownership.tsx). Greg, spya-cf30ac. */}
         <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
           <Ownership whose="yours" email={ownerEmail} />
+          {/* The administrator's own article: who opened its private link
+              (plan 261021d § 5). Draws and asks nothing for anybody else. */}
+          <AdminLinkOpens slug={slug} readerId={ownerId} privateLink={linkOn} />
         </div>
         <PrivateLink
           slug={slug}
@@ -2705,7 +2721,7 @@ function SubHeading({ children }: { children: ReactNode }) {
      did to it" into the contents list in the margin as if it were a peer of
      "Your reading". `Section` is what `[data-section]` means. */
   return (
-    <h3 className="tw:mt-5 tw:mb-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+    <h3 className="tw:mt-5 tw:mb-2 tw:text-[length:max(var(--text-min),0.68rem)] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
       {children}
     </h3>
   );
@@ -2865,8 +2881,9 @@ function TechnicalDetails({
 }
 
 /** The quiet inline button this page uses for an act with a sentence beside it. */
+/* `min-h-[40px]` under a finger: these came out 34 tall on a phone (plan 261021g). */
 const QUIET_BUTTON =
-  "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+  "tw:inline-flex tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
 
 /**
  * **Archive and Share…, under the title.** Greg, 2026-09-30
@@ -3054,7 +3071,7 @@ function ArchiveArticle({
         type="button"
         onClick={() => void set(!archived)}
         disabled={busy}
-        className={`tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
+        className={`tw:inline-flex tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
           archived
             ? "tw:text-highlight-text tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
             : /* Quiet at rest and tinted on hover — the shelf's own Archive
@@ -3811,7 +3828,7 @@ function Stat({
       >
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
-          <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+          <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
             {label}
           </span>
         </div>
@@ -3854,7 +3871,7 @@ function Row({
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:px-4 tw:py-3 tw:text-sm">
       <Chip icon={icon} />
-      <span className="tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+      <span className="tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
         {label}
       </span>
       <span className="tw:ml-auto tw:min-w-0 tw:text-right tw:text-ink-faint">{children}</span>
@@ -3916,7 +3933,7 @@ function StageRow({
             is what this app says "yes, and it is this one" with everywhere
             else. */}
         <span
-          className={`tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:px-2 tw:py-0.5 tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] ${
+          className={`tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:px-2 tw:py-0.5 tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] ${
             done
               ? "tw:border-highlight/30 tw:bg-highlight-wash tw:text-highlight-ink"
               : "tw:border-border tw:text-muted-foreground"

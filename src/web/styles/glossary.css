@@ -84,7 +84,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   cursor: pointer;
 }
 /* **Behind `(hover: hover)`, and pressed feedback beside it.** The wash and the
@@ -174,7 +174,7 @@
 }
 .gloss-gate-label {
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   text-transform: lowercase;
 }
 /* Monospaced and pushed right, like the scores on the rows it governs — this
@@ -184,7 +184,7 @@
   margin-left: auto;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   white-space: nowrap;
 }
 /* **Debate's value is words, not a number**, so it is not mono: a proportional
@@ -244,7 +244,7 @@
 .gloss-gate-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.35;
 }
 
@@ -253,7 +253,7 @@
   margin: 0.35rem 0 0;
   max-width: 46ch;
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   line-height: 1.45;
 }
 /* A failure sentence: `--danger`, the error-text colour every band's failure
@@ -396,6 +396,17 @@ div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem
 .gloss-hide:hover { background: var(--surface-raised); color: var(--ink); }
 .gloss-hide:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 .gloss-hide:disabled { opacity: 0.45; cursor: default; }
+/* **40 × 40 under a finger**, from 1.8rem (plan 261021g § Stage 2, Sol's R8;
+   controls.md § The numbers). It is beside the row's button, not on it (the
+   grid above), so it can grow without covering the term. No top margin, so
+   its glyph stays on the term's line and the row grows by about 4px, not 10. */
+@media (any-pointer: coarse) {
+  .gloss-hide {
+    width: 40px;
+    height: 40px;
+    margin-top: 0;
+  }
+}
 
 /* *Hidden (n)* at the foot of the list — collapsed, quiet, names only. */
 .gloss-hidden {
@@ -449,7 +460,7 @@ div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem
 .gloss-added {
   flex-shrink: 0;
   color: var(--ink-faint);
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   white-space: nowrap;
   cursor: help;
 }
@@ -457,7 +468,7 @@ div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem
 .gloss-ask-added {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   line-height: 1.45;
 }
 .gloss-ask-added .gloss-btn { margin-left: 0.25rem; }
@@ -496,7 +507,7 @@ div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem
   margin: 0 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;

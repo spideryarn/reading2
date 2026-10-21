@@ -600,7 +600,7 @@ Three postmortems name the classes:
 - **The migration was renumbered twice** at merges with dev, which gained
   `20261020164021_article_open_times` and then `20261020204049_chat_threads_mode_prepared_at`. Each
   time it was regenerated on top (identical DDL, the two hand-written `auth.users` keys appended
-  again), ending as `20261021032232_view_as_sessions`, so the snapshot chain stays linear and the
+  again), ending as `20261021154507_view_as_sessions`, so the snapshot chain stays linear and the
   journal in time order. Applied to the local database (`Target: postgresql://postgres@127.0.0.1:54362`).
 - **Browser run (Playwright, the box, as dev-admin viewing dev-reader-b): all seven checks
   passed.** The button and reason form; the new tab with the fragment stripped; the reader's

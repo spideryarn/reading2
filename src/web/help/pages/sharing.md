@@ -22,7 +22,8 @@ that you have the right to share the text, and press **Create the link**. Then c
 send it however you like.
 
 - **Anyone who has the link can read the article without an account**, and can pass the link on. We
-  cannot tell you who has opened it.
+  don't show you who has opened it. We do record it — the accounts of people signed in, and a rough
+  count of signed-out opens — and only the administrator can see that.
 - **An article shared only this way is not listed anywhere**, and the page tells whoever opens it
   that it is a private link. They get what a visitor to a public article gets, and like any visitor
   they cannot write anything or start any AI work.

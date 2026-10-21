@@ -1022,7 +1022,7 @@ describe("the schema keeps the promises the plan makes", () => {
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
                             'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk',
-                            'shelf_topic_sets_owner_fk',
+                            'shelf_topic_sets_owner_fk','private_link_openers_reader_fk',
                             'view_as_sessions_actor_fk','view_as_sessions_subject_fk')
           order by conname`,
       );
@@ -1067,6 +1067,10 @@ describe("the schema keeps the promises the plan makes", () => {
            a delete on it would mean an account could not be removed until its
            last hover expired. */
         "link_summaries_owner_fk",
+        /* drizzle/20261021013453, appended by hand. CASCADE, as
+           `article_open_times_owner_fk`: that an account opened somebody's
+           private link is worth nothing once the account is gone. */
+        "private_link_openers_reader_fk",
         /* drizzle/20260905172650, and the first CASCADE. Bookkeeping: one row
            per outbound fetch a pointer caused, deleted by the limiter itself as
            soon as it falls out of the rolling window. It arrived with stage 2 of
@@ -1091,7 +1095,7 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for the same reason: the model's topic set is a cache. */
         "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",
-        /* drizzle/20261021032232, appended by hand. CASCADE on both, for
+        /* drizzle/20261021154507, appended by hand. CASCADE on both, for
            `reader_arrivals`' reason: bookkeeping about two accounts. */
         "view_as_sessions_actor_fk",
         "view_as_sessions_subject_fk",

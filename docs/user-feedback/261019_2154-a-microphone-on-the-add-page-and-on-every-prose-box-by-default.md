@@ -1,7 +1,7 @@
 ---
 reports: spya-wc4vku
 ending: shipped
-comment: Both add-page boxes now have a microphone, and the page waits while you dictate. A test fails on any new writing box without one. The controls.md rule waits on q-ccv9qq; five boxes still without one are queued.
+comment: Both add-page boxes now have a microphone, and the page waits while you dictate. So do Skim's purpose, Referee's criterion, the Candidates scope and a comment's note. controls.md says so; a test fails on any new writing box without one.
 ---
 # A microphone on the add page, and on every prose box by default
 
@@ -44,3 +44,28 @@ to Greg ([edit-important-docs.md](../reusable/edit-important-docs.md)). controls
 **Deferred, queued as `qi-d44n9rhc`**: the five reader prose boxes the test lists as *not yet* — Skim's purpose box,
 Referee's new-criterion box, the Candidates search's scope, rewriting a chat question, and editing
 a comment's note. Each has its own send and unmount to check.
+
+## 2026-10-21: the rule and the four boxes (q-ccv9qq answered)
+
+Greg's reply `spya-xd63nn`, 2026-10-20 21:43 UTC, quoted in full in
+[q-ccv9qq](questions/q-ccv9qq.md): *"Yes, but keep it a minimal update … we obviously don't want the
+URL … to have a voice button … And not so we need a voice button for, like, the search bar on the
+homepage. So use your judgment a little bit."* Queue item `qi-d44n9rhc`, plan
+[261021e](../plans/261021e-microphone-on-the-five-remaining-prose-boxes.md); the report re-read
+with `feedback-reporter.ts` (admin, exit 0, no addenda) before this section.
+
+- **controls.md has the row** (option A): a box for more than a few words of the reader's writing
+  gets the microphone, *not a URL, a search or a title*, pointing at dictation.md and the test.
+- **Four more boxes have the microphone**: Skim's *What are you skimming for?*, Referee's new
+  criterion, the box that scopes the Candidates search, and a comment's own note. None sends or
+  saves while you are still talking or the words are on their way; Skim's box stays on screen
+  through a banner until they land; the note saves when they land, not on the blur that Stop
+  causes.
+- **One exempted, by judgment**: rewriting a chat question already asked. It is usually a small fix
+  to words already there, the composer one box below has the microphone, and a voice rewrite would
+  be stored as typed (the rewrite keeps the original question's record of how it was made). Its
+  reason is in the test; easy to reverse.
+
+Two GPT Sol reviews (plan, code), both in `docs/plans/261021e-*-sol.md`.
+
+**Ending: still Shipped.**

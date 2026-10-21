@@ -317,8 +317,8 @@ will eventually have to decide whether they are a system or an accident:
 - **[typography.md](typography.md)** — one sans for the article and the chrome alike, the weight
   axis, the six text roles (`--type-*`) a band's recurring lines take their size from, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
   content that cannot reflow: a wide code block, and a figure drawn in black ink for a white page.
-- **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in IBM
-  Plex Mono, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
+- **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in iA
+  Writer Quattro, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
   shows, and how to put a new one in its voice.
 - **[controls.md](controls.md)** — **controls that do the same job look the same in every mode**:
   the shared piece for each kind and checks of the pieces and listed callers; then why a button in this

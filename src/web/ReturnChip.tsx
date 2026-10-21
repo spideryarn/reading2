@@ -66,6 +66,7 @@ import { useEffect, useState } from "react";
 
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
+import { isAppSurfaceOpen, isPlainKey } from "./key-chord.js";
 import { type Section, sectionIndexContaining } from "./position.js";
 import { dismissJumpOrigin, jumpStampKey, useJumpOrigin, useJumpStampKey } from "./router.js";
 
@@ -145,6 +146,19 @@ function VisibleReturnChip({
     };
   }, [stampKey, held]);
 
+  /* Backspace presses it, for exactly as long as it is here — this half mounts
+     and unmounts with the chip, so with no chip the key is the browser's
+     again. See `isWayBackKey`. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isWayBackKey(e)) return;
+      e.preventDefault();
+      onReturn();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onReturn]);
+
   return (
     /* `role="note"` and no live region, for `InstallHint`'s reason: this is a
        standing affordance rather than an announcement, and interrupting a
@@ -170,11 +184,18 @@ function VisibleReturnChip({
         /* A button rather than a link: the address it writes is decided at the
            press, from whatever the reader has open by then. */
         onClick={onReturn}
+        aria-keyshortcuts="Backspace"
       >
         {/* Decorative: the sentence beside it already says what the press
             does, so a screen reader reading "left arrow hook" first would only
             be in the way. */}
         <span aria-hidden="true">↩</span> {label}
+        {/* The key, shown; `aria-keyshortcuts` above says it to a screen
+            reader, so this is hidden from one. Hidden on a coarse pointer,
+            where a hardware keyboard is uncommon (dock.css). */}
+        <span className="return-chip-key" aria-hidden="true">
+          ⌫
+        </span>
       </button>
       <button
         type="button"
@@ -188,6 +209,53 @@ function VisibleReturnChip({
     </div>
   );
 }
+
+/**
+ * **Is this the Backspace that presses the chip?** A reader asked for it
+ * (spya-yjnpjg) and Greg chose it, 2026-10-20 (spya-dzfvs2): *"A. And use your
+ * judgement"*. docs/plans/261020u-backspace-takes-the-way-back.md.
+ *
+ * `isPlainKey`'s rules first — no modifier, no repeat, no IME, not typing, not
+ * claimed, no native modal. Then two of its own, and they differ from G's on
+ * purpose:
+ *
+ *  - **Focus on a plain control does not stop it.** G refuses focus on any
+ *    control but its own, because a control may give a letter a meaning.
+ *    Backspace means nothing to a button, a link or a tree, and Enter on a
+ *    section in Structure leaves focus on Structure's `role="tree"` — the
+ *    very place the reporter asked from (a click leaves it on the page,
+ *    measured in Chrome, which this rule allows too). Focus on either of the chip's
+ *    own buttons presses the return, never the ×. What it does yield to is a
+ *    widget that may use the key itself (`OWNS_BACKSPACE`).
+ *  - **Nothing while a modeless dialog is open** — Chat, a comment, Annotate,
+ *    the Dock's drawer, a popover, a hover card — whether focus is in it or
+ *    has fallen back to the page behind it. The reader is attending to that
+ *    surface, and a stray Backspace there must not move the article.
+ */
+export function isWayBackKey(e: KeyboardEvent): boolean {
+  if (!isPlainKey(e, "Backspace")) return false;
+  if (isAppSurfaceOpen('[role="dialog"]')) return false;
+  const focused = document.activeElement;
+  return !(focused instanceof Element && focused.closest(OWNS_BACKSPACE) !== null);
+}
+
+/**
+ * Widgets in which Backspace may already mean something: deleting a chosen
+ * item or a tag, or a character in a scripted text field `isTyping` cannot see.
+ */
+const OWNS_BACKSPACE = [
+  "listbox",
+  "combobox",
+  "menu",
+  "menubar",
+  "grid",
+  "slider",
+  "spinbutton",
+  "textbox",
+  "searchbox",
+]
+  .map((role) => `[role="${role}"]`)
+  .join(", ");
 
 /**
  * What the chip says, or `null` for "draw nothing".

@@ -638,7 +638,7 @@ export function Library({
               >
                 <Link
                   href={PROFILE_HREF}
-                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight-text"
+                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:any-pointer-coarse:min-h-[40px] tw:hover:text-highlight-text"
                 >
                   <User size={13} />
                   Profile
@@ -656,7 +656,7 @@ export function Library({
                 >
                   <Link
                     href={ADMIN_HREF}
-                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight-text"
+                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:any-pointer-coarse:min-h-[40px] tw:hover:text-highlight-text"
                   >
                     <Shield size={13} />
                     Admin

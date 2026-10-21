@@ -826,7 +826,7 @@ td.text.kind-heading .blk-gutter {
 .blk-cmt { color: var(--highlight-text); pointer-events: auto; }
 .blk-n {
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: max(var(--text-min), 0.58rem);
 }
 
 /* **What "…" opens: this same column, unfolded over the rows below it.**
@@ -938,7 +938,7 @@ td.text.kind-heading .blk-gutter[data-open] {
 .block-chat.has:focus-visible { color: var(--highlight-text); }
 .block-chat-n {
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: max(var(--text-min), 0.58rem);
 }
 
 /* ------------------------------------------------------ one press for help --

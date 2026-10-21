@@ -109,7 +109,7 @@ mark.cmt[data-colour][data-cmt-open] {
 mark.cmt[data-mark-end]::after {
   content: "✳";
   font-family: var(--font-ui);
-  font-size: 0.6em;
+  font-size: max(var(--text-min), 0.6em);
   line-height: 1;
   vertical-align: super;
   margin-left: 0.15em;
@@ -692,7 +692,7 @@ mark.hit[data-dir]::after {
   content: "−";
   /* biome-ignore lint/suspicious/noDuplicateProperties: the plain declaration above is the fallback for a browser without the alt-text syntax */
   content: "−" / "counts against";
-  font-size: 0.7em;
+  font-size: max(var(--text-min), 0.7em);
   /* `line-height: 0` with `vertical-align: super` raises the glyph without
      growing the line box, so switching a criterion on cannot reflow the
      article — the same rule the stripes follow by living in the leading. */
@@ -1065,7 +1065,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.5rem;
 }
 .cmt-dialog-label {
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -1187,7 +1187,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .cmt-followup input::placeholder { color: var(--ink-faint); }
 .cmt-followup input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.cmt-followup button { font-size: 0.81rem; white-space: nowrap; }
+.cmt-followup button { font-size: max(var(--text-min), 0.81rem); white-space: nowrap; }
 .cmt-followup button:disabled { opacity: 0.4; cursor: default; }
 
 /* The reader's own words on a comment, edited in place — CommentDialog's
@@ -1212,19 +1212,28 @@ td.text.has-hit[data-hues="8"] {
   resize: vertical;
 }
 .cmt-note::placeholder { color: var(--ink-faint); }
+/* The note and its microphone, side by side; the box keeps its own vertical
+   spacing on the row (plan 261021e). */
+.cmt-note-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.55rem 0 0.6rem;
+}
+.cmt-note-row .cmt-note { flex: 1; min-width: 0; margin: 0; }
 .cmt-note:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cmt-open-thread {
   display: block;
   margin: 0 0 0.6rem;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
 }
 /* Under the link, which then gives up its own bottom margin to it (plan 261011c). */
 .cmt-open-thread:has(+ .cmt-thread-gist) { margin-bottom: 0.15rem; }
 .cmt-thread-gist {
   margin: 0 0 0.6rem;
   color: var(--ink-soft);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.4;
 }
 
@@ -1235,7 +1244,7 @@ td.text.has-hit[data-hues="8"] {
 .cmt-error p {
   margin: 0 0 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.4;
   color: var(--danger);
   overflow-wrap: anywhere;
@@ -1247,7 +1256,7 @@ td.text.has-hit[data-hues="8"] {
   border-top: 1px solid var(--rule);
 }
 .cmt-sources-label {
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -1260,11 +1269,11 @@ td.text.has-hit[data-hues="8"] {
   flex-direction: column;
   gap: 0.3rem;
 }
-.cmt-sources li { font-size: 0.84rem; line-height: 1.35; }
+.cmt-sources li { font-size: max(var(--text-min), 0.84rem); line-height: 1.35; }
 .cmt-sources a { color: var(--highlight-ink); }
 .cmt-host {
   display: block;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--ink-faint);
 }
 
@@ -1276,7 +1285,7 @@ td.text.has-hit[data-hues="8"] {
   margin-top: 0.6rem;
   padding-top: 0.55rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--ink-faint);
 }
 /* Delete stays hard right; everything else in the footer packs to the left, in
@@ -1290,7 +1299,7 @@ td.text.has-hit[data-hues="8"] {
    highlight", a refusal and "Remove highlight" on one line. */
 .cmt-fresh-hint {
   margin: 0.5rem 0 0;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--ink-faint);
 }
 .cmt-dialog footer:has(.cmt-copy) { flex-wrap: wrap; }
@@ -1368,7 +1377,7 @@ td.text.has-hit[data-hues="8"] {
    that goes nowhere reads as "there is more this way" when there isn't. */
 .cmt-nav button:disabled { color: var(--ink-faint); opacity: 0.35; cursor: default; }
 .cmt-count {
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
   min-width: 2.5rem;
@@ -1390,7 +1399,7 @@ td.text.has-hit[data-hues="8"] {
 .cmt-search.on { color: var(--highlight-text); }
 .cmt-search.off { color: var(--ink-faint); opacity: 0.65; }
 .cmt-search svg { display: block; }
-.cmt-search-n { font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+.cmt-search-n { font-size: max(var(--text-min), 0.74rem); font-variant-numeric: tabular-nums; }
 .tooltip.tip-search { max-width: 17rem; font-size: 0.85rem; line-height: 1.45; }
 .tooltip.tip-search strong { color: var(--highlight-ink); font-weight: 600; }
 

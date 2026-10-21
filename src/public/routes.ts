@@ -44,6 +44,7 @@ import type { ServerResponse } from "node:http";
 import { sendBinary, sendBinaryHead } from "../binary-response.js";
 import { isSlug } from "../ingest.js";
 import {
+  PRIVATE_LINK_OPENED,
   PUBLIC_ROUTE_NAMES,
   type PublicAssetRouteName,
   type PublicCollectionRouteName,
@@ -51,6 +52,7 @@ import {
 } from "./route-names.js";
 import { parseShareKey } from "../share-key.js";
 import { type PublicAccess, accessFor } from "../store/public-access.js";
+import { countSignedOutOpen } from "../store/private-link-signed-out-opens.js";
 import { pgPublicLibraryReader } from "../store/public-library.js";
 import { type PublicAsset, pgPublicReader } from "../store/public-reader.js";
 
@@ -401,6 +403,23 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
      malformed key for anybody to tell from a wrong one. */
   const access = accessFor(parseShareKey(request.key));
 
+  /* **The one write, matched before the reads and answered on its own.**
+     A signed-out visitor opened a private link, so its count goes up (plan
+     261021d § 4; Greg's 2C). POST only, by its own check; it reads no body and
+     no header — there is still no `req` here — and answers 204 with no body
+     whatever happened, so it tells a caller nothing the article GET they have
+     just made did not. Without a usable key it writes nothing.
+     `countSignedOutOpen` is bounded and throttled (security-risks.md § R31). */
+  const opened = PRIVATE_LINK_OPENED.pattern.exec(path);
+  if (opened) {
+    requireMethod(res, method, "POST");
+    const slug = slugFrom(opened);
+    if (access.kind === "link") await countSignedOutOpen(slug, access.key);
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
   /* **Method, then slug, then the read**, and the order is the content of
      these lines. The slug is validated before the store is consulted, so a
      malformed request is a 400 and never reaches a read. (There was a fourth
@@ -518,4 +537,15 @@ function requireReadMethod(res: ServerResponse, method: string): void {
   if (method === "GET" || method === "HEAD") return;
   res.setHeader("Allow", "GET, HEAD");
   throw httpError(405, `Public routes are read-only, not ${method}`);
+}
+
+/**
+ * **The write route's own check: exactly one method, and not a read.** The
+ * mirror of `requireReadMethod`, for `PRIVATE_LINK_OPENED` alone — a GET or
+ * HEAD there would be a write a prefetch or an unfurler could make.
+ */
+function requireMethod(res: ServerResponse, method: string, only: "POST"): void {
+  if (method === only) return;
+  res.setHeader("Allow", only);
+  throw httpError(405, `This public route takes ${only} only, not ${method}`);
 }

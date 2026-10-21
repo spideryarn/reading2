@@ -362,8 +362,13 @@ export function EditableTitle({
       ) : (
         <div className="tw:group tw:flex tw:items-start tw:gap-2">
           {children}
+          {/* **40 × 40 under a finger**, sized from here because `IconButton`
+              takes no class and every other one of them keeps its 28px (plan
+              261021g § Stage 2, Sol's R3). The masthead's sharing mark and
+              Archive do the same, with the same 2px lift so the glyph keeps
+              its line (Masthead.tsx § `SharingMark`); Metadata's pencil follows. */}
           {offer && (
-            <span className="tw:mt-1 tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100">
+            <span className="tw:mt-1 tw:shrink-0 tw:any-pointer-coarse:-mt-0.5 tw:any-pointer-coarse:[&>button]:size-[40px] tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100">
               <IconButton ref={pencil} label="Edit title" onClick={rename.begin}>
                 <Pencil size={14} />
               </IconButton>

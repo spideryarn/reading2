@@ -1029,8 +1029,14 @@ function SharingMark({
            this is the only mark left in the row.) `text-highlight` when it is
            out in the world, matching the shelf's own `SharedBadge`
            (ShelfEntry.tsx) — one article, one colour, whichever page you meet
-           it on. */
-        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-md tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground ${
+           it on.
+
+           **40px under a finger**, like Archive and the pencil beside it (plan
+           261021g § Stage 2): a 28px square at a 36px pitch was the top bar's
+           smallest target. The margin goes 2px up instead of 4px down, so the
+           glyph keeps the centre line it shares with the title's first line;
+           the row's 8px gap stays, so the three boxes do not touch. */
+        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:any-pointer-coarse:-mt-0.5 tw:any-pointer-coarse:size-[40px] tw:items-center tw:justify-center tw:rounded-md tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground ${
           shared ? "tw:text-highlight-text" : "tw:text-ink-faint"
         }`}
       >
@@ -1111,7 +1117,8 @@ function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boo
         onClick={() => void set(!archived)}
         disabled={busy}
         aria-label={archived ? "Archived — put back on the shelf" : "Archive this article"}
-        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-0 tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:disabled:opacity-50 ${
+        /* 40px under a finger, the sharing mark's reason (§ `SharingMark`). */
+        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:any-pointer-coarse:-mt-0.5 tw:any-pointer-coarse:size-[40px] tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-0 tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:disabled:opacity-50 ${
           error ? "tw:text-danger" : archived ? "tw:text-highlight-text" : "tw:text-ink-faint"
         }`}
       >

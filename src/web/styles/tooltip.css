@@ -66,7 +66,7 @@
    with the band marked, its gist and sub-sections under it, then how big it is
    (BandCard in Spine.tsx, plan 261003d). Here rather than in skim.css since
    the spine began using it. */
-.where-card { margin: 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.45; }
+.where-card { margin: 0; padding: 0; list-style: none; font-size: max(var(--text-min), 0.8rem); line-height: 1.45; }
 .where-node { color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Keep a trimmed level's count visible when its title is long. Scoped to the
    counted spine rows so moving these shared rules does not alter Skim's rows. */
@@ -117,14 +117,14 @@
 .tip-num {
   margin-right: 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.82em;
+  font-size: max(var(--text-min), 0.82em);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
 .tip-gist {
   margin: 0.35rem 0 0;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -143,7 +143,7 @@
 .tip-kids li {
   position: relative;
   padding-left: 0.7rem;
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.45;
   color: var(--ink-soft);
   overflow: hidden;
@@ -170,7 +170,7 @@
   gap: 0.6rem;
   margin-top: 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: max(var(--text-min), 0.62rem);
   line-height: 1;
   color: var(--ink-faint);
   opacity: 0.8;
@@ -209,7 +209,7 @@
   margin-top: 0.45rem;
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.66rem;
+  font-size: max(var(--text-min), 0.66rem);
   line-height: 1.35;
   color: var(--ink-faint);
 }
@@ -290,7 +290,7 @@
   grid-template-columns: auto 1fr;
   gap: 0.2rem 0.75rem;
   margin: 0;
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.45;
 }
 
@@ -310,7 +310,7 @@
    their hue's dot, wrapping in the facts' value column. */
 .tip-byline {
   margin: 0.15rem 0 0;
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.4;
   color: var(--ink-faint);
 }
@@ -328,7 +328,7 @@
   margin: 0.45rem 0 0;
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   font-weight: 500;
   color: var(--ink);
 }

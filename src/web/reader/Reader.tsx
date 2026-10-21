@@ -1324,6 +1324,8 @@ export function Reader({
      "the list happens to be empty" is a much weaker guarantee than "the branch
      does not exist". */
   const chatSummaries = owner?.chatAnchors.summaries ?? NO_THREADS;
+  /* Whether that list has answered yet: an empty one before it has is "not known". */
+  const chatSummariesLoaded = owner?.chatAnchors.loaded ?? false;
 
   /* Memoised, and this is a performance fix rather than tidiness. Both of these
      build a fresh array and a fresh Map, so calling them inline in the JSX
@@ -1858,9 +1860,12 @@ export function Reader({
           setBandAway(false);
           /* A question is not in the article: *Your questions* is Investigate's (it
              was Reception's angle box until plan 261020n, and an angle chat
-             made then lands here too, where it is now listed). */
+             made then lands here too, where it is now listed). **`?thread=`
+             is kept**, so the conversation the reader came back from stays
+             open beside Investigate, rather than the panel opening its newest
+             (InvestigatePanel.tsx § `useReopenNewest`; plan 261021b). */
           void setSourcesWay(
-            { mode: "sources", sources: "investigate", thread: null },
+            { mode: "sources", sources: "investigate" },
             { history: "push" },
           );
           return;
@@ -2880,12 +2885,29 @@ export function Reader({
   const investigateChats = useMemo(
     () => ({
       summaries: chatSummaries,
+      loaded: chatSummariesLoaded,
+      /* Anything already open beside the mode, which the arrival must not
+         replace: a `?thread=` (shown, or Chat's state carried across), an
+         unsent passage chat, a note, or an annotation in progress. GPT Sol's
+         F1 on plan 261021b; the annotation was found in built-code review. */
+      occupied: thread !== null || chatDraft !== null || note !== null || annotating !== null,
       onQuestion: askSourcesQuestion,
       onCheck: checkClaim,
       onAskWork: askWork,
       onOpen: openClaimChat,
     }),
-    [chatSummaries, askSourcesQuestion, checkClaim, askWork, openClaimChat],
+    [
+      chatSummaries,
+      chatSummariesLoaded,
+      thread,
+      chatDraft,
+      note,
+      annotating,
+      askSourcesQuestion,
+      checkClaim,
+      askWork,
+      openClaimChat,
+    ],
   );
   /* The same three things for Glossary's entries and Bibliography's rows
      (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`

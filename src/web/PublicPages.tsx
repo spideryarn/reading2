@@ -37,11 +37,14 @@ import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
 import { AdminOwnerLine, Ownership } from "./Ownership.js";
+import type { ShareKey } from "../share-key.js";
 import { useSession } from "./useSession.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { markedModes, NOUN } from "./visitor.js";
 import { useExperimental } from "./useExperimental.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { useViewAsSubject } from "./view-as-session.js";
 
 /**
  * The link out to the publisher, the source page found for an upload, or
@@ -139,6 +142,7 @@ export function PublicMetadataPage({
   readerId = null,
   sessionUnconfirmed,
   sharedBy,
+  shareKey = null,
 }: {
   slug: string;
   article: Article;
@@ -155,10 +159,17 @@ export function PublicMetadataPage({
   sessionUnconfirmed: boolean;
   /** For the notice below only — reader-capability.ts § sharedBy. */
   sharedBy: PublicSharedBy;
+  /**
+   * The address's private-link key, for the administrator's line only: the
+   * admin route answers for a private article only when named with its key
+   * (Ownership.tsx, plan 261021d). Optional for tests that mount this page alone.
+   */
+  shareKey?: ShareKey | null;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
   const { user } = useSession();
+  const viewAsSubject = useViewAsSubject();
   /* `readerId` is the account for which the access result below was resolved.
      A session event can reach this hook before it reaches App and changes that
      prop, so do not make a claim — or an admin request — during that crossing. */
@@ -231,8 +242,16 @@ export function PublicMetadataPage({
         {signedIn && !sessionUnconfirmed && sessionMatchesReader && (
           <section data-access className="tw:mt-8">
             <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
-            <Ownership whose="not-yours" email={user.email ?? null} />
-            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} sharedBy={sharedBy} />
+            {/* In a tab viewing as a reader, theirs is the address, and the
+                administrator's own lines are not part of what they see (plan
+                261019n § Part 3). */}
+            <Ownership
+              whose="not-yours"
+              email={viewAsNonce() !== null ? (viewAsSubject?.subjectEmail ?? null) : (user.email ?? null)}
+            />
+            {viewAsNonce() === null && (
+              <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} shareKey={shareKey} />
+            )}
           </section>
         )}
 

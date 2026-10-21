@@ -24,7 +24,7 @@
   background: none;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   font-weight: 400;
   text-align: left;
   cursor: pointer;
@@ -49,9 +49,9 @@
   white-space: nowrap;
 }
 .origin-chat-waiting { font-family: var(--font-ui); font-style: italic; }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   /* A finger's height (docs/project/touch.md), without widening the row. */
-  .origin-chat { min-height: 2.5rem; }
+  .origin-chat { min-height: max(40px, 2.5rem); }
 }
 /* **A gist wraps to two lines** (plan 261010s, D4): it is a sentence about
    the whole conversation, up to ~200 characters, and one clipped line of it

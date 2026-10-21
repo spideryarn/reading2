@@ -64,7 +64,7 @@ export function AccountSection() {
         type="button"
         onClick={() => void out()}
         disabled={busy}
-        className="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-md tw:border tw:border-border tw:px-3 tw:py-1.5 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground tw:disabled:opacity-60"
+        className="tw:inline-flex tw:items-center tw:gap-1.5 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:px-3 tw:py-1.5 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground tw:disabled:opacity-60"
       >
         <LogOut size={13} />
         {busy ? "Signing out…" : "Sign out"}

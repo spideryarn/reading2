@@ -131,11 +131,12 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/link-summary.ts`](../../src/link-summary.ts) | **the one place a stranger's page reaches a model.** Same scope as the row above — own the article, and the URL must be in it — plus the fencing: explicit untrusted-content markers, a system rule that the page is data and never a request, a reminder on the far side of it, every run of `===` rewritten so a page cannot close its own fence, and **no tools on the call**, so there is nothing for an injected instruction to reach. Its own limiter bucket, with a day and a global fuse, because this one spends money. [links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands) |
 | [`src/injection-scan.ts`](../../src/injection-scan.ts) | hidden text in the raw source, found before the model reads it. It reports and decides nothing, and it does not read PDFs |
 | [`src/referee-hidden-check.ts`](../../src/referee-hidden-check.ts) + [`src/scan-groups.ts`](../../src/scan-groups.ts) | **the one place the hidden fragments reach a model**, on the referee's press: capped and fenced where the prompt is built, the answer validated and bound to the rows sent, and drawn as a line under a row that nothing ordering, counting or marking the rows can read. Kept since 2026-10-09, owner-only, and redrawn on reload through the same validator and renderer. [security.md § the manuscript](security.md#hidden-instructions) |
-| [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
+| [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only on every read route, no owner ever set. **One write route since 2026-10-21**, matched before the reads with its own POST-only check: `POST /api/public/private-link-opened/:slug?key=`, a signed-out open of a private link counted, 204 whatever happened (Greg's 2C, [261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md); risk [R31](security-risks.md#r31)). See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
 | [`src/store/link-shared-slug.ts`](../../src/store/link-shared-slug.ts) | `linkSharedSlug()` — slug **and** `share_token = ?`, the lookup for somebody holding a private link's key. Its own leaf, never OR-ed into `publicSlug`. See below |
-| [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it |
+| [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it. Since 2026-10-21 also `privateLinkWhere()`, *private and this key*, for recording an open, never for a read |
+| [`src/store/private-link-signed-out-opens.ts`](../../src/store/private-link-signed-out-opens.ts) | **the one table the public namespace writes**: a count of signed-out opens, by `privateLinkWhere`, throttled and saturating in the statement, nothing returned. The signed-in half, which records who, is [`pg-private-link-openers.ts`](../../src/store/pg-private-link-openers.ts) and is forbidden in the public graph (`tests/public-imports.test.ts`) |
 | [`src/share-key.ts`](../../src/share-key.ts) | `parseShareKey()` — what counts as a key (22 base64url characters), so nothing else reaches a query or a request; `withoutShareKey()` — the key taken off an address before it is stored or sent |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
 | [`src/store/public-topic-tree.ts`](../../src/store/public-topic-tree.ts) + [`src/public-library-topics.ts`](../../src/public-library-topics.ts) | the public shelf's topic pills: one row read by a fixed key, the site account's, and **withheld whole** while any article it names is no longer listed. Since 2026-10-09. See below |
@@ -375,6 +376,14 @@ both still without a token or cookies. The owner's requests never carry it
 (`tests/private-link-access.test.tsx`). It is in the owner's card, read from
 `GET /api/article/:slug/share-link`, which answers `no-store` and is the one path under
 `/api/article/` the browser's offline store never keeps (`lib/api.ts` § `NEVER_KEPT`).
+
+**And since 2026-10-21, in two requests that say the link was opened**
+([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)): a signed-out
+visitor's `POST /api/public/private-link-opened/:slug?key=`, credential-less like the reads, and a
+signed-in visitor's `POST /api/private-link-opens/:slug?key=`, through `apiFetch` bound to the
+account the page was resolved for. And the administrator's `GET /api/admin/articles/:slug/access?key=`,
+which answers for somebody else's private article only when named with its key. All three in the
+query string, for the reasons the reads are; none is an owner's request.
 
 It is not in our request log, which drops the query string, nor in a Sentry event. It is not in a
 feedback report: the browser takes it off the address and the server takes it off again

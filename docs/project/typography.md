@@ -76,7 +76,7 @@ and `kind-caption`, which had never been styled at all.
 ## A face per voice
 
 For every reader, on every page, since 2026-10-02: the author, the model and the reader each get
-their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
+their own face — a serif, iA Writer Quattro and Arial — and Geist stays the chrome. The rule,
 the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 ## Text roles in a band
@@ -111,7 +111,7 @@ Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts
 foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
 0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
 quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the
-quote, and in monospace a body-sized line reads larger than the serif quote beside it (plan
+quote, and in the model's typed face, wider than the serif, a body-sized line reads larger than the quote beside it (plan
 [261009j](../plans/261009j-skim-question-optional-and-the-border.md)). The open Skim stop's section heading
 (`.skim-row.current .skim-place`) is 0.82rem rather than `--type-item`, so the quote under it is
 read first; the other rows keep the role (plan [261009m](../plans/261009m-skim-quieter-open-stop.md)).
@@ -125,6 +125,38 @@ part of a fixed composition; Chat, whose turns are prose; and everything outside
 each exception to its literal; a line that never joins its registry is not caught. The plan, the
 measurements and what was passed over:
 [261008k](../plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md).
+
+## The smallest text
+
+> I like the way it cites all of its sources, but the font is too small and they're too close
+> together for an iPhone. … make a minimum size, especially on an iPhone, but maybe in general, and
+> make a minimal update to our sort of design system documentation to avoid this problem going
+> forwards.
+>
+> — Greg, 2026-10-20 (`spya-y4yhnp`)
+
+**On a touch screen, no text comes out under 13px.** Write any size that might go under it as
+`font-size: max(var(--text-min), <the size>)`. `--text-min` lives in
+[`tokens.css`](../../src/web/styles/tokens.css). It is 0px with a mouse. Under
+`any-pointer: coarse` it is `max(13px, 0.8125rem)`: 13px at the browser's own root, growing with a
+reader's larger text size, so a tiny id grows with everything else instead of sitting at 13px
+through every setting. A size that is already bigger keeps its value, and desktop is unchanged.
+It uses `any-pointer`, as the 16px field rule does
+([touch.md](touch.md#how-big-a-thing-has-to-be-to-press-it)), because type is not rationed
+chrome.
+
+The six text roles above take the floor in their token definitions, and so does Tailwind's
+`tw:text-xs`, once, in [`tailwind.css`](../../src/web/tailwind.css)'s `@theme inline`. An
+arbitrary `tw:text-[0.68rem]` does not, so write those as a token or a class.
+
+[`tests/minimum-text-size.test.ts`](../../tests/minimum-text-size.test.ts) holds an exact baseline
+of every small literal size that skips the floor: in a stylesheet (`font-size` or `font:`), or as
+an arbitrary `tw:text-[…]`. A new one fails, and so does a floored one left in the list. It cannot
+see an `em` that comes out small against a small parent, so a computed sweep at 390 is the real
+check. Most of what it still lists is Diagram, Sketch and Illustrated, whose type is part of a
+drawing, and the dense admin and feedback pages. Plan
+[261021c](../plans/261021c-minimum-text-and-touch-target-sizes-on-a-phone.md) has the
+measurements.
 
 ## Weight, and the variable axis
 

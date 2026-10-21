@@ -179,6 +179,8 @@ Since 2026-10-20, for the owner: the sixth chip, `?sources=investigate`. It is *
 chats from**, not a chat drawn in the band. Top to bottom:
 
 - **A question box.** It replaced Reception's *Look at the debate from an angle*.
+- **Your questions**: every chat started from the box or a suggested question, newest first, each
+  with its gist. This was Reception's *Your angles*. It has been first since 2026-10-21.
 - **Five suggested questions**, the same for every article: how it has been received, whether its
   main claims are borne out, who disagrees most and why, whether the studies it leans on have held
   up, and what has been published since.
@@ -186,11 +188,24 @@ chats from**, not a chat drawn in the band. Top to bottom:
   when the owner has already made the list; this chip never buys it.
 - **About the works it cites**: the three Bibliography rates the piece as leaning on most
   (`relevance`). A work with no rating is left out.
-- **Your questions**: every chat started from the box or a suggested question, newest first, each
-  with its gist. This was Reception's *Your angles*.
+
+**Arriving takes you back to your conversation.** Since 2026-10-21, coming to Investigate opens the
+newest chat under *Your questions* beside Sources, in the floating chat dialog. It happens once per
+visit, after the chat list has loaded, and never over anything already open there: a `?thread=`, an
+unsent passage chat, a note, or an annotation in progress. It opens a stored conversation and sends
+nothing.
+
+> I started an investigate chat about how the piece had been received, and I can see it listed in
+> the chat threads, but when I go to investigate, it just shows me an empty thing.
+>
+> — Greg, 2026-10-20 (spya-nhwy3d), in [261021b](../plans/261021b-investigate-takes-you-back-to-your-conversation.md)
+
+Of the two models he offered, it is **multiple Investigate threads, a subset of Chat's**: every chat
+with a lens origin. The single-thread one would need a new thread kind; the plan says why not.
 
 **Each press sends**, as every *Ask in chat* does. It opens Chat on a fresh conversation, and
-Chat's *Back to your question in Investigate* returns here.
+Chat's *Back to your question in Investigate* returns here, with that conversation still open
+beside it.
 - **A claim row or a work row** goes through Claims' or Bibliography's own sender. It therefore
   records the same origin as that list's button does, reopens the item's chat if one exists, and
   shows the same mark in the button's place, in both places.

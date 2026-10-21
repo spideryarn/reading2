@@ -178,6 +178,9 @@ export const ARTICLE_TABLES = {
   /** Takedown evidence; a transfer that unshares writes a row of its own (step 3). */
   article_visibility_changes: "history",
   article_share_link_events: "history",
+  /** Who opened the old private link, and how often signed out: the administrator's record (plan 261021d). */
+  private_link_openers: "history",
+  private_link_signed_out_opens: "history",
   /** Live-conversation sessions, with the ledger. */
   realtime_sessions: "history",
   /** `starter_article_id`: the voucher that named it, whoever owns it now. */

@@ -65,7 +65,7 @@ and the section below it is the draft as reviewed, kept for the reasoning.
 Built: `src/web/Ownership.tsx` (`Ownership`, `AdminOwnerLine`), its first line in the owner's
 *Access & sharing* card (`Metadata.tsx`), an *Access* section on `PublicMetadataPage`, the strings
 in `src/messages.ts` § Sharing a document, a line in the Help's sharing page, and
-[admin.md § Whose article it is](../project/admin.md#whose-article-it-is-on-a-visitors-details-page).
+[admin.md § Whose article it is](../project/admin.md#whose-article-it-is-on-its-details-page).
 Tests: `tests/article-ownership.test.tsx`.
 
 ## The draft as reviewed (simplest version)

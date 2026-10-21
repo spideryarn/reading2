@@ -87,6 +87,11 @@ import { hostOf } from "../urls.js";
 import { useChat } from "./useChat.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { keepDictation } from "./dictation-keep.js";
+import { dictationReporter } from "./dictation-report.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
+import { useDictationField } from "./useDictationField.js";
 
 /**
  * The band: the thread, the fetch that belongs to it, and the opening turn.
@@ -225,6 +230,7 @@ export function CandidatesBand({
 
   return (
     <CandidatesPanel
+      slug={slug}
       thread={thread}
       loaded={loaded}
       loadFailed={loadFailed}
@@ -267,6 +273,7 @@ function firstCandidatesThread(threads: ChatThread[]): ChatThread | null {
  * router and no fetch — the seam every other referee panel already has.
  */
 export function CandidatesPanel({
+  slug,
   thread,
   loaded,
   loadFailed,
@@ -279,6 +286,8 @@ export function CandidatesPanel({
   onReload,
   onJump,
 }: {
+  /** The article, for the scope box's dictation (its vocabulary and its keeper). */
+  slug: string;
   thread: ChatThread | null;
   loaded: boolean;
   loadFailed: boolean;
@@ -378,7 +387,7 @@ export function CandidatesPanel({
         ))}
       </ol>
 
-      <Composer busy={busy} disabled={!thread} onAsk={onAsk} />
+      <Composer slug={slug} busy={busy} disabled={!thread} onAsk={onAsk} />
     </div>
   );
 }
@@ -830,19 +839,36 @@ function Tools({ tools }: { tools: ChatMessage }) {
 
 /** Where the editor scopes the search. */
 function Composer({
+  slug,
   busy,
   disabled,
   onAsk,
 }: {
+  slug: string;
   busy: boolean;
   disabled: boolean;
   onAsk(question: string): void;
 }) {
   const [text, setText] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+  const dictate = useDictationField({
+    value: text,
+    onChange: setText,
+    box,
+    context: { kind: "article", slug },
+    transcribe: useReaderTranscriber(),
+    report: dictationReporter("candidates"),
+    keep: keepDictation(`candidates:${slug}`),
+    /* A double press on Stop asks once the words are in. */
+    onDone: () => send(),
+  });
   const send = () => {
+    /* **Not while the microphone is involved** — `dictate.busy` is both
+       halves, recording and the transcript on its way. Either would send the
+       recogniser's rough guess, or on Safari and Firefox nothing that was said
+       (dictation.md § Adding it to a box). Enter and Ask both come here. */
     const question = text.trim();
-    if (question === "" || busy || disabled) return;
+    if (question === "" || busy || disabled || dictate.busy) return;
     setText("");
     onAsk(question);
     /* The search has started and its answer arrives under the keys
@@ -859,6 +885,9 @@ function Composer({
         enterKeyHint="send"
         value={text}
         placeholder="Scope the search — a method, a subfield, people to leave out…"
+        /* `readOnly`, not `disabled`, while the transcript is on its way —
+           useDictationField.ts says why. */
+        readOnly={dictate.readOnly}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           /* Enter sends, Shift+Enter is a newline — chat's own arrangement, so a
@@ -872,16 +901,29 @@ function Composer({
           if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="cnd-send"
-        disabled={busy || disabled || text.trim() === ""}
-        onClick={send}
-      >
-        <SendHorizontal size={13} aria-hidden /> Ask
-      </Button>
+      {/* One row: the composer is a flex column, and the microphone as its own
+          child would be stretched to the column's width. */}
+      <div className="cnd-actions">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="cnd-send"
+          disabled={busy || disabled || dictate.busy || text.trim() === ""}
+          onClick={send}
+        >
+          <SendHorizontal size={13} aria-hidden /> Ask
+        </Button>
+        {dictate.dictation.supported && (
+          <DictationButton
+            dictation={dictate.dictation}
+            toggle={dictate.toggle}
+            sendingAfter={dictate.sendingAfter}
+            doubleStop={dictate.doubleStop}
+          />
+        )}
+      </div>
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
     </div>
   );
 }

@@ -112,6 +112,7 @@ function paint(t: ChatThread | null, byline?: string, loadFailed = false) {
   act(() => {
     root.render(
       createElement(CandidatesPanel, {
+        slug: "a-paper",
         thread: t,
         loaded: true,
         loadFailed,

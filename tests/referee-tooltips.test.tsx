@@ -829,6 +829,7 @@ describe("Candidates explains the press before it is pressed", () => {
     act(() => {
       root.render(
         createElement(CandidatesPanel, {
+          slug: "a-paper",
           thread: null,
           loaded: true,
           loadFailed: false,
