@@ -567,7 +567,11 @@ Every few hours, as a tmux loop like the feedback sweep's:
    do the multi-step or careful way, but don't stop to ask me"*. Since 2026-10-21 this widens to
    every migration, the destructive kind included, unless you see a real risk, uncertainty or
    trade-off; take those to Greg. Greg, 2026-10-21: *"you have permission to make all future
-   database migrations unless there's significant risk/uncertainty/tradeoffs/concerns"*.
+   database migrations unless there's significant risk/uncertainty/tradeoffs/concerns"*. That
+   includes untangling two sessions' migrations on the shared local database (a stray ledger row,
+   a table only a test made): do it yourself when the fix is clear. Greg, 2026-10-21: *"if the fix
+   (e.g. for the two migrations that needed to be merged) is that clearcut/straightforward/trivial,
+   then in future don't ask for my input"*.
 3. **Write the release notes first**: `npm run changelog:prepare` under `scripts/tmux-job.ts`, then
    pull. Greg, 2026-10-01: *"make sure that the latest release notes are included in the deploy
    itself"*. It commits and pushes the notes for what is about to ship
