@@ -37,11 +37,11 @@ const column = (id: "name" | "count"): SortableColumn<Row> => ({
   header: id,
   accessorFn: (r) => r[id],
   sortDescFirst: false,
-  meta: { label: id, hint: id, ends: ["low", "high"], fluid: id === "name" },
+  meta: { label: id, hint: id, ends: ["low", "high"], fluid: id === "name", numeric: id === "count" },
 });
 const COLUMNS = [column("name"), column("count")];
 
-function Harness({ pinFirst }: { pinFirst?: boolean }): ReactElement {
+function Harness({ pinFirst, markedRowId }: { pinFirst?: boolean; markedRowId?: string }): ReactElement {
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [columnVisibility, setVisibility] = useState<VisibilityState>({});
   const table = useSortedTable<Row>({
@@ -66,6 +66,7 @@ function Harness({ pinFirst }: { pinFirst?: boolean }): ReactElement {
       rows: table.getRowModel().rows,
       caption: "People",
       pinFirst: pinFirst ?? false,
+      markedRowId: markedRowId ?? null,
     }),
   );
 }
@@ -121,5 +122,49 @@ describe("DataTable pinFirst", () => {
   it("pins nothing without it", () => {
     act(() => root.render(createElement(Harness, {})));
     expect(pinnedIn(host)).toEqual([[], [], []]);
+  });
+
+  it("keeps the default row's attributes and fixed, fluid, numeric, pinned and marked classes", () => {
+    act(() => root.render(createElement(Harness, { pinFirst: true, markedRowId: "a" })));
+    const [marked, ordinary] = host.querySelectorAll("tbody tr");
+    expect(marked?.getAttribute("data-row-id")).toBe("a");
+    expect(marked?.getAttribute("aria-current")).toBe("true");
+    expect([...marked!.classList]).toEqual(
+      expect.arrayContaining([
+        "tw:group",
+        "tw:border-b",
+        "tw:border-border/60",
+        "tw:last:border-0",
+        "tw:bg-[color-mix(in_oklab,var(--spideryarn-orange)_10%,var(--background))]",
+      ]),
+    );
+    expect(ordinary?.getAttribute("data-row-id")).toBe("b");
+    expect(ordinary?.hasAttribute("aria-current")).toBe(false);
+    expect(ordinary?.classList.contains("tw:hover:bg-card")).toBe(true);
+
+    const [fluid, numeric] = marked!.querySelectorAll("td");
+    expect([...fluid!.classList]).toEqual(
+      expect.arrayContaining([
+        "tw:px-3",
+        "tw:first:pl-4",
+        "tw:py-2",
+        "tw:w-full",
+        "tw:max-w-0",
+        "tw:min-w-56",
+        "tw:sticky",
+        "tw:left-0",
+        "tw:max-sm:min-w-40",
+      ]),
+    );
+    expect([...numeric!.classList]).toEqual(
+      expect.arrayContaining([
+        "tw:last:pr-4",
+        "tw:whitespace-nowrap",
+        "tw:text-xs",
+        "tw:text-muted-foreground",
+        "tw:text-right",
+        "tw:tabular-nums",
+      ]),
+    );
   });
 });

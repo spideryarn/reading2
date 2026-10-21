@@ -146,7 +146,9 @@ const DEFINITIONS: { [K in VoucherColumnId]: SortableColumn<AdminVoucherRow> & {
   },
   usage: {
     id: "usage",
-    header: "Claimant's free usage",
+    /* Unlike sortable headers, this has no button carrying DataTable's muted
+       header colour. Keep the plain table's header voice explicitly. */
+    header: () => <span className="tw:text-muted-foreground">Claimant's free usage</span>,
     /* Not sortable: a count, an allowance, a plan and a lapse, with no one
        honest number among them (Sol F5). */
     enableSorting: false as const,

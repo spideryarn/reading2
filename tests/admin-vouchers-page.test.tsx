@@ -252,6 +252,8 @@ const rowFor = (email: string) =>
   [...host.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(email)) as
     | HTMLTableRowElement
     | undefined;
+const rowById = (id: string) =>
+  host.querySelector<HTMLTableRowElement>(`tbody tr[data-row-id="${id}"]`) ?? undefined;
 
 const buttonIn = (el: Element | undefined, label: string) =>
   [...(el?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.trim() === label);
@@ -1717,6 +1719,13 @@ describe("sorting and hiding the Given table", () => {
   }
 
   it("is newest first by default, under the headers it always had and an order-neutral caption", async () => {
+    /* Deliberately neither server order nor UUID order, so this proves the
+       Created accessor rather than TanStack's stable-id fallback. */
+    listAnswer = [
+      { ...VOUCHERS[1], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1" },
+      { ...VOUCHERS[0], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3" },
+      { ...VOUCHERS[2], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2" },
+    ];
     await mount();
     expect(order()).toEqual(["waiting@example.test", "claimed@example.test", "revoked@example.test"]);
     expect(host.querySelector("caption")?.textContent).toBe("Every gift voucher");
@@ -1731,21 +1740,35 @@ describe("sorting and hiding the Given table", () => {
       "Claimant's free usage",
       "Actions",
     ]);
+    const usage = [...host.querySelectorAll("thead th")].find(
+      (th) => th.textContent?.trim() === "Claimant's free usage",
+    );
+    expect(usage?.querySelector(".tw\\:text-muted-foreground")).not.toBeNull();
+    expect(headerButton("Claimant's free usage")).toBeUndefined();
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent?.trim() === "Claimant's free usage",
+      ),
+    ).toBe(false);
   });
 
-  it("sorts from a header, writes ?by= beside ?tab=given, and reads both back on a reload", async () => {
+  it("sorts from a header, keeps ?tab= and ?gift=, and reads all of them back on a reload", async () => {
+    history.replaceState(null, "", `/admin/vouchers?tab=given&gift=${WAITING}`);
     await mount();
     await click(headerButton("Email"));
     expect(order()).toEqual(["claimed@example.test", "revoked@example.test", "waiting@example.test"]);
     expect(query().get("by")).toBe("email");
     expect(query().get("tab")).toBe("given");
+    expect(query().get("gift")).toBe(WAITING);
     await click(headerButton("Email"));
     expect(query().get("dir")).toBe("desc");
     expect(query().get("tab")).toBe("given");
+    expect(query().get("gift")).toBe(WAITING);
 
     await remount();
     expect(order()).toEqual(["waiting@example.test", "revoked@example.test", "claimed@example.test"]);
     expect(host.querySelector("table")?.closest("[hidden]")).toBeNull();
+    expect(query().get("gift")).toBe(WAITING);
   });
 
   it("keeps the sort when the tab changes, and the tab when the sort does", async () => {
@@ -1823,6 +1846,90 @@ describe("sorting and hiding the Given table", () => {
     expect(rows).toHaveLength(3);
     for (const tr of rows) expect(tr.children).toHaveLength(headers().length);
     expect(rowFor("claimed@example.test")?.textContent).not.toContain("free allowance");
+  });
+
+  it("moves focus into a claimed voucher's editor when Articles is hidden", async () => {
+    await mount();
+    await hideFromMenu("Articles");
+    const claimed = rowFor("claimed@example.test");
+    await click(buttonIn(claimed, "Edit"));
+    expect(document.activeElement).toBe(claimed?.querySelector('input[aria-label="Their name"]'));
+  });
+
+  it("keeps every visible editor control attached to the row's form when another column is hidden", async () => {
+    await mount();
+    await hideFromMenu("Note to them");
+    const waiting = rowFor("waiting@example.test");
+    await click(buttonIn(waiting, "Edit"));
+    const form = waiting?.querySelector("form");
+    const controls = [
+      ...(waiting?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea") ?? []),
+    ];
+    expect(controls.map((control) => control.getAttribute("aria-label"))).toEqual([
+      "Email address",
+      "Their name",
+      "Articles",
+      "Private note",
+    ]);
+    for (const control of controls) expect(control.form).toBe(form);
+  });
+
+  it("keeps a half-made edit with its voucher when Refresh adds and removes rows", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await click(buttonIn(waiting, "Edit"));
+    await typeInto(
+      waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]'),
+      "edited across refresh",
+    );
+    listAnswer = [
+      {
+        ...VOUCHERS[2],
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+        email: "new@example.test",
+        createdAt: "2026-10-10T10:00:00Z",
+      },
+      VOUCHERS[0],
+    ];
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="Refresh the vouchers"]') ?? undefined);
+    expect(rowById(WAITING)).toBe(waiting);
+    expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]')?.value).toBe(
+      "edited across refresh",
+    );
+    await click(buttonIn(waiting, "Save"));
+    expect(calls.filter((call) => call.method === "PATCH")).toEqual([
+      { method: "PATCH", url: `/api/admin/vouchers/${WAITING}`, body: { note: "edited across refresh" } },
+    ]);
+  });
+
+  it("keeps a half-made edit mounted through a tab switch", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await click(buttonIn(waiting, "Edit"));
+    await typeInto(
+      waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]'),
+      "edited across tabs",
+    );
+    const tab = (name: string) =>
+      [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((item) => item.textContent?.startsWith(name));
+    await click(tab("Give"));
+    await click(tab("Given"));
+    expect(rowById(WAITING)).toBe(waiting);
+    expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]')?.value).toBe(
+      "edited across tabs",
+    );
+  });
+
+  it("keeps a refusal on its voucher when a re-sort moves the row", async () => {
+    patchAnswer = { status: 409, body: { error: "That voucher changed elsewhere." } };
+    await mount();
+    const claimed = rowFor("claimed@example.test");
+    await click(buttonIn(claimed, "Revoke"));
+    expect(claimed?.textContent).toContain("That voucher changed elsewhere.");
+    await click(headerButton("Email"));
+    expect(rowFor("claimed@example.test")).toBe(claimed);
+    expect(claimed?.textContent).toContain("That voucher changed elsewhere.");
+    expect(rowFor("revoked@example.test")?.textContent).not.toContain("That voucher changed elsewhere.");
   });
 
   /* Sol F2: the row's edit state must travel with its voucher. Keyed by

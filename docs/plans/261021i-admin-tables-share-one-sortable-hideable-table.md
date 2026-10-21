@@ -200,3 +200,17 @@ code, but it is exactly the "different from /users" Greg reported, kept, with a 
   and first click is descending (claimed first, revoked at the foot), ties newest first under that
   arrow. Mutation-proven: index keys fail both identity tests, revoked losing fails Status, a blank
   note not missing fails the sink test, a hideable Actions fails the menu test. Full suite green.
+- 2026-10-21: Stage 2 browser pass (Sonnet, own dev server, 1280 and 390, two test vouchers made on
+  the local database through the Give form): all six checks pass — headers sort and keep
+  `tab=given`, the sort survives a tab switch, hide survives reload, Email held at 390, no page-level
+  sideways scroll, and **an edit begun, re-sorted twice mid-edit, then saved landed on its own
+  voucher** (the form moved rows 10 → 6 → 1 with its draft). Seen and left: an address breaks
+  mid-word in the Email column — the old table's `break-all`, unchanged; a row being edited makes
+  the table wider than 1280, as the old one's inputs did.
+- 2026-10-21: Stage 2 GPT Sol code review —
+  [stage2-code-review-sol.md](261021i-admin-tables-share-one-sortable-hideable-table-stage2-code-review-sol.md),
+  `APPROVE WITH CHANGES`, fixed by the reviewer, red first: D1 (P1) with Articles hidden, Edit on a
+  claimed voucher had no field to focus — it now focuses the name field, which is always drawn; D2
+  (P1) the unsortable usage header had lost the old muted colour (the browser pass saw it too); D3
+  (P2) tests for refresh and tab identity, refusal ownership, cross-cell forms, `?gift=`, Created
+  order, usage unsortable, and the default row's dress. Gates green after.

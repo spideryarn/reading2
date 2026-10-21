@@ -1121,8 +1121,9 @@ function VoucherRow({
   const unclaimed = voucher.claimedBy === null;
   const revoked = voucher.revokedAt !== null;
   /* Also changes if a refresh says a waiting voucher was claimed while its
-     editor was open, when the email field gives way to the article field. */
-  const focusDestination = editing ? (unclaimed ? "email" : "articles") : "edit";
+     editor was open, when the editable address gives way to the name below
+     it. The Email column cannot be hidden, so both destinations always exist. */
+  const focusDestination = editing ? (unclaimed ? "email" : "name") : "edit";
 
   /* The Edit button disappears when the fields arrive. Put focus on the first
      field rather than leaving a keyboard user on a detached element. */
@@ -1217,6 +1218,7 @@ function VoucherRow({
             name on each row than an address alone (plan 261007f). */}
         {editing ? (
           <input
+            ref={unclaimed ? undefined : firstField}
             type="text"
             aria-label="Their name"
             enterKeyHint="done"
@@ -1237,7 +1239,6 @@ function VoucherRow({
     articles: () =>
       editing ? (
         <input
-          ref={unclaimed ? undefined : firstField}
           type="number"
           aria-label="Articles"
           enterKeyHint="done"
