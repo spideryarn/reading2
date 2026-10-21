@@ -43,14 +43,12 @@ const WITHOUT: Record<string, string> = {
   "src/web/AdminVouchersPage.tsx#VoucherRow": "admin only: a short note sent with a voucher",
   "src/web/AdminAuthorGifts.tsx#Notes": "admin only: notes on an author gift",
   "src/web/AdminAuthorGifts.tsx#DraftEditor": "admin only: the draft of an author gift's email",
-  /* Prose boxes a reader writes in, without a microphone yet. Queued as the
-     sweep in plan 261020r § Stage 5; each has its own send and unmount to
-     check, so each is a change of its own. Delete the line when it lands. */
-  "src/web/SkimPurpose.tsx#PurposeLine": "not yet: queued (Skim's own purpose box)",
-  "src/web/CriteriaPanel.tsx#NewCriterion": "not yet: queued (Referee's new-criterion box)",
-  "src/web/CandidatesPanel.tsx#Composer": "not yet: queued (scoping the candidates search)",
-  "src/web/ChatPanel.tsx#EditQuestion": "not yet: queued (rewriting a question already asked)",
-  "src/web/CommentDialog.tsx#CommentBody": "not yet: queued (editing a comment's note)",
+  /* GPT Sol's plan review of 261021e, F5-F6. A voice rewrite would need a
+     keeper name that survives the question's client-to-server id swap, and a
+     modality carried through the edit route (`withEdit` in src/chat.ts keeps
+     the original question's), or it stores the wrong one. */
+  "src/web/ChatPanel.tsx#EditQuestion":
+    "a rewrite is mostly a fix to words already there, and the composer one box below has the microphone; a voice rewrite would be stored with the original question's modality (plan 261021e)",
 };
 
 function tsxFiles(dir: string): string[] {
@@ -169,6 +167,10 @@ describe("prose boxes have a microphone", () => {
         "src/web/AddPage.tsx#AboutYouBox",
         "src/web/ProfileBox.tsx#ProfileBox",
         "src/web/FeedbackSendBox.tsx#FeedbackSendBox",
+        "src/web/SkimPurpose.tsx#PurposeAsk",
+        "src/web/CriteriaPanel.tsx#NewCriterion",
+        "src/web/CandidatesPanel.tsx#Composer",
+        "src/web/CommentDialog.tsx#CommentBody",
       ]),
     );
   });

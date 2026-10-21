@@ -30,7 +30,7 @@ import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
-import { useReaderTranscriber } from "./dictation-upload.js";
+import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { useCopy } from "./useCopy.js";
@@ -207,12 +207,15 @@ export function CommentDialog({
      string comparison, and because a reader who navigates while the dialog is
      open should not have a stale slug in the next request. */
   const route = parseRoute(location.pathname);
+  /* Shared with the note box (`CommentBody`), which is about the same passage. */
+  const dictationContext: DictationContext =
+    route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" };
   const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: followUp,
     onChange: setFollowUp,
     box: followUpBox,
-    context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
+    context: dictationContext,
     transcribe,
     report: dictationReporter("comment"),
     /* One box per comment, as the follow-up itself is. */
@@ -685,6 +688,8 @@ export function CommentDialog({
       {own ? (
         <CommentBody
           key={comment.id}
+          commentId={comment.id}
+          context={dictationContext}
           body={comment.body ?? ""}
           onSave={(next) => {
             touch();
@@ -1100,6 +1105,12 @@ function hostOf(url: string): string {
  * committing there is what keeps the words. ⌘/Ctrl+Enter commits too, for the
  * reader who wants to say "done" with the keyboard.
  *
+ * **Except while a dictation is busy** (plan 261021e). Then blur and
+ * ⌘/Ctrl+Enter save nothing, Escape is contained, and the dictation's own end
+ * saves the transcript. Closing, stepping or deleting mid-dictation unmounts
+ * the box and aborts it: the rough words are not saved, and the keeper offers
+ * the recording back next time this note is opened.
+ *
  * **Keyed on the comment id by the caller**, so stepping between comments
  * remounts this and cannot carry one reader's half-edited note onto another
  * passage — the same bug the follow-up box below fixed once already.
@@ -1108,16 +1119,31 @@ function hostOf(url: string): string {
  * bare bookmark again, and `""` is not a value the store may hold.
  */
 function CommentBody({
+  commentId,
+  context,
   body,
   onSave,
   onTyped,
 }: {
+  commentId: string;
+  /** Where a dictation into the note is going — the dialog's own. */
+  context: DictationContext;
   body: string;
   onSave(next: string | null): void;
   /** The reader changed the text, committed or not — the fresh box's `touch`. */
   onTyped(): void;
 }) {
-  const [draft, setDraft] = useState(body);
+  const [draft, setDraftState] = useState(body);
+  /* **The draft as of now, not as of the last render.** The dictation's own
+     commit runs from its `onEnd`, in the same turn as the transcript landed,
+     before React has rendered the new words; a `commit` reading this render's
+     `draft` would save the rough guesses it replaced. Both typed and dictated
+     changes go through `setDraft`, so this is never behind either. */
+  const draftNow = useRef(body);
+  const setDraft = (next: string) => {
+    draftNow.current = next;
+    setDraftState(next);
+  };
   /* What is actually stored, so a commit that changes nothing sends nothing. A
      PATCH per blur would rewrite `updatedAt` every time the reader clicked
      through a comment, and "edited just now" on a note they only looked at is a
@@ -1125,45 +1151,97 @@ function CommentBody({
   const saved = useRef(body);
 
   const commit = () => {
-    const next = draft.trim();
+    const next = draftNow.current.trim();
     if (next === saved.current) return;
     saved.current = next;
     onSave(next === "" ? null : next);
   };
 
+  const box = useRef<HTMLTextAreaElement>(null);
+  const dictate = useDictationField({
+    value: draft,
+    onChange: (next) => {
+      setDraft(next);
+      onTyped();
+    },
+    box,
+    context,
+    transcribe: useReaderTranscriber(),
+    report: dictationReporter("comment"),
+    /* Its own keeper, apart from the follow-up box's `comment:<id>`: a
+       recording offered back belongs in the box it was spoken into. */
+    keep: keepDictation(`comment-note:${commentId}`),
+    /* The end of a dictation saves the words once they have landed — the
+       blur that pressing Stop caused was refused below. */
+    onCommit: commit,
+  });
+
   return (
-    <textarea
-      className="cmt-note"
-      value={draft}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        onTyped();
-      }}
-      onBlur={commit}
+    /* **Escape is contained here while a dictation is busy**, from the box and
+       from its microphone alike: the dialog closes from a bubble-phase window
+       listener (`useEscapeToClose`), and closing unmounts this box, which
+       aborts the dictation. Stopped on the way up, so it never reaches
+       `window`. Plan 261021e § After GPT Sol's plan review, "Comment note". */
+    /* biome-ignore lint/a11y/noStaticElementInteractions: not a control — it only stops an Escape from its own textarea and microphone on the way up */
+    <div
+      className="cmt-note-field"
       onKeyDown={(e) => {
-        // A changed note contains Escape, including the input method's key.
-        if (e.key === "Escape" && draft !== saved.current) e.stopPropagation();
-        /* A key an input method is using is not ours: its Escape dismisses a
-           candidate list and must not put the stored words back. */
-        if (isImeComposing(e)) return;
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-          e.preventDefault();
-          commit();
-          return;
-        }
-        /* Escape closes the dialog from a window listener, which would throw
-           away an uncommitted edit without warning. The first Escape puts the
-           stored words back; the second closes the panel. */
-        if (e.key === "Escape" && draft !== saved.current) {
-          setDraft(saved.current);
-        }
+        if (e.key === "Escape" && dictate.busy) e.stopPropagation();
       }}
-      /* **Says the box is free**, beside the follow-up box that says it is
-         the AI's: Greg, SPIDERYARN-READING2-9C, *"make a small UI tweak that
-         will make that clear to the user."* Plan 261002j. */
-      placeholder="Add a comment. It’s yours: the AI doesn’t reply"
-      aria-label="Your comment on this passage"
-      rows={2}
-    />
+    >
+      <div className="cmt-note-row">
+        <textarea
+          ref={box}
+          className="cmt-note"
+          value={draft}
+          readOnly={dictate.readOnly}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            onTyped();
+          }}
+          /* **Not while busy.** Pressing Stop moves the focus out of the box,
+             and a commit then would PATCH Chromium's rough live words and race
+             the transcript; the hook's `onCommit` saves once they land. */
+          onBlur={() => {
+            if (dictate.busy) return;
+            commit();
+          }}
+          onKeyDown={(e) => {
+            /* While busy the wrapper above contains Escape, and nothing here
+               may put the stored words back over a dictation in progress. */
+            if (dictate.busy) {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.preventDefault();
+              return;
+            }
+            // A changed note contains Escape, including the input method's key.
+            if (e.key === "Escape" && draft !== saved.current) e.stopPropagation();
+            /* A key an input method is using is not ours: its Escape dismisses a
+               candidate list and must not put the stored words back. */
+            if (isImeComposing(e)) return;
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              commit();
+              return;
+            }
+            /* Escape closes the dialog from a window listener, which would throw
+               away an uncommitted edit without warning. The first Escape puts the
+               stored words back; the second closes the panel. */
+            if (e.key === "Escape" && draft !== saved.current) {
+              setDraft(saved.current);
+            }
+          }}
+          /* **Says the box is free**, beside the follow-up box that says it is
+             the AI's: Greg, SPIDERYARN-READING2-9C, *"make a small UI tweak that
+             will make that clear to the user."* Plan 261002j. */
+          placeholder="Add a comment. It’s yours: the AI doesn’t reply"
+          aria-label="Your comment on this passage"
+          rows={2}
+        />
+        {dictate.dictation.supported && (
+          <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
+        )}
+      </div>
+      <DictationStrip dictation={dictate.dictation} />
+    </div>
   );
 }

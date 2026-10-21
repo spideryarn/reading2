@@ -136,6 +136,11 @@ import {
   valenceWords,
 } from "./valence.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { keepDictation } from "./dictation-keep.js";
+import { dictationReporter } from "./dictation-report.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
+import { useDictationField } from "./useDictationField.js";
 
 /** One starter: what pressing it puts in the form. Nothing runs from a press. */
 interface CriterionStarter {
@@ -387,6 +392,7 @@ export function CriteriaBand({
 
   return (
     <CriteriaView
+      slug={slug}
       api={api}
       slots={slots}
       active={on}
@@ -424,6 +430,7 @@ export function CriteriaBand({
  * on the day one wants to.
  */
 function CriteriaView({
+  slug,
   api,
   slots,
   active,
@@ -435,6 +442,7 @@ function CriteriaView({
   onOpenKey,
   onShow,
 }: {
+  slug: string;
   api: ReturnType<typeof useCriteria>;
   slots: Map<string, number>;
   active: string[];
@@ -458,6 +466,7 @@ function CriteriaView({
   return (
     <div className="crit">
       <NewCriterion
+        slug={slug}
         scale={scale}
         loaded={api.loaded}
         hasOwn={api.loaded && api.startersUnlocked}
@@ -673,11 +682,14 @@ const MIXED_SIGN = "±";
  * they were halfway through asking.
  */
 function NewCriterion({
+  slug,
   scale,
   loaded,
   hasOwn,
   onAsk,
 }: {
+  /** The article: where a dictation's vocabulary comes from, and what its keeper is named for. */
+  slug: string;
   /**
    * **The mode's ramp, written into the new row** — `?refscale=`.
    *
@@ -735,28 +747,68 @@ function NewCriterion({
     text.trim() !== "" &&
     (kind !== "diverging" || (against.trim() !== "" && favour.trim() !== ""));
 
+  /* **The one submit path** — the form's (the Run press, and Enter in a pole)
+     and a double press on Stop alike. Refused while the microphone is
+     involved, both halves of it: `busy` is `armed` or the transcript on its
+     way, and running either would save the recogniser's rough guess, or on
+     Safari and Firefox nothing that was said (dictation.md § Adding it to a
+     box). Plan 261021e § Stage 2, item 2. */
+  const submit = () => {
+    if (!ready || dictate.busy) return;
+    onAsk(text.trim(), config);
+    setText("");
+  };
+
+  const box = useRef<HTMLTextAreaElement>(null);
+  const dictate = useDictationField({
+    value: text,
+    onChange: setText,
+    box,
+    context: { kind: "article", slug },
+    transcribe: useReaderTranscriber(),
+    report: dictationReporter("referee"),
+    keep: keepDictation(`referee:criterion:${slug}`),
+    /* A double press on Stop runs the criterion once the words are in. */
+    onDone: () => submit(),
+  });
+  /* Run's dead look and the submit's refusal are one condition. */
+  const canRun = ready && !dictate.busy;
+
   return (
     <form
       className="crit-new"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!ready) return;
-        onAsk(text.trim(), config);
-        setText("");
+        submit();
       }}
     >
-      <label className="crit-label" htmlFor="crit-text">
-        What are you judging this paper against?
-      </label>
+      <div className="crit-label-row">
+        <label className="crit-label" htmlFor="crit-text">
+          What are you judging this paper against?
+        </label>{" "}
+        {dictate.dictation.supported && (
+          <DictationButton
+            dictation={dictate.dictation}
+            toggle={dictate.toggle}
+            sendingAfter={dictate.sendingAfter}
+            doubleStop={dictate.doubleStop}
+          />
+        )}
+      </div>
       <textarea
+        ref={box}
         id="crit-text"
         className="crit-text"
         rows={2}
         value={text}
         maxLength={500}
         placeholder="Are the controls adequate?"
+        /* `readOnly`, not `disabled`, while the transcript is on its way —
+           useDictationField.ts says why. */
+        readOnly={dictate.readOnly}
         onChange={(e) => setText(e.target.value)}
       />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
       {/* The part-switcher every mode shares (mode-band.css § the
           part-switcher): a choice of one kind, not an action. */}
@@ -863,7 +915,16 @@ function NewCriterion({
                       <button
                         type="button"
                         className="crit-preset"
+                        /* **Off while a dictation is in progress.** The press
+                           replaces the box, and the words on their way would
+                           then be refused by, or spliced into, a sentence that
+                           is no longer the one being dictated into (plan
+                           261021e, Sol's F4). Native `disabled`: the card
+                           explains the press, and there is none to make until
+                           the words land. */
+                        disabled={dictate.busy}
                         onClick={() => {
+                          if (dictate.busy) return;
                           setText(p.criterion);
                           setKind(p.kind);
                           setAgainst(p.poles?.against ?? "");
@@ -906,7 +967,7 @@ function NewCriterion({
 
             **`aria-disabled` on its own does not stop an activation**, so the
             inertness is elsewhere and has to stay there: the `onSubmit` above
-            returns on `!ready` before it calls `onAsk`, which catches the click,
+            returns on `!ready` (and on a dictation in progress) before it calls `onAsk`, which catches the click,
             the Enter and the Space alike because all three arrive here as a
             submit. `onClick` is *not* where that guard goes — Enter in a text
             field submits a form without ever pressing the button.
@@ -916,7 +977,7 @@ function NewCriterion({
             `pointer-events: none`, which would take the card away again.
             Shadcn's outline button since plan 261007h § F3, the run button
             every mode shares; `.crit-run` stays as a hook. */}
-        <Button type="submit" variant="outline" size="sm" className="crit-run" aria-disabled={!ready}>
+        <Button type="submit" variant="outline" size="sm" className="crit-run" aria-disabled={!canRun}>
           Run this criterion
         </Button>
       </Tooltip>

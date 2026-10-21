@@ -352,6 +352,8 @@
 .skim-purpose-tip p { margin: 0; max-width: 24em; }
 .skim-purpose-ask { flex-direction: column; align-items: stretch; gap: 0.3rem; }
 .skim-purpose-q { color: var(--ink-soft); }
+/* The question and its microphone on one row, as the add page's box has them. */
+.skim-purpose-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 /* Its border, corner, ground, padding and focus are every band's text box's:
    mode-band.css § text boxes in the bands. (A 5px corner, the raised ground
    and a border-colour focus until 2026-10-07.) */

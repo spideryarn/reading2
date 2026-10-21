@@ -50,6 +50,7 @@ const NOT_FAILURES = new Set([
 export type DictationSurface =
   | "add"
   | "annotate"
+  | "candidates"
   | "chat"
   | "command-bar"
   | "comment"
@@ -58,7 +59,9 @@ export type DictationSurface =
   | "help"
   | "illustrated"
   | "profile"
-  | "quiz";
+  | "quiz"
+  | "referee"
+  | "skim";
 
 /** The browser's engine and form, coarsely, from a closed set. */
 export function browserTags(ua: string): { browser_engine: string; browser_mobile: string } {
