@@ -529,6 +529,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      back with. `ai-pdf-cut-off` is the one `bug` of the four, matching
      `ai-over-room` — it is our own room for the answer set too low. */
   "pdf-pages": "blocked",
+  /* A Rebuild that fetched a longer PDF than the article was added as, and a
+     long PDF stage 2 found unpriced (plan 261020b). The first is the same sum
+     on every press; the second is a ledger fault of ours. */
+  "pdf-rerun-pages": "blocked",
+  "pdf-unpriced": "ours",
   "pdf-chunk-big": "blocked",
   /* The two files pdf.js will not open. `blocked` and not `retry`, which is the
      whole of the finding they were added for: nothing declared reads as *nobody
@@ -736,6 +741,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      pressed twice on one paper — `minimalQuotaReached` and
      `READ_THIS_ALREADY_RUNNING`. `blocked`: another press is the same answer. */
   "pay-minimal": "blocked",
+  /* A long PDF needing more articles than are left (plan 261020b). */
+  "pay-pages": "blocked",
   "pay-reading": "blocked",
   /* Stripe had a bad minute. The one `pay-` code where another go is exactly
      the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
@@ -6643,6 +6650,77 @@ export function ingestQuotaReached(quota: {
 }
 
 /**
+ * **A long PDF needs more articles' worth than the account has left** — stage
+ * 1's refusal, once the pages are counted and before anything is paid for
+ * (plan 261020b). Greg, 2026-10-19: *"That user would not be able to import a
+ * 250-page article, because that would need 3 slots."* (At 50 pages a slot, as
+ * he later chose, it is 5.)
+ *
+ * It names the pages, the slots needed and the slots left — one wording for
+ * every plan, so one code, `pay-pages`, which `QuotaNotice` links to the
+ * profile page (it shows the plans to a free reader and the plan to a paying
+ * one) — with the same conditional sharing offer as the ingest wall, computed
+ * by `priceFetchedPdf` against *this* request's cost.
+ */
+export function longPdfQuotaReached(quota: {
+  pages: number;
+  slots: number;
+  /** `ingestHeadroom`: one-slot articles the account could still add. */
+  slotsLeft: number;
+  shareToMakeRoom?: readonly [NamedArticle, ...NamedArticle[]];
+}): ReaderFacingFailure {
+  const left = quota.slotsLeft === 0 ? "none" : String(quota.slotsLeft);
+  const share =
+    quota.shareToMakeRoom === undefined
+      ? ""
+      : ` A public article counts as half, so ${sharingOffer(quota.shareToMakeRoom)} would make room.`;
+  return {
+    kind: "blocked",
+    message:
+      `This PDF is ${quota.pages} pages, which counts as ${quota.slots} articles, and your account ` +
+      `has ${left} left. Trying again will not help; a shorter document, or the part of this one ` +
+      `you want, may fit, and your plan page says what more would take.${share} Everything you ` +
+      "have already added stays exactly where it is. [pay-pages]",
+  };
+}
+
+/**
+ * **A re-run fetched a longer PDF than the article was added as** — rule 4 of
+ * plan 261020b. Re-runs are free, so a Rebuild may not turn a one-slot article
+ * into an eight-slot one; adding the document again charges it.
+ */
+export function pdfGrewOnRerun(pages: number, slots: number, paidSlots: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    message:
+      `This PDF is now ${pages} pages, which counts as ${slots} articles; it was added as ` +
+      `${paidSlots}. Rebuilding again will not help; add it as a new article to read the longer version. [pdf-rerun-pages]`,
+  };
+}
+
+/**
+ * **Stage 2 found a long PDF its job had not been charged for** — the
+ * read-only assertion of plan 261020b. Ours: it means a path skipped stage 1's
+ * pricing, and the step fails closed rather than transcribe it.
+ */
+export const PDF_NOT_PRICED: ReaderFacingFailure = {
+  kind: "ours",
+  message:
+    "Something went wrong working out what reading this document costs, so it was not read, " +
+    "and that needs fixing on our side. Nothing has been charged for it. [pdf-unpriced]",
+};
+
+/**
+ * **The warning a long PDF's import shows, and does not stop for** — Greg,
+ * 2026-10-19: *"it should warn the user during the import process that
+ * multiple slots are being used for long articles. But don't block"*. The
+ * fetch step's stored detail, so it outlives the step (plan 261020b).
+ */
+export function longPdfUses(pages: number, slots: number): string {
+  return `This PDF is ${pages} pages, so it uses ${slots} of your articles (one for every 50 pages).`;
+}
+
+/**
  * **Switching High-powered AI on needs more allowance than is left** — the
  * refusal `PUT /api/article/:slug/high-power` answers with a 402.
  *
@@ -6667,8 +6745,9 @@ export function highPowerNoRoom(quota: {
   return {
     kind: "blocked",
     message:
-      "Switching on High-powered AI counts as one more article against your allowance — half " +
-      "of one if the article is shared publicly — and there is not that much left. Trying " +
+      "Switching on High-powered AI counts the article against your allowance again, at the " +
+      "same number of slots — half as much if it is shared publicly — and there is not that " +
+      "much left. Trying " +
       `again will not help ${more}. Nothing has changed, and reading is never limited. ` +
       "[pay-high-power]",
   };
@@ -6826,7 +6905,7 @@ export const ALREADY_ON_ITS_WAY: ReaderFacingFailure = {
  * above is one line away from the list that decides what is drawn around it —
  * and `tests/billing-plan.test.ts` asserts the producers agree with this array.
  */
-export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed" | "pay-minimal";
+export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed" | "pay-minimal" | "pay-pages";
 
 /* A union rather than loose strings, so that another refusal added above
    makes every `switch` over this go red at compile time — `QuotaNotice` chooses
@@ -6837,6 +6916,7 @@ export const QUOTA_CODES: readonly QuotaCode[] = [
   "pay-limit",
   "pay-lapsed",
   "pay-minimal",
+  "pay-pages",
 ];
 
 /**

@@ -1,6 +1,6 @@
 {
-  "id": "7d035264-0fc6-4423-b021-4a44c01e81e0",
-  "prevId": "b28c781e-8010-47e5-97d9-ce2d603f4b86",
+  "id": "17a97a19-01b8-4a39-9e47-52bc637bb614",
+  "prevId": "e5f7dbc9-b0cd-4461-a557-512e389f8c77",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -725,6 +725,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "raw_pages": {
+          "name": "raw_pages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "raw_filename": {
           "name": "raw_filename",
           "type": "text",
@@ -1114,6 +1120,10 @@
         "article_revisions_status": {
           "name": "article_revisions_status",
           "value": "\"spideryarn\".\"article_revisions\".\"status\" in ('draft','published','failed')"
+        },
+        "article_revisions_raw_pages": {
+          "name": "article_revisions_raw_pages",
+          "value": "\"spideryarn\".\"article_revisions\".\"raw_pages\" is null or \"spideryarn\".\"article_revisions\".\"raw_pages\" > 0"
         },
         "article_revisions_reading_language": {
           "name": "article_revisions_reading_language",
@@ -6016,6 +6026,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "slots": {
+          "name": "slots",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "pages": {
+          "name": "pages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -6132,6 +6155,14 @@
       },
       "policies": {},
       "checkConstraints": {
+        "ingest_events_slots": {
+          "name": "ingest_events_slots",
+          "value": "\"spideryarn\".\"ingest_events\".\"slots\" between 1 and 8"
+        },
+        "ingest_events_pages": {
+          "name": "ingest_events_pages",
+          "value": "\"spideryarn\".\"ingest_events\".\"pages\" is null or \"spideryarn\".\"ingest_events\".\"pages\" > 0"
+        },
         "ingest_events_settled_once": {
           "name": "ingest_events_settled_once",
           "value": "num_nonnulls(\"spideryarn\".\"ingest_events\".\"succeeded_at\", \"spideryarn\".\"ingest_events\".\"released_at\") <= 1"

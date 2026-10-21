@@ -5,7 +5,8 @@
  *
  * Off by default and never remembered: a remembered tick would double the price
  * of every later import without the reader looking at it again. The price is in
- * articles, never money, in the Metadata switch's own words (HighPowerSwitch.tsx).
+ * allowance slots, never money, in the Metadata switch's own words
+ * (HighPowerSwitch.tsx).
  */
 import { useSyncExternalStore } from "react";
 import { TriangleAlert, Zap } from "lucide-react";
@@ -44,7 +45,7 @@ export function AddHighPower({ intent, repeat = false }: { intent: HighPowerInte
             A stronger AI model (Claude Opus) for this article — better on difficult pieces.{" "}
             {exempt
               ? "Administrator: no charge."
-              : "Counts as one more article against your allowance (half of one while it is shared publicly). Switching off later doesn't give it back."}
+              : "Counts this article against your allowance again, at the same number of slots (half as much while it is shared publicly). Switching off later doesn't give it back."}
           </span>
           <span className="tw:block tw:text-muted-foreground" aria-live="polite">
             {line(state, repeat)}

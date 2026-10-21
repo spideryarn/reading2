@@ -1203,9 +1203,12 @@ export function AddPage({
   const highPowerSlug = job?.slug ?? completion?.slug ?? null;
   const highPowerAlive = !vanished && (job ? job.status === "queued" || job.status === "running" : completion === null);
   const highPowerLate = mayHaveStartedOnStandard(job?.steps, Boolean(job?.upload)) || (job === null && completion !== null);
+  /* A completion means the article and its price exist, so a waiting intent
+     may go out; a job that died without one may not (add-high-power.ts). */
+  const highPowerCompleted = completion !== null;
   useEffect(() => {
-    highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
-  }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
+    highPower.observe(highPowerSlug, highPowerAlive, highPowerLate, highPowerCompleted);
+  }, [highPower, highPowerSlug, highPowerAlive, highPowerLate, highPowerCompleted]);
 
   /**
    * ***Make it public* for this add** — plan 261005l § 3. The tab keeps one

@@ -395,6 +395,7 @@ function readRaw(row: RevisionRow, source: { bytes: number } | null): RawManifes
     sha256: row.rawSha256,
     ...(row.rawSourceSha256 === null ? {} : { storedSha256: row.rawSourceSha256 }),
     ...(source === null ? {} : { storedBytes: source.bytes }),
+    ...(row.rawPages === null ? {} : { pages: row.rawPages }),
     fetchedAt: fetchedAt.toISOString(),
   };
 }
@@ -985,6 +986,7 @@ const RAW_COLUMNS = [
   "rawEncoding",
   "rawSha256",
   "rawByteCount",
+  "rawPages",
   "rawFilename",
   "savedFromUrl",
   "rawSourceSha256",
@@ -1200,6 +1202,9 @@ async function writeRawSource(
     rawEncoding: manifest.encoding,
     rawSha256: manifest.sha256,
     rawByteCount: manifest.bytes,
+    /* Null unless stage 1 counted pages for these bytes, so a re-fetch that
+       turned a PDF into a web page clears the old count rather than keeping it. */
+    rawPages: manifest.pages ?? null,
     rawFilename: manifest.filename ?? null,
     /* **Null unless this manifest carries one**, so a new upload without the
        meta clears an old claim rather than inheriting it: the claim belongs to

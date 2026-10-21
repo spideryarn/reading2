@@ -79,6 +79,9 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
   Since 2026-09-30 it also holds High-powered AI’s charge (one more row per article, once, never
   refunded), and the rule that AI *cost* is never shown to a non-admin lives in
   [cost-tracking.md](cost-tracking.md#only-the-administrator-ever-sees-a-figure).
+  Since 2026-10-20 a PDF costs a slot per 50 pages, charged in stage 1 once the pages are counted
+  and before anything is paid for, under the same lock and fenced on the job's claim
+  ([§ A long document](billing.md#a-long-document-costs-a-slot-per-50-pages)).
 - **[deployment.md § Who can reach it](deployment.md#who-can-reach-it)** — the app is readable by
   anybody with the address, deliberately, and it was an accident first: Vercel's protection setting
   reports itself as enabled while serving the world.

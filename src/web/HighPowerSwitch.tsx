@@ -8,7 +8,7 @@
  * **Drawn for every owner, on their own article** — `/metadata` is owner-only
  * (a visitor gets `PublicMetadataPage`). The gate and the charge are the
  * server's: `PUT /api/article/:slug/high-power` is owner-scoped, and switching on
- * charges one more article's worth against the reader's allowance (half while
+ * charges the article's slots again against the reader's allowance (half while
  * the article is public), once, never refunded — src/billing/admission.ts. The
  * administrator is exempt as with ingests; `isAdmin` here only adds a line
  * saying so, and decides nothing (src/admin.ts).
@@ -126,7 +126,7 @@ export function HighPowerSwitch({
         summaries use it already.{" "}
         {exempt
           ? "Administrator: no charge."
-          : "Switching it on counts as one more article against your allowance (half of one while the article is shared publicly). Switching off doesn't give it back, and switching on again is free."}{" "}
+          : "Switching it on counts the article against your allowance again, at the same number of slots (half as much while it is shared publicly). Switching off doesn't give it back, and switching on again is free."}{" "}
         Only later runs use it — nothing re-runs by itself. Use a mode&apos;s <em>Run it again</em>{" "}
         below to redo it.
       </p>

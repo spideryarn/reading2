@@ -51,7 +51,8 @@ When it goes wrong, the message says why. What to try:
   Use the site's **Download PDF** button if it has one; otherwise save the page as a PDF. Then
   upload that file.
 - **A PDF that is locked, damaged, too big or too long**: upload a copy without the password, a
-  smaller file, or just the part you want.
+  smaller file, or just the part you want. PDFs can be up to {{max-pdf-pages}} pages. A long PDF counts as one article for every {{pages-per-article}} pages
+  ([Plans](/help/plans)).
 - **A stage stopped part way**: press **Retry**. It skips the stages that already worked.
 
 An article counts against your allowance only once it comes back readable; a failure costs nothing.

@@ -46,16 +46,18 @@
  *
  * ## The tokens
  *
- * Four facts live in code and would go stale in prose, so a file names them:
+ * Six facts live in code and would go stale in prose, so a file names them:
  *
  * | token | stands for |
  * |---|---|
  * | `{{experimental-modes}}` | the experimental modes' names, "A, B and C" |
  * | `{{public-shelf-label}}` | `PUBLIC_SHELF_LABEL` |
  * | `{{whats-new-label}}` | `CHANGELOG_LABEL` |
+ * | `{{max-pdf-pages}}` | `MAX_PAGES`, the longest PDF we take (src/uploads.ts) |
+ * | `{{pages-per-article}}` | `PAGES_PER_SLOT`, the pages one article's worth buys |
  * | `{{modes-table}}`, alone in a paragraph | the *Which mode when* table |
  *
- * The first three are replaced inside a run of text **after** parsing, so a
+ * All but the table are replaced inside a run of text **after** parsing, so a
  * label can never be read as Markdown. An unknown token throws.
  */
 import type { ReactNode } from "react";
@@ -65,6 +67,7 @@ import type { List, ListItem, Paragraph, PhrasingContent, RootContent } from "md
 import { PUBLIC_SHELF_LABEL } from "../../messages.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { MODES } from "../../modes.js";
+import { MAX_PAGES, PAGES_PER_SLOT } from "../../uploads.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { CHANGELOG_LABEL, HELP_HREF } from "../router.js";
 import { helpHref, resolveHelpAnchor, type HelpAnchor } from "./help-anchors.js";
@@ -89,6 +92,8 @@ const TEXT_TOKENS: Readonly<Record<string, () => string>> = {
   "experimental-modes": () => listOf(MODES.filter((m) => MODE_CATALOG[m].experimental).map((m) => MODE_LABEL[m])),
   "public-shelf-label": () => PUBLIC_SHELF_LABEL,
   "whats-new-label": () => CHANGELOG_LABEL,
+  "max-pdf-pages": () => String(MAX_PAGES),
+  "pages-per-article": () => String(PAGES_PER_SLOT),
 };
 
 const TABLE_TOKEN = "modes-table";

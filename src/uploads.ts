@@ -74,6 +74,35 @@ export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export const MAX_PAGES = 250;
 
 /**
+ * **How many pages one article's worth of allowance buys.** A PDF costs
+ * `ceil(pages / 50)` slots — Greg, 2026-10-20: *"let's go with 50 instead of
+ * 100 pages per slot"*. Anything without a page count (a web page, Word,
+ * Markdown, text) is one slot.
+ * docs/plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md.
+ */
+export const PAGES_PER_SLOT = 50;
+
+/** The most slots a row can be — `ingest_events_slots` checks the same 8 (400 pages). */
+const MAX_SLOTS = 8;
+
+/**
+ * **What a PDF of this many pages costs, in slots** — the one function that
+ * does the division. Throws on a count that is not a page count, and on one
+ * past eight slots, rather than pricing either at one: a wrong count here is a
+ * free long document.
+ */
+export function slotsForPages(pages: number): number {
+  if (!Number.isInteger(pages) || pages < 1) {
+    throw new Error(`${String(pages)} is not a page count`);
+  }
+  const slots = Math.ceil(pages / PAGES_PER_SLOT);
+  if (slots > MAX_SLOTS) {
+    throw new Error(`${pages} pages is ${slots} slots, past the ${MAX_SLOTS} a document can be`);
+  }
+  return slots;
+}
+
+/**
  * What we will take, said before the reader has chosen anything.
  *
  * **A limit nobody hits is worth stating; a limit somebody hits is worth
@@ -91,7 +120,7 @@ export const MAX_PAGES = 250;
 export function uploadLimits(): string {
   return (
     `PDF, web page, Word, Markdown or text file, up to ${formatBytes(MAX_UPLOAD_BYTES)}. ` +
-    `PDFs up to ${MAX_PAGES} pages.`
+    `PDFs up to ${MAX_PAGES} pages; every ${PAGES_PER_SLOT} pages counts as one article.`
   );
 }
 

@@ -47,13 +47,14 @@ describe("the usage query", () => {
     const { sql, params } = dialect.sqlToQuery(usageSql(HOSTILE_OWNER, PAID));
     expect(sql).not.toContain("2026-09-01");
     expect(sql).not.toContain("drop table");
-    /* Eleven values: the owner, and the two bounds **five times** — the charged
-       predicate is built once per counted column: ingests at full price and at
-       half, since 260930k High-powered AI upgrades at full price and at half,
-       and since 261001m minimal papers charged and not superseded. Duplicated
-       binds rather than a duplicated *statement*, which is the property this
-       file is actually about. */
-    expect(params).toHaveLength(11);
+    /* Nineteen values: the owner, and the two bounds **nine times** — the
+       charged predicate is built once per counted column: ingests at full price
+       and at half, since 260930k High-powered AI upgrades at full price and at
+       half, since 261001m minimal papers charged and not superseded, and since
+       261020b the slot sums beside the four priced counts. Duplicated binds
+       rather than a duplicated *statement*, which is the property this file is
+       actually about. */
+    expect(params).toHaveLength(19);
     expect(params).toContain("2026-09-01T00:00:00.000Z");
     expect(params).toContain("2026-10-01T00:00:00.000Z");
   });
@@ -64,7 +65,7 @@ describe("the usage query", () => {
     const free = dialect.sqlToQuery(usageSql("owner", FREE));
     const paid = dialect.sqlToQuery(usageSql("owner", PAID));
     expect(free.params).toHaveLength(1);
-    expect(paid.params).toHaveLength(11);
+    expect(paid.params).toHaveLength(19);
     expect(free.sql).not.toContain("timestamptz");
     expect(paid.sql).toContain("timestamptz");
   });

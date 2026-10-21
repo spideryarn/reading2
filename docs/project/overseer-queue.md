@@ -117,6 +117,27 @@ Four clusters wait on a product answer as well as a lull; the Overseer put the d
 | O — operate abandoned-draft retention | per-article sweep on step start; no remote run without asking | a lull; the remote run is Greg's |
 | P — reader study protocol | doc only; Greg runs the study | a lull |
 
+## Longer documents: what raising the page cap waits on
+
+Greg asked for PDFs up to 400 pages (`spya-p5x9wy`, 2026-10-19), and the slot price for them shipped
+with [261020b](../plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md); the
+cap stayed at 250 because a 400-page maths-heavy book does not import
+([261020e](../investigations/261020e-four-hundred-page-imports-measured.md), which has the evidence
+for every row below). The ledger already takes 8 slots, so the raise itself is `MAX_PAGES` in
+`src/uploads.ts` and the numbers in `tests/stated-limits.test.ts`; Help and the limits line read the
+constant.
+
+| Item | One line | Waiting on |
+|---|---|---|
+| Raise `MAX_PAGES` from 250 to 400 | only once the three rows below are done and the same three documents (Code v2, the WASSA proceedings, the maths book) import again on a second paid measurement | the three rows below; Greg approved 400 in principle |
+| Keep every finished chunk when a window runs out | `src/pdf-read.ts` § `keepChunk` saves only chunks that passed first time; recovered ones wait for a final pass a timed-out window never reaches, so each window re-buys the book (1 of 68 kept on the maths book). This is `qi-astc8qqs` | a stage-2 change with its own review |
+| A time limit on each transcription call | no single call has one; the slowest took 727 s of a 740 s window | a stage-2 change with its own review |
+| Measure the 4.5 MB response limit on Vercel | `qi-sbytr395`; dense proceedings at 400 pages come to about 4.0 MB with labels | a lull |
+| Bug: out-of-windows failure says `[jb-gone]` | a job that used all three windows (`REQUEUE_BUDGET = 2`) tells the reader whatever ran it did not come back and that trying again picks up where it left off; neither is true, a retry re-buys 67 of 68 chunks | standing bug authority |
+| Bug: `[ai-pdf-incomplete]` invites a retry that repeats | a page that fails its source-page check the same way twice is told *"Trying again may produce a usable reading"*; on the proceedings' page 28 the retry failed the same way for $0.36 more | standing bug authority |
+| Bug: labels asked for 38 and given 39 fails the whole step | one batch's off-by-one count sinks every label in the article, twice, and the sentence says trying again is worth a go | standing bug authority |
+| Bug: `npm run labels` straight after an ingest waits "busy" and gives up | it is handed the queued `labels` job, which waits behind a `matter` job nothing drives; the hint `scripts/stage.ts` prints does not work then | standing bug authority |
+
 ## Improvements the Overseer noticed but may not originate
 
 Gate 3 says a job of the Overseer's own devising is a proposal, not a dispatch. These are proposals.

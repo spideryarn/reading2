@@ -69,6 +69,7 @@
  */
 
 import { and, count, eq, isNotNull, lte, ne, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import type { Db } from "../db/client.js";
@@ -165,13 +166,30 @@ export interface IngestTally {
   /**
    * **High-powered AI upgrades**, over the same two windows, and how many of
    * each are public now. Counted apart from the ingests above because they are
-   * not articles added — one more article's worth each, on the ledger as
+   * not articles added — each article's slots again, on the ledger as
    * `kind = 'high_power'`. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
    */
   highPowerLifetime: number;
   highPowerInPeriod: number;
   highPowerLifetimeShared: number;
   highPowerInPeriodShared: number;
+  /**
+   * **Every priced count above, as a sum of `slots`** — what the rows cost,
+   * where the counts say how many there are (a long PDF, plan 261020b). Keyed
+   * by the count's own name, so the two cannot be paired up wrongly.
+   */
+  slots: Pick<
+    IngestTally,
+    | "lifetime"
+    | "inPeriod"
+    | "inFlight"
+    | "lifetimeShared"
+    | "inPeriodShared"
+    | "highPowerLifetime"
+    | "highPowerInPeriod"
+    | "highPowerLifetimeShared"
+    | "highPowerInPeriodShared"
+  >;
 }
 
 /**
@@ -242,6 +260,44 @@ export interface UserCounts {
   spendMonth: string;
 }
 
+/* -------------------------------------------- the ledger's nine windows -- */
+
+/**
+ * **The nine priced filters over `ingest_events`, each spelled once** — so the
+ * count and the slot sum the ledger query takes of each (plan 261020b) cannot
+ * come to filter differently. Read against a `left join` of `billing_accounts`
+ * and `articles`; the half-open period is `usageSql`'s, and "public" is
+ * `isPublicPrice`, imported rather than restated.
+ */
+const IN_STORED_PERIOD = sql`${billingAccounts.currentPeriodStart} is not null
+  and ${billingAccounts.currentPeriodEnd} is not null
+  and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+  and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}`;
+const PUBLIC_NOW = isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete);
+const CHARGED_INGEST = sql`${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null`;
+const UPGRADE = sql`${ingestEvents.kind} = 'high_power'`;
+const LEDGER = {
+  lifetime: CHARGED_INGEST,
+  inPeriod: sql`${CHARGED_INGEST} and ${IN_STORED_PERIOD}`,
+  inFlight: sql`${ingestEvents.kind} <> 'minimal'
+    and ${ingestEvents.succeededAt} is null
+    and ${ingestEvents.releasedAt} is null`,
+  lifetimeShared: sql`${CHARGED_INGEST} and ${PUBLIC_NOW}`,
+  inPeriodShared: sql`${CHARGED_INGEST} and ${IN_STORED_PERIOD} and ${PUBLIC_NOW}`,
+  highPowerLifetime: UPGRADE,
+  highPowerInPeriod: sql`${UPGRADE} and ${IN_STORED_PERIOD}`,
+  highPowerLifetimeShared: sql`${UPGRADE} and ${PUBLIC_NOW}`,
+  highPowerInPeriodShared: sql`${UPGRADE} and ${IN_STORED_PERIOD} and ${PUBLIC_NOW}`,
+} as const;
+
+function countWhere(where: SQL) {
+  return sql<number>`count(*) filter (where ${where})`.mapWith(Number);
+}
+
+function slotsWhere(where: SQL) {
+  return sql<number>`coalesce(sum(${ingestEvents.slots}) filter (where ${where}), 0)`.mapWith(Number);
+}
+
 /** Turn `[{owner, n}]` into something the merge can look up. */
 function tally(rows: CountRow[]): Map<string, number> {
   return new Map(rows.map((r) => [r.owner, r.n]));
@@ -261,6 +317,10 @@ type PlanFacts = Pick<
   | "ingestsShared"
   | "highPower"
   | "highPowerShared"
+  | "ingestSlots"
+  | "ingestsSharedSlots"
+  | "highPowerSlots"
+  | "highPowerSharedSlots"
   | "minimal"
   | "ingestLimit"
   | "ingestWindow"
@@ -338,6 +398,22 @@ function planFacts(
   const minimalInFlight = counts?.minimalInFlight ?? 0;
   const lifetimeMinimal = (counts?.minimalLifetime ?? 0) + minimalInFlight;
   const inPeriodMinimal = (counts?.minimalInPeriod ?? 0) + minimalInFlight;
+  /* **What the same rows cost, in slots** (plan 261020b), beside the counts:
+     the cell prices these and prints those. In flight joins both, as above. */
+  const sums = counts?.slots;
+  const slotsInFlight = sums?.inFlight ?? 0;
+  const lifetimeSlots = {
+    ingestSlots: (sums?.lifetime ?? 0) + slotsInFlight,
+    ingestsSharedSlots: sums?.lifetimeShared ?? 0,
+    highPowerSlots: sums?.highPowerLifetime ?? 0,
+    highPowerSharedSlots: sums?.highPowerLifetimeShared ?? 0,
+  };
+  const inPeriodSlots = {
+    ingestSlots: (sums?.inPeriod ?? 0) + slotsInFlight,
+    ingestsSharedSlots: sums?.inPeriodShared ?? 0,
+    highPowerSlots: sums?.highPowerInPeriod ?? 0,
+    highPowerSharedSlots: sums?.highPowerInPeriodShared ?? 0,
+  };
 
   const entitlement = entitlementFromRow(account, tiers, now);
 
@@ -352,6 +428,7 @@ function planFacts(
       ingests: lifetime,
       ingestsShared: lifetimeShared,
       ...lifetimeUpgrades,
+      ...lifetimeSlots,
       minimal: lifetimeMinimal,
       ingestLimit: tier?.ingestsPerPeriod ?? FREE_LIFETIME_INGESTS,
       /* **Its own window, not `lifetime`.** The count and the limit are measured
@@ -368,6 +445,7 @@ function planFacts(
         ingests: inPeriod,
         ingestsShared: inPeriodShared,
         ...inPeriodUpgrades,
+        ...inPeriodSlots,
         minimal: inPeriodMinimal,
         ingestLimit: entitlement.limit,
         ingestWindow: "period",
@@ -378,6 +456,7 @@ function planFacts(
         ingests: lifetime,
         ingestsShared: lifetimeShared,
         ...lifetimeUpgrades,
+        ...lifetimeSlots,
         minimal: lifetimeMinimal,
         ingestLimit: entitlement.limit,
         ingestWindow: "lifetime",
@@ -613,24 +692,11 @@ export function adminQueries(db: Db) {
     ingests: db
       .select({
         owner: ingestEvents.ownerId,
-        lifetime: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null)`.mapWith(
-          Number,
-        ),
-        inPeriod: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
-              and ${billingAccounts.currentPeriodStart} is not null
-              and ${billingAccounts.currentPeriodEnd} is not null
-              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
-              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(
-          Number,
-        ),
+        lifetime: countWhere(LEDGER.lifetime),
+        inPeriod: countWhere(LEDGER.inPeriod),
         /* In flight split by kind, as `usageSql` splits it: anything unsettled
            that is not a minimal paper is an ingest at full price. */
-        inFlight: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} <> 'minimal'
-              and ${ingestEvents.succeededAt} is null
-              and ${ingestEvents.releasedAt} is null)`.mapWith(Number),
+        inFlight: countWhere(LEDGER.inFlight),
         minimalInFlight: sql<number>`count(*) filter (
             where ${ingestEvents.kind} = 'minimal'
               and ${ingestEvents.succeededAt} is null
@@ -666,44 +732,26 @@ export function adminQueries(db: Db) {
            article was destroyed keeps whatever it cost. In flight is not counted
            here for the same reason it is not discounted there: nobody knows yet.
            tests/admin-queries.test.ts § the ingest ledger's half-price split. */
-        lifetimeShared: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
-              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
-          Number,
-        ),
-        inPeriodShared: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
-              and ${billingAccounts.currentPeriodStart} is not null
-              and ${billingAccounts.currentPeriodEnd} is not null
-              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
-              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}
-              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
-          Number,
-        ),
+        lifetimeShared: countWhere(LEDGER.lifetimeShared),
+        inPeriodShared: countWhere(LEDGER.inPeriodShared),
         /* The same four windows for High-powered AI's upgrades, which are
            settled at birth and so have no in-flight term. */
-        highPowerLifetime: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'high_power')`.mapWith(Number),
-        highPowerInPeriod: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'high_power'
-              and ${billingAccounts.currentPeriodStart} is not null
-              and ${billingAccounts.currentPeriodEnd} is not null
-              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
-              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(Number),
-        highPowerLifetimeShared: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'high_power'
-              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
-          Number,
-        ),
-        highPowerInPeriodShared: sql<number>`count(*) filter (
-            where ${ingestEvents.kind} = 'high_power'
-              and ${billingAccounts.currentPeriodStart} is not null
-              and ${billingAccounts.currentPeriodEnd} is not null
-              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
-              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}
-              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
-          Number,
-        ),
+        highPowerLifetime: countWhere(LEDGER.highPowerLifetime),
+        highPowerInPeriod: countWhere(LEDGER.highPowerInPeriod),
+        highPowerLifetimeShared: countWhere(LEDGER.highPowerLifetimeShared),
+        highPowerInPeriodShared: countWhere(LEDGER.highPowerInPeriodShared),
+        /* The same nine, as sums of `slots` (plan 261020b): what they cost. */
+        slots: {
+          lifetime: slotsWhere(LEDGER.lifetime),
+          inPeriod: slotsWhere(LEDGER.inPeriod),
+          inFlight: slotsWhere(LEDGER.inFlight),
+          lifetimeShared: slotsWhere(LEDGER.lifetimeShared),
+          inPeriodShared: slotsWhere(LEDGER.inPeriodShared),
+          highPowerLifetime: slotsWhere(LEDGER.highPowerLifetime),
+          highPowerInPeriod: slotsWhere(LEDGER.highPowerInPeriod),
+          highPowerLifetimeShared: slotsWhere(LEDGER.highPowerLifetimeShared),
+          highPowerInPeriodShared: slotsWhere(LEDGER.highPowerInPeriodShared),
+        },
       })
       .from(ingestEvents)
       .leftJoin(billingAccounts, eq(billingAccounts.ownerId, ingestEvents.ownerId))

@@ -1091,7 +1091,7 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for the same reason: the model's topic set is a cache. */
         "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",
-        /* drizzle/20261021002318, appended by hand. CASCADE on both, for
+        /* drizzle/20261021032232, appended by hand. CASCADE on both, for
            `reader_arrivals`' reason: bookkeeping about two accounts. */
         "view_as_sessions_actor_fk",
         "view_as_sessions_subject_fk",
