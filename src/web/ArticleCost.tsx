@@ -168,7 +168,7 @@ function CostTable({ cost }: { cost: ArticleCost }) {
 
           <table className="tw:w-full tw:border-collapse tw:text-left">
             <thead>
-              <tr className="tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+              <tr className="tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
                 <th className="tw:py-1 tw:pr-3 tw:font-normal">Work</th>
                 <th className="tw:py-1 tw:pr-3 tw:font-normal">Kind</th>
                 <th className="tw:py-1 tw:pr-3 tw:text-right tw:font-normal">Calls</th>

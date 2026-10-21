@@ -218,7 +218,7 @@ td.text.kind-heading:has(> .fold-toggle) {
 }
 .matter-stub > button {
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.4;
   font-weight: 400;
   padding: 0.1rem 0.2rem;
@@ -442,7 +442,7 @@ tr.row-active .block-ref { opacity: 0.95; }
    colour of its own, and both on hover. */
 .block-ref {
   font-family: var(--font-id);
-  font-size: 0.58rem;
+  font-size: max(var(--text-min), 0.58rem);
   line-height: 1;
   letter-spacing: 0.02em;
   color: var(--ink-faint);
@@ -482,7 +482,7 @@ tr.row-active .block-ref { opacity: 0.95; }
 .block-range { line-height: 1; }
 .block-range-dash {
   font-family: var(--font-id);
-  font-size: 0.58rem;
+  font-size: max(var(--text-min), 0.58rem);
   color: var(--ink-faint);
   opacity: 0.5;
   padding: 0 0.1em;
@@ -664,7 +664,7 @@ tr.row-active .block-ref { opacity: 0.95; }
 td.text .figure-note {
   margin: 0.25rem 0 0;
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.5;
   color: var(--ink-faint);
   display: flex;

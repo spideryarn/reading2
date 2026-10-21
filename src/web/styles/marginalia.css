@@ -57,7 +57,7 @@
      within a pixel of its paragraph's first line (it was 2.3px high at 0.35rem). */
   padding: 0.5rem 0.5rem 0 var(--marg-gap);
   font-family: var(--font-ui);
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   line-height: 1.45;
   color: var(--ink-soft);
   user-select: none;
@@ -126,7 +126,7 @@
   display: block;
   cursor: help;
   border-radius: 2px;
-  font-size: 0.6875rem;
+  font-size: max(var(--text-min), 0.6875rem);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -144,7 +144,7 @@
 .marg-aside {
   padding-left: 0.5rem;
   border-left: 1px solid var(--rule-strong);
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   line-height: 1.4;
   color: var(--ink-soft);
 }
@@ -152,7 +152,7 @@
   all: unset;
   cursor: help;
   border-radius: 2px;
-  font-size: 0.6875rem;
+  font-size: max(var(--text-min), 0.6875rem);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -176,7 +176,7 @@
    app's face, and never a warning — for an allusion, memory is the product
    (glossary.md § Provenance is the label, not a badge). */
 .marg-aside-memory {
-  font-size: 0.6875rem;
+  font-size: max(var(--text-min), 0.6875rem);
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -185,7 +185,7 @@
   outline-offset: 2px;
 }
 .marg-stamp {
-  font-size: 0.6875rem;
+  font-size: max(var(--text-min), 0.6875rem);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -345,7 +345,7 @@ p.marg-shut {
      text's edge, so it underlines the head's words rather than the gutter:
      `::before`, since `::after` is the fade. */
   font-family: var(--font-ui);
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   line-height: 1.4;
   color: var(--ink-faint);
   user-select: none;
@@ -401,7 +401,7 @@ p.marg-shut {
   overflow-wrap: anywhere;
 }
 .marg-path-step[data-depth="0"] {
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   letter-spacing: 0.04em;
   font-variant: small-caps;
 }
@@ -447,7 +447,7 @@ p.marg-shut {
   border: 1px solid var(--rule);
   border-radius: 6px;
   font-family: var(--font-ui);
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   line-height: 1.35;
   color: var(--ink-faint);
   user-select: none;

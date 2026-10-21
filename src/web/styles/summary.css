@@ -126,7 +126,7 @@
   flex-wrap: wrap;
   gap: 0.2rem 0.5rem;
   margin-top: 0.3rem;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   /* The ask button is taller than the doors' text; keep them on one line. */
   align-items: center;
 }

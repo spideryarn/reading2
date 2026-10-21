@@ -24,7 +24,7 @@
   background: none;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   font-weight: 400;
   text-align: left;
   cursor: pointer;

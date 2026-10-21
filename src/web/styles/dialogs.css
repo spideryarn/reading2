@@ -199,7 +199,7 @@
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   color: var(--ink-soft);
 }
 .chat-card-head > svg { flex: none; color: var(--ink-faint); }
@@ -217,7 +217,7 @@
      bare text. */
   display: block;
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   line-height: 1.45;
   color: var(--ink-faint);
   overflow: hidden;
@@ -273,7 +273,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -362,7 +362,7 @@
   align-items: center;
   gap: 0.6rem;
   margin: 0.6rem 0 0.15rem;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   color: var(--ink-soft);
 }
 .hl-swatches-row { display: inline-flex; gap: 0.4rem; }
@@ -413,7 +413,7 @@
   gap: 0.5rem;
   margin-top: 0.55rem;
 }
-.annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
+.annotate-actions button { font-size: max(var(--text-min), 0.81rem); white-space: nowrap; }
 /* Discard sits apart on the left, away from the two buttons that keep the
    draft: it is the one press here that throws the reader's words away. */
 .annotate-actions button.linky { margin-right: auto; }
@@ -476,7 +476,7 @@
 
 .annotate-hint {
   margin: 0.5rem 0 0;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--ink-faint);
 }
 
@@ -504,20 +504,20 @@
 }
 
 .place-title {
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
 .place-optional {
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   color: var(--ink-faint);
 }
 
 .place-note {
   margin: 0.35rem 0 0;
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   line-height: 1.4;
   color: var(--ink-faint);
 }
@@ -530,7 +530,7 @@
 }
 
 .place-pick-label {
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   color: var(--ink-soft);
   white-space: nowrap;
 }
@@ -546,7 +546,7 @@
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
 }
 
 /* What is stored now, shown before it is overwritten — v1 keeps no history of
@@ -557,7 +557,7 @@
   align-items: center;
   gap: 0.4rem;
   margin: 0.45rem 0 0;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   color: var(--ink-soft);
 }
 
@@ -586,7 +586,7 @@
   background: none;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   text-align: left;
   cursor: pointer;
 }
@@ -607,13 +607,13 @@
 
 .place-clear {
   margin-top: 0.35rem;
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
 }
 
 /* A write that did not land, said out loud in the dialog that made it. */
 .cmt-write-error {
   margin: 0.5rem 0 0;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.4;
   color: var(--danger);
   overflow-wrap: anywhere;
@@ -639,7 +639,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -735,7 +735,7 @@
    being asked, and a reader who knew that needs telling it has stopped. */
 .chat-dialog-hint {
   margin: 0 0 0.4rem;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--ink-faint);
 }
 
@@ -757,7 +757,7 @@
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
 }
 .chat-dialog-delete { margin-left: auto; }
 .chat-dialog button.linky {
@@ -782,7 +782,7 @@
 
 .chat-dialog-error {
   margin: 0.4rem 0 0;
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--danger);
 }
 
@@ -811,7 +811,7 @@ mark.chat[data-chat-open] {
 mark.chat[data-chat-end]::before {
   content: "❞";
   font-family: var(--font-ui);
-  font-size: 0.6em;
+  font-size: max(var(--text-min), 0.6em);
   line-height: 1;
   vertical-align: super;
   margin-left: 0.15em;

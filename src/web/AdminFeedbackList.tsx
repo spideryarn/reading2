@@ -257,7 +257,7 @@ function Diagnostics({ ownerId, id, version }: { ownerId: string; id: string; ve
            shape changes (src/types.ts § FeedbackDiagnosticsPayload), and a
            renderer that knew the shape would be the thing that stops that being
            true. */
-        <pre className="tw:mt-2 tw:max-h-96 tw:overflow-auto tw:rounded-md tw:bg-muted tw:p-3 tw:text-[0.7rem] tw:text-muted-foreground">
+        <pre className="tw:mt-2 tw:max-h-96 tw:overflow-auto tw:rounded-md tw:bg-muted tw:p-3 tw:text-[length:max(var(--text-min),0.7rem)] tw:text-muted-foreground">
           {JSON.stringify(payload.diagnostics?.payload ?? null, null, 2)}
         </pre>
       ) : (
@@ -272,7 +272,7 @@ function Handle({ label, value }: { label: string; value: string }) {
   return (
     <span className="tw:whitespace-nowrap">
       <span className="tw:text-ink-faint">{label} </span>
-      <code className="tw:font-mono tw:text-[0.7rem] tw:text-muted-foreground">{value}</code>
+      <code className="tw:font-mono tw:text-[length:max(var(--text-min),0.7rem)] tw:text-muted-foreground">{value}</code>
     </span>
   );
 }
@@ -401,7 +401,7 @@ export function FeedbackCard({
             has no spaces in it and would otherwise push the card off the page.
             `null` is a report from a bundle older than 2026-09-02. */}
         <span className="tw:break-all">{report.url ?? "an older client"}</span>
-        {report.slug && <code className="tw:font-mono tw:text-[0.7rem]">{report.slug}</code>}
+        {report.slug && <code className="tw:font-mono tw:text-[length:max(var(--text-min),0.7rem)]">{report.slug}</code>}
         <span className={`tw:inline-flex tw:items-center tw:gap-1 ${TONE[mirror.tone]}`}>
           {mirror.tone === "ok" ? (
             <CheckCircle2 size={11} />

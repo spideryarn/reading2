@@ -103,7 +103,7 @@
 }
 .skim-depth-n {
   color: var(--ink-faint);
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -138,7 +138,7 @@
   align-items: flex-end;
   min-width: 1.4em;
   color: var(--ink-faint);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: var(--skim-number-line);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -150,10 +150,11 @@
    optional question before the quote, and matters less than the quote (Greg,
    spya-qpgvq9, plan 261009j); its monospace face reads larger than the quote's
    serif at the same size, so it sits a clear step below --type-quote.
-   tests/type-roles.test.ts holds it at 0.78rem. */
+   tests/type-roles.test.ts holds its chosen value at 0.78rem; the phone floor
+   still applies. */
 .skim-cue {
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.4;
 }
 /* The quote's own words (plan 260928e) — cut short on every row but the
@@ -187,7 +188,7 @@
 /* A stop whose quote has gone says so on its own row (SkimPanel.tsx §
    `SKIM_STOP_MISSING`, plan 261010a): the banner that used to explain it can
    be sent away. */
-.skim-missing { color: var(--ink-faint); font-size: 0.84rem; font-style: italic; }
+.skim-missing { color: var(--ink-faint); font-size: max(var(--text-min), 0.84rem); font-style: italic; }
 /* A quote may run to 1,200 characters (src/quotes.ts), so the card is wider
    than the shared 22rem and breaks an unbroken token. At that width the
    longest quote is about twenty lines, which fits any window the band is
@@ -195,7 +196,7 @@
 .skim-words-tip {
   max-width: min(30rem, calc(100vw - 1.75rem));
   overflow-wrap: anywhere;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   line-height: 1.4;
 }
 
@@ -230,10 +231,10 @@
    soft ink, so the quote under it is the line read first (Greg's answer to
    q-u04sye, plan 261009m). Only the open stop: the other rows keep the full
    heading, so the route still scans as a list. tests/type-roles.test.ts
-   holds it at 0.82rem. */
+   holds its chosen value at 0.82rem; the phone floor still applies. */
 .skim-row.current .skim-place {
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   font-weight: 600;
 }
 
@@ -330,7 +331,7 @@
   align-items: baseline;
   gap: 0.5rem;
   margin: 0.35rem 0.7rem 0.25rem;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
   color: var(--ink-faint);
 }
@@ -372,7 +373,7 @@
   flex: none;
   margin: 0.3rem 0.7rem 0.35rem;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.4;
 }
 .mode-band.skim.has-about:not(:has(> .band-head)) > .skim-intro {
@@ -430,7 +431,7 @@
   max-width: 32em;
   margin: 0;
   color: var(--ink-faint);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
   text-align: right;
 }

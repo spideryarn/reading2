@@ -196,7 +196,7 @@
 .srch-all-tick {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 .srch-all-tick:hover { color: var(--ink-soft); }
 /* The native box, restyled rather than replaced. `accent-color` is the whole of
@@ -311,7 +311,7 @@
   align-items: center;
   gap: 0.25rem;
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 .srch-icon {
   display: inline-flex;
@@ -443,7 +443,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: inherit;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   text-align: center;
   cursor: pointer;
 }
@@ -494,7 +494,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -513,7 +513,7 @@
   border: 1px solid transparent;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   /* A button's own default, which a span does not get: inheriting the row's
      made this box 2px taller than the button it stands in for. */
   line-height: normal;
@@ -550,7 +550,7 @@
   display: block;
   margin-top: 0.35rem;
   color: var(--ink-faint);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
 }
 
 /* ---- nothing to show, in its five flavours ---- */
@@ -603,7 +603,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   cursor: pointer;
 }
 /* **Behind `(hover: hover)`, with pressed feedback and a focus mark beside
@@ -749,7 +749,7 @@
   border-radius: 3px;
   background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.35));
   color: var(--ink);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -811,7 +811,7 @@
   line-height: 1.4;
 }
 .srch-hit-why { color: var(--ink-faint); font-size: var(--type-body); line-height: 1.4; }
-.srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
+.srch-hit-whole { color: var(--ink-faint); font-size: max(var(--text-min), 0.79rem); font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of
    it is to show more than the row could; and under the viewport cap the base
@@ -829,7 +829,7 @@
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 .tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
 .tip-hit-meta em { font-style: italic; }

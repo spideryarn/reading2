@@ -1183,7 +1183,7 @@ export function Metadata({
                 sure they never see it. */}
             <div className="tw:mt-4 tw:border-t tw:border-border tw:pt-3">
               <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3">
-                <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
+                <span className="tw:text-[length:max(var(--text-min),0.7rem)] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
                   About you
                 </span>
                 <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight-text">
@@ -2703,7 +2703,7 @@ function SubHeading({ children }: { children: ReactNode }) {
      did to it" into the contents list in the margin as if it were a peer of
      "Your reading". `Section` is what `[data-section]` means. */
   return (
-    <h3 className="tw:mt-5 tw:mb-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+    <h3 className="tw:mt-5 tw:mb-2 tw:text-[length:max(var(--text-min),0.68rem)] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
       {children}
     </h3>
   );
@@ -3809,7 +3809,7 @@ function Stat({
       >
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
-          <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+          <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
             {label}
           </span>
         </div>
@@ -3852,7 +3852,7 @@ function Row({
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:px-4 tw:py-3 tw:text-sm">
       <Chip icon={icon} />
-      <span className="tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+      <span className="tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
         {label}
       </span>
       <span className="tw:ml-auto tw:min-w-0 tw:text-right tw:text-ink-faint">{children}</span>
@@ -3914,7 +3914,7 @@ function StageRow({
             is what this app says "yes, and it is this one" with everywhere
             else. */}
         <span
-          className={`tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:px-2 tw:py-0.5 tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] ${
+          className={`tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:px-2 tw:py-0.5 tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] ${
             done
               ? "tw:border-highlight/30 tw:bg-highlight-wash tw:text-highlight-ink"
               : "tw:border-border tw:text-muted-foreground"

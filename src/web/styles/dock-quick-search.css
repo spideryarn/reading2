@@ -75,7 +75,7 @@
   border: 1px solid var(--rule);
   border-radius: 3px;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: max(var(--text-min), 0.7rem);
   line-height: 1.3;
   color: var(--ink-faint);
 }

@@ -78,7 +78,9 @@
 /* Spaced from its label by the part-switcher's own gap. */
 .rcp-view-count {
   color: var(--ink-faint);
-  font-size: 0.9em;
+  /* Floored although 0.9em looks big: its parent is already at the floor, so
+     0.9em of it came out 12.1px under a finger (plan 261021c, browser pass). */
+  font-size: max(var(--text-min), 0.9em);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
@@ -234,13 +236,13 @@
   margin: 0.15rem 0 0;
   padding-left: calc(0.55rem + 2px);
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.4;
 }
 .rcp-listed-ai {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
 }
 
 /* **Cited in this paragraph** (ReceptionAndClaimsPanel.tsx § CitedHere, plan 261009l §
@@ -251,7 +253,7 @@
   padding-left: calc(0.55rem + 2px);
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   line-height: 1.5;
 }
 .rcp-cited-work {
@@ -281,15 +283,15 @@
 .rcp-check-row .gloss-ask-input { flex: 1 1 12rem; }
 .rcp-check-send { flex: none; white-space: nowrap; }
 .rcp-check-pending,
-.rcp-check-line { margin: 0.25rem 0 0; font-size: 0.82rem; }
-.rcp-check-error { margin: 0.25rem 0 0; color: var(--danger); font-size: 0.82rem; }
+.rcp-check-line { margin: 0.25rem 0 0; font-size: max(var(--text-min), 0.82rem); }
+.rcp-check-error { margin: 0.25rem 0 0; color: var(--danger); font-size: max(var(--text-min), 0.82rem); }
 .rcp-check-found > .rcp-list { margin-top: 0.25rem; }
 .rcp-dig { flex: none; margin-left: 0.35rem; white-space: nowrap; }
 .rcp-own-claim, .rcp-checked-claim { margin-top: 0.75rem; }
 /* Checks against an earlier version of the article: read-only, set apart (E5). */
 .rcp-check-earlier { margin-top: 1.25rem; padding-top: 0.5rem; border-top: 1px solid var(--rule); }
 .rcp-check-earlier-head { margin: 0; }
-.rcp-own-label { color: var(--ink-faint); font-family: var(--font-ui); font-size: 0.78rem; }
+.rcp-own-label { color: var(--ink-faint); font-family: var(--font-ui); font-size: max(var(--text-min), 0.78rem); }
 @media (pointer: coarse) {
   .rcp-check-send,
   .rcp-dig { min-height: 2.5rem; }
@@ -335,7 +337,7 @@
   background: none;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   text-align: left;
   cursor: pointer;
 }
@@ -363,7 +365,7 @@
 .investigate-asked {
   padding: 0.2rem 0;
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
 }
 .investigate-mark { margin-top: 0.15rem; }
 .investigate-yours-line { align-items: center; }
@@ -388,7 +390,7 @@
   min-width: 0;
   padding-left: calc(12px + 0.35rem);
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
 }
 @media (pointer: coarse) {
   .investigate-send,
@@ -418,7 +420,7 @@
   color: var(--highlight-ink);
   font: inherit;
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   text-decoration: none;
   cursor: pointer;
 }
@@ -444,7 +446,7 @@
   margin: 0 0 0.35rem;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.45;
 }
 .rcp-citers-note .cmt-spinner { display: inline; vertical-align: -2px; }
@@ -487,7 +489,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0.2rem 0 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.45;
 }
 
@@ -615,7 +617,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   border-top: 1px dotted var(--rule);
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.35;
 }
 .rcp-marker {
@@ -625,7 +627,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0.35rem 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   font-weight: 600;
   line-height: 1.35;
 }
@@ -642,7 +644,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 .rcp-authors {
   margin: 0.3rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   font-style: italic;
   line-height: 1.4;
 }
@@ -665,13 +667,13 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   border-radius: 3px;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.64rem;
+  font-size: max(var(--text-min), 0.64rem);
   font-weight: 600;
   letter-spacing: 0.07em;
   line-height: 1.5;
   cursor: help;
 }
-.rcp-dot { color: var(--ink-faint); font-size: 0.76rem; }
+.rcp-dot { color: var(--ink-faint); font-size: max(var(--text-min), 0.76rem); }
 
 /* **Characters we located in that page's own extract.** The solid rule down the
    left is the provenance mark this app already uses for "these are not our
@@ -710,7 +712,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   cursor: pointer;
 }
 .rcp-more:hover { color: var(--ink); }
@@ -739,7 +741,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0 0 0.25rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: max(var(--text-min), 0.68rem);
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -753,7 +755,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 .rcp-relation {
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -776,7 +778,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   align-items: center;
   gap: 0.25rem;
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -796,7 +798,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 .rcp-limits {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.4;
 }
 
@@ -808,7 +810,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0.35rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -823,14 +825,14 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   font-weight: 600;
 }
 .rcp-identifies-list {
   margin: 0.15rem 0 0;
   padding: 0 0 0 1rem;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -840,13 +842,13 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
 .rcp-ref {
   margin: 0.3rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.45;
 }
 .rcp-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.4;
 }
 .rcp-out {
@@ -856,7 +858,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0.35rem 0 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-weight: 600;
   text-decoration: none;
 }
@@ -893,7 +895,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0 0 0.3rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -927,13 +929,13 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   align-items: center;
   gap: 0.35rem;
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   font-weight: 600;
 }
 .rcp-thread.on .rcp-thread-label { color: var(--highlight-ink); }
 .rcp-thread-count {
   color: var(--ink-faint);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -946,7 +948,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   -webkit-line-clamp: 2;
   line-clamp: 2;
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
 }
 .rcp-thread.on .rcp-thread-gist { display: block; -webkit-line-clamp: unset; line-clamp: none; }
@@ -954,7 +956,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0.35rem 0.4rem 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
 }
 .rcp-thread-all {
   padding: 0;
@@ -975,7 +977,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0.2rem 0 0.4rem;
   color: var(--danger);
   font-family: var(--font-ui);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   line-height: 1.4;
 }
 
@@ -988,13 +990,13 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   align-items: center;
   gap: 0.2rem 0.4rem;
   margin: 0.3rem 0 0;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
 }
 .rcp-key-label {
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1032,7 +1034,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   margin: 0 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1049,7 +1051,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   content: "▸";
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
 }
 .rcp-section[open] > .rcp-section-head::before { content: "▾"; }
@@ -1064,7 +1066,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   min-width: 0;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   font-weight: 600;
   line-height: 1.35;
 }
@@ -1089,7 +1091,7 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   line-clamp: 2;
   margin-top: 0.05rem;
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
 }
 .rcp-section[open] > .rcp-section-head .rcp-section-gist {

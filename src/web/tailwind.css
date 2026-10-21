@@ -280,6 +280,14 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+
+  /* **`tw:text-xs` takes the touch screen's text floor** (plan 261021c):
+     Tailwind's 0.75rem, but never under `--text-min` (styles/tokens.css), which
+     is 0px with a mouse. One line here rather than a floor at each of the 273
+     call sites, which the utilities layer would outrank anyway. Its line height
+     is Tailwind's own `--text-xs--line-height`, untouched.
+     docs/project/typography.md § The smallest text. */
+  --text-xs: max(var(--text-min), 0.75rem);
 }
 
 /* ------------------------------------------- the bit of preflight we need --
