@@ -6854,7 +6854,7 @@ export const feedbackQuestionDeferrals = spideryarn.table(
  * >
  * > — Greg, 2026-10-21
  *
- * **A published copy of a file**, `docs/user-feedback/questions/q-….md`, which
+ * **A published copy of a file** under `docs/user-feedback/questions/`, which
  * stays the one place a question is written: nobody edits a row, and publishing
  * overwrites it from the file. `refs:` is never here, because it is for agents
  * and nothing in this table may be unfit for a browser. No owner: a question is

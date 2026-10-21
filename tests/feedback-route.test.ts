@@ -41,6 +41,7 @@ const HOISTED = vi.hoisted(() => {
 
 import { mintId } from "../src/ids.js";
 import { ADMIN_USER_ID_PROD } from "../src/admin.js";
+import type { PublishedFeedbackQuestion } from "../src/feedback-question-values.js";
 import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
@@ -160,47 +161,40 @@ vi.mock("../src/feedback-endings.generated.js", () => ({
   FEEDBACK_NOTE_ENDINGS: {
     "spya-k3m9qt": "shipped",
     "spya-dec1ne": "declined",
-    "spya-wa1t00": "awaiting",
+    "spya-wa2t00": "awaiting",
     "spya-sh1pd2": "shipped",
   },
   FEEDBACK_NOTE_COMMENTS: {
     "spya-dec1ne": "Set aside: the browser gives us no way to do this.",
-    "spya-wa1t00": "Waiting on you: one switch or two?",
+    "spya-wa2t00": "Waiting on you: one switch or two?",
     /* A comment for a report this reader never filed: it must go nowhere. */
-    "spya-n0tm1n": "about somebody else's report",
+    "spya-n0tm2n": "about somebody else's report",
   },
 }));
 
-/* The questions, fixed here for the same reason. One open about the admin's
-   own report, one open about nothing, one open about a report the admin did
-   not file, and one already answered: known to the POST, never sent by the GET. */
-vi.mock("../src/feedback-questions.generated.js", () => ({
-  FEEDBACK_QUESTION_STATUS: {
-    "q-aaaaaa": "open",
-    "q-bbbbbb": "open",
-    "q-cccccc": "open",
-    "q-dddddd": "answered",
-  },
-  FEEDBACK_OPEN_QUESTIONS: [
-    { id: "q-aaaaaa", title: "One switch or two?", report: "spya-wa1t00", repeats: ["spya-rep3at"], asked: "2026-10-05", body: "Background.\n\nA. One.\nB. Two." },
-    { id: "q-bbbbbb", title: "A question about nothing filed", report: null, repeats: [], asked: "2026-10-06", body: "Stands alone." },
-    { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", repeats: [], asked: "2026-10-07", body: "The body says it all." },
-  ],
+/* The questions, as `feedback_questions` holds them (plan 261021h). One open
+   about the admin's own report, one open about nothing, one open about a
+   report the admin did not file, and one already answered: known to the POST,
+   never sent by the GET. Answered last-asked and out of order, so the GET's
+   oldest-first order is the route's, not the fixture's. */
+const PUBLISHED_QUESTIONS: PublishedFeedbackQuestion[] = [
+  { id: "q-dddddd", title: "Settled", report: null, repeats: [], asked: "2026-10-01", body: "Done.", status: "answered", acted: [] },
+  { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm2n", repeats: [], asked: "2026-10-07", body: "The body says it all.", status: "open", acted: [] },
+  { id: "q-aaaaaa", title: "One switch or two?", report: "spya-wa2t00", repeats: ["spya-rep3at"], asked: "2026-10-05", body: "Background.\n\nA. One.\nB. Two.", status: "open", acted: [] },
   /* q-bbbbbb's first replies have been acted on (plans 261008i and 261010h). */
-  FEEDBACK_QUESTION_ACTED: {
-    "q-aaaaaa": [],
-    "q-bbbbbb": [
-      "spya-act3d0",
-      "spya-act3d1",
-      "spya-act3d2",
-      "spya-act3d3",
-      "spya-act3d4",
-      "spya-act3d5",
-      "spya-act3d6",
-    ],
-    "q-cccccc": [],
+  {
+    id: "q-bbbbbb",
+    title: "A question about nothing filed",
+    report: null,
+    repeats: [],
+    asked: "2026-10-06",
+    body: "Stands alone.",
+    status: "open",
+    acted: ["spya-act3da", "spya-act3db", "spya-act3dc", "spya-act3dd", "spya-act3de", "spya-act3df", "spya-act3dg"],
   },
-}));
+];
+/** What `publishedQuestions` hands back; a test may swap it. */
+let publishedAnswer: PublishedFeedbackQuestion[] = PUBLISHED_QUESTIONS;
 
 vi.mock("../src/store/index.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/store/index.js")>();
@@ -254,6 +248,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
           }
         );
       },
+      publishedQuestions: async () => publishedAnswer,
       answersTo: async (ids: readonly string[]) => {
         newestAsked.push({ ids, owner: currentOwnerId() });
         return newestAnswer;
@@ -501,6 +496,7 @@ beforeEach(() => {
   addendumOutcome = null;
   newestAsked = [];
   newestAnswer = [];
+  publishedAnswer = PUBLISHED_QUESTIONS;
   linkedAsked = [];
   linkedAnswer = [];
   acrossAsked = [];
@@ -605,7 +601,7 @@ describe("GET /api/feedback", () => {
   it("says shipped only for a report whose note says shipped — not declined, not waiting, not unknown", async () => {
     const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null });
     listAnswer = {
-      reports: [row("spya-k3m9qt"), row("spya-dec1ne"), row("spya-wa1t00"), row("spya-unkn0w")],
+      reports: [row("spya-k3m9qt"), row("spya-dec1ne"), row("spya-wa2t00"), row("spya-unkn0w")],
       more: false,
     };
     const reply = await call(undefined, { method: "GET" });
@@ -613,7 +609,7 @@ describe("GET /api/feedback", () => {
     expect(reports.map((r) => [r.id, r.shipped])).toEqual([
       ["spya-k3m9qt", true],
       ["spya-dec1ne", false],
-      ["spya-wa1t00", false],
+      ["spya-wa2t00", false],
       ["spya-unkn0w", false],
     ]);
     expect(listFilters, "no ?show= is the whole list").toEqual([undefined]);
@@ -793,7 +789,7 @@ describe("GET /api/admin/feedback/earlier", () => {
         endings: {
           shipped: ["spya-k3m9qt", "spya-sh1pd2"],
           declined: ["spya-dec1ne"],
-          awaiting: ["spya-wa1t00"],
+          awaiting: ["spya-wa2t00"],
         },
         show: "all",
         owner: TEST_OWNER,
@@ -809,7 +805,7 @@ describe("GET /api/admin/feedback/earlier", () => {
   it("marks each row an open question covers as asked, under every filter, and moves no row or count", async () => {
     for (const show of ["waiting", "all"]) {
       statusAnswer = {
-        reports: [row("spya-rep3at", 581, "waiting"), row("spya-wa1t00", 580, "waiting"), row("spya-0rphan", 579, "waiting")],
+        reports: [row("spya-rep3at", 581, "waiting"), row("spya-wa2t00", 580, "waiting"), row("spya-0rphan", 579, "waiting")],
         more: false,
         counts: { open: 0, waiting: 3, aside: 0, shipped: 0 },
       };
@@ -818,7 +814,7 @@ describe("GET /api/admin/feedback/earlier", () => {
       const sent = reply.body as { reports: { id: string; asked: boolean }[]; counts: { waiting: number } };
       expect(sent.reports.map(({ id, asked }) => [id, asked])).toEqual([
         ["spya-rep3at", true],
-        ["spya-wa1t00", true],
+        ["spya-wa2t00", true],
         ["spya-0rphan", false],
       ]);
       expect(sent.counts.waiting).toBe(3);
@@ -830,9 +826,9 @@ describe("GET /api/admin/feedback/earlier", () => {
   it("sends each report's addenda, oldest first as the store has them, three fields each", async () => {
     statusAnswer = {
       reports: [
-        row("spya-wa1t00", 541, "waiting", {
+        row("spya-wa2t00", 541, "waiting", {
           addenda: [
-            { id: "spya-addzz2", body: "Actually, only the Open ones.", createdAt: "2026-10-10T09:12:00.000Z", reportId: "spya-wa1t00" },
+            { id: "spya-addzz2", body: "Actually, only the Open ones.", createdAt: "2026-10-10T09:12:00.000Z", reportId: "spya-wa2t00" },
             { id: "spya-addzz3", body: "And a second thought.", createdAt: "2026-10-10T09:13:00.000Z", environment: "test" },
           ],
         }),
@@ -971,10 +967,10 @@ describe("questions for the admin, and replies to them", () => {
 
   /* Plan 261008i: a client that asks `questions=2` gets threads. */
   it("sends threads to a client that asks: unacted replies, the state, the report's text", async () => {
-    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." }];
+    linkedAnswer = [{ id: "spya-wa2t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." }];
     newestAnswer = [
       /* Acted on (the mock's `acted` names it), so not listed, though it still counts for the state. */
-      { id: "spya-act3d0", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
+      { id: "spya-act3da", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
       { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
     ];
     /* q-cccccc deferred, and q-bbbbbb deferred before its newest reply, which wins (F2). */
@@ -990,7 +986,7 @@ describe("questions for the admin, and replies to them", () => {
         title: "One switch or two?",
         body: "Background.\n\nA. One.\nB. Two.",
         asked: "2026-10-05",
-        report: { id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." },
+        report: { id: "spya-wa2t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." },
         answers: [],
         olderAnswers: 0,
         state: "waiting",
@@ -1026,12 +1022,12 @@ describe("questions for the admin, and replies to them", () => {
      does not look like one never answered. Shape 2 stays exactly as it was. */
   it("sends acted replies apart to a client that asks for shape 3, and shape 2 without them", async () => {
     newestAnswer = [
-      { id: "spya-act3d0", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
+      { id: "spya-act3da", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
       { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
     ];
     const three = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
     const b3 = three.find((one) => one.id === "q-bbbbbb");
-    expect(b3?.actedAnswers).toEqual([{ id: "spya-act3d0", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" }]);
+    expect(b3?.actedAnswers).toEqual([{ id: "spya-act3da", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" }]);
     expect(b3?.olderActedAnswers).toBe(0);
     expect(b3?.answers).toEqual([{ id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }]);
     expect(three.find((one) => one.id === "q-aaaaaa")?.actedAnswers).toEqual([]);
@@ -1049,9 +1045,9 @@ describe("questions for the admin, and replies to them", () => {
   it("sends shape 4 the report whoever filed it, marked whose, and shape 3 only the admin's own", async () => {
     acrossAnswer = {
       found: [
-        { id: "spya-wa1t00", ownerId: TEST_OWNER, reporterEmail: TEST_EMAIL, number: 212, firstLine: "Mine", body: "Mine." },
+        { id: "spya-wa2t00", ownerId: TEST_OWNER, reporterEmail: TEST_EMAIL, number: 212, firstLine: "Mine", body: "Mine." },
         {
-          id: "spya-n0tm1n",
+          id: "spya-n0tm2n",
           ownerId: "0000f5e1-0000-4000-8000-00000000beef",
           reporterEmail: "reader@example.test",
           number: 650,
@@ -1061,16 +1057,16 @@ describe("questions for the admin, and replies to them", () => {
       ],
       ambiguous: [],
     };
-    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Mine", body: "Mine." }];
+    linkedAnswer = [{ id: "spya-wa2t00", number: 212, firstLine: "Mine", body: "Mine." }];
     const four = ((await get(`${EARLIER}?questions=4`)).body as Sent).questions;
-    expect(acrossAsked).toEqual([["spya-wa1t00", "spya-n0tm1n"]]);
+    expect(acrossAsked).toEqual([["spya-wa2t00", "spya-n0tm2n"]]);
     /* Shape 4 does not ask the owner-scoped store: own-first could show the admin's report under a reader's id. */
     expect(linkedAsked).toEqual([]);
     expect(four.map((one) => one.report)).toEqual([
-      { id: "spya-wa1t00", number: 212, firstLine: "Mine", body: "Mine.", whose: "yours", from: null },
+      { id: "spya-wa2t00", number: 212, firstLine: "Mine", body: "Mine.", whose: "yours", from: null },
       null,
       {
-        id: "spya-n0tm1n",
+        id: "spya-n0tm2n",
         number: 650,
         firstLine: "Please build this",
         body: "Please build this.",
@@ -1082,14 +1078,14 @@ describe("questions for the admin, and replies to them", () => {
     const three = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
     expect(acrossAsked).toHaveLength(1);
     expect(three.map((one) => one.report)).toEqual([
-      { id: "spya-wa1t00", number: 212, firstLine: "Mine", body: "Mine." },
+      { id: "spya-wa2t00", number: 212, firstLine: "Mine", body: "Mine." },
       null,
       null,
     ]);
   });
 
   it("sends no report for an id more than one account holds, and says so in the log without the id", async () => {
-    acrossAnswer = { found: [], ambiguous: ["spya-n0tm1n"] };
+    acrossAnswer = { found: [], ambiguous: ["spya-n0tm2n"] };
     let sent: Sent = { questions: [] };
     const logged = await logLinesWhile(async () => {
       sent = (await get(`${EARLIER}?questions=4`)).body as Sent;
@@ -1097,13 +1093,13 @@ describe("questions for the admin, and replies to them", () => {
     expect(sent.questions.map((one) => one.report)).toEqual([null, null, null]);
     const warned = logged.split("\n").filter((line) => line.includes("more than one account holds"));
     expect(warned).toHaveLength(1);
-    expect(warned.join("\n")).not.toContain("spya-n0tm1n");
+    expect(warned.join("\n")).not.toContain("spya-n0tm2n");
   });
 
   it("marks a unique report from another administrator as an admin's, not a reader's", async () => {
     acrossAnswer = {
       found: [{
-        id: "spya-n0tm1n",
+        id: "spya-n0tm2n",
         ownerId: ADMIN_USER_ID_PROD,
         reporterEmail: "other-admin@example.test",
         number: 650,
@@ -1114,7 +1110,7 @@ describe("questions for the admin, and replies to them", () => {
     };
     const questions = ((await get(`${EARLIER}?questions=4`)).body as Sent).questions;
     expect(questions.find((one) => one.id === "q-cccccc")?.report).toEqual({
-      id: "spya-n0tm1n",
+      id: "spya-n0tm2n",
       number: 650,
       firstLine: "An administrator's report",
       body: "An administrator's report.",
@@ -1149,7 +1145,7 @@ describe("questions for the admin, and replies to them", () => {
 
   it("sends at most five acted replies a thread, the newest in oldest-first order, and counts the rest", async () => {
     newestAnswer = Array.from({ length: 7 }, (_, i) => ({
-      id: `spya-act3d${i}`,
+      id: `spya-act3d${"abcdefg"[i]}`,
       questionId: "q-bbbbbb",
       body: `acted reply ${i}`,
       createdAt: `2026-10-07T0${i}:00:00.000Z`,
@@ -1167,8 +1163,17 @@ describe("questions for the admin, and replies to them", () => {
     expect(acted?.answers).toEqual([]);
   });
 
+  /* Plan 261021h, Sol's F7: a row that breaks the file's rules is a failure to
+     load, never a quietly shorter list of questions. */
+  it("answers 500, not a shorter list, when one published row is malformed", async () => {
+    publishedAnswer = [...PUBLISHED_QUESTIONS, { ...PUBLISHED_QUESTIONS[1]!, id: "q-eeeeee", title: "" }];
+    expect((await get(`${EARLIER}?questions=4`)).status).toBe(500);
+    publishedAnswer = PUBLISHED_QUESTIONS;
+    expect((await get(`${EARLIER}?questions=4`)).status).toBe(200);
+  });
+
   it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {
-    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?" }];
+    linkedAnswer = [{ id: "spya-wa2t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?" }];
     newestAnswer = [
       { id: "spya-older0", questionId: "q-bbbbbb", body: "first", createdAt: "2026-10-07T07:00:00.000Z" },
       { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
@@ -1183,7 +1188,7 @@ describe("questions for the admin, and replies to them", () => {
         title: "One switch or two?",
         body: "Background.\n\nA. One.\nB. Two.",
         asked: "2026-10-05",
-        report: { id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?" },
+        report: { id: "spya-wa2t00", number: 212, firstLine: "Could there be one switch?" },
         answer: null,
       },
       {
@@ -1199,7 +1204,7 @@ describe("questions for the admin, and replies to them", () => {
     ]);
     /* Both lookups ran as the signed-in admin, for the open questions only. */
     expect(newestAsked).toEqual([{ ids: ["q-aaaaaa", "q-bbbbbb", "q-cccccc"], owner: TEST_OWNER }]);
-    expect(linkedAsked).toEqual([{ ids: ["spya-wa1t00", "spya-n0tm1n"], owner: TEST_OWNER }]);
+    expect(linkedAsked).toEqual([{ ids: ["spya-wa2t00", "spya-n0tm2n"], owner: TEST_OWNER }]);
   });
 
   it("never sends an answered question, whatever the store says about it", async () => {
@@ -1320,7 +1325,7 @@ describe("questions for the admin, and replies to them", () => {
     const reply = await post({ id: "spya-repzyy", question: "q-zzzzzz", body: "1A" });
     expect(reply.status).toBe(400);
     expect(await post({ id: "spya-repzyy", question: "constructor", body: "1A" })).toMatchObject({ status: 400 });
-    expect(await post({ id: "spya-repzyy", question: "spya-wa1t00", body: "1A" })).toMatchObject({ status: 400 });
+    expect(await post({ id: "spya-repzyy", question: "spya-wa2t00", body: "1A" })).toMatchObject({ status: 400 });
     expect(answersSubmitted).toEqual([]);
   });
 
@@ -1400,7 +1405,7 @@ describe("POST /api/admin/feedback/addenda", () => {
       {
         input: { id: "spya-addzz2", reportId: "spya-k3m9qt", body: "Actually, only the Open ones.", environment: "test" },
         /* The same endings the list's status is worked out from, so the gate and the list agree. */
-        endings: { shipped: ["spya-k3m9qt", "spya-sh1pd2"], declined: ["spya-dec1ne"], awaiting: ["spya-wa1t00"] },
+        endings: { shipped: ["spya-k3m9qt", "spya-sh1pd2"], declined: ["spya-dec1ne"], awaiting: ["spya-wa2t00"] },
         owner: TEST_OWNER,
       },
     ]);

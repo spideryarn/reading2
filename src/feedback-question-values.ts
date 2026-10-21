@@ -131,3 +131,49 @@ export function askedReports(
 ): Set<string> {
   return new Set(questions.flatMap((question) => (question.report === null ? [] : [question.report, ...question.repeats])));
 }
+
+/**
+ * **One question as the table holds it** (plan 261021h): the compiled fields,
+ * and the two the server needs to answer for it, its status and the replies an
+ * agent has acted on. `refs` is not here and never was in the table.
+ */
+export interface PublishedFeedbackQuestion extends CompiledFeedbackQuestion {
+  status: FeedbackQuestionStatus;
+  acted: readonly string[];
+}
+
+type Ordered = Pick<CompiledFeedbackQuestion, "asked" | "id">;
+
+/** Oldest asked first, the id breaking a tie: the order they were asked in, and stable under a new one. */
+export function byAsked(a: Ordered, b: Ordered): number {
+  if (a.asked !== b.asked) return a.asked < b.asked ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * **What is wrong with a published row, or null** — the file's rules
+ * (scripts/feedback-endings.ts § `parseQuestionFile`) applied on the way out of
+ * the table, so a row written some other way than by publishing a file is
+ * refused loudly rather than drawn (plan 261021h, Sol's F7). The sentence names
+ * fields, never their contents.
+ */
+export function publishedQuestionProblem(row: PublishedFeedbackQuestion): string | null {
+  if (!isFeedbackQuestionId(row.id)) return "id is not a question id";
+  if (row.title.trim() === "" || row.title.length > MAX_FEEDBACK_QUESTION_TITLE_CHARS || row.title.includes("\n")) {
+    return "title is blank, too long or more than one line";
+  }
+  if (row.report !== null && !isSpideryarnId(row.report)) return "report is not a report id";
+  if (row.report === null && row.repeats.length > 0) return "repeats without a report";
+  if (
+    row.repeats.some((one) => !isSpideryarnId(one) || one === row.report) ||
+    new Set(row.repeats).size !== row.repeats.length
+  ) {
+    return "repeats are not distinct report ids other than its own";
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.asked)) return "asked is not yyyy-mm-dd";
+  if (row.body.trim() === "" || row.body.length > MAX_FEEDBACK_QUESTION_BODY_CHARS) return "body is blank or too long";
+  if (row.body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) return "body splits twice";
+  if (!FEEDBACK_QUESTION_STATUSES.includes(row.status)) return "status is neither open nor answered";
+  if (row.acted.some((one) => !isSpideryarnId(one))) return "acted names something that is not an answer id";
+  return null;
+}

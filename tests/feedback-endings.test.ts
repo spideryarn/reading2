@@ -18,24 +18,23 @@ import {
   NOTES_DIR,
   parseNoteHeader,
   parseQuestionFile,
-  QUESTIONS_GENERATED_PATH,
   readNotes,
   readQuestionFiles,
   renderModule,
-  renderQuestionsModule,
+  publishedRow,
   syncGenerated,
 } from "../scripts/feedback-endings.js";
 import { feedbackComment, feedbackIdsByEnding, isFeedbackShipped, shippedFeedbackIds } from "../src/feedback-ending.js";
 import { MAX_FEEDBACK_COMMENT_CHARS as MAX_COMMENT_CHARS } from "../src/feedback-ending-values.js";
 import { FEEDBACK_NOTE_COMMENTS, FEEDBACK_NOTE_ENDINGS } from "../src/feedback-endings.generated.js";
-import { feedbackQuestionStatus, openFeedbackQuestions } from "../src/feedback-question.js";
+import { feedbackQuestionsFrom, MalformedQuestionError } from "../src/feedback-question.js";
 import {
   isFeedbackQuestionId,
   MAX_FEEDBACK_QUESTION_BODY_CHARS,
   MAX_FEEDBACK_QUESTION_TITLE_CHARS,
   mintFeedbackQuestionId,
+  publishedQuestionProblem,
 } from "../src/feedback-question-values.js";
-import { FEEDBACK_OPEN_QUESTIONS, FEEDBACK_QUESTION_STATUS } from "../src/feedback-questions.generated.js";
 
 const note = (header: string, body = "# A note\n") => `---\n${header}\n---\n${body}`;
 
@@ -341,9 +340,9 @@ describe("which note's comment a report shows (261007d, decision 4)", () => {
 });
 
 /**
- * **Questions for Greg, compiled** (261007d stage 2): one file a question
- * under docs/user-feedback/questions/, compiled into
- * src/feedback-questions.generated.ts by the same command as the endings.
+ * **Questions for Greg** (261007d stage 2): one file a question under
+ * docs/user-feedback/questions/, checked by the same command as the endings and
+ * published to `feedback_questions` by feedback-questions.ts (plan 261021h).
  */
 describe("a question file", () => {
   const HEADER = "id: q-k3m9qt\nreport: spya-aaaaaa\nstatus: open\nasked: 2026-10-07\ntitle: Should the box take longer reports?";
@@ -381,18 +380,9 @@ describe("a question file", () => {
     expect(parse(file(`${HEADER.replace("spya-aaaaaa", "none")}\nrepeats: spya-bbbbbb`))).toMatch(/repeats/);
   });
 
-  it("compiles an open question's repeats for the server, and an answered one's not at all", () => {
-    const answered = HEADER.replace("q-k3m9qt", "q-answrd")
-      .replace("status: open", "status: answered")
-      .replace("spya-aaaaaa", "spya-dddddd");
-    const { questions } = compileQuestions([
-      { name: "q-k3m9qt.md", text: file(`${HEADER}\nrepeats: spya-bbbbbb`) },
-      { name: "q-answrd.md", text: file(`${answered}\nrepeats: spya-eeeeee`) },
-    ]);
-    const text = renderQuestionsModule(questions);
-    expect(text).toContain('report: "spya-aaaaaa", repeats: ["spya-bbbbbb"], asked:');
-    expect(text).not.toContain("spya-dddddd");
-    expect(text).not.toContain("spya-eeeeee");
+  it("publishes repeats with the question (261016a)", () => {
+    const { questions } = compileQuestions([{ name: "q-k3m9qt.md", text: file(`${HEADER}\nrepeats: spya-bbbbbb`) }]);
+    expect(questions.map(publishedRow)).toMatchObject([{ report: "spya-aaaaaa", repeats: ["spya-bbbbbb"] }]);
   });
 
   it("refuses a bad id, and an id that is not the file's name", () => {
@@ -431,10 +421,10 @@ describe("a question file", () => {
     expect(parse(file(HEADER, "  \n"))).toMatch(/body/);
   });
 
-  it("compiles every id with its status, and the words of the open ones only; refs never", () => {
+  it("publishes every question, answered ones too, with status and acted, and refs never (261021h)", () => {
     const answered = HEADER.replace("q-k3m9qt", "q-answrd").replace("status: open", "status: answered");
     const { questions, problems } = compileQuestions([
-      { name: "q-k3m9qt.md", text: file(`${HEADER}\nrefs: qi-secret-ref SPIDERYARN-READING2-E8`) },
+      { name: "q-k3m9qt.md", text: file(`${HEADER}\nrefs: qi-secret-ref SPIDERYARN-READING2-E8\nacted: spya-bbbbbb`) },
       { name: "q-answrd.md", text: file(answered, "An answered question's words.") },
       { name: "q-brokn2.md", text: file(HEADER) },
       { name: "README.txt", text: "not a question" },
@@ -442,24 +432,15 @@ describe("a question file", () => {
     expect(problems).toHaveLength(2);
     expect(problems[0]).toMatch(/^q-brokn2\.md: /);
     expect(problems[1]).toMatch(/^README\.txt: /);
-    const text = renderQuestionsModule(questions);
-    expect(text).toContain('"q-answrd": "answered"');
-    expect(text).toContain('"q-k3m9qt": "open"');
-    expect(text).toContain("Should the box take longer reports?");
-    expect(text).not.toContain("An answered question's words.");
-    expect(text).not.toContain("qi-secret-ref");
-    expect(text).not.toContain("SPIDERYARN-READING2-E8");
-  });
-
-  it("compiles each open question's acted ids for the server, and an answered one's not at all (261008i)", () => {
-    const answered = HEADER.replace("q-k3m9qt", "q-answrd").replace("status: open", "status: answered");
-    const { questions } = compileQuestions([
-      { name: "q-k3m9qt.md", text: file(`${HEADER}\nacted: spya-bbbbbb, spya-cccccc`) },
-      { name: "q-answrd.md", text: file(`${answered}\nacted: spya-dddddd`) },
+    const rows = questions.map(publishedRow);
+    expect(rows.map((row) => [row.id, row.status, row.acted])).toEqual([
+      ["q-answrd", "answered", []],
+      ["q-k3m9qt", "open", ["spya-bbbbbb"]],
     ]);
-    const text = renderQuestionsModule(questions);
-    expect(text).toContain('"q-k3m9qt": ["spya-bbbbbb", "spya-cccccc"],');
-    expect(text).not.toContain("spya-dddddd");
+    for (const row of rows) {
+      expect(Object.keys(row).sort()).toEqual(["acted", "asked", "body", "id", "repeats", "report", "status", "title"]);
+    }
+    expect(JSON.stringify(rows)).not.toContain("qi-secret-ref");
   });
 
   it("takes one line that is exactly Details, and refuses a second (261008i)", () => {
@@ -480,26 +461,49 @@ describe("a question file", () => {
 });
 
 describe("the committed questions", () => {
-  it("are what the files say now, and every file parses", () => {
+  it("every file parses, and each would publish a row the server accepts (261021h)", () => {
     const { questions, problems } = compileQuestions(readQuestionFiles());
     expect(problems, "a question file does not parse").toEqual([]);
-    expect(
-      readFileSync(QUESTIONS_GENERATED_PATH, "utf8"),
-      "src/feedback-questions.generated.ts is stale: npx tsx scripts/feedback-endings.ts",
-    ).toBe(renderQuestionsModule(questions));
+    expect(questions.length, "the positive control: there are question files").toBeGreaterThan(0);
+    for (const question of questions) {
+      expect(publishedQuestionProblem(publishedRow(question)), question.id).toBeNull();
+    }
   });
 
-  it("is what the server reads: open ones with their words, every id with its status", () => {
-    const open = openFeedbackQuestions();
-    expect(open).toEqual(FEEDBACK_OPEN_QUESTIONS);
-    expect(open.length, "the positive control: there is at least one open question").toBeGreaterThan(0);
-    for (const question of open) {
-      expect(feedbackQuestionStatus(question.id)).toBe("open");
+  it("as the server reads them: open ones oldest first with their words, every id with its status", () => {
+    const { questions } = compileQuestions(readQuestionFiles());
+    const view = feedbackQuestionsFrom(questions.map(publishedRow));
+    const open = questions.filter((question) => question.status === "open");
+    expect(view.open.map((question) => question.id).sort()).toEqual(open.map((question) => question.id).sort());
+    expect(view.open.map((question) => question.asked)).toEqual([...view.open.map((question) => question.asked)].sort());
+    for (const question of view.open) {
+      expect(view.status(question.id)).toBe("open");
       expect(Object.keys(question).sort()).toEqual(["asked", "body", "id", "repeats", "report", "title"]);
     }
-    expect(Object.keys(FEEDBACK_QUESTION_STATUS).length).toBeGreaterThanOrEqual(open.length);
-    expect(feedbackQuestionStatus("q-zzzzzz")).toBeNull();
-    expect(feedbackQuestionStatus("constructor")).toBeNull();
+    for (const question of questions) expect(view.status(question.id)).toBe(question.status);
+    expect(view.status("q-zzzzzz")).toBeNull();
+    expect(view.status("constructor")).toBeNull();
+    expect(view.acted("constructor")).toEqual([]);
+  });
+
+  it("refuses to draw any of them when one row breaks the rules (261021h, F7)", () => {
+    const { questions } = compileQuestions(readQuestionFiles());
+    const rows = questions.map(publishedRow);
+    const first = rows[0];
+    if (first === undefined) throw new Error("no question files");
+    for (const bad of [
+      { ...first, title: "" },
+      { ...first, title: "two\nlines" },
+      { ...first, body: "x".repeat(MAX_FEEDBACK_QUESTION_BODY_CHARS + 1) },
+      { ...first, status: "closed" as never },
+      { ...first, report: null, repeats: ["spya-bbbbbb"] },
+      { ...first, acted: ["212"] },
+      { ...first, id: "q-NOPE00" },
+    ]) {
+      expect(() => feedbackQuestionsFrom([...rows.slice(1), bad]), JSON.stringify(bad).slice(0, 60)).toThrow(
+        MalformedQuestionError,
+      );
+    }
   });
 
   it("links a question to the one report named by its source note", () => {

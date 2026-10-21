@@ -37,8 +37,6 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 const notes = readdirSync("docs/user-feedback").filter((f) => f.endsWith(".md")).sort();
 if (notes.some((f) => readFileSync(`docs/user-feedback/${f}`, "utf8").includes("BROKEN"))) process.exit(1);
 writeFileSync("src/feedback-endings.generated.ts", `export const N = ${JSON.stringify(notes)};\n`);
-const qs = readdirSync("docs/user-feedback/questions").sort();
-writeFileSync("src/feedback-questions.generated.ts", `export const Q = ${JSON.stringify(qs)};\n`);
 if (notes.some((f) => readFileSync(`docs/user-feedback/${f}`, "utf8").includes("EDIT-HELP"))) {
   writeFileSync("src/web/help/pages/a.md", "changed during the second generator\n");
 }
@@ -113,9 +111,9 @@ check "only the file that changed is appended, relative to the cd" \
 reset_repo
 
 echo "--- a directory as the commit path ---"
-echo q2 > "$REPO/docs/user-feedback/questions/q-2.md"
-run "git add -- docs/user-feedback/questions/q-2.md && git commit -F msg -- docs/user-feedback"
-check "the questions are appended"               command_is "git add -- docs/user-feedback/questions/q-2.md && git commit -F msg -- docs/user-feedback src/feedback-questions.generated.ts"
+echo q2 > "$REPO/docs/user-feedback/n3.md"
+run "git add -- docs/user-feedback/n3.md && git commit -F msg -- docs/user-feedback"
+check "the endings are appended"                 command_is "git add -- docs/user-feedback/n3.md && git commit -F msg -- docs/user-feedback src/feedback-endings.generated.ts"
 reset_repo
 
 echo "--- the generated file already named ---"

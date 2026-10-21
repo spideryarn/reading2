@@ -2653,6 +2653,7 @@ export type {
   FeedbackKind,
 } from "../types.js";
 import type { FeedbackEnding } from "../feedback-ending-values.js";
+import type { PublishedFeedbackQuestion } from "../feedback-question-values.js";
 import type { AdminFeedbackAddendum, EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
 
 /** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
@@ -3137,6 +3138,14 @@ export interface FeedbackStore {
    * 261010h).
    */
   answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  /**
+   * **Every question published to `feedback_questions`**, open and answered,
+   * in one read (plan 261021h): src/feedback-question.ts builds one
+   * request's view of them from it, so one response cannot mix two versions.
+   * Not owner-scoped: a question is asked of every admin, and only admin
+   * routes call this. Unvalidated; the caller checks each row.
+   */
+  publishedQuestions(): Promise<PublishedFeedbackQuestion[]>;
   /**
    * **This owner's deferral of each of these questions**, where there is a
    * row: deferred (a time) or brought back (null). Owner-scoped.
