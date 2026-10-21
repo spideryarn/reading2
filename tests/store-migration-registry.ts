@@ -3106,6 +3106,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
+  /* Question ids minted per run, deleted after; no owner (plan 261021h). */
+  "tests/feedback-questions-publish.test.ts": "private-postgres",
   /* Owners minted per run under its own stem; plan 261002f. */
   "tests/feedback-shipped-emails-ledger.test.ts": "private-postgres",
   /* The first inbound rate limiter, and the lane follows from what it

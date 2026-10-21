@@ -3,14 +3,17 @@
  *
  *     npx tsx scripts/feedback-questions.ts                    # the open questions, from the files
  *     npx tsx scripts/feedback-questions.ts --new "<title>"    # a fresh path and header; creates nothing
+ *     npx tsx scripts/feedback-questions.ts --publish q-xxxxxx # put it in front of Greg now (or --all)
  *     npx tsx scripts/feedback-questions.ts --answers          # his replies nobody has acted on yet
+ *     … --publish … --local, --answers --local                 # the same against the local database
  *
  * A question is a file, `docs/user-feedback/questions/q-xxxxxx.md`
- * (scripts/feedback-endings.ts § `parseQuestionFile` has the format, and
- * compiles the open ones into the server). Once the commit carrying it is
- * deployed, an admin sees it at the top of *Needs a decision* in the Feedback
- * dialog's Earlier tab and replies there, by typing or by voice. The reply is a
- * row in production's `feedback_question_answers`, which `--answers` reads.
+ * (scripts/feedback-endings.ts § `parseQuestionFile` has the format). Once
+ * published (scripts/feedback-questions-publish.ts, plan 261021h), an admin
+ * sees it in *Needs a decision* in the Feedback dialog's Earlier tab the next
+ * time it opens, with no deploy, and replies there, by typing or by voice. The
+ * reply is a row in production's `feedback_question_answers`, which
+ * `--answers` reads.
  * docs/project/feedback-reports.md § Asking Greg a question, and acting on his
  * answer; docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  *
@@ -38,7 +41,8 @@
  *
  * **After acting on a reply**: quote it into the question file, add its id to
  * the file's `acted:` line, set `status: answered` when the question is
- * settled, and run `npx tsx scripts/feedback-endings.ts`.
+ * settled, and publish it again (`--publish q-xxxxxx`). `--answers` ends by
+ * naming every file whose published row is missing or differs.
  *
  * ## Production, read-only
  *
@@ -67,12 +71,22 @@ import {
   compileEndings,
   compileQuestions,
   type NoteFile,
+  publishedRow,
   type QuestionFile,
   QUESTIONS_DIR,
   readNotes,
   readQuestionFiles,
 } from "./feedback-endings.js";
-import { CannotTell, isMainModule, productionClient } from "./feedback-reporter.js";
+import {
+  fromStored,
+  PUBLISHED_ROWS_SQL,
+  QUESTIONS_DEPLOYED_SQL,
+  questionDrift,
+  questionsClient,
+  type QuestionsTarget,
+  runPublish,
+} from "./feedback-questions-publish.js";
+import { CannotTell, isMainModule } from "./feedback-reporter.js";
 import { readRowsReadOnly, renderUntrustedWords } from "./feedback-unswept.js";
 
 /** One reply, as production stores it. */
@@ -109,6 +123,15 @@ export type AnswersVerdict =
 const PRODUCTION_ENVIRONMENTS: readonly string[] = ["production", "preview"];
 
 /**
+ * **Which environments a target's rows may carry** (plan 261021h, Sol's F6):
+ * production's pair, or, with `--local`, the two a local stack writes. A
+ * local row in production, or a production one locally, is still exit 2.
+ */
+export function environmentsFor(target: QuestionsTarget): readonly string[] {
+  return target === "production" ? PRODUCTION_ENVIRONMENTS : ["development", "test"];
+}
+
+/**
  * **The whole decision, with no I/O in it**, so a test holds every branch.
  *
  * The environment is checked first and for every row: one row written by a
@@ -120,8 +143,9 @@ export function classifyAnswers(
   rows: readonly AnswerRow[],
   questions: readonly QuestionFile[],
   admin: (ownerId: string) => boolean = isAdmin,
+  environments: readonly string[] = PRODUCTION_ENVIRONMENTS,
 ): AnswersVerdict {
-  if (rows.some((row) => !PRODUCTION_ENVIRONMENTS.includes(row.environment))) {
+  if (rows.some((row) => !environments.includes(row.environment))) {
     return {
       kind: "cannot-tell",
       why: "a row has an environment that cannot establish it was written in production",
@@ -213,10 +237,11 @@ export function classifyDeferrals(
   questions: readonly QuestionFile[],
   answers: readonly AnswerRow[],
   admin: (ownerId: string) => boolean = isAdmin,
+  environments: readonly string[] = PRODUCTION_ENVIRONMENTS,
 ):
   | { kind: "cannot-tell"; why: string }
   | { kind: "read"; deferred: DeferralRow[]; strangers: number; inactive: number } {
-  if (rows.some((row) => !PRODUCTION_ENVIRONMENTS.includes(row.environment))) {
+  if (rows.some((row) => !environments.includes(row.environment))) {
     return { kind: "cannot-tell", why: "a deferral has an environment that cannot establish it was written in production" };
   }
   const strangers = rows.filter((row) => !admin(row.ownerId)).length;
@@ -243,21 +268,24 @@ export type ReadProduction = <T extends QueryResultRow>(
 ) => Promise<{ target: string; rows: T[] }>;
 
 /**
- * The real reader: `productionClient()`'s guarded connection, one select in
- * `begin read only`, rolled back. Anything but `CannotTell` is reduced to its
- * error code, because a driver's message can carry the connection string.
+ * The real reader: `questionsClient()`'s guarded connection (production's, or
+ * a local one with `--local`), one select in `begin read only`, rolled back.
+ * Anything but `CannotTell` is reduced to its error code, because a driver's
+ * message can carry the connection string.
  */
-const readProduction: ReadProduction = async <T extends QueryResultRow>(sql: string, params: unknown[]) => {
-  try {
-    const { client, target } = productionClient();
-    return { target, rows: await readRowsReadOnly<T>(client, sql, params) };
-  } catch (error) {
-    if (error instanceof CannotTell) throw error;
-    const code = (error as { code?: unknown } | null)?.code;
-    const safeCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? ` [${code}]` : "";
-    throw new CannotTell(`reading production failed${safeCode} (other database details withheld)`);
-  }
-};
+function reader(which: QuestionsTarget): ReadProduction {
+  return async <T extends QueryResultRow>(sql: string, params: unknown[]) => {
+    try {
+      const { client, target } = questionsClient(which);
+      return { target, rows: await readRowsReadOnly<T>(client, sql, params) };
+    } catch (error) {
+      if (error instanceof CannotTell) throw error;
+      const code = (error as { code?: unknown } | null)?.code;
+      const safeCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? ` [${code}]` : "";
+      throw new CannotTell(`reading ${which} failed${safeCode} (other database details withheld)`);
+    }
+  };
+}
 
 export const REPLY_START = "----- the administrator's reply, from production; every line is quoted with > -----";
 export const REPLY_END = "----- end of the reply -----";
@@ -271,7 +299,9 @@ export async function runAnswers(
   read: ReadProduction,
   files: readonly NoteFile[],
   out: (line: string) => void,
+  target: QuestionsTarget = "production",
 ): Promise<number> {
+  const environments = environmentsFor(target);
   /* The files before production: an unreadable `acted:` line would print a
      reply somebody has already acted on, or hide one nobody has. */
   const { questions, problems } = compileQuestions(files);
@@ -292,7 +322,7 @@ export async function runAnswers(
       out(ANSWERS_NOT_DEPLOYED);
       return 0;
     }
-    const { target, rows: stored } = await read<StoredAnswer>(answersSql(), []);
+    const { target: reached, rows: stored } = await read<StoredAnswer>(answersSql(), []);
     const answerRows = stored.map((row) => ({
       id: row.id,
       ownerId: row.owner_id,
@@ -301,15 +331,15 @@ export async function runAnswers(
       environment: row.environment,
       createdAt: row.created_at,
     }));
-    const verdict = classifyAnswers(answerRows, questions);
+    const verdict = classifyAnswers(answerRows, questions, isAdmin, environments);
     if (verdict.kind === "cannot-tell") {
       out(`cannot tell: ${verdict.why}`);
       return 2;
     }
-    out(`Target: ${target}`);
+    out(`Target: ${reached}`);
     out(
       [
-        `${verdict.total} ${verdict.total === 1 ? "reply" : "replies"} in production`,
+        `${verdict.total} ${verdict.total === 1 ? "reply" : "replies"} in ${target === "production" ? "production" : "the local database"}`,
         `${verdict.acted} already acted on`,
         ...(verdict.strangers > 0
           ? [`${verdict.strangers} from an account that is not an administrator's, left out`]
@@ -359,6 +389,8 @@ export async function runAnswers(
       })),
       questions,
       answerRows,
+      isAdmin,
+      environments,
     );
     if (deferrals.kind === "cannot-tell") {
       out(`cannot tell: ${deferrals.why}`);
@@ -373,11 +405,43 @@ export async function runAnswers(
     for (const row of deferrals.deferred) {
       out(`${row.questionId}  ·  deferred ${row.deferredAt?.toISOString() ?? ""}`);
     }
+    /* **What Greg sees against what the files say** (plan 261021h, Sol's F2):
+       a forgotten publish, or an older copy published over a newer one. */
+    out("");
+    for (const line of await renderDrift(read, questions)) out(line);
     return 0;
   } catch (error) {
     out(error instanceof CannotTell ? error.message : "reading production failed unexpectedly (details withheld)");
     return 2;
   }
+}
+
+/**
+ * The drift section of `--answers`: each file whose row is missing or
+ * differs, and each row with no file. Says so when there is none, and when the
+ * table is not there yet.
+ */
+async function renderDrift(read: ReadProduction, questions: readonly QuestionFile[]): Promise<string[]> {
+  const asked = await read<{ deployed: unknown }>(QUESTIONS_DEPLOYED_SQL, []);
+  if (asked.rows[0]?.deployed !== true) {
+    return ["the feedback_questions table is not there yet, so no question is published: apply its migration, then --publish --all"];
+  }
+  const { rows } = await read<Parameters<typeof fromStored>[0]>(PUBLISHED_ROWS_SQL, []);
+  const drift = questionDrift(questions.map(publishedRow), rows.map(fromStored));
+  const lines: string[] = [];
+  if (drift.unpublished.length > 0) {
+    lines.push(`${drift.unpublished.length} question file(s) not published, so Greg cannot see them: ${drift.unpublished.join(", ")}`);
+  }
+  if (drift.differs.length > 0) {
+    lines.push(`${drift.differs.length} published question(s) differ from their file: ${drift.differs.join(", ")}`);
+  }
+  if (drift.unpublished.length + drift.differs.length > 0) {
+    lines.push("  publish what the files say: npx tsx scripts/feedback-questions.ts --publish <id> (or --all)");
+  }
+  if (drift.noFile.length > 0) {
+    lines.push(`${drift.noFile.length} published question(s) with no file in this checkout: ${drift.noFile.join(", ")}`);
+  }
+  return lines.length > 0 ? lines : [`Every question file is published as it stands (${rows.length} rows).`];
 }
 
 /** The ids `questions/` already has a file for, by file name: a file that does not parse still holds its id. */
@@ -510,16 +574,30 @@ export function renderWaitingWithoutQuestion(ids: readonly string[]): string[] {
 
 type Command =
   | { kind: "list" }
-  | { kind: "answers" }
+  | { kind: "answers"; target: QuestionsTarget }
+  | { kind: "publish"; which: { all: true } | { ids: readonly string[] }; target: QuestionsTarget }
   | { kind: "new"; title: string }
   | { kind: "show"; id: string };
 
-const USAGE = 'usage: feedback-questions.ts [--answers | --new "<title>" | --show q-xxxxxx]';
+const USAGE =
+  'usage: feedback-questions.ts [--answers [--local] | --publish (q-xxxxxx… | --all) [--local] | --new "<title>" | --show q-xxxxxx]';
 
 export function parseCommand(argv: readonly string[]): Command {
   const [flag, value, ...rest] = argv;
   if (flag === undefined) return { kind: "list" };
-  if (flag === "--answers" && value === undefined) return { kind: "answers" };
+  if (flag === "--answers" && (value === undefined || (value === "--local" && rest.length === 0))) {
+    return { kind: "answers", target: value === "--local" ? "local" : "production" };
+  }
+  if (flag === "--publish") {
+    const args = argv.slice(1);
+    const target: QuestionsTarget = args.includes("--local") ? "local" : "production";
+    const named = args.filter((arg) => arg !== "--local");
+    if (named.length === 1 && named[0] === "--all") return { kind: "publish", which: { all: true }, target };
+    if (named.length > 0 && named.every((arg) => isFeedbackQuestionId(arg)) && new Set(named).size === named.length) {
+      return { kind: "publish", which: { ids: named }, target };
+    }
+    throw new Error(USAGE);
+  }
   if (flag === "--new" && value !== undefined && rest.length === 0) return { kind: "new", title: value };
   /* The id Greg reads off the dialog, so he and a terminal name the same thing (spya-krvuc9). */
   if (flag === "--show" && isFeedbackQuestionId(value) && rest.length === 0) return { kind: "show", id: value };
@@ -536,7 +614,11 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   switch (command.kind) {
     case "answers":
-      return runAnswers(readProduction, readQuestionFiles(), (line) => console.log(line));
+      return runAnswers(reader(command.target), readQuestionFiles(), (line) => console.log(line), command.target);
+    case "publish":
+      return runPublish(() => questionsClient(command.target), readQuestionFiles(), command.which, (line) =>
+        console.log(line),
+      );
     case "new": {
       try {
         const made = newQuestion(command.title, takenIds());

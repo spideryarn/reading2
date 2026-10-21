@@ -1,13 +1,12 @@
 /**
  * **What a question for Greg may look like**: the rules its file, the server
- * and the dialog all hold it to. An import-light leaf (only src/ids.ts), for
- * the reason src/feedback-ending-values.ts is one: the compiler
- * (scripts/feedback-endings.ts) must run when its generated output is missing,
- * and the dialog may import this but never the generated list.
+ * and the dialog all hold it to. An import-light leaf (only src/ids.ts), so
+ * scripts/feedback-endings.ts can check the files without loading the store,
+ * and the dialog may import the rules without importing the server's reads.
  *
  * A question is a file under docs/user-feedback/questions/, named for its id,
- * written by an agent and shown to an admin in the Feedback dialog's Earlier tab once the
- * commit carrying it is deployed. docs/project/feedback-reports.md § Asking
+ * written by an agent and shown to an admin in the Feedback dialog's Earlier tab once
+ * published to the database. docs/project/feedback-reports.md § Asking
  * Greg a question, and acting on his answer.
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */
@@ -95,12 +94,13 @@ export function mintFeedbackQuestionId(random?: () => number): string {
 }
 
 /**
- * **One open question as the server holds it**, compiled from its file. `refs`
- * is for agents and is not here: nothing compiled reaches a browser that the
- * file's author did not write for Greg to read. `acted` is compiled beside it,
- * for the server alone (`FEEDBACK_QUESTION_ACTED`), which sends the browser
- * only the state it works out from it and which list each reply goes in
- * (plan 261008i, decision 1; 261010h).
+ * **One open question as the server holds it**, read from its file and
+ * published to the table. `refs` is for agents and is not here: nothing
+ * published reaches a browser that the file's author did not write for Greg to
+ * read. `acted` is held beside it, for the server alone
+ * (`PublishedFeedbackQuestion`), which sends the browser only the state it
+ * works out from it and which list each reply goes in (plan 261008i, decision
+ * 1; 261010h; 261021h).
  */
 export interface CompiledFeedbackQuestion {
   id: string;
@@ -130,4 +130,57 @@ export function askedReports(
   questions: readonly Pick<CompiledFeedbackQuestion, "report" | "repeats">[],
 ): Set<string> {
   return new Set(questions.flatMap((question) => (question.report === null ? [] : [question.report, ...question.repeats])));
+}
+
+/**
+ * **One question as the table holds it** (plan 261021h): the compiled fields,
+ * and the two the server needs to answer for it, its status and the replies an
+ * agent has acted on. `refs` is not here and never was in the table.
+ */
+export interface PublishedFeedbackQuestion extends CompiledFeedbackQuestion {
+  status: FeedbackQuestionStatus;
+  acted: readonly string[];
+}
+
+type Ordered = Pick<CompiledFeedbackQuestion, "asked" | "id">;
+
+/** A real calendar day written `yyyy-mm-dd`, for both a file and a published row. */
+export function isCalendarDay(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+/** Oldest asked first, the id breaking a tie: the order they were asked in, and stable under a new one. */
+export function byAsked(a: Ordered, b: Ordered): number {
+  if (a.asked !== b.asked) return a.asked < b.asked ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * **What is wrong with a published row, or null** — the file's rules
+ * (scripts/feedback-endings.ts § `parseQuestionFile`) applied on the way out of
+ * the table, so a row written some other way than by publishing a file is
+ * refused loudly rather than drawn (plan 261021h, Sol's F7). The sentence names
+ * fields, never their contents.
+ */
+export function publishedQuestionProblem(row: PublishedFeedbackQuestion): string | null {
+  if (!isFeedbackQuestionId(row.id)) return "id is not a question id";
+  if (row.title.trim() === "" || row.title.length > MAX_FEEDBACK_QUESTION_TITLE_CHARS || row.title.includes("\n")) {
+    return "title is blank, too long or more than one line";
+  }
+  if (row.report !== null && !isSpideryarnId(row.report)) return "report is not a report id";
+  if (row.report === null && row.repeats.length > 0) return "repeats without a report";
+  if (
+    row.repeats.some((one) => !isSpideryarnId(one) || one === row.report) ||
+    new Set(row.repeats).size !== row.repeats.length
+  ) {
+    return "repeats are not distinct report ids other than its own";
+  }
+  if (!isCalendarDay(row.asked)) return "asked is not a calendar day written yyyy-mm-dd";
+  if (row.body.trim() === "" || row.body.length > MAX_FEEDBACK_QUESTION_BODY_CHARS) return "body is blank or too long";
+  if (row.body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) return "body splits twice";
+  if (!FEEDBACK_QUESTION_STATUSES.includes(row.status)) return "status is neither open nor answered";
+  if (row.acted.some((one) => !isSpideryarnId(one))) return "acted names something that is not an answer id";
+  return null;
 }

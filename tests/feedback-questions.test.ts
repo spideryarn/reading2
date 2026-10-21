@@ -16,6 +16,7 @@ import {
   compileEndings,
   compileQuestions,
   parseQuestionFile,
+  publishedRow,
   type QuestionFile,
   readNotes,
   readQuestionFiles,
@@ -30,6 +31,7 @@ import {
   DEFERRALS_DEPLOYED_SQL,
   DEFERRALS_NOT_DEPLOYED,
   deferralsSql,
+  environmentsFor,
   newQuestion,
   parseCommand,
   type ReadProduction,
@@ -39,7 +41,12 @@ import {
   runAnswers,
   waitingWithoutQuestion,
 } from "../scripts/feedback-questions.js";
+import {
+  PUBLISHED_ROWS_SQL,
+  QUESTIONS_DEPLOYED_SQL,
+} from "../scripts/feedback-questions-publish.js";
 import { ADMIN_USER_ID_PROD } from "../src/admin.js";
+import type { PublishedFeedbackQuestion } from "../src/feedback-question-values.js";
 import { askedReports, isFeedbackQuestionId } from "../src/feedback-question-values.js";
 
 /* Minted per run: a literal here collided with tests/uploads-api.test.ts in
@@ -175,10 +182,14 @@ describe("runAnswers — the run, through a fake reader", () => {
     deployed: boolean | "throws" | "cannot",
     rows: AnswerRow[] | "throws" = [],
     deferrals: false | DeferralRow[] = false,
+    /** What `feedback_questions` holds (plan 261021h); false before it exists. */
+    published: false | PublishedFeedbackQuestion[] = false,
   ) {
     const statements: string[] = [];
     const read: ReadProduction = async <T>(sql: string) => {
       statements.push(sql);
+      if (sql === QUESTIONS_DEPLOYED_SQL) return { target: TARGET, rows: [{ deployed: published !== false }] as T[] };
+      if (sql === PUBLISHED_ROWS_SQL) return { target: TARGET, rows: (published === false ? [] : published) as T[] };
       if (sql === ANSWERS_DEPLOYED_SQL) {
         if (deployed === "cannot") throw new CannotTell("no .env.prod here");
         if (deployed === "throws") throw new Error("password=hunter2 refused");
@@ -249,12 +260,49 @@ describe("runAnswers — the run, through a fake reader", () => {
     ]);
     const { code, text } = await run(read, [question("q-aaaaaa")]);
     expect(code).toBe(0);
-    expect(statements).toEqual([ANSWERS_DEPLOYED_SQL, answersSql(), DEFERRALS_DEPLOYED_SQL, deferralsSql()]);
+    expect(statements).toEqual([
+      ANSWERS_DEPLOYED_SQL,
+      answersSql(),
+      DEFERRALS_DEPLOYED_SQL,
+      deferralsSql(),
+      QUESTIONS_DEPLOYED_SQL,
+    ]);
+    expect(text).toMatch(/feedback_questions table is not there yet/);
     expect(text).toMatch(/1 question\(s\) deferred by an administrator/);
     expect(text).toMatch(/1 row\(s\) from an account that is not an administrator's, left out/);
     expect(text).toContain("q-aaaaaa  ·  deferred 2026-10-08T09:00:00.000Z");
     expect(text).not.toContain("q-bbbbbb");
     expect(text).not.toContain("q-cccccc");
+  });
+
+  /* Plan 261021h, Sol's F2: a forgotten publish, or an older copy over a newer one. */
+  it("ends by naming files not published, rows that differ, and rows with no file", async () => {
+    const files = [question("q-aaaaaa"), question("q-bbbbbb"), question("q-cccccc")];
+    const rows = files.map(publishedRow);
+    const { read } = reader(true, [], [], [
+      rows[0]!,
+      { ...rows[1]!, body: "older words" },
+      { ...rows[0]!, id: "q-dddddd" },
+    ]);
+    const { code, text } = await run(read, files);
+    expect(code).toBe(0);
+    expect(text).toContain("1 question file(s) not published, so Greg cannot see them: q-cccccc");
+    expect(text).toContain("1 published question(s) differ from their file: q-bbbbbb");
+    expect(text).toContain("1 published question(s) with no file in this checkout: q-dddddd");
+
+    const quiet = reader(true, [], [], rows);
+    expect((await run(quiet.read, files)).text).toContain("Every question file is published as it stands (3 rows).");
+  });
+
+  it("with --local, takes a local stack's rows, and still refuses production's (Sol's F6)", async () => {
+    const local = [row("spya-aaaaaa", "q-aaaaaa", { environment: "development" })];
+    const lines: string[] = [];
+    const { read } = reader(true, local, []);
+    expect(await runAnswers(read, [file(question("q-aaaaaa"))], (line) => lines.push(line), "local")).toBe(0);
+    expect(lines.join("\n")).toContain("reply spya-aaaaaa");
+    const prod = reader(true, [row("spya-aaaaaa", "q-aaaaaa")], []);
+    expect(await runAnswers(prod.read, [file(question("q-aaaaaa"))], () => undefined, "local")).toBe(2);
+    expect(environmentsFor("production")).toEqual(["production", "preview"]);
   });
 
   it("does not call a deferral in force once its question is answered or absent from this checkout", async () => {
@@ -469,7 +517,15 @@ describe("the listing and the command line", () => {
 
   it("reads --answers, --new <title>, --show <id>, and nothing as the listing; anything else is refused", () => {
     expect(parseCommand([])).toEqual({ kind: "list" });
-    expect(parseCommand(["--answers"])).toEqual({ kind: "answers" });
+    expect(parseCommand(["--answers"])).toEqual({ kind: "answers", target: "production" });
+    expect(parseCommand(["--answers", "--local"])).toEqual({ kind: "answers", target: "local" });
+    expect(parseCommand(["--publish", "q-k3m9qt"])).toEqual({ kind: "publish", which: { ids: ["q-k3m9qt"] }, target: "production" });
+    expect(parseCommand(["--publish", "--all", "--local"])).toEqual({ kind: "publish", which: { all: true }, target: "local" });
+    expect(parseCommand(["--publish", "q-k3m9qt", "q-aaaaaa"])).toMatchObject({ which: { ids: ["q-k3m9qt", "q-aaaaaa"] } });
+    expect(() => parseCommand(["--publish"])).toThrow(/usage/);
+    expect(() => parseCommand(["--publish", "--all", "q-k3m9qt"])).toThrow(/usage/);
+    expect(() => parseCommand(["--publish", "spya-k3m9qt"])).toThrow(/usage/);
+    expect(() => parseCommand(["--publish", "q-k3m9qt", "q-k3m9qt"])).toThrow(/usage/);
     expect(parseCommand(["--new", "A title"])).toEqual({ kind: "new", title: "A title" });
     /* The id Greg reads off the dialog (spya-krvuc9). */
     expect(parseCommand(["--show", "q-k3m9qt"])).toEqual({ kind: "show", id: "q-k3m9qt" });

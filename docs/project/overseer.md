@@ -45,6 +45,16 @@ one turn and you nothing. Add a gloss of your own only where you already hold th
 question for it. Greg, 2026-09-09: *"reject unclear questions/interpret them for me … that might
 require you to get tooooo involved in the details of all the other agents."*
 
+**Anything blocked on Greg goes out as a published question, not only in the terminal** — a
+migration that will not apply, a deploy held up, a decision a stage is waiting on. Write it as a
+file and publish it (`npx tsx scripts/feedback-questions.ts --new "<title>"`, then `--publish
+q-xxxxxx`), so it is in *Needs a decision* the next time he opens Feedback, on his phone, with no
+deploy; read his reply with `--answers`. Greg, 2026-10-21: *"anything that's blocking, like if
+there's a migration issue or something else, you can just surface it in the needs input section
+and I can address everything from there (e.g. on my phone) rather than having to open up a
+terminal."* How to write one:
+[feedback-reports.md § Asking Greg a question](feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer).
+
 **Give every question you put to Greg a short, human-readable tag**, such as `[Q-public-tailoring]`,
 unique across the session and kept unchanged when the question is asked again. That way his answer
 ("public-tailoring A") can't be matched to the wrong question. Greg, 2026-10-01: *"Whenever you ask
