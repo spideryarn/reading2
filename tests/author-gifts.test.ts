@@ -173,6 +173,9 @@ async function deleteArticle(id: string): Promise<void> {
 }
 
 async function sweep(): Promise<void> {
+  /* A new gift, and a voucher with a starter, queue the article's main modes
+     (plan 261021j); nothing here drives them. */
+  await pool.query("delete from spideryarn.jobs where slug like $1", [`${SLUG_STEM}%`]);
   await pool.query("delete from spideryarn.billing_vouchers where email like $1", ["agift-%@example.invalid"]);
   await pool.query("delete from spideryarn.article_share_link_events where slug like $1", [`${SLUG_STEM}%`]);
   if (runIds.length > 0) await pool.query("delete from spideryarn.ai_calls where run_id = any($1::uuid[])", [runIds.splice(0)]);
@@ -1313,6 +1316,7 @@ describe("the namespace gate", () => {
       ["PATCH", `/api/admin/author-gifts/${id}`, { notes: "x", notesBase: null }],
       ["POST", `/api/admin/author-gifts/${id}/lookups`, null],
       ["POST", `/api/admin/author-gifts/${id}/send`, null],
+      ["POST", `/api/admin/author-gifts/${id}/high-power`, null],
     ] as const) {
       const reply = await drive(method, url, body, STRANGER);
       expect(reply.status, `${method} ${url}`).toBe(403);

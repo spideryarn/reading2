@@ -40,6 +40,14 @@ export interface NewVoucherInput {
    * or null for none. Never its link: the server reads that. Plan 261007j.
    */
   readonly starterSlug: string | null;
+  /**
+   * Switch the starter to Opus as the voucher is made (plan 261021j § D4);
+   * sent only with a starter. **Not part of the create's identity**
+   * (`createKey`): a retry under the same id is the server's replay, which
+   * answers the first create and ignores this, so a box toggled between
+   * attempts must not mint a second voucher.
+   */
+  readonly highPower?: boolean;
 }
 
 export interface VoucherPatchInput {
@@ -108,7 +116,10 @@ function starterField(body: unknown): NonNullable<VoucherUpdated["starter"]> | n
   return said === "kept" || said === "dropped" ? said : null;
 }
 
-/** The identity used both for sending again and for the form's replay exception. */
+/**
+ * The identity used both for sending again and for the form's replay
+ * exception. `highPower` is left out on purpose (plan 261021j § D4).
+ */
 function createKey(input: NewVoucherInput): string {
   return JSON.stringify([
     input.email,

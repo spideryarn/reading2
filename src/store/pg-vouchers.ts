@@ -61,6 +61,14 @@ import {
 } from "./pg-billing.js";
 import { guardDbStore } from "./db-errors.js";
 import { type TransferTx, transferStarterOnClaim } from "./pg-article-transfer.js";
+import {
+  type GiftPrep,
+  checkGiftArticle,
+  type GiftPrepSkipReason,
+  giftPrepLogFields,
+  lockGiftArticleIn,
+  prepareLockedGiftArticleIn,
+} from "./pg-gift-prep.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
 import {
@@ -611,6 +619,15 @@ export interface NewVoucher {
    * replay names the same starter or is a different create. Plan 261007j.
    */
   readonly starterSlug: string | null;
+  /**
+   * **Switch the starter to Opus as the voucher is made** (plan 261021j § D3);
+   * absent is false. Meaningless without a starter. **Not part of the create's
+   * identity**: a replay answers the first create and does nothing else, so the
+   * preparation ran with that create or not at all (§ D4). An author gift's
+   * *Send* passes false: the gift's own create, or its card, is where it is
+   * switched on.
+   */
+  readonly highPower?: boolean;
 }
 
 /** Why a starter was refused: `StarterResolution` less the one that was not. */
@@ -627,6 +644,11 @@ export type CreateVoucherAnswer =
   | { readonly kind: "starter-refused"; readonly reason: StarterRefusal }
   /** The caller's transaction-local permission was revoked before insertion. */
   | { readonly kind: "create-refused" };
+
+/** The locked starter changed after its earlier resolution, so no create may claim it was prepared. */
+function lockedStarterRefusal(reason: GiftPrepSkipReason): CreateVoucherAnswer {
+  return { kind: "starter-refused", reason: reason === "unpublished" ? "unpublished" : "absent" };
+}
 
 /**
  * **Make one voucher, and queue its recipient's email in the same
@@ -645,6 +667,16 @@ export type CreateVoucherAnswer =
  * gone — none of which makes it a different create. Only a new id has its
  * starter resolved, as the administrator, and a starter that cannot be linked
  * now is `starter-refused`, with nothing written.
+ *
+ * **A new voucher with a starter prepares its article** in the same
+ * transaction: the main-mode jobs, and Opus if `highPower` (plan 261021j § D2,
+ * `prepareLockedGiftArticleIn`). The article is locked and re-checked
+ * **first**, before the caller's `beforeCreate` locks its gift and before the
+ * voucher row — article before gift and voucher is the order the claim and the
+ * share-link switch keep. A replay, a conflict and a refused create prepare
+ * nothing; the lock they took is released with their transaction. If the
+ * starter changed after its unlocked resolution, the create is refused rather
+ * than sending an email while silently skipping its promised preparation.
  */
 export async function createVoucher(
   input: NewVoucher,
@@ -667,12 +699,18 @@ export async function createVoucher(
   }
   /* Before the transaction: a network call does not belong inside one. */
   const audience = await giftAudienceOrInvite(email, deps.audience ?? giftAudienceFor);
-  return await getDb().transaction(
-    async (tx): Promise<CreateVoucherAnswer> => {
+  const made = await getDb().transaction(
+    async (tx): Promise<{ answer: CreateVoucherAnswer; prep: GiftPrep | null }> => {
+      const only = (answer: CreateVoucherAnswer) => ({ answer, prep: null });
+      /* The starter before the gift and the voucher: see above. */
+      const checked = starter === null ? null : checkGiftArticle(await lockGiftArticleIn(tx, starter.articleId));
+      if (checked !== null && !checked.ok) {
+        return only((await replayOf(tx, input, email, createdBy)) ?? lockedStarterRefusal(checked.reason));
+      }
       if (deps.beforeCreate && !(await deps.beforeCreate(tx))) {
         /* A concurrent create may have committed since the first replay read.
            Its identity still wins; otherwise the caller revoked this create. */
-        return (await replayOf(tx, input, email, createdBy)) ?? { kind: "create-refused" };
+        return only((await replayOf(tx, input, email, createdBy)) ?? { kind: "create-refused" });
       }
       const [row] = await tx
         .insert(billingVouchers)
@@ -696,17 +734,29 @@ export async function createVoucher(
           recipientNote: input.recipientNote,
           starter: starter === null ? null : { title: starter.title, url: starter.url },
         });
-        return { kind: "created", id: row.id, delivery };
+        const prep =
+          checked === null
+            ? null
+            : await prepareLockedGiftArticleIn(tx, checked.article, { highPower: input.highPower === true });
+        return { answer: { kind: "created", id: row.id, delivery }, prep };
       }
       /* Another create of this id inserted between the check above and this
          insert: the same comparison, against what it committed. */
-      return (await replayOf(tx, input, email, createdBy)) ?? { kind: "conflict" };
+      return only((await replayOf(tx, input, email, createdBy)) ?? { kind: "conflict" });
     },
     /* A concurrent replay waits on the first insert's key, then does nothing
        and reads the committed original — which needs a fresh snapshot per
        statement, as `reserveIngest` explains. */
     READ_COMMITTED,
   );
+  if (made.prep !== null && made.answer.kind === "created") {
+    /* After the commit, ids and counts only (src/log.ts). */
+    logger.info(
+      { voucherId: made.answer.id, articleId: starter?.articleId, ...giftPrepLogFields(made.prep) },
+      "gift voucher's starter prepared",
+    );
+  }
+  return made.answer;
 }
 
 /**
@@ -758,7 +808,8 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
 export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
   const unknown = Object.keys(body).filter(
-    (key) => !["id", "email", "articles", "note", "recipientNote", "recipientName", "starterSlug"].includes(key),
+    (key) =>
+      !["id", "email", "articles", "note", "recipientNote", "recipientName", "starterSlug", "highPower"].includes(key),
   );
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   if (typeof body.id !== "string" || !isUuid(body.id)) return { ok: false, message: "id must be a uuid." };
@@ -778,6 +829,13 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (starterSlug !== null && !isSlug(starterSlug)) {
     return { ok: false, message: "starterSlug must be an article's slug, or null." };
   }
+  /* Default false (plan 261021j § D4); not a replay's identity, so not checked against anything. */
+  if ("highPower" in body && typeof body.highPower !== "boolean") {
+    return { ok: false, message: "highPower must be true or false." };
+  }
+  if (body.highPower === true && starterSlug === null) {
+    return { ok: false, message: "highPower needs a starterSlug to switch on." };
+  }
   return {
     ok: true,
     value: {
@@ -788,6 +846,7 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
       recipientNote: recipientNote.value,
       recipientName: recipientName.value,
       starterSlug,
+      highPower: body.highPower === true,
     },
   };
 }

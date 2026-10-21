@@ -278,6 +278,7 @@ function trimAuthorGift(api: Api, g: AdminAuthorGift) {
     sendStartedAt: g.sendStartedAt,
     discardedAt: g.discardedAt,
     voucherId: g.voucherId,
+    highPower: g.highPower,
     lookups: g.lookups.map(trimAuthorLookup),
   };
 }
@@ -907,7 +908,9 @@ export const TOOLS: readonly Tool[] = [
       "link: this tool never makes one, and if Send needs one it asks the admin to confirm they may share the " +
       "article and makes it then. One gift per article: if the article already has one, nothing is changed and the " +
       "answer says so, and update_author_gift edits it. look_up_author: true also runs a paid web search for the " +
-      "author's name and address, which fills only what you left empty. The answer's `review` is the address of " +
+      "author's name and address, which fills only what you left empty. Making a new draft also queues the " +
+      "article's main modes; high_power: true switches it to Opus first, for what is made from now on (modes " +
+      "already made stay as they are), which costs more. The answer's `review` is the address of " +
       "this draft on /admin/vouchers: give it to the admin, or open it in a browser for them. For a gift with no article, there is no " +
       "draft: the admin makes it on /admin/vouchers.",
     input: z.strictObject({
@@ -923,16 +926,25 @@ export const TOOLS: readonly Tool[] = [
         .optional()
         .describe("Notes for the admin, never emailed: where the address came from, why this person, a draft message."),
       look_up_author: z.boolean().default(false).describe("Also search the web for the author and an address. Costs money."),
+      high_power: z
+        .boolean()
+        .default(false)
+        .describe(
+          "Also switch the article to High-powered AI (Opus) for whatever is made from now on; modes already made stay as they are. Costs more.",
+        ),
     }),
     /* Not idempotent in what it answers: the second call finds the first's gift. */
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async (api, { slug, look_up_author, ...fields }) => {
+    handler: async (api, { slug, look_up_author, high_power, ...fields }) => {
       const draft = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
       const answer = await api.call<AuthorGiftEnsured>("POST", "/api/admin/author-gifts", {
         slug,
         makeLink: false,
         lookup: look_up_author,
         draft,
+        /* Default false (plan 261021j § D4): an agent's draft is a proposal
+           Greg may discard, and the card's *Switch on* is there when he decides. */
+        highPower: high_power,
       });
       /* This gift's card, not just the page (plan 261011n § D1): a harness can
          open it in a browser for the admin. */

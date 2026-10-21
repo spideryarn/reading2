@@ -395,6 +395,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["POST"],
     witnesses: ["/api/admin/author-gifts/w1/lookups"],
   },
+  /* A draft gift's article switched to Opus, 261021j. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/high-power$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/author-gifts/w1/high-power"],
+  },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$", flags: "" },
     methods: ["PATCH"],
@@ -1181,8 +1187,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    your-words.md on its own (plan 261020w); 124 with the guide's prepare step
    (plan 261019p); 126 with an article's access for the admin and a private
    link's opens (plan 261021d); 129 with view as's start, current and end
-   (plan 261019n). */
-const EXPECTED_MATCHER_COUNT = 129;
+   (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j). */
+const EXPECTED_MATCHER_COUNT = 130;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1203,8 +1209,9 @@ const EXPECTED_MATCHER_COUNT = 129;
    note (plan 261018o); 152 with your-words.md (plan 261020w); 153 with the
    guide's prepare step (plan 261019p); 155 with an article's access for the
    admin and a private link's opens (plan 261021d); 158 with view as's start,
-   current and end (plan 261019n). */
-const EXPECTED_GUARD_COUNT = 158;
+   current and end (plan 261019n); 159 with a draft gift's High-powered AI
+   (plan 261021j). */
+const EXPECTED_GUARD_COUNT = 159;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2376,6 +2383,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/author-gifts",
         "POST literal /api/admin/author-gifts",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/lookups$/",
+        // a draft gift's article switched to Opus, 261021j
+        "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/high-power$/",
         "PATCH regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$/",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$/",
         // every article, and one article's transfer, 261011n — after the gifts

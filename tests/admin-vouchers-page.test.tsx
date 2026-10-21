@@ -1275,6 +1275,49 @@ describe("/admin/vouchers", () => {
       expect(picker().value).toBe("");
     });
 
+    /* Plan 261021j § D4: High-powered AI for the starter, on by default. */
+    const highPower = () => host.querySelector("#voucher-new-high-power") as HTMLInputElement | null;
+
+    it("offers High-powered AI, ticked, once a starter is chosen, and sends it only with one", async () => {
+      await mountWithShelf();
+      expect(highPower()).toBeNull();
+      await fill("new@example.test");
+      await submit();
+      expect(creates()[0]?.body).not.toHaveProperty("highPower");
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      expect(highPower()?.checked).toBe(true);
+      expect(form().textContent).toContain(
+        "Uses Opus for what is made from now on. What is already made, Structure included, stays as it is",
+      );
+      await submit();
+      expect(creates()[1]?.body).toMatchObject({ starterSlug: "the-bitter-lesson", highPower: true });
+    });
+
+    it("sends highPower false when it is unticked, and is ticked again once the voucher is made", async () => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      await act(async () => highPower()?.click());
+      expect(highPower()?.checked).toBe(false);
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ starterSlug: "the-bitter-lesson", highPower: false });
+      await choose("the-bitter-lesson");
+      expect(highPower()?.checked).toBe(true);
+    });
+
+    it("keeps the id when only High-powered AI changed after a create whose answer was lost", async () => {
+      /* The server ignores it on a replay; a new id would be a second voucher and a second email. */
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      await act(async () => highPower()?.click());
+      await submit();
+      expect(idOf(creates()[1])).toBe(idOf(creates()[0]));
+    });
+
     it("mints a new id when only the starter changed after a create whose answer was lost", async () => {
       /* Sol's F5, as 261007f's name: the fingerprint lists every field by hand. */
       await mountWithShelf();

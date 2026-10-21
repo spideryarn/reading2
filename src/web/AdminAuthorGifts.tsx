@@ -584,6 +584,48 @@ function GiftActions({
   );
 }
 
+/**
+ * **A draft's High-powered AI**: on, or off with *Switch on* — the line plan
+ * 261010c's D10 meant the card to show, and plan 261021j § D4 adds. It covers
+ * a gift an agent drafted (MCP's `draft_author_gift` leaves it off by default)
+ * and one drafted with the box unticked. Drafts only: once a gift is sent the
+ * article may be the recipient's. There is no *Switch off* here; the article's
+ * own page has that.
+ */
+function HighPowerLine({
+  gift,
+  busy,
+  attempt,
+  hooks,
+}: {
+  gift: AdminAuthorGift;
+  busy: boolean;
+  attempt: (run: () => Promise<string | null>) => Promise<void>;
+  hooks: Pick<UseAdminAuthorGifts, "switchOnHighPower">;
+}) {
+  /* Which of the card's actions is in flight, so only this one says so. */
+  const [switching, setSwitching] = useState(false);
+  return (
+    <div data-high-power={gift.highPower ? "on" : "off"} className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+      <span className="tw:text-foreground">High-powered AI: {gift.highPower ? "on" : "off"}</span>
+      {!gift.highPower && (
+        <button
+          type="button"
+          disabled={busy}
+          data-tip="Uses Opus for what is made from now on, and queues the article's main modes. What is already made stays as it is."
+          onClick={() => {
+            setSwitching(true);
+            void attempt(() => hooks.switchOnHighPower(gift.id)).finally(() => setSwitching(false));
+          }}
+          className={BUTTON}
+        >
+          {switching ? "Switching on…" : "Switch on"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function GiftCard({
   gift,
   hooks,
@@ -592,7 +634,7 @@ function GiftCard({
   onSent,
 }: {
   gift: AdminAuthorGift;
-  hooks: Pick<UseAdminAuthorGifts, "patch" | "send" | "lookUpAgain">;
+  hooks: Pick<UseAdminAuthorGifts, "patch" | "send" | "lookUpAgain" | "switchOnHighPower">;
   now: number;
   /** A fresh object each time this gift is pointed at, so an old fold choice cannot hide a new arrival. */
   pointer: GiftPointer | null;
@@ -718,6 +760,7 @@ function GiftCard({
       {/* Hidden rather than unmounted, so an open notes editor survives a fold. */}
       <div id={bodyId} hidden={!open}>
         <GiftFields gift={shown} />
+        {draft && <HighPowerLine gift={gift} busy={busy} attempt={attempt} hooks={hooks} />}
 
         {editing && draft ? (
           <DraftEditor gift={gift} patch={hooks.patch} done={() => setEditing(false)} />
@@ -837,10 +880,13 @@ export function AuthorGifts({
   active: boolean;
   onVoucherMade: () => void;
 }) {
-  const { gifts, error, loading, watching, reload, lookUpAgain, patch, send } = list;
+  const { gifts, error, loading, watching, reload, lookUpAgain, patch, send, switchOnHighPower } = list;
   /* Re-render each minute, so a lookup past the stale limit says it did not finish. */
   const now = useNow();
-  const hooks = useMemo(() => ({ patch, send, lookUpAgain }), [patch, send, lookUpAgain]);
+  const hooks = useMemo(
+    () => ({ patch, send, lookUpAgain, switchOnHighPower }),
+    [patch, send, lookUpAgain, switchOnHighPower],
+  );
   const ordered = useMemo(
     () => (gifts === null ? null : [...gifts.filter((g) => !finished(g)), ...gifts.filter(finished)]),
     [gifts],

@@ -104,6 +104,13 @@ export interface AdminAuthorGift {
   readonly discardedAt: string | null;
   /** The voucher's id once it exists (`sent`); null before. */
   readonly voucherId: string | null;
+  /**
+   * Whether the article is on High-powered AI (`high_power_since` set), for the
+   * draft card's line and its *Switch on* (plan 261021j § D4). False once the
+   * article is deleted. Says nothing about which model made what is already
+   * made.
+   */
+  readonly highPower: boolean;
   /** Newest first. */
   readonly lookups: readonly AdminAuthorLookup[];
 }
@@ -127,6 +134,16 @@ export type AuthorGiftEnsured =
 export interface AuthorGiftPatched {
   readonly ok: true;
   readonly notesUpdatedAt: string | null;
+}
+
+/**
+ * What `POST /api/admin/author-gifts/:id/high-power` answers with its `200`:
+ * the article is on, and how many main-mode jobs this press queued — zero when
+ * every one was already waiting (plan 261021j § D4).
+ */
+export interface AuthorGiftHighPowered {
+  readonly highPower: true;
+  readonly queued: number;
 }
 
 /** What `POST /api/admin/author-gifts/:id/lookups` answers with its `202`. */

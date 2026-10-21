@@ -384,6 +384,7 @@ import type { VoucherCreated, VoucherUpdated } from "./admin-vouchers.js";
 import {
   AUTHOR_GIFT_NOTES_MAX,
   type AuthorGiftEnsured,
+  type AuthorGiftHighPowered,
   type AuthorGiftPatched,
   type AuthorGiftSent,
   type AuthorLookupStarted,
@@ -10362,6 +10363,38 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       await afterResponse("author gift: lookup", () => startAuthorLookup(lookupId));
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 202, { lookupId } satisfies AuthorLookupStarted);
+    },
+  },
+  /* **A draft gift's article, switched to Opus** — the card's *Switch on*
+     (plan 261021j § D4): the same preparation a new gift gets, with
+     `highPower: true`. It spends nothing itself: the main-mode jobs it queues
+     are driven later by the owner's browser and attributed by the job runner,
+     hence `"none"`. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/admin\/author-gifts\/([\w-]+)\/high-power$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const answer = await pgAuthorGiftStore.switchGiftOnHighPower(id);
+      switch (answer.kind) {
+        case "not-found":
+          throw httpError(404, "There is no such author gift.");
+        case "not-draft":
+          throw httpError(409, "That gift has been sent or discarded, so its article is no longer switched from here.");
+        case "article-skipped":
+          throw httpError(409, "That gift's article is no longer yours, or has nothing to read, so nothing was switched.");
+        case "on":
+          res.setHeader("Cache-Control", "private, no-store");
+          send(res, 200, { highPower: true, queued: answer.queued } satisfies AuthorGiftHighPowered);
+          return;
+        default: {
+          const never: never = answer;
+          throw httpError(500, `unknown answer ${String(never)}`);
+        }
+      }
     },
   },
   {

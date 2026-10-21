@@ -939,7 +939,7 @@ checks for each of them:
 | Route | Does |
 |---|---|
 | `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`), free usage and `starter: { slug, title } \| null` (never its link) — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName?, starterSlug? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id`. A starter must be one of the administrator's own articles (400 otherwise), published, and public or with its private link on (409 otherwise); the route reads the link, never makes one ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)) |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName?, starterSlug?, highPower? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id`. A starter must be one of the administrator's own articles (400 otherwise), published, and public or with its private link on (409 otherwise); the route reads the link, never makes one ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)). With a starter, its main modes are queued; `highPower: true` switches it to Opus first ([261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md)) |
 | `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued, whatever has happened to the starter since; a different body under that id → 409 |
 | `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, recipientName, email, revoked }`, never the starter; the address only while unclaimed (409 after). A real change of address answers `email: "queued"`, and for a voucher with a starter `starter: "kept"` or `"dropped"` (no longer linkable, so the new email went without it) |
 | `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
@@ -1054,8 +1054,9 @@ is how the section reads each lookup's cost from the ledger.
 
 | Route | Does |
 |---|---|
-| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409). Since [261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md), MCP's `draft_author_gift`: `makeLink: false` in place of the tick (never makes a link; since [261010r](../plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md) a link-less private article is drafted anyway, and *Send* makes the link), `lookup: false` (no lookup row, → `201` with `lookupId: null`), and `draft: { email, recipientName, recipientNote, articles, notes }`, written by the insert only, under the PATCH's field rules |
+| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true, highPower? }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, its main modes queued, Opus switched on first when `highPower: true`, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409). Since [261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md), MCP's `draft_author_gift`: `makeLink: false` in place of the tick (never makes a link; since [261010r](../plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md) a link-less private article is drafted anyway, and *Send* makes the link), `lookup: false` (no lookup row, → `201` with `lookupId: null`), and `draft: { email, recipientName, recipientNote, articles, notes }`, written by the insert only, under the PATCH's field rules |
 | `POST /api/admin/author-gifts/:id/lookups` | *Look up again* on a draft → `202`; `409` while one runs (five minutes, then it counts as stale) or once the gift is not a draft |
+| `POST /api/admin/author-gifts/:id/high-power` | a draft card's *Switch on*: switches its article to Opus and queues its main modes → `200`; `409` after Send/Discard, or if the article is no longer the gift creator's published article |
 | `GET /api/admin/author-gifts` | every gift with its derived status (draft, sending, sent, discarded), fields, notes, each field's source lookup, and every lookup with its cost — `private, no-store` |
 | `PATCH /api/admin/author-gifts/:id` | `{ email, recipientName, recipientNote, articles, notes, discarded }`, the voucher's own field rules; once *Send* has started only `notes`. Editing the address or name clears its lookup as the source |
 | `POST /api/admin/author-gifts/:id/send` | freezes the draft under an attempt token, then `createVoucher`; the gift email is scheduled after a create *or* a replay, and a starter that cannot be linked now unfreezes only that attempt (409). The page sends `{ expected: { email, recipientName, recipientNote, articles } }`, what its confirmation showed, and a gift that no longer matches (an agent edited it meanwhile) is a 409 with nothing made (261010i). `rightsConfirmed: true` is the confirmation's tick, shown when the list says `starter.linkable: false`: only a fresh create's `link-off`, never a replay, may make the article's private link before retrying `createVoucher`. The link write locks the slug and rechecks the gift's article id, attempt and absent voucher; a slug since taken by another is `absent` (261010r) |
@@ -1071,6 +1072,19 @@ never leave the admin routes. The model can choose up to three searches from a p
 stranger's article; that residual risk is accepted and written up in the plan's D7.
 
 The add page's half is [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
+
+**A gift's article gets its main modes, and Opus if asked** (since 2026-10-21, Greg, `spya-s902kr`:
+*"by default, any articles that we share as part of this should automatically get their main modes
+generated as well"*). A new gift, and a new voucher with a starter, queue the article's main-mode
+jobs — the import's own list, `AUTO_MODE_STEPS` — in the transaction that makes it, whatever the
+administrator's own *Generate the main modes* setting says. Unforced, so a mode already made is a
+skipped step at no cost. The Give form's *High-powered AI* box (on by default) and the draft card's
+*Switch on* (`POST /api/admin/author-gifts/:id/high-power`) switch the article to Opus first, in the
+same transaction: **Opus for what is made from now on; nothing already made is redone**, Structure
+included. Whether it should remake the Sonnet-made modes is asked of Greg in `q-trk64h`. One cost of
+queuing: the claim moves a starter to its recipient only when nothing is queued or running on it, so
+a send-now voucher claimed within the minutes the modes take stays the administrator's, to move
+below. [261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md).
 
 ## `/admin/articles` — moving an article to another account
 

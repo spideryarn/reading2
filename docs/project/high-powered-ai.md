@@ -94,6 +94,16 @@ tab and charge only an import that got past `fetch`.
 
 Simple is not part of the default ingest and already uses Opus whenever it is requested.
 
+## Switching it on for a gift
+
+Since 2026-10-21 the administrator can switch it on while giving an article away — the Give form's
+*High-powered AI* box on `/admin/vouchers`, on by default, a draft gift card's *Switch on*, and MCP's
+`high_power` on `draft_author_gift`. It is the uncharged administrator
+switch, written in the transaction that makes the gift, before that transaction queues the main
+modes. Like every switch-on it re-runs nothing: whatever is still to be made is made on Opus, and
+what Sonnet already made stays. [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author);
+[261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md).
+
 ## What it changes, and what it does not
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
