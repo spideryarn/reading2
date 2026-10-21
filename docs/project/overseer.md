@@ -155,7 +155,10 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   it, and say in the queue entry that it rests on this rule. What still goes to him as a tagged
   question is a real product trade-off, added complexity, a destructive write to production, and the
   wording of a rule doc. (The general rule, for every agent, is AGENTS.md § When the right thing to
-  do is obvious and unambiguous, do it.)
+  do is obvious and unambiguous, do it.) **The same goes for fleet housekeeping with one right
+  answer** — landing a finished, reviewed commit stranded in a stuck session's tree, say. Greg,
+  2026-10-21: *"going forwards you should use your judgment. If it's clear-cut and straightforward
+  and there's a definite right answer, just do it. Don't ask me."*
 - **A question waiting on him blocks only itself.** Greg, 2026-10-06: *"I'm probably only going to
   check in every day or so, so if something is blocking you, just work around it sensibly in the
   meantime."* So ask, and meanwhile carry on with everything that does not depend on the answer, or

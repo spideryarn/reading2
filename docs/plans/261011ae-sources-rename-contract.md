@@ -162,3 +162,11 @@ results go in § Log.
 
 - 2026-10-11: production read-only checks (above). The first-draft insert found and fixed, red then
   green (`tests/first-draft-insert.test.ts`).
+- 2026-10-21: Deploy A's commit (42a8d876) was stranded in the stuck session's tree; merged onto
+  `dev` with Greg's yes (q-b80y0k) and reviewed again by Sol against current `dev`: no defect, and no
+  writer added since 2026-10-11 enumerates a retired column. Before stage 2, two things from that
+  review: the production counts above are a 2026-10-11 snapshot, so re-run the read-only checks and
+  the rehearsal; and generate the migration after the current tip (`20261021154507_view_as_sessions`)
+  from the current schema, whose CHECKs have gained members since (`matter`, `citation-blurbs`,
+  `related-work-search`, `citation-web-note`), never from a hand-copied constraint. Stage 2 is still
+  gated on Greg.
