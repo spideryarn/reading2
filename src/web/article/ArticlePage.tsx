@@ -55,6 +55,8 @@ import {
   STRUCTURE_BUILDING,
   type StructureArrival,
 } from "../modes/structure/StructureArriving.js";
+import type { ShareKey } from "../../share-key.js";
+import { usePrivateLinkOpen } from "../usePrivateLinkOpen.js";
 import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import { OwnerNotShared } from "./StillBeingAdded.js";
@@ -281,6 +283,7 @@ export function ArticlePage({
           readerId={readerId}
           sessionUnconfirmed={access.sessionUnconfirmed}
           sharedBy={access.sharedBy}
+          shareKey={shareKey}
           view={view}
         />
       )}
@@ -461,7 +464,9 @@ function OwnedArticle({
    * **And not from a visitor at all**, which is why it is in this component
    * rather than in `ArticlePage`. There is no shelf row to count against, the
    * POST would be refused, and the acceptance test for public reading is that a
-   * signed-out browser issues no POST whatever.
+   * signed-out browser issues no POST whatever. (A private link is the one
+   * exception, since plan 261021d: its visitor's page sends one POST saying the
+   * link was opened — `usePrivateLinkOpen` in `VisitorArticle`.)
    *
    * **The ref is not belt-and-braces; without it the number is simply wrong.**
    * `<StrictMode>` is on (main.tsx), and in development React deliberately runs
@@ -746,12 +751,15 @@ function VisitorArticle({
   readerId,
   sessionUnconfirmed,
   sharedBy,
+  shareKey,
   view,
 }: {
   slug: string;
   article: Article;
   /** Public, or by a private link. For the notice, on both views. */
   sharedBy: PublicSharedBy;
+  /** The address's private-link key: for recording the open, and for the details page's admin line. */
+  shareKey: ShareKey | null;
   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
@@ -783,9 +791,11 @@ function VisitorArticle({
   useEffect(() => {
     settleFirstOpen(slug, null, "unknown");
   }, [slug]);
+  usePrivateLinkOpen(slug, sharedBy, shareKey, readerId, sessionUnconfirmed);
   if (view === "metadata")
     return (
       <PublicMetadataPage
+        shareKey={shareKey}
         slug={slug}
         article={article}
         available={available}

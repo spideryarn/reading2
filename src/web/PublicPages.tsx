@@ -37,6 +37,7 @@ import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
 import { AdminOwnerLine, Ownership } from "./Ownership.js";
+import type { ShareKey } from "../share-key.js";
 import { useSession } from "./useSession.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { markedModes, NOUN } from "./visitor.js";
@@ -139,6 +140,7 @@ export function PublicMetadataPage({
   readerId = null,
   sessionUnconfirmed,
   sharedBy,
+  shareKey = null,
 }: {
   slug: string;
   article: Article;
@@ -155,6 +157,12 @@ export function PublicMetadataPage({
   sessionUnconfirmed: boolean;
   /** For the notice below only — reader-capability.ts § sharedBy. */
   sharedBy: PublicSharedBy;
+  /**
+   * The address's private-link key, for the administrator's line only: the
+   * admin route answers for a private article only when named with its key
+   * (Ownership.tsx, plan 261021d). Optional for tests that mount this page alone.
+   */
+  shareKey?: ShareKey | null;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
@@ -232,7 +240,7 @@ export function PublicMetadataPage({
           <section data-access className="tw:mt-8">
             <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
             <Ownership whose="not-yours" email={user.email ?? null} />
-            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} sharedBy={sharedBy} />
+            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} shareKey={shareKey} />
           </section>
         )}
 

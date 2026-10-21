@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "20 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "21 October 2026"');
   });
 
   it("distinguishes the article-free open record from the request log", () => {
@@ -437,12 +437,22 @@ describe("the privacy page", () => {
       expect(read("src/store/link-shared-slug.ts")).toMatch(/eq\(articles\.shareToken, key\)/);
     });
 
-    it("says it is not listed, and that we cannot tell who read it", () => {
+    /* Until 2026-10-21 the page said "We cannot tell you who has read it", and
+       this case pinned that nothing recorded a visit. Greg's 2C (reply
+       spya-xug3kf to q-agbc89, plan 261021d) changed the fact, so the page and
+       this case changed with it: signed-in openers are recorded, signed-out
+       opens counted, and only the administrator sees either. */
+    it("says it is not listed, and who records which opens and who sees them", () => {
       expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
-      expect(prose).toMatch(/cannot tell (you )?who (has )?(read|opened)/);
+      expect(prose).toContain("We do not tell you who has read it.");
+      expect(prose).toContain("when somebody signed in opens the link, their account and when");
+      expect(prose).toContain("when somebody signed out does, only a rough count");
+      expect(prose).toContain("Only the administrator can see that.");
+      expect(prose).toContain("When you open somebody’s private link while signed in");
       expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);
-      /* Nothing records a visit: the public routes write nothing. */
-      expect(read("src/db/schema.ts")).not.toMatch(/share_link_(reads|visits|opens)/);
+      /* The two tables the sentences describe, and no third. */
+      const tables = [...read("src/db/schema.ts").matchAll(/spideryarn\.table\(\s*"(private_link_\w+|share_link_\w+)"/g)].map((m) => m[1]);
+      expect(tables.sort()).toEqual(["private_link_openers", "private_link_signed_out_opens"]);
     });
 
     it("says they get what a public reader gets", () => {

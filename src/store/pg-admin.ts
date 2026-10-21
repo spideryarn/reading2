@@ -862,6 +862,12 @@ export function adminQueries(db: Db) {
  *   account rather than the article, so a deleted or transferred article keeps
  *   its days for whoever opened it, and no shelf predicate applies.
  *
+ * **Not `private_link_openers`**, though its rows are timestamps an account
+ * caused: opening somebody else's private link. Greg chose to record those for
+ * *which users open which articles* (reply `spya-xug3kf` to q-agbc89, plan
+ * 261021d), not for Active days; counting them here is a separate decision.
+ * GPT Sol's F7 on that plan.
+ *
  * **Not `reader_arrivals`**, which looks like the sign-up day and is not: its
  * migration backfilled every account in the shared Auth project with its
  * creation date, including accounts that never used this app (Sol, finding 1).

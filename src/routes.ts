@@ -307,6 +307,7 @@ import {
   spendForArticle,
 } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
+import { articleAccessForAdmin, recordOpener } from "./store/pg-private-link-openers.js";
 import type {
   ClaimCheckFinish,
   PromisesFinish,
@@ -388,7 +389,7 @@ import {
   type AuthorLookupStarted,
 } from "./admin-author-gifts.js";
 import { startAuthorLookup } from "./author-lookup-start.js";
-import type { AdminArticle, AdminArticles, TransferDone, TransferPreview } from "./admin-articles.js";
+import type { AdminArticle, AdminArticleAccess, AdminArticles, TransferDone, TransferPreview } from "./admin-articles.js";
 import { parseTransferRequest, pgArticleTransferStore } from "./store/pg-article-transfer.js";
 import {
   parseAuthorGiftPatch,
@@ -406,7 +407,7 @@ import {
   type IngestSlot,
 } from "./billing/admission.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
-import { SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
+import { parseShareKey, SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
   collectSpend,
@@ -10822,6 +10823,60 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **Whose article it is, and who opened its private link**, for the
+     administrator on its details page — Greg, 2026-10-20 (reply `spya-xug3kf`
+     to q-agbc89): "As an admin, I want to be able to see anything." Behind the
+     namespace gate like its siblings. Plan 261021d.
+
+     **Only for an article the administrator can already read** — their own,
+     a public one, or a private one named with its link's key
+     (`articleAccessForAdmin`). A private article without its key is the same
+     404 as no article, so this does not let a slug be looked up without the
+     link. No title, slug or key in the answer: admin.md § Whose article it is. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/articles\/([\w.%-]+)\/access$/,
+    article: "none",
+    handler: async ({ user, request: { res, query } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const found = await articleAccessForAdmin(slug, parseShareKey(query.get(SHARE_KEY_PARAM)));
+      if (!found) throw httpError(404, "There is no such article.");
+      res.setHeader("Cache-Control", "private, no-store");
+      /* A failed listing costs the addresses, not the answer, as on
+         /api/admin/articles. Only the error's class is logged. */
+      const { url, key } = authAdminEndpoint();
+      const accounts = await listAccounts(gotruePages(url, key)).catch((err: unknown) => {
+        log("http").warn(
+          { errorClass: err instanceof Error ? err.constructor.name : typeof err },
+          "admin article access: the account listing failed, so the answer carries no addresses",
+        );
+        return null;
+      });
+      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
+      const access: AdminArticleAccess = {
+        ownerId: found.ownerId,
+        ownerEmail: emails.get(found.ownerId) ?? null,
+        emailsAvailable: accounts !== null,
+        mine: found.ownerId === user.id,
+        privateLink: found.privateLink,
+        openers: found.openers.map((o) => ({
+          readerId: o.readerId,
+          email: emails.get(o.readerId) ?? null,
+          opens: o.opens,
+          firstOpenedAt: o.firstOpenedAt.toISOString(),
+          lastOpenedAt: o.lastOpenedAt.toISOString(),
+        })),
+        signedOut: found.signedOut && {
+          opens: found.signedOut.opens,
+          firstOpenedAt: found.signedOut.firstOpenedAt.toISOString(),
+          lastOpenedAt: found.signedOut.lastOpenedAt.toISOString(),
+        },
+      };
+      send(res, 200, access);
+    },
+  },
+
   /* **What one article has cost**, for the metadata page's admin section —
      Greg, 2026-09-30 (SPIDERYARN-READING2-68). Behind the namespace gate like
      its siblings; this row adds no check of its own, because the gate is the
@@ -11365,6 +11420,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       await shelfStore.recordOpen(slugPart(captures, 1));
       // 204: there is nothing worth reading back, and a body would invite
       // somebody to render a counter that is one behind.
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
+  /* **A signed-in visitor opened somebody's private link** — Greg's 2C
+     (reply `spya-xug3kf` to q-agbc89; plan 261021d § 3). From the visitor's
+     page, once per mount, as the owner's record-open above is. The reader is
+     the verified session's id; the key comes from `?key=` and is bounded by
+     `parseShareKey` before it reaches a query. Writes only when the key opens
+     a private article that is not the reader's own (pg-private-link-openers.ts),
+     and answers 204 whatever happened. Read by the administrator alone. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/private-link-opens\/([\w.%-]+)$/,
+    article: "none",
+    handler: async ({ user, request: { res, query } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const key = parseShareKey(query.get(SHARE_KEY_PARAM));
+      if (key !== null) await recordOpener(slug, key, user.id);
       res.statusCode = 204;
       res.end();
     },

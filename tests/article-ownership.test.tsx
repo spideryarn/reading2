@@ -16,8 +16,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
 import type { PublicArtefacts } from "../src/public-types.js";
 import {
-  OWNERSHIP_ADMIN_LINK,
+  LINK_OPENS_HEADING,
+  LINK_OPENS_NONE,
+  LINK_OPENS_SIGNED_OUT,
   OWNERSHIP_ADMIN_NO_EMAIL,
+  OWNERSHIP_ADMIN_NOT_FOUND,
   OWNERSHIP_ADMIN_OWNER,
   OWNERSHIP_NOT_YOURS,
   OWNERSHIP_YOURS,
@@ -31,11 +34,27 @@ const READER = "00000000-0000-4000-8000-0000000ce1f0";
 const ADMIN = ADMIN_USER_ID_PROD;
 /** Which account the mocked session holds; the session's id is what `user.id === readerId` compares. */
 let sessionId = READER;
-/** What `GET /api/admin/articles` answers, and how often it was asked. */
-let adminList: unknown = { articles: [], emailsAvailable: true };
+/** What `GET /api/admin/articles/:slug/access` answers (`null`: 404), and every address it was asked at. */
+let adminAccess: unknown = null;
 /** Queued answers for tests which hold one request while the page moves on. */
 let adminReplies: Promise<unknown>[] = [];
 let adminCalls = 0;
+const adminUrls: string[] = [];
+const KEY = "abcdefghijklmnopqrstuv";
+
+/** An access answer, with the fields a test does not care about filled in. */
+function access(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ownerId: READER,
+    ownerEmail: "owner@example.com",
+    emailsAvailable: true,
+    mine: false,
+    privateLink: false,
+    openers: [],
+    signedOut: null,
+    ...over,
+  };
+}
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -129,18 +148,28 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sessionId = READER;
-  adminList = { articles: [], emailsAvailable: true };
+  adminAccess = null;
   adminReplies = [];
   adminCalls = 0;
+  adminUrls.length = 0;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url === "/api/admin/articles") {
+    if (url.startsWith("/api/admin/") && !url.split("?")[0]!.endsWith("/access")) {
+      /* The owner's page also asks for the administrator's cost section; not this test's business. */
+      return new Response(JSON.stringify({ error: "not here" }), { status: 404, headers: { "content-type": "application/json" } });
+    }
+    if (url.startsWith("/api/admin/")) {
       adminCalls++;
+      adminUrls.push(url);
       const queued = adminReplies.shift();
-      return new Response(JSON.stringify(queued ? await queued : adminList), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      const body = queued ? await queued : adminAccess;
+      if (body === null) {
+        return new Response(JSON.stringify({ error: "There is no such article." }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (url.startsWith("/api/metadata/")) {
       return new Response(
@@ -227,6 +256,32 @@ describe("the owner's details page", () => {
     expect(host.textContent).not.toContain(OWNERSHIP_NOT_YOURS);
   });
 
+  it("shows the administrator who opened their own article's private link, and asks nothing for anybody else", async () => {
+    adminAccess = access({ ownerId: ADMIN, mine: true, privateLink: true, signedOut: { opens: 2, firstOpenedAt: "2026-10-21T08:00:00Z", lastOpenedAt: "2026-10-21T08:00:00Z" } });
+    for (const who of [READER, ADMIN]) {
+      sessionId = who;
+      adminUrls.length = 0;
+      await act(async () => {
+        root.render(
+          createElement(
+            NuqsAdapter,
+            null,
+            createElement(Metadata, { slug: SLUG, article: ARTICLE, readerId: who, onRenamed: () => {}, onVisibility: () => {} }),
+          ),
+        );
+      });
+      await settle();
+      const opens = section("Access & sharing")?.querySelector("[data-admin-link-opens]");
+      if (who === ADMIN) {
+        expect(adminUrls).toEqual([`/api/admin/articles/${SLUG}/access`]);
+        expect(opens?.textContent).toContain(`${LINK_OPENS_SIGNED_OUT} 2`);
+      } else {
+        expect(adminUrls).toEqual([]);
+        expect(opens).toBeFalsy();
+      }
+    }
+  });
+
   it("does not put a new session's address beside the old reader's ownership answer", async () => {
     sessionId = "00000000-0000-4000-8000-000000000002";
     await act(async () => {
@@ -257,7 +312,8 @@ describe("a visitor's details page", () => {
       readerId = signedIn ? READER : null,
       sharedBy = "link",
       slug = SLUG,
-    }: { readerId?: string | null; sharedBy?: "public" | "link"; slug?: string } = {},
+      shareKey = null,
+    }: { readerId?: string | null; sharedBy?: "public" | "link"; slug?: string; shareKey?: string | null } = {},
   ): Promise<void> {
     history.replaceState(null, "", `/read/${slug}/metadata`);
     await act(async () => {
@@ -270,6 +326,7 @@ describe("a visitor's details page", () => {
           readerId,
           sessionUnconfirmed,
           sharedBy,
+          shareKey: shareKey as never,
         }),
       );
     });
@@ -315,61 +372,65 @@ describe("a visitor's details page", () => {
     expect(host.querySelector("[data-admin-owner]")).toBeNull();
   });
 
-  it("tells the administrator whose public article it is, matched by slug", async () => {
+  it("tells the administrator whose public article it is, from the access route", async () => {
     sessionId = ADMIN;
-    adminList = {
-      emailsAvailable: true,
-      articles: [
-        { id: "x", shortId: null, ownerId: READER, ownerEmail: "other@example.com", mine: false, createdAt: "", visibility: "public", processing: "full", title: "Another", slug: "another", published: true },
-        { id: "y", shortId: null, ownerId: READER, ownerEmail: "owner@example.com", mine: false, createdAt: "", visibility: "public", processing: "full", title: "A piece", slug: SLUG, published: true },
-      ],
-    };
+    adminAccess = access();
     await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
-    expect(adminCalls).toBe(1);
+    expect(adminUrls).toEqual([`/api/admin/articles/${SLUG}/access`]);
     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(`${OWNERSHIP_ADMIN_OWNER} owner@example.com.`);
+    /* A public article that has never had a link says nothing about links. */
+    expect(host.querySelector("[data-admin-link-opens]")).toBeNull();
   });
 
   it("says the address could not be read when the Auth service listing failed", async () => {
     sessionId = ADMIN;
-    adminList = {
-      emailsAvailable: false,
-      articles: [{ id: "y", shortId: null, ownerId: READER, ownerEmail: null, mine: false, createdAt: "", visibility: "public", processing: "full", title: "A piece", slug: SLUG, published: true }],
-    };
+    adminAccess = access({ ownerEmail: null, emailsAvailable: false });
     await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_NO_EMAIL);
   });
 
-  it("does not look up a private-link article's owner, and says why", async () => {
+  /* Greg's 1B (reply spya-xug3kf to q-agbc89): on a private link, the owner too
+     — asked with the address's key, which is what the server answers for. */
+  it("tells the administrator whose private-link article it is, asking with the key", async () => {
     sessionId = ADMIN;
-    await visitor(true, false, { readerId: ADMIN, sharedBy: "link" });
-    expect(adminCalls).toBe(0);
-    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_LINK);
+    adminAccess = access({ privateLink: true });
+    await visitor(true, false, { readerId: ADMIN, sharedBy: "link", shareKey: KEY });
+    expect(adminUrls).toEqual([`/api/admin/articles/${SLUG}/access?key=${KEY}`]);
+    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(`${OWNERSHIP_ADMIN_OWNER} owner@example.com.`);
+    expect(host.querySelector("[data-admin-link-opens]")?.textContent).toBe(LINK_OPENS_NONE);
+  });
+
+  /* Greg's 2C: who opened it, among the signed-in, and roughly how often signed out. */
+  it("lists who opened the private link, and the signed-out count", async () => {
+    sessionId = ADMIN;
+    adminAccess = access({
+      privateLink: true,
+      openers: [
+        { readerId: "r1", email: "a@example.com", opens: 3, firstOpenedAt: "2026-10-20T09:00:00Z", lastOpenedAt: "2026-10-21T09:00:00Z" },
+        { readerId: "r2", email: null, opens: 1, firstOpenedAt: "2026-10-20T10:00:00Z", lastOpenedAt: "2026-10-20T10:00:00Z" },
+      ],
+      signedOut: { opens: 4, firstOpenedAt: "2026-10-20T08:00:00Z", lastOpenedAt: "2026-10-21T08:00:00Z" },
+    });
+    await visitor(true, false, { readerId: ADMIN, sharedBy: "link", shareKey: KEY });
+    const opens = host.querySelector("[data-admin-link-opens]")?.textContent ?? "";
+    expect(opens).toContain(LINK_OPENS_HEADING);
+    expect(opens).toContain("a@example.com — 3 times, last 21 October 2026");
+    expect(opens).toContain("once, last 20 October 2026");
+    expect(opens).toContain(`${LINK_OPENS_SIGNED_OUT} 4, last 21 October 2026.`);
+  });
+
+  it("says it could not look the article up when the route answers 404", async () => {
+    sessionId = ADMIN;
+    adminAccess = null;
+    await visitor(true, false, { readerId: ADMIN, sharedBy: "link", shareKey: KEY });
+    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_NOT_FOUND);
+    expect(host.querySelector("[data-admin-link-opens]")).toBeNull();
   });
 
   it("does not let an earlier slug's late owner answer overwrite the current one", async () => {
     sessionId = ADMIN;
     const old = deferred<unknown>();
-    adminReplies = [
-      old.promise,
-      Promise.resolve({
-        emailsAvailable: true,
-        articles: [
-          {
-            id: "new",
-            shortId: null,
-            ownerId: READER,
-            ownerEmail: "current@example.com",
-            mine: false,
-            createdAt: "",
-            visibility: "public",
-            processing: "full",
-            title: "A piece",
-            slug: SLUG,
-            published: true,
-          },
-        ],
-      }),
-    ];
+    adminReplies = [old.promise, Promise.resolve(access({ ownerEmail: "current@example.com" }))];
 
     await visitor(true, false, { readerId: ADMIN, sharedBy: "public", slug: "old-piece" });
     expect(adminCalls).toBe(1);
@@ -378,24 +439,7 @@ describe("a visitor's details page", () => {
       `${OWNERSHIP_ADMIN_OWNER} current@example.com.`,
     );
 
-    old.resolve({
-      emailsAvailable: true,
-      articles: [
-        {
-          id: "old",
-          shortId: null,
-          ownerId: READER,
-          ownerEmail: "stale@example.com",
-          mine: false,
-          createdAt: "",
-          visibility: "public",
-          processing: "full",
-          title: "Old piece",
-          slug: "old-piece",
-          published: true,
-        },
-      ],
-    });
+    old.resolve(access({ ownerEmail: "stale@example.com" }));
     await settle();
     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(
       `${OWNERSHIP_ADMIN_OWNER} current@example.com.`,

@@ -699,6 +699,14 @@ describe("the one query that lists articles for nobody in particular", () => {
       ],
     },
     { file: LISTING.file, fns: [LISTING.fn] },
+    /* **Added 2026-10-21: the one public write.** A signed-out visitor opened
+       a private link, so its count goes up (Greg's reply `spya-xug3kf` to
+       q-agbc89, option C). It names `articles` only as the source of an
+       `insert … select`, by `privateLinkWhere` — slug, key and private — in
+       its own `where`; it selects the article's id into the count's row and
+       returns nothing to the caller. No owner is bound or selected.
+       docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md § 4. */
+    { file: "src/store/private-link-signed-out-opens.ts", fns: ["countSignedOutOpen"] },
   ];
 
   /**
@@ -784,7 +792,7 @@ describe("the one query that lists articles for nobody in particular", () => {
    * too, naming both the alias and the table it aliases; the regex this replaced
    * was green on exactly that.
    */
-  it("names the articles table in exactly two places, each inside its own function", async () => {
+  it("names the articles table in exactly the permitted files, each inside its own functions", async () => {
     const offenders: string[] = [];
     const permittedFiles = PERMITTED.map((one) => one.file);
 
@@ -793,7 +801,7 @@ describe("the one query that lists articles for nobody in particular", () => {
       if (uses.length === 0) continue;
       if (!permittedFiles.includes(file)) {
         offenders.push(
-          `${file} names the articles table and is not one of the two permitted: ` +
+          `${file} names the articles table and is not one of the permitted files: ` +
             uses.map((u) => `line ${u.line} (${u.how}) ${u.text}`).join("; "),
         );
       }

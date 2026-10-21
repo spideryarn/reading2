@@ -29,7 +29,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
-- [§ A private link](#a-private-link) — the four places the page names it
+- [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
 - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
 - [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
 - [§ Where it lives](#where-it-lives-and-why-it-is-not-markdown) — why JSX, not markdown
@@ -896,8 +896,9 @@ way somebody else reads a reader's article, so the page names it in four places:
 
 - **Who can see your shelf** counts three exceptions where it counted two. It says anyone who has
   the link can read the article without signing in and can pass it on, that it is not listed, that
-  they get what a public reader gets, that we cannot tell who has read it, that the key is part of
-  the address and so stays in a browser's history, and what turning it off can and cannot do.
+  they get what a public reader gets, that we do not tell the owner who has read it but do record
+  it for the administrator (since 2026-10-21, below), that the key is part of the address and so
+  stays in a browser's history, and what turning it off can and cannot do.
 - **If you send us a bug report** says a report from such a page records the address without the
   key.
 - **Deleting things** says archiving leaves a private link working, as it leaves a public one, and
@@ -908,7 +909,36 @@ way somebody else reads a reader's article, so the page names it in four places:
 
 What we hold: the key itself, in `articles.share_token`, in the clear so the owner can copy the
 link again; and `article_share_link_events`, who made or turned off a link and when, without the
-key. We record nothing about who opens one.
+key.
+
+### Who opens one, since 2026-10-21
+
+Until 2026-10-21 we recorded nothing about who opens a private link. Greg chose to, when asked
+(question q-agbc89, option C):
+
+> As an admin, I want to be able to see anything. Because after all, I've got access to the
+> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
+> which users open which articles.
+>
+> — Greg, 2026-10-20 (reply `spya-xug3kf`)
+
+So two tables
+([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)):
+
+- **`private_link_openers`** — one row per article and signed-in account that opened it through
+  its link: how many times, and the first and last time. Written by the visitor's page, once per
+  page, only when the key opens a private article that is not the reader's own. Cascades with the
+  account and with the article. Not in the article's export, and kept with the article on a
+  transfer.
+- **`private_link_signed_out_opens`** — one row per article: a count of signed-out opens and the
+  first and last time. Nobody is identified. Approximate, since anybody holding the link can add to
+  it (throttled to one per two seconds; [security-risks.md § R31](security-risks.md#r31)).
+
+**Only the administrator sees either**, on the article's details page; the owner is not shown who
+opened their link, and nothing else reads them (they are deliberately not in Active days). The
+page says so in *Who can see your shelf* and in *What we keep*, and Help's sharing page says the
+same. Nothing was backfilled. The administrator also sees whose an article read through a private
+link is, which is admin.md's business rather than this page's: it adds no stored data.
 
 ## An administrator's AI assistant can look up accounts
 

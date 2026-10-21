@@ -94,6 +94,15 @@ export async function publicFetch(path: string, signal?: AbortSignal): Promise<R
    * path stays inside the closed room and fails its route patterns there.
    * Rejecting it would refuse a slug that legitimately carries one.
    */
+  requirePublicPath(path);
+  /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
+     (docs/project/typechecking.md), so an explicit `signal: undefined` is not
+     the same thing as no signal at all. */
+  return fetch(path, { credentials: "omit", ...(signal ? { signal } : {}) });
+}
+
+/** `publicFetch`'s guard, shared with the one public write below. */
+function requirePublicPath(path: string): void {
   const url = new URL(path, SAME_ORIGIN);
   if (url.origin !== SAME_ORIGIN || !url.pathname.startsWith("/api/public/")) {
     /* Without its query string: on a private link that is where the key is,
@@ -102,10 +111,25 @@ export async function publicFetch(path: string, signal?: AbortSignal): Promise<R
       `publicFetch is for the public namespace only, and this is not: ${path.split("?")[0]}`,
     );
   }
-  /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
-     (docs/project/typechecking.md), so an explicit `signal: undefined` is not
-     the same thing as no signal at all. */
-  return fetch(path, { credentials: "omit", ...(signal ? { signal } : {}) });
+}
+
+/**
+ * **`POST /api/public/private-link-opened/:slug?key=`** — a signed-out visitor
+ * opened a private link, so its count goes up (Greg's 2C; plan 261021d § 3).
+ *
+ * Its own function rather than a `method` on `publicFetch`, which takes a path
+ * and a signal and nothing else so that no caller can add a method, a header
+ * or credentials to an anonymous request (GPT Sol's F5 on the plan). Here all
+ * of it is fixed: `POST`, `credentials: "omit"`, no body, no headers. The
+ * answer is 204 whatever happened, and is not read.
+ */
+export async function notePrivateLinkOpened(slug: string, key: ShareKey): Promise<void> {
+  /* Spelled here, not imported: the client may not import src/public/
+     (tests/client-imports.test.ts). tests/public-client-fetch.test.ts ties it
+     to `PRIVATE_LINK_OPENED`, so a rename on either side is a red test. */
+  const path = withShareKey(`/api/public/private-link-opened/${encodeURIComponent(slug)}`, key);
+  requirePublicPath(path);
+  await fetch(path, { method: "POST", credentials: "omit" });
 }
 
 /**

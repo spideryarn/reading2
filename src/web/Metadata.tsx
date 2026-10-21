@@ -296,7 +296,7 @@ import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
-import { Ownership } from "./Ownership.js";
+import { AdminLinkOpens, Ownership } from "./Ownership.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
@@ -1344,6 +1344,7 @@ export function Metadata({
              owner branch above has been replaced. Never put B's address beside
              an ownership result fetched for A. */
           ownerEmail={readerId != null && user?.id === readerId ? (user.email ?? null) : null}
+          ownerId={readerId != null && user?.id === readerId ? readerId : null}
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
              false for ever if it fails — so a failed metadata check removed the
              whole section rather than showing its "we could not check" state.
@@ -1543,6 +1544,7 @@ function SharingSection({
   slug,
   title,
   ownerEmail,
+  ownerId,
   offer,
   sharing,
   checking,
@@ -1552,6 +1554,8 @@ function SharingSection({
   slug: string;
   title: string;
   ownerEmail: string | null;
+  /** The signed-in owner's id, under the same guard as `ownerEmail`; for the administrator's openers line. */
+  ownerId: string | null;
   /** Straight through to the card — see `Metadata`'s prop of the same name. */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
   onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
@@ -1568,7 +1572,7 @@ function SharingSection({
   checking: boolean;
 }) {
   if (!offer) return null;
-  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} ownerId={ownerId} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
 }
 
 /**
@@ -1585,6 +1589,7 @@ function SharingCard({
   slug,
   title,
   ownerEmail,
+  ownerId,
   sharing,
   checking,
   onVisibility,
@@ -1593,6 +1598,7 @@ function SharingCard({
   slug: string;
   title: string;
   ownerEmail: string | null;
+  ownerId: string | null;
   sharing: ArticleSharing | undefined;
   checking: boolean;
   onVisibility: (slug: string, visibility: Visibility | null) => void;
@@ -1637,6 +1643,9 @@ function SharingCard({
             (Ownership.tsx). Greg, spya-cf30ac. */}
         <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
           <Ownership whose="yours" email={ownerEmail} />
+          {/* The administrator's own article: who opened its private link
+              (plan 261021d § 5). Draws and asks nothing for anybody else. */}
+          <AdminLinkOpens slug={slug} readerId={ownerId} />
         </div>
         <PrivateLink
           slug={slug}
