@@ -117,6 +117,7 @@ import { blockRefLeaks } from "./block-ref-leak.js";
 import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
+import { startedAMode } from "./next-steps.js";
 import { plainWords } from "./plain-words.js";
 import { widerWorld } from "./wider-world.js";
 import { CHAT_PRINCIPLES } from "./chat-principles.js";
@@ -1876,7 +1877,8 @@ At the end of your answer, offer up to three next steps with offer_next_steps:
 call it once, as the very last thing, after your reply is complete and after any
 other tool has answered. They appear
 as buttons under your answer, beside the box where the reader types, and the
-reader presses one or types their own. It does nothing by itself.
+reader usually presses one or types their own. The one exception is a prepare
+step marked now: after your answer, the page presses that button itself.
 
 - ask: words the reader could send you next, in their own voice and plain
   words: "Help me pick what to read closely", "What should I look out for in
@@ -1896,6 +1898,15 @@ reader presses one or types their own. It does nothing by itself.
 - search: a few words to search the piece for, when their reason names a topic,
   method or term they will want to find. They can change the words first, and
   it runs under your answer, as the search buttons do.
+- prepare: get a mode ready in the background, so it is there when they open
+  it; it does not open it. Making a mode costs money, so set now to true, which
+  starts it straight away, only when you are confident they will want that mode
+  soon (more readily for Summary and Skim, which most readers use), and at most
+  once in a conversation. Otherwise leave now false: they get a button to start
+  it themselves. When they ask for a route or a quick way through the piece,
+  that is Skim, planned around their reason: prepare it. Never say a mode is
+  ready because you prepared it. Not Skim in an answer where you offer to save
+  their reason; offer it next time.
 - share: when they want somebody else to read it (a private link for a group,
   or making it public). It takes them to where they do that.
 - archive: when they are done with it and want it off their shelf. It takes
@@ -2173,6 +2184,13 @@ export interface ConverseRequest {
    * message, like `profile`, and only when `kind` is `guide`.
    */
   experience?: GuideExperience | null;
+  /**
+   * **How much of the piece the reader has read**, already rendered —
+   * `readingSoFarLine` in src/reading-so-far.ts, built by the route from the
+   * owner's reading time on every turn. In the final user message, like
+   * `profile`; every kind but `candidates`. Plan 261020ac.
+   */
+  reading?: string | null;
   /**
    * The article's High-powered AI setting (plan 260930f). Required, so a route
    * cannot forget to ask. It picks Candidates' model and is what the chat tools
@@ -2503,6 +2521,13 @@ export function buildConverseMessages(opts: {
    */
   experience?: GuideExperience | null;
   /**
+   * **How much of the piece they have read** — `ConverseRequest.reading`. In
+   * the final user message, beside the profile, and never above the
+   * breakpoint: it changes as they read. Dropped for `candidates`, whose
+   * reader is an editor finding reviewers and whose turns send no profile.
+   */
+  reading?: string | null;
+  /**
    * **Other articles the reader brought into this conversation** with an
    * @-mention, from the stored thread (`resolveMentions`, src/chat-mentions.ts).
    * A second part of the first user message, after the open article and with
@@ -2523,6 +2548,7 @@ export function buildConverseMessages(opts: {
   /* After the profile: the reader is who they say, then how much of the app
      they have seen. The guide's only. */
   const used = kind === "guide" ? experienceLine(opts.experience) : "";
+  const read = kind === "candidates" ? "" : (opts.reading ?? "");
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
   /* After the anchor: the reader is told *which* passage first, then how to
      explain it. Both are below the breakpoint, so the order is about how the
@@ -2571,7 +2597,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, used, about, teach, own, others, marked, brief, opts.question]
+      content: [position, who, used, read, about, teach, own, others, marked, brief, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -2880,6 +2906,7 @@ export async function* converse({
   notes = null,
   others = null,
   experience = null,
+  reading = null,
   useTools = true,
   kind = "chat",
   anchor = null,
@@ -2931,6 +2958,8 @@ export async function* converse({
     others,
     /* Only a guide turn carries it; `buildConverseMessages` drops it for any other. */
     experience,
+    /* Every kind but `candidates`, which `buildConverseMessages` drops it for. */
+    reading,
     kind,
     /* Unconditional, and `null` rather than absent when there is none: the
        option's type admits null and `anchorSection` returns "" for it, so an
@@ -3038,6 +3067,9 @@ export async function* converse({
     /* Chat and Explore offer About you too, press only (plan 261020o). */
     ...((kind === "guide" || kind === "chat" || kind === "explore") && saved !== null ? { saved } : {}),
     ...(kind === "guide" && typed !== null ? { typed } : {}),
+    /* Once a conversation, as far as the model's own choice goes (plan
+       261019p § Stage 2b); the thread's claim at the press is the durable cap. */
+    ...(kind === "guide" ? { preparedEarlier: history.some(startedAMode) } : {}),
   };
 
   /* The last round's, read by the guards after the loop. Declared out here so

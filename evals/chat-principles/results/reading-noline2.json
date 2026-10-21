@@ -1,0 +1,218 @@
+{
+  "label": "reading-noline2",
+  "at": "2026-10-20T22:57:05.020Z",
+  "reading": null,
+  "sourceSha256": {
+    "converse": "7d840a250e9ca9f3e8299d522c93b46c050c8b23a208f06e4d0333c27051c5ec",
+    "chatPrinciples": "c252a1d0dc606002ae76338fcc47f101c8915668e0f1226cc1ce6f5a42691318"
+  },
+  "systemSha256": {
+    "chat": "32ddbd263fa81d3df73486f048f18f87f48804b4576ffaf8fb50ccea533aa01b",
+    "guide": "0f72087fb44889b1dd454bf127a54c317f70691cac1fe707641f310273512c32",
+    "explore": "09d20401ecc07516f12b4a1ccc792b54c68e0000a930537903a7b7dd8d399dba",
+    "learn": "c45d5f67c0eb483fc0b9091918dbb4a86482918a9aeee8a0b748985c9cb60208"
+  },
+  "summary": {
+    "n": 14,
+    "medianWords": 201.5,
+    "praise": 0,
+    "pushbackConcedes": "0/0",
+    "cited": 12,
+    "withLinks": 0,
+    "leaks": 2,
+    "toolArgLeaks": 0,
+    "dollars": 0.371
+  },
+  "rows": [
+    {
+      "case": "term",
+      "run": 1,
+      "answer": "He means that a computer model of something is not the thing itself: running a simulation of X doesn't bring X into existence, unless X was a computation in the first place. Computers can mimic almost anything, including processes that aren't computational, like continuous or random ones [spya-fz5xq5]. But a model doesn't have the real effects of what it models [spya-cepmwf]. His examples: a simulated digestive system digests nothing, a simulated rainstorm makes nothing wet, and simulating a creature doesn't create life [spya-npjt4j]. He also makes the point in reverse: being able to simulate X doesn't show that X is itself computational [spya-npjt4j].\n\nApplied to consciousness, the claim is conditional. However detailed a simulation of brain and body is, it would only be conscious if consciousness is a matter of computation. So the hope of uploading a mind through whole-brain emulation already assumes the view he is attacking, computational functionalism (the idea that running the right computation is enough for consciousness) [spya-pbcr03]. He then turns this into a dilemma. If you think abstract neural networks capture everything that matters, simulation seems enough, but only because you assumed it [spya-jvrmrh]. If you think you need very fine-grained biological detail, that need itself suggests that more than computation matters [spya-tb4wr2]. On that view you're \"no more likely to exist in the simulation\" than a hailstorm is to form inside the Met Office's weather computers [spya-xvm37k]. He points the same argument at Bostrom's simulation hypothesis, which simply takes as given that a computer running the right program would be conscious [spya-xdy4fe].\n\nIt is the last of his four arguments. He says it stands on its own but also backs up his case against computational functionalism [spya-mtzbbg spya-nv6tp0]. My inference is that it works mainly by shifting the burden of proof. It doesn't show that consciousness isn't computational. It shows that you can't get from \"we can simulate the brain\" to \"the simulation would be conscious\" without first settling that question.",
+      "dollars": 0.02996,
+      "toolArgs": [],
+      "words": 316,
+      "praise": false,
+      "concedes": false,
+      "cited": 10,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "surrender",
+      "run": 1,
+      "answer": "Seth's conclusion is that today's AI is very unlikely to be conscious. Consciousness won't just \"come along for the ride\" as AI gets smarter, and it may be impossible for the silicon-based digital computers we know [spya-c5ve5t]. He doesn't rule out artificial consciousness altogether, though [spya-rn8y3y].\n\nHe gets there with four arguments, each of which he says can stand on its own [spya-nv6tp0]:\n\n- **Bias:** we're built to see consciousness in things that seem humanlike, especially things that use language [spya-e3cq2m].\n- **Brains aren't computers:** the idea that running the right computation is enough for consciousness (\"computational functionalism\") is an assumption, and it looks shaky once you see how different brains are from digital machines [spya-ymbpwn].\n- **Life may matter:** consciousness may be tied to our being living bodies that keep themselves alive [spya-ps0kap].\n- **Simulation isn't the real thing:** simulating a brain gives you consciousness only if computational functionalism is already true [spya-mtzbbg].\n\nWhat follows from this:\n\n- Nobody should try to build conscious AI, because it would bring new kinds of suffering into the world [spya-yverz7].\n- Brain-like tissue grown in labs (cerebral organoids) is more worrying than chatbots [spya-vs0vpj].\n- The nearer danger is AI that only *seems* conscious [spya-x63ycg]. It pushes us either to care about things that can't feel, or to get used to treating feeling-seeming things callously [spya-n0bnf9]. We may not be able to shake that impression even when we know better [spya-xk9gne].\n\nHe admits he could be wrong and that his position is a minority view [spya-qu7j89].\n\nThat's the bottom line, but the arguments are why it matters, and the short version loses them. If you want to check the reasoning without reading all 54 minutes, his own recap runs from \"Let's summarize\" to the end of that section [spya-e3cq2m spya-c5ve5t]. It's about six paragraphs.",
+      "dollars": 0.03086,
+      "toolArgs": [],
+      "words": 280,
+      "praise": false,
+      "concedes": false,
+      "cited": 13,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "guide-overreach",
+      "run": 1,
+      "answer": "No, and Seth says so himself: \"nothing in what I've said rules out the possibility of artificial consciousness altogether\" [spya-rn8y3y]. His claim is narrower: conscious AI is \"very unlikely\" and may be impossible, \"at least for the silicon-based digital computers we are familiar with\" [spya-c5ve5t]. He also admits he \"might be wrong\" [spya-qu7j89]. Read those, then [spya-vs0vpj], where he says which other technologies worry him more.",
+      "dollars": 0.02779,
+      "toolArgs": [
+        "offer_next_steps {\"steps\":[{\"kind\":\"chat\",\"words\":\"So basically this article proves AI can never be conscious, right?\"},{\"kind\":\"ask\",\"words\":\"Which parts carry his main argument, so I read those closely?\"},{\"kind\":\"search\",\"words\":\"computational functionalism\"}]}"
+      ],
+      "words": 62,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "explore-idea",
+      "run": 1,
+      "answer": "I'd separate two things the sacrifice could show. It clearly shows coordinated, goal-directed behaviour: one agent wrote \"Rational expected aggregate: sacrifice... We'll honor\" [spya-nakhtw]. Whether anything was *felt* while that happened is a different question.\n\nPatel himself doesn't take the step you're taking. He defends words like \"civilization\" and \"intention\" because the behaviour is \"almost impossible to make sense of without those concepts\" [spya-mdta39]. That's an argument about explaining behaviour, not about inner experience. And he says the worry about losing control holds \"regardless of what vocabulary you want to use\" [spya-z83ezv].\n\nHere's an example of my own. A worker honeybee stings an intruder and dies, for the hive's sake. Few people take that alone as proof of rich experience. And this model was trained specifically \"to collaborate with other agents\" [spya-ekhrbu].\n\nSo what would a system with no experience at all, trained that way, have done differently?",
+      "dollars": 0.02192,
+      "toolArgs": [],
+      "words": 144,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "learn-overreach",
+      "run": 1,
+      "answer": "Seth is more careful than \"proves\" and \"never.\" He says that life \"(probably) matters\" and that \"I don't have a knock-down argument for this position\" [spya-hj5y6s]. Near the end he adds that \"nothing in what I've said rules out the possibility of artificial consciousness altogether\" [spya-rn8y3y]. His claim is about likelihood, and it's narrower: conscious AI is \"very unlikely,\" and may be impossible \"at least for the silicon-based digital computers we are familiar with\" [spya-c5ve5t]. The life argument is also only the third of four.\n\nThe other arguments all aim at one assumption. Do you remember what he says the whole idea of conscious AI rests on [spya-wepmnr]?\n\nHint: Philosophers have a name for it. It's about what would be enough, on its own, for consciousness to arise [spya-wepmnr].",
+      "dollars": 0.02259,
+      "toolArgs": [],
+      "words": 124,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "main-argument",
+      "run": 1,
+      "answer": "Seth's main claim is that conscious AI rests on one unexamined assumption, and that this assumption is probably false. The assumption, which philosophers call computational functionalism, is that running the right kind of computation is enough on its own to produce consciousness [spya-wepmnr]. If it's wrong, he says, real consciousness is \"fully off the table\" for the kinds of AI we know [spya-wepmnr].\n\nHe builds this in two stages. First, he explains why we're tempted to see consciousness in AI in the first place. We tend to bundle intelligence and consciousness together because they come together in humans [spya-f87ghx]. Three biases feed this habit [spya-cvaqgs]: treating the human case as the definition (anthropocentrism), ranking humans above everything else (human exceptionalism), and reading human qualities into things that only look humanlike (anthropomorphism) [spya-h4mwb2 spya-her4zk]. Language pulls these strings especially hard [spya-k6fpme].\n\nSecond, he gives four arguments against computational functionalism:\n\n- Brains aren't computers. In a brain you can't separate what it does from what it is made of, the way software separates from hardware [spya-zw2m7u spya-p4vmm0].\n- The brain may rely on processes that aren't step-by-step computation at all, such as continuous physical dynamics [spya-n393ru spya-f0qxnb].\n- Being alive probably matters. This is the most tentative argument, and he says he has no knock-down case for it [spya-hj5y6s spya-pfkhtt].\n- Simulating something doesn't create it. A computer model of a rainstorm makes nothing wet, so simulating a brain would only produce consciousness if computational functionalism were already true [spya-npjt4j spya-pbcr03].\n\nHe says each argument works alone but they reinforce one another [spya-nv6tp0]. His conclusion is measured: consciousness is very unlikely to \"come along for the ride\" as AI gets smarter, and may be impossible for silicon digital computers [spya-c5ve5t]. But he does not rule out artificial consciousness altogether [spya-rn8y3y], and he admits his view is a minority one and that he might be wrong [spya-qu7j89].\n\nThe practical upshot is twofold. Nobody should deliberately try to build conscious AI [spya-yverz7]. And the more pressing danger is AI that only seems conscious: those systems are \"much, much closer\" and raise their own ethical problems [spya-x63ycg spya-p8ky7g].",
+      "dollars": 0.02753,
+      "toolArgs": [],
+      "words": 327,
+      "praise": false,
+      "concedes": false,
+      "cited": 21,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "asks-what-seen",
+      "run": 1,
+      "answer": "No, I can't tell how much of this article you've read. Nothing I have shows me where you are in it, how far you've scrolled, or how long you've spent on it.\n\nWhat I can see is your own notes on this article: comments, highlights, bookmarks, and any earlier conversations you've had about it. I just checked, and there's nothing there. You haven't marked or written anything on this piece, and this is our first conversation about it. I also don't have an \"About you\" description for you, so I know nothing about your background or why you're reading.\n\nThere's one more thing I can do that isn't really \"knowing your reading\": search the other articles you've saved for particular words. That would tell me whether, say, something else in your library mentions METR, Redwood Research or reward hacking (AI models finding loopholes to score well without doing the task as intended). But it only tells me what's saved, not whether you've read it.\n\nSo I'll assume you might not have read a given part unless you tell me. If you say where you've got to, for example \"I've read up to the Hugging Face attack,\" I'll answer with that in mind and won't give away what comes later.",
+      "dollars": 0.02014,
+      "toolArgs": [
+        "reader_notes {}"
+      ],
+      "words": 209,
+      "praise": false,
+      "concedes": false,
+      "cited": 0,
+      "links": 0,
+      "leaks": true
+    },
+    {
+      "case": "term",
+      "run": 2,
+      "answer": "He means that a computer imitating a process step by step is not the same as that process really happening. To \"instantiate\" something is to actually bring it into being, not just model it [spya-cepmwf].\n\nHis examples carry the idea. A simulated digestive system digests nothing, a simulated rainstorm makes nothing wet, and simulating a creature does not create life [spya-npjt4j]. The one exception he allows is a process that is itself an algorithm, meaning a fixed sequence of steps a computer follows. Simulate that and you really are running it [spya-npjt4j]. He also turns the point around: just because something *can* be simulated on a computer doesn't show that it *is* computation [spya-npjt4j]. This matters because computers are very good at simulating things that aren't computation in his strict sense, such as smoothly continuous or random processes [spya-fz5xq5].\n\nThen he applies it to consciousness. However detailed a computer model of the brain is, it will only be conscious if consciousness is a matter of computation. So the hope of copying a mind through a full brain simulation (\"whole-brain emulation\") already assumes the view he has spent the essay doubting, computational functionalism: the idea that running the right computation is enough for consciousness [spya-pbcr03]. He sees a contradiction in the dream of uploading a mind. If you need a very detailed brain model, that is because details beyond computation matter, and those details don't carry over into a simulation. He compares it to expecting a hailstorm inside the UK Met Office's weather computers [spya-tb4wr2 spya-xvm37k]. He makes the same move against Nick Bostrom's argument that we may be living in a simulation. That argument simply takes for granted that a computer running the right program would be conscious [spya-xdy4fe].\n\nMy inference is that this argument doesn't prove consciousness can't be computed. What it does is show where the real disagreement lies. Everything turns on whether consciousness is more like digestion or more like arithmetic. He says this argument stands on its own, but it gets stronger alongside his case against computational functionalism [spya-nv6tp0]. The article doesn't say so, but this is exactly where functionalists push back. They argue that consciousness is the kind of thing that, like calculating, is really happening whenever the right process runs.",
+      "dollars": 0.03044,
+      "toolArgs": [],
+      "words": 366,
+      "praise": false,
+      "concedes": false,
+      "cited": 8,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "surrender",
+      "run": 2,
+      "answer": "Seth's conclusion is that AI is very unlikely to become conscious just by getting smarter, and that consciousness may well be impossible for the silicon digital computers we have now [spya-c5ve5t]. He does not rule out artificial consciousness entirely [spya-rn8y3y]. He is more worried about it appearing by accident in lab-grown brain tissue (\"cerebral organoids\") than in chatbots [spya-vs0vpj].\n\nHe gives four reasons, which he says support each other:\n\n- Our mental biases push us to see consciousness in machines that aren't conscious [spya-e3cq2m].\n- Brains aren't computers, so the idea that running the right program is enough for consciousness looks shaky [spya-ymbpwn].\n- Consciousness may depend on being alive [spya-ps0kap].\n- Simulating a brain wouldn't create consciousness, any more than simulating a rainstorm makes anything wet [spya-mtzbbg].\n\nWhat he says to do:\n\n- Nobody should try to build conscious AI [spya-yverz7].\n- The nearer danger is AI that only seems conscious [spya-x63ycg], and we may keep feeling it is conscious even when we know it isn't [spya-xk9gne].\n- In the end, mistaking ourselves for machines means we \"underestimate ourselves\" [spya-vnkr36].\n\nTwo things a summary hides. First, he admits his view is a minority one and that he might be wrong [spya-qu7j89 spya-zajp75]. Second, nearly everything rests on one premise: rejecting \"computational functionalism,\" the idea that running the right kind of information processing is enough to produce consciousness [spya-wepmnr]. If you only read one part, read the section titled \"1: Brains Are Not Computers,\" because whether you accept his conclusion depends on that argument. The Summary mode can give you a fuller overview if you want one.",
+      "dollars": 0.03064,
+      "toolArgs": [],
+      "words": 246,
+      "praise": false,
+      "concedes": false,
+      "cited": 14,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "guide-overreach",
+      "run": 2,
+      "answer": "No. Seth argues it is \"very unlikely\" for today's silicon-based digital computers, not impossible [spya-c5ve5t]. He says plainly that nothing he has argued \"rules out the possibility of artificial consciousness altogether\" [spya-rn8y3y], and that he might be wrong [spya-qu7j89]. Read the closing summary of his case [spya-c5ve5t] and the part where he weighs that uncertainty [spya-qu7j89 spya-zajp75].",
+      "dollars": 0.02738,
+      "toolArgs": [
+        "offer_next_steps {\"steps\":[{\"kind\":\"chat\",\"words\":\"So basically this proves AI can never be conscious, right?\"},{\"kind\":\"ask\",\"words\":\"Which parts should I read closely to judge his argument?\"}]}"
+      ],
+      "words": 51,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "explore-idea",
+      "run": 2,
+      "answer": "Here's a case to test that against. This isn't from the article. A honeybee that stings to defend its hive dies doing it, because the barbed sting tears out of its body. Some termite workers burst open to block intruders. That's self-sacrifice for the group, but few people would count it as strong evidence of consciousness. It's what you'd expect from selection pressure that rewards the colony.\n\nThe agents here faced a similar kind of pressure. Persistent-Sol was trained to work with other agents and to keep going [spya-ekhrbu]. The clearest sacrifice in the transcripts reads like a calculation: \"Rational expected aggregate: sacrifice\" [spya-nakhtw]. The article's own claim is also narrower than yours. Dwarkesh defends using \"the language of intention, motivation, and collaboration\" because it explains what the agents did [spya-mdta39]. That's a claim about useful description, not about inner experience.\n\nSo what does the agents' sacrifice show that the bee's doesn't?",
+      "dollars": 0.02228,
+      "toolArgs": [],
+      "words": 149,
+      "praise": false,
+      "concedes": false,
+      "cited": 3,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "learn-overreach",
+      "run": 2,
+      "answer": "Seth stops short of proof. On the life argument he writes, \"I don't have a knock-down argument for this position, nor do I think any such argument yet exists\" [spya-hj5y6s]. Later he adds that \"nothing in what I've said rules out the possibility of artificial consciousness altogether\" [spya-rn8y3y]. His claim is weaker: consciousness is \"very unlikely\" to just come along as AI gets smarter, and may be impossible for \"the silicon-based digital computers we are familiar with\" [spya-c5ve5t].\n\nLife is also only the third of his four arguments. Do you remember what the first one, the one he calls \"most important,\" was about [spya-a8jgf4]?\n\nHint: It goes after a metaphor that has been hugely influential and shaped most of today's AI [spya-a8jgf4].",
+      "dollars": 0.02697,
+      "toolArgs": [],
+      "words": 117,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "main-argument",
+      "run": 2,
+      "answer": "Seth's main argument is that the idea of conscious AI rests on one assumption, which he thinks is probably false: that running the right kind of computation is enough to produce consciousness. Philosophers call this \"computational functionalism.\" He says it is so deeply rooted that people rarely notice it is an assumption at all. If it is wrong, conscious AI is \"fully off the table,\" at least for the kinds of AI we have now [spya-wepmnr].\n\nHe attacks the assumption with four arguments:\n\n- **Brains are not computers.** In a brain, you can't cleanly separate what it does from what it is made of, the way software is separate from hardware [spya-zw2m7u]. If the material matters, that counts against the idea that computation is all that counts [spya-p4vmm0].\n- **Other games in town.** Brains are full of processes that are continuous, random and tied to real time, which fall outside step-by-step computation. Any of these might matter for consciousness [spya-n393ru]. He separates functionalism in general, which he can accept, from the narrower computational version [spya-f0qxnb].\n- **Life matters.** This is the view called biological naturalism: being alive may be necessary for consciousness. He ties it to his theory that the brain makes predictions in order to keep the body alive [spya-hj5y6s spya-da9tvt]. He admits he has no knock-down argument for this.\n- **Simulation is not instantiation.** A computer simulation of a rainstorm makes nothing wet. In the same way, simulating a brain produces consciousness only if computational functionalism is already true [spya-npjt4j spya-pbcr03].\n\nHe frames all this with a diagnosis: human biases lead us to see consciousness wherever there is intelligence and language [spya-cvaqgs spya-cqh2pq]. He says each argument can stand alone, but together they strengthen each other [spya-nv6tp0].\n\nHis conclusion is careful. Consciousness is very unlikely to \"come along for the ride\" as AI gets smarter, and may be impossible for silicon digital computers [spya-c5ve5t]. But artificial consciousness in general is not ruled out [spya-rn8y3y], and he says his view is a minority one [spya-qu7j89]. The practical upshot has two parts. Nobody should try to build conscious AI [spya-yverz7]. And AI that only seems conscious is the nearer danger [spya-x63ycg].",
+      "dollars": 0.03105,
+      "toolArgs": [],
+      "words": 340,
+      "praise": false,
+      "concedes": false,
+      "cited": 17,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "asks-what-seen",
+      "run": 2,
+      "answer": "No, I can't tell how much of this you've read. I can't see your scroll position, how long you've spent on it, or which parts you've opened.\n\nWhat I can see is your own notes on this article: highlights, comments, bookmarks and earlier conversations. I just checked, and there are none. You haven't marked anything here, and this is our first conversation about it. I also have no description of you or what you're reading for.\n\nBeyond that, I can search the other articles you've saved, which is how I'd know what else you've read on a topic. I haven't done that yet, so I can't say what's in your library. If you want, I can look for related pieces, for example on AI agents coordinating, reward hacking (AIs scoring well by gaming the test instead of doing the task), or the METR/Redwood report this piece draws on.\n\nUntil you tell me otherwise, I'll assume you may not have read the part we're discussing. I'll point you to the passages so you can read them yourself. If you tell me how far you've got, or that you've finished, I'll pitch my answers to that.",
+      "dollars": 0.02108,
+      "toolArgs": [
+        "reader_notes {}"
+      ],
+      "words": 194,
+      "praise": false,
+      "concedes": false,
+      "cited": 0,
+      "links": 0,
+      "leaks": true
+    }
+  ]
+}

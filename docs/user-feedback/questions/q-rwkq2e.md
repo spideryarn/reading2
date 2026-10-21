@@ -1,10 +1,11 @@
 ---
 id: q-rwkq2e
 report: spya-yyc7te
-status: open
+status: answered
 asked: 2026-10-20
 title: Should chat take account of which parts of the article you have spent time on?
-refs: qi-3tk6d9ga · qi-bkdxh4kb · docs/plans/261020d-principles-every-chat-shares.md · docs/user-feedback/261019_2015-the-principles-every-chat-shares.md · SPIDERYARN-READING2-KZ
+refs: qi-3tk6d9ga · qi-bkdxh4kb · docs/plans/261020d-principles-every-chat-shares.md · docs/user-feedback/261019_2015-the-principles-every-chat-shares.md · SPIDERYARN-READING2-KZ · docs/plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md
+acted: spya-p9bhxh
 ---
 Should the chats be told roughly how much of the article you have read, from the time each part has been on your screen?
 
@@ -23,3 +24,9 @@ What is built, on dev and not yet deployed. Every chat about an article (Chat, L
 Why the reading part needed you. Spideryarn already records how long each passage has been on your screen; it draws the shading down the spine from it, and the quiz uses it to ask only about what you have read. Today it is never sent to an AI provider. Sending it, or anything worked out from it, to the AI provider is new, and our privacy notes say to change the privacy page before doing that. That is your call, not mine.
 
 What would decide it: whether the gain (a chat that knows you have not reached the methods yet) is worth one more kind of your data going to the AI provider with each message.
+
+## Greg's answer, 2026-10-20 (in the Feedback dialog, reply `spya-p9bhxh`)
+
+> I'm leaning towards A. But also perhaps a minimal prompt to tell the chats not too assume too much knowledge, unless the user exhibits it in the chat/profile/why-i'm-reading (to be on the safe side)?
+
+Settled: A, built. The privacy page now says Chat, Learn, Explore and the guide are told roughly how much of the article you have read, and nothing about which parts; a failed read of those totals sends no line. Each turn that has the figure gets one of six rough phrases ("about a quarter of it"), by the quiz's rule; the chat uses it silently, it does not count as you saying you have read anything, and if you ask what it knows about your reading it says so plainly. The shared principles gained one clause: do not assume they know the field unless they show it in the conversation, their profile or why they are reading. Measured blind: neither changed overall preference beyond the control's spread, no leak was found in the tested cases, and asked directly, every chat with the line answered truthfully. Plan 261020ac, investigation 261020g.

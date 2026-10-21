@@ -885,6 +885,25 @@ const rawPgChatStore: ChatStore = {
     }, READ_COMMITTED);
   },
 
+  async claimModePreparation(slug: string, threadId: string): Promise<boolean> {
+    const articleId = await articleIdForOwned(slug);
+    /* One conditional UPDATE: Postgres re-checks the null under the row lock,
+       so two concurrent claims cannot both return a row. */
+    const claimed = await getDb()
+      .update(chatThreads)
+      .set({ modePreparedAt: DB_NOW })
+      .where(
+        and(
+          eq(chatThreads.articleId, articleId),
+          eq(chatThreads.id, threadId),
+          eq(chatThreads.kind, "guide"),
+          isNull(chatThreads.modePreparedAt),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+    return claimed.length > 0;
+  },
+
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);

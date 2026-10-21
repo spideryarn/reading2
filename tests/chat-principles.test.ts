@@ -108,7 +108,9 @@ describe("the principles every chat shares", () => {
   });
 
   it("stays short: principles, not a second rulebook", () => {
-    expect(CHAT_PRINCIPLES.split(/\s+/).length).toBeLessThan(200);
+    /* 200 until plan 261020ac added Greg's clause on assumed knowledge (16
+       words, 210 in all). Raise it for a principle Greg asks for, not to fit a rule. */
+    expect(CHAT_PRINCIPLES.split(/\s+/).length).toBeLessThan(220);
   });
 
   it("asks for a recheck under push-back, not for the model to dig in", () => {

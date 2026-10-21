@@ -731,6 +731,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/skim/w1/profile-notice-dismissal"],
   },
   {
+    /* Get a mode ready without opening it, the guide's prepare step — plan
+       261019p § Stage 2b. Owner only; a `now` press claims the thread's one start. */
+    match: { kind: "regex", source: "^\\/api\\/guide-prepare\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/guide-prepare/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/reception\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/reception/w1"],
@@ -1158,9 +1165,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    reviewer's major/minor comment sort (plan 261011f); 120 with every article
    and one article's transfer (plan 261011n); 121 with Sources › Not cited
    (plan 261011ac); 122 with a cited work's web note (plan 261018o); 123 with
-   your-words.md on its own (plan 261020w); 126 with view as's start, current
-   and end (plan 261019n). */
-const EXPECTED_MATCHER_COUNT = 126;
+   your-words.md on its own (plan 261020w); 124 with the guide's prepare step
+   (plan 261019p); 127 with view as's start, current and end (plan 261019n). */
+const EXPECTED_MATCHER_COUNT = 127;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1178,9 +1185,10 @@ const EXPECTED_MATCHER_COUNT = 126;
    261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
    with every article, and a transfer's preview and POST (plan 261011n); 150
    with Not cited's GET and POST (plan 261011ac); 151 with a cited work's web
-   note (plan 261018o); 152 with your-words.md (plan 261020w); 155 with view
-   as's start, current and end (plan 261019n). */
-const EXPECTED_GUARD_COUNT = 155;
+   note (plan 261018o); 152 with your-words.md (plan 261020w); 153 with the
+   guide's prepare step (plan 261019p); 156 with view as's start, current and
+   end (plan 261019n). */
+const EXPECTED_GUARD_COUNT = 156;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2447,6 +2455,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         // Skim's profile notice, 261009i
         "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
+        // the guide's prepare step, 261019p stage 2b
+        "POST regex /^\\/api\\/guide-prepare\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/reception\\/([\\w.%-]+)$/",
         // Reception's old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",

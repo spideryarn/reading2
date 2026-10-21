@@ -598,7 +598,7 @@ Three postmortems name the classes:
 ### Landing (2026-10-20)
 
 - **The migration was renumbered** at the merge with dev, which had gained
-  `20261020164021_article_open_times`: regenerated as `20261020225640_view_as_sessions` on top
+  `20261020164021_article_open_times`: regenerated as `20261021002318_view_as_sessions` on top
   of it (identical DDL, the two hand-written `auth.users` keys appended again), so the journal
   stays in time order and drizzle will apply it.
 - **Not applied to the shared local database.** Its ledger holds an unpushed row from another

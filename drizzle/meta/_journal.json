@@ -1461,8 +1461,15 @@
     {
       "idx": 208,
       "version": "7",
-      "when": 1792537000398,
-      "tag": "20261020225640_view_as_sessions",
+      "when": 1792528849121,
+      "tag": "20261020204049_chat_threads_mode_prepared_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 209,
+      "version": "7",
+      "when": 1792542198290,
+      "tag": "20261021002318_view_as_sessions",
       "breakpoints": true
     }
   ]

@@ -511,6 +511,23 @@ totals, showing them or a conclusion drawn from them to a shared link's reader, 
 outside Spideryarn — to a model, for example. The plan is
 [261001a](../plans/261001a-privacy-reading-time-wording.md).
 
+**Since 2026-10-20 one conclusion from them goes to a model**: a turn of Chat, Learn, Explore or the
+guide on the owner's own article carries one coarse phrase for how much of it they have read ("about
+a quarter"), worked out with the quiz's rule, and nothing about which parts. Not Candidates, and not
+a turn whose read of the totals failed. Greg chose it, answering
+[q-rwkq2e](../user-feedback/questions/q-rwkq2e.md):
+
+> I'm leaning towards A.
+>
+> — Greg, 2026-10-20
+
+The bullet gained a sentence saying so and the models paragraph a clause, the same day, before the
+code; `LAST_UPDATED` already read 20 October 2026. What keeps it true: `readingSoFarLine`
+([`src/reading-so-far.ts`](../../src/reading-so-far.ts)) can only return one of six phrases, the
+route reads the totals only for the article's owner, and the line is never stored with the turn.
+**Section names, per-part detail or a percentage would be a new disclosure**: rewrite the bullet
+first. Plan [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md).
+
 ## Article open times
 
 **Added 2026-10-20**, with plan

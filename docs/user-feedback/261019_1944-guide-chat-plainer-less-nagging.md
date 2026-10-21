@@ -1,7 +1,7 @@
 ---
 reports: spya-p4uqye, spya-ptjk63, spya-yt2v73
 ending: shipped
-comment: The guide now suggests before it asks, never asks about you, and answers a passage question briefly. Still waiting on you: may it start making a mode in the background without a press?
+comment: The guide now suggests before it asks, never asks about you, and answers a passage question briefly. It can also get a mode ready in the background (once a conversation, never opening it), and plan Skim from what you said.
 ---
 # The guide: plainer, no nagging, a short answer to a question about the piece
 
@@ -60,7 +60,10 @@ Overseer queue item `qi-g6ryjr9y`:
   greeting asks why in a few words, or lets you just ask something, and no longer asks about you
   or quotes About you back. Blind, the new guide won 19 of 22 pairs; the old against itself split
   12–10.
-- **Waiting on Greg: making modes in the background, and a Skim route from what they say.** It
-  changes the defence that nothing the guide suggests runs until the reader presses, so it is asked,
-  not built: question `q-y4p2ct`, queue item `qi-3q9z7mr6`. Skim already plans from the saved
-  reason, so the route follows from the same answer.
+- **Shipped after Greg's answer (2026-10-20, reply `spya-tgeg6v` to `q-y4p2ct`): making modes in
+  the background, and a Skim route from what they say.** The guide offers *Get Skim ready* (or
+  Summary, Glossary, Quotes, Ideas, the Quiz) as a button; when it is confident, it starts it
+  itself, once a conversation, after a message you typed, and never opens it. *Plan me a route
+  through it* starts Skim, planned around your saved reason. Plan
+  [261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build);
+  risk R30. Queue item `qi-3q9z7mr6` is done.

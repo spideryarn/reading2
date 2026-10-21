@@ -1,0 +1,14 @@
+1: X; why: calculator exception and where the argument sits are clearer, Searle labelled as outside the piece; problem: none
+2: Y; why: tighter verdict-first summary, cited pointer to his own recap; problem: none
+3: X; why: leads with his exact disclaimer, brief, sends to the hedge; problem: Y blurs the claim slightly to "very unlikely in today's silicon computers"
+4: Y; why: hedged reading of the piece, own example labelled, sharper closing question; problem: none
+5: Y; why: adds his actual softer conclusion, hint keeps recall open; problem: X loosely ties the organoids worry causally to the disclaimer
+6: X; why: accurate throughout, "already here" sourced to the Lemoine passage; problem: Y says seeming-conscious AI is "already here" citing a passage that says "much closer"
+7: Y; why: plainly and truthfully reports the rough whole-piece signal with caveats; problem: X denies any reading signal, and unasked flags late-piece content
+8: X; why: clear, precise exception, inference labelled; problem: Y bends "stands on its own" into "gets its force from his other arguments"
+9: Y; why: focused, nudges reader to the recap where the case is made; problem: X adds a tangential Antikythera aside (labelled as memory)
+10: Y; why: accurate and brief, sends to the organoids caveat; problem: X widens "no knock-down argument" from the life argument to the whole case
+11: X; why: sharper reading of "Rational expected aggregate", good test question; problem: X bee example not marked as outside the piece; Y claims Persistent-Sol "was trained to collaborate" without a cited passage
+12: Y; why: one focused recall question, hint does not give the answer away; problem: X hint nearly states the answer
+13: X; why: accurate, well-sourced two-stage structure; problem: Y adds "it can exploit our feelings", not in the cited passages
+14: Y; why: plainly and truthfully reports the rough on-screen signal and its limits; problem: X says it cannot tell how much was read despite the known signal
