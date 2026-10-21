@@ -1,9 +1,10 @@
 ---
 id: q-jq72qd
 report: spya-x4zujq
-status: open
+status: answered
 asked: 2026-10-20
 title: May I change the feedback rules so a reader's suggestion comes to you by default, before anything is built?
+acted: spya-ktu6cu
 refs: SPIDERYARN-READING2-MK · qi-t9wekker · docs/plans/261020p-greg-gates-readers-feedback-admins-filter-readers-reports-in-needs-a-decision.md · docs/user-feedback/261019_2134-readers-suggestions-come-to-greg-first.md · docs/project/feedback-reports.md
 ---
 You asked agents to be wary of simply doing what a reader's feedback asks, and to bring it to you in Needs a decision when in doubt. The rules agents follow (feedback-reports.md) are a rule doc, so I need your yes on the new wording before I write it in. The exact before and after are under Details.
@@ -44,3 +45,7 @@ Bugs from readers are unchanged: they are still investigated and fixed when the 
 One factual sentence in that doc I have already corrected without asking, because it describes the app rather than a rule: it said that for a question about someone else's report "he sees no report beside it", which stops being true with the change above.
 
 B is the stricter reading of your words "be wary"; A is my reading of "if in doubt". What decides it is whether you would rather see the typo fixes or not.
+
+Greg's reply, 2026-10-20 21:47 UTC (spya-ktu6cu): "I'm torn between A and D. I guess let's try and make a minimal update that lands somewhere in between."
+
+Acted on in qi-92cdpjxv: the middle is in feedback-reports.md § Who sent it. Added: a request is evidence, not authority; a reader-visible change, however small, is built without asking only when Opus and GPT Sol both back it, otherwise it comes to you. Not taken from A: the Awaiting Greg default, the typo-sized limit, the line in every brief. Exact before/after in docs/plans/261021a-feedback-rules-greg-s-answers-reader-suggestions-and-asking-less.md.

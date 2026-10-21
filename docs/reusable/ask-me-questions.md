@@ -25,6 +25,15 @@ destructive write to real data, or a product tweak that would take a lot of the 
 Anything else is yours to settle with a second opinion (Sol, or Opus to arbitrate). Decide it, and
 say in a line what you decided.
 
+**That list is a reason to weigh the stakes, not by itself a reason to ask.** Keeping things as they
+are is yours to decide when nothing about them gives a reader a bad time and it is cheap to revisit.
+So is a change where the stakes are low, one option is plainly good, or there is no real trade-off,
+unless it loosens a defence, changes a prompt or a privacy promise, or writes destructively to real
+data: those still go to him. In doubt, ask GPT Sol, or have two Opus subagents argue from different
+roles (a reader, and someone else with a stake), and judge between them. Greg, 2026-10-20: *"is it
+important to ask me a question like this kind of question? […] All I'm trying to avoid is anything
+that's going to be a bad user experience. […] But don't bug me for trivial stuff."*
+
 **Before asking, check it is still open.** Answers often arrive in other places: a report note, a
 plan, a later message. Re-reading the source also often shows that the request was specific enough
 to build after all.
