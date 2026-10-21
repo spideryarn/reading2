@@ -462,6 +462,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback/w1/w2/screenshot"],
   },
   {
+    /* Whose an article is, and who opened its private link, for the details
+       page, 261021d. */
+    match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/access$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/articles/w1/access"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/admin/articles/w1/cost"],
@@ -513,6 +520,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)\\/open$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/library/w1/open"],
+  },
+  {
+    /* A signed-in visitor opened a private link, 261021d. */
+    match: { kind: "regex", source: "^\\/api\\/private-link-opens\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/private-link-opens/w1"],
   },
   {
     /* One article's tags, 261003d. */
@@ -1150,8 +1163,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    and one article's transfer (plan 261011n); 121 with Sources › Not cited
    (plan 261011ac); 122 with a cited work's web note (plan 261018o); 123 with
    your-words.md on its own (plan 261020w); 124 with the guide's prepare step
-   (plan 261019p). */
-const EXPECTED_MATCHER_COUNT = 124;
+   (plan 261019p); 126 with an article's access for the admin and a private
+   link's opens (plan 261021d). */
+const EXPECTED_MATCHER_COUNT = 126;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1170,8 +1184,9 @@ const EXPECTED_MATCHER_COUNT = 124;
    with every article, and a transfer's preview and POST (plan 261011n); 150
    with Not cited's GET and POST (plan 261011ac); 151 with a cited work's web
    note (plan 261018o); 152 with your-words.md (plan 261020w); 153 with the
-   guide's prepare step (plan 261019p). */
-const EXPECTED_GUARD_COUNT = 153;
+   guide's prepare step (plan 261019p); 155 with an article's access for the
+   admin and a private link's opens (plan 261021d). */
+const EXPECTED_GUARD_COUNT = 155;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2353,6 +2368,8 @@ describe("the authenticated API's route contract", () => {
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
+        // whose an article is and who opened its private link, 261021d
+        "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/access$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
         // the cost cube, for /admin/costs, 261005a — beside the article's cost
@@ -2381,6 +2398,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/reader",
         "PATCH literal /api/reader",
         "POST regex /^\\/api\\/library\\/([\\w.%-]+)\\/open$/",
+        // a signed-in visitor opened a private link, 261021d — beside the owner's open
+        "POST regex /^\\/api\\/private-link-opens\\/([\\w.%-]+)$/",
         // the article block, 260911d
         "GET regex /^\\/api\\/article\\/([\\w.%-]+)$/",
         "GET literal /api/link-preview",

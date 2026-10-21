@@ -39,6 +39,23 @@ Tests: `tests/private-link-opens-pg.test.ts` (both writes and the admin route, a
 `action-tables-have-created-at`, `db-schema`). The dispatch, hook and import guards were each
 watched red against a deliberately broken version.
 
+**What the full suite found after both reviews.** The network trace in
+`tests/public-network-trace.test.tsx` showed a signed-in visitor's open was noted **twice**: the
+gift-claim check (`useClaimSharedArticle`) reads the article again and remounts the visitor's page,
+and the hook's ref went with it. The dedupe is now module state, one note per slug, key and reader
+per page load, and the hook test has a remount case. The trace test's acceptance rule now names the
+one POST instead of saying "no POST", and the route contract, schema-drift count and the
+destroy-an-article cascade seeds list both tables. This fix came after GPT Sol's code review and was
+not reviewed again.
+
+**Where the Postgres suite ran.** `tests/private-link-opens-pg.test.ts` runs in the
+`private-postgres` lane, on a database minted for the run: the shared schema without `spideryarn`
+or the ledger, then this branch's own migrator. That was the only way: the shared local database's
+ledger holds `view_as_sessions` from an unlanded worktree (fbk06kam), so `npm run db:migrate`
+refuses there and nobody may touch the ledger. For the same reason the two `shared-services` files
+bound to that database (`admin-store`, `seed-admin-signin`) fail on `raw_pages`, a `dev` column
+that database never got. Neither file is ours.
+
 ## After GPT Sol's plan review
 
 [The review](261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-sol.md)

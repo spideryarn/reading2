@@ -618,6 +618,9 @@ const { addHref } = await import("../src/web/router.js");
 const { resetForTests: resetExperimental, snapshot: experimentalSnapshot } = await import(
   "../src/web/experimental-store.js"
 );
+/* The same kind of singleton: which private-link visit this page load has
+   already noted (src/web/usePrivateLinkOpen.ts). */
+const { forgetNotedPrivateLinkOpen } = await import("../src/web/usePrivateLinkOpen.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -656,6 +659,7 @@ beforeEach(() => {
      `SIGNED_IN` that `open()` fires is then real news.
      src/web/experimental-store.ts § Forget everything. */
   resetExperimental();
+  forgetNotedPrivateLinkOpen();
   /* Reads `served` at call time, so a case may still swap the payload without
      also having to restate how the route answers. */
   publicArticle = () => json(served);
@@ -3987,8 +3991,12 @@ describe("an owner's reading view, left alone", () => {
  * **A private link**: `/read/<slug>?key=<key>` on an article that is not
  * public. docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
  *
- * The acceptance rule of this file holds unchanged: one public request, no
- * POST, no `Authorization`. What is new is that the request carries the key,
+ * The acceptance rule of this file holds with one named exception: one public
+ * read, no `Authorization`, and no POST but one. Since plan 261021d (Greg's
+ * reply `spya-xug3kf` to q-agbc89, 2026-10-20) a private link's page notes that
+ * it was opened, once per visit: signed out, through the one public write;
+ * signed in, through the authenticated route. A public article sends neither.
+ * What is new besides is that the request carries the key,
  * that the key stays in the address while the reader moves about the article,
  * that it is kept nowhere else, and that the notice says which way in this is.
  *
@@ -4002,6 +4010,7 @@ describe("a visitor holding a private link", () => {
   const LINKED: PublicArticle = { ...ARTICLE, sharedBy: "link" };
   const PROSE = "The first paragraph of the piece.";
   const withKey = `/api/public/article/${SLUG}?key=${KEY}`;
+  const opened = `/api/public/private-link-opened/${SLUG}?key=${KEY}`;
 
   /* This suite's jsdom has no `localStorage`, so the rest of this file never
      meets the remembered view. These cases are about what is written there, so
@@ -4047,13 +4056,13 @@ describe("a visitor holding a private link", () => {
     expect(host.textContent).not.toContain(PROSE);
   });
 
-  it("makes one public request, with the key, no POST and no Authorization", async () => {
+  it("makes one public read with the key, one public note that it was opened, and no Authorization", async () => {
     await open(`?key=${KEY}`);
 
     expect(host.textContent).toContain(PROSE);
     expect(host.textContent).toContain("View only");
-    expect(trace.map((r) => r.url)).toEqual([withKey]);
-    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(trace.map((r) => r.url)).toEqual([withKey, opened]);
+    expect(trace.filter((r) => r.method !== "GET").map((r) => `${r.method} ${r.url}`)).toEqual([`POST ${opened}`]);
     expect(trace.filter((r) => r.auth !== null)).toEqual([]);
   });
 
@@ -4066,6 +4075,7 @@ describe("a visitor holding a private link", () => {
     await open(`?key=${KEY}`, "/metadata");
     expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
     expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    /* The same visit, so it is not noted a second time. */
     expect(trace.map((r) => r.url)).toEqual([withKey]);
   });
 
@@ -4103,18 +4113,23 @@ describe("a visitor holding a private link", () => {
     const asked = trace.filter((r) => r.url.includes(SLUG));
     /* Twice: after the first read, the page asks once whether this reader's
        gift claim just made the article theirs, and reads again owner-first
-       whatever the answer (src/web/article/useClaimSharedArticle.ts, 261011n). */
+       whatever the answer (src/web/article/useClaimSharedArticle.ts, 261011n).
+       The open is noted once, on the authenticated route, although the page
+       mounts twice: a ref in the hook counted it twice until 2026-10-21. */
     expect(asked.map((r) => `${r.method} ${r.url}`)).toEqual([
       `GET /api/article/${SLUG}`,
       `GET ${withKey}`,
+      `POST /api/private-link-opens/${SLUG}?key=${KEY}`,
       `GET /api/article/${SLUG}`,
       `GET ${withKey}`,
     ]);
-    for (const r of asked.filter((r) => r.url.includes("key="))) {
+    for (const r of asked.filter((r) => r.url.startsWith("/api/public/"))) {
       expect(r.auth, "the public request carries no token").toBeNull();
     }
     expect(trace.filter((r) => r.url.startsWith("/api/billing/usage"))).toHaveLength(1);
-    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET").map((r) => r.url)).toEqual([
+      `/api/private-link-opens/${SLUG}?key=${KEY}`,
+    ]);
   });
 
   it.each([
@@ -4197,6 +4212,7 @@ describe("a visitor holding a private link", () => {
     trace.length = 0;
     await act(async () => navigate(`/read/${SLUG}?key=${KEY}`));
     await settle();
+    /* Back to a visit this page load has noted: the read, and no second note. */
     expect(trace.map((r) => r.url)).toEqual([withKey]);
     expect(host.textContent).toContain(PROSE);
   });

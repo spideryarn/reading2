@@ -6,8 +6,12 @@
  *
  * From the page, as the owner's record-open is (`OwnedArticle` in
  * ArticlePage.tsx), and for its reasons: not from inside a GET, which a
- * prefetch, retry or unfurler would inflate; and **once per slug per mount**,
- * by a ref, because StrictMode runs every effect twice in development.
+ * prefetch, retry or unfurler would inflate; and **once per visit**: one slug,
+ * key and reader is noted once per page load, in module state rather than a
+ * ref. A ref was not enough. StrictMode runs every effect twice, and a
+ * signed-in visitor's gift-claim check (`useClaimSharedArticle`) reads the
+ * article again and remounts the page under it, so a ref counted every
+ * signed-in open twice. The full suite's network trace caught that.
  *
  * Only on a private link — `sharedBy === "link"` and a key in the address. A
  * public article sends nothing, so the visitor tests' *a signed-out browser
@@ -23,12 +27,20 @@
  * Failures are swallowed: the reader is reading, and a missed count is not
  * theirs to hear about.
  */
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import type { PublicSharedBy } from "../public-types.js";
 import { type ShareKey, withShareKey } from "../share-key.js";
 import { apiFetch } from "./lib/api.js";
 import { notePrivateLinkOpened } from "./public-api.js";
+
+/** The last visit noted in this page load: slug, key and reader. */
+let lastNoted: string | null = null;
+
+/** Tests only: start a new page load. */
+export function forgetNotedPrivateLinkOpen(): void {
+  lastNoted = null;
+}
 
 export function usePrivateLinkOpen(
   slug: string,
@@ -37,11 +49,11 @@ export function usePrivateLinkOpen(
   readerId: string | null,
   sessionUnconfirmed: boolean,
 ): void {
-  const noted = useRef<string | null>(null);
   useEffect(() => {
     if (sharedBy !== "link" || shareKey === null || sessionUnconfirmed) return;
-    if (noted.current === slug) return;
-    noted.current = slug;
+    const visit = `${slug}\n${shareKey}\n${readerId ?? ""}`;
+    if (lastNoted === visit) return;
+    lastNoted = visit;
     const sent =
       readerId === null
         ? notePrivateLinkOpened(slug, shareKey)

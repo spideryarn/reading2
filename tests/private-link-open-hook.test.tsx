@@ -9,7 +9,8 @@
  * - session unconfirmed, a public article, or no key: nothing at all — so the
  *   visitor tests' *a signed-out browser issues no POST* still holds on a
  *   public article;
- * - StrictMode's double effect, and a re-render: still one.
+ * - StrictMode's double effect, a re-render, and a remount of the same visit
+ *   (the gift-claim re-read does that): still one.
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -26,7 +27,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   googleSignInAvailable: false,
 }));
 
-const { usePrivateLinkOpen } = await import("../src/web/usePrivateLinkOpen.js");
+const { usePrivateLinkOpen, forgetNotedPrivateLinkOpen } = await import("../src/web/usePrivateLinkOpen.js");
 const { parseShareKey } = await import("../src/share-key.js");
 
 const SLUG = "a-piece-spya-k3m9qt";
@@ -40,6 +41,7 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
+  forgetNotedPrivateLinkOpen();
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(input), init });
     return new Response(null, { status: 204 });
@@ -104,5 +106,24 @@ describe("usePrivateLinkOpen", () => {
     await mount({ sharedBy: "link", shareKey: KEY, readerId: null, sessionUnconfirmed: false, tick: 1 });
     await mount({ sharedBy: "link", shareKey: KEY, readerId: null, sessionUnconfirmed: false, tick: 2 });
     expect(calls).toHaveLength(1);
+  });
+
+  it("still sends once when the page is unmounted and mounted again for the same visit", async () => {
+    const props = { sharedBy: "link" as const, shareKey: KEY, readerId: READER, sessionUnconfirmed: false };
+    await mount(props);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount(props);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("sends again for a different reader, or a new page load", async () => {
+    await mount({ sharedBy: "link", shareKey: KEY, readerId: null, sessionUnconfirmed: false });
+    await mount({ sharedBy: "link", shareKey: KEY, readerId: READER, sessionUnconfirmed: false });
+    forgetNotedPrivateLinkOpen();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount({ sharedBy: "link", shareKey: KEY, readerId: READER, sessionUnconfirmed: false });
+    expect(calls).toHaveLength(3);
   });
 });
