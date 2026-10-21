@@ -38,6 +38,10 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
   and learning deeply (2026-10-10): twenty-one topic files and a digest of what they say about each
   mode. Research on how people read goes there, not only here.
 
+- [261021a-table-library-for-sortable-hideable-columns.md](../research/261021a-table-library-for-sortable-hideable-columns.md)
+  — TanStack Table stays the table library (headless, behind `DataTable`); stay on v8 for now, and what
+  a v9 move would cost
+
 - [261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
   — 45 places a reader's paper link points, what each imports as today through our own fetcher,
   which refuse us, and the ranking of which are worth an import rule
