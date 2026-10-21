@@ -238,9 +238,11 @@ and kept, bar one part of C3:
   date is drawn at 40 in a row that is already 40 tall.
 - **C5 (P1)** The mention picker's rows and Reception's expanders and section heads, at 40.
 - **C6 (P2)** The test's declaration folding was hardened.
-- **C7 (P1, reported)** Eleven Tailwind classes in seven components wrote the finger size as
-  `size-10` or `min-h-10` (2.5rem). They are now `[40px]`, and the guard scans `src/web/**/*.tsx`
-  for the pattern; it was shown red first.
+- **C7 (P1, reported)** Ten live Tailwind classes in seven components wrote the finger size as
+  `size-10` or `min-h-10` (2.5rem); the review's eleventh textual hit was a comment describing one
+  of them. They are now `[40px]` under `any-pointer-coarse`, and the guard scans
+  `src/web/**/*.tsx` for the pattern; both the fixed pixel floor and the hybrid-pointer query are
+  pinned. The guard was shown red first.
 
 **After the review**, the browser re-measure found the Metadata page's second *Archive*, the one in
 its Archive section, still at 34. It is a copy of `QUIET_BUTTON`'s classes, and is now floored too.

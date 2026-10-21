@@ -2488,7 +2488,7 @@ function ClaimsList({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    className="rcp-claim-check tw:pointer-coarse:size-[40px]"
+                    className="rcp-claim-check tw:any-pointer-coarse:size-[40px]"
                     aria-label={SOURCES_CLAIM_CHECK_CLAIM}
                     /* A button in a `<summary>`: the press is ours, and must
                        not also fold the claim. */
@@ -2937,7 +2937,7 @@ function ListedClaims({
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      className="rcp-claim-check tw:pointer-coarse:size-[40px]"
+                      className="rcp-claim-check tw:any-pointer-coarse:size-[40px]"
                       aria-label={SOURCES_CLAIM_CHECK_CLAIM}
                       onClick={() => chats.onCheck(origin)}
                     >

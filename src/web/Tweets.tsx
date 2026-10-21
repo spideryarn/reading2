@@ -531,7 +531,7 @@ function CopyButton({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="tw:pointer-coarse:size-[40px]"
+          className="tw:any-pointer-coarse:size-[40px]"
           aria-label={label}
           onClick={() => copy(text())}
         >

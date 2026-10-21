@@ -115,6 +115,21 @@ function declsFor(css: string, selector: string): string | undefined {
 const css = readerCssNoComments();
 const coarse = blocks(css, "any-pointer: coarse");
 
+/**
+ * Tailwind source tokens that leave a 2.5rem target behind a coarse-pointer
+ * variant. Tokenising first keeps `not-pointer-coarse` from matching while
+ * still admitting arbitrary and compound variants after the pointer variant.
+ * Comments are deliberately included: Tailwind's scanner includes them too.
+ */
+function bareTailwindFingerFloors(input: string): string[] {
+  const out: string[] = [];
+  for (const token of input.match(/[^\s"'`{}]+/g) ?? []) {
+    if (!/(?:^|:)(?:any-)?pointer-coarse:/.test(token)) continue;
+    if (/(?:^|:)(?:size|min-h|min-w|h|w)-10!?$/.test(token)) out.push(token);
+  }
+  return out;
+}
+
 /** Compiles Tailwind class names the way the build does (run-buttons-and-text-boxes-agree.test.ts). */
 let compile: (classes: string[]) => (string | null)[];
 beforeAll(async () => {
@@ -363,6 +378,10 @@ describe("the browser pass's stragglers", () => {
     expect(declsFor(coarse, ".prof-mic")).toMatch(/flex:\s*none/);
     const metadata = /const QUIET_BUTTON\s*=\s*"([^"]+)"/.exec(source("src/web/Metadata.tsx"))?.[1] ?? "";
     expectCoarse40(metadata, "min-h-", ["min-height"]);
+    const archiveArticle = /function ArchiveArticle[\s\S]*?disabled=\{busy\}\s*className=\{`([^`]*)/.exec(
+      source("src/web/Metadata.tsx"),
+    )?.[1] ?? "";
+    expectCoarse40(archiveArticle, "min-h-", ["min-height"]);
     const signOut = /onClick=\{\(\) => void out\(\)\}[\s\S]*?className="([^"]+)"/.exec(
       source("src/web/AccountSection.tsx"),
     )?.[1] ?? "";
@@ -411,7 +430,8 @@ describe("no bare 2.5rem finger floor", () => {
   }
 
   /* The same mistake in Tailwind: `size-10`, `min-h-10` and friends are 2.5rem.
-     Sol's stage-2 review (C7) found eleven behind a coarse-pointer variant. */
+     Sol's stage-2 review (C7) found ten live utilities behind a coarse-pointer
+     variant; the eleventh textual hit was a comment describing one of them. */
   it("is in any component's coarse-pointer Tailwind class", () => {
     const dir = path.join(ROOT, "src/web");
     const hits: string[] = [];
@@ -420,14 +440,51 @@ describe("no bare 2.5rem finger floor", () => {
         const p = path.join(d, e.name);
         if (e.isDirectory()) walk(p);
         else if (p.endsWith(".tsx")) {
-          for (const m of readFileSync(p, "utf8").matchAll(/pointer-coarse:(?:[\w@\[\]&_:(),-]*:)?(?:size|min-h|min-w|h|w)-10\b/g)) {
-            hits.push(`${path.relative(ROOT, p)}: ${m[0]}`);
+          for (const hit of bareTailwindFingerFloors(readFileSync(p, "utf8"))) {
+            hits.push(`${path.relative(ROOT, p)}: ${hit}`);
           }
         }
       }
     };
     walk(dir);
     expect(hits).toEqual([]);
+  });
+
+  it("recognises nested variants without matching lookalike variant names or larger scales", () => {
+    expect(
+      bareTailwindFingerFloors(
+        [
+          "tw:any-pointer-coarse:[&_x]:size-10",
+          "tw:any-pointer-coarse:[&>button]:min-h-10",
+          "tw:pointer-coarse:group-hover/card:size-10!",
+        ].join(" "),
+      ),
+    ).toEqual([
+      "tw:any-pointer-coarse:[&_x]:size-10",
+      "tw:any-pointer-coarse:[&>button]:min-h-10",
+      "tw:pointer-coarse:group-hover/card:size-10!",
+    ]);
+    expect(
+      bareTailwindFingerFloors(
+        "tw:not-pointer-coarse:size-10 tw:pointer-coarse:size-100 tw:pointer-coarse:text-10",
+      ),
+    ).toEqual([]);
+  });
+
+  it("pins every C7 target to a fixed 40px floor on any available coarse pointer", () => {
+    const targets: readonly [string, number][] = [
+      ["src/web/BackLink.tsx", 1],
+      ["src/web/FeedbackButton.tsx", 2],
+      ["src/web/Library.tsx", 2],
+      ["src/web/PlanHelp.tsx", 1],
+      ["src/web/ReceptionAndClaimsPanel.tsx", 2],
+      ["src/web/SimplePanel.tsx", 1],
+      ["src/web/Tweets.tsx", 1],
+    ];
+    for (const [file, expected] of targets) {
+      const hits = source(file).match(/tw:any-pointer-coarse:(?:size|min-h)-\[40px\]/g) ?? [];
+      expect(hits, file).toHaveLength(expected);
+    }
   });
 
   it("is in any coarse-pointer block", () => {

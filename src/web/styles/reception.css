@@ -178,7 +178,7 @@
    height it adds, so a claim's heading is no taller for having it. Quiet until
    the pointer is on the claim or the keyboard is on the button; where nothing
    can hover it is drawn at a strength a finger can find. Its size on a coarse
-   pointer is at the call site (`tw:pointer-coarse:size-[40px]`). */
+   pointer is at the call site (`tw:any-pointer-coarse:size-[40px]`). */
 .rcp-claim-check {
   align-self: center;
   margin-block: -0.25rem;
