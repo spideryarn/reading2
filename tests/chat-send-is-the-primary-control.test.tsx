@@ -164,6 +164,9 @@ describe("the send button", () => {
          (quiz.css; plan 261003i). The same tokens as Send's, asserted below. */
       '.chat-send.quiz-go:not([aria-disabled="true"])',
       '.chat-send.quiz-go:not([aria-disabled="true"]):hover',
+      /* Size only, under a finger: Answer keeps 40px after a mark takes
+         `.quiz-go` away (quiz.css; plan 261021g). */
+      ".quiz-actions .chat-send",
     ]);
   });
 
