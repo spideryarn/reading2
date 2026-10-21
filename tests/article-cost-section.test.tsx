@@ -285,7 +285,11 @@ describe("where the section is mounted", () => {
        or refused What-it-cost section. Mounting all of Metadata here would
        replace this one assertion with every fetch and store on that page. */
     const source = readFileSync("src/web/Metadata.tsx", "utf8");
-    expect(source).toMatch(/\{isAdmin\(user\?\.id\) && <CostSection slug=\{slug\} \/>\}/);
+    /* …and hidden in a view-as tab, where the admin is seeing a reader's
+       page (plan 261019n). */
+    expect(source).toMatch(
+      /\{isAdmin\(user\?\.id\) && viewAsNonce\(\) === null && <CostSection slug=\{slug\} \/>\}/,
+    );
     /* The guarded occurrence is the only mount; otherwise the assertion above
        could stay green while a second, unguarded section rendered and read. */
     expect(source.match(/<CostSection\b/g)).toHaveLength(1);
