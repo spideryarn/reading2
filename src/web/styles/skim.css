@@ -148,8 +148,8 @@
 /* A named exception to the text roles (typography.md § Text roles in a band):
    not --type-body, though it is a sentence under the row. It is the model's
    optional question before the quote, and matters less than the quote (Greg,
-   spya-qpgvq9, plan 261009j); its monospace face reads larger than the quote's
-   serif at the same size, so it sits a clear step below --type-quote.
+   spya-qpgvq9, plan 261009j); its typed face, wider than the quote's serif,
+   reads larger at the same size, so it sits a clear step below --type-quote.
    tests/type-roles.test.ts holds its chosen value at 0.78rem; the phone floor
    still applies. */
 .skim-cue {
@@ -425,7 +425,7 @@
 /* **Where the door leads**: the next stop's cue, small and muted, so it reads
    as a signpost rather than as the author's words or a summary — or, at the
    end of a pass, the fixed "End of Gist — 5 stops". Upright since plan
-   261009m, both: italic mono read poorly, and the model's cue is marked by
+   261009m, both: italic mono read poorly (Plex, then), and the model's cue is marked by
    its face (voices.css § `.skim-door-cue-next`), not by a slant. */
 .skim-door-cue {
   max-width: 32em;

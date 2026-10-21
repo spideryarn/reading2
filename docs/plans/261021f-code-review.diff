@@ -1,0 +1,442 @@
+diff --git a/docs/project/design-css-overview.md b/docs/project/design-css-overview.md
+index 7956f7b56..ded3a5a15 100644
+--- a/docs/project/design-css-overview.md
++++ b/docs/project/design-css-overview.md
+@@ -317,8 +317,8 @@ will eventually have to decide whether they are a system or an accident:
+ - **[typography.md](typography.md)** — one sans for the article and the chrome alike, the weight
+   axis, the six text roles (`--type-*`) a band's recurring lines take their size from, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
+   content that cannot reflow: a wide code block, and a figure drawn in black ink for a white page.
+-- **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in IBM
+-  Plex Mono, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
++- **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in iA
++  Writer Quattro, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
+   shows, and how to put a new one in its voice.
+ - **[controls.md](controls.md)** — **controls that do the same job look the same in every mode**:
+   the shared piece for each kind and checks of the pieces and listed callers; then why a button in this
+diff --git a/docs/project/fonts.md b/docs/project/fonts.md
+index 2f6f1a0ae..34e747308 100644
+--- a/docs/project/fonts.md
++++ b/docs/project/fonts.md
+@@ -38,7 +38,8 @@ view and every page outside it (the shelf, Metadata, /profile, /add, the public
+ | Token | Voice | Face | Why |
+ |---|---|---|---|
+ | `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable | a screen serif; variable, so dark mode's 450 weight still works |
+-| `--font-ai` | prose a model generated | IBM Plex Mono, static 400/700 | monospaced, so it reads as machine-made; not Courier, which Greg found "really ugly" |
++| `--font-ai` | prose a model generated | iA Writer Quattro, static 400/700 | still looks typed, so it reads as machine-made, but reads as prose; not Courier, which Greg found "really ugly", nor strict monospace, which a reader found hard going |
++| `--font-ai-code` | code inside a model's answer | iA Writer Mono, static 400/700 | the same letters on one width, so columns of code line up |
+ | `--font-reader` | anything the reader typed | Arial, from the system | Greg's word, no download |
+ | `--font-ui` | the chrome, and every fixed sentence we wrote | Geist | the fourth voice, by being left alone |
+ 
+@@ -49,15 +50,28 @@ be self-hosted too**: a font CDN would be a new outside party seeing every reade
+ ([privacy.md](privacy.md)).
+ 
+ How the faces were chosen: Courier Prime and the serif in
+-[261001d](../plans/261001d-typeface-per-voice.md); Plex Mono over Courier, with seven candidates
+-side by side, in [261002b](../plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md). Its
+-runner-up, iA Writer Quattro, is easier to read as paragraphs but barely looks monospaced; swapping
+-to it means changing the token and its import.
++[261001d](../plans/261001d-typeface-per-voice.md); IBM Plex Mono over Courier, with seven
++candidates side by side, in [261002b](../plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md);
++iA Writer Quattro over Plex in
++[261021f](../plans/261021f-nicer-ai-face-and-no-reader-font-setting.md), after a reader asked to
++choose their own fonts and Greg read it as the monospace being hard going:
++
++> So why don't we try finding a nicer one, and don't give the user the ability to switch it?
++> Because my hunch is that does add complexity that we don't need.
++>
++> — Greg, 2026-10-20
++
++Quattro is Plex's letters on four widths instead of one, so it keeps the slab `i l r` and the typed
++rhythm and loses the gaps a strict monospace leaves in a paragraph. What it gives up: at small sizes
++it is closer to Geist than Plex was, so the model's words are told from the chrome by their letters
++rather than by their spacing. iA Writer Duo, which widens only `m` and `w`, was the runner-up and
++looked almost the same as Plex. **There is no reader setting for any face**: Greg declined one
++(q-s0suam).
+ 
+ ## Whose voice is it? The rule
+ 
+ - **Prose a model generated → `--font-ai`.** Summaries, gists, glossary entries and term names,
+-  idea names, quiz questions, chat replies (code blocks too), Tweets' posts, Sketch's and
++  idea names, quiz questions, chat replies (code too, in `--font-ai-code`), Tweets' posts, Sketch's and
+   Illustrated's titles and captions, a "why this one" tooltip. If a model chose the words, it is AI.
+ - **Text a model only copied or transcribed keeps its writer's voice.** A heading-leaf's label is
+   the author's heading, copied verbatim, so it is the author's. A citation's title is the cited
+diff --git a/docs/project/typography.md b/docs/project/typography.md
+index 19277c77a..5c2960e83 100644
+--- a/docs/project/typography.md
++++ b/docs/project/typography.md
+@@ -76,7 +76,7 @@ and `kind-caption`, which had never been styled at all.
+ ## A face per voice
+ 
+ For every reader, on every page, since 2026-10-02: the author, the model and the reader each get
+-their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
++their own face — a serif, iA Writer Quattro and Arial — and Geist stays the chrome. The rule,
+ the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
+ 
+ ## Text roles in a band
+@@ -111,7 +111,7 @@ Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts
+ foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
+ 0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
+ quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the
+-quote, and in monospace a body-sized line reads larger than the serif quote beside it (plan
++quote, and in the model's typed face, wider than the serif, a body-sized line reads larger than the quote beside it (plan
+ [261009j](../plans/261009j-skim-question-optional-and-the-border.md)). The open Skim stop's section heading
+ (`.skim-row.current .skim-place`) is 0.82rem rather than `--type-item`, so the quote under it is
+ read first; the other rows keep the role (plan [261009m](../plans/261009m-skim-quieter-open-stop.md)).
+diff --git a/docs/reusable/ask-me-questions.md b/docs/reusable/ask-me-questions.md
+index cc5260852..66e27ac9f 100644
+--- a/docs/reusable/ask-me-questions.md
++++ b/docs/reusable/ask-me-questions.md
+@@ -48,6 +48,9 @@ to build after all.
+   - **Background first:** what the work is for, and any jargon in plain words.
+   - **Then each option:** what it would look like in use (an example, or an ASCII sketch where shape
+     matters), what it costs, what it gives up, and its risks and concerns.
++  - **Say roughly how big each option is to build**: an hour, a session, several days. Greg,
++    2026-10-20: *"I can't tell how complicated this would be. If it's trivial, I'd be at least open
++    to it."*
+   - **Then what would decide between them**, and **your recommendation**, marked as such, with the
+     reason.
+ - **Make it answerable briefly**: number the questions and letter the options, so "1A 2B" is a whole
+diff --git a/package-lock.json b/package-lock.json
+index 0a4b8ca4d..4e0a19368 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -16,7 +16,8 @@
+         "@fontsource-variable/geist": "^5.3.0",
+         "@fontsource-variable/geist-mono": "^5.3.0",
+         "@fontsource-variable/source-serif-4": "^5.3.0",
+-        "@fontsource/ibm-plex-mono": "^5.3.0",
++        "@fontsource/ia-writer-mono": "^5.3.0",
++        "@fontsource/ia-writer-quattro": "^5.3.0",
+         "@modelcontextprotocol/server": "^2.3.1",
+         "@mozilla/readability": "^0.6.0",
+         "@napi-rs/canvas": "^1.0.8",
+@@ -1751,10 +1752,19 @@
+         "url": "https://github.com/sponsors/ayuhito"
+       }
+     },
+-    "node_modules/@fontsource/ibm-plex-mono": {
++    "node_modules/@fontsource/ia-writer-mono": {
+       "version": "5.3.0",
+-      "resolved": "https://registry.npmjs.org/@fontsource/ibm-plex-mono/-/ibm-plex-mono-5.3.0.tgz",
+-      "integrity": "sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==",
++      "resolved": "https://registry.npmjs.org/@fontsource/ia-writer-mono/-/ia-writer-mono-5.3.0.tgz",
++      "integrity": "sha512-8eyf6/Cf1lFOtgzAYtY57qXwuUDbRlqjaa8aW0DBdLc7z1CBxRvNUq6hj6CMdeCym+hhfNCp8oLl305PEF+6ew==",
++      "license": "OFL-1.1",
++      "funding": {
++        "url": "https://github.com/sponsors/ayuhito"
++      }
++    },
++    "node_modules/@fontsource/ia-writer-quattro": {
++      "version": "5.3.0",
++      "resolved": "https://registry.npmjs.org/@fontsource/ia-writer-quattro/-/ia-writer-quattro-5.3.0.tgz",
++      "integrity": "sha512-J249e+/1kBy9YzJ1JKRPDm0V3ELGwqSlxf3WlB7qNiExLA+kXGN+VwOhILNH21ZcezFVilvA9+ev2r/kZSyy/g==",
+       "license": "OFL-1.1",
+       "funding": {
+         "url": "https://github.com/sponsors/ayuhito"
+diff --git a/package.json b/package.json
+index b9c5207a6..885b51aac 100644
+--- a/package.json
++++ b/package.json
+@@ -98,7 +98,8 @@
+     "@fontsource-variable/geist": "^5.3.0",
+     "@fontsource-variable/geist-mono": "^5.3.0",
+     "@fontsource-variable/source-serif-4": "^5.3.0",
+-    "@fontsource/ibm-plex-mono": "^5.3.0",
++    "@fontsource/ia-writer-mono": "^5.3.0",
++    "@fontsource/ia-writer-quattro": "^5.3.0",
+     "@modelcontextprotocol/server": "^2.3.1",
+     "@mozilla/readability": "^0.6.0",
+     "@napi-rs/canvas": "^1.0.8",
+diff --git a/src/web/DesignPage.tsx b/src/web/DesignPage.tsx
+index c33791a61..63791eca6 100644
+--- a/src/web/DesignPage.tsx
++++ b/src/web/DesignPage.tsx
+@@ -433,6 +433,7 @@ const FACES: { token: string; used: string }[] = [
+      2026-10-02. docs/project/fonts.md. */
+   { token: "--font-author", used: "the article, and verbatim quotes of it" },
+   { token: "--font-ai", used: "model-generated prose" },
++  { token: "--font-ai-code", used: "code inside a model's answer" },
+   { token: "--font-reader", used: "anything the reader typed" },
+ ];
+ 
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 81bf62b10..f51456793 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -413,9 +413,11 @@ p.marg-shut {
+   display: -webkit-box;
+   -webkit-box-orient: vertical;
+   /* Four, not three, since 261002g: the arc is now at most 20 words, which in
+-     the AI face (a monospace, about a third wider than Geist) is four lines at
+-     288px for 32 of 35 measured sentences, and three for 3
+-     (evals/arc-length/run.ts). Three cut nearly every one mid-sentence. */
++     the AI face as it was then (IBM Plex Mono, a monospace about a third wider
++     than Geist) is four lines at 288px for 32 of 35 measured sentences, and
++     three for 3 (evals/arc-length/run.ts). Three cut nearly every one
++     mid-sentence. iA Writer Quattro (261021f) averages about 8% narrower than
++     Plex, so four lines now cut fewer, not more. */
+   -webkit-line-clamp: 4;
+   line-clamp: 4;
+   overflow: hidden;
+diff --git a/src/web/styles/skim.css b/src/web/styles/skim.css
+index 47fe188a4..273c0ecab 100644
+--- a/src/web/styles/skim.css
++++ b/src/web/styles/skim.css
+@@ -148,8 +148,8 @@
+ /* A named exception to the text roles (typography.md § Text roles in a band):
+    not --type-body, though it is a sentence under the row. It is the model's
+    optional question before the quote, and matters less than the quote (Greg,
+-   spya-qpgvq9, plan 261009j); its monospace face reads larger than the quote's
+-   serif at the same size, so it sits a clear step below --type-quote.
++   spya-qpgvq9, plan 261009j); its typed face, wider than the quote's serif,
++   reads larger at the same size, so it sits a clear step below --type-quote.
+    tests/type-roles.test.ts holds its chosen value at 0.78rem; the phone floor
+    still applies. */
+ .skim-cue {
+@@ -425,7 +425,7 @@
+ /* **Where the door leads**: the next stop's cue, small and muted, so it reads
+    as a signpost rather than as the author's words or a summary — or, at the
+    end of a pass, the fixed "End of Gist — 5 stops". Upright since plan
+-   261009m, both: italic mono read poorly, and the model's cue is marked by
++   261009m, both: italic mono read poorly (Plex, then), and the model's cue is marked by
+    its face (voices.css § `.skim-door-cue-next`), not by a slant. */
+ .skim-door-cue {
+   max-width: 32em;
+diff --git a/src/web/styles/summary.css b/src/web/styles/summary.css
+index 0e3f8a410..244029fd6 100644
+--- a/src/web/styles/summary.css
++++ b/src/web/styles/summary.css
+@@ -103,7 +103,7 @@
+   text-underline-offset: 2px;
+ }
+ /* **A key phrase** (plan 261004b): the few words of a sentence a skimming
+-   reader should catch. 700 because the model's face, IBM Plex Mono, is static
++   reader should catch. 700 because the model's face, iA Writer Quattro, is static
+    and ships 400 and 700 only (fonts.md); anything between is drawn as one of
+    them, or faked. Ink and face are the sentence's, linked or not. */
+ .simple-text strong { font-weight: 700; }
+diff --git a/src/web/styles/voices.css b/src/web/styles/voices.css
+index 02374c590..38882bc9a 100644
+--- a/src/web/styles/voices.css
++++ b/src/web/styles/voices.css
+@@ -3,8 +3,10 @@
+    Greg, 2026-10-01 (SPIDERYARN-READING2-7C): "Courier for all AI-generated
+    text … a serif font for the author-text … Arial or something like that for
+    user-generated … Perhaps try a v1 of this and I'll see how I feel about it."
+-   The v1 was docs/plans/261001d-typeface-per-voice.md; the model's face is now
+-   IBM Plex Mono rather than Courier, and the trawl that widened these lists is
++   The v1 was docs/plans/261001d-typeface-per-voice.md; the model's face was
++   IBM Plex Mono rather than Courier from 2026-10-02 and iA Writer Quattro from
++   2026-10-21 (docs/plans/261021f-nicer-ai-face-and-no-reader-font-setting.md),
++   and the trawl that widened these lists is
+    docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md. The rule,
+    and how to voice a new element, is docs/project/fonts.md.
+ 
+@@ -242,6 +244,17 @@
+     font-family: var(--font-ai);
+ }
+ 
++/* The same code, on one width. It stays in the list above, so that rule's
++   specificity is unchanged; this one ties with it and comes later. Quattro
++   gives letters four widths, which knocks the columns of code out of line, so
++   code takes iA Writer Mono: the same letters, every one as wide (261021f). */
++:root :is(
++    .chat-turn.model :is(.fmt-code, .fmt-pre code),
++    .cnd-answer :is(.fmt-code, .fmt-pre code)
++) {
++    font-family: var(--font-ai-code);
++}
++
+ /* ---- the reader: what they typed ----------------------------------------- */
+ :root :is(
+     /* whatever computed its voice and found the reader's: a renamed title
+diff --git a/src/web/tailwind.css b/src/web/tailwind.css
+index 75970c38c..077b21886 100644
+--- a/src/web/tailwind.css
++++ b/src/web/tailwind.css
+@@ -60,15 +60,21 @@
+ /* The author's and the model's faces, read only by styles/voices.css, for every
+    reader since 2026-10-02. An @font-face downloads nothing until a rule uses
+    its family. `opsz.css` rather than `wght.css`: the same weight axis plus optical
+-   size, so a serif at 14px in a quote card is drawn for 14px. IBM Plex Mono is
+-   static, so it is four files: 400 and 700, upright and italic (no 500: the dark
+-   mode's 450 then resolves to 400, as it did for Courier — docs/project/fonts.md). */
++   size, so a serif at 14px in a quote card is drawn for 14px. iA Writer Quattro
++   is static, so it is four files: 400 and 700, upright and italic (no 500: the
++   dark mode's 450 then resolves to 400 — docs/project/fonts.md). Unlike the
++   others it is not split by `unicode-range`: one ~44KB file per style, carrying
++   Greek, Cyrillic and Vietnamese too. iA Writer Mono is the same letters on one
++   width, for code inside a model's answer, where Quattro's four widths would
++   knock columns out of line; 400 and 700 only. */
+ @import "@fontsource-variable/source-serif-4/opsz.css";
+ @import "@fontsource-variable/source-serif-4/opsz-italic.css";
+-@import "@fontsource/ibm-plex-mono/400.css";
+-@import "@fontsource/ibm-plex-mono/400-italic.css";
+-@import "@fontsource/ibm-plex-mono/700.css";
+-@import "@fontsource/ibm-plex-mono/700-italic.css";
++@import "@fontsource/ia-writer-quattro/400.css";
++@import "@fontsource/ia-writer-quattro/400-italic.css";
++@import "@fontsource/ia-writer-quattro/700.css";
++@import "@fontsource/ia-writer-quattro/700-italic.css";
++@import "@fontsource/ia-writer-mono/400.css";
++@import "@fontsource/ia-writer-mono/700.css";
+ 
+ @import "tailwindcss/theme.css" layer(theme) prefix(tw);
+ @import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
+diff --git a/styles/tokens.css b/styles/tokens.css
+index 90e7301a5..922a4aacd 100644
+--- a/styles/tokens.css
++++ b/styles/tokens.css
+@@ -293,9 +293,13 @@
+        `--font-author`; their visible children set their own face. Greg, 2026-10-01:
+        Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
+        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
+-       "Courier is really ugly" — still monospaced, so still machine-made. docs/project/fonts.md. */
++       "Courier is really ugly" — and Plex became iA Writer Quattro on 2026-10-21, after a
++       reader found the monospace hard going: Plex's letters on four widths rather than one,
++       so it still looks typed but reads as prose. Code in a model's answer keeps one width,
++       in iA Writer Mono (voices.css). docs/project/fonts.md. */
+     --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
+-    --font-ai: 'IBM Plex Mono', 'Courier New', Courier, monospace;
++    --font-ai: 'iA Writer Quattro', 'Courier New', Courier, monospace;
++    --font-ai-code: 'iA Writer Mono', 'Courier New', Courier, monospace;
+     --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
+ 
+     /* ---- reading measure --------------------------------------------- */
+diff --git a/tests/type-roles.test.ts b/tests/type-roles.test.ts
+index 908167e51..c9536863c 100644
+--- a/tests/type-roles.test.ts
++++ b/tests/type-roles.test.ts
+@@ -211,7 +211,7 @@ const EXCEPTIONS: Exception[] = [
+     value: "max(var(--text-min), 0.78rem)",
+     reason:
+       "The model's optional question before a quote, which matters less than the quote it " +
+-      "introduces (Greg, spya-qpgvq9). Its monospace face reads larger than the quote's serif " +
++      "introduces (Greg, spya-qpgvq9). Its typed face, wider than the quote's serif, reads larger " +
+       "at the same size, so it sits a clear step below --type-quote rather than at --type-body.",
+   },
+   {
+diff --git a/tests/voices-css.test.ts b/tests/voices-css.test.ts
+index 326cc038d..96008ac53 100644
+--- a/tests/voices-css.test.ts
++++ b/tests/voices-css.test.ts
+@@ -385,7 +385,14 @@ describe("voices.css", () => {
+     const tokens = readFileSync("styles/tokens.css", "utf8");
+     const used = [...new Set([...CSS.matchAll(/var\((--font-[\w-]+)\)/g)].map((m) => m[1]!))];
+     /* --font-ui only in the placeholder rule: app copy inside a reader's box. */
+-    expect(used.sort()).toEqual(["--font-ai", "--font-author", "--font-reader", "--font-ui"]);
++    /* --font-ai-code only for code in a model's answer: the model's letters on one width. */
++    expect(used.sort()).toEqual([
++      "--font-ai",
++      "--font-ai-code",
++      "--font-author",
++      "--font-reader",
++      "--font-ui",
++    ]);
+     for (const t of used) expect(tokens, t).toMatch(new RegExp(`${t}:`));
+   });
+ 
+diff --git a/tests/self-hosted-faces.test.ts b/tests/self-hosted-faces.test.ts
+new file mode 100644
+index 000000000..dcf9618a5
+--- /dev/null
++++ b/tests/self-hosted-faces.test.ts
+@@ -0,0 +1,97 @@
++/**
++ * **Every face token names a family that a self-hosted file declares.**
++ * docs/project/fonts.md; src/web/tailwind.css; styles/tokens.css.
++ *
++ * A token's first family is matched against the `@font-face` rules of the
++ * Fontsource packages tailwind.css imports. Misspell it, or swap the package
++ * without the token, and the browser silently falls through to the next family
++ * in the stack — Courier New for the model's words — which looks close enough
++ * to pass a screenshot. Nothing on screen says so, and the computed style still
++ * names the family you meant. Written when the model's face became iA Writer
++ * Quattro (261021f).
++ *
++ * The model's two faces also need all the styles they are drawn in: a missing
++ * italic or 700 is synthesised by the browser, which on these faces looks like
++ * a bug, not a choice.
++ */
++import { readFileSync } from "node:fs";
++import { resolve } from "node:path";
++import { describe, expect, it } from "vitest";
++
++const ENTRY = "src/web/tailwind.css";
++const TOKENS = readFileSync("styles/tokens.css", "utf8");
++
++type Face = { family: string; style: string; weight: string };
++
++/** Every `@font-face` declared by the packages `tailwind.css` imports. */
++function declaredFaces(entryCss: string): Face[] {
++  const code = entryCss.replace(/\/\*[\s\S]*?\*\//g, "");
++  const imports = [...code.matchAll(/@import\s+"(@fontsource[^"]+)"/g)].map((m) => m[1]!);
++  const faces: Face[] = [];
++  for (const id of imports) {
++    const css = readFileSync(resolve("node_modules", id), "utf8");
++    for (const block of css.matchAll(/@font-face\s*\{([^}]*)\}/g)) {
++      const prop = (name: string) =>
++        block[1]!.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1]?.trim() ?? "";
++      faces.push({
++        family: prop("font-family").replace(/^['"]|['"]$/g, ""),
++        style: prop("font-style"),
++        weight: prop("font-weight"),
++      });
++    }
++  }
++  return faces;
++}
++
++/** The first family a token in tokens.css names. */
++function primaryFamily(css: string, token: string): string {
++  const value = css.match(new RegExp(`${token}:\\s*([^;]+);`))?.[1];
++  if (!value) throw new Error(`tokens.css defines no ${token}`);
++  return value.split(",")[0]!.trim().replace(/^['"]|['"]$/g, "");
++}
++
++/** Weights a face covers: "400", or a variable range like "200 900". */
++function covers(face: Face, weight: number): boolean {
++  const [lo, hi = lo] = face.weight.split(/\s+/).map(Number);
++  return lo !== undefined && hi !== undefined && weight >= lo && weight <= hi;
++}
++
++const FACES = declaredFaces(readFileSync(ENTRY, "utf8"));
++
++describe("self-hosted faces", () => {
++  it("finds the packages' @font-face rules at all", () => {
++    expect(FACES.length).toBeGreaterThan(10);
++  });
++
++  it.each([
++    "--font-sans",
++    "--font-mono",
++    "--font-author",
++    "--font-ai",
++    "--font-ai-code",
++  ])("%s names a family an imported file declares", (token) => {
++    const family = primaryFamily(TOKENS, token);
++    expect(FACES.map((f) => f.family)).toContain(family);
++  });
++
++  it.each([
++    ["--font-ai", ["normal", "italic"], [400, 700]],
++    ["--font-ai-code", ["normal"], [400, 700]],
++  ] as const)("%s has every style it is drawn in", (token, styles, weights) => {
++    const family = primaryFamily(TOKENS, token);
++    for (const style of styles) {
++      for (const weight of weights) {
++        const found = FACES.some(
++          (f) => f.family === family && f.style === style && covers(f, weight),
++        );
++        expect(found, `${family} ${style} ${weight}`).toBe(true);
++      }
++    }
++  });
++
++  it("would catch a misspelt family", () => {
++    const misspelt = TOKENS.replace("'iA Writer Quattro'", "'iA Writer Quatro'");
++    expect(misspelt).not.toBe(TOKENS);
++    expect(FACES.map((f) => f.family)).not.toContain(primaryFamily(misspelt, "--font-ai"));
++  });
++});

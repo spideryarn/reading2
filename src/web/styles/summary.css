@@ -103,7 +103,7 @@
   text-underline-offset: 2px;
 }
 /* **A key phrase** (plan 261004b): the few words of a sentence a skimming
-   reader should catch. 700 because the model's face, IBM Plex Mono, is static
+   reader should catch. 700 because the model's face, iA Writer Quattro, is static
    and ships 400 and 700 only (fonts.md); anything between is drawn as one of
    them, or faked. Ink and face are the sentence's, linked or not. */
 .simple-text strong { font-weight: 700; }

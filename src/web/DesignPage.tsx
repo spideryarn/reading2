@@ -433,6 +433,7 @@ const FACES: { token: string; used: string }[] = [
      2026-10-02. docs/project/fonts.md. */
   { token: "--font-author", used: "the article, and verbatim quotes of it" },
   { token: "--font-ai", used: "model-generated prose" },
+  { token: "--font-ai-code", used: "code inside a model's answer" },
   { token: "--font-reader", used: "anything the reader typed" },
 ];
 

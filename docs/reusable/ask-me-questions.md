@@ -48,6 +48,9 @@ to build after all.
   - **Background first:** what the work is for, and any jargon in plain words.
   - **Then each option:** what it would look like in use (an example, or an ASCII sketch where shape
     matters), what it costs, what it gives up, and its risks and concerns.
+  - **Say roughly how big each option is to build**: an hour, a session, several days. Greg,
+    2026-10-20: *"I can't tell how complicated this would be. If it's trivial, I'd be at least open
+    to it."*
   - **Then what would decide between them**, and **your recommendation**, marked as such, with the
     reason.
 - **Make it answerable briefly**: number the questions and letter the options, so "1A 2B" is a whole
