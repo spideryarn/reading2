@@ -48,6 +48,7 @@ import {
   SOURCES_INVESTIGATE_SEND,
   SOURCES_INVESTIGATE_SUGGESTED,
   SOURCES_INVESTIGATE_WORKS_HEAD,
+  SOURCES_INVESTIGATE_SUGGESTED_HEAD,
   SOURCES_INVESTIGATE_YOURS_HEAD,
   type SourcesInvestigateChats,
 } from "../src/web/InvestigatePanel.js";
@@ -96,6 +97,10 @@ const opened: string[] = [];
 function chats(summaries: ThreadSummary[]): SourcesInvestigateChats {
   return {
     summaries,
+    /* Not loaded, so the arrival (`useReopenNewest`) stays out of these
+       tests' `opened`; it is tests/reception-lens-in-chat.test.tsx's. */
+    loaded: false,
+    occupied: false,
     onQuestion: (q) => asked.push(q),
     onCheck: (origin) => checked.push(origin),
     onAskWork: (w) => worked.push(w.id),
@@ -328,6 +333,14 @@ describe("your questions", () => {
     });
     expect(section("investigate-yours")).toBeNull();
     expect(host.textContent).not.toContain(SOURCES_INVESTIGATE_YOURS_HEAD);
+  });
+
+  /* The reader's own conversations before ours (plan 261021b). */
+  it("comes before the suggested questions", () => {
+    paint({ summaries: [summary({ id: "spya-aaa222", origin: LENS })] });
+    const sections = [...host.querySelectorAll(".investigate-section")];
+    expect(sections[0]?.classList.contains("investigate-yours")).toBe(true);
+    expect(sections[1]?.textContent).toContain(SOURCES_INVESTIGATE_SUGGESTED_HEAD);
   });
 
   it("has one line per lens chat, newest first, in the reader's face, with its gist", () => {
