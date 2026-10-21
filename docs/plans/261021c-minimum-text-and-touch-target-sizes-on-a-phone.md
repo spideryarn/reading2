@@ -205,6 +205,17 @@ three findings, all fixed by the reviewer and read before committing:
 
 Sol found no problem with the footnote halo, the chat header at 40px, or long source links.
 
+## Code review (GPT Sol, round 2)
+
+[Prompt](261021c-minimum-text-and-touch-target-sizes-on-a-phone-code-review-2-prompt.md),
+[answer](261021c-minimum-text-and-touch-target-sizes-on-a-phone-code-review-2-sol.md). It was
+narrow: the composer's 40px row, `.rcp-view-count`, the two chat-test edits and the 261021b merge.
+Exit 0, with one finding, fixed by the reviewer:
+
+- **D1 (P2)** the send button's state matrix allowed the coarse composer selector on the strength
+  of a "size only" comment that nothing checked. A test now pins that rule to `width` and `height`
+  inside `any-pointer: coarse`, and tap-target.test.tsx pins the composer's four controls.
+
 ## Verification at 390 and 1440 (Sonnet browser pass)
 
 - **iPhone.** No text under 13px on the chat list, an Investigate answer, the prose, the hover

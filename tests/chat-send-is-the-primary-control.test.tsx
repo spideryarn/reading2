@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
@@ -165,6 +165,21 @@ describe("the send button", () => {
       '.chat-send.quiz-go:not([aria-disabled="true"])',
       '.chat-send.quiz-go:not([aria-disabled="true"]):hover',
     ]);
+  });
+
+  it("keeps the coarse-pointer composer rule size-only", () => {
+    const found = [
+      ...css.matchAll(
+        /^[\t ]*\.chat-composer \.chat-send,\s*\.chat-composer \.prof-mic\s*\{([^}]*)\}/gm,
+      ),
+    ];
+    expect(found, "expected one shared coarse-pointer size rule").toHaveLength(1);
+    expect(enclosing(css, found[0]?.index ?? 0)).toEqual(["@media (any-pointer: coarse)"]);
+    const body = found[0]?.[1] ?? "";
+    const properties = [...body.matchAll(/(?:^|;)\s*([\w-]+)\s*:/g)].map((m) => m[1]);
+    expect(properties).toEqual(["width", "height"]);
+    expect(body).toMatch(/width:\s*max\(40px,\s*var\(--control-h\)\)/);
+    expect(body).toMatch(/height:\s*max\(40px,\s*var\(--control-h\)\)/);
   });
 
   it("fills Quiz's Answer and Next with the tokens Send uses", () => {

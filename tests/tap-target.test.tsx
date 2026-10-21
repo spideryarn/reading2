@@ -198,6 +198,18 @@ describe("the class", () => {
     expect(step).toMatch(/width:\s*max\(\s*40px\s*,\s*2\.5rem\s*\)/);
     expect(step).toMatch(/height:\s*max\(\s*40px\s*,\s*2\.5rem\s*\)/);
 
+    for (const selector of [".chat-composer .chat-send", ".chat-composer .prof-mic"]) {
+      const rule = declsFor(coarse, selector);
+      expect(rule, `${selector} has no coarse-pointer size`).toBeDefined();
+      expect(rule).toMatch(/width:\s*max\(\s*40px\s*,\s*var\(--control-h\)\s*\)/);
+      expect(rule).toMatch(/height:\s*max\(\s*40px\s*,\s*var\(--control-h\)\s*\)/);
+    }
+    for (const selector of [".chat-composer .chat-live-btn", ".chat-composer .chat-live-arrow"]) {
+      const rule = declsFor(coarse, selector);
+      expect(rule, `${selector} has no coarse-pointer height`).toBeDefined();
+      expect(rule).toMatch(/height:\s*max\(\s*40px\s*,\s*var\(--control-h\)\s*\)/);
+    }
+
     for (const selector of [".chat-thread-source", ".chat-from-btn", ".chat-to-bottom", ".bring-in-button"]) {
       const rule = declsFor(coarse, selector);
       expect(rule, `${selector} has no coarse-pointer rule`).toBeDefined();
