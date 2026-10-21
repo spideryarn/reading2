@@ -64,8 +64,8 @@ Under `any-pointer: coarse` only. Desktop keeps its compact list.
 - **The link stays a ≥40px box but is a block, not a centred flex box.** Its padding puts a
   one-line title in a 40px box. A wrapped title's lines stay together at the list's line height,
   instead of being centred in a box taller than they are.
-- **Line height for a wrapped title: 1.4**, a little tighter than 1.5, so a two-line title reads
-  as one item. The hairline and the padding between rows are what separate items.
+- **A wrapped title keeps the list's 1.5 line height.** The draft tightened it to 1.4; Greg named
+  line spacing as one of the two problems, so it stays (Sol, R1).
 
 The simpler option passed over: just add a margin between `<li>`s and leave the button floating.
 That fixes the 1px case, but a wrapped pill still sits nearer the title below it than its own.
@@ -137,3 +137,36 @@ one of these (C2 in 261021c was exactly that), plus the browser pass below.
   is about the citations, and this spacing is the same on every answer on every screen. It is
   offered in the note.
 - **Desktop floors.** These are still under a finger only, as 261021c decided.
+
+## Plan review (GPT Sol, 2026-10-21)
+
+[Prompt](261021g-phone-sizes-part-two-plan-review-prompt.md),
+[answer](261021g-phone-sizes-part-two-plan-review-sol.md). Exit 0, *build with changes*, nine
+findings. These supersede the Stage 2 table above where they disagree:
+
+- **R1 (P1) Don't tighten line spacing that Greg named.** Taken: titles keep 1.5.
+- **R2 (P1) `narrow-window.css` sets `--band-corner-btn` back to 2rem under a coarse pointer**, after
+  mode-band.css. Taken: the 40px goes there, replacing the 2rem, with its comment updated.
+- **R3 (P1) The `Button` floor works through `twMerge` (a `min-h` survives `h-7`), but "each one
+  alone in its row" was not established.** There are 116 `Button`s in 49 files, and some sit in
+  rows (AccessSharing, ProfilePanel, the quiz row). Taken: the browser pass covers those dense
+  rows. The top bar's edit-title control is an `IconButton`, not a `Button`; it gets a local coarse
+  class rather than widening every `IconButton`.
+- **R4 (P1) Three halos break `.tap-target`'s clearance contract.** The facts row wraps, the fold
+  toggle already overlaps the gutter by 4px, and `.skim-where` lies over its own row's button.
+  Taken: the facts-row controls are drawn `inline-flex` 40px tall instead, so a wrapped line keeps
+  its room. **The fold toggle and Skim's place button are deferred** until each has a 40px cell
+  of its own.
+- **R5 (P1) `.matter-stub-info` must be 40 wide as well as tall.** Taken.
+- **R6 (P1) The gutter bar would cover about two lines, not 1.5; it has at most four controls.**
+  **Deferred, for Greg.** It is the product trade-off of whether the bar hides two lines of the
+  paragraph above or the paragraph moves. touch.md § The gutter owns that question, and Greg has
+  asked about the gutter twice.
+- **R7 (P2) Keep Quiz's 8px gap between steppers.** Taken: four 40px controls with their gaps come
+  to 184px.
+- **R8 (P2) Glossary's hide button and the footer links are cheap.** Taken, both. The dock's 39px
+  is raised to 40 rather than left as an unwritten exception.
+- **R9 (P2) A per-rule declaration test is not a cascade.** Partly taken. The `Button` variants and
+  the `IconButton` class are tested directly. The browser pass reads computed sizes and is the
+  real check. A cascade-folding test helper is passed over: the suite has no browser, and the
+  computed pass is what 261021c's C2 needed.

@@ -1257,10 +1257,30 @@ svg.band-waiting-ghost { flex: none; }
    20px tall and 0–1px apart, and *Bring into this chat* 23px tall touching
    the link above it — "too close together for an iPhone" (Greg, 2026-10-20).
    The link itself is the 40px box, not only its row (GPT Sol, plan review
-   R1); a wrapped row keeps room between its link and its button. */
+   R1); a wrapped row keeps room between its link and its button.
+
+   **And each source is one shape, set off by a hairline** (plan 261021g). With
+   only the 40px boxes, *Bring into this chat* sat beside a short title and under
+   a long one, 7px below its own title and 10px above the next, so it read as
+   the next one's; titles ran 12 to 68px apart. Greg: *"as much about sort of
+   line spacing or paragraph spacing being quite close as font size"*
+   (spya-byxz0r). So under a finger the button always goes under its own title,
+   the title is a top-aligned block (a centred one floats a wrapped title's
+   lines in a box taller than they are), and the rows are divided as the band's
+   other lists are. */
 @media (any-pointer: coarse) {
-  .chat-sources li { row-gap: 0.35rem; }
-  .chat-sources li > a { display: inline-flex; align-items: center; min-height: 40px; }
+  .chat-sources li {
+    display: block;
+    padding: 0.5rem 0;
+  }
+  .chat-sources li + li { border-top: 1px solid var(--rule); }
+  .chat-sources li > a {
+    display: block;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding-block: 0.5rem;
+  }
+  .chat-sources li > .bring-in { display: flex; margin-top: 0.15rem; }
   .bring-in-button { min-height: 40px; padding-inline: 0.75rem; }
 }
 

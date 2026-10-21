@@ -218,6 +218,11 @@ describe("the class", () => {
     expect(declsFor(coarse, ".chat-thread-source")).toMatch(/min-width:\s*40px/);
     expect(declsFor(coarse, ".chat-from-btn")).toMatch(/min-width:\s*40px/);
     expect(declsFor(coarse, ".chat-sources li > a")).toMatch(/min-height:\s*40px/);
+    /* Plan 261021g: each source one shape under a finger — a top-aligned title
+       block, its button always under it, a hairline between sources. */
+    expect(declsFor(coarse, ".chat-sources li > a")).toMatch(/display:\s*block/);
+    expect(declsFor(coarse, ".chat-sources li")).toMatch(/display:\s*block/);
+    expect(declsFor(coarse, ".chat-sources li + li")).toMatch(/border-top:/);
   });
 });
 
