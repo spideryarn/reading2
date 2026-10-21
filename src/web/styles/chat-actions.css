@@ -267,7 +267,11 @@
    tap-target.css says why neighbours need their own room). */
 @media (any-pointer: coarse) {
   .chat-steps { gap: 0.25rem; margin: 0.15rem auto; }
-  .chat-step { width: 2.5rem; height: 2.5rem; }
+  /* Keep the px half: 2.5rem is 38.4px at the measured iPhone root and
+     only 30px at the smallest supported root. This rule loads after the
+     shared `.chat-icon` floor in mode-band.css, so a bare 2.5rem here would
+     silently take that floor away again. */
+  .chat-step { width: max(40px, 2.5rem); height: max(40px, 2.5rem); }
   /* "Latest" was 26px tall beside them (plan 261021c). */
   .chat-to-bottom { min-height: 40px; }
 }

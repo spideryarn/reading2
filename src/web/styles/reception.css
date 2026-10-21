@@ -78,7 +78,9 @@
 /* Spaced from its label by the part-switcher's own gap. */
 .rcp-view-count {
   color: var(--ink-faint);
-  font-size: 0.9em;
+  /* Floored although 0.9em looks big: its parent is already at the floor, so
+     0.9em of it came out 12.1px under a finger (plan 261021c, browser pass). */
+  font-size: max(var(--text-min), 0.9em);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }

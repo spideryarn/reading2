@@ -182,6 +182,31 @@ describe("the class", () => {
       expect(edge, "last id target is outside its row").toBeGreaterThanOrEqual((1.3 - 0.58) * rootSize / 2);
     }
   });
+
+  it("keeps Chat's drawn controls at least 40px after the full coarse-pointer cascade", () => {
+    const icon = declsFor(coarse, ".chat-icon");
+    expect(icon, "Chat's shared icon has no coarse-pointer size").toBeDefined();
+    expect(icon).toMatch(/width:\s*40px/);
+    expect(icon).toMatch(/height:\s*40px/);
+
+    /* chat-actions.css loads after mode-band.css. Its stepper rule therefore
+       has to preserve the shared icon's px floor rather than replacing it
+       with 2.5rem, which is only 38.4px at the measured phone root and 30px
+       at the smallest supported root. */
+    const step = declsFor(coarse, ".chat-step");
+    expect(step, "Chat's stepper has no coarse-pointer size").toBeDefined();
+    expect(step).toMatch(/width:\s*max\(\s*40px\s*,\s*2\.5rem\s*\)/);
+    expect(step).toMatch(/height:\s*max\(\s*40px\s*,\s*2\.5rem\s*\)/);
+
+    for (const selector of [".chat-thread-source", ".chat-from-btn", ".chat-to-bottom", ".bring-in-button"]) {
+      const rule = declsFor(coarse, selector);
+      expect(rule, `${selector} has no coarse-pointer rule`).toBeDefined();
+      expect(rule).toMatch(/min-height:\s*40px/);
+    }
+    expect(declsFor(coarse, ".chat-thread-source")).toMatch(/min-width:\s*40px/);
+    expect(declsFor(coarse, ".chat-from-btn")).toMatch(/min-width:\s*40px/);
+    expect(declsFor(coarse, ".chat-sources li > a")).toMatch(/min-height:\s*40px/);
+  });
 });
 
 describe("the controls that carry it", () => {

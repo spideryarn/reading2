@@ -155,6 +155,8 @@ describe("the send button", () => {
       '.chat-send[type="submit"]:not([aria-disabled="true"])',
       '.chat-send[type="submit"]:not([aria-disabled="true"]):hover',
       ".chat-send:focus-visible",
+      /* Size only, not state: 40px under a finger (mode-band.css; plan 261021c). */
+      ".chat-composer .chat-send, .chat-composer .prof-mic",
       ".learn .chat-send",
       ".chat-send.stop",
       /* Quiz borrows the box for Answer and for Next, neither of them a

@@ -37,23 +37,48 @@ const FLOOR_REM = 0.85;
 
 /** True when a bare literal like `0.72em` or `11px` is under the floor. */
 function under(literal: string): boolean {
-  const m = /^(\d*\.?\d+)(px|rem|em)$/.exec(literal);
+  const m = /^(\d*\.?\d+)(px|rem|em)$/i.exec(literal);
   if (!m) return false;
   const n = Number(m[1]);
-  return m[2] === "px" ? n < FLOOR_PX : n < FLOOR_REM;
+  return m[2]?.toLowerCase() === "px" ? n < FLOOR_PX : n < FLOOR_REM;
 }
 
-/** True when one `font-size` value is a literal under the floor and does not take it. */
+/** The px/rem/em literals in a value, including inside `calc()`/`clamp()`/etc. */
+function literals(value: string): string[] {
+  return [...value.matchAll(/(?<![-\w.])(\d*\.?\d+(?:px|rem|em))\b/gi)].map((m) => m[1] ?? "");
+}
+
+/** The one supported floor spelling — merely mentioning the token is not enough. */
+function takesFloor(value: string): boolean {
+  return /^\s*max\(\s*var\(--text-min\)\s*,[\s\S]+\)\s*(?:!important)?\s*$/i.test(value);
+}
+
+/** True when one `font-size` value contains an under-floor literal and does not take the floor. */
 function smallLiteral(value: string): boolean {
-  if (value.includes("var(--text-min)")) return false;
-  return under(value.replace(/!important/, "").trim());
+  if (takesFloor(value)) return false;
+  /* This deliberately over-reports a small term inside arithmetic whose final
+     result might be larger. The guard cannot evaluate CSS maths in every
+     environment; asking the author to use the house floor is the safe side. */
+  return literals(value.replace(/!important/i, "")).some(under);
 }
 
 /** `font: 600 0.7rem/1.2 var(--font-ui)` → `0.7rem`; a shorthand with no literal size → null. */
 function shorthandSize(value: string): string | null {
-  if (value.includes("var(--text-min)")) return null;
-  const m = /(?:^|\s)(\d*\.?\d+(?:px|rem|em))(?:\/\S+)?(?=\s|$)/.exec(value.trim());
-  return m?.[1] ?? null;
+  /* A `font:` shorthand necessarily has family and may have `/line-height`
+     after the size, so its floor cannot occupy the whole declaration value. */
+  if (/(?:^|\s)max\(\s*var\(--text-min\)\s*,/i.test(value)) return null;
+  const start = value.search(/(?<![-\w.])\d*\.?\d+(?:px|rem|em)\b/i);
+  if (start < 0) return null;
+  /* Stop before a top-level `/` so a small length used as line-height does
+     not get mistaken for the font size. A slash inside CSS maths is part of
+     that size expression and stays. */
+  let depth = 0;
+  for (let i = start; i < value.length; i++) {
+    if (value[i] === "(") depth++;
+    else if (value[i] === ")") depth--;
+    else if (value[i] === "/" && depth === 0) return value.slice(start, i);
+  }
+  return value.slice(start);
 }
 
 function sheetEntries(): string[] {
@@ -84,11 +109,11 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** The small arbitrary sizes in one source file's text: `tw:text-[0.7rem]` → `0.7rem`. */
+/** Small arbitrary values in source: `tw:text-[length:calc(0.7rem)]` keeps its whole value. */
 function smallArbitrary(text: string): string[] {
-  return [...text.matchAll(/tw:text-\[(?:length:)?(\d*\.?\d+(?:px|rem|em))\]/g)]
+  return [...text.matchAll(/tw:text-\[([^\]]+)\]/g)]
     .map((m) => m[1] ?? "")
-    .filter(under);
+    .filter((value) => smallLiteral(value.replace(/^length:/, "")));
 }
 
 function tsxEntries(): string[] {
@@ -146,6 +171,9 @@ describe("the text floor", () => {
     expect(smallLiteral(" 11px")).toBe(true);
     expect(smallLiteral(".58rem !important")).toBe(true);
     expect(smallLiteral("0.83rem")).toBe(true);
+    expect(smallLiteral("calc(0.72em)")).toBe(true);
+    expect(smallLiteral("min(var(--text-min), 0.72em)")).toBe(true);
+    expect(smallLiteral("calc(max(var(--text-min), 0.72em) / 2)")).toBe(true);
     expect(smallLiteral("max(var(--text-min), 0.72em)")).toBe(false);
     expect(smallLiteral("0.85rem")).toBe(false);
     expect(smallLiteral("13px")).toBe(false);
@@ -161,8 +189,8 @@ describe("the text floor", () => {
     // its scanner is checked on a sample instead.
     expect(current().some((e) => e.startsWith("src/web/styles/"))).toBe(true);
     const sample =
-      '<p className="tw:text-[0.7rem] tw:text-[length:11px] tw:text-[0.9rem] tw:text-[length:max(var(--text-min),0.7rem)]">';
-    expect(smallArbitrary(sample)).toEqual(["0.7rem", "11px"]);
+      '<p className="tw:text-[0.7rem] tw:text-[length:11px] tw:text-[length:calc(0.72rem)] tw:text-[0.9rem] tw:text-[length:max(var(--text-min),0.7rem)]">';
+    expect(smallArbitrary(sample)).toEqual(["0.7rem", "length:11px", "length:calc(0.72rem)"]);
   });
 
   it("adds no small literal size that skips the floor", () => {

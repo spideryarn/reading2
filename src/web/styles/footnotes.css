@@ -33,8 +33,10 @@
   /* The finger's target is bigger than the ink, without moving any line. */
   box-decoration-break: clone;
 }
-/* **Under a finger it was still 9 × 24** (plan 261021c, measured at 390), so a
-   finger gets `.tap-target`'s invisible halo, written out here because the
+/* **Under a finger a marker is about one line tall** — `[1]` measured 21px
+   wide and ~20 tall at 390 (plan 261021c) — so a finger gets the house's 40px
+   of height, and 28px of width for a lone `¹`, from `.tap-target`'s invisible
+   halo, written out here because the
    marker is the author's `<a>`, not one of our components. 40px tall like the
    house floor; 28px wide rather than 40, because two markers can sit side by
    side (`¹²`) and the wider halo would hand one's taps to the other. A marker

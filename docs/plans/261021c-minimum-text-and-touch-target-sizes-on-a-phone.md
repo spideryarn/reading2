@@ -161,8 +161,12 @@ floor.
 - **Targets.** These are floored where the fix is local and cannot crowd a neighbour:
   - the prose hover card's ways out and actions (`.prose-card-link`, `-open`, `-act`,
     `-cite-check`), from 30px, and *Ask about this* from 12 × 25;
-  - footnote markers in the prose, from 9 × 24, given a 28 × 40 halo. It is 28 wide because two
-    markers can sit side by side.
+  - footnote markers in the prose get a 28 × 40 halo. It is 28 wide because two markers can sit
+    side by side. (The sweep's 9 × 24 turned out to be an author's own anchor, not a marker.
+    The verification pass found `[n]` markers 21–35px wide and about a line tall, so the real
+    gain is the 40px of height. A tap 9px above or below now opens the note.)
+  - Chat's composer row (Send, Dictate, Live and its arrow), from 36 to 40, as one rule so the
+    four still agree.
 
 ### Deferred: the rest of the targets
 
@@ -179,6 +183,37 @@ reconsidered rather than a floor. Each is queued as one Overseer item (see the n
 - **Skim's place button** (19 × 32, absolutely positioned), Quiz's native radio (13 × 13) and
   share pie (24), and `/profile`'s Dictate (24 × 26).
 - The dock at 39px, a pixel under the floor, is left alone.
+- `band-about`, the ⓘ at the head of every band, 32 × 32: one of the 32px family above.
+- The hover card's title link (`.prose-card-name`, 23 tall) and a footnote card's source links
+  (20 tall): links in a card's text, which a 40px box would push apart.
 
 Inline prose links stay exempt. They are the author's words, a line apart, and a link that wraps
 cannot take a halo.
+
+## Code review (GPT Sol, round 1)
+
+[Prompt](261021c-minimum-text-and-touch-target-sizes-on-a-phone-code-review-prompt.md),
+[answer](261021c-minimum-text-and-touch-target-sizes-on-a-phone-code-review-sol.md). Exit 0, with
+three findings, all fixed by the reviewer and read before committing:
+
+- **C1 (P1)** type-roles still expected Skim's two named exceptions bare.
+- **C2 (P1)** `.chat-step`'s later `2.5rem` undercut the 40px chat-icon floor: 38.4px at the
+  measured root, 30px at a 12px root. It is now `max(40px, 2.5rem)`, with a cascade test in
+  `tap-target.test.tsx`.
+- **C3 (P2)** The guard was green for `calc(0.72rem)`, functional Tailwind sizes, and
+  `min(var(--text-min), …)`. Only the `max(var(--text-min), …)` form passes now.
+
+Sol found no problem with the footnote halo, the chat header at 40px, or long source links.
+
+## Verification at 390 and 1440 (Sonnet browser pass)
+
+- **iPhone.** No text under 13px on the chat list, an Investigate answer, the prose, the hover
+  cards, the dock, Structure, Quotes, FAQ, Skim, Sources and `/profile`, bar one:
+  `.rcp-view-count`, `0.9em` of an already-floored parent, at 12.1px. That is the guard's named
+  blind spot, and it is now floored too. Every chat and hover-card control in scope is 40px. The
+  composer row was 36 and is now 40. Screenshots of each surface showed no clipping, overlap,
+  badge overflow or wrapped header. A long chat title ellipsises with the 40px icons on one row.
+- **Desktop.** Every measured computed size and box is identical to before, so the floor is
+  invisible with a mouse.
+- **Footnote markers.** A real touch 9px above or below `[1]` opens its note; a touch 60px away
+  opens nothing.

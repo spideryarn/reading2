@@ -1756,6 +1756,18 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
   padding: 0 0.6rem;
 }
 .chat-composer .chat-live-arrow { height: var(--control-h); }
+/* Under a finger the whole row is 40px, the house finger floor, rather than
+   Send's 36 (plan 261021c; the browser pass measured all four at 36). One
+   rule for the row, so the four still agree with each other. */
+@media (any-pointer: coarse) {
+  .chat-composer .chat-send,
+  .chat-composer .prof-mic {
+    width: max(40px, var(--control-h));
+    height: max(40px, var(--control-h));
+  }
+  .chat-composer .chat-live-btn,
+  .chat-composer .chat-live-arrow { height: max(40px, var(--control-h)); }
+}
 
 /* **The live session's one status line**: a state word in a pill whose colour
    says it too, then the meter, then a sentence. Listening is the only filled

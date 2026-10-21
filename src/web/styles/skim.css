@@ -150,7 +150,8 @@
    optional question before the quote, and matters less than the quote (Greg,
    spya-qpgvq9, plan 261009j); its monospace face reads larger than the quote's
    serif at the same size, so it sits a clear step below --type-quote.
-   tests/type-roles.test.ts holds it at 0.78rem. */
+   tests/type-roles.test.ts holds its chosen value at 0.78rem; the phone floor
+   still applies. */
 .skim-cue {
   color: var(--ink-soft);
   font-size: max(var(--text-min), 0.78rem);
@@ -230,7 +231,7 @@
    soft ink, so the quote under it is the line read first (Greg's answer to
    q-u04sye, plan 261009m). Only the open stop: the other rows keep the full
    heading, so the route still scans as a list. tests/type-roles.test.ts
-   holds it at 0.82rem. */
+   holds its chosen value at 0.82rem; the phone floor still applies. */
 .skim-row.current .skim-place {
   color: var(--ink-soft);
   font-size: max(var(--text-min), 0.82rem);
