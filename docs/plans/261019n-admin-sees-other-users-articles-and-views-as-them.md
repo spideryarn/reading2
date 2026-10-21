@@ -595,19 +595,21 @@ Three postmortems name the classes:
 [261020c](../postmortems/261020c-a-sql-regex-state-machine-cannot-own-the-server-transaction-state.md),
 [261020d](../postmortems/261020d-authorization-expiry-must-remove-data-already-on-screen.md).
 
-### Landing (2026-10-20)
+### Landing (2026-10-21)
 
-- **The migration was renumbered** at the merge with dev, which had gained
-  `20261020164021_article_open_times`: regenerated as `20261021002318_view_as_sessions` on top
-  of it (identical DDL, the two hand-written `auth.users` keys appended again), so the journal
-  stays in time order and drizzle will apply it.
-- **Not applied to the shared local database.** Its ledger holds an unpushed row from another
-  worktree (`20261020204049_chat_threads_mode_prepared_at`), and `db:migrate` rightly refuses to
-  reconcile until that lands on dev. The private test lane applies the migration cleanly on every
-  run.
-- **No browser run yet**, for the same reason: the dev server shares that database, so "View as"
-  cannot start a session on it. The tab is covered in jsdom (tests/view-as-*.test.ts[x]) and the
-  gate against Postgres; the first real-browser pass belongs after the next `db:migrate`.
+- **The migration was renumbered twice** at merges with dev, which gained
+  `20261020164021_article_open_times` and then `20261020204049_chat_threads_mode_prepared_at`. Each
+  time it was regenerated on top (identical DDL, the two hand-written `auth.users` keys appended
+  again), ending as `20261021002318_view_as_sessions`, so the snapshot chain stays linear and the
+  journal in time order. Applied to the local database (`Target: postgresql://postgres@127.0.0.1:54362`).
+- **Browser run (Playwright, the box, as dev-admin viewing dev-reader-b): all seven checks
+  passed.** The button and reason form; the new tab with the fragment stripped; the reader's
+  library and articles in six modes; chat and Add refused with the read-only message, and no
+  non-GET leaving the tab except `/api/admin/view-as/end`; both storages empty in-memory shims;
+  `private, no-store` on every `/api` GET; Stop closing the tab and the old nonce answering 410;
+  the admin's own library unchanged. At 390px the bar clipped "30 min left" to "30 mi…", so the
+  name now gives way first (`shrink-[100]`). A hand-written `fetch` POST from the console leaves
+  the tab, as expected, and the server refuses it.
 - **Dev's new open counter** (`POST /api/library/:slug/open`, now also writing
   `article_open_times`) is a POST, so the gate refuses it, and ArticlePage already skips it while
   viewing as.

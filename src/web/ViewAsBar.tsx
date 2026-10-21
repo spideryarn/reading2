@@ -64,14 +64,16 @@ function TheBar() {
     setStopping({ kind: "failed", message: answer.message });
   }
 
+  /* The name gives way first: at 390px it and the minutes both truncated, and
+     "30 mi…" was the half that mattered. */
   const who =
     session.kind === "live" ? (
-      <span className="tw:min-w-0 tw:truncate">
+      <span className="tw:min-w-0 tw:shrink-[100] tw:truncate">
         Viewing as{" "}
         <strong className="tw:font-semibold">{session.subject.subjectEmail ?? session.subject.subjectId}</strong>
       </span>
     ) : (
-      <span className="tw:min-w-0 tw:truncate">Viewing as another reader</span>
+      <span className="tw:min-w-0 tw:shrink-[100] tw:truncate">Viewing as another reader</span>
     );
 
   let status: string;
