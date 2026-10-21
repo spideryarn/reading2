@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "mode_prepared_at" timestamp with time zone;

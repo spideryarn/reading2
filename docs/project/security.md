@@ -998,7 +998,15 @@ control that must not arrive.
 
 ### What does still hold
 
-Nothing chat can call writes a file, deletes anything, or spends the reader's money. That property is
+Nothing chat can call writes a file, deletes anything, or spends the reader's money — **with one
+bounded exception since 2026-10-20**: the guide may choose to start one mode's generation in the
+background, once a conversation, on the reader's own article, from a fixed list, on a turn the
+reader typed, and the page then presses that start itself (Greg's reply `spya-tgeg6v` to q-y4p2ct;
+[chat-tools.md § The guide](chat-tools.md#the-guide); risk [R30](security-risks.md#r30)). A
+planted line can therefore spend a few cents to a few tens of cents of our money, and write one
+artefact of a kind the reader would have got by opening that mode; it cannot pick the article, the
+step, or a second start. The bounds are code, not prompt: the eval with a planted line saw no start
+in twelve runs, which is evidence about the model, not a defence. That property is
 load-bearing and it is the reason the write tools in
 [chat-tools.md § Not built](chat-tools.md#not-built-and-worth-building) are not built yet. The first
 one that writes turns "an injected page made the answer wrong" into "an injected page changed the

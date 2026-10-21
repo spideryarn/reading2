@@ -1353,6 +1353,16 @@ export interface ChatStore {
   setGist(slug: string, threadId: string, gist: string, basedOn: ChatThread): Promise<boolean>;
 
   /**
+   * **Claim a guide conversation's one automatic start of a mode** (plan
+   * docs/plans/261019p-guide-chat-plainer.md § Stage 2b). Stamps
+   * `mode_prepared_at` only where it is still null and the thread is a guide
+   * thread on this reader's article, in one statement, so of two presses only
+   * one is `true`. `false` means already claimed, or no such guide thread.
+   * Does not touch `updated_at`.
+   */
+  claimModePreparation(slug: string, threadId: string): Promise<boolean>;
+
+  /**
    * **The reader pressed Hint under a Recall answer.** Stamps
    * `hint_opened_at` once; a second press answers with the first time.
    *

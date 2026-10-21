@@ -3185,6 +3185,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      other turns through the route with `fetch` stubbed to keep the request and
      fail, the experience count stubbed on the store. No model is called. */
   "tests/guide-route.test.ts": "private-postgres",
+  /* The guide's prepare route and its once-a-conversation claim (plan 261019p § Stage 2b). */
+  "tests/guide-prepare-route.test.ts": "private-postgres",
   /* The guide's experience count, 261007j stage 1. Seeds two private owners in
      `auth.users` and seven bare articles, one per rule the count keeps, and
      deletes them all afterwards. */

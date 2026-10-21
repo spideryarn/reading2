@@ -2224,6 +2224,7 @@ export function Conversation({
         {kind === "guide" && !busy && (
           <GuideNextSteps
             slug={slug}
+            threadId={thread.id}
             message={thread.messages.at(-1)}
             blocks={blocks}
             onAsk={(q) => onSend(q)}

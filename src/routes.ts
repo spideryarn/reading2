@@ -447,6 +447,8 @@ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
+import { prepareMode } from "./prepare-mode.js";
+import { MODE_PREPARATION_ALREADY_CLAIMED, preparable } from "./preparable-modes.js";
 import { parseStaleNoticeDismissal, type StaleNoticesResponse } from "./stale-notice.js";
 import {
   type ArticleStage,
@@ -12240,6 +12242,43 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       res.statusCode = 204;
       res.end();
+    },
+  },
+
+  /* **Get a mode ready without opening it** — the guide's `prepare` step,
+     pressed by the reader (*Get Skim ready*) or, for a step the guide marked
+     `now`, by the page itself, once (plan 261019p § Stage 2b, Greg's reply to
+     q-y4p2ct). Body `{ mode, threadId, now }`. `now: true` first claims the
+     guide thread's one automatic start, atomically, and a second is a 409: two
+     tabs, a retry or an edit cannot pass it (GPT Sol's F3 on the plan). Then
+     `prepareMode`, which starts the band's own job through `enqueue` (owner
+     scope, minimal papers, an identical job handed back) or answers that the
+     mode is made. Answers `{ status: "ready" }` or `{ status: "started", job }`;
+     the page hands the job to its engine, which is all that drives one on
+     Vercel. Free in slots, like any re-run on an article on the shelf. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/guide-prepare\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const { mode, threadId, now } = ((await readBody(req)) ?? {}) as Record<string, unknown>;
+      if (typeof mode !== "string" || preparable(mode) === undefined) {
+        throw httpError(400, "Expected { mode } naming a mode that can be prepared.");
+      }
+      if (now === true) {
+        if (typeof threadId !== "string") throw httpError(400, "Expected { threadId } with now.");
+        if (!(await chatStore.claimModePreparation(at, threadId))) {
+          throw httpError(409, MODE_PREPARATION_ALREADY_CLAIMED);
+        }
+      }
+      const prepared = await prepareMode(at, mode, await resolveProfile(at));
+      send(
+        res,
+        prepared.status === "started" ? 202 : 200,
+        prepared.status === "started" ? { status: "started", job: publicJob(prepared.job) } : prepared,
+      );
     },
   },
 
